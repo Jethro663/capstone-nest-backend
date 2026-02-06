@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { SubjectsModule } from './modules/subjects/subjects.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { OtpModule } from './modules/otp/otp.module';
 import { DatabaseModule } from './database/database.module';
@@ -21,6 +22,7 @@ import jwtConfig from './config/jwt.config';
     UsersModule,
     RolesModule,
     OtpModule,
+    SubjectsModule,
   ],
   providers: [
     {
