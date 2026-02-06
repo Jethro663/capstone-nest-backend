@@ -86,15 +86,14 @@ function App() {
     // ================================================================================
 
     /**
-     * Handle role selection from splash screen
+     * Handle action selection from splash screen
      *
-     * @param {String} role - Selected role (student/teacher/admin)
+     * @param {String} role - Not used for login (null)
      * @param {String} action - Action (login/signup)
      *
-     * UNCHANGED from original
+     * UPDATED: Removed role selection for login
      */
     const handleRoleSelection = (role, action) => {
-        setSelectedRole(role);
         setCurrentPage(action);
     };
 

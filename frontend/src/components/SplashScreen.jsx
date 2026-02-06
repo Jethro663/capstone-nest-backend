@@ -14,64 +14,30 @@ export default function SplashScreen({ onSelectRole }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl w-full">
-        {/* Student Card */}
-        <Card className="hover:scale-105 transition-transform duration-300 shadow-lg">
+      <div className="flex flex-col items-center justify-center space-y-8 max-w-md w-full">
+        {/* Welcome Message */}
+        <div className="text-center space-y-4">
+          <h2 className="text-3xl font-bold text-white">Welcome to Nexora LMS</h2>
+          <p className="text-gray-300 text-lg">
+            Your learning management system for students, teachers, and administrators
+          </p>
+        </div>
+
+        {/* Single Login Card */}
+        <Card className="hover:scale-105 transition-transform duration-300 shadow-lg w-full">
           <CardHeader className="text-center space-y-2">
             <div className="mx-auto w-16 h-16 bg-gradient-to-br from-[#dc2626] to-[#b91c1c] rounded-full flex items-center justify-center">
               <BookOpen className="w-8 h-8 text-white" />
             </div>
-            <CardTitle className="text-2xl">Student</CardTitle>
-            <CardDescription>Access your courses, assignments, and grades</CardDescription>
+            <CardTitle className="text-2xl">Get Started</CardTitle>
+            <CardDescription>Login to access your personalized dashboard</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Button
-              onClick={() => onSelectRole("student", "login")}
+              onClick={() => onSelectRole(null, "login")}
               className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white"
             >
-              Login as Student
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Teacher Card */}
-        <Card className="hover:scale-105 transition-transform duration-300 shadow-lg bg-[#374151] text-white border-[#374151]">
-          <CardHeader className="text-center space-y-2">
-            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-[#dc2626] to-[#b91c1c] rounded-full flex items-center justify-center">
-              <GraduationCap className="w-8 h-8 text-white" />
-            </div>
-            <CardTitle className="text-2xl">Teacher</CardTitle>
-            <CardDescription className="text-gray-300">
-              Manage courses, create content, and track progress
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white"
-              onClick={() => onSelectRole("teacher", "login")}
-            >
-              Login as Teacher
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Admin Card */}
-        <Card className="hover:scale-105 transition-transform duration-300 shadow-lg bg-[#1f2937] text-white border-[#1f2937]">
-          <CardHeader className="text-center space-y-2">
-            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-[#dc2626] to-[#b91c1c] rounded-full flex items-center justify-center">
-              <Shield className="w-8 h-8 text-white" />
-            </div>
-            <CardTitle className="text-2xl">Admin</CardTitle>
-            <CardDescription className="text-gray-300">
-              Manage users, subjects, and sections
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button
-              className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white"
-              onClick={() => onSelectRole("admin", "login")}
-            >
-              Login as Admin
+              Login
             </Button>
           </CardContent>
         </Card>

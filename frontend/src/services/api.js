@@ -178,8 +178,13 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        // Don't handle 401 for auth endpoints (login, register, refresh, etc)
+        // These should return their original error messages
+        const authEndpoints = ['/auth/login', '/auth/register', '/auth/refresh', '/otp/verify', '/otp/resend'];
+        const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint));
+
         // Handle token expiration (401 Unauthorized)
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
 
             // Prevent retry loop
             if (isRefreshing) {

@@ -13,11 +13,10 @@ import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 /**
  * LoginPage Component
  *
- * @param {String} role - User role for this page ('student' | 'teacher' | 'admin')
  * @param {Function} onBack - Navigate back
  * @param {Function} onForgotPassword - Navigate to forgot password
  */
-export function LoginPage({ role, onBack, onForgotPassword }) {
+export function LoginPage({ onBack, onForgotPassword }) {
   const { login } = useAuth();
 
   // Form state
@@ -69,14 +68,6 @@ export function LoginPage({ role, onBack, onForgotPassword }) {
     return email && password && !emailError && !passwordError;
   };
 
-  // Get role display name
-  const getRoleDisplayName = () => {
-    if (role === "student") return "Student";
-    if (role === "teacher") return "Teacher";
-    if (role === "admin") return "Admin";
-    return "";
-  };
-
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -86,27 +77,21 @@ export function LoginPage({ role, onBack, onForgotPassword }) {
 
     try {
       // Call backend login
-      const user = await login(email, password); // must return { id, email, fullName, role }
-
-      // ROLE GUARD - 1:1 mapping
-      if (user.role !== role) {
-        setPasswordError(`You are not authorized to login as ${getRoleDisplayName()}`);
-        return;
-      }
+      await login(email, password);
 
       // Success: AuthContext already updated, App.jsx handles redirect
 
     } catch (error) {
-      // Email not verified
-      if (error.code === "EMAIL_NOT_VERIFIED") {
-        setEmailError("Please verify your email before logging in");
-      }
-      // Invalid credentials
-      else if (error.message?.includes("Invalid")) {
+      // Invalid credentials (wrong email/password)
+      if (error.message?.includes("Invalid") || error.code === "INVALID_CREDENTIALS") {
         setPasswordError("Invalid email or password");
       }
-      // Account suspended
-      else if (error.message?.includes("suspended")) {
+      // Email not verified
+      else if (error.message?.includes("Email not verified") || error.code === "EMAIL_NOT_VERIFIED") {
+        setEmailError("Please verify your email before logging in");
+      }
+      // Account not active
+      else if (error.message?.includes("not active")) {
         setEmailError("Account suspended. Contact administrator.");
       }
       // Generic error
@@ -136,7 +121,7 @@ export function LoginPage({ role, onBack, onForgotPassword }) {
       {/* Login Card */}
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl text-center">{getRoleDisplayName()} Login</CardTitle>
+          <CardTitle className="text-2xl text-center">Nexora Login</CardTitle>
           <CardDescription className="text-center">
             Enter your credentials to access your account
           </CardDescription>
@@ -151,7 +136,7 @@ export function LoginPage({ role, onBack, onForgotPassword }) {
               <Input
                 id="email"
                 type="email"
-                placeholder={`${role}@example.com`}
+                placeholder="your.email@example.com"
                 value={email}
                 onChange={(e) => handleEmailChange(e.target.value)}
                 onBlur={() => validateEmail(email)}

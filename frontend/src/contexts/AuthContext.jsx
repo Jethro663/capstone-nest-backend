@@ -258,11 +258,11 @@ export function AuthProvider({ children }) {
 
         } catch (error) {
             // Handle specific login errors
-            if (error.code === 'EMAIL_NOT_VERIFIED') {
+            if (error.code === 'EMAIL_NOT_VERIFIED' || error.message?.includes('Email not verified')) {
                 toast.error('Please verify your email before logging in.');
-            } else if (error.code === 'INVALID_CREDENTIALS') {
+            } else if (error.code === 'INVALID_CREDENTIALS' || error.message?.includes('Invalid credentials')) {
                 toast.error('Invalid email or password.');
-            } else if (error.code === 'ACCOUNT_INACTIVE') {
+            } else if (error.code === 'ACCOUNT_INACTIVE' || error.message?.includes('not active')) {
                 toast.error('Account is suspended. Contact support.');
             } else {
                 toast.error(error.message || 'Login failed. Please try again.');

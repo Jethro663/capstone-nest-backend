@@ -1,10 +1,10 @@
 import React from 'react';
 import { cn } from '@/components/ui/utils';
-import { 
-  LayoutDashboard, 
-  User, 
-  MessageSquare, 
-  Bell, 
+import {
+  LayoutDashboard,
+  User,
+  MessageSquare,
+  Bell,
   LogOut,
   BookOpen,
   Users,
@@ -17,9 +17,10 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
 
   const getNavItems = () => {
     const commonItems = [
-      { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> },
-      { id: 'messages', label: 'Messages', icon: <MessageSquare className="h-5 w-5" /> },
       { id: 'notifications', label: 'Notifications', icon: <Bell className="h-5 w-5" /> },
+      { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> },
+
+
     ];
 
     const roleSpecificItems = {
@@ -51,7 +52,7 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
         <h1 className="text-2xl font-bold text-primary">Nexora</h1>
         <p className="text-xs text-muted-foreground mt-1 capitalize">{role} Portal</p>
       </div>
-      
+
       <nav className="flex-1 p-4 overflow-y-auto">
         <ul className="space-y-1">
           {navItems.map((item) => (
@@ -59,7 +60,7 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
               <button
                 onClick={() => onNavigate(item.id)}
                 className={cn(
-                  'w-full flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 transform', 
+                  'w-full flex items-center gap-3 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 transform',
                   currentPage === item.id
                     ? 'bg-primary text-primary-foreground shadow-md scale-105'
                     : 'text-muted-foreground hover:bg-primary/10 hover:text-primary hover:shadow hover:scale-105'
