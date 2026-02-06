@@ -1,10 +1,9 @@
+
 import React from 'react';
 import { cn } from '@/components/ui/utils';
 import {
   LayoutDashboard,
   User,
-  MessageSquare,
-  Bell,
   LogOut,
   BookOpen,
   Users,
@@ -16,11 +15,9 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
   const { logout } = useAuth();
 
   const getNavItems = () => {
+    // Only include Profile in common items
     const commonItems = [
-      { id: 'notifications', label: 'Notifications', icon: <Bell className="h-5 w-5" /> },
-      { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> },
-
-
+      { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> }
     ];
 
     const roleSpecificItems = {
