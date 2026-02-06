@@ -30,6 +30,7 @@ const ClassManagementPage = () => {
     setLoading(true);
     try {
       const response = await api.get("/classes/all");
+      console.log("Fetched classes:", response.data);
 
       if (response.data.success) {
         // Transform backend data to match frontend expectations
@@ -71,6 +72,7 @@ const ClassManagementPage = () => {
       if (editingClass) {
         // Update existing class
         const response = await api.put(`/classes/${editingClass._id}`, classData);
+      
 
         if (response.data.success) {
           toast.success("Class updated successfully");
