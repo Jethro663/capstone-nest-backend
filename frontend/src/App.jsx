@@ -15,6 +15,7 @@ import  AdminDashboard  from './pages/dashboard/AdminDashboard';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import SubjectManagementPage from './pages/admin/SubjectManagementPage';
 import SectionManagementPage from './pages/admin/SectionManagementPage';
+import ClassManagementPage from './pages/admin/ClassManagementPage';
 import  ProfilePage  from './pages/ProfilePage';
 import  NotificationsPage  from './pages/NotificationsPage';
 import MessagesPage  from './pages/MessagesPage';
@@ -243,6 +244,10 @@ function App() {
 
         if (currentPage === 'sections') {
             return <SectionManagementPage />;
+        }
+
+        if (currentPage === 'classes') {
+            return <ClassManagementPage />;
         }
 
         // Placeholder for other pages (courses, settings, etc.)

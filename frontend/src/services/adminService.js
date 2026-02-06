@@ -56,6 +56,28 @@ const adminService = {
     return response.data;
   },
 
+  // Class Management
+  async getClasses(params = {}) {
+    const response = await api.get('/classes/all', { params });
+    return response.data;
+  },
+  async createClass(classData) {
+    const response = await api.post('/classes', classData);
+    return response.data;
+  },
+  async updateClass(id, classData) {
+    const response = await api.put(`/classes/${id}`, classData);
+    return response.data;
+  },
+  async deleteClass(id) {
+    const response = await api.delete(`/classes/${id}`);
+    return response.data;
+  },
+  async toggleClassStatus(id) {
+    const response = await api.put(`/classes/${id}/toggle-status`, {});
+    return response.data;
+  },
+
   // Dashboard Stats
   async getDashboardStats() {
     const response = await api.get('/admin/dashboard/stats');
