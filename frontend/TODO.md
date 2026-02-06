@@ -1,0 +1,5 @@
+- [x] Add resetPassword state to formData (boolean, default false)
+- [x] Add resetPassword checkbox in JSX (only when editing)
+- [x] Conditionally show password field (for new user or when resetPassword checked)
+- [x] Update validation to require password when resetPassword is checked during edit
+- [x] Update payload to include password only when appropriate (new user or reset checked)

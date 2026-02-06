@@ -1,0 +1,51 @@
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
+import { UsersService } from '../../users/users.service';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+  // jwt.strategy.ts
+  constructor(
+    private configService: ConfigService,
+    private usersService: UsersService,
+  ) {
+    const jwtSecret = configService.get<string>('jwt.secret');
+
+    if (!jwtSecret || jwtSecret.length < 32) {
+      throw new Error(
+        'JWT_SECRET must be set and at least 32 characters. ' +
+          'Current value is insecure or missing.',
+      );
+    }
+
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKey: jwtSecret,
+    });
+  }
+
+  async validate(payload: any) {
+    if (payload.type !== 'access') {
+      throw new UnauthorizedException('Invalid token type');
+    }
+
+    const user = await this.usersService.findById(payload.userId);
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('Account is not active');
+    }
+
+    return {
+      userId: user.id,
+      email: user.email,
+      roles: user.roles.map((role) => role.name),
+    };
+  }
+}

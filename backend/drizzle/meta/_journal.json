@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1770220378290,
+      "tag": "0000_naive_doctor_spectrum",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770268505373,
+      "tag": "0001_daffy_hydra",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770268696109,
+      "tag": "0002_brave_daimon_hellstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770273048024,
+      "tag": "0003_cute_norrin_radd",
+      "breakpoints": true
+    }
+  ]
+}
