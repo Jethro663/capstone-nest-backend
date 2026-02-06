@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { UserPlus, Trash2, Edit2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import CreateSubjectModal from "@/components/modals/CreateSubjectModal";
 import DeleteModal from "@/components/modals/DeleteModal";
+import api from "@/services/api";
 
 const SubjectManagementPage = () => {
   // -------------------------
@@ -27,19 +29,25 @@ const SubjectManagementPage = () => {
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
-      // Replace with API GET request
-      // const response = await api.get("/subjects");
-      // setSubjects(response.data);
-
-      // Mock data
-      const mockData = [
-        { _id: "1", subjectName: "Mathematics", subjectCode: "MATH101", gradeLevel: "Grade 10" },
-        { _id: "2", subjectName: "English", subjectCode: "ENG102", gradeLevel: "Grade 11" },
-      ];
-
-      setSubjects(mockData);
+      const response = await api.get("/subjects/all");
+      
+      if (response.data.success) {
+        // Transform backend data to match frontend expectations
+        const transformedSubjects = response.data.data.map(subject => ({
+          _id: subject.id,
+          subjectName: subject.name,
+          subjectCode: subject.code,
+          gradeLevel: subject.gradeLevel,
+          description: subject.description,
+          isActive: subject.isActive,
+          createdAt: subject.createdAt,
+          updatedAt: subject.updatedAt,
+        }));
+        setSubjects(transformedSubjects);
+      }
     } catch (error) {
       console.error("Failed to load subjects", error);
+      toast.error("Failed to load subjects. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -55,18 +63,44 @@ const SubjectManagementPage = () => {
   const handleAddOrUpdateSubject = async (subjectData) => {
     try {
       if (editingSubject) {
-        // Replace with API PUT request
-        setSubjects(prev =>
-          prev.map(s => (s._id === editingSubject._id ? { ...s, ...subjectData } : s))
-        );
+        // Update existing subject
+        const payload = {
+          name: subjectData.subjectName,
+          code: subjectData.subjectCode,
+          gradeLevel: subjectData.gradeLevel,
+          description: subjectData.description,
+        };
+
+        const response = await api.put(`/subjects/update/${editingSubject._id}`, payload);
+        
+        if (response.data.success) {
+          toast.success("Subject updated successfully");
+          await fetchSubjects(); // Refresh the list
+        }
       } else {
-        // Replace with API POST request
-        setSubjects(prev => [{ _id: crypto.randomUUID(), ...subjectData }, ...prev]);
+        // Create new subject
+        const payload = {
+          name: subjectData.subjectName,
+          code: subjectData.subjectCode,
+          gradeLevel: subjectData.gradeLevel,
+          description: subjectData.description,
+        };
+
+        const response = await api.post("/subjects/create", payload);
+        
+        if (response.data.success) {
+          toast.success("Subject created successfully");
+          await fetchSubjects(); // Refresh the list
+        }
       }
+      
       setIsModalOpen(false);
       setEditingSubject(null);
     } catch (error) {
       console.error("Failed to save subject", error);
+      const errorMessage = error.response?.data?.message || "Failed to save subject";
+      toast.error(errorMessage);
+      throw error; // Re-throw so the modal can handle it
     }
   };
 
@@ -82,10 +116,16 @@ const SubjectManagementPage = () => {
     if (!subjectToDelete) return;
     setDeleting(true);
     try {
-      // Replace with API DELETE request
-      setSubjects(prev => prev.filter(s => s._id !== subjectToDelete._id));
+      const response = await api.delete(`/subjects/delete/${subjectToDelete._id}`);
+      
+      if (response.data.success) {
+        toast.success("Subject deleted successfully");
+        await fetchSubjects(); // Refresh the list
+      }
     } catch (error) {
       console.error("Failed to delete subject", error);
+      const errorMessage = error.response?.data?.message || "Failed to delete subject";
+      toast.error(errorMessage);
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);

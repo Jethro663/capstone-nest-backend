@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { UserPlus, Trash2, Edit2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import CreateSectionModal from "@/components/modals/CreateSectionModal";
 import DeleteModal from "@/components/modals/DeleteModal";
+import api from "@/services/api";
 
 const SectionManagementPage = () => {
   // -------------------------
@@ -27,35 +29,30 @@ const SectionManagementPage = () => {
   const fetchSections = useCallback(async () => {
     setLoading(true);
     try {
-      // Replace with API call
-      // const response = await api.get("/sections");
-      // setSections(response.data);
-
-      // Mock data for now
-      const mockData = [
-        {
-          _id: "1",
-          sectionName: "Section A",
-          gradeLevel: "Grade 10",
-          assignedTeacher: "Mr. John Smith",
-          studentCapacity: 30,
-          roomNumber: "Room 101",
-          schedule: "Mon-Fri, 8:00-10:00",
-        },
-        {
-          _id: "2",
-          sectionName: "Section B",
-          gradeLevel: "Grade 11",
-          assignedTeacher: "Ms. Jane Doe",
-          studentCapacity: 25,
-          roomNumber: "Room 102",
-          schedule: "Mon-Fri, 10:00-12:00",
-        },
-      ];
-
-      setSections(mockData);
+      const response = await api.get("/sections/all");
+      
+      if (response.data.success) {
+        // Transform backend data to match frontend expectations
+        const transformedSections = response.data.data.map(section => ({
+          _id: section.id,
+          sectionName: section.name,
+          gradeLevel: section.gradeLevel,
+          schoolYear: section.schoolYear,
+          assignedTeacher: section.adviser 
+            ? `${section.adviser.firstName} ${section.adviser.lastName}`
+            : "No Adviser",
+          adviserId: section.adviser?.id,
+          studentCapacity: section.capacity,
+          roomNumber: section.roomNumber || "N/A",
+          isActive: section.isActive,
+          createdAt: section.createdAt,
+          updatedAt: section.updatedAt,
+        }));
+        setSections(transformedSections);
+      }
     } catch (error) {
       console.error("Failed to load sections", error);
+      toast.error("Failed to load sections. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -71,18 +68,48 @@ const SectionManagementPage = () => {
   const handleAddOrUpdateSection = async (sectionData) => {
     try {
       if (editingSection) {
-        // Replace with API PUT request
-        setSections(prev =>
-          prev.map(s => (s._id === editingSection._id ? { ...s, ...sectionData } : s))
-        );
+        // Update existing section
+        const payload = {
+          name: sectionData.sectionName,
+          gradeLevel: sectionData.gradeLevel,
+          schoolYear: sectionData.schoolYear,
+          capacity: sectionData.studentCapacity,
+          roomNumber: sectionData.roomNumber,
+          adviserId: sectionData.adviserId || null,
+        };
+
+        const response = await api.put(`/sections/update/${editingSection._id}`, payload);
+        
+        if (response.data.success) {
+          toast.success("Section updated successfully");
+          await fetchSections(); // Refresh the list
+        }
       } else {
-        // Replace with API POST request
-        setSections(prev => [{ _id: crypto.randomUUID(), ...sectionData }, ...prev]);
+        // Create new section
+        const payload = {
+          name: sectionData.sectionName,
+          gradeLevel: sectionData.gradeLevel,
+          schoolYear: sectionData.schoolYear,
+          capacity: sectionData.studentCapacity,
+          roomNumber: sectionData.roomNumber,
+          adviserId: sectionData.adviserId || null,
+        };
+
+        const response = await api.post("/sections/create", payload);
+        
+        if (response.data.success) {
+          toast.success("Section created successfully");
+          await fetchSections(); // Refresh the list
+        }
       }
+      
       setIsModalOpen(false);
       setEditingSection(null);
     } catch (error) {
       console.error("Failed to save section", error);
+      const errorMessage = error.response?.data?.message || "Failed to save section";
+      toast.error(errorMessage);
+      throw error; // Re-throw so the modal can handle it
     }
   };
 
@@ -98,10 +125,16 @@ const SectionManagementPage = () => {
     if (!sectionToDelete) return;
     setDeleting(true);
     try {
-      // Replace with API DELETE request
-      setSections(prev => prev.filter(s => s._id !== sectionToDelete._id));
+      const response = await api.delete(`/sections/delete/${sectionToDelete._id}`);
+      
+      if (response.data.success) {
+        toast.success("Section deleted successfully");
+        await fetchSections(); // Refresh the list
+      }
     } catch (error) {
       console.error("Failed to delete section", error);
+      const errorMessage = error.response?.data?.message || "Failed to delete section";
+      toast.error(errorMessage);
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);

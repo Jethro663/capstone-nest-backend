@@ -15,9 +15,15 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
   const [formData, setFormData] = useState({
     sectionName: "",
     gradeLevel: "",
+    schoolYear: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
     assignedTeacher: "",
     studentCapacity: "",
     roomNumber: "",
+  });
+
+  const [schoolYearRange, setSchoolYearRange] = useState({
+    startYear: new Date().getFullYear().toString(),
+    endYear: (new Date().getFullYear() + 1).toString(),
   });
 
   /* ------------------------- */
@@ -25,15 +31,38 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
   /* ------------------------- */
   useEffect(() => {
     if (section) {
+      const [startYear, endYear] = section.schoolYear?.split('-') || ['', ''];
+      setSchoolYearRange({
+        startYear: startYear || new Date().getFullYear().toString(),
+        endYear: endYear || (new Date().getFullYear() + 1).toString(),
+      });
       setFormData({
         sectionName: section.sectionName || "",
         gradeLevel: section.gradeLevel || "",
+        schoolYear: section.schoolYear || "",
         assignedTeacher: section.assignedTeacher || "",
         studentCapacity: String(section.studentCapacity || ""),
         roomNumber: section.roomNumber || "",
       });
     }
   }, [section]);
+
+  const handleSchoolYearChange = (field, value) => {
+    const newRange = {
+      ...schoolYearRange,
+      [field]: value,
+    };
+    setSchoolYearRange(newRange);
+    const formattedYear = `${newRange.startYear}-${newRange.endYear}`;
+    setFormData((prev) => ({
+      ...prev,
+      schoolYear: formattedYear,
+    }));
+    setErrors((errs) => ({
+      ...errs,
+      schoolYear: formattedYear.length > 0 ? "" : "School year is required",
+    }));
+  };
 
   /* ------------------------- */
   /* 2. VALIDATION LOGIC       */
@@ -110,6 +139,7 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
         id: section?.id || crypto.randomUUID(),
         sectionName: formData.sectionName.trim(),
         gradeLevel: formData.gradeLevel,
+        schoolYear: formData.schoolYear.trim(),
         assignedTeacher: formData.assignedTeacher.trim(),
         studentCapacity: Number(formData.studentCapacity),
         roomNumber: formData.roomNumber.trim(),
@@ -182,7 +212,17 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
           </Button>
         </div>
 
-        <form className="space-y-6" onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <YearRangePicker
+            label="School Year"
+            startYear={schoolYearRange.startYear}
+            endYear={schoolYearRange.endYear}
+            onStartYearChange={(value) => handleSchoolYearChange('startYear', value)}
+            onEndYearChange={(value) => handleSchoolYearChange('endYear', value)}
+            error={errors.schoolYear}
+            disabled={loading}
+          />
+
           <InputField
             label="Section Name"
             name="sectionName"
@@ -194,69 +234,71 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
           />
 
           <SelectField
-            label="Grade Level"
-            name="gradeLevel"
-            value={formData.gradeLevel}
-            onChange={handleChange}
-            error={errors.gradeLevel}
-            disabled={loading}
-            options={["Grade 7", "Grade 8", "Grade 9", "Grade 10"]}
-          />
+          label="Grade Level"
+          name="gradeLevel"
+          value={formData.gradeLevel}
+          onChange={handleChange}
+          error={errors.gradeLevel}
+          disabled={loading}
+          options={["Grade 7", "Grade 8", "Grade 9", "Grade 10"]}
+        />
 
-          <InputField
-            label="Assigned Teacher"
-            name="assignedTeacher"
-            value={formData.assignedTeacher}
-            onChange={handleChange}
-            error={errors.assignedTeacher}
-            disabled={loading}
-            placeholder="Mr. Juan Dela Cruz"
-          />
+        
 
-          <InputField
-            label="Student Capacity"
-            name="studentCapacity"
-            value={formData.studentCapacity}
-            onChange={handleChange}
-            error={errors.studentCapacity}
-            disabled={loading}
-            placeholder="30"
-          />
+        <InputField
+          label="Assigned Teacher"
+          name="assignedTeacher"
+          value={formData.assignedTeacher}
+          onChange={handleChange}
+          error={errors.assignedTeacher}
+          disabled={loading}
+          placeholder="Mr. Juan Dela Cruz"
+        />
 
-          <InputField
-            label="Room Number"
-            name="roomNumber"
-            value={formData.roomNumber}
-            onChange={handleChange}
-            error={errors.roomNumber}
-            disabled={loading}
-            placeholder="Room 101"
-          />
+        <InputField
+          label="Student Capacity"
+          name="studentCapacity"
+          value={formData.studentCapacity}
+          onChange={handleChange}
+          error={errors.studentCapacity}
+          disabled={loading}
+          placeholder="30"
+        />
 
-          <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
-            <Button type="button" onClick={onClose} variant="outline" disabled={loading}>
-              Go Back
-            </Button>
+        <InputField
+          label="Room Number"
+          name="roomNumber"
+          value={formData.roomNumber}
+          onChange={handleChange}
+          error={errors.roomNumber}
+          disabled={loading}
+          placeholder="Room 101"
+        />
 
-            <Button
-              type="submit"
-              variant="destructive"
-              className="text-white px-6 py-3 min-w-[160px] text-center"
-              disabled={loading || !isFormValid}
-            >
-              {loading ? "Saving..." : section ? "Save Changes" : "Add Section"}
-            </Button>
-          </div>
-        </form>
-      </div>
+        <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
+          <Button type="button" onClick={onClose} variant="outline" disabled={loading}>
+            Go Back
+          </Button>
 
-      {/* 🔴 GENERIC API ERROR MODAL */}
-      <ApiErrorModal
-        isOpen={showApiError}
-        error={apiError}
-        onClose={() => setShowApiError(false)}
-      />
-    </>
+          <Button
+            type="submit"
+            variant="destructive"
+            className="text-white px-6 py-3 min-w-[160px] text-center"
+            disabled={loading || !isFormValid}
+          >
+            {loading ? "Saving..." : section ? "Save Changes" : "Add Section"}
+          </Button>
+        </div>
+      </form>
+    </div>
+
+    {/* 🔴 GENERIC API ERROR MODAL */}
+    <ApiErrorModal
+      isOpen={showApiError}
+      error={apiError}
+      onClose={() => setShowApiError(false)}
+    />
+  </>
   );
 };
 
@@ -267,6 +309,7 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
 const FIELD_LABELS = {
   sectionName: "Section Name",
   gradeLevel: "Grade Level",
+  schoolYear: "School Year",
   assignedTeacher: "Assigned Teacher",
   studentCapacity: "Student Capacity",
   roomNumber: "Room Number",
@@ -274,6 +317,7 @@ const FIELD_LABELS = {
 
 const FIELD_MAX_LENGTHS = {
   sectionName: 30,
+  schoolYear: 10,
   assignedTeacher: 50,
   studentCapacity: 3,
   roomNumber: 15,
@@ -290,9 +334,8 @@ const InputField = ({ label, error, className = "", ...props }) => (
     </label>
     <input
       {...props}
-      className={`w-full px-4 py-3 text-base rounded-xl border ${
-        error ? "border-red-500" : "border-gray-200"
-      } focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all placeholder:text-gray-300 disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
+      className={`w-full px-4 py-3 text-base rounded-xl border ${error ? "border-red-500" : "border-gray-200"
+        } focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all placeholder:text-gray-300 disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
     />
     {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
   </div>
@@ -305,9 +348,8 @@ const SelectField = ({ label, error, options, className = "", ...props }) => (
     </label>
     <select
       {...props}
-      className={`w-full px-4 py-3 text-base rounded-xl border ${
-        error ? "border-red-500" : "border-gray-200"
-      } bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
+      className={`w-full px-4 py-3 text-base rounded-xl border ${error ? "border-red-500" : "border-gray-200"
+        } bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
     >
       <option value="" disabled>
         Select grade level
@@ -321,5 +363,62 @@ const SelectField = ({ label, error, options, className = "", ...props }) => (
     {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
   </div>
 );
+
+const YearRangePicker = ({
+  label,
+  startYear,
+  endYear,
+  onStartYearChange,
+  onEndYearChange,
+  error,
+  disabled,
+}) => {
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 16 }, (_, i) => currentYear - 5 + i).map(
+    (year) => year.toString()
+  );
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-bold text-slate-800 uppercase tracking-wide">
+        {label}
+      </label>
+      <div className="flex gap-3 items-center">
+        <div className="flex-1">
+          <select
+            value={startYear}
+            onChange={(e) => onStartYearChange(e.target.value)}
+            disabled={disabled}
+            className={`w-full px-4 py-3 text-base rounded-xl border ${error ? "border-red-500" : "border-gray-200"
+              } bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400`}
+          >
+            {years.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="text-slate-600 font-semibold">-</span>
+        <div className="flex-1">
+          <select
+            value={endYear}
+            onChange={(e) => onEndYearChange(e.target.value)}
+            disabled={disabled}
+            className={`w-full px-4 py-3 text-base rounded-xl border ${error ? "border-red-500" : "border-gray-200"
+              } bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all disabled:bg-gray-50 disabled:text-gray-400`}
+          >
+            {years.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
+    </div>
+  );
+};
 
 export default CreateSectionModal;
