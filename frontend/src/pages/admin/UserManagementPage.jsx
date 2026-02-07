@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { UserPlus, Trash2, UserCheck, UserX, Search, Loader2, Edit2 } from "lucide-react";
 import api from "../../services/api"; // BACKEND NOTE: Adjust the import based on your API utility
-
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import CreateUserModal from "@/components/modals/CreateUserModal";
@@ -186,7 +186,7 @@ const UserManagementPage = () => {
                     <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-semibold text-slate-800">{`${user.firstName} ${(user.middleName) ? user.middleName : ""} ${user.lastName}`}</td>
                       <td className="px-6 py-4 text-slate-500">{user.email}</td>
-                      <td className="px-6 py-4 capitalize text-slate-600">{user.roles[0].name}</td>
+                      <td className="px-6 py-4 capitalize text-slate-600">{}</td>
                       <td className="px-6 py-4">
                         <span
                           className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-tight ${

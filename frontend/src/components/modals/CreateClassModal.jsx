@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import ApiErrorModal from "@/components/modals/ApiErrorModal";
@@ -8,12 +8,8 @@ import api from "@/services/api";
 const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
-
-  // API ERROR STATE
   const [apiError, setApiError] = useState(null);
   const [showApiError, setShowApiError] = useState(false);
-
-  // Available options for dropdowns
   const [subjects, setSubjects] = useState([]);
   const [sections, setSections] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -24,15 +20,10 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
     sectionId: "",
     teacherId: "",
     schoolYear: "",
-    schedule: {
-      days: [],
-      startTime: "",
-      endTime: "",
-    },
+    schedule: { days: [], startTime: "", endTime: "" },
     room: "",
   });
 
-  // Fetch available options when modal opens
   useEffect(() => {
     fetchOptions();
   }, []);
@@ -46,31 +37,22 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
         api.get("/users/all"),
       ]);
 
-      if (subjectsRes.data.success && Array.isArray(subjectsRes.data.data)) {
-        setSubjects(subjectsRes.data.data);
-      }
-
-      if (sectionsRes.data.success && Array.isArray(sectionsRes.data.data)) {
-        setSections(sectionsRes.data.data);
-      }
-
-      if (usersRes.data.success && Array.isArray(usersRes.data.users)) {
-        // Filter for teachers only
+      if (subjectsRes.data.success) setSubjects(subjectsRes.data.data || []);
+      if (sectionsRes.data.success) setSections(sectionsRes.data.data || []);
+      if (usersRes.data.success) {
         const teachersList = usersRes.data.users.filter(
-          (u) => u.roles && Array.isArray(u.roles) && u.roles.some((role) => role?.name === "teacher")
+          (u) => u.roles?.some((role) => role?.name === "teacher")
         );
-        console.log("Fetched teachers:", teachersList);
         setTeachers(teachersList);
       }
-    } catch (error) {
-      console.error("Failed to fetch options", error);
+    } catch (err) {
+      console.error(err);
       toast.error("Failed to load form options");
     } finally {
       setLoadingOptions(false);
     }
   };
 
-  // Populate form when editing
   useEffect(() => {
     if (classItem) {
       const scheduleData = classItem.schedule ? parseSchedule(classItem.schedule) : { days: [], startTime: "", endTime: "" };
@@ -85,64 +67,35 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
     }
   }, [classItem]);
 
-  // Handle input changes
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    const fieldValue = type === "checkbox" ? checked : value;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: fieldValue,
-    }));
-
-    if (fieldValue) {
-      setErrors((errs) => ({
-        ...errs,
-        [name]: "",
-      }));
-    }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (value) setErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
-  // Parse schedule string to object
   const parseSchedule = (scheduleStr) => {
     if (!scheduleStr) return { days: [], startTime: "", endTime: "" };
-    // Expecting format like "MWF 10:00 - 11:00" or "M,W,F 10:00 - 11:00"
     const match = scheduleStr.match(/([A-Z,]+)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
     if (!match) return { days: [], startTime: "", endTime: "" };
-    
-    const daysStr = match[1].split(",").map(d => d.trim());
-    return {
-      days: daysStr,
-      startTime: match[2],
-      endTime: match[3],
-    };
+    const daysStr = match[1].split(",").map((d) => d.trim());
+    return { days: daysStr, startTime: match[2], endTime: match[3] };
   };
 
-  // Format schedule object to string
-  const formatSchedule = (schedule) => {
-    if (!schedule.days || schedule.days.length === 0 || !schedule.startTime || !schedule.endTime) {
-      return null;
-    }
-    return `${schedule.days.join(",").toUpperCase()} ${schedule.startTime} - ${schedule.endTime}`;
-  };
+  const formatSchedule = (schedule) =>
+    schedule.days.length && schedule.startTime && schedule.endTime
+      ? `${schedule.days.join(",").toUpperCase()} ${schedule.startTime} - ${schedule.endTime}`
+      : null;
 
-  // Generate years from 2026 to current year + 5
   const generateAvailableYears = () => {
     const currentYear = new Date().getFullYear();
-    const startYear = 2026;
-    const endYear = currentYear + 5;
     const years = [];
-    for (let i = startYear; i <= endYear; i++) {
-      years.push(`${i}-${i + 1}`);
-    }
+    for (let i = currentYear; i <= currentYear + 5; i++) years.push(`${i}-${i + 1}`);
     return years;
   };
 
-  // Days of week for schedule picker
   const daysOfWeek = ["M", "T", "W", "Th", "F", "Sa", "Su"];
   const daysOfWeekFull = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-  // Toggle day selection
   const toggleDay = (day) => {
     setFormData((prev) => ({
       ...prev,
@@ -155,330 +108,148 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
     }));
   };
 
-  // Update schedule time
   const updateScheduleTime = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      schedule: {
-        ...prev.schedule,
-        [field]: value,
-      },
-    }));
+    setFormData((prev) => ({ ...prev, schedule: { ...prev.schedule, [field]: value } }));
   };
 
-  // Validate form
-  const isFormValid = useMemo(() => {
-    return (
+  const isFormValid = useMemo(
+    () =>
       formData.subjectId &&
       formData.sectionId &&
       formData.teacherId &&
       formData.schoolYear &&
-      !Object.values(errors).some(Boolean)
-    );
-  }, [formData, errors]);
+      !Object.values(errors).some(Boolean),
+    [formData, errors]
+  );
 
-  // Submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Validate required fields
     const newErrors = {};
-    if (!formData.subjectId) newErrors.subjectId = "Subject is required";
-    if (!formData.sectionId) newErrors.sectionId = "Section is required";
-    if (!formData.teacherId) newErrors.teacherId = "Teacher is required";
-    if (!formData.schoolYear) newErrors.schoolYear = "School year is required";
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    if (!formData.subjectId) newErrors.subjectId = "Subject required";
+    if (!formData.sectionId) newErrors.sectionId = "Section required";
+    if (!formData.teacherId) newErrors.teacherId = "Teacher required";
+    if (!formData.schoolYear) newErrors.schoolYear = "School year required";
+    if (Object.keys(newErrors).length) return setErrors(newErrors);
 
     setLoading(true);
-
     try {
-      const scheduleStr = formatSchedule(formData.schedule);
       const payload = {
-        subjectId: formData.subjectId,
-        sectionId: formData.sectionId,
-        teacherId: formData.teacherId,
-        schoolYear: formData.schoolYear,
-        schedule: scheduleStr,
+        ...formData,
+        schedule: formatSchedule(formData.schedule),
         room: formData.room || null,
       };
-
       await onAddClass(payload);
       onClose();
-    } catch (error) {
-      console.error("Failed to save class", error);
-      const errorMessage = error.response?.data?.message || "Failed to save class";
-      setApiError(errorMessage);
+    } catch (err) {
+      console.error(err);
+      setApiError(err.response?.data?.message || "Failed to save class");
       setShowApiError(true);
     } finally {
       setLoading(false);
     }
   };
 
-  // Get subject name by ID
-  const getSubjectName = (id) => {
-    const subject = subjects.find((s) => s.id === id);
-    return subject?.name || "Unknown Subject";
-  };
-
-  // Get section name by ID
-  const getSectionName = (id) => {
-    const section = sections.find((s) => s.id === id);
-    return section?.name || "Unknown Section";
-  };
-
-  // Get teacher name by ID
-  const getTeacherName = (id) => {
-    const teacher = teachers.find(
-      (t) => t.id === id || t._id === id
-    );
-    if (teacher) {
-      return `${teacher.firstName || teacher.fullName || ""} ${teacher.lastName || ""}`.trim();
-    }
-    return "Unknown Teacher";
-  };
-
   return (
-    <>
-      {/* Overlay */}
-      <div
-        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Side Panel Modal */}
-      <div className="fixed right-0 top-0 bottom-0 w-full max-w-2xl bg-white shadow-2xl z-50 overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-700 text-white p-8 flex items-center justify-between shadow-md">
-          <div>
-            <h2 className="text-2xl font-bold">
-              {classItem ? "Edit Class" : "Create New Class"}
-            </h2>
-            <p className="text-red-100 text-sm mt-1">
-              {classItem ? "Update class information" : "Add a new class to the system"}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-red-500 rounded-md transition-colors"
-          >
-            <X size={24} />
-          </button>
+    <div className="w-full h-full bg-white animate-in fade-in slide-in-from-right-5 duration-300 p-8 lg:p-12 overflow-y-auto">
+      <div className="flex justify-between items-start mb-10">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+            {classItem ? "Edit Class" : "Add New Class"}
+          </h2>
+          <p className="text-gray-500 mt-1">Update or create a new class in the system</p>
         </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-8 space-y-7">
-          {/* Subject Section */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Subject <span className="text-red-600">*</span>
-            </label>
-            <select
-              name="subjectId"
-              value={formData.subjectId}
-              onChange={handleChange}
-              disabled={loadingOptions}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-100 transition"
-            >
-              <option value="">
-                {loadingOptions ? "Loading..." : "Select a subject"}
-              </option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>
-                  {subject.name} ({subject.code})
-                </option>
-              ))}
-            </select>
-            {errors.subjectId && (
-              <p className="text-red-600 text-xs mt-1.5">{errors.subjectId}</p>
-            )}
-          </div>
-
-          {/* Section Section */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Section <span className="text-red-600">*</span>
-            </label>
-            <select
-              name="sectionId"
-              value={formData.sectionId}
-              onChange={handleChange}
-              disabled={loadingOptions}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-100 transition"
-            >
-              <option value="">
-                {loadingOptions ? "Loading..." : "Select a section"}
-              </option>
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name} - {section.gradeLevel}
-                </option>
-              ))}
-            </select>
-            {errors.sectionId && (
-              <p className="text-red-600 text-xs mt-1.5">{errors.sectionId}</p>
-            )}
-          </div>
-
-          {/* Teacher Section */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Teacher <span className="text-red-600">*</span>
-            </label>
-            <select
-              name="teacherId"
-              value={formData.teacherId}
-              onChange={handleChange}
-              disabled={loadingOptions}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:bg-gray-100 transition"
-            >
-              <option value="">
-                {loadingOptions ? "Loading..." : "Select a teacher"}
-              </option>
-              {teachers.map((teacher) => (
-                <option key={teacher.id || teacher._id} value={teacher.id || teacher._id}>
-                  {teacher.firstName || teacher.fullName} {teacher.lastName || ""}
-                </option>
-              ))}
-            </select>
-            {errors.teacherId && (
-              <p className="text-red-600 text-xs mt-1.5">{errors.teacherId}</p>
-            )}
-          </div>
-
-          {/* School Year Picker */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              School Year <span className="text-red-600">*</span>
-            </label>
-            <div className="relative">
-              <select
-                name="schoolYear"
-                value={formData.schoolYear}
-                onChange={handleChange}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition appearance-none"
-              >
-                <option value="">Select a school year</option>
-                {generateAvailableYears().map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-              <ChevronRight className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
-            </div>
-            {errors.schoolYear && (
-              <p className="text-red-600 text-xs mt-1.5">{errors.schoolYear}</p>
-            )}
-          </div>
-
-          {/* Schedule Picker */}
-          <div className="bg-gray-50 rounded-md p-6 border border-gray-200">
-            <label className="block text-sm font-semibold text-gray-900 mb-4 flex items-center">
-              <Clock className="inline mr-2" size={16} />
-              Schedule (Optional)
-            </label>
-
-            {/* Days Selection */}
-            <div className="mb-5">
-              <p className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wide">Select Days</p>
-              <div className="flex flex-wrap gap-2">
-                {daysOfWeek.map((day, idx) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    className={`px-3 py-1.5 rounded-md font-medium text-sm transition ${
-                      formData.schedule.days.includes(day)
-                        ? "bg-red-600 text-white"
-                        : "bg-white border border-gray-300 text-gray-700 hover:border-red-400"
-                    }`}
-                    title={daysOfWeekFull[idx]}
-                  >
-                    {day}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Time Selection */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-2">Start Time</label>
-                <input
-                  type="time"
-                  value={formData.schedule.startTime}
-                  onChange={(e) => updateScheduleTime("startTime", e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-2">End Time</label>
-                <input
-                  type="time"
-                  value={formData.schedule.endTime}
-                  onChange={(e) => updateScheduleTime("endTime", e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition"
-                />
-              </div>
-            </div>
-
-            {/* Schedule Preview */}
-            {formData.schedule.days.length > 0 && formData.schedule.startTime && formData.schedule.endTime && (
-              <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-600 rounded">
-                <p className="text-sm text-red-900">
-                  <span className="font-semibold">Schedule:</span> {formData.schedule.days.join(", ")} {formData.schedule.startTime} - {formData.schedule.endTime}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Room Section */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Room (Optional)
-            </label>
-            <input
-              type="text"
-              name="room"
-              value={formData.room}
-              onChange={handleChange}
-              placeholder="e.g., Room 101 or A-205"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent transition"
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-2.5 border border-gray-300 rounded-md text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!isFormValid || loading}
-              className="flex-1 px-6 py-2.5 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? "Saving..." : "Save Class"}
-            </button>
-          </div>
-        </form>
+        <Button onClick={onClose} variant="ghost" className="p-2 rounded-full" disabled={loading}>
+          <X size={28} />
+        </Button>
       </div>
 
-      {/* API Error Modal */}
-      <ApiErrorModal
-        isOpen={showApiError}
-        onClose={() => setShowApiError(false)}
-        error={apiError}
-      />
-    </>
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SelectField label="Subject" name="subjectId" value={formData.subjectId} onChange={handleChange} options={subjects.map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }))} error={errors.subjectId} disabled={loading || loadingOptions} />
+          <SelectField label="Section" name="sectionId" value={formData.sectionId} onChange={handleChange} options={sections.map((s) => ({ value: s.id, label: `${s.name} - ${s.gradeLevel}` }))} error={errors.sectionId} disabled={loading || loadingOptions} />
+          <SelectField label="Teacher" name="teacherId" value={formData.teacherId} onChange={handleChange} options={teachers.map((t) => ({ value: t.id || t._id, label: `${t.firstName || t.fullName} ${t.lastName || ""}` }))} error={errors.teacherId} disabled={loading || loadingOptions} />
+        </div>
+
+        <SelectField label="School Year" name="schoolYear" value={formData.schoolYear} onChange={handleChange} options={generateAvailableYears().map((y) => ({ value: y, label: y }))} error={errors.schoolYear} disabled={loading} />
+
+        {/* Schedule */}
+        <div className="bg-gray-50 rounded-xl p-4 md:p-6 border border-gray-200 space-y-4">
+          <div className="flex items-center gap-2 text-gray-700 font-semibold text-sm md:text-base">
+            <Clock size={16} /> Schedule (Optional)
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {daysOfWeek.map((d, i) => {
+              const selected = formData.schedule.days.includes(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => toggleDay(d)}
+                  title={daysOfWeekFull[i]}
+                  className={`px-3 py-1.5 rounded-xl font-medium text-sm transition-all duration-200 border ${
+                    selected
+                      ? "bg-red-500 border-red-600 text-gray-900 shadow-md scale-105"
+                      : "bg-white border-gray-300 text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-2">
+            <InputField label="Start Time" type="time" value={formData.schedule.startTime} onChange={(e) => updateScheduleTime("startTime", e.target.value)} disabled={loading} />
+            <InputField label="End Time" type="time" value={formData.schedule.endTime} onChange={(e) => updateScheduleTime("endTime", e.target.value)} disabled={loading} />
+          </div>
+        </div>
+
+        {/* Room */}
+        <InputField label="Room" name="room" value={formData.room} onChange={handleChange} disabled={loading} />
+
+        {/* Buttons */}
+        <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
+          <Button type="button" onClick={onClose} variant="outline" disabled={loading}>
+            Go Back
+          </Button>
+          <Button type="submit" variant="destructive" className="text-white px-6 py-3 min-w-[160px]" disabled={loading || !isFormValid}>
+            {loading ? "Saving..." : classItem ? "Save Changes" : "Add Class"}
+          </Button>
+        </div>
+      </form>
+
+      <ApiErrorModal isOpen={showApiError} onClose={() => setShowApiError(false)} error={apiError} />
+    </div>
   );
 };
+
+const InputField = ({ label, error, className = "", ...props }) => (
+  <div className="space-y-2 flex-1">
+    <label className="block text-sm font-bold text-slate-800 uppercase tracking-wide">{label}</label>
+    <input
+      {...props}
+      className={`w-full px-4 py-3 text-base rounded-xl border ${error ? "border-red-500" : "border-gray-200"} focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all placeholder:text-gray-300 disabled:bg-gray-50 disabled:text-gray-400 ${className}`}
+    />
+    {error && <p className="text-red-500 text-xs font-medium mt-1">{error}</p>}
+  </div>
+);
+
+const SelectField = ({ label, options, error, className = "", disabled = false, ...props }) => (
+  <div className="space-y-2 flex-1">
+    <label className="block text-sm font-bold text-slate-800 uppercase tracking-wide">{label}</label>
+    <select
+      {...props}
+      disabled={disabled}
+      className={`w-full px-4 py-3 text-base rounded-xl border ${error ? "border-red-500" : "border-gray-200"} focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all bg-white ${className}`}
+    >
+      <option value="">Select {label}</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+    {error && <p className="text-red-500 text-xs font-medium mt-1">{error}</p>}
+  </div>
+);
 
 export default CreateClassModal;

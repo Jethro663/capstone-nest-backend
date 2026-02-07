@@ -1,24 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { UserPlus, Trash2, Edit2, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
-
+import { UserPlus, Trash2, Edit2, Search, Loader2 } from "lucide-react";
+import api from "@/services/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import CreateClassModal from "@/components/modals/CreateClassModal";
 import DeleteModal from "@/components/modals/DeleteModal";
-import api from "@/services/api";
 
 const ClassManagementPage = () => {
-  // -------------------------
-  // State
-  // -------------------------
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
-
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [classToDelete, setClassToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -30,25 +24,16 @@ const ClassManagementPage = () => {
     setLoading(true);
     try {
       const response = await api.get("/classes/all");
-      console.log("Fetched classes:", response.data);
-
       if (response.data.success) {
-        // Transform backend data to match frontend expectations
-        const transformedClasses = response.data.data.map((classItem) => ({
-          _id: classItem.id,
-          id: classItem.id,
-          subjectId: classItem.subjectId,
-          sectionId: classItem.sectionId,
-          teacherId: classItem.teacherId,
-          schoolYear: classItem.schoolYear,
-          schedule: classItem.schedule,
-          room: classItem.room,
-          isActive: classItem.isActive,
-          subject: classItem.subject,
-          section: classItem.section,
-          teacher: classItem.teacher,
-          createdAt: classItem.createdAt,
-          updatedAt: classItem.updatedAt,
+        const transformedClasses = response.data.data.map((c) => ({
+          _id: c.id,
+          subject: c.subject,
+          section: c.section,
+          teacher: c.teacher,
+          schoolYear: c.schoolYear,
+          schedule: c.schedule,
+          room: c.room,
+          isActive: c.isActive,
         }));
         setClasses(transformedClasses);
       }
@@ -70,31 +55,19 @@ const ClassManagementPage = () => {
   const handleAddOrUpdateClass = async (classData) => {
     try {
       if (editingClass) {
-        // Update existing class
         const response = await api.put(`/classes/${editingClass._id}`, classData);
-      
-
-        if (response.data.success) {
-          toast.success("Class updated successfully");
-          await fetchClasses(); // Refresh the list
-        }
+        if (response.data.success) toast.success("Class updated successfully");
       } else {
-        // Create new class
         const response = await api.post("/classes", classData);
-
-        if (response.data.success) {
-          toast.success("Class created successfully");
-          await fetchClasses(); // Refresh the list
-        }
+        if (response.data.success) toast.success("Class created successfully");
       }
-
+      await fetchClasses();
       setIsModalOpen(false);
       setEditingClass(null);
     } catch (error) {
       console.error("Failed to save class", error);
       const errorMessage = error.response?.data?.message || "Failed to save class";
       toast.error(errorMessage);
-      throw error; // Re-throw so the modal can handle it
     }
   };
 
@@ -111,15 +84,11 @@ const ClassManagementPage = () => {
     setDeleting(true);
     try {
       const response = await api.delete(`/classes/${classToDelete._id}`);
-
-      if (response.data.success) {
-        toast.success("Class deleted successfully");
-        await fetchClasses(); // Refresh the list
-      }
+      if (response.data.success) toast.success("Class deleted successfully");
+      await fetchClasses();
     } catch (error) {
       console.error("Failed to delete class", error);
-      const errorMessage = error.response?.data?.message || "Failed to delete class";
-      toast.error(errorMessage);
+      toast.error(error.response?.data?.message || "Failed to delete class");
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);
@@ -128,7 +97,7 @@ const ClassManagementPage = () => {
   };
 
   // -------------------------
-  // Filter Classes (Search)
+  // Search Filter
   // -------------------------
   const filteredClasses = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -143,9 +112,6 @@ const ClassManagementPage = () => {
     );
   }, [classes, searchTerm]);
 
-  // -------------------------
-  // Get display names
-  // -------------------------
   const getTeacherName = (teacher) => {
     if (!teacher) return "Unknown";
     return `${teacher.firstName || ""} ${teacher.lastName || ""}`.trim();
@@ -155,20 +121,21 @@ const ClassManagementPage = () => {
   // Render
   // -------------------------
   return (
-    <div className="flex-1 w-full rounded-2xl p-8 md:p-12">
-      {/* Create/Edit Class Modal */}
+    <div className="flex-1 w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-8 md:p-12">
+      {/* Modals */}
       {isModalOpen && (
-        <CreateClassModal
-          classItem={editingClass}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingClass(null);
-          }}
-          onAddClass={handleAddOrUpdateClass}
-        />
+        <div className="animate-in fade-in slide-in-from-right-5 duration-300">
+          <CreateClassModal
+            classItem={editingClass}
+            onClose={() => {
+              setIsModalOpen(false);
+              setEditingClass(null);
+            }}
+            onAddClass={handleAddOrUpdateClass}
+          />
+        </div>
       )}
 
-      {/* Delete Modal */}
       <DeleteModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -178,112 +145,100 @@ const ClassManagementPage = () => {
         title="Delete Class"
       />
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Class Management</h1>
-          <p className="text-slate-500">Manage all classes in the system.</p>
-        </div>
-        <Button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2">
-          <UserPlus className="h-4 w-4" />
-          Add New Class
-        </Button>
-      </div>
+      {!isModalOpen && (
+        <div className="flex flex-col gap-6 animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">Class Management</h1>
+              <p className="text-slate-500">Manage all classes in the system.</p>
+            </div>
+            <Button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" /> Add New Class
+            </Button>
+          </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-gray-50 px-4 py-1 rounded-xl border border-gray-100 shadow-sm max-w-2xl mb-4">
-        <Search className="h-5 w-5 text-gray-400" />
-        <Input
-          placeholder="Search by subject, section, teacher, schedule, or room..."
-          className="border-0 bg-transparent focus-visible:ring-0 shadow-none text-base"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+          {/* Search */}
+          <div className="flex items-center gap-2 bg-gray-50 px-4 py-1 rounded-xl border border-gray-100 shadow-sm max-w-2xl">
+            <Search className="h-5 w-5 text-gray-400" />
+            <Input
+              placeholder="Search by subject, section, teacher, schedule, or room..."
+              className="border-0 bg-transparent focus-visible:ring-0 shadow-none text-base"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-gray-100 shadow-sm overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-gray-50/50 border-b border-gray-100 text-slate-600 font-semibold uppercase tracking-wider">
-            <tr>
-              <th className="px-6 py-4">Subject</th>
-              <th className="px-6 py-4">Section</th>
-              <th className="px-6 py-4">Teacher</th>
-              <th className="px-6 py-4">School Year</th>
-              <th className="px-6 py-4">Schedule</th>
-              <th className="px-6 py-4">Room</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {loading ? (
-              <tr>
-                <td colSpan="8" className="py-20 text-center">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-                </td>
-              </tr>
-            ) : filteredClasses.length > 0 ? (
-              filteredClasses.map((classItem) => (
-                <tr key={classItem._id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 font-semibold text-slate-800">
-                    {classItem.subject?.name || "Unknown"}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {classItem.section?.name || "Unknown"}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {getTeacherName(classItem.teacher)}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{classItem.schoolYear}</td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {classItem.schedule || "—"}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">
-                    {classItem.room || "—"}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                        classItem.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {classItem.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-3">
-                      <button
-                        onClick={() => {
-                          setEditingClass(classItem);
-                          setIsModalOpen(true);
-                        }}
-                        title="Edit Class"
-                      >
-                        <Edit2 size={18} className="text-slate-900" />
-                      </button>
-                      <button
-                        onClick={() => confirmDeleteClass(classItem)}
-                        title="Delete Class"
-                      >
-                        <Trash2 size={18} className="text-slate-900" />
-                      </button>
-                    </div>
-                  </td>
+          {/* Table */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50/50 border-b border-gray-100 text-slate-600 font-semibold uppercase tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Subject</th>
+                  <th className="px-6 py-4">Section</th>
+                  <th className="px-6 py-4">Teacher</th>
+                  <th className="px-6 py-4">School Year</th>
+                  <th className="px-6 py-4">Schedule</th>
+                  <th className="px-6 py-4">Room</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="8" className="py-12 text-center text-gray-500">
-                  No classes found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {loading ? (
+                  <tr>
+                    <td colSpan="8" className="py-20 text-center">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                    </td>
+                  </tr>
+                ) : filteredClasses.length > 0 ? (
+                  filteredClasses.map((c) => (
+                    <tr key={c._id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-slate-800">{c.subject?.name || "Unknown"}</td>
+                      <td className="px-6 py-4 text-slate-500">{c.section?.name || "Unknown"}</td>
+                      <td className="px-6 py-4 text-slate-500">{getTeacherName(c.teacher)}</td>
+                      <td className="px-6 py-4 text-slate-500">{c.schoolYear}</td>
+                      <td className="px-6 py-4 text-slate-500">{c.schedule || "—"}</td>
+                      <td className="px-6 py-4 text-slate-500">{c.room || "—"}</td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-tight ${
+                            c.isActive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                          }`}
+                        >
+                          {c.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex justify-end gap-3">
+                          <button
+                            onClick={() => {
+                              setEditingClass(c);
+                              setIsModalOpen(true);
+                            }}
+                            title="Edit Class"
+                          >
+                            <Edit2 size={18} className="text-slate-900" />
+                          </button>
+                          <button onClick={() => confirmDeleteClass(c)} title="Delete Class">
+                            <Trash2 size={18} className="text-slate-900" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="py-12 text-center text-gray-500">
+                      No classes found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
