@@ -11,6 +11,7 @@ const ClassManagementPage = () => {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGrade, setSelectedGrade] = useState("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClass, setEditingClass] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -24,6 +25,7 @@ const ClassManagementPage = () => {
     setLoading(true);
     try {
       const response = await api.get("/classes/all");
+      console.log("Fetched classes:", response.data);
       if (response.data.success) {
         const transformedClasses = response.data.data.map((c) => ({
           _id: c.id,
@@ -102,15 +104,25 @@ const ClassManagementPage = () => {
   const filteredClasses = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return classes.filter(
-      (c) =>
-        (c.subject?.name || "").toLowerCase().includes(term) ||
-        (c.section?.name || "").toLowerCase().includes(term) ||
-        (c.teacher?.firstName || "").toLowerCase().includes(term) ||
-        (c.teacher?.lastName || "").toLowerCase().includes(term) ||
-        (c.schedule || "").toLowerCase().includes(term) ||
-        (c.room || "").toLowerCase().includes(term)
+      (c) => {
+        // Filter by grade level
+        const gradeLevel = c.section?.gradeLevel || c.subject?.gradeLevel || "";
+        const matchesGrade = selectedGrade === "all" ? true : gradeLevel === selectedGrade;
+
+        // Filter by search term
+        const matchesSearch =
+          (c.subject?.name || "").toLowerCase().includes(term) ||
+          (c.section?.name || "").toLowerCase().includes(term) ||
+          (c.teacher?.firstName || "").toLowerCase().includes(term) ||
+          (c.teacher?.lastName || "").toLowerCase().includes(term) ||
+          (c.schedule || "").toLowerCase().includes(term) ||
+          (c.room || "").toLowerCase().includes(term) ||
+          gradeLevel.toLowerCase().includes(term);
+
+        return matchesGrade && matchesSearch;
+      }
     );
-  }, [classes, searchTerm]);
+  }, [classes, searchTerm, selectedGrade]);
 
   const getTeacherName = (teacher) => {
     if (!teacher) return "Unknown";
@@ -158,6 +170,60 @@ const ClassManagementPage = () => {
             </Button>
           </div>
 
+          {/* Grade Filter Buttons */}
+          <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-100">
+            <button
+              onClick={() => setSelectedGrade("all")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "all"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              All Classes
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 7")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 7"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 7
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 8")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 8"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 8
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 9")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 9"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 9
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 10")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 10"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 10
+            </button>
+          </div>
+
           {/* Search */}
           <div className="flex items-center gap-2 bg-gray-50 px-4 py-1 rounded-xl border border-gray-100 shadow-sm max-w-2xl">
             <Search className="h-5 w-5 text-gray-400" />
@@ -176,6 +242,7 @@ const ClassManagementPage = () => {
                 <tr>
                   <th className="px-6 py-4">Subject</th>
                   <th className="px-6 py-4">Section</th>
+                  <th className="px-6 py-4">Grade Level</th>
                   <th className="px-6 py-4">Teacher</th>
                   <th className="px-6 py-4">School Year</th>
                   <th className="px-6 py-4">Schedule</th>
@@ -187,7 +254,7 @@ const ClassManagementPage = () => {
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan="8" className="py-20 text-center">
+                    <td colSpan="9" className="py-20 text-center">
                       <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
                     </td>
                   </tr>
@@ -196,6 +263,7 @@ const ClassManagementPage = () => {
                     <tr key={c._id} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-semibold text-slate-800">{c.subject?.name || "Unknown"}</td>
                       <td className="px-6 py-4 text-slate-500">{c.section?.name || "Unknown"}</td>
+                      <td className="px-6 py-4 text-slate-500">{c.section?.gradeLevel || c.subject?.gradeLevel || "—"}</td>
                       <td className="px-6 py-4 text-slate-500">{getTeacherName(c.teacher)}</td>
                       <td className="px-6 py-4 text-slate-500">{c.schoolYear}</td>
                       <td className="px-6 py-4 text-slate-500">{c.schedule || "—"}</td>
@@ -229,7 +297,7 @@ const ClassManagementPage = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="8" className="py-12 text-center text-gray-500">
+                    <td colSpan="9" className="py-12 text-center text-gray-500">
                       No classes found.
                     </td>
                   </tr>

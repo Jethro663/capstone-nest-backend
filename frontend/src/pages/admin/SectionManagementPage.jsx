@@ -12,6 +12,7 @@ const SectionManagementPage = () => {
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedGrade, setSelectedGrade] = useState("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
@@ -126,12 +127,20 @@ const SectionManagementPage = () => {
   const filteredSections = useMemo(() => {
     const term = searchTerm.toLowerCase();
     return sections.filter(
-      (s) =>
-        s.sectionName.toLowerCase().includes(term) ||
-        s.gradeLevel.toLowerCase().includes(term) ||
-        s.assignedTeacher.toLowerCase().includes(term)
+      (s) => {
+        // Filter by grade level
+        const matchesGrade = selectedGrade === "all" ? true : s.gradeLevel === selectedGrade;
+
+        // Filter by search term
+        const matchesSearch =
+          s.sectionName.toLowerCase().includes(term) ||
+          s.gradeLevel.toLowerCase().includes(term) ||
+          s.assignedTeacher.toLowerCase().includes(term);
+
+        return matchesGrade && matchesSearch;
+      }
     );
-  }, [sections, searchTerm]);
+  }, [sections, searchTerm, selectedGrade]);
 
   // -------------------------
   // Render
@@ -173,6 +182,60 @@ const SectionManagementPage = () => {
               <UserPlus className="h-4 w-4" />
               Add New Section
             </Button>
+          </div>
+
+          {/* Grade Filter Buttons */}
+          <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-100">
+            <button
+              onClick={() => setSelectedGrade("all")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "all"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              All Sections
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 7")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 7"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 7
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 8")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 8"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 8
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 9")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 9"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 9
+            </button>
+            <button
+              onClick={() => setSelectedGrade("Grade 10")}
+              className={`px-4 py-2 rounded-full font-medium transition-all ${
+                selectedGrade === "Grade 10"
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
+              }`}
+            >
+              Grade 10
+            </button>
           </div>
 
           {/* Search */}
