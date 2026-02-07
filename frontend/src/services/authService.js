@@ -284,6 +284,28 @@ export const login = async (email, password) => {
     }
 };
 
+// Validate credentials without enforcing email verification
+export const validateCredentials = async (email, password) => {
+    try {
+        const response = await api.post('/auth/validate-credentials', { email, password });
+        return response.data;
+    } catch (error) {
+        if (error.response) {
+            const { data, status } = error.response;
+            throw {
+                message: data.message || 'Invalid credentials',
+                code: data.code,
+                status,
+            };
+        }
+
+        throw {
+            message: 'Network error. Please try again.',
+            code: 'NETWORK_ERROR'
+        };
+    }
+};
+
 // ================================================================================
 // LOGOUT - Clear User Session
 // ================================================================================

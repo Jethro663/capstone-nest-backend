@@ -99,6 +99,17 @@ export class AuthController {
     return { success: true, message: 'Password reset successful' };
   }
 
+  // Validate credentials endpoint used by frontend to confirm the password
+  // when a login attempt fails due to unverified email.
+  @Public()
+  @Post('validate-credentials')
+  @HttpCode(HttpStatus.OK)
+  async validateCredentials(@Body() dto: { email: string; password: string }) {
+    await this.authService.validateCredentials(dto.email, dto.password);
+
+    return { success: true, message: 'Credentials valid' };
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getCurrentUser(@CurrentUser() user: any) {

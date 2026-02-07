@@ -4,7 +4,7 @@
 // Verifies user email with 6-digit OTP code
 // ALL UI PRESERVED - Only logic updated
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,21 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
     }
   }, [resendCountdown]);
 
+  // Refs for segmented inputs
+  const inputRefs = useRef([]);
+
+  // Focus and reset when email changes (e.g., navigated from login)
+  useEffect(() => {
+    setCode('');
+    setError('');
+    // focus first input (use timeout to ensure refs are mounted)
+    setTimeout(() => {
+      if (inputRefs.current && inputRefs.current[0]) {
+        inputRefs.current[0].focus();
+      }
+    }, 0);
+  }, [email]);
+
   // ================================================================================
   // VALIDATION
   // ================================================================================
@@ -107,27 +122,8 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
   // INPUT HANDLER
   // ================================================================================
 
-  /**
-   * Handle code input
-   *
-   * FEATURES:
-   * - Only allows numbers
-   * - Max 6 digits
-   * - Validates on change
-   */
-  const handleCodeChange = (value) => {
-    // Only allow numbers
-    const numbersOnly = value.replace(/\D/g, '');
+  // NOTE: Individual input handlers are implemented inline in the JSX below to support segmented OTP UI.
 
-    // Max 6 digits
-    const truncated = numbersOnly.slice(0, 6);
-
-    setCode(truncated);
-
-    // Validate
-    const validationError = validateCode(truncated);
-    setError(validationError);
-  };
 
   // ================================================================================
   // VERIFICATION
@@ -329,21 +325,73 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
                 </p>
               </div>
 
-              {/* Code Input */}
+              {/* Code Input - segmented OTP fields */}
               <div className="space-y-2">
                 <Label htmlFor="code">Verification Code</Label>
-                <Input
-                    id="code"
-                    type="text"
-                    inputMode="numeric"  // Shows number keyboard on mobile
-                    placeholder="000000"
-                    value={code}
-                    onChange={(e) => handleCodeChange(e.target.value)}
-                    className={`text-center text-2xl tracking-widest ${error ? "border-[#dc2626]" : ""}`}
-                    maxLength={6}
-                    disabled={isVerifying || isResending}
-                    autoFocus  // Auto-focus for better UX
-                />
+                <div
+                  className={`flex gap-2 justify-center ${error ? 'border border-[#dc2626] p-2 rounded-md' : ''}`}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const paste = (e.clipboardData || window.clipboardData).getData('text');
+                    const digits = paste.replace(/\D/g, '').slice(0,6);
+                    if (digits.length) {
+                      setCode(digits.padEnd(6, ''));
+                      const nextIndex = digits.length >= 6 ? 5 : digits.length;
+                      const dst = inputRefs.current[nextIndex];
+                      if (dst) dst.focus();
+                    }
+                  }}
+                >
+                  {Array.from({length:6}).map((_, i) => (
+                    <input
+                      key={i}
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={1}
+                      ref={el => inputRefs.current[i] = el}
+                      value={code[i] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0,1);
+                        setError('');
+                        const arr = code.split('').slice(0,6);
+                        while (arr.length < 6) arr.push('');
+                        arr[i] = val;
+                        const newCode = arr.join('');
+                        setCode(newCode);
+                        if (val) {
+                          const next = inputRefs.current[i+1];
+                          if (next) next.focus();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Backspace') {
+                          e.preventDefault();
+                          const arr = code.split('').slice(0,6);
+                          while (arr.length < 6) arr.push('');
+                          if (arr[i]) {
+                            arr[i] = '';
+                            setCode(arr.join(''));
+                          } else {
+                            const prev = inputRefs.current[i-1];
+                            if (prev) {
+                              arr[i-1] = '';
+                              setCode(arr.join(''));
+                              prev.focus();
+                            }
+                          }
+                        } else if (e.key === 'ArrowLeft') {
+                          const prev = inputRefs.current[i-1];
+                          if (prev) prev.focus();
+                        } else if (e.key === 'ArrowRight') {
+                          const next = inputRefs.current[i+1];
+                          if (next) next.focus();
+                        }
+                      }}
+                      disabled={isVerifying || isResending}
+                      className="w-12 h-12 text-center text-2xl tracking-widest rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#dc2626]"
+                    />
+                  ))}
+                </div>
                 {error && (
                     <p className="text-sm text-[#dc2626]">{error}</p>
                 )}

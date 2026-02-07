@@ -61,6 +61,24 @@ export class AuthService {
     };
   }
 
+  /**
+   * Validate credentials without enforcing email verification or status.
+   * Used by the frontend to determine if a provided password is correct for an email
+   * when the login response indicates the account is unverified.
+   *
+   * Returns true if credentials are valid, otherwise throws UnauthorizedException.
+   */
+  async validateCredentials(email: string, password: string) {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
+
+    // If we reach here, credentials are valid
+    return true;
+  }
+
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email);
     if (!user) return; // Silent fail to prevent email enumeration

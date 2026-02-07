@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { validateCredentials } from "@/services/authService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,9 @@ import { ArrowLeft, Eye, EyeOff } from "lucide-react";
  *
  * @param {Function} onBack - Navigate back
  * @param {Function} onForgotPassword - Navigate to forgot password
+ * @param {Function} onUnverified - Called when account is unverified. Receives the email and should navigate to verification page.
  */
-export function LoginPage({ onBack, onForgotPassword }) {
+export function LoginPage({ onBack, onForgotPassword, onUnverified }) {
   const { login } = useAuth();
 
   // Form state
@@ -86,9 +88,22 @@ export function LoginPage({ onBack, onForgotPassword }) {
       if (error.message?.includes("Invalid") || error.code === "INVALID_CREDENTIALS") {
         setPasswordError("Invalid email or password");
       }
-      // Email not verified
+      // Email not verified - only navigate to verification flow if the provided password is correct
       else if (error.message?.includes("Email not verified") || error.code === "EMAIL_NOT_VERIFIED") {
-        setEmailError("Please verify your email before logging in");
+        // Confirm the password is correct before sending user to verification page
+        try {
+          await validateCredentials(email, password);
+
+          // If credentials are valid, navigate to verification flow
+          if (typeof onUnverified === 'function') {
+            onUnverified(email);
+          } else {
+            setEmailError("Please verify your email before logging in");
+          }
+        } catch (vError) {
+          // Password is incorrect or validation failed
+          setPasswordError("Invalid email or password");
+        }
       }
       // Account not active
       else if (error.message?.includes("not active")) {

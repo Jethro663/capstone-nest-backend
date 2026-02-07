@@ -278,6 +278,11 @@ function App() {
                         onBack={() => setCurrentPage('splash')}
                         onForgotPassword={() => setCurrentPage('forgotPassword')}
                         onSignUp={() => setCurrentPage('signup')}
+                        onUnverified={(email) => {
+                            // Store email for verification page and navigate
+                            setTempEmail(email);
+                            setCurrentPage('emailVerification');
+                        }}
                         // onLogin removed - handled by LoginPage via useAuth()
                     />
                 );
@@ -297,7 +302,7 @@ function App() {
                 return (
                     <EmailVerificationPage
                         email={tempEmail}
-                        onBack={() => setCurrentPage('signup')}
+                        onBack={() => setCurrentPage('login')}
                         onVerify={handleEmailVerification}
                     />
                 );
