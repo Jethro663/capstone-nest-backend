@@ -1,6 +1,5 @@
 import { 
-  User, Mail, Phone, MapPin, Calendar, 
-  GraduationCap, Users, FileText, Download 
+  User, Mail, Phone, MapPin, Calendar
 } from "lucide-react";
 import { useState } from "react";
 
@@ -9,8 +8,7 @@ export function ProfilePage() {
 
   const tabs = [
     { id: "about", label: "About Me" },
-    { id: "requirements", label: "Requirements" },
-    { id: "education", label: "Education" },
+    
     { id: "family", label: "Family" },
   ];
 
@@ -75,8 +73,6 @@ export function ProfilePage() {
 
         <div style={{ padding: '2rem' }}>
           {activeTab === "about" && <AboutMeTab />}
-          {activeTab === "requirements" && <RequirementsTab />}
-          {activeTab === "education" && <EducationTab />}
           {activeTab === "family" && <FamilyTab />}
         </div>
       </div>
@@ -113,72 +109,8 @@ function AboutMeTab() {
   );
 }
 
-function RequirementsTab() {
-  const requirements = [
-    { id: "1", name: "PSA Birth Certificate", type: "E-copy", date: "05/15/2023", file: "PSA Cert.pdf" },
-    { id: "2", name: "2x2 ID Picture", type: "E-copy", date: "05/01/2023", file: "2x2 Picture.pdf" },
-    { id: "3", name: "Good Moral Certificate", type: "E-copy", date: "05/01/2023", file: "Good Moral.pdf" },
-  ];
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-      <section>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-          <div style={{ width: '6px', height: '32px', backgroundColor: '#dc2626', borderRadius: '4px' }} />
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: 0 }}>Enrollment Profile</h3>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
-          <GridItem label="Nationality" value="Filipino" />
-          <GridItem label="Admission Date" value="06/23/2023" />
-          <GridItem label="Student Type" value="Full-time" />
-          <GridItem label="Category" value="Freshman" />
-        </div>
-      </section>
 
-      <section>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
-          <div style={{ width: '6px', height: '32px', backgroundColor: '#dc2626', borderRadius: '4px' }} />
-          <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827', margin: 0 }}>Documentation Tracking</h3>
-        </div>
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead style={{ backgroundColor: '#dc2626', color: 'white' }}>
-              <tr>
-                <th style={tableHeadStyle}>REQUIREMENT</th>
-                <th style={tableHeadStyle}>COPY TYPE</th>
-                <th style={tableHeadStyle}>SUBMITTED</th>
-                <th style={tableHeadStyle}>ACTION</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requirements.map((req) => (
-                <tr key={req.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '1rem', fontSize: '14px', fontWeight: '600' }}>{req.name}</td>
-                  <td style={{ padding: '1rem', fontSize: '14px', color: '#4b5563' }}>{req.type}</td>
-                  <td style={{ padding: '1rem', fontSize: '14px', color: '#4b5563' }}>{req.date}</td>
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', backgroundColor: '#f0fdf4', color: '#166534', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', border: '1px solid #dcfce7' }}>
-                      <FileText size={14} /> {req.file} <Download size={14} style={{ cursor: 'pointer' }} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function EducationTab() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <EducationCard school="Casa De San Miguel Montessori Inc." year="2019-2023" level="Secondary" />
-      <EducationCard school="Casa De San Miguel Montessori Inc." year="2005-2019" level="Primary" />
-    </div>
-  );
-}
 
 function FamilyTab() {
   return (
@@ -214,28 +146,10 @@ function InfoRow({ label, value }) {
   );
 }
 
-function GridItem({ label, value }) {
-  return (
-    <div style={{ padding: '1.25rem', backgroundColor: 'white', borderRight: '1px solid #f3f4f6' }}>
-      <span style={{ display: 'block', fontSize: '10px', fontWeight: '800', color: '#dc2626', textTransform: 'uppercase', marginBottom: '4px' }}>{label}</span>
-      <span style={{ fontSize: '1.1rem', fontWeight: '700', color: '#111827' }}>{value}</span>
-    </div>
-  );
-}
 
-function EducationCard({ school, year, level }) {
-  return (
-    <div style={{ display: 'flex', gap: '1rem', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: '8px' }}>
-      <GraduationCap size={32} color="#3b82f6" />
-      <div>
-        <div style={{ fontSize: '12px', fontWeight: '700', color: '#3b82f6' }}>{level}</div>
-        <div style={{ fontWeight: '700' }}>{school}</div>
-        <div style={{ fontSize: '14px', color: '#6b7280' }}>{year}</div>
-      </div>
-    </div>
-  );
-}
 
-const tableHeadStyle = { padding: '12px 16px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.05em' };
+
+
+
 
 export default ProfilePage;
