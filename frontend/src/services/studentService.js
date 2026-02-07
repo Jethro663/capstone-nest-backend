@@ -1,33 +1,34 @@
 import api from './api';
 
+// Student-facing API (matches backend "classes" module)
 const studentService = {
-  // Lessons
-  async getLessons(params = {}) {
-    const response = await api.get('/student/lessons', { params });
+  // Get classes with optional filters (maps to GET /classes/all)
+  async getClasses(params = {}) {
+    const response = await api.get('/classes/all', { params });
     return response.data;
   },
 
-  // Assessments
-  async getAssessments(params = {}) {
-    const response = await api.get('/student/assessments', { params });
-    return response.data;
-  },
-  async startAssessment(id) {
-    const response = await api.post(`/student/assessments/${id}/start`);
-    return response.data;
-  },
-  async submitAssessment(attemptId, answers) {
-    const response = await api.post(`/student/assessments/attempts/${attemptId}/submit`, { answers });
-    return response.data;
-  },
-  async getAttemptDetails(attemptId) {
-    const response = await api.get(`/student/assessments/attempts/${attemptId}`);
+  // Get a specific class by ID (GET /classes/:id)
+  async getClassById(id) {
+    const response = await api.get(`/classes/${id}`);
     return response.data;
   },
 
-  // Enrollments
-  async getEnrollments() {
-    const response = await api.get('/student/enrollments');
+  // Get classes by teacher (GET /classes/teacher/:teacherId)
+  async getClassesByTeacher(teacherId) {
+    const response = await api.get(`/classes/teacher/${teacherId}`);
+    return response.data;
+  },
+
+  // Get classes by section (GET /classes/section/:sectionId)
+  async getClassesBySection(sectionId) {
+    const response = await api.get(`/classes/section/${sectionId}`);
+    return response.data;
+  },
+
+  // Get classes by subject (GET /classes/subject/:subjectId)
+  async getClassesBySubject(subjectId) {
+    const response = await api.get(`/classes/subject/${subjectId}`);
     return response.data;
   }
 };

@@ -17,173 +17,165 @@ import SubjectManagementPage from './pages/admin/SubjectManagementPage';
 import SectionManagementPage from './pages/admin/SectionManagementPage';
 import ClassManagementPage from './pages/admin/ClassManagementPage';
 import  ProfilePage  from './pages/ProfilePage';
+import CompleteProfilePage from './pages/auth/CompleteProfilePage';
 import  NotificationsPage  from './pages/NotificationsPage';
 import MessagesPage  from './pages/MessagesPage';
+import profilesService from './services/profilesService';
 import { Toaster } from './components/ui/sonner';
 
 function App() {
 
-    // ================================================================================
-    // AUTH STATE - From Context
-    // ================================================================================
-    const { user, logout } = useAuth();
+    // Auth state from context
+    const { user, logout, loading: authLoading } = useAuth();
 
-    // ================================================================================
-    // NAVIGATION STATE - Unchanged
-    // ================================================================================
+    // Navigation state
 
-    /**
-     * Current page/route
-     * Still using simple state-based routing
-     * Could be replaced with React Router later
-     */
+    // Current page (simple state-based routing)
     const [currentPage, setCurrentPage] = useState('splash');
 
-    /**
-     * Selected role for login/signup
-     * Determines which form to show
-     */
+    // Selected role for forms
     const [selectedRole, setSelectedRole] = useState('student');
 
-    /**
-     * Temporary data for verification flow
-     * Stores email during signup → verification process
-     */
+    // Temporary email used during signup/verification
     const [tempEmail, setTempEmail] = useState('');
 
-    // ================================================================================
-    // AUTO-REDIRECT AUTHENTICATED USERS
-    // ================================================================================
+    // Track when auth is ready (loading complete, user data available)
+    const [authReady, setAuthReady] = useState(false);
 
-    /**
-     * If user is logged in, auto-redirect to dashboard
-     *
-     * WHY:
-     * - Logged-in users shouldn't see splash/login pages
-     * - Better UX - go straight to their dashboard
-     */
+    // Effect 1: Wait for auth to finish loading, THEN allow profile check
     useEffect(() => {
-        if (user && (currentPage === 'splash' || currentPage === 'login' || currentPage === 'signup')) {
-            setCurrentPage('dashboard');
+        if (!authLoading) {
+            setAuthReady(true);
         }
-    }, [user, currentPage]);
+    }, [authLoading]);
 
-    // ================================================================================
-    // NAVIGATION HANDLERS
-    // ================================================================================
+    // Redirect logged-in users to dashboard or complete profile
+    // Only runs once auth is complete and user is loaded
+    const checkProfileCompletion = async () => {
+        if (!user) {
+            console.log('checkProfileCompletion: no user available');
+            return false;
+        }
+        if(user.roles?.includes('admin')) {
+            return false;
+        }
 
-    /**
-     * Handle action selection from splash screen
-     *
-     * @param {String} role - Not used for login (null)
-     * @param {String} action - Action (login/signup)
-     *
-     * UPDATED: Removed role selection for login
-     */
+        try {
+            console.log('checkProfileCompletion start - user:', user);
+            console.log('Checking profile completion for user ID:', user.id);
+            const res = await profilesService.getProfileByUserId(user.id);
+            console.log('profilesService.getProfileByUserId res:', res);
+            const profile = res?.data || res || null;
+            console.log('derived profile:', profile);
+
+            // Check basic user fields (firstName, lastName)
+            const requiredUserFields = ['firstName', 'lastName'];
+            const missingUserChecks = {};
+            requiredUserFields.forEach((f) => {
+                const val = user[f];
+                const present = val !== undefined && val !== null && !(typeof val === 'string' && !val.toString().trim());
+                missingUserChecks[f] = !present;
+                console.log(`user field ${f}:`, val, 'present=', present);
+            });
+            const missingUser = requiredUserFields.some((f) => missingUserChecks[f]);
+
+            // Check profile fields
+            const profileFields = ['dateOfBirth', 'gender', 'phone', 'address', 'familyName', 'familyRelationship', 'familyContact'];
+            const missingProfileChecks = {};
+
+            profileFields.forEach((f) => {
+                let v;
+                if (f === 'dateOfBirth') {
+                    v = profile?.dateOfBirth ?? profile?.dob ?? user.dateOfBirth ?? user.dob;
+                } else {
+                    v = profile?.[f] ?? user[f];
+                }
+
+                const present = v !== undefined && v !== null && !(typeof v === 'string' && !v.toString().trim());
+                missingProfileChecks[f] = !present;
+                console.log(`profile field ${f}:`, v, 'present=', present);
+            });
+
+            const missingProfile = profileFields.some((f) => missingProfileChecks[f]);
+
+            console.log('Profile check summary - missingUserChecks:', missingUserChecks, 'missingProfileChecks:', missingProfileChecks);
+            console.log('Profile check result - missingUser:', missingUser, 'missingProfile:', missingProfile);
+            return missingUser || missingProfile;
+        } catch (err) {
+            console.log('Profile check failed:', err);
+            return true;
+        }
+    };
+
+    // Effect 2: Check profile completion only AFTER auth is ready
+    useEffect(() => {
+        if (!authReady || !user) return;
+
+        let mounted = true;
+
+        (async () => {
+            const needs = await checkProfileCompletion();
+            if (!mounted) return;
+
+            if (needs) {
+                console.log('User needs to complete profile');
+                setCurrentPage('completeProfile');
+                return;
+            }
+
+            if (currentPage === 'splash' || currentPage === 'login' || currentPage === 'signup') {
+                setCurrentPage('dashboard');
+            }
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, [authReady, user, currentPage]);
+
+    // Navigation handlers
+
+    // Handle splash actions (login/signup)
     const handleRoleSelection = (role, action) => {
         setCurrentPage(action);
     };
 
-    /**
-     * Handle successful signup
-     * Redirect to email verification
-     *
-     * @param {Object} data - Registration response data
-     *
-     * CHANGED:
-     * - No longer creates user immediately
-     * - Stores email for verification
-     * - Redirects to verification page
-     */
+    // Store signup email and go to verification
     const handleSignUp = (data) => {
-        // Store email for verification page
         setTempEmail(data.email || data.data?.user?.email);
-
-        // Redirect to verification
         setCurrentPage('emailVerification');
-    };
+    }; 
 
-    /**
-     * Handle successful email verification
-     * Redirect to login
-     *
-     * CHANGED:
-     * - No longer manually creates user
-     * - Backend already activated account
-     * - Just redirect to login
-     */
+    // Clear temp email and go to login
     const handleEmailVerification = () => {
-        // Clear temp email
         setTempEmail('');
-
-        // Redirect to login
         setCurrentPage('login');
-    };
+    }; 
 
-    /**
-     * Handle successful password reset
-     * Redirect to login
-     *
-     * UNCHANGED from original
-     */
+    // Redirect to login after password reset
     const handlePasswordReset = () => {
         setCurrentPage('login');
-    };
+    }; 
 
-    /**
-     * Handle logout
-     *
-     * CHANGED:
-     * - Calls real logout API
-     * - Clears tokens
-     * - Redirects to splash
-     */
+    // Logout via context and go to splash
     const handleLogout = async () => {
-        await logout();  // Calls API + clears state
+        await logout();
         setCurrentPage('splash');
-    };
+    }; 
 
-    /**
-     * Handle profile click
-     *
-     * UNCHANGED from original
-     */
+    // Show profile
     const handleProfileClick = () => {
         setCurrentPage('profile');
-    };
+    }; 
 
-    /**
-     * Handle profile save
-     *
-     * CHANGED:
-     * - Updates user in contexts
-     * - In real app, would call backend API to persist
-     * - For now, just updates local state
-     *
-     * TODO: Add API call to update user profile
-     * await api.patch('/users/profile', profileData)
-     */
+    // Profile save: updates context (TODO: persist to backend)
 
-    /**
-     * Handle general navigation
-     *
-     * UNCHANGED from original
-     */
+    // General navigation
     const handleNavigation = (page) => {
         setCurrentPage(page);
-    };
+    }; 
 
-    // ================================================================================
-    // RENDER DASHBOARD CONTENT
-    // ================================================================================
-
-    /**
-     * Render appropriate dashboard based on user role
-     *
-     * CHANGED:
-     * - Uses real user.roles array from backend
-     * - Checks roles[0] instead of role string
-     */
+    // Render dashboard/other pages based on user role
     const renderDashboardContent = () => {
         if (!user) return null;
 
@@ -249,24 +241,13 @@ function App() {
         );
     };
 
-    // ================================================================================
-    // MAIN RENDER - Page Routing
-    // ================================================================================
+    // Page routing
 
-    /**
-     * Render current page based on state
-     *
-     * CHANGES:
-     * - Removed onLogin/onSignUp props (handled by contexts)
-     * - Added handleSignUp callback
-     * - Updated user role checking
-     */
+    // Render current page
     const renderPage = () => {
         switch (currentPage) {
 
-            // ============================
-            // PUBLIC PAGES (No Auth Required)
-            // ============================
+            // Public pages
 
             case 'splash':
                 return <SplashScreen onSelectRole={handleRoleSelection} />;
@@ -283,7 +264,7 @@ function App() {
                             setTempEmail(email);
                             setCurrentPage('emailVerification');
                         }}
-                        // onLogin removed - handled by LoginPage via useAuth()
+                        // onLogin handled by context
                     />
                 );
 
@@ -315,9 +296,7 @@ function App() {
                     />
                 );
 
-            // ============================
-            // PROTECTED PAGES (Auth Required)
-            // ============================
+            // Protected pages
 
             case 'profile':
                 // Check if user is logged in
@@ -337,6 +316,26 @@ function App() {
                         onMessages={() => setCurrentPage('messages')}
                     >
                         <ProfilePage />
+                    </DashboardLayout>
+                );
+
+            case 'completeProfile':
+                if (!user) {
+                    setCurrentPage('splash');
+                    return null;
+                }
+
+                return (
+                    <DashboardLayout
+                        role={user.roles?.[0] || 'student'}
+                        userName={`${user.firstName || ''} ${user.lastName || user.email}`}
+                        currentPage="complete-profile"
+                        onNavigate={handleNavigation}
+                        onProfile={handleProfileClick}
+                        onNotifications={() => setCurrentPage('notifications')}
+                        onMessages={() => setCurrentPage('messages')}
+                    >
+                        <CompleteProfilePage onComplete={() => setCurrentPage('dashboard')} />
                     </DashboardLayout>
                 );
 
@@ -366,9 +365,7 @@ function App() {
         }
     };
 
-    // ================================================================================
-    // RENDER APP
-    // ================================================================================
+    // App render
 
     return (
         <>

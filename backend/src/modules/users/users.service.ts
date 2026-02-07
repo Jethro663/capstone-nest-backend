@@ -7,7 +7,7 @@ import {
 import { and, eq, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
-import { users, roles, userRoles } from '../../drizzle/schema';
+import { users, roles, userRoles, userProfiles } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { OtpService } from '../otp/otp.service';
@@ -92,10 +92,14 @@ export class UsersService {
 
     if (!user) return null;
 
-    // Transform to include roles array
+    // Transform to include roles array and flatten profile into the user object
+    const profile = (user as any).profile || {};
+    const { userRoles: userRolesData, profile: _p, ...userData } = user as any;
+
     return {
-      ...user,
-      roles: user.userRoles.map((ur) => ur.role),
+      ...userData,
+      ...profile,
+      roles: userRolesData.map((ur) => ur.role),
     };
   }
 
@@ -108,14 +112,19 @@ export class UsersService {
             role: true,
           },
         },
+        profile: true,
       },
     });
 
     if (!user) return null;
 
+    const profile = (user as any).profile || {};
+    const { userRoles: userRolesData, profile: _p, ...userData } = user as any;
+
     return {
-      ...user,
-      roles: user.userRoles.map((ur) => ur.role),
+      ...userData,
+      ...profile,
+      roles: userRolesData.map((ur) => ur.role),
     };
   }
   //CRUD Operations
@@ -212,6 +221,8 @@ export class UsersService {
 
   // !!Subject to change based on requirements
   async updateUser(id: string, updateUserDto: UpdateUserDto) {
+    console.log('[USERS] updateUser called for id:', id, 'payload:', updateUserDto);
+
     const existingUser = await this.findById(id);
 
     if (!existingUser) {
@@ -256,11 +267,57 @@ export class UsersService {
     if (updateUserDto.studentId !== undefined)
       updateData.studentId = updateUserDto.studentId;
 
-    const [updatedUser] = await this.db
-      .update(users)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
+    // New profile fields will be stored in `user_profiles` table as a separate one-to-one record
+    const profilePayload: any = {};
+    if (updateUserDto.dob) profilePayload.dateOfBirth = new Date(updateUserDto.dob);
+    if (updateUserDto.gender !== undefined) profilePayload.gender = updateUserDto.gender;
+    if (updateUserDto.phone !== undefined) profilePayload.phone = updateUserDto.phone;
+    if (updateUserDto.address !== undefined) profilePayload.address = updateUserDto.address;
+    if (updateUserDto.familyName !== undefined)
+      profilePayload.familyName = updateUserDto.familyName;
+    if (updateUserDto.familyRelationship !== undefined)
+      profilePayload.familyRelationship = updateUserDto.familyRelationship;
+    if (updateUserDto.familyContact !== undefined)
+      profilePayload.familyContact = updateUserDto.familyContact;
+
+    let updatedUser;
+    try {
+      [updatedUser] = await this.db
+        .update(users)
+        .set({ ...updateData, updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+    } catch (err) {
+      console.error('[USERS] Failed to update users row for user:', id, err);
+      throw err;
+    }
+
+    // Upsert profile record if payload exists
+    if (Object.keys(profilePayload).length > 0) {
+      console.log('[USERS] profilePayload to upsert for user:', id, profilePayload);
+      try {
+        const existingProfile = await this.db.query.userProfiles.findFirst({
+          where: eq(userProfiles.userId, id),
+        });
+
+        if (existingProfile) {
+          await this.db
+            .update(userProfiles)
+            .set({ ...profilePayload, updatedAt: new Date() })
+            .where(eq(userProfiles.userId, id));
+        } else {
+          await this.db.insert(userProfiles).values({
+            userId: id,
+            ...profilePayload,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+      } catch (err) {
+        console.error('[USERS] Failed to upsert profile for user:', id, err);
+        throw err;
+      }
+    }
 
     if (updateUserDto.role) {
       await this.db.delete(userRoles).where(eq(userRoles.userId, id));

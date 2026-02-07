@@ -28,11 +28,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: any) {
+    console.log('[JWT-STRAT] Validating payload:', payload);
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
     }
 
     const user = await this.usersService.findById(payload.userId);
+    console.log('[JWT-STRAT] lookup user:', payload.userId, 'found:', !!user);
 
     if (!user) {
       throw new UnauthorizedException('User not found');

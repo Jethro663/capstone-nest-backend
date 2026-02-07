@@ -193,6 +193,28 @@ export const classes = pgTable(
   }),
 );
 
+export const userProfiles = pgTable(
+  'user_profiles',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    dateOfBirth: timestamp('date_of_birth'),
+    gender: text('gender'),
+    phone: text('phone'),
+    address: text('address'),
+    familyName: text('family_name'),
+    familyRelationship: text('family_relationship'),
+    familyContact: text('family_contact'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('user_profiles_user_id_idx').on(table.userId),
+  }),
+);
+
+
 export const enrollments = pgTable(
   'enrollments',
   {
@@ -255,11 +277,15 @@ export const assessments = pgTable('assessments', {
 // 5. RELATIONS
 // ==========================================
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   userRoles: many(userRoles), // Relationship to Roles
   classesTaught: many(classes, { relationName: 'teacherClasses' }),
   advisedSections: many(sections),
   enrollments: many(enrollments),
+  profile: one(userProfiles, {
+    fields: [users.id],
+    references: [userProfiles.userId],
+  }),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({

@@ -1,51 +1,8 @@
-// ================================================================================
-// AUTH SERVICE - Backend-Compatible Authentication
-// ================================================================================
-// This service handles all authentication operations
-// Matches the backend API structure exactly
+// Auth service: backend-compatible authentication API
 
 import api, { setAccessToken, clearAccessToken } from './api';
 
-// ================================================================================
-// REGISTRATION - Matches Backend Schema
-// ================================================================================
-
-/**
- * Register a new user account
- *
- * BACKEND ENDPOINT: POST /api/auth/register
- *
- * BACKEND EXPECTS:
- * {
- *   email: string (required) - User's email address
- *   password: string (required) - Must meet security requirements
- *   confirmPassword: string (required) - Must match password
- *   role: string (optional) - Defaults to "student" if not provided
- * }
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Registration successful. Please check your email for verification code.",
- *   data: {
- *     user: {
- *       id: "uuid",
- *       email: "user@example.com",
- *       roles: ["student"],
- *       isEmailVerified: false,
- *       status: "PENDING"
- *     }
- *   }
- * }
- *
- * WHAT HAPPENS:
- * 1. Backend validates email format and password strength
- * 2. Backend checks if email already exists
- * 3. Backend creates user with PENDING status
- * 4. Backend generates 6-digit OTP code
- * 5. Backend sends verification email
- * 6. Frontend should redirect to email verification page
- */
+// Register a new user (POST /auth/register)
 export const register = async ({ email, password, confirmPassword, role = 'student' }) => {
     try {
         // Make API call to registration endpoint
@@ -84,40 +41,7 @@ export const register = async ({ email, password, confirmPassword, role = 'stude
     }
 };
 
-// ================================================================================
-// EMAIL VERIFICATION - OTP Code Verification
-// ================================================================================
-
-/**
- * Verify user's email with OTP code
- *
- * BACKEND ENDPOINT: POST /api/otp/verify
- *
- * BACKEND EXPECTS:
- * {
- *   email: string (required) - User's email
- *   code: string (required) - 6-digit OTP code from email
- * }
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Email verified successfully",
- *   data: {
- *     email: "user@example.com",
- *     isVerified: true
- *   }
- * }
- *
- * WHAT HAPPENS:
- * 1. Backend finds OTP record for user
- * 2. Backend checks if code matches
- * 3. Backend checks if code is expired (<10 minutes)
- * 4. Backend checks attempt count (<5 attempts)
- * 5. Backend updates user: isEmailVerified = true, status = ACTIVE
- * 6. Backend deletes used OTP
- * 7. User can now login
- */
+// Verify email with OTP (POST /otp/verify)
 export const verifyEmail = async (email, code) => {
     try {
         const response = await api.post('/otp/verify', {
@@ -150,35 +74,7 @@ export const verifyEmail = async (email, code) => {
     }
 };
 
-// ================================================================================
-// RESEND OTP - Request New Verification Code
-// ================================================================================
-
-/**
- * Resend OTP verification code
- *
- * BACKEND ENDPOINT: POST /api/otp/resend
- *
- * BACKEND EXPECTS:
- * {
- *   email: string (required) - User's email
- * }
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Verification code sent",
- *   data: {
- *     expiresAt: "2026-02-01T12:30:00Z" // When new code expires
- *   }
- * }
- *
- * WHAT HAPPENS:
- * 1. Backend deletes old OTP records for this user
- * 2. Backend generates new 6-digit code
- * 3. Backend sends new email
- * 4. Backend returns new expiration time
- */
+// Resend OTP (POST /otp/resend)
 export const resendOTP = async (email) => {
     try {
         const response = await api.post('/otp/resend', { email });
@@ -200,50 +96,7 @@ export const resendOTP = async (email) => {
     }
 };
 
-// ================================================================================
-// LOGIN - User Authentication
-// ================================================================================
-
-/**
- * Login user with email and password
- *
- * BACKEND ENDPOINT: POST /api/auth/login
- *
- * BACKEND EXPECTS:
- * {
- *   email: string (required) - User's email
- *   password: string (required) - User's password
- * }
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Login successful",
- *   data: {
- *     user: {
- *       id: "uuid",
- *       email: "user@example.com",
- *       roles: ["student"],
- *       isEmailVerified: true
- *     },
- *     accessToken: "eyJhbGciOiJIUzI1NiIs..." // JWT token
- *   }
- * }
- *
- * ALSO SETS:
- * - HttpOnly cookie: refreshToken (7 day expiration)
- *
- * WHAT HAPPENS:
- * 1. Backend finds user by email
- * 2. Backend checks if email is verified
- * 3. Backend checks if account is active
- * 4. Backend verifies password hash
- * 5. Backend generates access token (15 min) and refresh token (7 days)
- * 6. Backend returns access token in response
- * 7. Backend sets refresh token as httpOnly cookie
- * 8. Frontend saves access token in memory
- * 9. Backend updates lastLoginAt timestamp
- */
+// Login user (POST /auth/login)
 export const login = async (email, password) => {
     try {
         const response = await api.post('/auth/login', {
@@ -306,28 +159,7 @@ export const validateCredentials = async (email, password) => {
     }
 };
 
-// ================================================================================
-// LOGOUT - Clear User Session
-// ================================================================================
-
-/**
- * Logout user and clear tokens
- *
- * BACKEND ENDPOINT: POST /api/auth/logout
- *
- * BACKEND EXPECTS: Nothing (uses refresh token from cookie)
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Logout successful"
- * }
- *
- * WHAT HAPPENS:
- * 1. Backend clears refreshToken cookie
- * 2. Frontend clears access token from memory
- * 3. User is logged out
- */
+// Logout and clear session (POST /auth/logout)
 export const logout = async () => {
     try {
         // Call backend logout endpoint
@@ -347,40 +179,7 @@ export const logout = async () => {
     }
 };
 
-// ================================================================================
-// GET CURRENT USER - Fetch Authenticated User Data
-// ================================================================================
-
-/**
- * Get currently authenticated user's data
- *
- * BACKEND ENDPOINT: GET /api/auth/me
- *
- * BACKEND EXPECTS: Valid access token in Authorization header
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   data: {
- *     user: {
- *       userId: "uuid",
- *       email: "user@example.com",
- *       roles: ["student"]
- *     }
- *   }
- * }
- *
- * WHAT HAPPENS:
- * 1. Frontend sends request with access token
- * 2. Backend verifies token signature
- * 3. Backend extracts user ID from token
- * 4. Backend returns user data
- *
- * USED FOR:
- * - Checking if user is still logged in on page load
- * - Getting fresh user data after token refresh
- * - Verifying authentication status
- */
+// Get current authenticated user (GET /auth/me)
 export const getCurrentUser = async () => {
     try {
         const response = await api.get('/auth/me');
@@ -405,35 +204,7 @@ export const getCurrentUser = async () => {
     }
 };
 
-// ================================================================================
-// FORGOT PASSWORD - Request Password Reset
-// ================================================================================
-
-/**
- * Request password reset OTP
- *
- * BACKEND ENDPOINT: POST /api/auth/forgot-password
- *
- * BACKEND EXPECTS:
- * {
- *   email: string (required) - User's email
- * }
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "If an account exists, a code has been sent."
- * }
- *
- * NOTE: Backend returns same message whether email exists or not
- * This prevents email enumeration attacks
- *
- * WHAT HAPPENS:
- * 1. Backend finds user by email (or not)
- * 2. If user exists: generate OTP, send email
- * 3. If user doesn't exist: do nothing but still return success
- * 4. This prevents attackers from knowing which emails are registered
- */
+// Forgot password (POST /auth/forgot-password)
 export const forgotPassword = async (email) => {
     try {
         const response = await api.post('/auth/forgot-password', { email });
@@ -455,38 +226,7 @@ export const forgotPassword = async (email) => {
     }
 };
 
-// ================================================================================
-// RESET PASSWORD - Complete Password Reset
-// ================================================================================
-
-/**
- * Reset password with OTP code
- *
- * BACKEND ENDPOINT: POST /api/auth/reset-password
- *
- * BACKEND EXPECTS:
- * {
- *   email: string (required) - User's email
- *   code: string (required) - 6-digit OTP from email
- *   newPassword: string (required) - New password (must meet requirements)
- * }
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Password reset successfully"
- * }
- *
- * WHAT HAPPENS:
- * 1. Backend finds user by email
- * 2. Backend verifies OTP code
- * 3. Backend checks if code expired
- * 4. Backend validates new password strength
- * 5. Backend hashes new password
- * 6. Backend updates user's password
- * 7. Backend deletes used OTP
- * 8. User can now login with new password
- */
+// Reset password with OTP (POST /auth/reset-password)
 export const resetPassword = async (email, code, newPassword) => {
     try {
         const response = await api.post('/auth/reset-password', {
@@ -514,37 +254,7 @@ export const resetPassword = async (email, code, newPassword) => {
     }
 };
 
-// ================================================================================
-// TOKEN REFRESH - Get New Access Token
-// ================================================================================
-
-/**
- * Refresh access token using refresh token cookie
- *
- * BACKEND ENDPOINT: POST /api/auth/refresh
- *
- * BACKEND EXPECTS: Valid refresh token in httpOnly cookie
- *
- * BACKEND RETURNS:
- * {
- *   success: true,
- *   message: "Token refreshed successfully",
- *   data: {
- *     accessToken: "eyJhbGciOiJIUzI1NiIs..." // New JWT token
- *   }
- * }
- *
- * WHAT HAPPENS:
- * 1. Frontend sends request (refresh token auto-sent via cookie)
- * 2. Backend verifies refresh token
- * 3. Backend checks if user still exists and is active
- * 4. Backend generates new access token (15 min)
- * 5. Backend returns new token
- * 6. Frontend saves new token in memory
- *
- * NOTE: This is usually called automatically by the API interceptor
- * when access token expires (401 response)
- */
+// Refresh access token (POST /auth/refresh)
 export const refreshToken = async () => {
     try {
         const response = await api.post('/auth/refresh');
@@ -575,21 +285,10 @@ export const refreshToken = async () => {
     }
 };
 
-// ================================================================================
-// HELPER FUNCTIONS
-// ================================================================================
+// Helpers
 
-/**
- * Check if user is authenticated
- *
- * RETURNS: boolean - true if user has valid access token
- *
- * NOTE: This only checks if token EXISTS in memory
- * It doesn't verify if token is valid or expired
- * For that, call getCurrentUser()
- */
+// Check if user is authenticated (token exists in memory)
 export const isAuthenticated = () => {
-    // Import from api.js which stores the token
     const { getAccessToken } = require('./api');
     return getAccessToken() !== null;
 };
@@ -601,9 +300,10 @@ export const isAuthenticated = () => {
  */
 export const updateProfile = async (profileData) => {
     try {
-        const response = await api.patch('/auth/profile', {
-            fullName: profileData.name
-        });
+        const isForm = profileData instanceof FormData;
+        const response = await api.patch('/auth/profile', profileData, isForm ? {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        } : undefined);
         return response.data;
     } catch (error) {
         if (error.response) {
@@ -613,9 +313,7 @@ export const updateProfile = async (profileData) => {
     }
 };
 
-// ================================================================================
-// EXPORT ALL FUNCTIONS
-// ================================================================================
+// Export functions
 
 export default {
     // Registration & Verification

@@ -9,10 +9,13 @@ import {
   Res,
   Req,
   UnauthorizedException,
+  InternalServerErrorException,
+  Patch,
 } from '@nestjs/common';
 import express from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './DTO/login.dto';
+import { UpdateProfileDto } from './DTO/update-profile.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -117,5 +120,31 @@ export class AuthController {
       success: true,
       data: { user },
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
+    // JwtStrategy.validate() returns { userId, email, roles }
+    // so the property is "userId", NOT "id"
+    if (!user || !user.userId) {
+      console.warn('[AUTH] updateProfile called without authenticated user');
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    console.log('[AUTH] PATCH /auth/profile body for user:', user.userId, dto);
+    try {
+      const updated = await this.authService.updateProfile(user.userId, dto);
+      return {
+        success: true,
+        message: 'Profile updated',
+        data: { user: updated },
+      };
+    } catch (error) {
+      console.error('[AUTH] updateProfile failed for user:', user.userId, error);
+      throw new InternalServerErrorException(
+        error?.message || 'Profile update failed',
+      );
+    }
   }
 }

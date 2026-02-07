@@ -1,69 +1,22 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as authService from '../services/authService';
+import profilesService from '../services/profilesService';
 import { toast } from 'sonner';
 
 
-/**
- * AuthContext stores:
- * - user: Current user object or null
- * - loading: Boolean indicating if auth check is in progress
- * - All authentication functions (login, logout, register, etc.)
- */
+// Auth context: holds current user, loading state, and auth helpers
 const AuthContext = createContext(null);
-/**
- * AuthProvider Component
- *
- * Wraps entire app to provide authentication state
- *
- * USAGE IN main.jsx:
- * import { AuthProvider } from './contexts/AuthContext';
- *
- * createRoot(document.getElementById('root')).render(
- *   <AuthProvider>
- *     <App />
- *   </AuthProvider>
- * );
- */
+// AuthProvider: provides authentication state and functions to the app
 export function AuthProvider({ children }) {
 
     // ============================================================================
     // STATE
     // ============================================================================
 
-    /**
-     * user: Current authenticated user
-     * NULL: User not logged in
-     * OBJECT: User is logged in
-     * STRUCTURE (from backend):
-     * {
-     *   id: "uuid",
-     *   email: "student@school.edu",
-     *   roles: ["student"],  // Array of roles
-     *   isEmailVerified: true,
-     *   status: "ACTIVE",
-     *   // Profile fields (added after first login)
-     *   firstName: "John",
-     *   middleName: "M",
-     *   lastName: "Doe",
-     *   profilePicture: "url"
-     * }
-     */
+    // Current user object (null if not authenticated)
     const [user, setUser] = useState(null);
 
-    /**
-     * loading: True while checking authentication status
-     *
-     * PREVENTS:
-     * - Flash of login page while checking auth on app load
-     * - Race conditions
-     *
-     * FLOW:
-     * 1. App loads → loading = true
-     * 2. Check if user has valid refresh token
-     * 3. Call getCurrentUser() → loading = false
-     * 4. If success: setUser(userData)
-     * 5. If failed: user stays null
-     */
+    // Loading flag used while checking authentication status
     const [loading, setLoading] = useState(true);
     /**
      * Check authentication status on app load
@@ -93,8 +46,23 @@ export function AuthProvider({ children }) {
             const response = await authService.getCurrentUser();
 
             // Success - user is authenticated
-            setUser(response.data.user);
-            console.log('[AUTH] User authenticated:', response.data.user.email);
+            const userData = response.data.user;
+            setUser(userData);
+            console.log('[AUTH] User authenticated:', userData.email);
+
+            // Try to fetch and merge user profile (if any) so UI has complete info
+            try {
+                const profileRes = await profilesService.getMyProfile();
+                const profile = profileRes?.data || profileRes || null;
+                if (profile) {
+                    // Merge profile fields into user state (profile fields take precedence)
+                    setUser(prev => ({ ...prev, ...profile }));
+                    console.log('[AUTH] Merged profile into user:', profile);
+                }
+            } catch (err) {
+                // Ignore profile fetch errors; treat as no profile
+                console.warn('[AUTH] Failed to fetch profile:', err?.message || err);
+            }
 
         } catch (error) {
             // Not authenticated or token expired
@@ -253,6 +221,7 @@ export function AuthProvider({ children }) {
             setUser(response.data.user);
 
             toast.success('Login successful!');
+            
 
             return response;
 
@@ -303,9 +272,10 @@ export function AuthProvider({ children }) {
      */
     const updateProfile = async (profileData) => {
         try {
-            const response = await authService.updateProfile(profileData);
-            setUser(response.data.user);
-            return response;
+            const result = await authService.updateProfile(profileData);
+            // API returns: { success: true, message, data: { user } }
+            setUser(result.data.user);
+            return result;
         } catch (error) {
             console.error('Update profile error:', error);
             throw error;
@@ -353,15 +323,7 @@ export function AuthProvider({ children }) {
         }
     };
 
-    /**
-     * RESET PASSWORD
-     *
-     * @param {string} email - User's email
-     * @param {string} code - OTP code from email
-     * @param {string} newPassword - New password
-     *
-     * @returns {Promise<Object>} Response
-     */
+    // Reset password using OTP (calls authService.resetPassword)
     const resetPassword = async (email, code, newPassword) => {
         try {
             const response = await authService.resetPassword(email, code, newPassword);

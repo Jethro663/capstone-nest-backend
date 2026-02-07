@@ -10,6 +10,7 @@ import { RolesModule } from './modules/roles/roles.module';
 import { OtpModule } from './modules/otp/otp.module';
 import { DatabaseModule } from './database/database.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { ProfilesModule } from './modules/profiles/profiles.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 
@@ -27,6 +28,8 @@ import jwtConfig from './config/jwt.config';
     SubjectsModule,
     SectionsModule,
     ClassesModule,
+    // Profiles module (user profile records)
+    ProfilesModule,
   ],
   providers: [
     {

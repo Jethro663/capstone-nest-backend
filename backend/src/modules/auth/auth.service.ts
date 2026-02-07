@@ -172,4 +172,10 @@ export class AuthService {
       roles: user.roles.map((role) => role.name),
     };
   }
+
+  // Update profile fields for a user
+  async updateProfile(userId: string, dto: any) {
+    const updated = await this.usersService.updateUser(userId, dto);
+    return this.sanitizeUser(updated);
+  }
 }

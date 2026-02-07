@@ -1,35 +1,13 @@
-// ================================================================================
-// API CLIENT - HTTP Request Configuration
-// ================================================================================
-// Central axios instance with token management and automatic refresh
+// API client: axios instance with token refresh
 
 import axios from 'axios';
 
-// ================================================================================
-// CONFIGURATION
-// ================================================================================
+// Configuration
 
-/**
- * API Base URL
- *
- * DEVELOPMENT: http://localhost:3000/api
- * PRODUCTION: Set via VITE_API_URL environment variable
- *
- * USAGE:
- * Create .env file:
- * VITE_API_URL=https://your-production-api.com/api
- */
+// API base URL (uses VITE_API_URL or defaults to localhost)
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-/**
- * Create axios instance with base configuration
- *
- * SETTINGS:
- * - baseURL: All requests prepend this URL
- * - withCredentials: Send cookies (for refresh token)
- * - timeout: Request timeout in milliseconds
- * - headers: Default headers for all requests
- */
+// Create axios instance with default settings
 const api = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true,  // CRITICAL: Sends httpOnly cookie with requests
@@ -39,71 +17,46 @@ const api = axios.create({
     }
 });
 
-// ================================================================================
-// TOKEN STORAGE
-// ================================================================================
-
-/**
- * Access Token Storage
- *
- * SECURITY: Stored in memory (NOT localStorage)
- *
- * WHY IN MEMORY:
- * - Prevents XSS attacks from stealing token
- * - Auto-cleared when tab/window closes
- * - Refresh token (in httpOnly cookie) provides session persistence
- *
- * TRADE-OFF:
- * - Token lost on page refresh
- * - But automatically restored via refreshToken call on app load
- */
+// Token storage: access token kept in memory (prevents XSS, restored via refresh on load)
 let accessToken = null;
 
-/**
- * Set access token
- * Called after successful login or token refresh
- *
- * @param {string} token - JWT access token from backend
- */
+// Set access token (stored in memory)
 export const setAccessToken = (token) => {
     accessToken = token;
     console.log('[AUTH] Access token set in memory');
 };
 
-/**
- * Get current access token
- *
- * @returns {string|null} Current token or null
- */
+// Get current access token
 export const getAccessToken = () => {
     return accessToken;
 };
 
-/**
- * Clear access token
- * Called on logout or when token refresh fails
- */
+// Clear access token
 export const clearAccessToken = () => {
     accessToken = null;
     console.log('[AUTH] Access token cleared from memory');
 };
 
-// ================================================================================
-// REQUEST INTERCEPTOR
-// ================================================================================
-
-/**
- * Add authentication token to every request
- *
- * HOW IT WORKS:
- * 1. User calls: api.get('/auth/me')
- * 2. This interceptor runs BEFORE request sent
- * 3. Adds "Authorization: Bearer <token>" header
- * 4. Request continues to backend
- * 5. Backend verifies token and responds
- */
+// Request interceptor: attach Authorization header and queue requests during refresh
 api.interceptors.request.use(
     (config) => {
+        // If a token refresh is in progress, queue outgoing requests so they get
+        // the new token when available. This prevents race conditions where
+        // requests are sent without an Authorization header.
+        if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+                failedQueue.push({
+                    resolve: (token) => {
+                        if (token) {
+                            config.headers.Authorization = `Bearer ${token}`;
+                        }
+                        resolve(config);
+                    },
+                    reject,
+                });
+            });
+        }
+
         // Add access token to request if available
         if (accessToken) {
             config.headers.Authorization = `Bearer ${accessToken}`;
@@ -123,28 +76,7 @@ api.interceptors.request.use(
     }
 );
 
-// ================================================================================
-// RESPONSE INTERCEPTOR
-// ================================================================================
-
-/**
- * Handle responses and automatic token refresh
- *
- * HOW TOKEN REFRESH WORKS:
- * 1. Request to protected endpoint
- * 2. Access token expired (15 minutes passed)
- * 3. Backend returns 401 Unauthorized
- * 4. This interceptor catches 401
- * 5. Calls /auth/refresh with refresh token cookie
- * 6. Gets new access token (15 min validity)
- * 7. Retries original request with new token
- * 8. User doesn't notice - seamless!
- *
- * REFRESH TOKEN EXPIRY:
- * - If refresh token also expired (7 days)
- * - Refresh call fails with 401
- * - User redirected to login
- */
+// Response interceptor: refresh token on 401 and retry requests
 
 // Flag to prevent multiple refresh attempts
 let isRefreshing = false;
@@ -152,12 +84,7 @@ let isRefreshing = false;
 // Queue of failed requests waiting for token refresh
 let failedQueue = [];
 
-/**
- * Process queued requests after token refresh
- *
- * @param {Error|null} error - Error if refresh failed
- * @param {string|null} token - New access token if refresh succeeded
- */
+// Process queued requests after token refresh
 const processQueue = (error, token = null) => {
     failedQueue.forEach(prom => {
         if (error) {
@@ -260,9 +187,7 @@ api.interceptors.response.use(
     }
 );
 
-// ================================================================================
-// EXPORT API INSTANCE
-// ================================================================================
+// Export api instance
 
 export default api;
 
