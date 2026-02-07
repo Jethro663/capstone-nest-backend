@@ -32,7 +32,6 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
       admin: [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
         { id: 'users', label: 'Manage Users', icon: <Users className="h-5 w-5" /> },
-        { id: 'subjects', label: 'Manage Subjects', icon: <BookOpen className="h-5 w-5" /> },
         { id: 'sections', label: 'Manage Sections', icon: <Users className="h-5 w-5" /> },
         { id: 'classes', label: 'Manage Classes', icon: <BookOpen className="h-5 w-5" /> },
         { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
