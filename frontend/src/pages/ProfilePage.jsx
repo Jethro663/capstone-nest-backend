@@ -149,7 +149,4 @@ function InfoRow({ label, value }) {
 
 
 
-
-
-
-export default ProfilePage;
+export { default } from './student/ProfilePage';

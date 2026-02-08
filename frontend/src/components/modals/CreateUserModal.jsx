@@ -3,11 +3,13 @@ import { X, Eye, EyeOff, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import ApiErrorModal from "@/components/modals/ApiErrorModal";
 
 const CreateUserModal = ({ user, onClose, onAddUser }) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+  const [apiError, setApiError] = useState(null);
   const [formData, setFormData] = useState({
     firstName: "",
     middleName: "",
@@ -74,6 +76,9 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    // clear any previous server-side field errors before submit
+    setErrors({});
+    setApiError(null);
 
     try {
       const payload = {
@@ -89,9 +94,31 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
       await onAddUser(payload);
       toast.success(user ? "User updated successfully" : "User registered successfully");
+      setApiError(null);
       onClose();
     } catch (error) {
-      toast.error("An error occurred while saving the user.");
+      // Surface field-specific errors returned from the server (e.g., duplicate email)
+      if (error?.fieldErrors) {
+        setErrors(prev => ({ ...prev, ...error.fieldErrors }));
+      } else if (error?.response) {
+        const resp = error.response;
+        if (resp.status === 409) {
+          const message = resp.data?.message || "Email already registered";
+          setErrors(prev => ({ ...prev, email: message }));
+        } else {
+          const apiErr = {
+            title: resp.data?.title || `Error ${resp.status}`,
+            message: resp.data?.message || resp.statusText || "An unexpected error occurred",
+            source: resp.config?.url || "server",
+            code: resp.status,
+            field: resp.data?.field,
+            requestId: resp.headers?.["x-request-id"] || resp.data?.requestId,
+          };
+          setApiError(apiErr);
+        }
+      } else {
+        setApiError({ title: "Error", message: error.message || "An unexpected error occurred", source: "client" });
+      }
     } finally {
       setLoading(false);
     }
@@ -115,6 +142,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
           position: "relative"
         }}
       >
+        <ApiErrorModal isOpen={!!apiError} error={apiError} onClose={() => setApiError(null)} />
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "40px" }}>
           <div>
             <h2 style={{ fontSize: "24px", fontWeight: "700", marginBottom: "4px" }}>
@@ -122,7 +150,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
             </h2>
             <p style={{ fontSize: "14px", color: "#6b7280" }}>Update or create a new system account</p>
           </div>
-          <Button onClick={onClose} disabled={loading} style={{ padding: "8px", borderRadius: "50%" }}>
+          <Button onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} disabled={loading} style={{ padding: "8px", borderRadius: "50%" }}>
             <X size={28} />
           </Button>
         </div>
@@ -222,7 +250,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
           {/* Buttons */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px", marginTop: "24px", flexWrap: "wrap" }}>
-            <Button type="button" onClick={onClose} disabled={loading}>Go Back</Button>
+            <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} disabled={loading}>Go Back</Button>
             <Button type="submit" style={{ background: "#dc2626", color: "white", padding: "12px 24px" }} disabled={loading || !isFormValid}>
               {loading ? "Saving..." : (user ? "Save Changes" : "Register User")}
             </Button>

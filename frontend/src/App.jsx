@@ -16,7 +16,7 @@ import UserManagementPage from './pages/admin/UserManagementPage';
 import SubjectManagementPage from './pages/admin/SubjectManagementPage';
 import SectionManagementPage from './pages/admin/SectionManagementPage';
 import ClassManagementPage from './pages/admin/ClassManagementPage';
-import  ProfilePage  from './pages/ProfilePage';
+import ProfilePage from './pages/student/ProfilePage';
 import CompleteProfilePage from './pages/auth/CompleteProfilePage';
 import  NotificationsPage  from './pages/NotificationsPage';
 import MessagesPage  from './pages/MessagesPage';
@@ -56,17 +56,16 @@ function App() {
             console.log('checkProfileCompletion: no user available');
             return false;
         }
-        if(user.roles?.includes('admin')) {
+        if(user.roles?.includes('admin') || user.roles?.includes('teacher')) {
             return false;
         }
 
         try {
-            console.log('checkProfileCompletion start - user:', user);
-            console.log('Checking profile completion for user ID:', user.id);
+        
             const res = await profilesService.getProfileByUserId(user.id);
-            console.log('profilesService.getProfileByUserId res:', res);
+      
             const profile = res?.data || res || null;
-            console.log('derived profile:', profile);
+       
 
             // Check basic user fields (firstName, lastName)
             const requiredUserFields = ['firstName', 'lastName'];
@@ -75,7 +74,7 @@ function App() {
                 const val = user[f];
                 const present = val !== undefined && val !== null && !(typeof val === 'string' && !val.toString().trim());
                 missingUserChecks[f] = !present;
-                console.log(`user field ${f}:`, val, 'present=', present);
+               
             });
             const missingUser = requiredUserFields.some((f) => missingUserChecks[f]);
 
@@ -93,13 +92,12 @@ function App() {
 
                 const present = v !== undefined && v !== null && !(typeof v === 'string' && !v.toString().trim());
                 missingProfileChecks[f] = !present;
-                console.log(`profile field ${f}:`, v, 'present=', present);
+               
             });
 
             const missingProfile = profileFields.some((f) => missingProfileChecks[f]);
 
-            console.log('Profile check summary - missingUserChecks:', missingUserChecks, 'missingProfileChecks:', missingProfileChecks);
-            console.log('Profile check result - missingUser:', missingUser, 'missingProfile:', missingProfile);
+    
             return missingUser || missingProfile;
         } catch (err) {
             console.log('Profile check failed:', err);

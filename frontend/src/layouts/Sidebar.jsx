@@ -17,13 +17,14 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
   const getNavItems = () => {
     // Only include Profile in common items
     const commonItems = [
-      { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> }
+      
     ];
 
     const roleSpecificItems = {
       student: [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
         { id: 'courses', label: 'My Courses', icon: <BookOpen className="h-5 w-5" /> },
+        { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> }
       ],
       teacher: [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },

@@ -83,14 +83,23 @@ const UserManagementPage = () => {
         setUsers(prev => prev.map(u => (u.id === editingUser.id ? { ...u, ...userData } : u)));
         toast.success("User updated");
       } else {
-        const res = await api.post("/users/create", userData);
+        await api.post("/users/create", userData);
         setUsers(prev => [{ id: crypto.randomUUID(), status: "ACTIVE", ...userData }, ...prev]);
         toast.success("User added");
       }
       setIsModalOpen(false);
       setEditingUser(null);
     } catch (error) {
+      // If the server responds with a conflict (duplicate email), forward a structured error
+      if (error?.response?.status === 409) {
+        const message = error.response?.data?.message || "Email already registered";
+        const err = new Error(message);
+        err.fieldErrors = { email: message };
+        throw err;
+      }
       toast.error("Failed to save user");
+      // rethrow so callers (like the modal) can handle specifics if needed
+      throw error;
     }
   };
 
@@ -191,9 +200,7 @@ const UserManagementPage = () => {
                 </button>
               ))}
               {/* Dynamic roles from API */}
-              {availableRoles.map(role => (
-                <button key={role} style={filterBtnStyle(selectedRole === role)} onClick={() => setSelectedRole(role)}>{role}</button>
-              ))}
+             
             </div>
 
             {/* Search */}
