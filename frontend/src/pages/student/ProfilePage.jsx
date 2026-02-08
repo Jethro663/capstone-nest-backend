@@ -1,7 +1,19 @@
-import { User, Mail, Phone, MapPin, Calendar } from "lucide-react";
+import { User } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from '@/contexts/AuthContext';
 import profilesService from '@/services/profilesService';
+
+// Helper to format ISO dates cleanly
+const formatDate = (iso) => {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch (e) {
+    return iso;
+  }
+};
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -20,13 +32,17 @@ export function ProfilePage() {
   const [familyName, setFamilyName] = useState('');
   const [familyRelationship, setFamilyRelationship] = useState('');
   const [familyContact, setFamilyContact] = useState('');
+  const [gradeLevel, setGradeLevel] = useState('');
+
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         setLoading(true);
+        console.log('Loading profile for user:', user);
        const res = await profilesService.getProfileByUserId(user.id);
+       console.log('API response for profile:', res);
         const data = res?.data || res || null;
         console.log('Loaded profile data:', data);
         console.log('User data:', user);
@@ -45,6 +61,7 @@ export function ProfilePage() {
         setFamilyName(src.familyName || '');
         setFamilyRelationship(src.familyRelationship || '');
         setFamilyContact(src.familyContact || '');
+        setGradeLevel(src.gradeLevel || src.grade || '');
 
       } catch (err) {
         console.warn('Failed to load profile', err);
@@ -81,16 +98,12 @@ export function ProfilePage() {
             <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#111827', margin: '0 0 0.5rem 0' }}>
               {fullName || user?.email}
             </h1>
-            <p style={{ color: '#6b7280', fontSize: '1rem', marginBottom: '1.5rem' }}>
+            <p style={{ color: '#6b7280', fontSize: '1rem', marginBottom: '6px' }}>
               {user?.studentId ? `ID: ${user.studentId}` : ''}
             </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-              <HeaderDetail icon={Mail} text={user?.email || ''} />
-              <HeaderDetail icon={Phone} text={phone || ''} />
-              <HeaderDetail icon={MapPin} text={address || ''} />
-              <HeaderDetail icon={Calendar} text={user?.studentId ? `ID: ${user.studentId}` : 'Student'} />
-            </div>
+            <p style={{ marginTop: 0, color: '#111827', fontSize: '1rem' }}>
+              Grade: <strong style={{ fontWeight: 800 }}>{gradeLevel || '—'}</strong>
+            </p>
 
 
           </div>
@@ -143,9 +156,7 @@ function AboutMeTab({ user, firstName, middleName, lastName, dateOfBirth, gender
         <h3 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.5rem', color: '#111827' }}>Basic Information</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <InfoRow label="Full Name" value={`${firstName} ${middleName ? (middleName + ' ') : ''}${lastName}`} />
-          <InfoRow label="Date of Birth" value={dateOfBirth || '—'} />
-          <InfoRow label="Gender" value={gender || '—'} />
-          <InfoRow label="Civil Status" value={'Single'} />
+          <InfoRow label="Date of Birth" value={dateOfBirth ? formatDate(dateOfBirth) : '—'} />
         </div>
       </section>
 
@@ -178,14 +189,6 @@ function FamilyTab({ profile, familyName, familyRelationship, familyContact }) {
 // UI Helpers
 // --------------------
 
-function HeaderDetail({ icon: Icon, text }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4b5563', fontSize: '14px' }}>
-      <Icon size={18} color="#3b82f6" />
-      <span>{text}</span>
-    </div>
-  );
-}
 
 function InfoRow({ label, value }) {
   return (

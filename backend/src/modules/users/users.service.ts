@@ -7,7 +7,7 @@ import {
 import { and, eq, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
-import { users, roles, userRoles, userProfiles } from '../../drizzle/schema';
+import { users, roles, userRoles, studentProfiles } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { OtpService } from '../otp/otp.service';
@@ -267,7 +267,7 @@ export class UsersService {
     if (updateUserDto.studentId !== undefined)
       updateData.studentId = updateUserDto.studentId;
 
-    // New profile fields will be stored in `user_profiles` table as a separate one-to-one record
+    // New profile fields will be stored in `student_profiles` table as a separate one-to-one record
     const profilePayload: any = {};
     if (updateUserDto.dob) profilePayload.dateOfBirth = new Date(updateUserDto.dob);
     if (updateUserDto.gender !== undefined) profilePayload.gender = updateUserDto.gender;
@@ -296,17 +296,17 @@ export class UsersService {
     if (Object.keys(profilePayload).length > 0) {
       console.log('[USERS] profilePayload to upsert for user:', id, profilePayload);
       try {
-        const existingProfile = await this.db.query.userProfiles.findFirst({
-          where: eq(userProfiles.userId, id),
+        const existingProfile = await this.db.query.studentProfiles.findFirst({
+          where: eq(studentProfiles.userId, id),
         });
 
         if (existingProfile) {
           await this.db
-            .update(userProfiles)
+            .update(studentProfiles)
             .set({ ...profilePayload, updatedAt: new Date() })
-            .where(eq(userProfiles.userId, id));
+            .where(eq(studentProfiles.userId, id));
         } else {
-          await this.db.insert(userProfiles).values({
+          await this.db.insert(studentProfiles).values({
             userId: id,
             ...profilePayload,
             createdAt: new Date(),

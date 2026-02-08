@@ -79,16 +79,20 @@ const UserManagementPage = () => {
   const handleAddOrUpdateUser = async (userData) => {
     try {
       if (editingUser) {
-        await api.put(`/users/update/${editingUser.id}`, userData);
-        setUsers(prev => prev.map(u => (u.id === editingUser.id ? { ...u, ...userData } : u)));
+        const resp = await api.put(`/users/update/${editingUser.id}`, userData);
+        const updatedUser = resp.data?.data?.user || { id: editingUser.id, ...userData };
+        setUsers(prev => prev.map(u => (u.id === editingUser.id ? { ...u, ...updatedUser } : u)));
         toast.success("User updated");
+        return updatedUser;
       } else {
-        await api.post("/users/create", userData);
-        setUsers(prev => [{ id: crypto.randomUUID(), status: "ACTIVE", ...userData }, ...prev]);
+        const resp = await api.post("/users/create", userData);
+        const createdUser = resp.data?.data?.user;
+        // if API didn't return a user object, fall back to a minimal local representation
+        const userRecord = createdUser || { id: crypto.randomUUID(), status: "ACTIVE", ...userData };
+        setUsers(prev => [{ ...userRecord }, ...prev]);
         toast.success("User added");
+        return userRecord;
       }
-      setIsModalOpen(false);
-      setEditingUser(null);
     } catch (error) {
       // If the server responds with a conflict (duplicate email), forward a structured error
       if (error?.response?.status === 409) {

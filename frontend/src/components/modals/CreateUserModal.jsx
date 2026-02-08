@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import ApiErrorModal from "@/components/modals/ApiErrorModal";
+import api from "@/services/api";
 
 const CreateUserModal = ({ user, onClose, onAddUser }) => {
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
     email: "",
     userRole: "student",
     studentId: "",
+    gradeLevel: "",
     password: "",
     resetPassword: false,
   });
@@ -31,6 +33,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
         email: user.email || "",
         userRole: user.role || "student",
         studentId: user.studentId || "",
+        gradeLevel: (user.profile && user.profile.gradeLevel) || user.gradeLevel || "",
         password: "",
         resetPassword: false,
       });
@@ -43,6 +46,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
       return `${name === "firstName" ? "First" : "Last"} name is required`;
     if (name === "email" && !/^\S+@\S+\.\S+/.test(value)) return "Invalid email format";
     if (name === "studentId" && role === "student" && !value.trim()) return "Student ID is required";
+    if (name === "gradeLevel" && role === "student" && !value) return "Grade level is required";
     if (name === "password" && ((!user && !value) || (user && resetPassword && !value))) return "Password is required";
     return "";
   };
@@ -52,11 +56,23 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
     if (["firstName", "middleName", "lastName"].includes(name) && value && !/^[a-zA-Z\s]*$/.test(value)) return;
     if (name === "studentId" && value && !/^[0-9]*$/.test(value)) return;
+    if (name === "gradeLevel" && value && !['7','8','9','10'].includes(value)) return;
 
     const newValue = type === "checkbox" ? checked : value;
 
     setFormData((prev) => {
-      const nextData = { ...prev, [name]: newValue };
+      // if role changed away from 'student', clear student-only fields
+      let nextData = { ...prev };
+      if (name === 'userRole') {
+        nextData = { ...nextData, userRole: newValue };
+        if (newValue !== 'student') {
+          nextData.studentId = '';
+          nextData.gradeLevel = '';
+        }
+      } else {
+        nextData = { ...nextData, [name]: newValue };
+      }
+
       setErrors((prevErrs) => ({
         ...prevErrs,
         [name]: getFieldError(name, newValue, nextData.userRole, nextData.resetPassword)
@@ -68,7 +84,10 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
   const isFormValid = useMemo(() => {
     const required = ["firstName", "lastName", "email"];
     if (!user || formData.resetPassword) required.push("password");
-    if (formData.userRole === "student") required.push("studentId");
+    if (formData.userRole === "student") {
+      required.push("studentId");
+      required.push("gradeLevel");
+    }
 
     return required.every(f => formData[f]?.trim()) && !Object.values(errors).some(e => e);
   }, [formData, errors, user]);
@@ -81,6 +100,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
     setApiError(null);
 
     try {
+      // Build user payload WITHOUT gradeLevel (profile must be created separately)
       const payload = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
@@ -92,10 +112,49 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
       if (!user || formData.resetPassword) payload.password = formData.password;
 
-      await onAddUser(payload);
+      // Create or update user and expect the service to return the user record
+      const savedUser = await onAddUser(payload);
+
+      // If this is a student, create/update their profile in a second request
+      if (formData.userRole === 'student') {
+        // Ensure we have a saved user id to attach the profile
+        if (!savedUser || !savedUser.id) {
+          console.warn('Skipping profile creation - missing user id');
+        } else {
+          try {
+            // Collect profile fields we support
+            const profilePayload = {
+              userId: savedUser.id,
+              gradeLevel: formData.gradeLevel || undefined,
+              dob: formData.dob || undefined,
+              gender: formData.gender || undefined,
+              phone: formData.phone || undefined,
+              address: formData.address || undefined,
+              familyName: formData.familyName || undefined,
+              familyRelationship: formData.familyRelationship || undefined,
+              familyContact: formData.familyContact || undefined,
+            };
+
+            // Use create endpoint for new users; update for existing
+            if (!user) {
+              await api.post('/profiles/create', profilePayload);
+            } else {
+              await api.put(`/profiles/update/${savedUser.id}`, profilePayload);
+            }
+          } catch (profileErr) {
+            // Profile creation failed - surface a user-friendly message but do not delete the created user
+            console.error('Profile creation/update failed', profileErr);
+            toast.error('User created but failed to create student profile');
+            const message = profileErr?.response?.data?.message || profileErr.message;
+            setApiError({ title: 'Profile Error', message, source: 'profiles' });
+          }
+        }
+      }
+
       toast.success(user ? "User updated successfully" : "User registered successfully");
       setApiError(null);
       onClose();
+      return savedUser;
     } catch (error) {
       // Surface field-specific errors returned from the server (e.g., duplicate email)
       if (error?.fieldErrors) {
@@ -206,6 +265,46 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
                 style={isTeacher ? { background: "#f3f4f6", opacity: 0.6, borderColor: "#d1d5db", cursor: "not-allowed" } : {}}
               />
               {isTeacher && <Lock size={16} style={{ position: "absolute", right: "16px", top: "42px", color: "#9ca3af" }} />}
+            </div>
+
+            {/* Grade Level - visible only for students */}
+            <div style={{ width: "180px" }}>
+              <AnimatePresence>
+                {formData.userRole === 'student' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18 }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
+                    layout
+                  >
+                    <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>Grade Level</label>
+                    <select
+                      name="gradeLevel"
+                      value={formData.gradeLevel}
+                      onChange={handleChange}
+                      disabled={loading}
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        fontSize: "14px",
+                        borderRadius: "12px",
+                        border: errors.gradeLevel ? "1px solid #ef4444" : "1px solid #d1d5db",
+                        appearance: "none",
+                        background: "white",
+                      }}
+                    >
+                      <option value="">Select grade</option>
+                      <option value="7">7</option>
+                      <option value="8">8</option>
+                      <option value="9">9</option>
+                      <option value="10">10</option>
+                    </select>
+                    {errors.gradeLevel && <p style={{ color: "#ef4444", fontSize: "12px" }}>{errors.gradeLevel}</p>}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 

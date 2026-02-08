@@ -31,4 +31,10 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   familyContact?: string;
+
+  @IsOptional()
+  @IsIn(['7','8','9','10'], {
+    message: 'Grade level must be one of: 7, 8, 9, 10',
+  })
+  gradeLevel?: '7' | '8' | '9' | '10';
 }

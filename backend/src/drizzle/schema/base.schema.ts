@@ -41,6 +41,8 @@ export const enrollmentStatusEnum = pgEnum('enrollment_status', [
   'completed',
 ]);
 
+export const gradeLevelEnum = pgEnum('grade_level', ['7', '8', '9', '10']);
+
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
 // ==========================================
@@ -193,8 +195,8 @@ export const classes = pgTable(
   }),
 );
 
-export const userProfiles = pgTable(
-  'user_profiles',
+export const studentProfiles = pgTable(
+  'student_profiles',
   {
     userId: uuid('user_id')
       .primaryKey()
@@ -206,11 +208,14 @@ export const userProfiles = pgTable(
     familyName: text('family_name'),
     familyRelationship: text('family_relationship'),
     familyContact: text('family_contact'),
+    // Student-specific fields
+    gradeLevel: gradeLevelEnum('grade_level'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    userIdx: index('user_profiles_user_id_idx').on(table.userId),
+    userIdx: index('student_profiles_user_id_idx').on(table.userId),
+    gradeLevelIdx: index('student_profiles_grade_level_idx').on(table.gradeLevel),
   }),
 );
 
@@ -282,9 +287,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   classesTaught: many(classes, { relationName: 'teacherClasses' }),
   advisedSections: many(sections),
   enrollments: many(enrollments),
-  profile: one(userProfiles, {
+  // Keep the property name `profile` for compatibility but point to student_profiles
+  profile: one(studentProfiles, {
     fields: [users.id],
-    references: [userProfiles.userId],
+    references: [studentProfiles.userId],
   }),
 }));
 
