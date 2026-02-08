@@ -6,6 +6,7 @@ import { UsersModule } from './modules/users/users.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
 import { SectionsModule } from './modules/sections/sections.module';
 import { ClassesModule } from './modules/classes/classes.module';
+import { LessonsModule } from './modules/lessons/lessons.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { OtpModule } from './modules/otp/otp.module';
 import { DatabaseModule } from './database/database.module';
@@ -28,6 +29,7 @@ import jwtConfig from './config/jwt.config';
     SubjectsModule,
     SectionsModule,
     ClassesModule,
+    LessonsModule,
     // Profiles module (user profile records)
     ProfilesModule,
   ],

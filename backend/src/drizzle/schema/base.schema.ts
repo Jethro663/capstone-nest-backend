@@ -9,6 +9,7 @@ import {
   unique,
   index,
   primaryKey,
+  json,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -42,6 +43,15 @@ export const enrollmentStatusEnum = pgEnum('enrollment_status', [
 ]);
 
 export const gradeLevelEnum = pgEnum('grade_level', ['7', '8', '9', '10']);
+
+export const lessonContentTypeEnum = pgEnum('lesson_content_type', [
+  'text',
+  'image',
+  'video',
+  'question',
+  'file',
+  'divider',
+]);
 
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
@@ -111,8 +121,6 @@ export const userRoles = pgTable(
 // ==========================================
 // 2. ACADEMIC STRUCTURE
 // ==========================================
-
-
 
 export const sections = pgTable(
   'sections',
@@ -237,17 +245,48 @@ export const enrollments = pgTable(
 // 4. CONTENT & ASSESSMENTS
 // ==========================================
 
-export const lessons = pgTable('lessons', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  description: text('description'),
-  classId: uuid('class_id')
-    .notNull()
-    .references(() => classes.id, { onDelete: 'cascade' }),
-  contentType: contentTypeEnum('content_type').notNull().default('video'),
-  contentUrl: text('content_url'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+export const lessons = pgTable(
+  'lessons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    description: text('description'),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    order: integer('order').notNull().default(0),
+    isDraft: boolean('is_draft').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    classIdIdx: index('lessons_class_id_idx').on(table.classId),
+    classOrderIdx: index('lessons_class_order_idx').on(table.classId, table.order),
+  }),
+);
+
+export const lessonContentBlocks = pgTable(
+  'lesson_content_blocks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    lessonId: uuid('lesson_id')
+      .notNull()
+      .references(() => lessons.id, { onDelete: 'cascade' }),
+    type: lessonContentTypeEnum('type').notNull(),
+    order: integer('order').notNull().default(0),
+    content: json('content').notNull(), // Stores text, images, questions, etc.
+    metadata: json('metadata'), // Additional flexible data (alt text, captions, etc.)
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    lessonIdIdx: index('lesson_content_blocks_lesson_id_idx').on(table.lessonId),
+    lessonOrderIdx: index('lesson_content_blocks_lesson_order_idx').on(
+      table.lessonId,
+      table.order,
+    ),
+  }),
+);
 
 export const assessments = pgTable('assessments', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -337,12 +376,23 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
   }),
 }));
 
-export const lessonsRelations = relations(lessons, ({ one }) => ({
+export const lessonsRelations = relations(lessons, ({ one, many }) => ({
   class: one(classes, {
     fields: [lessons.classId],
     references: [classes.id],
   }),
+  contentBlocks: many(lessonContentBlocks),
 }));
+
+export const lessonContentBlocksRelations = relations(
+  lessonContentBlocks,
+  ({ one }) => ({
+    lesson: one(lessons, {
+      fields: [lessonContentBlocks.lessonId],
+      references: [lessons.id],
+    }),
+  }),
+);
 
 export const assessmentsRelations = relations(assessments, ({ one }) => ({
   class: one(classes, {

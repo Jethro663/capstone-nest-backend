@@ -1,26 +1,129 @@
-import { useState } from "react";
-import { GraduationCap, Clock, Users } from "lucide-react";
+import { useState, useEffect } from "react";
+import { GraduationCap, Clock, Users, AlertCircle } from "lucide-react";
+import lessonService from '@/services/lessonService';
+import { useAuth } from '@/contexts/AuthContext';
+import api from '@/services/api';
+import StudentClassDetailsPage from './StudentClassDetailsPage';
 
 export default function CoursesPage() {
-  const [courses] = useState([
-    { id: "1", name: "Mathematics", code: "MATH 101", teacher: "Ms. Johnson", schedule: "Mon, Wed, Fri - 8:00 AM", room: "Room 204", students: 28, progress: 75, color: "#3B82F6" },
-    { id: "2", name: "English Literature", code: "ENG 201", teacher: "Mr. Smith", schedule: "Tue, Thu - 10:00 AM", room: "Room 105", students: 25, progress: 60, color: "#8B5CF6" },
-    { id: "3", name: "Science", code: "SCI 301", teacher: "Mrs. Davis", schedule: "Mon, Wed - 1:00 PM", room: "Lab 3", students: 30, progress: 45, color: "#10B981" },
-    { id: "4", name: "History", code: "HIST 102", teacher: "Mr. Brown", schedule: "Tue, Thu - 2:00 PM", room: "Room 301", students: 26, progress: 85, color: "#F97316" },
-    { id: "5", name: "Physical Education", code: "PE 101", teacher: "Coach Wilson", schedule: "Fri - 3:00 PM", room: "Gymnasium", students: 32, progress: 90, color: "#EF4444" },
-    { id: "6", name: "Computer Science", code: "CS 201", teacher: "Dr. Anderson", schedule: "Mon, Wed - 11:00 AM", room: "Computer Lab", students: 24, progress: 55, color: "#4F46E5" },
-  ]);
+  const { user } = useAuth();
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingLessons, setLoadingLessons] = useState(false);
+  const [lessonErrors, setLessonErrors] = useState({});
+  const [selectedCourse, setSelectedCourse] = useState(null);
+
+  // Fetch real enrolled courses for this student
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!user || !user.id) return;
+      setLoading(true);
+      try {
+        const res = await api.get(`/classes/student/${user.id}`);
+        if (res?.data?.data && Array.isArray(res.data.data)) {
+          const courseList = res.data.data.map(c => ({
+            id: c.id,
+            name: c.subjectName ? `${c.subjectName} (${(c.subjectCode||'').toUpperCase()})` : (c.name || 'Unknown'),
+            grade: c.subjectGradeLevel ? `Grade ${c.subjectGradeLevel}` : (c.section?.gradeLevel ? `Grade ${c.section.gradeLevel}` : 'Grade —'),
+            teacher: c.teacher ? `${c.teacher.firstName} ${c.teacher.lastName}` : 'Unknown',
+            schedule: c.schedule || '—',
+            // students: (Array.isArray(c.enrollments) ? c.enrollments.length : 0) || (c.studentCount || 0),
+            progress: 0, // TODO: Calculate from student submissions
+            color: pickColor(c.subjectCode || c.id),
+            lessons: [],
+          }));
+          if (mounted) setCourses(courseList);
+        }
+      } catch (err) {
+        console.error('Failed to load student courses', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [user]);
+
+  // Fetch lessons for all courses
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (courses.length === 0) return;
+      setLoadingLessons(true);
+      const next = await Promise.all(courses.map(async (c) => {
+        try {
+          const res = await lessonService.getLessonsByClass(c.id);
+          if (res && res.data) {
+            return { ...c, lessons: res.data };
+          }
+          return c;
+        } catch (err) {
+          console.error(`Failed to load lessons for class ${c.id}`, err);
+          setLessonErrors(prev => ({ ...prev, [c.id]: true }));
+          return c;
+        }
+      }));
+
+      if (mounted) setCourses(next);
+      setLoadingLessons(false);
+    };
+
+    load();
+    return () => { mounted = false; };
+  }, [courses.length > 0]);
+
+  // Deterministically pick a color for course cards
+  const COLORS = ["#3B82F6","#8B5CF6","#10B981","#F97316","#EC4899","#14B8A6","#64748B"];
+  const pickColor = (seed) => {
+    if (!seed) return COLORS[0];
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) {
+      h = (h << 5) - h + seed.charCodeAt(i);
+      h |= 0;
+    }
+    return COLORS[Math.abs(h) % COLORS.length];
+  };
 
   // General container styles
   const containerStyle = {
+    minHeight: "100vh",
+    backgroundColor: "#F9FAFB",
     padding: "32px",
-    fontFamily: "Arial, sans-serif",
-    backgroundColor: "#f9f9f9"
+    fontFamily: "Arial, sans-serif"
   };
 
-  const headerStyle = { marginBottom: "32px" };
-  const titleStyle = { fontSize: "28px", margin: 0, color: "#111" };
-  const subtitleStyle = { color: "#555", marginTop: "4px" };
+  const headerStyle = {
+    marginBottom: "24px",
+  };
+
+  const titleStyle = { fontSize: "24px", margin: 0, color: "#111" };
+  const subtitleStyle = { fontSize: "14px", color: "#555" };
+
+  const gridStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: "24px"
+  };
+
+  const cardStyle = {
+    backgroundColor: "#fff",
+    borderRadius: "12px",
+    border: "1px solid #ddd",
+    overflow: "hidden",
+    transition: "box-shadow 0.2s, transform 0.2s",
+    cursor: "pointer"
+  };
+
+  const cardHeaderStyle = color => ({
+    height: "6px",
+    backgroundColor: color
+  });
+
+  const cardContentStyle = { padding: "16px" };
+  const cardTitleStyle = { fontSize: "18px", margin: "0 0 4px 0", color: "#111" };
+  const cardSubtitleStyle = { fontSize: "12px", color: "#555", marginBottom: "12px" };
+  const cardRowStyle = { display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#555", marginBottom: "8px" };
 
   const emptyStyle = {
     background: "#fff",
@@ -40,53 +143,12 @@ export default function CoursesPage() {
     margin: "0 auto 16px auto"
   };
 
-  const coursesGridStyle = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-    gap: "24px"
-  };
-
-  const courseCardStyle = {
-    background: "#fff",
-    borderRadius: "12px",
-    overflow: "hidden",
-    border: "1px solid #ddd",
-    display: "flex",
-    flexDirection: "column",
-    cursor: "pointer",
-    transition: "box-shadow 0.2s",
-  };
-
-  const courseHeaderStyle = color => ({
-    padding: "24px",
-    color: "#fff",
-    backgroundColor: color
-  });
-
-  const courseCodeStyle = { opacity: 0.85, fontSize: "12px", marginBottom: "8px" };
-  const courseNameStyle = { fontSize: "20px", margin: "0 0 8px 0" };
-  const courseStudentsStyle = { display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" };
-
-  const courseDetailsStyle = { padding: "16px 24px", flex: 1, display: "flex", flexDirection: "column" };
-  const detailRowStyle = { display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" };
-  const iconStyle = { width: "16px", height: "16px", color: "#888", flexShrink: 0 };
-  const labelStyle = { fontSize: "12px", color: "#555" };
-  const valueStyle = { fontSize: "14px", fontWeight: "bold", color: "#222" };
-
-  const buttonStyle = {
-    marginTop: "16px",
-    padding: "8px 0",
-    background: "#f0f0f0",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500",
-    color: "#333",
-    transition: "background 0.2s"
-  };
-
-  return (
+  return selectedCourse ? (
+    <StudentClassDetailsPage 
+      classItem={selectedCourse}
+      onBack={() => setSelectedCourse(null)}
+    />
+  ) : (
     <div style={containerStyle}>
       {/* Header */}
       <div style={headerStyle}>
@@ -95,74 +157,96 @@ export default function CoursesPage() {
       </div>
 
       {/* Empty State */}
-      {courses.length === 0 ? (
+      {!loading && courses.length === 0 ? (
         <div style={emptyStyle}>
           <div style={iconCircleStyle}><GraduationCap /></div>
           <h2>Not enrolled in any courses</h2>
           <p>You are not currently enrolled in any classes. Please contact the registrar or administrator.</p>
         </div>
+      ) : loading ? (
+        <div style={emptyStyle}>
+          <p>Loading your courses...</p>
+        </div>
       ) : (
-        <div style={coursesGridStyle}>
+        <div style={gridStyle}>
           {courses.map(course => (
-            <div key={course.id} style={courseCardStyle}>
-              {/* Course Header */}
-              <div style={courseHeaderStyle(course.color)}>
-                <div style={courseCodeStyle}>{course.code}</div>
-                <h3 style={courseNameStyle}>{course.name}</h3>
-                <div style={courseStudentsStyle}>
-                  <Users style={iconStyle} />
-                  <span>{course.students} students</span>
-                </div>
-              </div>
+            <div
+              key={course.id}
+              style={cardStyle}
+              onClick={() => setSelectedCourse(course)}
+              onMouseEnter={e => {
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+                e.currentTarget.style.transform = "scale(1.02)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.boxShadow = "none";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              {/* Color Header */}
+              <div style={cardHeaderStyle(course.color)}></div>
 
-              {/* Course Details */}
-              <div style={courseDetailsStyle}>
-                <div style={detailRowStyle}>
-                  <GraduationCap style={iconStyle} />
-                  <div>
-                    <div style={labelStyle}>Teacher</div>
-                    <div style={valueStyle}>{course.teacher}</div>
+              {/* Card Content */}
+              <div style={cardContentStyle}>
+                <div style={{ marginBottom: "12px" }}>
+                  <h3 style={cardTitleStyle}>{course.name}</h3>
+                  <p style={cardSubtitleStyle}>{course.grade}</p>
+                </div>
+
+                <div style={{ marginBottom: "12px" }}>
+                  <div style={cardRowStyle}>
+                    <Users style={{ width: "14px", height: "14px", color: "#555" }} />
+                    <span>{course.students} students</span>
+                  </div>
+                  <div style={cardRowStyle}>
+                    <Clock style={{ width: "14px", height: "14px", color: "#555" }} />
+                    <span>{course.schedule}</span>
                   </div>
                 </div>
 
-                <div style={detailRowStyle}>
-                  <Clock style={iconStyle} />
-                  <div>
-                    <div style={labelStyle}>Schedule</div>
-                    <div style={valueStyle}>{course.schedule}</div>
+                {/* Lessons preview */}
+                {loadingLessons && (!course.lessons || course.lessons.length === 0) ? (
+                  <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>Loading lessons...</div>
+                ) : lessonErrors[course.id] ? (
+                  <div style={{ marginTop: 8, color: '#dc2626', fontSize: 12 }}>Failed to load lessons</div>
+                ) : (course.lessons && course.lessons.length > 0) ? (
+                  <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
+                    <div style={{ fontSize: "12px", fontWeight: "600", color: "#555", marginBottom: "8px" }}>
+                      {course.lessons.length} lesson{course.lessons.length !== 1 ? 's' : ''}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>No lessons yet</div>
+                )}
 
                 {/* Progress Bar */}
-                <div style={{ marginTop: "12px" }}>
+                <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
                   <div style={{
                     display: "flex",
                     justifyContent: "space-between",
-                    fontSize: "12px",
+                    fontSize: "11px",
                     color: "#555",
-                    marginBottom: "4px"
+                    marginBottom: "6px"
                   }}>
-                    <span>Course Progress</span>
+                    <span>Progress</span>
                     <span>{course.progress}%</span>
                   </div>
                   <div style={{
-                    height: "8px",
-                    background: "#eee",
-                    borderRadius: "4px",
+                    height: "6px",
+                    background: "#e5e7eb",
+                    borderRadius: "3px",
                     overflow: "hidden",
                     width: "100%"
                   }}>
                     <div style={{
                       height: "100%",
-                      borderRadius: "4px",
+                      borderRadius: "3px",
                       transition: "width 0.3s",
                       width: `${course.progress}%`,
                       backgroundColor: course.color
                     }} />
                   </div>
                 </div>
-
-                <button style={buttonStyle}>View Course</button>
               </div>
             </div>
           ))}

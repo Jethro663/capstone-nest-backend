@@ -4,7 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { and, eq, ilike, or, SQL, isNull, ne } from 'drizzle-orm';
+import { and, eq, ilike, or, SQL, isNull, ne, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { classes, sections, users, enrollments, studentProfiles } from '../../drizzle/schema';
 
@@ -306,6 +306,43 @@ export class ClassesService {
   async getClassesBySubject(subjectId: string) {
     const classList = await this.db.query.classes.findMany({
       where: eq(classes.subjectCode, subjectId),
+      with: {
+        section: true,
+        teacher: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: (classes, { asc }) => [asc(classes.createdAt)],
+    });
+
+    return classList;
+  }
+
+  /**
+   * Get all classes enrolled by a student
+   */
+  async getClassesByStudent(studentId: string) {
+    // First, get all enrollments for this student
+    const studentEnrollments = await this.db.query.enrollments.findMany({
+      where: eq(enrollments.studentId, studentId),
+      columns: { classId: true },
+    });
+
+    if (studentEnrollments.length === 0) {
+      return [];
+    }
+
+    // Extract unique class IDs
+    const classIds = [...new Set(studentEnrollments.map(e => e.classId).filter((id): id is string => Boolean(id)))];
+
+    // Fetch all classes with those IDs
+    const classList = await this.db.query.classes.findMany({
+      where: (classTable) => inArray(classTable.id, classIds),
       with: {
         section: true,
         teacher: {

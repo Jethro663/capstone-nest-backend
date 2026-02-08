@@ -179,7 +179,8 @@ api.interceptors.response.use(
             console.error('[API] Response error:', {
                 url: error.config?.url,
                 status: error.response?.status,
-                message: error.response?.data?.message
+                message: error.response?.data?.message,
+                data: error.response?.data
             });
         }
 

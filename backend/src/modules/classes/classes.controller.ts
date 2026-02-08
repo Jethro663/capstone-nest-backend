@@ -114,6 +114,22 @@ export class ClassesController {
   }
 
   /**
+   * Get classes enrolled by a student
+   * Students can access their own, teachers/admins can access any student's
+   */
+  @Get('student/:studentId')
+  @Roles('admin', 'teacher', 'student')
+  async getClassesByStudent(@Param('studentId') studentId: string) {
+    const classes = await this.classesService.getClassesByStudent(studentId);
+
+    return {
+      success: true,
+      message: 'Classes retrieved successfully',
+      data: classes,
+    };
+  }
+
+  /**
    * Get a specific class by ID
    */
   @Get(':id')

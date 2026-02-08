@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Book, BarChart3, Bell, Users, FileText, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Book, BarChart3, Bell, Users, FileText, Plus, Trash2, Edit2, Lock, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 import adminService from '@/services/adminService';
+import lessonService from '@/services/lessonService';
+import LessonEditorPage from './LessonEditorPage';
 
 const ClassDetailsPage = ({ classItem, onBack }) => {
   const [activeTab, setActiveTab] = useState('lessons');
@@ -11,6 +13,15 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState([]);
   const [addingStudents, setAddingStudents] = useState(false);
+
+  // Lesson states
+  const [lessons, setLessons] = useState([]);
+  const [showCreateLessonModal, setShowCreateLessonModal] = useState(false);
+  const [newLessonTitle, setNewLessonTitle] = useState('');
+  const [newLessonDesc, setNewLessonDesc] = useState('');
+  const [creatingLesson, setCreatingLesson] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState(null);
+  const [editingLesson, setEditingLesson] = useState(null); // For navigation to LessonEditorPage
 
   // Tab configuration with icons
   const tabs = [
@@ -25,6 +36,7 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
   useEffect(() => {
     if (classItem?.id) {
       fetchEnrolledStudents();
+      fetchLessons();
     }
   }, [classItem?.id]);
 
@@ -120,6 +132,70 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
         ? prev.filter(id => id !== studentId)
         : [...prev, studentId]
     );
+  };
+
+  const fetchLessons = async () => {
+    try {
+      const res = await lessonService.getLessonsByClass(classItem.id);
+      if (res?.data) {
+        setLessons(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load lessons', err);
+    }
+  };
+
+  const handleCreateLesson = async () => {
+    if (!newLessonTitle.trim()) {
+      toast.error('Please enter a lesson title');
+      return;
+    }
+
+    setCreatingLesson(true);
+    try {
+      const res = await lessonService.createLesson({
+        title: newLessonTitle,
+        description: newLessonDesc,
+        classId: classItem.id,
+      });
+      if (res?.data) {
+        toast.success('Lesson created successfully');
+        setNewLessonTitle('');
+        setNewLessonDesc('');
+        setShowCreateLessonModal(false);
+        fetchLessons();
+      }
+    } catch (err) {
+      console.error('Failed to create lesson', err);
+      toast.error('Failed to create lesson');
+    } finally {
+      setCreatingLesson(false);
+    }
+  };
+
+  const handleDeleteLesson = async (lessonId) => {
+    if (!window.confirm('Delete this lesson? This action cannot be undone.')) return;
+
+    try {
+      await lessonService.deleteLesson(lessonId);
+      toast.success('Lesson deleted successfully');
+      fetchLessons();
+    } catch (err) {
+      console.error('Failed to delete lesson', err);
+      toast.error('Failed to delete lesson');
+    }
+  };
+
+  const handleEditLesson = async (lesson) => {
+    try {
+      const res = await lessonService.getLessonById(lesson.id);
+      if (res?.data) {
+        setEditingLesson(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load lesson', err);
+      toast.error('Failed to load lesson details');
+    }
   };
 
   // Container styles
@@ -405,9 +481,108 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
     switch (activeTab) {
       case 'lessons':
         return (
-          <div style={placeholderStyle}>
-            <div style={placeholderTitleStyle}>📚 Lessons</div>
-            <div style={placeholderDescStyle}>No lessons added yet. Create your first lesson to get started.</div>
+          <div>
+            <div style={studentsHeaderStyle}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                Lessons ({lessons.length})
+              </h3>
+              <button
+                style={addButtonStyle}
+                onMouseEnter={(e) => (e.target.style.backgroundColor = '#b91c1c')}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = '#dc2626')}
+                onClick={() => setShowCreateLessonModal(true)}
+              >
+                <Plus size={16} />
+                Create Lesson
+              </button>
+            </div>
+
+            {lessons.length === 0 ? (
+              <div style={placeholderStyle}>
+                <div style={placeholderTitleStyle}>No lessons yet</div>
+                <div style={placeholderDescStyle}>Create your first lesson to get started teaching this class.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {lessons.map((lesson, idx) => (
+                  <div
+                    key={lesson.id}
+                    style={{
+                      padding: '16px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      backgroundColor: lesson.isDraft ? '#fafafa' : '#ffffff',
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>
+                          Lesson {idx + 1}
+                        </span>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                          {lesson.title}
+                        </h4>
+                        {lesson.isDraft && (
+                          <span style={{
+                            fontSize: '11px',
+                            backgroundColor: '#fef3c7',
+                            color: '#92400e',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontWeight: '600',
+                          }}>
+                            DRAFT
+                          </span>
+                        )}
+                      </div>
+                      {lesson.description && (
+                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#6b7280' }}>
+                          {lesson.description}
+                        </p>
+                      )}
+                      <p style={{ margin: '6px 0 0 0', fontSize: '12px', color: '#9ca3af' }}>
+                        {lesson.contentBlocks?.length || 0} content block(s)
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                      <button
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#3b82f6',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                        onMouseEnter={(e) => (e.target.style.backgroundColor = '#2563eb')}
+                        onMouseLeave={(e) => (e.target.style.backgroundColor = '#3b82f6')}
+                        onClick={() => handleEditLesson(lesson)}
+                      >
+                        <Edit2 size={14} />
+                        Edit
+                      </button>
+                      <button
+                        style={removeButtonStyle}
+                        onMouseEnter={(e) => (e.target.style.backgroundColor = '#fecaca')}
+                        onMouseLeave={(e) => (e.target.style.backgroundColor = '#fee2e2')}
+                        onClick={() => handleDeleteLesson(lesson.id)}
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       case 'assessments':
@@ -497,6 +672,20 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
     }
   };
 
+  // If editing a lesson, show the LessonEditorPage instead
+  if (editingLesson) {
+    return (
+      <LessonEditorPage
+        lesson={editingLesson}
+        classId={classItem.id}
+        onBack={() => {
+          setEditingLesson(null);
+          fetchLessons(); // Reload lessons in case edits were made
+        }}
+      />
+    );
+  }
+
   return (
     <div style={containerStyle}>
       {/* Header with Back Button and Class Title */}
@@ -550,6 +739,94 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
           {renderTabContent()}
         </div>
       </div>
+
+      {/* Create Lesson Modal */}
+      {showCreateLessonModal && (
+        <div style={modalOverlayStyle}>
+          <div style={modalStyle}>
+            <div style={modalHeaderStyle}>
+              <h2 style={modalTitleStyle}>Create New Lesson</h2>
+              <button
+                style={closeButtonStyle}
+                onClick={() => setShowCreateLessonModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={modalContentStyle}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                  Lesson Title *
+                </label>
+                <input
+                  type="text"
+                  value={newLessonTitle}
+                  onChange={(e) => setNewLessonTitle(e.target.value)}
+                  placeholder="e.g., Introduction to Algebra"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={newLessonDesc}
+                  onChange={(e) => setNewLessonDesc(e.target.value)}
+                  placeholder="Brief description of this lesson..."
+                  rows="4"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontFamily: 'Arial, sans-serif',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={modalFooterStyle}>
+              <button
+                style={cancelButtonStyle}
+                onClick={() => setShowCreateLessonModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                style={submitButtonStyle}
+                disabled={creatingLesson}
+                onMouseEnter={(e) => {
+                  if (!creatingLesson) {
+                    e.target.style.backgroundColor = '#b91c1c';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!creatingLesson) {
+                    e.target.style.backgroundColor = '#dc2626';
+                  }
+                }}
+                onClick={handleCreateLesson}
+              >
+                {creatingLesson ? 'Creating...' : 'Create Lesson'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
 
       {/* Add Students Modal */}
       {showAddModal && (
