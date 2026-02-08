@@ -3,7 +3,9 @@ import { ArrowLeft, Book, BarChart3, Bell, Users, FileText, Plus, Trash2, Edit2,
 import { toast } from 'sonner';
 import adminService from '@/services/adminService';
 import lessonService from '@/services/lessonService';
+import assessmentService from '@/services/assessmentService';
 import LessonEditorPage from './LessonEditorPage';
+import AssessmentEditorPage from './AssessmentEditorPage';
 
 const ClassDetailsPage = ({ classItem, onBack }) => {
   const [activeTab, setActiveTab] = useState('lessons');
@@ -23,6 +25,17 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [editingLesson, setEditingLesson] = useState(null); // For navigation to LessonEditorPage
 
+  // Assessment states
+  const [assessments, setAssessments] = useState([]);
+  const [showCreateAssessmentModal, setShowCreateAssessmentModal] = useState(false);
+  const [newAssessmentTitle, setNewAssessmentTitle] = useState('');
+  const [newAssessmentDesc, setNewAssessmentDesc] = useState('');
+  const [newAssessmentType, setNewAssessmentType] = useState('quiz');
+  const [newAssessmentPoints, setNewAssessmentPoints] = useState(100);
+  const [newAssessmentPassingScore, setNewAssessmentPassingScore] = useState(60);
+  const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState(null);
+
   // Tab configuration with icons
   const tabs = [
     { id: 'lessons', label: 'Lessons', icon: Book },
@@ -37,6 +50,7 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
     if (classItem?.id) {
       fetchEnrolledStudents();
       fetchLessons();
+      fetchAssessments();
     }
   }, [classItem?.id]);
 
@@ -195,6 +209,64 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
     } catch (err) {
       console.error('Failed to load lesson', err);
       toast.error('Failed to load lesson details');
+    }
+  };
+
+  const fetchAssessments = async () => {
+    try {
+      const res = await assessmentService.getAssessmentsByClass(classItem.id);
+      if (res?.data) {
+        setAssessments(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load assessments', err);
+    }
+  };
+
+  const handleCreateAssessment = async () => {
+    if (!newAssessmentTitle.trim()) {
+      toast.error('Please enter an assessment title');
+      return;
+    }
+
+    setCreatingAssessment(true);
+    try {
+      const res = await assessmentService.createAssessment({
+        title: newAssessmentTitle,
+        description: newAssessmentDesc,
+        classId: classItem.id,
+        type: newAssessmentType,
+        totalPoints: parseInt(newAssessmentPoints),
+        passingScore: parseInt(newAssessmentPassingScore),
+      });
+      if (res?.data) {
+        toast.success('Assessment created successfully');
+        setNewAssessmentTitle('');
+        setNewAssessmentDesc('');
+        setNewAssessmentType('quiz');
+        setNewAssessmentPoints(100);
+        setNewAssessmentPassingScore(60);
+        setShowCreateAssessmentModal(false);
+        fetchAssessments();
+      }
+    } catch (err) {
+      console.error('Failed to create assessment', err);
+      toast.error('Failed to create assessment');
+    } finally {
+      setCreatingAssessment(false);
+    }
+  };
+
+  const handleDeleteAssessment = async (assessmentId) => {
+    if (!window.confirm('Delete this assessment? This action cannot be undone.')) return;
+
+    try {
+      await assessmentService.deleteAssessment(assessmentId);
+      toast.success('Assessment deleted successfully');
+      fetchAssessments();
+    } catch (err) {
+      console.error('Failed to delete assessment', err);
+      toast.error('Failed to delete assessment');
     }
   };
 
@@ -587,9 +659,109 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
         );
       case 'assessments':
         return (
-          <div style={placeholderStyle}>
-            <div style={placeholderTitleStyle}>📝 Assessments</div>
-            <div style={placeholderDescStyle}>No assessments created yet. Add assessments to evaluate student progress.</div>
+          <div>
+            <div style={studentsHeaderStyle}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                Assessments ({assessments.length})
+              </h3>
+              <button
+                style={addButtonStyle}
+                onMouseEnter={(e) => (e.target.style.backgroundColor = '#b91c1c')}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = '#dc2626')}
+                onClick={() => setShowCreateAssessmentModal(true)}
+              >
+                <Plus size={16} />
+                Create Assessment
+              </button>
+            </div>
+
+            {assessments.length === 0 ? (
+              <div style={placeholderStyle}>
+                <div style={placeholderTitleStyle}>No assessments yet</div>
+                <div style={placeholderDescStyle}>Create your first assessment to evaluate student progress.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {assessments.map((assessment, idx) => (
+                  <div
+                    key={assessment.id}
+                    style={{
+                      padding: '16px',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      backgroundColor: !assessment.isPublished ? '#fafafa' : '#ffffff',
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: '600', color: '#6b7280' }}>
+                          Assessment {idx + 1}
+                        </span>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                          {assessment.title}
+                        </h4>
+                        <span style={{
+                          fontSize: '11px',
+                          backgroundColor: assessment.isPublished ? '#dcfce7' : '#fef3c7',
+                          color: assessment.isPublished ? '#15803d' : '#92400e',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontWeight: '600',
+                        }}>
+                          {assessment.isPublished ? 'PUBLISHED' : 'DRAFT'}
+                        </span>
+                      </div>
+                      {assessment.description && (
+                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#6b7280' }}>
+                          {assessment.description}
+                        </p>
+                      )}
+                      <div style={{ margin: '8px 0 0 0', display: 'flex', gap: '16px', fontSize: '12px', color: '#6b7280' }}>
+                        <span>Type: <strong>{assessment.type}</strong></span>
+                        <span>Points: <strong>{assessment.totalPoints}</strong></span>
+                        <span>Passing: <strong>{assessment.passingScore}%</strong></span>
+                        <span>Questions: <strong>{assessment.questions?.length || 0}</strong></span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+                      <button
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#3b82f6',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                        onMouseEnter={(e) => (e.target.style.backgroundColor = '#2563eb')}
+                        onMouseLeave={(e) => (e.target.style.backgroundColor = '#3b82f6')}
+                        onClick={() => setEditingAssessment(assessment)}
+                      >
+                        <Edit2 size={14} />
+                        Edit
+                      </button>
+                      <button
+                        style={removeButtonStyle}
+                        onMouseEnter={(e) => (e.target.style.backgroundColor = '#fecaca')}
+                        onMouseLeave={(e) => (e.target.style.backgroundColor = '#fee2e2')}
+                        onClick={() => handleDeleteAssessment(assessment.id)}
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       case 'announcements':
@@ -681,6 +853,20 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
         onBack={() => {
           setEditingLesson(null);
           fetchLessons(); // Reload lessons in case edits were made
+        }}
+      />
+    );
+  }
+
+  // If editing an assessment, show the AssessmentEditorPage instead
+  if (editingAssessment) {
+    return (
+      <AssessmentEditorPage
+        assessment={editingAssessment}
+        classId={classItem.id}
+        onBack={() => {
+          setEditingAssessment(null);
+          fetchAssessments(); // Reload assessments in case edits were made
         }}
       />
     );
@@ -909,6 +1095,157 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
                 onClick={handleAddStudents}
               >
                 {addingStudents ? 'Adding...' : `Add ${selectedStudents.length} Student(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Assessment Modal */}
+      {showCreateAssessmentModal && (
+        <div style={modalOverlayStyle}>
+          <div style={modalStyle}>
+            <div style={modalHeaderStyle}>
+              <h2 style={modalTitleStyle}>Create New Assessment</h2>
+              <button
+                style={closeButtonStyle}
+                onClick={() => setShowCreateAssessmentModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={modalContentStyle}>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                  Assessment Title *
+                </label>
+                <input
+                  type="text"
+                  value={newAssessmentTitle}
+                  onChange={(e) => setNewAssessmentTitle(e.target.value)}
+                  placeholder="e.g., Algebra Quiz 1"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                  Description (Optional)
+                </label>
+                <textarea
+                  value={newAssessmentDesc}
+                  onChange={(e) => setNewAssessmentDesc(e.target.value)}
+                  placeholder="Brief description of this assessment..."
+                  rows="3"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontFamily: 'Arial, sans-serif',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                    Assessment Type *
+                  </label>
+                  <select
+                    value={newAssessmentType}
+                    onChange={(e) => setNewAssessmentType(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="quiz">Quiz</option>
+                    <option value="exam">Exam</option>
+                    <option value="assignment">Assignment</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                    Total Points *
+                  </label>
+                  <input
+                    type="number"
+                    value={newAssessmentPoints}
+                    onChange={(e) => setNewAssessmentPoints(e.target.value)}
+                    min="1"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                  Passing Score (%) *
+                </label>
+                <input
+                  type="number"
+                  value={newAssessmentPassingScore}
+                  onChange={(e) => setNewAssessmentPassingScore(e.target.value)}
+                  min="0"
+                  max="100"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={modalFooterStyle}>
+              <button
+                style={cancelButtonStyle}
+                onClick={() => setShowCreateAssessmentModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                style={submitButtonStyle}
+                disabled={creatingAssessment}
+                onMouseEnter={(e) => {
+                  if (!creatingAssessment) {
+                    e.target.style.backgroundColor = '#b91c1c';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!creatingAssessment) {
+                    e.target.style.backgroundColor = '#dc2626';
+                  }
+                }}
+                onClick={handleCreateAssessment}
+              >
+                {creatingAssessment ? 'Creating...' : 'Create Assessment'}
               </button>
             </div>
           </div>

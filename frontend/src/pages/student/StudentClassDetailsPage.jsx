@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Book, Bell, BarChart3, FileText } from 'lucide-react';
 import lessonService from '@/services/lessonService';
+import assessmentService from '@/services/assessmentService';
 import StudentLessonViewerPage from './StudentLessonViewerPage';
+import StudentAssessmentPage from './StudentAssessmentPage';
 import { toast } from 'sonner';
 
 const StudentClassDetailsPage = ({ classItem, onBack }) => {
@@ -10,6 +12,10 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [completions, setCompletions] = useState({});
+  const [assessments, setAssessments] = useState([]);
+  const [loadingAssessments, setLoadingAssessments] = useState(false);
+  const [selectedAssessment, setSelectedAssessment] = useState(null);
+  const [studentAttempts, setStudentAttempts] = useState({});
 
   // Tab configuration
   const tabs = [
@@ -19,10 +25,11 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
     { id: 'grades', label: 'Grades', icon: BarChart3 },
   ];
 
-  // Fetch lessons on component mount
+  // Fetch lessons and assessments on component mount
   useEffect(() => {
     if (classItem?.id) {
       fetchLessons();
+      fetchAssessments();
     }
   }, [classItem?.id]);
 
@@ -66,6 +73,40 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
 
     fetchCompletions();
   }, [classItem?.id, lessons.length]);
+
+  const fetchAssessments = async () => {
+    setLoadingAssessments(true);
+    try {
+      const res = await assessmentService.getAssessmentsByClass(classItem.id);
+      if (res?.data) {
+        // Only show published assessments to students
+        const publishedAssessments = res.data.filter(a => a.isPublished);
+        setAssessments(publishedAssessments);
+        
+        // Fetch student attempts for each assessment
+        publishedAssessments.forEach(async (assessment) => {
+          try {
+            const attemptsRes = await assessmentService.getStudentAttempts(assessment.id);
+            if (attemptsRes?.data && Array.isArray(attemptsRes.data)) {
+              setStudentAttempts(prev => (
+                {
+                  ...prev,
+                  [assessment.id]: attemptsRes.data,
+                }
+              ));
+            }
+          } catch (err) {
+            console.error('Failed to load assessment attempts', err);
+          }
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load assessments', err);
+      toast.error('Failed to load assessments');
+    } finally {
+      setLoadingAssessments(false);
+    }
+  };
 
   // Container styles
   const containerStyle = {
@@ -303,7 +344,93 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
             <p style={placeholderDescStyle}>No announcements yet. Check back soon for updates from your instructor.</p>
           </div>
         );
+      case 'assessments':
+        return (
+          <div>
+            <div style={{ marginBottom: '20px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', margin: 0 }}>
+                Course Assessments
+              </h2>
+              <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0 0' }}>
+                {assessments.length} assessment{assessments.length !== 1 ? 's' : ''}
+              </p>
+            </div>
 
+            {loadingAssessments ? (
+              <div style={placeholderStyle}>
+                <p>Loading assessments...</p>
+              </div>
+            ) : assessments.length === 0 ? (
+              <div style={placeholderStyle}>
+                <p style={placeholderTitleStyle}>No Assessments Yet</p>
+                <p style={placeholderDescStyle}>Your instructor hasn't published any assessments for this course.</p>
+              </div>
+            ) : (
+              <div style={lessonListStyle}>
+                {assessments.map((assessment) => {
+                  const attempts = studentAttempts[assessment.id] || [];
+                  const hasAttempted = attempts.length > 0;
+                  const latestAttempt = hasAttempted ? attempts[attempts.length - 1] : null;
+                  
+                  return (
+                    <div
+                      key={assessment.id}
+                      style={lessonItemStyle}
+                      onMouseEnter={(e) => {
+                        Object.assign(e.currentTarget.style, lessonItemHoverStyle);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#ffffff';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                      onClick={() => setSelectedAssessment(assessment)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={lessonTitleStyle}>{assessment.title}</h3>
+                          {assessment.description && <p style={lessonDescStyle}>{assessment.description}</p>}
+                          <div style={{ marginTop: '8px', display: 'flex', gap: '16px', fontSize: '13px', color: '#6b7280' }}>
+                            <span>Type: <strong>{assessment.type}</strong></span>
+                            <span>Points: <strong>{assessment.totalPoints}</strong></span>
+                            <span>Passing: <strong>{assessment.passingScore}%</strong></span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', whiteSpace: 'nowrap' }}>
+                          {hasAttempted && latestAttempt && (
+                            <div style={{ textAlign: 'right' }}>
+                              <div
+                                style={{
+                                  display: 'inline-block',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  backgroundColor: latestAttempt.passed ? '#dcfce7' : '#fee2e2',
+                                  color: latestAttempt.passed ? '#15803d' : '#dc2626',
+                                }}
+                              >
+                                Score: {latestAttempt.score?.toFixed(1) || 0}% {latestAttempt.passed ? '✓ PASSED' : '✗ FAILED'}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                                {attempts.length} attempt{attempts.length !== 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          )}
+                          {!hasAttempted && (
+                            <span style={lessonStatusStyle(false)}>
+                              Not Started
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
       case 'grades':
         return (
           <div style={placeholderStyle}>
@@ -323,6 +450,15 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
       classItem={classItem}
       allLessons={lessons}
       onBack={() => setSelectedLesson(null)}
+    />
+  ) : selectedAssessment ? (
+    <StudentAssessmentPage
+      assessment={selectedAssessment}
+      classItem={classItem}
+      onBack={() => {
+        setSelectedAssessment(null);
+        fetchAssessments(); // Reload to get updated attempts
+      }}
     />
   ) : (
     <div style={containerStyle}>

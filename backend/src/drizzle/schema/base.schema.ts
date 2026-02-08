@@ -53,6 +53,15 @@ export const lessonContentTypeEnum = pgEnum('lesson_content_type', [
   'divider',
 ]);
 
+export const questionTypeEnum = pgEnum('question_type', [
+  'multiple_choice',
+  'multiple_select',
+  'true_false',
+  'short_answer',
+  'fill_blank',
+  'dropdown',
+]);
+
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
 // ==========================================
@@ -326,6 +335,108 @@ export const assessments = pgTable('assessments', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+export const assessmentQuestions = pgTable(
+  'assessment_questions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    assessmentId: uuid('assessment_id')
+      .notNull()
+      .references(() => assessments.id, { onDelete: 'cascade' }),
+    type: questionTypeEnum('type').notNull().default('multiple_choice'),
+    content: text('content').notNull(),
+    points: integer('points').notNull().default(1),
+    order: integer('order').notNull().default(0),
+    isRequired: boolean('is_required').default(true),
+    explanation: text('explanation'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    assessmentIdIdx: index('assessment_questions_assessment_id_idx').on(
+      table.assessmentId,
+    ),
+    orderIdx: index('assessment_questions_order_idx').on(table.order),
+  }),
+);
+
+export const assessmentQuestionOptions = pgTable(
+  'assessment_question_options',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    questionId: uuid('question_id')
+      .notNull()
+      .references(() => assessmentQuestions.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    isCorrect: boolean('is_correct').default(false),
+    order: integer('order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    questionIdIdx: index('assessment_question_options_question_id_idx').on(
+      table.questionId,
+    ),
+  }),
+);
+
+export const assessmentAttempts = pgTable(
+  'assessment_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    assessmentId: uuid('assessment_id')
+      .notNull()
+      .references(() => assessments.id, { onDelete: 'cascade' }),
+    startedAt: timestamp('started_at').notNull().defaultNow(),
+    submittedAt: timestamp('submitted_at'),
+    score: integer('score'),
+    passed: boolean('passed'),
+    isSubmitted: boolean('is_submitted').default(false),
+    timeSpentSeconds: integer('time_spent_seconds').default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    studentIdIdx: index('assessment_attempts_student_id_idx').on(table.studentId),
+    assessmentIdIdx: index('assessment_attempts_assessment_id_idx').on(
+      table.assessmentId,
+    ),
+    submittedIdx: index('assessment_attempts_submitted_idx').on(table.isSubmitted),
+    uniqueAttempt: unique('assessment_attempts_student_assessment_unique').on(
+      table.studentId,
+      table.assessmentId,
+    ),
+  }),
+);
+
+export const assessmentResponses = pgTable(
+  'assessment_responses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    attemptId: uuid('attempt_id')
+      .notNull()
+      .references(() => assessmentAttempts.id, { onDelete: 'cascade' }),
+    questionId: uuid('question_id')
+      .notNull()
+      .references(() => assessmentQuestions.id, { onDelete: 'cascade' }),
+    studentAnswer: text('student_answer'),
+    selectedOptionId: uuid('selected_option_id').references(
+      () => assessmentQuestionOptions.id,
+      { onDelete: 'set null' },
+    ),
+    isCorrect: boolean('is_correct'),
+    pointsEarned: integer('points_earned').default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    attemptIdIdx: index('assessment_responses_attempt_id_idx').on(table.attemptId),
+    questionIdIdx: index('assessment_responses_question_id_idx').on(
+      table.questionId,
+    ),
+  }),
+);
+
 // ==========================================
 // 5. RELATIONS
 // ==========================================
@@ -432,9 +543,69 @@ export const lessonCompletionsRelations = relations(
   }),
 );
 
-export const assessmentsRelations = relations(assessments, ({ one }) => ({
-  class: one(classes, {
-    fields: [assessments.classId],
-    references: [classes.id],
+export const assessmentsRelations = relations(
+  assessments,
+  ({ one, many }) => ({
+    class: one(classes, {
+      fields: [assessments.classId],
+      references: [classes.id],
+    }),
+    questions: many(assessmentQuestions),
+    attempts: many(assessmentAttempts),
   }),
-}));
+);
+
+export const assessmentQuestionsRelations = relations(
+  assessmentQuestions,
+  ({ one, many }) => ({
+    assessment: one(assessments, {
+      fields: [assessmentQuestions.assessmentId],
+      references: [assessments.id],
+    }),
+    options: many(assessmentQuestionOptions),
+    responses: many(assessmentResponses),
+  }),
+);
+
+export const assessmentQuestionOptionsRelations = relations(
+  assessmentQuestionOptions,
+  ({ one }) => ({
+    question: one(assessmentQuestions, {
+      fields: [assessmentQuestionOptions.questionId],
+      references: [assessmentQuestions.id],
+    }),
+  }),
+);
+
+export const assessmentAttemptsRelations = relations(
+  assessmentAttempts,
+  ({ one, many }) => ({
+    student: one(users, {
+      fields: [assessmentAttempts.studentId],
+      references: [users.id],
+    }),
+    assessment: one(assessments, {
+      fields: [assessmentAttempts.assessmentId],
+      references: [assessments.id],
+    }),
+    responses: many(assessmentResponses),
+  }),
+);
+
+export const assessmentResponsesRelations = relations(
+  assessmentResponses,
+  ({ one }) => ({
+    attempt: one(assessmentAttempts, {
+      fields: [assessmentResponses.attemptId],
+      references: [assessmentAttempts.id],
+    }),
+    question: one(assessmentQuestions, {
+      fields: [assessmentResponses.questionId],
+      references: [assessmentQuestions.id],
+    }),
+    selectedOption: one(assessmentQuestionOptions, {
+      fields: [assessmentResponses.selectedOptionId],
+      references: [assessmentQuestionOptions.id],
+    }),
+  }),
+);

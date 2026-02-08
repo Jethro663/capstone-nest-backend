@@ -72,13 +72,15 @@ export default function CoursesPage() {
 
     load();
     return () => { mounted = false; };
-  }, [courses.length > 0]);
+  }, [courses.length]);
 
   // Fetch lesson completions for all courses and calculate progress
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (courses.length === 0) return;
+      if (courses.length === 0 || !loadingLessons === false) return;
+      // Only proceed if all courses have lessons loaded
+      if (!courses.every(c => Array.isArray(c.lessons))) return;
       
       const newCompletions = {};
       const updatedCourses = await Promise.all(courses.map(async (c) => {
@@ -112,7 +114,7 @@ export default function CoursesPage() {
 
     load();
     return () => { mounted = false; };
-  }, [courses.length > 0]);
+  }, [courses.length, loadingLessons]);
 
   // Deterministically pick a color for course cards
   const COLORS = ["#3B82F6","#8B5CF6","#10B981","#F97316","#EC4899","#14B8A6","#64748B"];

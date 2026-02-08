@@ -340,7 +340,7 @@ export class ClassesService {
     // Extract unique class IDs
     const classIds = [...new Set(studentEnrollments.map(e => e.classId).filter((id): id is string => Boolean(id)))];
 
-    // Fetch all classes with those IDs
+    // Fetch all classes with those IDs, including enrollments and student count
     const classList = await this.db.query.classes.findMany({
       where: (classTable) => inArray(classTable.id, classIds),
       with: {
@@ -351,6 +351,12 @@ export class ClassesService {
             firstName: true,
             lastName: true,
             email: true,
+          },
+        },
+        enrollments: {
+          columns: {
+            id: true,
+            studentId: true,
           },
         },
       },
