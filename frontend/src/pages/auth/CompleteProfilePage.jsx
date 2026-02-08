@@ -1,48 +1,42 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
-/**
- * CompleteProfilePage
- * A full form that collects all profile details for new users.
- * - Does client-side validation
- * - Calls `updateProfile` from AuthContext
- * - Calls optional `onComplete` callback after successful save
- *
- * Usage:
- * <CompleteProfilePage onComplete={() => navigate('/dashboard')} />
- */
 export function CompleteProfilePage({ onComplete }) {
   const { user, updateProfile } = useAuth();
 
-  // Pre-fill from user when available
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [middleName, setMiddleName] = useState(user?.middleName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
-  // Date of birth split into Day / Month / Year selects
   const [dobDay, setDobDay] = useState('');
   const [dobMonth, setDobMonth] = useState('');
   const [dobYear, setDobYear] = useState('');
   const [gender, setGender] = useState(user?.gender || '');
-  // Address replaces separate city + country fields
   const [address, setAddress] = useState(user?.city || '');
   const [studentId, setStudentId] = useState(user?.studentId || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [familyName, setFamilyName] = useState(user?.familyName || '');
   const [familyRelationship, setFamilyRelationship] = useState(user?.familyRelationship || '');
   const [familyContact, setFamilyContact] = useState(user?.familyContact || '');
-
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState({});
-
   const dobInitRef = useRef(false);
 
+  const months = [
+    { value: '1', label: 'January' }, { value: '2', label: 'February' },
+    { value: '3', label: 'March' }, { value: '4', label: 'April' },
+    { value: '5', label: 'May' }, { value: '6', label: 'June' },
+    { value: '7', label: 'July' }, { value: '8', label: 'August' },
+    { value: '9', label: 'September' }, { value: '10', label: 'October' },
+    { value: '11', label: 'November' }, { value: '12', label: 'December' },
+  ];
+  const currentYear = new Date().getFullYear();
+  const minYear = 1975;
+  const years = Array.from({ length: currentYear - minYear + 1 }, (_, i) => String(currentYear - i));
+  const daysInMonth = (y, m) => new Date(y, m, 0).getDate();
+
   useEffect(() => {
-    // Initialize DOB select values from user.dob when available
     if (user?.dob) {
       const d = new Date(user.dob);
       if (!Number.isNaN(d.getTime())) {
@@ -50,17 +44,14 @@ export function CompleteProfilePage({ onComplete }) {
         setDobDay(String(d.getDate()));
         setDobMonth(String(d.getMonth() + 1));
         setDobYear(String(d.getFullYear()));
-        // Clear the init flag on next tick so later user changes are detected
         setTimeout(() => (dobInitRef.current = false), 0);
       }
     }
   }, [user]);
 
-  // When year changes by the user, reset month and day to enforce selection order
   useEffect(() => {
     if (dobInitRef.current) return;
     if (dobYear) {
-      // user selected a year — reset month and day to force re-selection in order
       setDobMonth('');
       setDobDay('');
     }
@@ -68,43 +59,15 @@ export function CompleteProfilePage({ onComplete }) {
 
   const isValidPHPhone = (value) => {
     const digits = (value || '').replace(/\D/g, '');
-    // Enforce exactly 11 digits starting with 09
     return digits.length === 11 && digits.startsWith('09');
   };
-
-  // Real-time validity state for phone inputs
   const [phoneValid, setPhoneValid] = useState(false);
   const [familyContactValid, setFamilyContactValid] = useState(false);
 
-  // Month labels and year range for DOB selects
-  const months = [
-    { value: '1', label: 'January' },
-    { value: '2', label: 'February' },
-    { value: '3', label: 'March' },
-    { value: '4', label: 'April' },
-    { value: '5', label: 'May' },
-    { value: '6', label: 'June' },
-    { value: '7', label: 'July' },
-    { value: '8', label: 'August' },
-    { value: '9', label: 'September' },
-    { value: '10', label: 'October' },
-    { value: '11', label: 'November' },
-    { value: '12', label: 'December' },
-  ];
-  const currentYear = new Date().getFullYear();
-  const minYear = 1975; // minimum allowed year
-  const years = Array.from({ length: currentYear - minYear + 1 }, (_, i) => String(currentYear - i));
-
-  // Helper: number of days in a given month/year
-  const daysInMonth = (y, m) => new Date(y, m, 0).getDate();
-
-  // Ensure selected day remains valid when month/year change
   useEffect(() => {
     if (dobYear && dobMonth) {
       const max = daysInMonth(Number(dobYear), Number(dobMonth));
-      if (dobDay && Number(dobDay) > max) {
-        setDobDay('');
-      }
+      if (dobDay && Number(dobDay) > max) setDobDay('');
     }
   }, [dobMonth, dobYear]);
 
@@ -112,249 +75,239 @@ export function CompleteProfilePage({ onComplete }) {
     const e = {};
     if (!firstName.trim()) e.firstName = 'First name is required';
     if (!lastName.trim()) e.lastName = 'Last name is required';
-
-    // DOB validation (must be a valid past or today's date)
-    if (!dobDay || !dobMonth || !dobYear) {
-      e.dob = 'Date of birth is required';
-    } else {
-      const y = Number(dobYear);
-      if (y < minYear) {
-        e.dob = `Year must be ${minYear} or later`;
-      } else {
-        const m = Number(dobMonth) - 1;
-        const d = Number(dobDay);
-        const date = new Date(y, m, d);
-        if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
-          e.dob = 'Invalid date of birth';
-        } else if (date > new Date()) {
-          e.dob = 'Date of birth cannot be in the future';
-        }
-      }
-    }
-
+    if (!dobDay || !dobMonth || !dobYear) e.dob = 'Date of birth is required';
     if (!gender) e.gender = 'Gender is required';
     if (!studentId.trim()) e.studentId = 'Student ID is required';
-
-    // Phone validations: numeric only, exactly 11 digits and starts with 09
     if (!phone.trim()) e.phone = 'Phone number is required';
-    else if (!isValidPHPhone(phone)) e.phone = 'Enter a valid 11-digit Philippine mobile number (e.g. 09123456789)';
-
+    else if (!isValidPHPhone(phone)) e.phone = 'Enter a valid 11-digit Philippine number';
     if (!address.trim()) e.address = 'Address is required';
     if (!familyName.trim()) e.familyName = 'Family member name is required';
     if (!familyRelationship.trim()) e.familyRelationship = 'Relationship is required';
     if (!familyContact.trim()) e.familyContact = 'Family contact is required';
-    else if (!isValidPHPhone(familyContact)) e.familyContact = 'Enter a valid 11-digit Philippine mobile number (e.g. 09123456789)';
+    else if (!isValidPHPhone(familyContact)) e.familyContact = 'Enter a valid 11-digit Philippine number';
     setErrors(e);
     return Object.keys(e).length === 0;
-  };  
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!validate()) return;
-
     setIsSaving(true);
-
     try {
-      // Prepare payload
       const payload = {
         firstName: firstName.trim(),
         middleName: middleName.trim() || undefined,
         lastName: lastName.trim(),
-        dob: `${dobYear}-${String(dobMonth).padStart(2,'0')}-${String(dobDay).padStart(2,'0')}`,
+        dob: `${dobYear}-${dobMonth.padStart(2,'0')}-${dobDay.padStart(2,'0')}`,
         gender,
         studentId: studentId.trim(),
         phone: phone.trim(),
-        address: address.trim(), // stored as 'city' in backend (repurposed as address)
+        address: address.trim(),
         familyName: familyName.trim(),
         familyRelationship: familyRelationship.trim(),
         familyContact: familyContact.trim(),
       };
-
       await updateProfile(payload);
-
       toast.success('Profile saved successfully!');
-
-      if (typeof onComplete === 'function') {
-        onComplete();
-      }
+      if (onComplete) onComplete();
     } catch (err) {
       console.error('Failed to save profile', err);
-      toast.error((err && err.message) || 'Failed to save profile. Please try again.');
+      toast.error(err?.message || 'Failed to save profile.');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const formGroupStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    marginBottom: '20px'
+  };
+
+  const inputStyle = {
+    padding: '10px',
+    borderRadius: '6px',
+    border: '1px solid #ccc',
+    fontSize: '14px',
+    marginTop: '5px'
+  };
+
+  const errorStyle = { color: '#dc2626', fontSize: '12px', marginTop: '4px' };
+  const validStyle = { color: '#16a34a', fontSize: '12px', marginTop: '4px' };
+  const dobSelectsStyle = { display: 'flex', gap: '10px' };
+  const submitBtnStyle = {
+    padding: '15px',
+    fontSize: '16px',
+    backgroundColor: '#dc2626',
+    color: 'white',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    marginTop: '30px'
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#374151] to-[#dc2626] flex flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-3xl shadow-lg">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl text-center">Complete Your Profile</CardTitle>
-          <CardDescription className="text-center">Please fill out your profile to continue. All fields are required.</CardDescription>
-        </CardHeader>
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      padding: '40px 20px',
+      background: '#f2f2f2',
+      minHeight: '100vh'
+    }}>
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        style={{
+          background: 'white',
+          borderRadius: '10px',
+          padding: '40px',
+          maxWidth: '800px',
+          width: '100%',
+          boxShadow: '0 10px 20px rgba(0,0,0,0.1)'
+        }}
+      >
+        <h2 style={{ textAlign: 'center', fontSize: '28px', marginBottom: '5px' }}>Complete Your Profile</h2>
+        <p style={{ textAlign: 'center', marginBottom: '30px', color: '#555' }}>All fields are required.</p>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
 
-            {/* Name fields */}
-            <div>
-              <Label htmlFor="firstName">First Name</Label>
-              <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-              {errors.firstName && <p className="text-sm text-[#dc2626]">{errors.firstName}</p>}
+          {/* Name fields */}
+          <div style={formGroupStyle}>
+            <label>First Name</label>
+            <input style={inputStyle} value={firstName} onChange={e => setFirstName(e.target.value)} />
+            {errors.firstName && <span style={errorStyle}>{errors.firstName}</span>}
+          </div>
+
+          <div style={formGroupStyle}>
+            <label>Middle Name</label>
+            <input style={inputStyle} value={middleName} onChange={e => setMiddleName(e.target.value)} />
+          </div>
+
+          <div style={formGroupStyle}>
+            <label>Last Name</label>
+            <input style={inputStyle} value={lastName} onChange={e => setLastName(e.target.value)} />
+            {errors.lastName && <span style={errorStyle}>{errors.lastName}</span>}
+          </div>
+
+          <div style={formGroupStyle}>
+            <label>Student ID</label>
+            <input style={inputStyle} value={studentId} onChange={e => setStudentId(e.target.value)} />
+            {errors.studentId && <span style={errorStyle}>{errors.studentId}</span>}
+          </div>
+
+          {/* Date of Birth */}
+          <div style={formGroupStyle}>
+            <label>Date of Birth</label>
+            <div style={dobSelectsStyle}>
+              <select style={inputStyle} value={dobYear} onChange={e => setDobYear(e.target.value)}>
+                <option value="">Year</option>
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <select style={inputStyle} value={dobMonth} onChange={e => setDobMonth(e.target.value)} disabled={!dobYear}>
+                <option value="">Month</option>
+                {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+              <select style={inputStyle} value={dobDay} onChange={e => setDobDay(e.target.value)} disabled={!dobMonth || !dobYear}>
+                <option value="">Day</option>
+                {dobYear && dobMonth && Array.from({ length: daysInMonth(Number(dobYear), Number(dobMonth)) }, (_, i) => (
+                  <option key={i+1} value={i+1}>{i+1}</option>
+                ))}
+              </select>
+            </div>
+            {errors.dob && <span style={errorStyle}>{errors.dob}</span>}
+          </div>
+
+          {/* Gender */}
+          <div style={formGroupStyle}>
+            <label>Gender</label>
+            <select style={inputStyle} value={gender} onChange={e => setGender(e.target.value)}>
+              <option value="">Select</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+            {errors.gender && <span style={errorStyle}>{errors.gender}</span>}
+          </div>
+
+          {/* Phone */}
+          <div style={formGroupStyle}>
+            <label>Phone</label>
+            <input
+              style={inputStyle}
+              value={phone}
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 11);
+                setPhone(v);
+                setPhoneValid(v.length === 11 && v.startsWith('09'));
+              }}
+            />
+            {errors.phone && <span style={errorStyle}>{errors.phone}</span>}
+            {!errors.phone && phone.length > 0 && (
+              <span style={phoneValid ? validStyle : errorStyle}>{phoneValid ? 'Valid number' : 'Invalid format'}</span>
+            )}
+          </div>
+
+          {/* Address */}
+          <div style={formGroupStyle}>
+            <label>Address</label>
+            <input style={inputStyle} value={address} onChange={e => setAddress(e.target.value)} />
+            {errors.address && <span style={errorStyle}>{errors.address}</span>}
+          </div>
+
+          {/* Emergency Contact */}
+          <fieldset style={{ gridColumn: '1 / -1', border: '1px solid #ddd', borderRadius: '8px', padding: '20px', marginTop: '20px' }}>
+            <legend>Emergency Contact</legend>
+
+            <div style={formGroupStyle}>
+              <label>Name</label>
+              <input style={inputStyle} value={familyName} onChange={e => setFamilyName(e.target.value)} />
+              {errors.familyName && <span style={errorStyle}>{errors.familyName}</span>}
             </div>
 
-            <div>
-              <Label htmlFor="middleName">Middle Name</Label>
-              <Input id="middleName" value={middleName} onChange={(e) => setMiddleName(e.target.value)} />
-            </div>
-
-            <div>
-              <Label htmlFor="lastName">Last Name</Label>
-              <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              {errors.lastName && <p className="text-sm text-[#dc2626]">{errors.lastName}</p>}
-            </div>
-
-            <div>
-              <Label htmlFor="studentId">Student ID</Label>
-              <Input id="studentId" value={studentId} onChange={(e) => setStudentId(e.target.value)} />
-              {errors.studentId && <p className="text-sm text-[#dc2626]">{errors.studentId}</p>}
-            </div>
-
-            <div>
-              <Label>Date of Birth</Label>
-              <div className="flex gap-2">
-                <select value={dobYear} onChange={(e) => setDobYear(e.target.value)} className="rounded-md border p-2 w-1/3">
-                  <option value="">Year</option>
-                  {years.map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-
-                <select value={dobMonth} onChange={(e) => setDobMonth(e.target.value)} className={`rounded-md border p-2 w-1/3 ${!dobYear ? 'opacity-50' : ''}`} disabled={!dobYear} aria-disabled={!dobYear}>
-                  <option value="">Month</option>
-                  {months.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
-
-                <select value={dobDay} onChange={(e) => setDobDay(e.target.value)} className={`rounded-md border p-2 w-1/3 ${!dobMonth ? 'opacity-50' : ''}`} disabled={!dobMonth || !dobYear} aria-disabled={!dobMonth || !dobYear}>
-                  <option value="">Day</option>
-                  {dobYear && dobMonth ? Array.from({ length: daysInMonth(Number(dobYear), Number(dobMonth)) }, (_, i) => (
-                    <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
-                  )) : null}
-                </select>
-              </div>
-              {errors.dob && <p className="text-sm text-[#dc2626]">{errors.dob}</p>}
-            </div> 
-
-            <div>
-              <Label htmlFor="gender">Gender</Label>
-              <select id="gender" value={gender} onChange={(e) => setGender(e.target.value)} className="w-full rounded-md border p-2">
+            <div style={formGroupStyle}>
+              <label>Relationship</label>
+              <select style={inputStyle} value={familyRelationship} onChange={e => setFamilyRelationship(e.target.value)}>
                 <option value="">Select</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
+                <option value="Father">Father</option>
+                <option value="Mother">Mother</option>
+                <option value="Guardian">Guardian</option>
+                <option value="Sibling">Sibling</option>
                 <option value="Other">Other</option>
               </select>
-              {errors.gender && <p className="text-sm text-[#dc2626]">{errors.gender}</p>}
+              {errors.familyRelationship && <span style={errorStyle}>{errors.familyRelationship}</span>}
             </div>
 
-
-
-            {/* Contact */}
-            <div>
-              <Label>Email</Label>
-              <Input value={user?.email || ''} disabled />
-            </div>
-
-            <div>
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                maxLength={11}
-                placeholder="09123456789"
-                value={phone}
-                onChange={(e) => {
+            <div style={formGroupStyle}>
+              <label>Contact</label>
+              <input
+                style={inputStyle}
+                value={familyContact}
+                onChange={e => {
                   const v = e.target.value.replace(/\D/g, '').slice(0,11);
-                  setPhone(v);
-                  setPhoneValid(v.length === 11 && v.startsWith('09'));
+                  setFamilyContact(v);
+                  setFamilyContactValid(v.length === 11 && v.startsWith('09'));
                 }}
               />
-              {errors.phone && <p className="text-sm text-[#dc2626]">{errors.phone}</p>}
-              {!errors.phone && phone.length > 0 && (
-                phoneValid ? <p className="text-sm text-green-600">Valid number</p> : <p className="text-sm text-[#dc2626]">Invalid format</p>
+              {errors.familyContact && <span style={errorStyle}>{errors.familyContact}</span>}
+              {!errors.familyContact && familyContact.length > 0 && (
+                <span style={familyContactValid ? validStyle : errorStyle}>{familyContactValid ? 'Valid number' : 'Invalid format'}</span>
               )}
-            </div>   
-
-            <div>
-              <Label htmlFor="address">Address</Label>
-              <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} />
-              {errors.address && <p className="text-sm text-[#dc2626]">{errors.address}</p>}
             </div>
+          </fieldset>
 
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="submit"
+            disabled={isSaving}
+            style={submitBtnStyle}
+          >
+            {isSaving ? 'Saving...' : 'Save & Continue'}
+          </motion.button>
 
-            {/* Emergency Contact */}
-            <div className="md:col-span-2 border border-gray-200 rounded-md p-4 bg-white">
-              <h4 className="font-semibold mb-3 text-sm text-gray-700">Emergency Contact</h4>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="familyName">Name</Label>
-                  <Input id="familyName" value={familyName} onChange={(e) => setFamilyName(e.target.value)} />
-                  {errors.familyName && <p className="text-sm text-[#dc2626]">{errors.familyName}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="familyRelationship">Relationship</Label>
-                  <select
-                    id="familyRelationship"
-                    value={familyRelationship}
-                    onChange={(e) => setFamilyRelationship(e.target.value)}
-                    className="w-full rounded-md border p-2"
-                  >
-                    <option value="">Select</option>
-                    <option value="Father">Father</option>
-                    <option value="Mother">Mother</option>
-                    <option value="Guardian">Guardian</option>
-                    <option value="Sibling">Sibling</option>
-                    <option value="Other">Other</option>
-                  </select>
-                  {errors.familyRelationship && <p className="text-sm text-[#dc2626]">{errors.familyRelationship}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="familyContact">Contact</Label>
-                  <Input
-                    id="familyContact"
-                    type="tel"
-                    maxLength={11}
-                    placeholder="09123456789"
-                    value={familyContact}
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/\D/g, '').slice(0,11);
-                      setFamilyContact(v);
-                      setFamilyContactValid(v.length === 11 && v.startsWith('09'));
-                    }}
-                  />
-                  {errors.familyContact && <p className="text-sm text-[#dc2626]">{errors.familyContact}</p>}
-                  {!errors.familyContact && familyContact.length > 0 && (
-                    familyContactValid ? <p className="text-sm text-green-600">Valid number</p> : <p className="text-sm text-[#dc2626]">Invalid format</p>
-                  )}
-                </div> 
-              </div>
-            </div>
-
-            {/* Submit */}
-            <div className="md:col-span-2 flex gap-3 justify-end mt-2">
-              <Button type="submit" className="bg-[#dc2626] hover:bg-[#b91c1c] text-white" disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save & Continue'}
-              </Button>
-            </div>
-
-          </form>
-        </CardContent>
-      </Card>
+        </form>
+      </motion.div>
     </div>
   );
 }

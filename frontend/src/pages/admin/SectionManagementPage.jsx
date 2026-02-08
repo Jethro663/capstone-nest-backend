@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { toast } from "sonner";
 import { UserPlus, Trash2, Edit2, Search, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 import api from "@/services/api";
-
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import CreateSectionModal from "@/components/modals/CreateSectionModal";
 import DeleteModal from "@/components/modals/DeleteModal";
 
@@ -13,10 +11,8 @@ const SectionManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedGrade, setSelectedGrade] = useState("all");
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
-
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -63,57 +59,48 @@ const SectionManagementPage = () => {
   // -------------------------
   const handleAddOrUpdateSection = async (sectionData) => {
     try {
+      const payload = {
+        name: sectionData.sectionName,
+        gradeLevel: sectionData.gradeLevel,
+        schoolYear: sectionData.schoolYear,
+        capacity: sectionData.studentCapacity,
+        roomNumber: sectionData.roomNumber,
+        adviserId: sectionData.adviserId || null,
+      };
+
       if (editingSection) {
-        const payload = {
-          name: sectionData.sectionName,
-          gradeLevel: sectionData.gradeLevel,
-          schoolYear: sectionData.schoolYear,
-          capacity: sectionData.studentCapacity,
-          roomNumber: sectionData.roomNumber,
-          adviserId: sectionData.adviserId || null,
-        };
         const response = await api.put(`/sections/update/${editingSection._id}`, payload);
         if (response.data.success) toast.success("Section updated successfully");
+        setSections(prev =>
+          prev.map(s => (s._id === editingSection._id ? { ...s, ...payload } : s))
+        );
       } else {
-        const payload = {
-          name: sectionData.sectionName,
-          gradeLevel: sectionData.gradeLevel,
-          schoolYear: sectionData.schoolYear,
-          capacity: sectionData.studentCapacity,
-          roomNumber: sectionData.roomNumber,
-          adviserId: sectionData.adviserId || null,
-        };
         const response = await api.post("/sections/create", payload);
         if (response.data.success) toast.success("Section created successfully");
+        setSections(prev => [{ _id: crypto.randomUUID(), ...payload, isActive: true }, ...prev]);
       }
-      await fetchSections();
+
       setIsModalOpen(false);
       setEditingSection(null);
     } catch (error) {
       console.error("Failed to save section", error);
       toast.error(error.response?.data?.message || "Failed to save section");
-      throw error;
     }
   };
 
   // -------------------------
   // Delete Section
   // -------------------------
-  const confirmDeleteSection = (section) => {
-    setSectionToDelete(section);
-    setIsDeleteModalOpen(true);
-  };
-
   const handleDeleteSection = async () => {
     if (!sectionToDelete) return;
     setDeleting(true);
     try {
-      const response = await api.delete(`/sections/delete/${sectionToDelete._id}`);
-      if (response.data.success) toast.success("Section deleted successfully");
-      await fetchSections();
+      await api.delete(`/sections/delete/${sectionToDelete._id}`);
+      toast.success("Section deleted successfully");
+      setSections(prev => prev.filter(s => s._id !== sectionToDelete._id));
     } catch (error) {
-      console.error("Failed to delete section", error);
-      toast.error(error.response?.data?.message || "Failed to delete section");
+      console.error(error);
+      toast.error("Failed to delete section");
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);
@@ -121,202 +108,150 @@ const SectionManagementPage = () => {
     }
   };
 
+  const confirmDeleteSection = (section) => {
+    setSectionToDelete(section);
+    setIsDeleteModalOpen(true);
+  };
+
   // -------------------------
-  // Filter Sections
+  // Filter & Search
   // -------------------------
   const filteredSections = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    return sections.filter(
-      (s) => {
-        // Filter by grade level
-        const matchesGrade = selectedGrade === "all" ? true : s.gradeLevel === selectedGrade;
-
-        // Filter by search term
-        const matchesSearch =
-          s.sectionName.toLowerCase().includes(term) ||
-          s.gradeLevel.toLowerCase().includes(term) ||
-          s.assignedTeacher.toLowerCase().includes(term);
-
-        return matchesGrade && matchesSearch;
-      }
-    );
+    return sections.filter(s => {
+      const matchesGrade = selectedGrade === "all" ? true : s.gradeLevel === selectedGrade;
+      const matchesSearch =
+        s.sectionName.toLowerCase().includes(term) ||
+        s.gradeLevel.toLowerCase().includes(term) ||
+        s.assignedTeacher.toLowerCase().includes(term);
+      return matchesGrade && matchesSearch;
+    });
   }, [sections, searchTerm, selectedGrade]);
 
   // -------------------------
-  // Render
+  // Inline Styles
   // -------------------------
+  const containerStyle = { width: "100%", minHeight: "100vh", padding: "40px 20px", background: "#f2f2f2", display: "flex", justifyContent: "center" };
+  const cardStyle = { width: "100%", maxWidth: "1200px", background: "#fff", borderRadius: "12px", padding: "30px", boxShadow: "0 10px 20px rgba(0,0,0,0.05)" };
+  const headerStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", marginBottom: "25px" };
+  const titleStyle = { fontSize: "28px", fontWeight: "bold", margin: 0 };
+  const subtitleStyle = { fontSize: "14px", color: "#555", marginTop: "5px" };
+  const buttonStyle = { padding: "10px 18px", display: "flex", alignItems: "center", gap: "6px", backgroundColor: "#dc2626", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer" };
+  const filterBtnStyle = (active) => ({
+    padding: "8px 16px",
+    borderRadius: "999px",
+    fontWeight: "500",
+    cursor: "pointer",
+    backgroundColor: active ? "#111827" : "#f5f5f5",
+    color: active ? "#fff" : "#4b5563",
+    boxShadow: active ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
+    transition: "all 0.2s"
+  });
+  const searchContainerStyle = { display: "flex", alignItems: "center", gap: "8px", background: "#f5f5f5", padding: "8px 12px", borderRadius: "12px", border: "1px solid #ddd", maxWidth: "400px" };
+  const tableContainerStyle = { overflowX: "auto", borderRadius: "12px", border: "1px solid #ddd", background: "#fff" };
+  const tableStyle = { width: "100%", borderCollapse: "collapse" };
+  const thStyle = { textAlign: "left", padding: "12px 16px", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", color: "#4b5563", borderBottom: "1px solid #ddd" };
+  const tdStyle = { padding: "12px 16px", fontSize: "14px", color: "#111827" };
+  const statusBadgeStyle = (active) => ({
+    padding: "4px 10px",
+    borderRadius: "999px",
+    fontSize: "11px",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    backgroundColor: active ? "#d1fae5" : "#fee2e2",
+    color: active ? "#059669" : "#dc2626",
+    display: "inline-block"
+  });
+  const actionBtnStyle = { border: "none", background: "transparent", cursor: "pointer" };
+
   return (
-    <div className="flex-1 w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-8 md:p-12">
-      {/* Modals */}
-      {isModalOpen && (
-        <div className="animate-in fade-in slide-in-from-right-5 duration-300">
-          <CreateSectionModal
-            section={editingSection}
-            onClose={() => {
-              setIsModalOpen(false);
-              setEditingSection(null);
-            }}
-            onAddSection={handleAddOrUpdateSection}
-          />
-        </div>
-      )}
+    <div style={containerStyle}>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} style={cardStyle}>
+        {/* Modals */}
+        {isModalOpen && <CreateSectionModal section={editingSection} onClose={() => { setIsModalOpen(false); setEditingSection(null); }} onAddSection={handleAddOrUpdateSection} />}
+        <DeleteModal isOpen={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setSectionToDelete(null); }} onDelete={handleDeleteSection} itemName={sectionToDelete?.sectionName} title="Delete Section" message={sectionToDelete ? `Are you sure you want to delete ${sectionToDelete.sectionName}?` : ""} loading={deleting} />
 
-      <DeleteModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onDelete={handleDeleteSection}
-        itemName={sectionToDelete?.sectionName}
-        loading={deleting}
-        title="Delete Section"
-      />
-
-      {!isModalOpen && (
-        <div className="flex flex-col gap-6 animate-in fade-in duration-300">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900">Section Management</h1>
-              <p className="text-slate-500">Manage all sections in the system.</p>
+        {/* Header & Controls */}
+        {!isModalOpen && !isDeleteModalOpen && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={headerStyle}>
+              <div>
+                <h1 style={titleStyle}>Section Management</h1>
+                <p style={subtitleStyle}>Manage all sections in the system.</p>
+              </div>
+              <button style={buttonStyle} onClick={() => setIsModalOpen(true)}>
+                <UserPlus size={16} /> Add New Section
+              </button>
             </div>
-            <Button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add New Section
-            </Button>
-          </div>
 
-          {/* Grade Filter Buttons */}
-          <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-100">
-            <button
-              onClick={() => setSelectedGrade("all")}
-              className={`px-4 py-2 rounded-full font-medium transition-all ${
-                selectedGrade === "all"
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
-              }`}
-            >
-              All Sections
-            </button>
-            <button
-              onClick={() => setSelectedGrade("Grade 7")}
-              className={`px-4 py-2 rounded-full font-medium transition-all ${
-                selectedGrade === "Grade 7"
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
-              }`}
-            >
-              Grade 7
-            </button>
-            <button
-              onClick={() => setSelectedGrade("Grade 8")}
-              className={`px-4 py-2 rounded-full font-medium transition-all ${
-                selectedGrade === "Grade 8"
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
-              }`}
-            >
-              Grade 8
-            </button>
-            <button
-              onClick={() => setSelectedGrade("Grade 9")}
-              className={`px-4 py-2 rounded-full font-medium transition-all ${
-                selectedGrade === "Grade 9"
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
-              }`}
-            >
-              Grade 9
-            </button>
-            <button
-              onClick={() => setSelectedGrade("Grade 10")}
-              className={`px-4 py-2 rounded-full font-medium transition-all ${
-                selectedGrade === "Grade 10"
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-gray-50 text-slate-600 hover:bg-gray-100"
-              }`}
-            >
-              Grade 10
-            </button>
-          </div>
+            {/* Grade Filters */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "15px" }}>
+              {["all", "Grade 7", "Grade 8", "Grade 9", "Grade 10"].map(grade => (
+                <button key={grade} style={filterBtnStyle(selectedGrade === grade)} onClick={() => setSelectedGrade(grade)}>
+                  {grade === "all" ? "All Sections" : grade}
+                </button>
+              ))}
+            </div>
 
-          {/* Search */}
-          <div className="flex items-center gap-2 bg-gray-50 px-4 py-1 rounded-xl border border-gray-100 shadow-sm max-w-2xl">
-            <Search className="h-5 w-5 text-gray-400" />
-            <Input
-              placeholder="Search by section, grade, or teacher..."
-              className="border-0 bg-transparent focus-visible:ring-0 shadow-none text-base"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+            {/* Search */}
+            <div style={searchContainerStyle}>
+              <Search size={16} color="#9ca3af" />
+              <input placeholder="Search by section, grade, or teacher..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: "14px" }} />
+            </div>
 
-          {/* Table */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50/50 border-b border-gray-100 text-slate-600 font-semibold uppercase tracking-wider">
-                <tr>
-                  <th className="px-6 py-4">Section Name</th>
-                  <th className="px-6 py-4">Grade Level</th>
-                  <th className="px-6 py-4">Teacher</th>
-                  <th className="px-6 py-4">Students</th>
-                  <th className="px-6 py-4">Room</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {loading ? (
+            {/* Table */}
+            <div style={tableContainerStyle}>
+              <table style={tableStyle}>
+                <thead>
                   <tr>
-                    <td colSpan="7" className="py-20 text-center">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-                    </td>
+                    <th style={thStyle}>Section Name</th>
+                    <th style={thStyle}>Grade Level</th>
+                    <th style={thStyle}>Teacher</th>
+                    <th style={thStyle}>Students</th>
+                    <th style={thStyle}>Room</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={{ ...thStyle, textAlign: "right" }}>Actions</th>
                   </tr>
-                ) : filteredSections.length > 0 ? (
-                  filteredSections.map((s) => (
-                    <tr key={s._id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-slate-800">{s.sectionName}</td>
-                      <td className="px-6 py-4 text-slate-500">{s.gradeLevel}</td>
-                      <td className="px-6 py-4 text-slate-500">{s.assignedTeacher}</td>
-                      <td className="px-6 py-4 text-slate-500">{s.studentCapacity}</td>
-                      <td className="px-6 py-4 text-slate-500">{s.roomNumber}</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-tight ${
-                            s.isActive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
-                          }`}
-                        >
-                          {s.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-3">
-                          <button
-                            onClick={() => {
-                              setEditingSection(s);
-                              setIsModalOpen(true);
-                            }}
-                            title="Edit Section"
-                          >
-                            <Edit2 size={18} className="text-slate-900" />
-                          </button>
-                          <button onClick={() => confirmDeleteSection(s)} title="Delete Section">
-                            <Trash2 size={18} className="text-slate-900" />
-                          </button>
-                        </div>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: "center", padding: "40px 0" }}>
+                        <Loader2 size={24} className="animate-spin" color="#dc2626" />
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="7" className="py-12 text-center text-gray-500">
-                      No sections found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  ) : filteredSections.length > 0 ? (
+                    filteredSections.map(section => (
+                      <tr key={section._id} style={{ borderBottom: "1px solid #f1f1f1", transition: "background 0.2s" }}>
+                        <td style={tdStyle}>{section.sectionName}</td>
+                        <td style={tdStyle}>{section.gradeLevel}</td>
+                        <td style={tdStyle}>{section.assignedTeacher}</td>
+                        <td style={tdStyle}>{section.studentCapacity}</td>
+                        <td style={tdStyle}>{section.roomNumber}</td>
+                        <td style={tdStyle}><span style={statusBadgeStyle(section.isActive)}>{section.isActive ? "Active" : "Inactive"}</span></td>
+                        <td style={{ ...tdStyle, textAlign: "right" }}>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                            <button style={actionBtnStyle} onClick={() => { setEditingSection(section); setIsModalOpen(true); }}>
+                              <Edit2 size={18} color="#111827" />
+                            </button>
+                            <button style={actionBtnStyle} onClick={() => confirmDeleteSection(section)}>
+                              <Trash2 size={18} color="#111827" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: "center", padding: "30px", color: "#6b7280" }}>No sections found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </motion.div>
     </div>
   );
 };
