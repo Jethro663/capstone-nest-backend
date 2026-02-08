@@ -3,13 +3,14 @@ import { Users, Clock, BookOpen, MoreVertical } from "lucide-react";
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 
-export function ClassesPage() {
+export function ClassesPage({ onViewClassDetails }) {
   // Keep the same mock format initially, but load from API for the current teacher
   const { user } = useAuth();
   const [classes, setClasses] = useState([
    
   ]);
   const [loading, setLoading] = useState(false);
+  const [selectedClass, setSelectedClass] = useState(null);
 
   // deterministically pick a color for class cards
   const COLORS = ["#3B82F6","#8B5CF6","#10B981","#F97316","#EC4899","#14B8A6","#64748B"];
@@ -121,9 +122,11 @@ export function ClassesPage() {
           <div
             key={classItem.id}
             style={cardStyle}
+            onClick={() => onViewClassDetails?.(classItem)}
             onMouseEnter={e => {
               e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
               e.currentTarget.style.transform = "scale(1.02)";
+              e.currentTarget.style.cursor = "pointer";
             }}
             onMouseLeave={e => {
               e.currentTarget.style.boxShadow = "none";
@@ -153,22 +156,6 @@ export function ClassesPage() {
                   <span>{classItem.schedule}</span>
                 </div>
               </div>
-
-              {/* View Details Button */}
-<button
-  style={{
-    ...detailsButtonStyle,
-    width: "100%",       // full width
-    padding: "12px 0",   // taller button
-    justifyContent: "center" // center text and icon
-  }}
-  onMouseEnter={e => Object.assign(e.target.style, detailsButtonHoverStyle)}
-  onMouseLeave={e => Object.assign(e.target.style, detailsButtonStyle)}
->
-  <BookOpen style={{ width: "16px", height: "16px" }} />
-  View Details
-</button>
-
             </div>
           </div>
         ))}

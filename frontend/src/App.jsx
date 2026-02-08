@@ -11,6 +11,7 @@ import  StudentDashboard  from './pages/dashboard/StudentDashboard';
 import CoursesPage from './pages/student/CoursesPage';
 import  TeacherDashboard  from './pages/dashboard/TeacherDashboard';
 import ClassesPage from './pages/teacher/ClassesPage';
+import ClassDetailsPage from './pages/teacher/ClassDetailsPage';
 import  AdminDashboard  from './pages/dashboard/AdminDashboard';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import SubjectManagementPage from './pages/admin/SubjectManagementPage';
@@ -148,6 +149,14 @@ function App() {
         setCurrentPage('section-roster');
     };
 
+    // Selected class for teacher class details page
+    const [selectedClass, setSelectedClass] = useState(null);
+
+    const handleViewClassDetails = (classItem) => {
+        setSelectedClass(classItem);
+        setCurrentPage('class-details');
+    };
+
     // Store signup email and go to verification
     const handleSignUp = (data) => {
         setTempEmail(data.email || data.data?.user?.email);
@@ -207,7 +216,17 @@ function App() {
 
         if (currentPage === 'classes') {
             if (primaryRole === 'admin') return <ClassManagementPage />;
-            return <ClassesPage />;
+            return <ClassesPage onViewClassDetails={handleViewClassDetails} />;
+        }
+
+        if (currentPage === 'class-details') {
+            if (!selectedClass) {
+                setCurrentPage('classes');
+                return null;
+            }
+            return (
+                <ClassDetailsPage classItem={selectedClass} onBack={() => setCurrentPage('classes')} />
+            );
         }
 
         if (currentPage === 'courses') {
