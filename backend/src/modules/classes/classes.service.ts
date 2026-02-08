@@ -4,9 +4,9 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { and, eq, ilike, or, SQL } from 'drizzle-orm';
+import { and, eq, ilike, or, SQL, isNull, ne } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { classes, sections, users } from '../../drizzle/schema';
+import { classes, sections, users, enrollments, studentProfiles } from '../../drizzle/schema';
 
 // Normalize grade level into typed union or undefined
 const normalizeGradeLevel = (v?: string): '7' | '8' | '9' | '10' | undefined => {
@@ -266,6 +266,11 @@ export class ClassesService {
       where: eq(classes.teacherId, teacherId),
       with: {
         section: true,
+        enrollments: {
+          columns: {
+            id: true,
+          },
+        },
       },
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
@@ -333,5 +338,224 @@ export class ClassesService {
       .where(eq(classes.id, id));
 
     return this.findById(id);
+  }
+
+  /**
+   * Get all students enrolled in a class
+   */
+  async getEnrollments(classId: string) {
+    // First verify the class exists
+    await this.findById(classId);
+
+    // Get all enrollments for this class with student details
+    const classEnrollments = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+          with: {
+            profile: {
+              columns: {
+                gradeLevel: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: (enrollments, { asc }) => [asc(enrollments.enrolledAt)],
+    });
+
+    return classEnrollments;
+  }
+
+  /**
+   * Get candidate students for enrollment in a class
+   * Returns students from the same section who are not yet enrolled in this class
+   */
+  async getCandidates(classId: string) {
+    // Get the class to find its section
+    const classRecord = await this.findById(classId);
+
+    // Get all students in the section (enrolled in section with classId NULL)
+    const sectionEnrollments = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.sectionId, classRecord.sectionId),
+        isNull(enrollments.classId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+          with: {
+            profile: {
+              columns: {
+                gradeLevel: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Get students already enrolled in this class
+    const classEnrollments = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: {
+        studentId: true,
+      },
+    });
+
+    const enrolledStudentIds = new Set(classEnrollments.map(e => e.studentId));
+
+    // Filter out already enrolled students
+    const candidates = sectionEnrollments.filter(
+      e => !enrolledStudentIds.has(e.studentId),
+    );
+
+    return candidates;
+  }
+
+  /**
+   * Enroll a student in a class
+   * If the student is already in the section (with classId=NULL), update that enrollment
+   * Otherwise, create a new enrollment
+   */
+  async enrollStudent(classId: string, studentId: string) {
+    // Verify class exists
+    const classRecord = await this.findById(classId);
+
+    // Verify student exists
+    const student = await this.db.query.users.findFirst({
+      where: eq(users.id, studentId),
+    });
+
+    if (!student) {
+      throw new BadRequestException(`Student with ID "${studentId}" not found`);
+    }
+
+    // Check if student is already enrolled in this class
+    const existingEnrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.classId, classId),
+      ),
+    });
+
+    if (existingEnrollment) {
+      throw new ConflictException(
+        `Student is already enrolled in this class`,
+      );
+    }
+
+    // Check if student is in the section
+    const sectionEnrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.sectionId, classRecord.sectionId),
+      ),
+    });
+
+    if (!sectionEnrollment) {
+      throw new BadRequestException(
+        `Student is not enrolled in the section for this class`,
+      );
+    }
+
+    // If the student has a section-only enrollment (classId=NULL), update it
+    if (sectionEnrollment.classId === null) {
+      await this.db
+        .update(enrollments)
+        .set({
+          classId: classId,
+          enrolledAt: new Date(),
+        })
+        .where(eq(enrollments.id, sectionEnrollment.id));
+
+      return this.getEnrollmentById(sectionEnrollment.id);
+    } else {
+      // Student already has a classId, create a new enrollment record
+      const [newEnrollment] = await this.db
+        .insert(enrollments)
+        .values({
+          studentId,
+          classId,
+          sectionId: classRecord.sectionId,
+          status: 'enrolled',
+        })
+        .returning();
+
+      return this.getEnrollmentById(newEnrollment.id);
+    }
+  }
+
+  /**
+   * Remove a student from a class
+   * Deletes the enrollment record
+   */
+  async removeStudent(classId: string, studentId: string) {
+    // Verify class exists
+    await this.findById(classId);
+
+    // Find and delete the enrollment
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.classId, classId),
+      ),
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException(
+        `Student is not enrolled in this class`,
+      );
+    }
+
+    await this.db.delete(enrollments).where(eq(enrollments.id, enrollment.id));
+
+    return { id: enrollment.id };
+  }
+
+  /**
+   * Get enrollment by ID
+   */
+  private async getEnrollmentById(enrollmentId: string) {
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: eq(enrollments.id, enrollmentId),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+          with: {
+            profile: {
+              columns: {
+                gradeLevel: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return enrollment;
   }
 }

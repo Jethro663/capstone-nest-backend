@@ -24,7 +24,7 @@ export function ClassesPage({ onViewClassDetails }) {
     id: c.id,
     name: c.subjectName ? `${c.subjectName} (${(c.subjectCode||'').toUpperCase()})` : (c.subject || 'Unknown'),
     grade: c.subjectGradeLevel ? `Grade ${c.subjectGradeLevel}` : (c.section?.gradeLevel ? `Grade ${c.section.gradeLevel}` : 'Grade —'),
-    students: c.enrollments ? c.enrollments.length : (c.studentCount || 0),
+    students: (Array.isArray(c.enrollments) ? c.enrollments.length : 0) || (c.studentCount || 0),
     schedule: c.schedule || '—',
     color: pickColor(c.subjectCode || c.id?.toString() || c.subjectName || c.name),
   });
@@ -34,6 +34,7 @@ export function ClassesPage({ onViewClassDetails }) {
     setLoading(true);
     try {
       const res = await api.get(`/classes/teacher/${user.id}`);
+      console.log('API response for teacher classes:', res);
       if (res.data?.data) {
         const items = res.data.data.map(mapClassToCard);
         setClasses(items);

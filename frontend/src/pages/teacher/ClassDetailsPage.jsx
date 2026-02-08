@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Book, BarChart3, Bell, Users, FileText } from 'lucide-react';
+import { ArrowLeft, Book, BarChart3, Bell, Users, FileText, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import adminService from '@/services/adminService';
 
 const ClassDetailsPage = ({ classItem, onBack }) => {
   const [activeTab, setActiveTab] = useState('lessons');
   const [loading, setLoading] = useState(false);
+  const [enrolledStudents, setEnrolledStudents] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState([]);
+  const [addingStudents, setAddingStudents] = useState(false);
 
   // Tab configuration with icons
   const tabs = [
@@ -13,6 +20,107 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
     { id: 'gradebook', label: 'Gradebook', icon: BarChart3 },
     { id: 'students', label: 'Students', icon: Users },
   ];
+
+  // Fetch enrolled students when component mounts or classItem changes
+  useEffect(() => {
+    if (classItem?.id) {
+      fetchEnrolledStudents();
+    }
+  }, [classItem?.id]);
+
+  // Fetch enrolled students when students tab is active
+  useEffect(() => {
+    if (activeTab === 'students' && classItem?.id && enrolledStudents.length === 0) {
+      fetchEnrolledStudents();
+    }
+  }, [activeTab, classItem?.id]);
+
+  // Fetch candidates when modal opens
+  useEffect(() => {
+    if (showAddModal && classItem?.id) {
+      fetchCandidates();
+    }
+  }, [showAddModal, classItem?.id]);
+
+  const fetchEnrolledStudents = async () => {
+    setLoading(true);
+    try {
+      const res = await adminService.getClassEnrollments(classItem.id);
+      if (res?.data) {
+        setEnrolledStudents(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to load enrolled students', err);
+      toast.error('Failed to load enrolled students');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCandidates = async () => {
+    try {
+      const res = await adminService.getClassCandidates(classItem.id);
+      if (res?.data) {
+        setCandidates(res.data);
+        setSelectedStudents([]);
+      }
+    } catch (err) {
+      console.error('Failed to load candidates', err);
+      toast.error('Failed to load available students');
+    }
+  };
+
+  const handleAddStudents = async () => {
+    if (selectedStudents.length === 0) {
+      toast.error('Please select at least one student');
+      return;
+    }
+
+    setAddingStudents(true);
+    const addedCount = { success: 0, failed: 0 };
+
+    for (const studentId of selectedStudents) {
+      try {
+        await adminService.enrollStudentInClass(classItem.id, studentId);
+        addedCount.success += 1;
+      } catch (err) {
+        console.error(`Failed to add student ${studentId}`, err);
+        addedCount.failed += 1;
+      }
+    }
+
+    setAddingStudents(false);
+
+    if (addedCount.failed === 0) {
+      toast.success(`Successfully added ${addedCount.success} student(s)`);
+      setShowAddModal(false);
+      fetchEnrolledStudents();
+    } else {
+      toast.error(`Added ${addedCount.success}, failed ${addedCount.failed}`);
+      fetchEnrolledStudents();
+    }
+  };
+
+  const handleRemoveStudent = async (studentId) => {
+    if (!window.confirm('Remove this student from the class?')) return;
+
+    try {
+      await adminService.removeStudentFromClass(classItem.id, studentId);
+      toast.success('Student removed successfully');
+      fetchEnrolledStudents();
+    } catch (err) {
+      console.error('Failed to remove student', err);
+      toast.error('Failed to remove student');
+    }
+  };
+
+  const toggleStudentSelection = (studentId) => {
+    setSelectedStudents(prev =>
+      prev.includes(studentId)
+        ? prev.filter(id => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
 
   // Container styles
   const containerStyle = {
@@ -123,6 +231,175 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
     fontSize: '14px',
   };
 
+  // Students tab styles
+  const studentsHeaderStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px',
+  };
+
+  const addButtonStyle = {
+    padding: '10px 16px',
+    backgroundColor: '#dc2626',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'background-color 0.2s',
+  };
+
+  const tableStyle = {
+    width: '100%',
+    borderCollapse: 'collapse',
+  };
+
+  const theadStyle = {
+    backgroundColor: '#f3f4f6',
+    borderBottom: '2px solid #e5e7eb',
+  };
+
+  const thStyle = {
+    padding: '12px 16px',
+    textAlign: 'left',
+    fontSize: '12px',
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+  };
+
+  const tbodyTrStyle = {
+    borderBottom: '1px solid #e5e7eb',
+  };
+
+  const tdStyle = {
+    padding: '16px',
+    fontSize: '14px',
+    color: '#111827',
+  };
+
+  const removeButtonStyle = {
+    padding: '6px 12px',
+    backgroundColor: '#fee2e2',
+    color: '#dc2626',
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'all 0.2s',
+  };
+
+  // Modal styles
+  const modalOverlayStyle = {
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  };
+
+  const modalStyle = {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+    width: '90%',
+    maxWidth: '600px',
+    maxHeight: '80vh',
+    display: 'flex',
+    flexDirection: 'column',
+  };
+
+  const modalHeaderStyle = {
+    padding: '20px 24px',
+    borderBottom: '1px solid #e5e7eb',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  };
+
+  const modalTitleStyle = {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#111827',
+    margin: 0,
+  };
+
+  const closeButtonStyle = {
+    background: 'none',
+    border: 'none',
+    fontSize: '24px',
+    cursor: 'pointer',
+    color: '#6b7280',
+  };
+
+  const modalContentStyle = {
+    padding: '20px 24px',
+    overflowY: 'auto',
+    flex: 1,
+  };
+
+  const modalFooterStyle = {
+    padding: '16px 24px',
+    borderTop: '1px solid #e5e7eb',
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'flex-end',
+  };
+
+  const cancelButtonStyle = {
+    padding: '10px 16px',
+    backgroundColor: '#f3f4f6',
+    color: '#111827',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+  };
+
+  const submitButtonStyle = {
+    padding: '10px 16px',
+    backgroundColor: '#dc2626',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  };
+
+  const candidateItemStyle = {
+    padding: '12px',
+    borderRadius: '6px',
+    border: '1px solid #e5e7eb',
+    marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  };
+
+  const checkboxStyle = {
+    width: '18px',
+    height: '18px',
+    cursor: 'pointer',
+  };
+
   // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
@@ -156,9 +433,63 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
         );
       case 'students':
         return (
-          <div style={placeholderStyle}>
-            <div style={placeholderTitleStyle}>👥 Students</div>
-            <div style={placeholderDescStyle}>Student roster and details will be displayed here.</div>
+          <div>
+            <div style={studentsHeaderStyle}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: '#111827' }}>
+                Enrolled Students ({enrolledStudents.length})
+              </h3>
+              <button
+                style={addButtonStyle}
+                onMouseEnter={(e) => (e.target.style.backgroundColor = '#b91c1c')}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = '#dc2626')}
+                onClick={() => setShowAddModal(true)}
+              >
+                <Plus size={16} />
+                Add Student
+              </button>
+            </div>
+
+            {loading ? (
+              <div style={placeholderStyle}>Loading students...</div>
+            ) : enrolledStudents.length === 0 ? (
+              <div style={placeholderStyle}>
+                <div style={placeholderTitleStyle}>No students enrolled yet</div>
+                <div style={placeholderDescStyle}>Add students from your section to get started.</div>
+              </div>
+            ) : (
+              <table style={tableStyle}>
+                <thead style={theadStyle}>
+                  <tr>
+                    <th style={thStyle}>Student Name</th>
+                    <th style={thStyle}>Email</th>
+                    <th style={thStyle}>Grade</th>
+                    <th style={{ ...thStyle, textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrolledStudents.map((enrollment) => (
+                    <tr key={enrollment.id} style={tbodyTrStyle}>
+                      <td style={tdStyle}>
+                        {enrollment.student.firstName} {enrollment.student.lastName}
+                      </td>
+                      <td style={tdStyle}>{enrollment.student.email}</td>
+                      <td style={tdStyle}>{enrollment.student.profile?.gradeLevel || '—'}</td>
+                      <td style={{ ...tdStyle, textAlign: 'center' }}>
+                        <button
+                          style={removeButtonStyle}
+                          onMouseEnter={(e) => (e.target.style.backgroundColor = '#fecaca')}
+                          onMouseLeave={(e) => (e.target.style.backgroundColor = '#fee2e2')}
+                          onClick={() => handleRemoveStudent(enrollment.studentId)}
+                        >
+                          <Trash2 size={14} />
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         );
       default:
@@ -172,15 +503,17 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
       <div style={headerStyle}>
         <button
           style={backButtonStyle}
-          onMouseEnter={(e) => (e.target.parentElement.style.backgroundColor = '#f3f4f6')}
-          onMouseLeave={(e) => (e.target.parentElement.style.backgroundColor = 'transparent')}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f3f4f6')}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           onClick={onBack}
         >
           <ArrowLeft size={20} style={{ color: '#111827' }} />
         </button>
         <div style={titleContainerStyle}>
           <h1 style={titleStyle}>{classItem?.name || 'Class Details'}</h1>
-          <p style={subtitleStyle}>{classItem?.grade || 'Grade —'} • {classItem?.students || 0} students</p>
+          <p style={subtitleStyle}>
+            {classItem?.grade || 'Grade —'} • {enrolledStudents.length > 0 ? enrolledStudents.length : (classItem?.students || 0)} students
+          </p>
         </div>
       </div>
 
@@ -217,6 +550,93 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
           {renderTabContent()}
         </div>
       </div>
+
+      {/* Add Students Modal */}
+      {showAddModal && (
+        <div style={modalOverlayStyle}>
+          <div style={modalStyle}>
+            <div style={modalHeaderStyle}>
+              <h2 style={modalTitleStyle}>Add Students to Class</h2>
+              <button
+                style={closeButtonStyle}
+                onClick={() => setShowAddModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={modalContentStyle}>
+              {candidates.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>
+                  <p>No available students to add</p>
+                  <p style={{ fontSize: '12px', marginTop: '8px' }}>
+                    All students in this section are already enrolled in this class.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '12px' }}>
+                    Select students from your section to enroll them in this class:
+                  </p>
+                  {candidates.map((candidate) => (
+                    <div
+                      key={candidate.id}
+                      style={candidateItemStyle}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f9fafb')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                      onClick={() => toggleStudentSelection(candidate.studentId)}
+                    >
+                      <input
+                        type="checkbox"
+                        style={checkboxStyle}
+                        checked={selectedStudents.includes(candidate.studentId)}
+                        onChange={() => toggleStudentSelection(candidate.studentId)}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+                          {candidate.student.firstName} {candidate.student.lastName}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {candidate.student.email}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                        {candidate.student.profile?.gradeLevel || 'Grade —'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={modalFooterStyle}>
+              <button
+                style={cancelButtonStyle}
+                onClick={() => setShowAddModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                style={submitButtonStyle}
+                disabled={selectedStudents.length === 0 || addingStudents}
+                onMouseEnter={(e) => {
+                  if (selectedStudents.length > 0 && !addingStudents) {
+                    e.target.style.backgroundColor = '#b91c1c';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedStudents.length > 0 && !addingStudents) {
+                    e.target.style.backgroundColor = '#dc2626';
+                  }
+                }}
+                onClick={handleAddStudents}
+              >
+                {addingStudents ? 'Adding...' : `Add ${selectedStudents.length} Student(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

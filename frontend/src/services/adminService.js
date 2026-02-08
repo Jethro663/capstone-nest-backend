@@ -96,6 +96,24 @@ const adminService = {
     return response.data;
   },
 
+  // Class Enrollment Management
+  async getClassEnrollments(classId) {
+    const response = await api.get(`/classes/${classId}/enrollments`);
+    return response.data;
+  },
+  async getClassCandidates(classId) {
+    const response = await api.get(`/classes/${classId}/candidates`);
+    return response.data;
+  },
+  async enrollStudentInClass(classId, studentId) {
+    const response = await api.post(`/classes/${classId}/enrollments`, { studentId });
+    return response.data;
+  },
+  async removeStudentFromClass(classId, studentId) {
+    const response = await api.delete(`/classes/${classId}/enrollments/${studentId}`);
+    return response.data;
+  },
+
   // Dashboard Stats
   async getDashboardStats() {
     const response = await api.get('/admin/dashboard/stats');

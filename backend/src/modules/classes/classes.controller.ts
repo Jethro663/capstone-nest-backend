@@ -194,4 +194,81 @@ export class ClassesController {
       success: true,
       message: 'Class deleted successfully',
     };
-  }}
+  }
+
+  /**
+   * Get all students enrolled in a class
+   * Teacher (of the class) and Admin can access
+   */
+  @Get(':classId/enrollments')
+  @Roles('admin', 'teacher')
+  async getEnrollments(@Param('classId') classId: string) {
+    const enrollments = await this.classesService.getEnrollments(classId);
+
+    return {
+      success: true,
+      message: 'Enrollments retrieved successfully',
+      data: enrollments,
+      count: enrollments.length,
+    };
+  }
+
+  /**
+   * Get candidate students for enrollment in a class
+   * Returns students from the section who are not yet enrolled in this class
+   * Teacher (of the class) and Admin can access
+   */
+  @Get(':classId/candidates')
+  @Roles('admin', 'teacher')
+  async getCandidates(@Param('classId') classId: string) {
+    const candidates = await this.classesService.getCandidates(classId);
+
+    return {
+      success: true,
+      message: 'Candidates retrieved successfully',
+      data: candidates,
+      count: candidates.length,
+    };
+  }
+
+  /**
+   * Enroll a student in a class
+   * Teacher (of the class) and Admin can access
+   */
+  @Post(':classId/enrollments')
+  @Roles('admin', 'teacher')
+  @HttpCode(HttpStatus.CREATED)
+  async enrollStudent(
+    @Param('classId') classId: string,
+    @Body() body: { studentId: string },
+  ) {
+    const enrollment = await this.classesService.enrollStudent(
+      classId,
+      body.studentId,
+    );
+
+    return {
+      success: true,
+      message: 'Student enrolled successfully',
+      data: enrollment,
+    };
+  }
+
+  /**
+   * Remove a student from a class
+   * Teacher (of the class) and Admin can access
+   */
+  @Delete(':classId/enrollments/:studentId')
+  @Roles('admin', 'teacher')
+  async removeStudent(
+    @Param('classId') classId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    await this.classesService.removeStudent(classId, studentId);
+
+    return {
+      success: true,
+      message: 'Student removed from class successfully',
+    };
+  }
+}
