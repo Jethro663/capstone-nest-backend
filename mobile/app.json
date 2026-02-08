@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Nexora LMS",
+    "slug": "nexora-lms",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "nexora-lms",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true,
+      "buildNumber": "1"
+    },
+    "android": {
+      "versionCode": 1
+    },
+    "web": {
+    },
+    "plugins": [
+      [
+        "expo-font"
+      ]
+    ]
+  }
+}

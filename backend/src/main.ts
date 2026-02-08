@@ -40,8 +40,13 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // CORS
+  // CORS
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: [
+      process.env.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://localhost:8081',
+    ].filter(Boolean), // .filter(Boolean) removes undefined/null values
     credentials: true,
   });
 
