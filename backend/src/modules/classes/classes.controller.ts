@@ -44,7 +44,10 @@ export class ClassesController {
   ) {
     const filters: any = {};
 
-    if (subjectId) filters.subjectId = subjectId;
+    if (subjectId) {
+      // Backwards compatible: treat subjectId as subjectCode when subjects were removed
+      filters.subjectCode = subjectId;
+    }
     if (sectionId) filters.sectionId = sectionId;
     if (teacherId) filters.teacherId = teacherId;
     if (schoolYear) filters.schoolYear = schoolYear;

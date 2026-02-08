@@ -56,6 +56,24 @@ const adminService = {
     return response.data;
   },
 
+  // Section roster
+  async getSectionRoster(id) {
+    const response = await api.get(`/sections/${id}/roster`);
+    return response.data;
+  },
+  async getSectionCandidates(id, params = {}) {
+    const response = await api.get(`/sections/${id}/candidates`, { params });
+    return response.data;
+  },
+  async addStudentsToSection(id, studentIds = []) {
+    const response = await api.post(`/sections/${id}/roster`, { studentIds });
+    return response.data;
+  },
+  async removeStudentFromSection(id, studentId) {
+    const response = await api.delete(`/sections/${id}/roster/${studentId}`);
+    return response.data;
+  },
+
   // Class Management
   async getClasses(params = {}) {
     const response = await api.get('/classes/all', { params });

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { and, eq, ilike, or, SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { sections, users } from '../../drizzle/schema';
+import { sections, users, enrollments, studentProfiles } from '../../drizzle/schema';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
 
@@ -28,6 +28,7 @@ export class SectionsService {
     search?: string;
     page?: number;
     limit?: number;
+    adviserId?: string;
   }) {
     const page = filters?.page || 1;
     const limit = Math.min(filters?.limit || 50, 100); // Cap max limit
@@ -45,6 +46,10 @@ export class SectionsService {
 
     if (filters?.isActive !== undefined) {
       whereConditions.push(eq(sections.isActive, filters.isActive));
+    }
+
+    if (filters?.adviserId) {
+      whereConditions.push(eq(sections.adviserId, filters.adviserId));
     }
 
     if (filters?.search) {
@@ -104,6 +109,159 @@ export class SectionsService {
     }
 
     return section;
+  }
+
+  /**
+   * Get the roster (students) for a section
+   */
+  async getRoster(sectionId: string) {
+    // Verify section exists
+    await this.findById(sectionId);
+
+    const roster = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.sectionId, sectionId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+          with: {
+            profile: {
+              columns: {
+                gradeLevel: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: (enrollments, { asc }) => [asc(enrollments.enrolledAt)],
+    });
+
+    return roster.map(r => ({
+      enrollmentId: r.id,
+      studentId: r.studentId,
+      status: r.status,
+      enrolledAt: r.enrolledAt,
+      student: r.student,
+    }));
+  }
+
+  /**
+   * Get candidate students who are not yet part of the section
+   */
+  async getCandidates(sectionId: string, filters?: { gradeLevel?: string; search?: string }) {
+    // Verify section exists
+    const section = await this.findById(sectionId);
+
+    // Build base query: students who do not have an enrollment for this section
+    // We will select users who have a student profile (i.e., are students)
+    // We'll fetch users with profiles and apply grade/search filters client-side for simplicity
+    // (keeps SQL simple and avoids enum typing issues)
+
+    // Subquery to find students already in this section
+    const existing = await this.db.query.enrollments.findMany({
+      where: eq(enrollments.sectionId, sectionId),
+      columns: { studentId: true },
+    });
+
+    const existingStudentIds = existing.map(e => e.studentId);
+
+    // Query users with their student profile (fetch candidates client-side)
+    const candidates = await this.db.query.users.findMany({
+      with: {
+        profile: true,
+      },
+      orderBy: (users, { asc }) => [asc(users.lastName), asc(users.firstName)],
+      limit: 500,
+    });
+
+    // Filter out existing students and apply grade/search filters client-side for simplicity
+    const filtered = candidates
+      .filter(c => c.profile) // only users that have a student profile
+      .filter(c => !existingStudentIds.includes(c.id))
+      .filter(c => {
+        if (filters?.gradeLevel && c.profile?.gradeLevel !== filters.gradeLevel) return false;
+        if (filters?.search) {
+          const s = filters.search.toLowerCase();
+          return (
+            c.firstName?.toLowerCase().includes(s) ||
+            c.lastName?.toLowerCase().includes(s) ||
+            c.email?.toLowerCase().includes(s)
+          );
+        }
+        return true;
+      });
+
+    return filtered.map(u => ({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, gradeLevel: u.profile?.gradeLevel }));
+  }
+
+  /**
+   * Bulk add students to a section (creates enrollments with classId = null)
+   */
+  async addStudentsToSection(sectionId: string, studentIds: string[]) {
+    // Verify section exists
+    await this.findById(sectionId);
+
+    const created: any[] = [];
+
+    for (const sid of studentIds) {
+      // Verify student exists
+      const student = await this.db.query.users.findFirst({ where: eq(users.id, sid) });
+      if (!student) continue; // skip invalid ids
+
+      // Check if already enrolled in this section without a class
+      const existing = await this.db.query.enrollments.findFirst({
+        where: and(eq(enrollments.sectionId, sectionId), eq(enrollments.studentId, sid), eq(enrollments.status, 'enrolled')),
+      });
+
+      if (existing) continue; // skip duplicates
+
+      const [newEnrollment] = await this.db.insert(enrollments).values({
+        studentId: sid,
+        classId: null,
+        sectionId: sectionId,
+        status: 'enrolled',
+        enrolledAt: new Date(),
+      }).returning();
+
+      created.push(newEnrollment);
+    }
+
+    return {
+      createdCount: created.length,
+      created,
+    };
+  }
+
+  /**
+   * Remove a student from a section (only if not enrolled in a class)
+   */
+  async removeStudentFromSection(sectionId: string, studentId: string) {
+    // Verify section exists
+    await this.findById(sectionId);
+
+    // Find enrollment where student is in this section and not yet assigned to a class
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(eq(enrollments.sectionId, sectionId), eq(enrollments.studentId, studentId)),
+    });
+
+    if (!enrollment) {
+      throw new BadRequestException('Student is not a member of this section');
+    }
+
+    if (enrollment.classId) {
+      throw new BadRequestException('Student is enrolled in a class for this section; remove class enrollment first');
+    }
+
+    await this.db.delete(enrollments).where(eq(enrollments.id, enrollment.id));
+
+    return { removed: true };
   }
 
   /**

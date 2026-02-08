@@ -6,7 +6,7 @@ import api from "@/services/api";
 import CreateSectionModal from "@/components/modals/CreateSectionModal";
 import DeleteModal from "@/components/modals/DeleteModal";
 
-const SectionManagementPage = () => {
+const SectionManagementPage = ({ onViewRoster }) => {
   const [sections, setSections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -222,7 +222,7 @@ const SectionManagementPage = () => {
                     </tr>
                   ) : filteredSections.length > 0 ? (
                     filteredSections.map(section => (
-                      <tr key={section._id} style={{ borderBottom: "1px solid #f1f1f1", transition: "background 0.2s" }}>
+                      <tr key={section._id} style={{ borderBottom: "1px solid #f1f1f1", transition: "background 0.2s", cursor: 'pointer' }} onClick={() => (typeof onViewRoster === 'function' ? onViewRoster(section) : null)}>
                         <td style={tdStyle}>{section.sectionName}</td>
                         <td style={tdStyle}>{section.gradeLevel}</td>
                         <td style={tdStyle}>{section.assignedTeacher}</td>
@@ -231,10 +231,10 @@ const SectionManagementPage = () => {
                         <td style={tdStyle}><span style={statusBadgeStyle(section.isActive)}>{section.isActive ? "Active" : "Inactive"}</span></td>
                         <td style={{ ...tdStyle, textAlign: "right" }}>
                           <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-                            <button style={actionBtnStyle} onClick={() => { setEditingSection(section); setIsModalOpen(true); }}>
+                            <button style={actionBtnStyle} onClick={(e) => { e.stopPropagation(); setEditingSection(section); setIsModalOpen(true); }}>
                               <Edit2 size={18} color="#111827" />
                             </button>
-                            <button style={actionBtnStyle} onClick={() => confirmDeleteSection(section)}>
+                            <button style={actionBtnStyle} onClick={(e) => { e.stopPropagation(); confirmDeleteSection(section); }}>
                               <Trash2 size={18} color="#111827" />
                             </button>
                           </div>

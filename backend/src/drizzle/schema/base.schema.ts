@@ -112,23 +112,7 @@ export const userRoles = pgTable(
 // 2. ACADEMIC STRUCTURE
 // ==========================================
 
-export const subjects = pgTable(
-  'subjects',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    name: text('name').notNull().unique(),
-    code: text('code').notNull().unique(),
-    description: text('description'),
-    gradeLevel: text('grade_level').notNull(),
-    isActive: boolean('is_active').notNull().default(true),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at').notNull().defaultNow(),
-  },
-  (table) => ({
-    gradeLevelIdx: index('subjects_grade_level_idx').on(table.gradeLevel),
-    isActiveIdx: index('subjects_is_active_idx').on(table.isActive),
-  }),
-);
+
 
 export const sections = pgTable(
   'sections',
@@ -164,9 +148,12 @@ export const classes = pgTable(
   'classes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    subjectId: uuid('subject_id')
-      .notNull()
-      .references(() => subjects.id, { onDelete: 'cascade' }),
+
+    // Denormalized subject info (moved from subjects table)
+    subjectName: text('subject_name').notNull(),
+    subjectCode: text('subject_code').notNull(),
+    subjectGradeLevel: gradeLevelEnum('subject_grade_level'),
+
     sectionId: uuid('section_id')
       .notNull()
       .references(() => sections.id, { onDelete: 'cascade' }),
@@ -185,10 +172,11 @@ export const classes = pgTable(
   (table) => ({
     teacherIdx: index('classes_teacher_idx').on(table.teacherId),
     sectionIdx: index('classes_section_idx').on(table.sectionId),
-    subjectIdx: index('classes_subject_idx').on(table.subjectId),
+    subjectCodeIdx: index('classes_subject_code_idx').on(table.subjectCode),
+    subjectNameIdx: index('classes_subject_name_idx').on(table.subjectName),
     schoolYearIdx: index('classes_school_year_idx').on(table.schoolYear),
     uniqueClass: unique().on(
-      table.subjectId,
+      table.subjectCode,
       table.sectionId,
       table.schoolYear,
     ),
@@ -219,7 +207,6 @@ export const studentProfiles = pgTable(
   }),
 );
 
-
 export const enrollments = pgTable(
   'enrollments',
   {
@@ -228,7 +215,6 @@ export const enrollments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     classId: uuid('class_id')
-      .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
     sectionId: uuid('section_id')
       .notNull()
@@ -309,9 +295,7 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
   }),
 }));
 
-export const subjectsRelations = relations(subjects, ({ many }) => ({
-  classes: many(classes),
-}));
+
 
 export const sectionsRelations = relations(sections, ({ many, one }) => ({
   classes: many(classes),
@@ -323,10 +307,7 @@ export const sectionsRelations = relations(sections, ({ many, one }) => ({
 }));
 
 export const classesRelations = relations(classes, ({ one, many }) => ({
-  subject: one(subjects, {
-    fields: [classes.subjectId],
-    references: [subjects.id],
-  }),
+
   section: one(sections, {
     fields: [classes.sectionId],
     references: [sections.id],

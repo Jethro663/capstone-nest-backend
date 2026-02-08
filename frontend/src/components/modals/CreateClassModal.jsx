@@ -17,7 +17,9 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   const [formData, setFormData] = useState({
-    subjectId: "",
+    subjectCode: "",
+    subjectName: "",
+    subjectGradeLevel: "",
     sectionId: "",
     teacherId: "",
     schoolYear: "",
@@ -50,7 +52,9 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
     if (classItem) {
       const scheduleData = classItem.schedule ? parseSchedule(classItem.schedule) : { days: [], startTime: "", endTime: "" };
       setFormData({
-        subjectId: classItem.subjectId || "",
+        subjectCode: classItem.subjectCode || classItem.subjectId || "",
+        subjectName: classItem.subjectName || "",
+        subjectGradeLevel: classItem.subjectGradeLevel || "",
         sectionId: classItem.sectionId || "",
         teacherId: classItem.teacherId || "",
         schoolYear: classItem.schoolYear || "",
@@ -62,8 +66,16 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    // If subjectCode selected, also populate subjectName/grade from options
+    if (name === 'subjectCode') {
+      const subj = subjects.find(s => s.code === value || s.code === value.toUpperCase());
+      setFormData(prev => ({ ...prev, subjectCode: value, subjectName: subj?.name || '', subjectGradeLevel: subj?.gradeLevel || '' }));
+      if (value) setErrors(prev => ({ ...prev, subjectCode: '' }));
+      return;
+    }
+
     setFormData(prev => ({ ...prev, [name]: value }));
-    if (value) setErrors(prev => ({ ...prev, [name]: "" }));
+    if (value) setErrors(prev => ({ ...prev, [name]: '' }));
   };
 
   const parseSchedule = (scheduleStr) => {
@@ -102,14 +114,15 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
   };
 
   const isFormValid = useMemo(() =>
-    formData.subjectId && formData.sectionId && formData.teacherId && formData.schoolYear && !Object.values(errors).some(Boolean),
+    formData.subjectCode && formData.subjectName && formData.sectionId && formData.teacherId && formData.schoolYear && !Object.values(errors).some(Boolean),
     [formData, errors]
   );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
-    if (!formData.subjectId) newErrors.subjectId = "Subject required";
+    if (!formData.subjectName) newErrors.subjectName = "Subject name required";
+    if (!formData.subjectCode) newErrors.subjectCode = "Subject code required";
     if (!formData.sectionId) newErrors.sectionId = "Section required";
     if (!formData.teacherId) newErrors.teacherId = "Teacher required";
     if (!formData.schoolYear) newErrors.schoolYear = "School year required";
@@ -117,7 +130,18 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
 
     setLoading(true);
     try {
-      const payload = { ...formData, schedule: formatSchedule(formData.schedule), room: formData.room || null };
+      // Build payload expected by backend (denormalized subject fields)
+      const payload = {
+        subjectName: formData.subjectName,
+        subjectCode: formData.subjectCode.toUpperCase(),
+        subjectGradeLevel: formData.subjectGradeLevel || undefined,
+        sectionId: formData.sectionId,
+        teacherId: formData.teacherId,
+        schoolYear: formData.schoolYear,
+        schedule: formatSchedule(formData.schedule),
+        room: formData.room || null,
+      };
+
       await onAddClass(payload);
       onClose();
     } catch (err) {
@@ -150,9 +174,15 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-            <SelectField label="Subject" name="subjectId" value={formData.subjectId} onChange={handleChange} options={subjects.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))} error={errors.subjectId} disabled={loading || loadingOptions} />
+            <InputField label="Subject Name" name="subjectName" value={formData.subjectName} onChange={handleChange} error={errors.subjectName} disabled={loading || loadingOptions} />
+            <InputField label="Subject Code" name="subjectCode" value={formData.subjectCode} onChange={handleChange} error={errors.subjectCode} disabled={loading || loadingOptions} />
             <SelectField label="Section" name="sectionId" value={formData.sectionId} onChange={handleChange} options={sections.map(s => ({ value: s.id, label: `${s.name} - ${s.gradeLevel}` }))} error={errors.sectionId} disabled={loading || loadingOptions} />
             <SelectField label="Teacher" name="teacherId" value={formData.teacherId} onChange={handleChange} options={teachers.map(t => ({ value: t.id || t._id, label: `${t.firstName || t.fullName} ${t.lastName || ""}` }))} error={errors.teacherId} disabled={loading || loadingOptions} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "16px" }}>
+            <SelectField label="Grade Level" name="subjectGradeLevel" value={formData.subjectGradeLevel} onChange={handleChange} options={[{value:'7',label:'7'},{value:'8',label:'8'},{value:'9',label:'9'},{value:'10',label:'10'}]} error={errors.subjectGradeLevel} disabled={loading} />
+            <div />
           </div>
 
           <SelectField label="School Year" name="schoolYear" value={formData.schoolYear} onChange={handleChange} options={generateAvailableYears().map(y => ({ value: y, label: y }))} error={errors.schoolYear} disabled={loading} />

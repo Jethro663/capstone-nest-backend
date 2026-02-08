@@ -27,10 +27,15 @@ const ClassManagementPage = () => {
       if (response.data.success) {
         const transformedClasses = response.data.data.map((c) => ({
           _id: c.id,
-          subject: c.subject?.name || "Unknown",
+          // denormalized subject fields (preferred)
+          subjectName: c.subjectName || c.subject?.name || "Unknown",
+          subjectCode: (c.subjectCode || c.subject?.code || "").toUpperCase(),
+          subject: c.subjectName || c.subject?.name ? `${c.subjectName || c.subject?.name} (${(c.subjectCode || c.subject?.code || "").toUpperCase()})` : "Unknown",
           section: c.section?.name || "Unknown",
-          gradeLevel: c.section?.gradeLevel || c.subject?.gradeLevel || "—",
+          sectionId: c.section?.id || null,
           teacher: c.teacher ? `${c.teacher.firstName} ${c.teacher.lastName}` : "Unknown",
+          teacherId: c.teacher?.id || null,
+          gradeLevel: c.subjectGradeLevel || c.section?.gradeLevel || "—",
           schoolYear: c.schoolYear,
           schedule: c.schedule || "—",
           room: c.room || "—",
@@ -172,9 +177,15 @@ const ClassManagementPage = () => {
 
             {/* Grade Filters */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "15px" }}>
-              {["all", "Grade 7", "Grade 8", "Grade 9", "Grade 10"].map(grade => (
-                <button key={grade} style={filterBtnStyle(selectedGrade === grade)} onClick={() => setSelectedGrade(grade)}>
-                  {grade === "all" ? "All Classes" : grade}
+              {[
+                { value: 'all', label: 'All Classes' },
+                { value: '7', label: 'Grade 7' },
+                { value: '8', label: 'Grade 8' },
+                { value: '9', label: 'Grade 9' },
+                { value: '10', label: 'Grade 10' },
+              ].map(grade => (
+                <button key={grade.value} style={filterBtnStyle(selectedGrade === grade.value)} onClick={() => setSelectedGrade(grade.value)}>
+                  {grade.label}
                 </button>
               ))}
             </div>

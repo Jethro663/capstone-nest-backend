@@ -2,10 +2,11 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { and, eq, ilike, or, SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { subjects } from '../../drizzle/schema';
+import { classes } from '../../drizzle/schema';
 import { CreateSubjectDto } from './DTO/create-subject.dto';
 import { UpdateSubjectDto } from './DTO/update-subject.dto';
 
@@ -22,7 +23,6 @@ export class SubjectsService {
    */
   async findAll(filters?: {
     gradeLevel?: string;
-    isActive?: boolean;
     search?: string;
     page?: number;
     limit?: number;
@@ -31,36 +31,44 @@ export class SubjectsService {
     const limit = Math.min(filters?.limit || 50, 100); // Cap max limit
     const offset = (page - 1) * limit;
 
+    // Query classes and derive distinct subjects from denormalized fields
     const whereConditions: SQL<unknown>[] = [];
 
     if (filters?.gradeLevel) {
-      whereConditions.push(eq(subjects.gradeLevel, filters.gradeLevel));
-    }
-
-    if (filters?.isActive !== undefined) {
-      whereConditions.push(eq(subjects.isActive, filters.isActive));
+      whereConditions.push(eq(classes.subjectGradeLevel, filters.gradeLevel as '7'|'8'|'9'|'10'));
     }
 
     if (filters?.search) {
       const searchPattern = `%${filters.search}%`;
       const searchCondition = or(
-        ilike(subjects.name, searchPattern),
-        ilike(subjects.code, searchPattern),
+        ilike(classes.subjectName, searchPattern),
+        ilike(classes.subjectCode, searchPattern),
       );
       if (searchCondition) {
         whereConditions.push(searchCondition);
       }
     }
 
-    const subjectsList = await this.db.query.subjects.findMany({
+    const classRows = await this.db.query.classes.findMany({
       where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      orderBy: (subjects, { asc }) => [
-        asc(subjects.gradeLevel),
-        asc(subjects.name),
-      ],
-      limit,
+      orderBy: (classes, { asc }) => [asc(classes.subjectName)],
+      limit: limit * 5, // fetch extra to allow de-duplication
       offset,
     });
+
+    const map: Record<string, any> = {};
+    classRows.forEach((r) => {
+      if (!r.subjectCode) return;
+      if (!map[r.subjectCode]) {
+        map[r.subjectCode] = {
+          name: r.subjectName,
+          code: r.subjectCode,
+          gradeLevel: r.subjectGradeLevel,
+        };
+      }
+    });
+
+    const subjectsList = Object.values(map).slice(0, limit);
 
     return subjectsList;
   }
@@ -69,157 +77,64 @@ export class SubjectsService {
    * Find a subject by ID
    */
   async findById(id: string) {
-    const subject = await this.db.query.subjects.findFirst({
-      where: eq(subjects.id, id),
+    // Treat id as subject code for compatibility
+    const subject = await this.db.query.classes.findFirst({
+      where: eq(classes.subjectCode, id),
     });
 
     if (!subject) {
-      throw new NotFoundException(`Subject with ID "${id}" not found`);
+      throw new NotFoundException(`Subject with code "${id}" not found`);
     }
 
-    return subject;
+    return {
+      name: subject.subjectName,
+      code: subject.subjectCode,
+      gradeLevel: subject.subjectGradeLevel,
+    };
   }
 
   /**
    * Find subject by code
    */
   async findByCode(code: string) {
-    const subject = await this.db.query.subjects.findFirst({
-      where: eq(subjects.code, code.toUpperCase()),
+    const subject = await this.db.query.classes.findFirst({
+      where: eq(classes.subjectCode, code.toUpperCase()),
     });
 
-    return subject;
+    if (!subject) return null;
+
+    return {
+      name: subject.subjectName,
+      code: subject.subjectCode,
+      gradeLevel: subject.subjectGradeLevel,
+    };
   }
 
   /**
    * Create a new subject
    */
   async createSubject(createSubjectDto: CreateSubjectDto) {
-    // Check if subject with same name already exists
-    const existingByName = await this.db.query.subjects.findFirst({
-      where: eq(subjects.name, createSubjectDto.name),
-    });
-
-    if (existingByName) {
-      throw new ConflictException(
-        `Subject with name "${createSubjectDto.name}" already exists`,
-      );
-    }
-
-    // Check if subject with same code already exists
-    const existingByCode = await this.findByCode(createSubjectDto.code);
-
-    if (existingByCode) {
-      throw new ConflictException(
-        `Subject with code "${createSubjectDto.code}" already exists`,
-      );
-    }
-
-    // Create the subject
-    const [newSubject] = await this.db
-      .insert(subjects)
-      .values({
-        name: createSubjectDto.name,
-        code: createSubjectDto.code.toUpperCase(),
-        description: createSubjectDto.description || null,
-        gradeLevel: createSubjectDto.gradeLevel,
-        isActive: true,
-      })
-      .returning();
-
-    return newSubject;
+    // Subjects are now represented within `classes` (denormalized); creating a subject directly is no longer supported.
+    throw new BadRequestException(
+      'Subjects are now derived from Classes. To add a subject, create a Class with the desired subjectName/subjectCode.',
+    );
   }
 
   /**
    * Update a subject
    */
   async updateSubject(id: string, updateSubjectDto: UpdateSubjectDto) {
-    // Verify subject exists
-    const existingSubject = await this.findById(id);
-
-    // Check for name conflicts (if name is being updated)
-    if (
-      updateSubjectDto.name &&
-      updateSubjectDto.name !== existingSubject.name
-    ) {
-      const duplicateName = await this.db.query.subjects.findFirst({
-        where: and(
-          eq(subjects.name, updateSubjectDto.name),
-          // Ensure we're not comparing with the same subject
-          // Note: We need to use SQL for not equal
-        ),
-      });
-
-      if (duplicateName && duplicateName.id !== id) {
-        throw new ConflictException(
-          `Subject with name "${updateSubjectDto.name}" already exists`,
-        );
-      }
-    }
-
-    // Check for code conflicts (if code is being updated)
-    if (
-      updateSubjectDto.code &&
-      updateSubjectDto.code !== existingSubject.code
-    ) {
-      const duplicateCode = await this.findByCode(updateSubjectDto.code);
-
-      if (duplicateCode && duplicateCode.id !== id) {
-        throw new ConflictException(
-          `Subject with code "${updateSubjectDto.code}" already exists`,
-        );
-      }
-    }
-
-    // Build update object
-    const updateData: any = {
-      updatedAt: new Date(),
-    };
-
-    if (updateSubjectDto.name !== undefined) {
-      updateData.name = updateSubjectDto.name;
-    }
-    if (updateSubjectDto.code !== undefined) {
-      updateData.code = updateSubjectDto.code.toUpperCase();
-    }
-    if (updateSubjectDto.description !== undefined) {
-      updateData.description = updateSubjectDto.description;
-    }
-    if (updateSubjectDto.gradeLevel !== undefined) {
-      updateData.gradeLevel = updateSubjectDto.gradeLevel;
-    }
-    if (updateSubjectDto.isActive !== undefined) {
-      updateData.isActive = updateSubjectDto.isActive;
-    }
-
-    // Perform update
-    const [updatedSubject] = await this.db
-      .update(subjects)
-      .set(updateData)
-      .where(eq(subjects.id, id))
-      .returning();
-
-    return updatedSubject;
+    // Subjects are denormalized into Classes; direct subject updates are not supported.
+    throw new BadRequestException(
+      'Subjects are denormalized into Classes. To change a subject, update the Classes that reference it.',
+    );
   }
 
   /**
    * Delete (soft delete) a subject by setting isActive to false
    */
   async deleteSubject(id: string) {
-    // Verify subject exists
-    await this.findById(id);
-
-    // Soft delete by setting isActive to false
-    const [deletedSubject] = await this.db
-      .update(subjects)
-      .set({
-        isActive: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(subjects.id, id))
-      .returning();
-
-    return deletedSubject;
+    throw new BadRequestException('Subjects are denormalized into Classes; deleting subjects directly is not supported.');
   }
 
   /**
@@ -227,11 +142,6 @@ export class SubjectsService {
    * Use with caution - this will cascade delete related classes
    */
   async permanentlyDeleteSubject(id: string) {
-    // Verify subject exists
-    await this.findById(id);
-
-    await this.db.delete(subjects).where(eq(subjects.id, id));
-
-    return { message: 'Subject permanently deleted' };
+    throw new BadRequestException('Subjects are denormalized into Classes; permanent deletes are not supported through this endpoint.');
   }
 }

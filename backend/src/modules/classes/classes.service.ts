@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 import { and, eq, ilike, or, SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { classes, subjects, sections, users } from '../../drizzle/schema';
+import { classes, sections, users } from '../../drizzle/schema';
+
+// Normalize grade level into typed union or undefined
+const normalizeGradeLevel = (v?: string): '7' | '8' | '9' | '10' | undefined => {
+  if (!v) return undefined;
+  const s = String(v).trim();
+  return s === '7' || s === '8' || s === '9' || s === '10' ? (s as '7' | '8' | '9' | '10') : undefined;
+};
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 
@@ -23,6 +30,9 @@ export class ClassesService {
    */
   async findAll(filters?: {
     subjectId?: string;
+    subjectCode?: string;
+    subjectName?: string;
+    subjectGradeLevel?: '7'|'8'|'9'|'10';
     sectionId?: string;
     teacherId?: string;
     schoolYear?: string;
@@ -37,8 +47,12 @@ export class ClassesService {
 
     const whereConditions: SQL<unknown>[] = [];
 
-    if (filters?.subjectId) {
-      whereConditions.push(eq(classes.subjectId, filters.subjectId));
+    // Support filtering by subject code or subject name
+    if (filters?.subjectCode) {
+      whereConditions.push(eq(classes.subjectCode, filters.subjectCode));
+    }
+    if (filters?.subjectName) {
+      whereConditions.push(ilike(classes.subjectName, `%${filters.subjectName}%`));
     }
 
     if (filters?.sectionId) {
@@ -71,7 +85,6 @@ export class ClassesService {
     const classList = await this.db.query.classes.findMany({
       where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
       with: {
-        subject: true,
         section: true,
         teacher: {
           columns: {
@@ -100,7 +113,6 @@ export class ClassesService {
     const classRecord = await this.db.query.classes.findFirst({
       where: eq(classes.id, id),
       with: {
-        subject: true,
         section: true,
         teacher: {
           columns: {
@@ -124,18 +136,7 @@ export class ClassesService {
    * Create a new class
    */
   async create(createClassDto: CreateClassDto) {
-    // Verify that subject exists
-    const subject = await this.db.query.subjects.findFirst({
-      where: eq(subjects.id, createClassDto.subjectId),
-    });
-
-    if (!subject) {
-      throw new BadRequestException(
-        `Subject with ID "${createClassDto.subjectId}" not found`,
-      );
-    }
-
-    // Verify that section exists
+    // Section check
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, createClassDto.sectionId),
     });
@@ -160,7 +161,7 @@ export class ClassesService {
     // Check if class already exists (same subject, section, and school year)
     const existingClass = await this.db.query.classes.findFirst({
       where: and(
-        eq(classes.subjectId, createClassDto.subjectId),
+        eq(classes.subjectCode, createClassDto.subjectCode),
         eq(classes.sectionId, createClassDto.sectionId),
         eq(classes.schoolYear, createClassDto.schoolYear),
       ),
@@ -172,11 +173,21 @@ export class ClassesService {
       );
     }
 
+    // Build a typed payload for insertion
+    const insertPayload: any = {
+      subjectName: createClassDto.subjectName,
+      subjectCode: createClassDto.subjectCode?.toUpperCase(),
+      subjectGradeLevel: normalizeGradeLevel(createClassDto.subjectGradeLevel),
+      sectionId: createClassDto.sectionId,
+      teacherId: createClassDto.teacherId,
+      schoolYear: createClassDto.schoolYear,
+      schedule: (createClassDto as any).schedule,
+      room: createClassDto.room,
+    };
+
     const [newClass] = await this.db
       .insert(classes)
-      .values({
-        ...createClassDto,
-      })
+      .values(insertPayload)
       .returning();
 
     return this.findById(newClass.id);
@@ -189,18 +200,8 @@ export class ClassesService {
     // Verify class exists
     await this.findById(id);
 
-    // If updating subject, verify it exists
-    if (updateClassDto.subjectId) {
-      const subject = await this.db.query.subjects.findFirst({
-        where: eq(subjects.id, updateClassDto.subjectId),
-      });
-
-      if (!subject) {
-        throw new BadRequestException(
-          `Subject with ID "${updateClassDto.subjectId}" not found`,
-        );
-      }
-    }
+    // If updating subject fields, no external lookup required (denormalized fields)
+    // We accept subjectName/subjectCode/subjectGradeLevel directly in the DTO.
 
     // If updating section, verify it exists
     if (updateClassDto.sectionId) {
@@ -228,12 +229,18 @@ export class ClassesService {
       }
     }
 
+    const updatePayload: any = {
+      ...updateClassDto,
+      updatedAt: new Date(),
+    };
+
+    if (updatePayload.subjectGradeLevel) {
+      updatePayload.subjectGradeLevel = normalizeGradeLevel(String(updatePayload.subjectGradeLevel));
+    }
+
     await this.db
       .update(classes)
-      .set({
-        ...updateClassDto,
-        updatedAt: new Date(),
-      })
+      .set(updatePayload)
       .where(eq(classes.id, id));
 
     return this.findById(id);
@@ -258,7 +265,6 @@ export class ClassesService {
     const classList = await this.db.query.classes.findMany({
       where: eq(classes.teacherId, teacherId),
       with: {
-        subject: true,
         section: true,
       },
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
@@ -274,7 +280,6 @@ export class ClassesService {
     const classList = await this.db.query.classes.findMany({
       where: eq(classes.sectionId, sectionId),
       with: {
-        subject: true,
         teacher: {
           columns: {
             id: true,
@@ -295,7 +300,7 @@ export class ClassesService {
    */
   async getClassesBySubject(subjectId: string) {
     const classList = await this.db.query.classes.findMany({
-      where: eq(classes.subjectId, subjectId),
+      where: eq(classes.subjectCode, subjectId),
       with: {
         section: true,
         teacher: {

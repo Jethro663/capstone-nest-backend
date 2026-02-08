@@ -8,6 +8,8 @@ import {
   Delete,
   UseGuards,
   Query,
+  Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { SectionsService } from './sections.service';
 import { CreateSectionDto } from './DTO/create-section.dto';
@@ -47,6 +49,29 @@ export class SectionsController {
     if (limit) filters.limit = parseInt(limit, 10);
 
     const sections = await this.sectionsService.findAll(filters);
+
+    return {
+      success: true,
+      data: sections,
+      count: sections.length,
+    };
+  }
+
+  /**
+   * Get sections assigned to the current logged-in teacher
+   * Teacher only
+   */
+  @Get('my')
+  @Roles('teacher')
+  async getMySections(@Req() req: any) {
+    const userId = req?.user?.userId;
+
+    // Ensure the request is authenticated and contains the user id
+    if (!userId) {
+      throw new UnauthorizedException('You must be logged in to access your sections');
+    }
+
+    const sections = await this.sectionsService.findAll({ adviserId: userId });
 
     return {
       success: true,
@@ -120,6 +145,73 @@ export class SectionsController {
     return {
       success: true,
       message: 'Section deleted successfully (set to inactive)',
+    };
+  }
+
+  /**
+   * Get roster (students) for a section
+   * Admin and Teacher can access
+   */
+  @Get(':id/roster')
+  @Roles('admin', 'teacher')
+  async getRoster(@Param('id') id: string) {
+    const roster = await this.sectionsService.getRoster(id);
+
+    return {
+      success: true,
+      data: roster,
+      count: roster.length,
+    };
+  }
+
+  /**
+   * Get candidate students to add to a section (not currently members)
+   * Admin only
+   */
+  @Get(':id/candidates')
+  @Roles('admin')
+  async getCandidates(@Param('id') id: string, @Query('gradeLevel') gradeLevel?: string, @Query('search') search?: string) {
+    const filters: any = {};
+    if (gradeLevel) filters.gradeLevel = gradeLevel;
+    if (search) filters.search = search;
+
+    const candidates = await this.sectionsService.getCandidates(id, filters);
+
+    return {
+      success: true,
+      data: candidates,
+      count: candidates.length,
+    };
+  }
+
+  /**
+   * Add students to a section
+   * Admin only
+   */
+  @Post(':id/roster')
+  @Roles('admin')
+  async addStudentsToSection(@Param('id') id: string, @Body('studentIds') studentIds: string[]) {
+    const result = await this.sectionsService.addStudentsToSection(id, studentIds);
+
+    return {
+      success: true,
+      message: `${result.createdCount} students added to section`,
+      data: result,
+    };
+  }
+
+  /**
+   * Remove student from a section
+   * Admin only
+   */
+  @Delete(':id/roster/:studentId')
+  @Roles('admin')
+  async removeStudentFromSection(@Param('id') id: string, @Param('studentId') studentId: string) {
+    const result = await this.sectionsService.removeStudentFromSection(id, studentId);
+
+    return {
+      success: true,
+      data: result,
     };
   }
 

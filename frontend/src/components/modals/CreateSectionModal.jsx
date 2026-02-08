@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import ApiErrorModal from "@/components/modals/ApiErrorModal";
 import { motion, AnimatePresence } from "framer-motion";
+import api from '@/services/api';
+
 
 const CreateSectionModal = ({ section, onClose, onAddSection }) => {
   const [loading, setLoading] = useState(false);
@@ -15,15 +17,41 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
     sectionName: "",
     gradeLevel: "",
     schoolYear: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+    adviserId: "",
     assignedTeacher: "",
     studentCapacity: "",
     roomNumber: "",
   });
 
+  const [teachers, setTeachers] = useState([]);
+  const [teachersLoading, setTeachersLoading] = useState(false);
+
+
   const [schoolYearRange, setSchoolYearRange] = useState({
     startYear: new Date().getFullYear().toString(),
     endYear: (new Date().getFullYear() + 1).toString(),
   });
+
+  // Fetch teachers list (for assigned teacher dropdown)
+  useEffect(() => {
+    let mounted = true;
+    const fetchTeachers = async () => {
+      setTeachersLoading(true);
+      try {
+        const res = await api.get('/users/all', { params: { role: 'teacher', limit: 500 } });
+        if (!mounted) return;
+        if (res?.data?.users) setTeachers(res.data.users);
+      } catch (err) {
+        console.error('Failed to load teachers', err);
+      } finally {
+        if (mounted) setTeachersLoading(false);
+      }
+    };
+
+    fetchTeachers();
+
+    return () => { mounted = false; };
+  }, []);
 
   // Populate form for editing
   useEffect(() => {
@@ -37,6 +65,7 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
         sectionName: section.sectionName || "",
         gradeLevel: section.gradeLevel || "",
         schoolYear: section.schoolYear || "",
+        adviserId: section.adviserId || section.adviserId || "",
         assignedTeacher: section.assignedTeacher || "",
         studentCapacity: String(section.studentCapacity || ""),
         roomNumber: section.roomNumber || "",
@@ -100,7 +129,10 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
         sectionName: formData.sectionName.trim(),
         gradeLevel: formData.gradeLevel,
         schoolYear: formData.schoolYear.trim(),
-        assignedTeacher: formData.assignedTeacher.trim(),
+        adviserId: formData.adviserId || null,
+        assignedTeacher: teachers.find(t => t.id === formData.adviserId)
+          ? `${teachers.find(t => t.id === formData.adviserId).firstName} ${teachers.find(t => t.id === formData.adviserId).lastName}`
+          : formData.assignedTeacher.trim(),
         studentCapacity: Number(formData.studentCapacity),
         roomNumber: formData.roomNumber.trim(),
       };
@@ -177,7 +209,22 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
             options={["Grade 7", "Grade 8", "Grade 9", "Grade 10"]}
           />
 
-          <InputField label="Assigned Teacher" name="assignedTeacher" value={formData.assignedTeacher} onChange={handleChange} error={errors.assignedTeacher} disabled={loading} placeholder="Mr. Juan Dela Cruz" />
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase" }}>Assigned Teacher</label>
+            <select
+              name="adviserId"
+              value={formData.adviserId}
+              onChange={(e) => setFormData(prev => ({ ...prev, adviserId: e.target.value }))}
+              disabled={loading || teachersLoading}
+              style={{ width: "100%", padding: "12px", fontSize: "14px", borderRadius: "12px", border: errors.assignedTeacher ? "1px solid #ef4444" : "1px solid #d1d5db", outline: "none", background: "white" }}
+            >
+              <option value="">(Optional) Select a teacher</option>
+              {teachers.map(t => (
+                <option key={t.id} value={t.id}>{t.firstName} {t.lastName} {t.email ? `(${t.email})` : ''}</option>
+              ))}
+            </select>
+            {teachersLoading && <p style={{ fontSize: 12, color: '#6b7280' }}>Loading teachers...</p>}
+          </div>
 
           <InputField label="Student Capacity" name="studentCapacity" value={formData.studentCapacity} onChange={handleChange} error={errors.studentCapacity} disabled={loading} placeholder="30" />
 

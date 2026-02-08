@@ -71,6 +71,20 @@
       "when": 1770540610046,
       "tag": "0009_secret_dakota_north",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770546870626,
+      "tag": "0010_tired_dorian_gray",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770551455697,
+      "tag": "0011_wet_cerise",
+      "breakpoints": true
     }
   ]
 }

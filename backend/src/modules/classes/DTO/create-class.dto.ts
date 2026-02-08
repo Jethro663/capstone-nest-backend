@@ -3,6 +3,7 @@ import {
   IsUUID,
   IsOptional,
   Validate,
+  IsIn,
 } from 'class-validator';
 import {
   IsValidSchoolYearConstraint,
@@ -10,8 +11,15 @@ import {
 } from './validators';
 
 export class CreateClassDto {
-  @IsUUID('4', { message: 'subjectId must be a valid UUID' })
-  subjectId: string;
+  @IsString({ message: 'subjectName must be a string' })
+  subjectName: string;
+
+  @IsString({ message: 'subjectCode must be a string' })
+  subjectCode: string;
+
+  @IsOptional()
+  @IsIn(['7','8','9','10'], { message: 'subjectGradeLevel must be 7,8,9 or 10' })
+  subjectGradeLevel?: string;
 
   @IsUUID('4', { message: 'sectionId must be a valid UUID' })
   sectionId: string;

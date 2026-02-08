@@ -28,7 +28,9 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
       ],
       teacher: [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
+         { id: 'sections', label: 'My Sections', icon: <Users className="h-5 w-5" /> },
         { id: 'classes', label: 'My Classes', icon: <Users className="h-5 w-5" /> },
+       
       ],
       admin: [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },

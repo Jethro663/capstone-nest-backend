@@ -15,6 +15,8 @@ import  AdminDashboard  from './pages/dashboard/AdminDashboard';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import SubjectManagementPage from './pages/admin/SubjectManagementPage';
 import SectionManagementPage from './pages/admin/SectionManagementPage';
+import SectionRosterPage from './pages/admin/SectionRosterPage';
+import TeacherSectionsPage from './pages/teacher/TeacherSectionsPage';
 import ClassManagementPage from './pages/admin/ClassManagementPage';
 import ProfilePage from './pages/student/ProfilePage';
 import CompleteProfilePage from './pages/auth/CompleteProfilePage';
@@ -138,6 +140,14 @@ function App() {
         setCurrentPage(action);
     };
 
+    // Selected section for admin pages
+    const [selectedSection, setSelectedSection] = useState(null);
+
+    const handleViewSectionRoster = (section) => {
+        setSelectedSection(section);
+        setCurrentPage('section-roster');
+    };
+
     // Store signup email and go to verification
     const handleSignUp = (data) => {
         setTempEmail(data.email || data.data?.user?.email);
@@ -221,7 +231,19 @@ function App() {
         }
 
         if (currentPage === 'sections') {
-            return <SectionManagementPage />;
+            if (primaryRole === 'admin') return <SectionManagementPage onViewRoster={handleViewSectionRoster} />;
+            if (primaryRole === 'teacher') return <TeacherSectionsPage onViewRoster={handleViewSectionRoster} />;
+            return <SectionManagementPage onViewRoster={handleViewSectionRoster} />;
+        }
+
+        if (currentPage === 'section-roster') {
+            if (!selectedSection) {
+                setCurrentPage('sections');
+                return null;
+            }
+            return (
+                <SectionRosterPage section={selectedSection} onBack={() => setCurrentPage('sections')} />
+            );
         }
 
         // Placeholder for other pages (courses, settings, etc.)

@@ -1,15 +1,51 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Users, Clock, BookOpen, MoreVertical } from "lucide-react";
+import api from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function ClassesPage() {
-  const classes = [
-    { id: 1, name: "Mathematics 101", grade: "Grade 7", students: 28, schedule: "Mon, Wed, Fri - 9:00 AM", color: "#3B82F6" },
-    { id: 2, name: "Advanced Calculus", grade: "Grade 10", students: 22, schedule: "Tue, Thu - 10:30 AM", color: "#8B5CF6" },
-    { id: 3, name: "Geometry", grade: "Grade 9", students: 30, schedule: "Mon, Wed, Fri - 2:00 PM", color: "#10B981" },
-    { id: 4, name: "Algebra II", grade: "Grade 8", students: 25, schedule: "Tue, Thu - 1:00 PM", color: "#F97316" },
-    { id: 5, name: "Statistics", grade: "Grade 7", students: 24, schedule: "Mon, Wed - 11:00 AM", color: "#EC4899" },
-    { id: 6, name: "Pre-Calculus", grade: "Grade 10", students: 27, schedule: "Tue, Thu - 3:30 PM", color: "#14B8A6" },
-  ];
+  // Keep the same mock format initially, but load from API for the current teacher
+  const { user } = useAuth();
+  const [classes, setClasses] = useState([
+   
+  ]);
+  const [loading, setLoading] = useState(false);
+
+  // deterministically pick a color for class cards
+  const COLORS = ["#3B82F6","#8B5CF6","#10B981","#F97316","#EC4899","#14B8A6","#64748B"];
+  const pickColor = (seed) => {
+    if (!seed) return COLORS[0];
+    let h = 0; for (let i = 0; i < seed.length; i++) { h = (h << 5) - h + seed.charCodeAt(i); h |= 0; }
+    return COLORS[Math.abs(h) % COLORS.length];
+  };
+
+  const mapClassToCard = (c) => ({
+    id: c.id,
+    name: c.subjectName ? `${c.subjectName} (${(c.subjectCode||'').toUpperCase()})` : (c.subject || 'Unknown'),
+    grade: c.subjectGradeLevel ? `Grade ${c.subjectGradeLevel}` : (c.section?.gradeLevel ? `Grade ${c.section.gradeLevel}` : 'Grade —'),
+    students: c.enrollments ? c.enrollments.length : (c.studentCount || 0),
+    schedule: c.schedule || '—',
+    color: pickColor(c.subjectCode || c.id?.toString() || c.subjectName || c.name),
+  });
+
+  const fetchClasses = useCallback(async () => {
+    if (!user || !user.id) return;
+    setLoading(true);
+    try {
+      const res = await api.get(`/classes/teacher/${user.id}`);
+      if (res.data?.data) {
+        const items = res.data.data.map(mapClassToCard);
+        setClasses(items);
+      }
+    } catch (err) {
+      console.error('Failed to load teacher classes', err);
+      // keep mock data as a fallback
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => { fetchClasses(); }, [fetchClasses]);
 
   const containerStyle = {
     minHeight: "100vh",
