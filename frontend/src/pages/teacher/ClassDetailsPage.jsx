@@ -33,6 +33,8 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
   const [newAssessmentType, setNewAssessmentType] = useState('quiz');
   const [newAssessmentPoints, setNewAssessmentPoints] = useState(100);
   const [newAssessmentPassingScore, setNewAssessmentPassingScore] = useState(60);
+  const [newAssessmentFeedbackLevel, setNewAssessmentFeedbackLevel] = useState('standard');
+  const [newAssessmentFeedbackDelayHours, setNewAssessmentFeedbackDelayHours] = useState(24);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState(null);
 
@@ -238,6 +240,8 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
         type: newAssessmentType,
         totalPoints: parseInt(newAssessmentPoints),
         passingScore: parseInt(newAssessmentPassingScore),
+        feedbackLevel: newAssessmentFeedbackLevel,
+        feedbackDelayHours: parseInt(newAssessmentFeedbackDelayHours),
       });
       if (res?.data) {
         toast.success('Assessment created successfully');
@@ -246,6 +250,8 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
         setNewAssessmentType('quiz');
         setNewAssessmentPoints(100);
         setNewAssessmentPassingScore(60);
+        setNewAssessmentFeedbackLevel('standard');
+        setNewAssessmentFeedbackDelayHours(24);
         setShowCreateAssessmentModal(false);
         fetchAssessments();
       }
@@ -1220,6 +1226,67 @@ const ClassDetailsPage = ({ classItem, onBack }) => {
                     boxSizing: 'border-box',
                   }}
                 />
+              </div>
+
+              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '12px' }}>
+                  Smart Feedback Settings
+                </h3>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
+                  Control when and how much feedback students receive after submitting.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                    Feedback Level *
+                  </label>
+                  <select
+                    value={newAssessmentFeedbackLevel}
+                    onChange={(e) => setNewAssessmentFeedbackLevel(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="immediate">Immediate (Score Only)</option>
+                    <option value="standard">Standard (With Hints)</option>
+                    <option value="detailed">Detailed (Full Feedback)</option>
+                  </select>
+                  <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                    Standard: Answers + hints after delay | Detailed: All feedback + hints after delay
+                  </p>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '6px', display: 'block' }}>
+                    Feedback Delay (Hours) *
+                  </label>
+                  <input
+                    type="number"
+                    value={newAssessmentFeedbackDelayHours}
+                    onChange={(e) => setNewAssessmentFeedbackDelayHours(e.target.value)}
+                    min="0"
+                    max="168"
+                    step="1"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                    0 = Immediate | 24 = Next day | 48 = Two days
+                  </p>
+                </div>
               </div>
             </div>
 

@@ -46,22 +46,34 @@ export function AuthProvider({ children }) {
             const response = await authService.getCurrentUser();
 
             // Success - user is authenticated
+            // The /auth/me endpoint returns JWT payload: { userId, email, roles, type }
             const userData = response.data.user;
-            setUser(userData);
             console.log('[AUTH] User authenticated:', userData.email);
 
             // Try to fetch and merge user profile (if any) so UI has complete info
+            let profileData = null;
             try {
                 const profileRes = await profilesService.getMyProfile();
-                const profile = profileRes?.data || profileRes || null;
-                if (profile) {
-                    // Merge profile fields into user state (profile fields take precedence)
-                    setUser(prev => ({ ...prev, ...profile }));
-                    console.log('[AUTH] Merged profile into user:', profile);
-                }
+                profileData = profileRes?.data || profileRes || null;
+                console.log('[AUTH] Fetched profile:', profileData);
             } catch (err) {
                 // Ignore profile fetch errors; treat as no profile
                 console.warn('[AUTH] Failed to fetch profile:', err?.message || err);
+            }
+
+            // Normalize: ensure both `id` and `userId` exist for compatibility
+            const normalizedUser = {
+                ...userData,
+                id: userData.id || userData.userId,
+                userId: userData.userId || userData.id,
+            };
+
+            // Merge profile fields into user state in a SINGLE setUser call
+            // This prevents double-render issues
+            if (profileData) {
+                setUser({ ...normalizedUser, ...profileData });
+            } else {
+                setUser(normalizedUser);
             }
 
         } catch (error) {
@@ -217,11 +229,33 @@ export function AuthProvider({ children }) {
         try {
             const response = await authService.login(email, password);
 
-            // Set user in context
-            setUser(response.data.user);
+            // Login returns user from database (has `id`, not `userId`)
+            const userData = response.data.user;
+
+            // Normalize: ensure both `id` and `userId` exist
+            const normalizedUser = {
+                ...userData,
+                id: userData.id || userData.userId,
+                userId: userData.userId || userData.id,
+            };
+
+            // Fetch and merge profile in one go (same as checkAuth)
+            let profileData = null;
+            try {
+                const profileRes = await profilesService.getMyProfile();
+                profileData = profileRes?.data || profileRes || null;
+            } catch (err) {
+                console.warn('[AUTH] Failed to fetch profile on login:', err?.message || err);
+            }
+
+            // Set user with profile merged in a SINGLE call
+            if (profileData) {
+                setUser({ ...normalizedUser, ...profileData });
+            } else {
+                setUser(normalizedUser);
+            }
 
             toast.success('Login successful!');
-            
 
             return response;
 

@@ -16,6 +16,12 @@ export enum AssessmentType {
   ASSIGNMENT = 'assignment',
 }
 
+export enum FeedbackLevel {
+  IMMEDIATE = 'immediate',       // Score only, no answers
+  STANDARD = 'standard',         // Answers + explanations (delayed)
+  DETAILED = 'detailed',         // Full feedback with hints (delayed longer)
+}
+
 // ==========================================
 // Assessment DTOs
 // ==========================================
@@ -45,6 +51,14 @@ export class CreateAssessmentDto {
   @IsOptional()
   @IsInt()
   passingScore?: number = 60;
+
+  @IsOptional()
+  @IsEnum(FeedbackLevel)
+  feedbackLevel?: FeedbackLevel = FeedbackLevel.STANDARD;
+
+  @IsOptional()
+  @IsInt()
+  feedbackDelayHours?: number = 24; // 24 hours default delay
 }
 
 export class UpdateAssessmentDto {
@@ -74,6 +88,14 @@ export class UpdateAssessmentDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsEnum(FeedbackLevel)
+  feedbackLevel?: FeedbackLevel;
+
+  @IsOptional()
+  @IsInt()
+  feedbackDelayHours?: number;
 }
 
 // ==========================================

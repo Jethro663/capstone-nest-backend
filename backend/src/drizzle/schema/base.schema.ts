@@ -62,6 +62,12 @@ export const questionTypeEnum = pgEnum('question_type', [
   'dropdown',
 ]);
 
+export const feedbackLevelEnum = pgEnum('feedback_level', [
+  'immediate',
+  'standard',
+  'detailed',
+]);
+
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
 // ==========================================
@@ -332,6 +338,8 @@ export const assessments = pgTable('assessments', {
   totalPoints: integer('total_points').notNull().default(100),
   passingScore: integer('passing_score').default(60),
   isPublished: boolean('is_published').default(false),
+  feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
+  feedbackDelayHours: integer('feedback_delay_hours').default(24),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

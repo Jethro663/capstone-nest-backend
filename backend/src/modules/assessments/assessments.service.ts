@@ -492,7 +492,183 @@ export class AssessmentsService {
       throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
     }
 
-    return attempt;
+    // Apply smart feedback filtering based on assessment settings
+    return this.applyFeedbackFiltering(attempt);
+  }
+
+  /**
+   * Apply feedback filtering based on assessment's feedbackLevel and delay
+   * Prevents cheating while supporting learning
+   */
+  private applyFeedbackFiltering(attemptWithData: any) {
+    const assessment = attemptWithData.assessment;
+    const feedbackLevel = assessment.feedbackLevel || 'standard';
+    const feedbackDelayHours = assessment.feedbackDelayHours || 24;
+    
+    // Check if feedback delay has passed
+    const submittedTime = new Date(attemptWithData.submittedAt);
+    const now = new Date();
+    const hoursElapsed = (now.getTime() - submittedTime.getTime()) / (1000 * 60 * 60);
+    const feedbackUnlocked = hoursElapsed >= feedbackDelayHours;
+
+    let filteredAttempt = JSON.parse(JSON.stringify(attemptWithData));
+
+    if (feedbackLevel === 'immediate') {
+      // IMMEDIATE: Show ONLY score, pass/fail, and question count
+      // Hide all answer information and options
+      filteredAttempt.responses = filteredAttempt.responses.map(r => ({
+        id: r.id,
+        questionId: r.questionId,
+        // Strip out all answer details
+        studentAnswer: null,
+        selectedOptionId: null,
+        isCorrect: null,
+        pointsEarned: null,
+        question: {
+          id: r.question.id,
+          content: r.question.content,
+          type: r.question.type,
+          points: r.question.points,
+          // No options shown
+          options: [],
+        },
+      }));
+
+      filteredAttempt.assessment.questions = filteredAttempt.assessment.questions.map(q => ({
+        id: q.id,
+        content: q.content,
+        type: q.type,
+        points: q.points,
+        // No options shown
+        options: [],
+      }));
+
+      // Add feedback locked message
+      filteredAttempt.feedbackStatus = {
+        level: 'immediate',
+        unlocked: true,
+        message: 'You can see your score. Detailed feedback not available for immediate assessments.',
+      };
+
+    } else if (feedbackLevel === 'standard') {
+      // STANDARD: Show answers ONLY after delay
+      if (!feedbackUnlocked) {
+        // Hide all answer information until delay passes
+        filteredAttempt.responses = filteredAttempt.responses.map(r => ({
+          id: r.id,
+          questionId: r.questionId,
+          // Strip out answers, show only question
+          studentAnswer: null,
+          selectedOptionId: null,
+          isCorrect: null,
+          pointsEarned: null,
+          question: {
+            id: r.question.id,
+            content: r.question.content,
+            type: r.question.type,
+            points: r.question.points,
+            // Mark options but don't show which is correct
+            options: r.question.options?.map(o => ({
+              id: o.id,
+              text: o.text,
+              order: o.order,
+              isCorrect: null, // Hidden
+            })) || [],
+          },
+        }));
+
+        const hoursUntilUnlock = Math.ceil(feedbackDelayHours - hoursElapsed);
+        filteredAttempt.feedbackStatus = {
+          level: 'standard',
+          unlocked: false,
+          hoursRemaining: Math.max(0, hoursUntilUnlock),
+          message: `Detailed feedback available in ${Math.max(0, hoursUntilUnlock)} hours. Review lessons to learn why answers are correct!`,
+        };
+      } else {
+        // Feedback unlocked - show everything
+        filteredAttempt.feedbackStatus = {
+          level: 'standard',
+          unlocked: true,
+          message: 'Detailed feedback is now available. Review your answers and explanations.',
+        };
+      }
+
+    } else if (feedbackLevel === 'detailed') {
+      // DETAILED: Longer delay, more detailed hints
+      if (!feedbackUnlocked) {
+        const hoursUntilUnlock = Math.ceil(feedbackDelayHours - hoursElapsed);
+        
+        // Show hints about which questions were wrong, but NOT the answers
+        filteredAttempt.responses = filteredAttempt.responses.map(r => ({
+          id: r.id,
+          questionId: r.questionId,
+          // Show if correct/wrong as hint, but not the actual answer
+          studentAnswer: null,
+          selectedOptionId: null,
+          isCorrect: r.isCorrect, // Hint: show if they got it right/wrong
+          pointsEarned: null,      // Hide partial credit until unlocked
+          questionType: r.question.type,
+          hint: this.generateLearningHint(r.question, r.isCorrect),
+          question: {
+            id: r.question.id,
+            content: r.question.content,
+            type: r.question.type,
+            points: r.question.points,
+            // No options shown
+            options: [],
+          },
+        }));
+
+        filteredAttempt.feedbackStatus = {
+          level: 'detailed',
+          unlocked: false,
+          hoursRemaining: Math.max(0, hoursUntilUnlock),
+          message: `Full feedback available in ${Math.max(0, hoursUntilUnlock)} hours. Use the hints below to study!`,
+        };
+      } else {
+        // Full feedback available
+        filteredAttempt.responses = filteredAttempt.responses.map(r => ({
+          ...r,
+          hint: this.generateLearningHint(r.question, r.isCorrect),
+        }));
+
+        filteredAttempt.feedbackStatus = {
+          level: 'detailed',
+          unlocked: true,
+          message: 'Full feedback with learning hints available. Review to improve!',
+        };
+      }
+    }
+
+    return filteredAttempt;
+  }
+
+  /**
+   * Generate learning-focused hints rather than just showing answers
+   */
+  private generateLearningHint(question: any, isCorrect: boolean): string {
+    if (isCorrect) {
+      return `✓ Correct! You understood the concept in question "${question.content.substring(0, 50)}..."`;
+    }
+
+    switch (question.type) {
+      case QuestionType.MULTIPLE_CHOICE:
+      case QuestionType.DROPDOWN:
+        return `Review the lesson content about this topic. The correct answer involves understanding the key concept.`;
+      
+      case QuestionType.TRUE_FALSE:
+        return `Think about whether the statement is always true or if there are exceptions. Review the lesson.`;
+      
+      case QuestionType.MULTIPLE_SELECT:
+        return `This question requires selecting ALL correct answers. Review which concepts apply.`;
+      
+      case QuestionType.SHORT_ANSWER:
+      case QuestionType.FILL_BLANK:
+        return `Compare your answer with the key terms in the lesson. Make sure you used precise language.`;
+      
+      default:
+        return `Review this question and the related lesson content.`;
+    }
   }
 
   /**

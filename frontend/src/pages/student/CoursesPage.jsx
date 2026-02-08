@@ -18,10 +18,10 @@ export default function CoursesPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!user || !user.id) return;
+      if (!user || !user.userId) return;
       setLoading(true);
       try {
-        const res = await api.get(`/classes/student/${user.id}`);
+        const res = await api.get(`/classes/student/${user.userId}`);
         if (res?.data?.data && Array.isArray(res.data.data)) {
           const courseList = res.data.data.map(c => ({
             id: c.id,

@@ -30,10 +30,10 @@ export function ClassesPage({ onViewClassDetails }) {
   });
 
   const fetchClasses = useCallback(async () => {
-    if (!user || !user.id) return;
+    if (!user || !user.userId) return;
     setLoading(true);
     try {
-      const res = await api.get(`/classes/teacher/${user.id}`);
+      const res = await api.get(`/classes/teacher/${user.userId}`);
       console.log('API response for teacher classes:', res);
       if (res.data?.data) {
         const items = res.data.data.map(mapClassToCard);

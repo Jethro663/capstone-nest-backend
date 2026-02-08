@@ -1,18 +1,17 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import SplashScreen from './components/SplashScreen';
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignUpPage } from './pages/auth/SignUpPage';
 import { EmailVerificationPage } from './pages/auth/EmailVerificationPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
-import  DashboardLayout  from './layouts/DashboardLayout';
-import  StudentDashboard  from './pages/dashboard/StudentDashboard';
+import DashboardLayout from './layouts/DashboardLayout';
+import StudentDashboard from './pages/dashboard/StudentDashboard';
 import CoursesPage from './pages/student/CoursesPage';
-import  TeacherDashboard  from './pages/dashboard/TeacherDashboard';
+import TeacherDashboard from './pages/dashboard/TeacherDashboard';
 import ClassesPage from './pages/teacher/ClassesPage';
 import ClassDetailsPage from './pages/teacher/ClassDetailsPage';
-import  AdminDashboard  from './pages/dashboard/AdminDashboard';
+import AdminDashboard from './pages/dashboard/AdminDashboard';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import SubjectManagementPage from './pages/admin/SubjectManagementPage';
 import SectionManagementPage from './pages/admin/SectionManagementPage';
@@ -21,273 +20,264 @@ import TeacherSectionsPage from './pages/teacher/TeacherSectionsPage';
 import ClassManagementPage from './pages/admin/ClassManagementPage';
 import ProfilePage from './pages/student/ProfilePage';
 import CompleteProfilePage from './pages/auth/CompleteProfilePage';
-import  NotificationsPage  from './pages/NotificationsPage';
-import MessagesPage  from './pages/MessagesPage';
+import NotificationsPage from './pages/NotificationsPage';
+import MessagesPage from './pages/MessagesPage';
 import profilesService from './services/profilesService';
 import { Toaster } from './components/ui/sonner';
 
-function App() {
+// ============================================================================
+// HELPER: Check if a student profile has all required fields filled
+// ============================================================================
+function isProfileComplete(user, profile) {
+    // Only students need profile completion — admins/teachers skip
+    if (!user || user.roles?.includes('admin') || user.roles?.includes('teacher')) {
+        return true;
+    }
 
-    // Auth state from context
+    const hasValue = (v) =>
+        v !== undefined && v !== null && !(typeof v === 'string' && !v.trim());
+
+    // User-level required fields
+    if (!hasValue(user.firstName) || !hasValue(user.lastName)) return false;
+
+    // Profile-level required fields (fall back to user object for merged data)
+    const fields = ['dateOfBirth', 'gender', 'phone', 'address', 'familyName', 'familyRelationship', 'familyContact'];
+    for (const f of fields) {
+        const v = f === 'dateOfBirth'
+            ? (profile?.dateOfBirth ?? profile?.dob ?? user.dateOfBirth ?? user.dob)
+            : (profile?.[f] ?? user[f]);
+        if (!hasValue(v)) return false;
+    }
+    return true;
+}
+
+// ============================================================================
+// PUBLIC (unauthenticated) PAGES
+// ============================================================================
+const PUBLIC_PAGES = ['splash', 'login', 'signup', 'emailVerification', 'forgotPassword'];
+
+// ============================================================================
+// LOADING SCREEN
+// ============================================================================
+function LoadingScreen() {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#374151] to-[#dc2626]">
+            <div className="text-center">
+                <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="mt-4 text-white text-lg">Loading...</p>
+            </div>
+        </div>
+    );
+}
+
+// ============================================================================
+// APP
+// ============================================================================
+function App() {
     const { user, logout, loading: authLoading } = useAuth();
 
-    // Navigation state
-
-    // Current page (simple state-based routing)
+    // ── Navigation state ──────────────────────────────────────────────
     const [currentPage, setCurrentPage] = useState('splash');
-
-    // Selected role for forms
     const [selectedRole, setSelectedRole] = useState('student');
-
-    // Temporary email used during signup/verification
     const [tempEmail, setTempEmail] = useState('');
+    const [selectedSection, setSelectedSection] = useState(null);
+    const [selectedClass, setSelectedClass] = useState(null);
 
-    // Track when auth is ready (loading complete, user data available)
-    const [authReady, setAuthReady] = useState(false);
+    // ── Startup readiness ─────────────────────────────────────────────
+    // `appReady` stays false until auth is done AND profile check finishes.
+    // While false, we show a loading spinner instead of any page.
+    const [appReady, setAppReady] = useState(false);
 
-    // Effect 1: Wait for auth to finish loading, THEN allow profile check
+    // Ref: track the identity we last ran the profile check for so we
+    // don't re-run on every render but DO re-run when the user changes.
+    const checkedIdentity = useRef(null);
+
+    // ── Startup effect ────────────────────────────────────────────────
+    // Runs when authLoading flips to false (auth finished) or user changes.
+    //
+    // Why this works cleanly now:
+    //   AuthContext sets `user` exactly ONCE (with profile already merged).
+    //   So this effect fires once after login and once after refresh —
+    //   never the double-fire that caused the old "profile modal flash".
     useEffect(() => {
-        if (!authLoading) {
-            setAuthReady(true);
-        }
-    }, [authLoading]);
+        // Still loading auth — wait
+        if (authLoading) return;
 
-    // Redirect logged-in users to dashboard or complete profile
-    // Only runs once auth is complete and user is loaded
-    const checkProfileCompletion = async () => {
+        // ── Not logged in ──
         if (!user) {
-            console.log('checkProfileCompletion: no user available');
-            return false;
+            checkedIdentity.current = null;
+            setAppReady(true);
+            // Kick to splash only if currently on a protected page
+            if (!PUBLIC_PAGES.includes(currentPage)) {
+                setCurrentPage('splash');
+            }
+            return;
         }
-        if(user.roles?.includes('admin') || user.roles?.includes('teacher')) {
-            return false;
-        }
 
-        try {
-        
-            const res = await profilesService.getProfileByUserId(user.id);
-      
-            const profile = res?.data || res || null;
-       
+        // ── Logged in — determine identity key ──
+        const identity = user.userId || user.id || user.email;
 
-            // Check basic user fields (firstName, lastName)
-            const requiredUserFields = ['firstName', 'lastName'];
-            const missingUserChecks = {};
-            requiredUserFields.forEach((f) => {
-                const val = user[f];
-                const present = val !== undefined && val !== null && !(typeof val === 'string' && !val.toString().trim());
-                missingUserChecks[f] = !present;
-               
-            });
-            const missingUser = requiredUserFields.some((f) => missingUserChecks[f]);
+        // Already checked this exact user — nothing to do
+        if (checkedIdentity.current === identity) return;
+        checkedIdentity.current = identity;
 
-            // Check profile fields
-            const profileFields = ['dateOfBirth', 'gender', 'phone', 'address', 'familyName', 'familyRelationship', 'familyContact'];
-            const missingProfileChecks = {};
-
-            profileFields.forEach((f) => {
-                let v;
-                if (f === 'dateOfBirth') {
-                    v = profile?.dateOfBirth ?? profile?.dob ?? user.dateOfBirth ?? user.dob;
-                } else {
-                    v = profile?.[f] ?? user[f];
-                }
-
-                const present = v !== undefined && v !== null && !(typeof v === 'string' && !v.toString().trim());
-                missingProfileChecks[f] = !present;
-               
-            });
-
-            const missingProfile = profileFields.some((f) => missingProfileChecks[f]);
-
-    
-            return missingUser || missingProfile;
-        } catch (err) {
-            console.log('Profile check failed:', err);
-            return true;
-        }
-    };
-
-    // Effect 2: Check profile completion only AFTER auth is ready
-    useEffect(() => {
-        if (!authReady || !user) return;
-
-        let mounted = true;
+        // ── Run profile-completion check (async) ──
+        let cancelled = false;
 
         (async () => {
-            const needs = await checkProfileCompletion();
-            if (!mounted) return;
+            try {
+                // AuthContext already merged the profile into `user`, but we
+                // fetch again to be safe (catches edge cases where AuthContext
+                // profile fetch failed silently).
+                let profile = null;
+                try {
+                    const res = await profilesService.getMyProfile();
+                    profile = res?.data !== undefined ? res.data : res;
+                } catch {
+                    // No profile exists yet — will be treated as incomplete for students
+                }
 
-            if (needs) {
-                console.log('User needs to complete profile');
-                setCurrentPage('completeProfile');
-                return;
-            }
+                if (cancelled) return;
 
-            if (currentPage === 'splash' || currentPage === 'login' || currentPage === 'signup') {
-                setCurrentPage('dashboard');
+                if (!isProfileComplete(user, profile)) {
+                    setCurrentPage('completeProfile');
+                } else if (PUBLIC_PAGES.includes(currentPage)) {
+                    // User is on a public page (splash/login/signup) — send to dashboard
+                    setCurrentPage('dashboard');
+                }
+                // Otherwise keep them on whatever protected page they were on (e.g. courses after refresh)
+            } catch (err) {
+                console.error('[App] Profile check error:', err);
+                // On error, just proceed to dashboard
+                if (!cancelled && PUBLIC_PAGES.includes(currentPage)) {
+                    setCurrentPage('dashboard');
+                }
+            } finally {
+                if (!cancelled) setAppReady(true);
             }
         })();
 
-        return () => {
-            mounted = false;
-        };
-    }, [authReady, user, currentPage]);
+        return () => { cancelled = true; };
+    }, [authLoading, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Navigation handlers
-
-    // Handle splash actions (login/signup)
-    const handleRoleSelection = (role, action) => {
-        setCurrentPage(action);
-    };
-
-    // Selected section for admin pages
-    const [selectedSection, setSelectedSection] = useState(null);
+    // ── Navigation handlers ───────────────────────────────────────────
+    const handleRoleSelection = (_role, action) => setCurrentPage(action);
+    const handleNavigation = (page) => setCurrentPage(page);
+    const handleProfileClick = () => setCurrentPage('profile');
 
     const handleViewSectionRoster = (section) => {
         setSelectedSection(section);
         setCurrentPage('section-roster');
     };
 
-    // Selected class for teacher class details page
-    const [selectedClass, setSelectedClass] = useState(null);
-
     const handleViewClassDetails = (classItem) => {
         setSelectedClass(classItem);
         setCurrentPage('class-details');
     };
 
-    // Store signup email and go to verification
     const handleSignUp = (data) => {
         setTempEmail(data.email || data.data?.user?.email);
         setCurrentPage('emailVerification');
-    }; 
+    };
 
-    // Clear temp email and go to login
     const handleEmailVerification = () => {
         setTempEmail('');
         setCurrentPage('login');
-    }; 
+    };
 
-    // Redirect to login after password reset
-    const handlePasswordReset = () => {
-        setCurrentPage('login');
-    }; 
+    const handlePasswordReset = () => setCurrentPage('login');
 
-    // Logout via context and go to splash
     const handleLogout = async () => {
         await logout();
+        checkedIdentity.current = null;
+        setAppReady(true);
         setCurrentPage('splash');
-    }; 
+    };
 
-    // Show profile
-    const handleProfileClick = () => {
-        setCurrentPage('profile');
-    }; 
-
-    // Profile save: updates context (TODO: persist to backend)
-
-    // General navigation
-    const handleNavigation = (page) => {
-        setCurrentPage(page);
-    }; 
-
-    // Render dashboard/other pages based on user role
+    // ── Dashboard content by role & page ──────────────────────────────
     const renderDashboardContent = () => {
         if (!user) return null;
+        const role = user.roles?.[0];
 
-        // Get user's primary role
-        // Backend returns roles as array: ["student"] or ["teacher"]
-        const primaryRole = user.roles?.[0];
+        switch (currentPage) {
+            case 'dashboard':
+                if (role === 'teacher') return <TeacherDashboard />;
+                if (role === 'admin') return <AdminDashboard />;
+                return <StudentDashboard />;
 
-        if (currentPage === 'dashboard') {
+            case 'classes':
+                if (role === 'admin') return <ClassManagementPage />;
+                return <ClassesPage onViewClassDetails={handleViewClassDetails} />;
 
-            switch (primaryRole) {
-                case 'student':
-                    return <StudentDashboard />;
-                case 'teacher':
-                    return <TeacherDashboard />;
-                case 'admin':
-                    return <AdminDashboard />;
-                default:
-                    return <StudentDashboard />;
-            }
-        }
+            case 'class-details':
+                if (!selectedClass) { setCurrentPage('classes'); return null; }
+                return <ClassDetailsPage classItem={selectedClass} onBack={() => setCurrentPage('classes')} />;
 
-        if (currentPage === 'classes') {
-            if (primaryRole === 'admin') return <ClassManagementPage />;
-            return <ClassesPage onViewClassDetails={handleViewClassDetails} />;
-        }
+            case 'courses':
+                return <CoursesPage />;
 
-        if (currentPage === 'class-details') {
-            if (!selectedClass) {
-                setCurrentPage('classes');
-                return null;
-            }
-            return (
-                <ClassDetailsPage classItem={selectedClass} onBack={() => setCurrentPage('classes')} />
-            );
-        }
+            case 'notifications':
+                return <NotificationsPage />;
 
-        if (currentPage === 'courses') {
-            return <CoursesPage />;
-        }
+            case 'messages':
+                return <MessagesPage />;
 
-        if (currentPage === 'notifications') {
-            return <NotificationsPage />;
-        }
+            case 'users':
+                return <UserManagementPage />;
 
-        if (currentPage === 'messages') {
-            return <MessagesPage />;
-        }
+            case 'subjects':
+                return <SubjectManagementPage />;
 
-        if (currentPage === 'users') {
-            return <UserManagementPage />;
-        }
+            case 'sections':
+                if (role === 'admin') return <SectionManagementPage onViewRoster={handleViewSectionRoster} />;
+                if (role === 'teacher') return <TeacherSectionsPage onViewRoster={handleViewSectionRoster} />;
+                return <SectionManagementPage onViewRoster={handleViewSectionRoster} />;
 
-        if (currentPage === 'subjects') {
-            return <SubjectManagementPage />;
-        }
+            case 'section-roster':
+                if (!selectedSection) { setCurrentPage('sections'); return null; }
+                return <SectionRosterPage section={selectedSection} onBack={() => setCurrentPage('sections')} />;
 
-        if (currentPage === 'sections') {
-            if (primaryRole === 'admin') return <SectionManagementPage onViewRoster={handleViewSectionRoster} />;
-            if (primaryRole === 'teacher') return <TeacherSectionsPage onViewRoster={handleViewSectionRoster} />;
-            return <SectionManagementPage onViewRoster={handleViewSectionRoster} />;
-        }
-
-        if (currentPage === 'section-roster') {
-            if (!selectedSection) {
-                setCurrentPage('sections');
-                return null;
-            }
-            return (
-                <SectionRosterPage section={selectedSection} onBack={() => setCurrentPage('sections')} />
-            );
-        }
-
-        // Placeholder for other pages (courses, settings, etc.)
-        return (
-            <div className="p-6">
-                <div className="max-w-4xl mx-auto">
-                    <h1 className="mb-4 capitalize">{currentPage.replace('-', ' ')}</h1>
-                    <div className="bg-white rounded-lg border p-8 text-center">
-                        <p className="text-muted-foreground">
-                            This page is under development. Content for "{currentPage}" will be added here.
-                        </p>
+            default:
+                return (
+                    <div className="p-6">
+                        <div className="max-w-4xl mx-auto">
+                            <h1 className="mb-4 capitalize">{currentPage.replace('-', ' ')}</h1>
+                            <div className="bg-white rounded-lg border p-8 text-center">
+                                <p className="text-muted-foreground">
+                                    This page is under development. Content for "{currentPage}" will be added here.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
+                );
+        }
+    };
+
+    // ── Reusable layout wrapper for any protected page ────────────────
+    const renderProtected = (page, children) => {
+        if (!user) { setCurrentPage('splash'); return null; }
+        return (
+            <DashboardLayout
+                role={user.roles?.[0] || 'student'}
+                userName={`${user.firstName || ''} ${user.lastName || user.email}`}
+                currentPage={page}
+                onNavigate={handleNavigation}
+                onProfile={handleProfileClick}
+                onNotifications={() => setCurrentPage('notifications')}
+                onMessages={() => setCurrentPage('messages')}
+            >
+                {children}
+            </DashboardLayout>
         );
     };
 
-    // Page routing
-
-    // Render current page
+    // ── Page router ───────────────────────────────────────────────────
     const renderPage = () => {
+        // Show loading spinner until auth + profile check complete
+        if (authLoading || !appReady) return <LoadingScreen />;
+
         switch (currentPage) {
-
-            // Public pages
-
+            // ── Public pages ──
             case 'splash':
                 return <SplashScreen onSelectRole={handleRoleSelection} />;
 
@@ -298,12 +288,7 @@ function App() {
                         onBack={() => setCurrentPage('splash')}
                         onForgotPassword={() => setCurrentPage('forgotPassword')}
                         onSignUp={() => setCurrentPage('signup')}
-                        onUnverified={(email) => {
-                            // Store email for verification page and navigate
-                            setTempEmail(email);
-                            setCurrentPage('emailVerification');
-                        }}
-                        // onLogin handled by context
+                        onUnverified={(email) => { setTempEmail(email); setCurrentPage('emailVerification'); }}
                     />
                 );
 
@@ -313,7 +298,6 @@ function App() {
                         role={selectedRole}
                         onBack={() => setCurrentPage('splash')}
                         onLogin={() => setCurrentPage('login')}
-                        // Add callback to handle signup success
                         onSignupSuccess={handleSignUp}
                     />
                 );
@@ -335,76 +319,19 @@ function App() {
                     />
                 );
 
-            // Protected pages
-
+            // ── Protected pages ──
             case 'profile':
-                // Check if user is logged in
-                if (!user) {
-                    setCurrentPage('splash');
-                    return null;
-                }
-
-                return (
-                    <DashboardLayout
-                        role={user.roles?.[0] || 'student'}  // Get role from user object
-                        userName={`${user.firstName || ''} ${user.lastName || user.email}`}
-                        currentPage="profile"
-                        onNavigate={handleNavigation}
-                        onProfile={handleProfileClick}
-                        onNotifications={() => setCurrentPage('notifications')}
-                        onMessages={() => setCurrentPage('messages')}
-                    >
-                        <ProfilePage />
-                    </DashboardLayout>
-                );
+                return renderProtected('profile', <ProfilePage />);
 
             case 'completeProfile':
-                if (!user) {
-                    setCurrentPage('splash');
-                    return null;
-                }
-
-                return (
-                    <DashboardLayout
-                        role={user.roles?.[0] || 'student'}
-                        userName={`${user.firstName || ''} ${user.lastName || user.email}`}
-                        currentPage="complete-profile"
-                        onNavigate={handleNavigation}
-                        onProfile={handleProfileClick}
-                        onNotifications={() => setCurrentPage('notifications')}
-                        onMessages={() => setCurrentPage('messages')}
-                    >
-                        <CompleteProfilePage onComplete={() => setCurrentPage('dashboard')} />
-                    </DashboardLayout>
+                return renderProtected('complete-profile',
+                    <CompleteProfilePage onComplete={() => setCurrentPage('dashboard')} />
                 );
 
-            case 'notifications':
-            case 'messages':
-            case 'dashboard':
             default:
-                // Check if user is logged in
-                if (!user) {
-                    setCurrentPage('splash');
-                    return null;
-                }
-
-                return (
-                    <DashboardLayout
-                        role={user.roles?.[0] || 'student'}
-                        userName={`${user.firstName || ''} ${user.lastName || user.email}`}
-                        currentPage={currentPage}
-                        onNavigate={handleNavigation}
-                        onProfile={handleProfileClick}
-                        onNotifications={() => setCurrentPage('notifications')}
-                        onMessages={() => setCurrentPage('messages')}
-                    >
-                        {renderDashboardContent()}
-                    </DashboardLayout>
-                );
+                return renderProtected(currentPage, renderDashboardContent());
         }
     };
-
-    // App render
 
     return (
         <>

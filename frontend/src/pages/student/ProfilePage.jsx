@@ -41,8 +41,8 @@ export function ProfilePage() {
       try {
         setLoading(true);
         console.log('Loading profile for user:', user);
-       const res = await profilesService.getProfileByUserId(user.id);
-       console.log('API response for profile:', res);
+        const res = await profilesService.getProfileByUserId(user.id);
+        console.log('API response for profile:', res);
         const data = res?.data || res || null;
         console.log('Loaded profile data:', data);
         console.log('User data:', user);

@@ -3,11 +3,13 @@ import { ArrowLeft, Play, Eye, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import assessmentService from '@/services/assessmentService';
 import StudentAssessmentTakingPage from './StudentAssessmentTakingPage';
+import StudentAssessmentResultsPage from './StudentAssessmentResultsPage';
 
 const StudentAssessmentPage = ({ assessment, classItem, onBack }) => {
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [takingAssessment, setTakingAssessment] = useState(null);
+  const [viewingResultId, setViewingResultId] = useState(null);
 
   useEffect(() => {
     fetchAttempts();
@@ -41,16 +43,7 @@ const StudentAssessmentPage = ({ assessment, classItem, onBack }) => {
   };
 
   const handleViewResults = async (attemptId) => {
-    try {
-      const res = await assessmentService.getAttemptResults(attemptId);
-      if (res?.data) {
-        // Could navigate to results viewer, for now show in toast
-        toast.success(`Score: ${(res.data.score || 0).toFixed(1)}%`);
-      }
-    } catch (err) {
-      console.error('Failed to load results', err);
-      toast.error('Failed to load assessment results');
-    }
+    setViewingResultId(attemptId);
   };
 
   // If taking assessment, show the taking page
@@ -66,6 +59,20 @@ const StudentAssessmentPage = ({ assessment, classItem, onBack }) => {
         }}
       />
     );
+  }
+
+  // If viewing results, show the results page
+  if (viewingResultId) {
+    const selectedAttempt = attempts.find(a => a.id === viewingResultId);
+    if (selectedAttempt) {
+      return (
+        <StudentAssessmentResultsPage
+          attempt={selectedAttempt}
+          assessment={assessment}
+          onBack={() => setViewingResultId(null)}
+        />
+      );
+    }
   }
 
   // Styles
