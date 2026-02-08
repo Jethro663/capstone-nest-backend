@@ -15,6 +15,7 @@ import { LessonsService } from './lessons.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   CreateLessonDto,
   UpdateLessonDto,
@@ -213,4 +214,70 @@ export class LessonsController {
       data: lesson,
     };
   }
+
+  /**
+   * Mark a lesson as complete for the current student
+   * Students can mark their own lessons as complete
+   */
+  @Post(':lessonId/complete')
+  @Roles('student')
+  async markLessonComplete(
+    @Param('lessonId') lessonId: string,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.lessonsService.markLessonComplete(
+      user.userId,
+      lessonId,
+    );
+
+    return {
+      success: true,
+      message: 'Lesson marked as complete',
+      data: result,
+    };
+  }
+
+  /**
+   * Check if a student has completed a lesson
+   * Students can check their own progress
+   */
+  @Get(':lessonId/completion-status')
+  @Roles('student')
+  async getCompletionStatus(
+    @Param('lessonId') lessonId: string,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.lessonsService.isLessonCompleted(
+      user.userId,
+      lessonId,
+    );
+
+    return {
+      success: true,
+      data: result,
+    };
+  }
+
+  /**
+   * Get all completed lessons for a student in a class
+   * Students can view their own progress per class
+   */
+  @Get('class/:classId/completed')
+  @Roles('student')
+  async getCompletedLessons(
+    @Param('classId') classId: string,
+    @CurrentUser() user: any,
+  ) {
+    const completions = await this.lessonsService.getCompletedLessonsForClass(
+      user.userId,
+      classId,
+    );
+
+    return {
+      success: true,
+      data: completions,
+      count: completions.length,
+    };
+  }
 }
+

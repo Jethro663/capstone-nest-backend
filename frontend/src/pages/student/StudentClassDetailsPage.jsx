@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Book, Bell, BarChart3, FileText } from 'lucide-react';
 import lessonService from '@/services/lessonService';
+import StudentLessonViewerPage from './StudentLessonViewerPage';
 import { toast } from 'sonner';
 
 const StudentClassDetailsPage = ({ classItem, onBack }) => {
@@ -8,6 +9,7 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
   const [lessons, setLessons] = useState([]);
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
+  const [completions, setCompletions] = useState({});
 
   // Tab configuration
   const tabs = [
@@ -38,6 +40,32 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
       setLoadingLessons(false);
     }
   };
+
+  // Fetch lesson completions for this class
+  useEffect(() => {
+    if (!classItem?.id || lessons.length === 0) return;
+
+    const fetchCompletions = async () => {
+      try {
+        const res = await lessonService.getCompletedLessonsForClass(classItem.id);
+        if (res?.data && Array.isArray(res.data)) {
+          const completionMap = {};
+          res.data.forEach(completion => {
+            completionMap[completion.lessonId] = {
+              isCompleted: true,
+              completedAt: completion.completedAt,
+            };
+          });
+          setCompletions(completionMap);
+        }
+      } catch (err) {
+        console.error('Failed to load lesson completions', err);
+        // Don't show error toast for this, it's optional
+      }
+    };
+
+    fetchCompletions();
+  }, [classItem?.id, lessons.length]);
 
   // Container styles
   const containerStyle = {
@@ -194,6 +222,17 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
     color: isDraft ? '#d97706' : '#059669',
   });
 
+  const completionBadgeStyle = {
+    display: 'inline-block',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: '600',
+    backgroundColor: '#dbeafe',
+    color: '#0369a1',
+    marginLeft: '8px',
+  };
+
   // Render tab content
   const renderTabContent = () => {
     switch (activeTab) {
@@ -239,9 +278,16 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
                         <h3 style={lessonTitleStyle}>{lesson.title}</h3>
                         {lesson.description && <p style={lessonDescStyle}>{lesson.description}</p>}
                       </div>
-                      <span style={lessonStatusStyle(lesson.isDraft)}>
-                        {lesson.isDraft ? 'Draft' : 'Published'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
+                        {completions[lesson.id]?.isCompleted && (
+                          <span style={completionBadgeStyle}>
+                            ✓ Completed
+                          </span>
+                        )}
+                        <span style={lessonStatusStyle(lesson.isDraft)}>
+                          {lesson.isDraft ? 'Draft' : 'Published'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -271,7 +317,14 @@ const StudentClassDetailsPage = ({ classItem, onBack }) => {
     }
   };
 
-  return (
+  return selectedLesson ? (
+    <StudentLessonViewerPage
+      lesson={selectedLesson}
+      classItem={classItem}
+      allLessons={lessons}
+      onBack={() => setSelectedLesson(null)}
+    />
+  ) : (
     <div style={containerStyle}>
       {/* Header with Back Button and Class Title */}
       <div style={headerStyle}>

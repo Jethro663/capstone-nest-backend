@@ -60,6 +60,22 @@ const lessonService = {
     });
     return response.data;
   },
+
+  // Lesson Completion & Progress
+  async markLessonComplete(lessonId) {
+    const response = await api.post(`/lessons/${lessonId}/complete`);
+    return response.data;
+  },
+
+  async checkLessonCompletion(lessonId) {
+    const response = await api.get(`/lessons/${lessonId}/completion-status`);
+    return response.data;
+  },
+
+  async getCompletedLessonsForClass(classId) {
+    const response = await api.get(`/lessons/class/${classId}/completed`);
+    return response.data;
+  },
 };
 
 export default lessonService;

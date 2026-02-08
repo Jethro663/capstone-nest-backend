@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { eq, and } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { lessons, lessonContentBlocks, classes } from '../../drizzle/schema';
+import { lessons, lessonContentBlocks, classes, lessonCompletions, users } from '../../drizzle/schema';
 import { CreateLessonDto, UpdateLessonDto, CreateContentBlockDto, UpdateContentBlockDto, ReorderBlocksDto } from './DTO/lesson.dto';
 
 @Injectable()
@@ -239,4 +239,93 @@ export class LessonsService {
     // Return updated lesson
     return this.getLessonById(lessonId);
   }
+
+  /**
+   * Mark a lesson as complete for a student
+   */
+  async markLessonComplete(studentId: string, lessonId: string) {
+    // Verify lesson exists
+    await this.getLessonById(lessonId);
+
+    // Verify student exists
+    const student = await this.db.query.users.findFirst({
+      where: eq(users.id, studentId),
+    });
+    if (!student) {
+      throw new NotFoundException(`Student with ID "${studentId}" not found`);
+    }
+
+    // Try to insert or update completion
+    try {
+      const result = await this.db
+        .insert(lessonCompletions)
+        .values({
+          studentId,
+          lessonId,
+          progressPercentage: 100,
+        })
+        .returning();
+
+      return { isCompleted: true, completedAt: result[0].completedAt };
+    } catch (error) {
+      // If unique constraint violation, update existing record
+      if (error.code === '23505') {
+        await this.db
+          .update(lessonCompletions)
+          .set({
+            progressPercentage: 100,
+            completedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(lessonCompletions.studentId, studentId),
+              eq(lessonCompletions.lessonId, lessonId),
+            ),
+          );
+
+        return { isCompleted: true, message: 'Lesson already marked as complete' };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a student has completed a lesson
+   */
+  async isLessonCompleted(studentId: string, lessonId: string) {
+    const completion = await this.db.query.lessonCompletions.findFirst({
+      where: and(
+        eq(lessonCompletions.studentId, studentId),
+        eq(lessonCompletions.lessonId, lessonId),
+      ),
+    });
+
+    return {
+      isCompleted: !!completion,
+      completedAt: completion?.completedAt || null,
+    };
+  }
+
+  /**
+   * Get all completed lessons for a student in a class
+   */
+  async getCompletedLessonsForClass(studentId: string, classId: string) {
+    const completions = await this.db.query.lessonCompletions.findMany({
+      where: and(
+        eq(lessonCompletions.studentId, studentId),
+      ),
+      with: {
+        lesson: true,
+      },
+    });
+
+    // Filter completions for lessons in the specified class
+    return completions
+      .filter(c => c.lesson?.classId === classId)
+      .map(c => ({
+        lessonId: c.lessonId,
+        completedAt: c.completedAt,
+      }));
+  }
 }
+

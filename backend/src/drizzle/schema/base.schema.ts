@@ -288,6 +288,29 @@ export const lessonContentBlocks = pgTable(
   }),
 );
 
+export const lessonCompletions = pgTable(
+  'lesson_completions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    lessonId: uuid('lesson_id')
+      .notNull()
+      .references(() => lessons.id, { onDelete: 'cascade' }),
+    completedAt: timestamp('completed_at').notNull().defaultNow(),
+    progressPercentage: integer('progress_percentage').notNull().default(0),
+  },
+  (table) => ({
+    studentIdIdx: index('lesson_completions_student_id_idx').on(table.studentId),
+    lessonIdIdx: index('lesson_completions_lesson_id_idx').on(table.lessonId),
+    uniqueCompletion: unique('lesson_completions_student_lesson_unique').on(
+      table.studentId,
+      table.lessonId,
+    ),
+  }),
+);
+
 export const assessments = pgTable('assessments', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
@@ -382,6 +405,7 @@ export const lessonsRelations = relations(lessons, ({ one, many }) => ({
     references: [classes.id],
   }),
   contentBlocks: many(lessonContentBlocks),
+  completions: many(lessonCompletions),
 }));
 
 export const lessonContentBlocksRelations = relations(
@@ -389,6 +413,20 @@ export const lessonContentBlocksRelations = relations(
   ({ one }) => ({
     lesson: one(lessons, {
       fields: [lessonContentBlocks.lessonId],
+      references: [lessons.id],
+    }),
+  }),
+);
+
+export const lessonCompletionsRelations = relations(
+  lessonCompletions,
+  ({ one }) => ({
+    student: one(users, {
+      fields: [lessonCompletions.studentId],
+      references: [users.id],
+    }),
+    lesson: one(lessons, {
+      fields: [lessonCompletions.lessonId],
       references: [lessons.id],
     }),
   }),

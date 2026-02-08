@@ -12,6 +12,7 @@ export default function CoursesPage() {
   const [loadingLessons, setLoadingLessons] = useState(false);
   const [lessonErrors, setLessonErrors] = useState({});
   const [selectedCourse, setSelectedCourse] = useState(null);
+  const [completions, setCompletions] = useState({});
 
   // Fetch real enrolled courses for this student
   useEffect(() => {
@@ -28,8 +29,8 @@ export default function CoursesPage() {
             grade: c.subjectGradeLevel ? `Grade ${c.subjectGradeLevel}` : (c.section?.gradeLevel ? `Grade ${c.section.gradeLevel}` : 'Grade —'),
             teacher: c.teacher ? `${c.teacher.firstName} ${c.teacher.lastName}` : 'Unknown',
             schedule: c.schedule || '—',
-            // students: (Array.isArray(c.enrollments) ? c.enrollments.length : 0) || (c.studentCount || 0),
-            progress: 0, // TODO: Calculate from student submissions
+            students: Array.isArray(c.enrollments) ? c.enrollments.length : 0,
+            progress: 0, // Will be calculated after lessons load
             color: pickColor(c.subjectCode || c.id),
             lessons: [],
           }));
@@ -67,6 +68,46 @@ export default function CoursesPage() {
 
       if (mounted) setCourses(next);
       setLoadingLessons(false);
+    };
+
+    load();
+    return () => { mounted = false; };
+  }, [courses.length > 0]);
+
+  // Fetch lesson completions for all courses and calculate progress
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (courses.length === 0) return;
+      
+      const newCompletions = {};
+      const updatedCourses = await Promise.all(courses.map(async (c) => {
+        try {
+          const res = await lessonService.getCompletedLessonsForClass(c.id);
+          if (res && res.data) {
+            const completed = res.data.length;
+            const total = c.lessons.length || 0;
+            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            
+            newCompletions[c.id] = {
+              completed,
+              total,
+              progress,
+            };
+            
+            return { ...c, progress };
+          }
+          return c;
+        } catch (err) {
+          console.error(`Failed to load completions for class ${c.id}`, err);
+          return c;
+        }
+      }));
+
+      if (mounted) {
+        setCompletions(newCompletions);
+        setCourses(updatedCourses);
+      }
     };
 
     load();
@@ -219,7 +260,7 @@ export default function CoursesPage() {
                   <div style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>No lessons yet</div>
                 )}
 
-                {/* Progress Bar */}
+                {/* Progress Bar and Completion Status */}
                 <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e5e7eb" }}>
                   <div style={{
                     display: "flex",
@@ -246,6 +287,15 @@ export default function CoursesPage() {
                       backgroundColor: course.color
                     }} />
                   </div>
+                  {completions[course.id] && (
+                    <div style={{
+                      marginTop: "6px",
+                      fontSize: "11px",
+                      color: "#6b7280"
+                    }}>
+                      {completions[course.id].completed} of {completions[course.id].total} lessons completed
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
