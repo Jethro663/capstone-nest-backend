@@ -11,6 +11,8 @@ import { users, roles, userRoles, studentProfiles } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { OtpService } from '../otp/otp.service';
+import { MailService } from '../mail/mail.service';
+import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
 type ValidStatus = (typeof VALID_STATUSES)[number];
@@ -20,6 +22,7 @@ export class UsersService {
   constructor(
     private databaseService: DatabaseService,
     private otpService: OtpService,
+    private mailService: MailService,
   ) {}
 
   private get db() {
@@ -177,10 +180,16 @@ export class UsersService {
       throw new NotFoundException(`Role '${role}' not found`);
     }
 
-    // 4. Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // 4. Generate password if not provided (new students get auto-generated passwords)
+    let generatedPassword = password;
+    if (!generatedPassword) {
+      generatedPassword = PasswordGenerator.generate();
+    }
 
-    // 5. Create user in transaction
+    // 5. Hash the password
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
+    // 6. Create user in transaction
     const result = await this.db.transaction(async (tx) => {
       // Insert user
       const [newUser] = await tx
@@ -204,19 +213,28 @@ export class UsersService {
         assignedBy: 'ADMIN',
       });
 
-
-
       return newUser;
     });
 
-    // 6. Send OTP for email verification
-    await this.otpService.createAndSendOTP(
-      result.id,
-      result.email,
-      'email_verification',
-    );
+    // 7. Send emails asynchronously (don't await - fire and forget)
+    // This prevents blocking the API response for slow email services
+    Promise.all([
+      this.otpService.createAndSendOTP(
+        result.id,
+        result.email,
+        'email_verification',
+      ),
+      this.mailService.sendPasswordEmail(result.email, generatedPassword),
+    ]).catch((err) => {
+      // Log email errors but don't fail the request
+      console.error('[USERS] Failed to send emails for user:', result.email, err);
+    });
 
-    return result;
+    // 8. Return user with generated password (for admin to see in modal)
+    return {
+      ...result,
+      temporaryPassword: generatedPassword,
+    };
   }
 
   // !!Subject to change based on requirements

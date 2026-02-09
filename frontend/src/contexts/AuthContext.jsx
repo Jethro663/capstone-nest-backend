@@ -384,6 +384,95 @@ export function AuthProvider({ children }) {
         }
     };
 
+    /**
+     * CHANGE PASSWORD FOR AUTHENTICATED USER
+     *
+     * @param {string} oldPassword - Current password for verification
+     * @param {string} newPassword - New password
+     *
+     * @returns {Promise<Object>} Response
+     *
+     * FLOW:
+     * 1. User is already authenticated
+     * 2. Verify old password
+     * 3. Update to new password
+     * 4. Show success message
+     */
+    const changePassword = async (oldPassword, newPassword) => {
+        try {
+            const response = await authService.changePassword(oldPassword, newPassword);
+
+            toast.success('Password changed successfully!');
+
+            return response;
+
+        } catch (error) {
+            if (error.message?.includes('Old password')) {
+                toast.error('Current password is incorrect.');
+            } else if (error.errors) {
+                // Password validation errors
+                const firstError = Object.values(error.errors)[0];
+                const errorMessage = typeof firstError === 'object' ? (firstError.message || firstError.msg) : firstError;
+                toast.error(errorMessage || 'Password change failed');
+            } else {
+                toast.error(error.message || 'Failed to change password.');
+            }
+
+            throw error;
+        }
+    };
+
+    /**
+     * Set initial password with OTP verification
+     * 
+     * USED AFTER EMAIL VERIFICATION during account creation
+     * 
+     * USER FLOW:
+     * 1. Admin creates student account
+     * 2. Student receives email with temporary password and OTP
+     * 3. Student verifies email with OTP code
+     * 4. Student sets their preferred password
+     * 5. Password is saved, account is activated, student can login
+     * 
+     * DIFFERENCE FROM changePassword:
+     * - changePassword requires JWT authentication and current password
+     * - setInitialPassword requires email, OTP code, and new password (no authentication)
+     * 
+     * PARAMS:
+     * - email: Student's email address
+     * - code: 6-digit OTP code from email verification
+     * - newPassword: Password student wants to use
+     * 
+     * FLOW:
+     * 1. Verify OTP against email
+     * 2. Update user's password
+     * 3. Mark email as verified and activate account
+     * 4. Show success message
+     */
+    const setInitialPassword = async (email, code, newPassword) => {
+        try {
+            const response = await authService.setInitialPassword(email, code, newPassword);
+
+            toast.success('Password set successfully! You can now log in.');
+
+            return response;
+
+        } catch (error) {
+            if (error.message?.includes('Invalid or expired')) {
+                toast.error('Your verification code has expired. Please request a new one.');
+            } else if (error.errors) {
+                // Password validation errors
+                const firstError = Object.values(error.errors)[0];
+                const errorMessage = typeof firstError === 'object' ? (firstError.message || firstError.msg) : firstError;
+                toast.error(errorMessage || 'Failed to set password');
+            } else {
+                toast.error(error.message || 'Failed to set password.');
+            }
+
+            throw error;
+        }
+    };
+
     // ============================================================================
     // CONTEXT VALUE
     // ============================================================================
@@ -409,6 +498,8 @@ export function AuthProvider({ children }) {
         updateProfile,                  // Update user profile
         forgotPassword,                 // Request password reset
         resetPassword,                  // Reset password with code
+        changePassword,                 // Change password (authenticated user)
+        setInitialPassword,             // Set initial password after OTP verification
         updateUser,                     // Update user in context
         checkAuth,                      // Re-check authentication
     };

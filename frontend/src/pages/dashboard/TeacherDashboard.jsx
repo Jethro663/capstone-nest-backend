@@ -1,42 +1,86 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import teacherService from '@/services/teacherService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import CreateLessonModal from '@/components/modals/CreateLessonModal';
-import CreateAssessmentModal from '@/components/modals/CreateAssessmentModal';
 
 const TeacherDashboard = () => {
   const [lessons, setLessons] = useState([]);
   const [assessments, setAssessments] = useState([]);
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
+  const [error, setError] = useState(null);
+  const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [isAutoRefresh, setIsAutoRefresh] = useState(true);
+  const refreshIntervalRef = useRef(null);
   const { user } = useAuth();
 
-  useEffect(() => {
-    fetchTeacherData();
-  }, []);
+  // Handle navigation using window.location
 
+  // Fetch teacher data from backend
   const fetchTeacherData = async () => {
     try {
-      setLoading(true);
+      setError(null);
       const [lessonsRes, classesRes, assessmentsRes] = await Promise.all([
         teacherService.getLessons(),
         teacherService.getClasses(),
         teacherService.getAssessments()
       ]);
-      setLessons(lessonsRes.data || []);
-      setClasses(classesRes.data || []);
-      setAssessments(assessmentsRes.data || []);
+      setLessons(lessonsRes.data || lessonsRes || []);
+      console.log('Classes Response:', classesRes);
+      console.log('Assessments Response:', assessmentsRes);
+      console.log('Lessons Response:', lessonsRes);
+      setClasses(classesRes.data || classesRes || []);
+      setAssessments(assessmentsRes.data || assessmentsRes || []);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching teacher data:', error);
-      toast.error('Failed to load dashboard data');
+      const errorMessage = error?.message || 'Failed to load dashboard data';
+      setError(errorMessage);
+      if (!lessons.length) {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  // Setup auto-refresh effect
+  useEffect(() => {
+    // Fetch immediately on mount
+    fetchTeacherData();
+
+    // Setup interval for auto-refresh
+    if (isAutoRefresh) {
+      refreshIntervalRef.current = setInterval(() => {
+        fetchTeacherData();
+      }, refreshInterval);
+    }
+
+    // Cleanup interval on unmount or when settings change
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [isAutoRefresh, refreshInterval]);
+
+  // Manual refresh handler
+  const handleManualRefresh = () => {
+    setLoading(true);
+    fetchTeacherData();
+    toast.success('Dashboard updated');
+  };
+
+  // Format time since last update
+  const formatTimeSince = (date) => {
+    if (!date) return 'Never';
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    return `${Math.floor(seconds / 3600)}h ago`;
   };
 
   const handleDeleteLesson = async (id) => {
@@ -106,158 +150,186 @@ const TeacherDashboard = () => {
   };
   const tdStyle = { padding: '12px 16px', fontSize: '14px', color: '#111827' };
   const actionBtnStyle = { border: 'none', background: 'transparent', cursor: 'pointer' };
+  const controlsStyle = {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    fontSize: '14px'
+  };
 
   return (
     <div style={containerStyle}>
       <div style={cardStyle}>
-        {/* ------------------------- */}
-        {/* Modals */}
-        {/* ------------------------- */}
-        {isCreateModalOpen && (
-          <CreateLessonModal
-            isOpen={isCreateModalOpen}
-            onClose={() => setIsCreateModalOpen(false)}
-            classes={classes}
-            onLessonCreated={fetchTeacherData}
-          />
+        {/* Dashboard Header */}
+        <div style={headerStyle}>
+          <h1 style={titleStyle}>Teacher Dashboard</h1>
+          <div style={controlsStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 500 }}>Auto-refresh:</label>
+              <input
+                type="checkbox"
+                checked={isAutoRefresh}
+                onChange={(e) => setIsAutoRefresh(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+            </div>
+            <select
+              value={refreshInterval}
+              onChange={(e) => setRefreshInterval(Number(e.target.value))}
+              disabled={!isAutoRefresh}
+              style={{
+                padding: '6px 10px',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '13px',
+                cursor: isAutoRefresh ? 'pointer' : 'not-allowed',
+                opacity: isAutoRefresh ? 1 : 0.6
+              }}
+            >
+              <option value={15000}>15s</option>
+              <option value={30000}>30s</option>
+              <option value={60000}>1m</option>
+              <option value={300000}>5m</option>
+            </select>
+            <button
+              onClick={handleManualRefresh}
+              disabled={loading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.6 : 1,
+                fontSize: '13px',
+                fontWeight: 500,
+                transition: 'background-color 0.2s'
+              }}
+            >
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {/* Last Updated Status */}
+        <div style={{ fontSize: '13px', color: '#666' }}>
+          Last updated: {formatTimeSince(lastUpdated)}
+          {error && <span style={{ color: '#dc2626', marginLeft: '16px' }}>Error: {error}</span>}
+        </div>
+
+        {/* Summary Cards */}
+        <div style={summaryGridStyle}>
+          <Card 
+            style={{ cursor: 'pointer' }}
+            onClick={() => window.location.href = '/teacher/lessons'}
+            className="hover:shadow-lg transition-shadow"
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">My Lessons</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-blue-600">{lessons.length}</p>
+              <p className="text-xs text-gray-500 mt-1">Click to manage</p>
+            </CardContent>
+          </Card>
+
+          <Card style={{ cursor: 'pointer' }}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">My Classes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-green-600">{classes.length}</p>
+              <p className="text-xs text-gray-500 mt-1">Active classes</p>
+            </CardContent>
+          </Card>
+
+          <Card 
+            style={{ cursor: 'pointer' }}
+            onClick={() => window.location.href = '/teacher/assessments'}
+            className="hover:shadow-lg transition-shadow"
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Assessments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-purple-600">{assessments.length}</p>
+              <p className="text-xs text-gray-500 mt-1">Click to manage</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Lessons Table */}
+        <h2 className="text-xl font-semibold mt-4 mb-2">Recent Lessons (Last 5)</h2>
+        {loading && !lessons.length ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Loading lessons...</div>
+        ) : lessons.length > 0 ? (
+          <div style={tableContainerStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Title</th>
+                  <th style={thStyle}>Class</th>
+                  <th style={thStyle}>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lessons.slice(0, 5).map((lesson) => (
+                  <tr key={lesson.id} className="hover:bg-muted/50 transition-colors">
+                    <td style={tdStyle}>{lesson.title}</td>
+                    <td style={tdStyle}>{lesson.classId?.slice(0, 8) || 'N/A'}</td>
+                    <td style={{ ...tdStyle, fontSize: '12px' }}>
+                      {new Date(lesson.createdAt).toLocaleDateString()}
+                    </td>
+
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              You haven't created any lessons yet.
+            </CardContent>
+          </Card>
         )}
 
-        {isAssessmentModalOpen && (
-          <CreateAssessmentModal
-            isOpen={isAssessmentModalOpen}
-            onClose={() => setIsAssessmentModalOpen(false)}
-            classes={classes}
-            onAssessmentCreated={fetchTeacherData}
-          />
-        )}
+        {/* Assessments Table */}
+        <h2 className="text-xl font-semibold mt-8 mb-2">Recent Assessments (Last 5)</h2>
+        {loading && !assessments.length ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Loading assessments...</div>
+        ) : assessments.length > 0 ? (
+          <div style={tableContainerStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Title</th>
+                  <th style={thStyle}>Type</th>
+                  <th style={thStyle}>Due Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assessments.slice(0, 5).map((assessment) => (
+                  <tr key={assessment.id} className="hover:bg-muted/50 transition-colors">
+                    <td style={tdStyle}>{assessment.title}</td>
+                    <td style={{ ...tdStyle, textTransform: 'uppercase', fontSize: '12px' }}>{assessment.type}</td>
+                    <td style={{ ...tdStyle, fontSize: '12px' }}>
+                      {assessment.dueDate ? new Date(assessment.dueDate).toLocaleDateString() : 'N/A'}
+                    </td>
 
-        {/* ------------------------- */}
-        {/* Dashboard content (hidden when modal is open) */}
-        {/* ------------------------- */}
-        {!isCreateModalOpen && !isAssessmentModalOpen && (
-          <>
-            {/* Dashboard Header */}
-            <div style={headerStyle}>
-              <h1 style={titleStyle}>Teacher Dashboard</h1>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <Button onClick={() => setIsCreateModalOpen(true)}>Create New Lesson</Button>
-                <Button onClick={() => setIsAssessmentModalOpen(true)} variant="outline">
-                  Create New Assessment
-                </Button>
-              </div>
-            </div>
-
-            {/* Summary Cards */}
-            <div style={summaryGridStyle}>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">My Lessons</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{lessons.length}</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">My Classes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{classes.length}</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Assessments</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{assessments.length}</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Lessons Table */}
-            <h2 className="text-xl font-semibold mt-4 mb-2">Manage Your Lessons</h2>
-            {loading ? (
-              <p>Loading lessons...</p>
-            ) : lessons.length > 0 ? (
-              <div style={tableContainerStyle}>
-                <table style={tableStyle}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Title</th>
-                      <th style={thStyle}>Type</th>
-                      <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lessons.map((lesson) => (
-                      <tr key={lesson.id} className="hover:bg-muted/50 transition-colors">
-                        <td style={tdStyle}>{lesson.title}</td>
-                        <td style={{ ...tdStyle, textTransform: 'uppercase', fontSize: '12px' }}>{lesson.contentType}</td>
-                        <td style={{ ...tdStyle, textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                          <button
-                            style={actionBtnStyle}
-                            onClick={() => toast.info('Edit feature - Backend ready placeholder')}
-                          >
-                            Edit
-                          </button>
-                          <button style={actionBtnStyle} onClick={() => handleDeleteLesson(lesson.id)}>
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  You haven't created any lessons yet.
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Assessments Table */}
-            <h2 className="text-xl font-semibold mt-8 mb-2">Manage Your Assessments</h2>
-            {loading ? (
-              <p>Loading assessments...</p>
-            ) : assessments.length > 0 ? (
-              <div style={tableContainerStyle}>
-                <table style={tableStyle}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Title</th>
-                      <th style={thStyle}>Type</th>
-                      <th style={thStyle}>Due Date</th>
-                      <th style={{ ...thStyle, textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {assessments.map((assessment) => (
-                      <tr key={assessment.id} className="hover:bg-muted/50 transition-colors">
-                        <td style={tdStyle}>{assessment.title}</td>
-                        <td style={{ ...tdStyle, textTransform: 'uppercase', fontSize: '12px' }}>{assessment.type}</td>
-                        <td style={{ ...tdStyle, fontSize: '12px' }}>{new Date(assessment.dueDate).toLocaleDateString()}</td>
-                        <td style={{ ...tdStyle, textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                          <button style={actionBtnStyle}>Edit</button>
-                          <button style={actionBtnStyle}>Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  You haven't created any assessments yet.
-                </CardContent>
-              </Card>
-            )}
-          </>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              You haven't created any assessments yet.
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

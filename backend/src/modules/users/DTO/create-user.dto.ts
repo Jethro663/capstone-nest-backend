@@ -53,6 +53,7 @@ export class CreateUserDto {
   @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
   email: string;
 
+  @IsOptional()
   @IsString({ message: 'Password must be a string' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   @Matches(/[A-Z]/, {
@@ -65,7 +66,7 @@ export class CreateUserDto {
   @Matches(/[@$!%*?&#]/, {
     message: 'Password must contain at least one special character',
   })
-  password: string;
+  password?: string;
 
   @IsString()
   @Transform(({ value }: { value: string }) => value.trim())

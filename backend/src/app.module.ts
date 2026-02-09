@@ -13,6 +13,8 @@ import { OtpModule } from './modules/otp/otp.module';
 import { DatabaseModule } from './database/database.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { ProfilesModule } from './modules/profiles/profiles.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { TeacherModule } from './modules/teacher/teacher.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 
@@ -34,6 +36,10 @@ import jwtConfig from './config/jwt.config';
     AssessmentsModule,
     // Profiles module (user profile records)
     ProfilesModule,
+    // Admin module (dashboard stats and admin endpoints)
+    AdminModule,
+    // Teacher module (teacher-specific endpoints)
+    TeacherModule,
   ],
   providers: [
     {

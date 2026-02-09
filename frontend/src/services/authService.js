@@ -212,10 +212,11 @@ export const forgotPassword = async (email) => {
 
     } catch (error) {
         if (error.response) {
-            const { data } = error.response;
+            const { data, status } = error.response;
             throw {
                 message: data.message || 'Failed to send reset code',
-                code: data.code
+                code: status === 404 ? 'EMAIL_NOT_FOUND' : data.code,
+                status: status
             };
         }
 
@@ -242,6 +243,62 @@ export const resetPassword = async (email, code, newPassword) => {
             const { data } = error.response;
             throw {
                 message: data.message || 'Failed to reset password',
+                code: data.code,
+                errors: data.errors // Validation errors if password is weak
+            };
+        }
+
+        throw {
+            message: 'Network error. Please try again.',
+            code: 'NETWORK_ERROR'
+        };
+    }
+};
+
+// Change password for authenticated user (POST /auth/change-password)
+export const changePassword = async (oldPassword, newPassword) => {
+    try {
+        const response = await api.post('/auth/change-password', {
+            oldPassword,   // Current password for verification
+            newPassword    // New password (backend will hash it)
+        });
+
+        return response.data;
+
+    } catch (error) {
+        if (error.response) {
+            const { data } = error.response;
+            throw {
+                message: data.message || 'Failed to change password',
+                code: data.code,
+                errors: data.errors // Validation errors if password is weak
+            };
+        }
+
+        throw {
+            message: 'Network error. Please try again.',
+            code: 'NETWORK_ERROR'
+        };
+    }
+};
+
+// Set initial password with OTP verification (POST /auth/set-initial-password)
+// Used after email verification during account creation
+export const setInitialPassword = async (email, code, newPassword) => {
+    try {
+        const response = await api.post('/auth/set-initial-password', {
+            email,        // User's email address
+            code,         // OTP code from email verification
+            newPassword   // Initial password to set (backend will hash it)
+        });
+
+        return response.data;
+
+    } catch (error) {
+        if (error.response) {
+            const { data } = error.response;
+            throw {
+                message: data.message || 'Failed to set password',
                 code: data.code,
                 errors: data.errors // Validation errors if password is weak
             };
@@ -330,6 +387,8 @@ export default {
     // Password Management
     forgotPassword,
     resetPassword,
+    changePassword,
+    setInitialPassword,
 
     // Token Management
     refreshToken,

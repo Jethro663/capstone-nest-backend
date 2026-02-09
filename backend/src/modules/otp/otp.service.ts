@@ -85,8 +85,11 @@ export class OtpService {
     });
 
     if (!otp) {
+      console.error('[OTP] No pending OTP found for user:', email);
       throw new BadRequestException('No pending verification found');
     }
+
+    console.log('[OTP] Verifying OTP for:', email, 'provided:', code.substring(0, 2) + '****', 'stored:', otp.code.substring(0, 2) + '****');
 
     // 3. Check attempt limit
     // Use atomic increment with WHERE clause
@@ -106,6 +109,7 @@ export class OtpService {
     }
 
     if (otp.code !== code) {
+      console.warn('[OTP] Invalid code for user:', email, '- provided:', code, 'expected:', otp.code);
       throw new BadRequestException('Invalid verification code');
     }
 

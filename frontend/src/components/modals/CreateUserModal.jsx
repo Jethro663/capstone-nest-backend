@@ -11,6 +11,8 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState("");
   const [formData, setFormData] = useState({
     firstName: "",
     middleName: "",
@@ -66,7 +68,8 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
         if (formData.userRole === "student" && !value) return "Grade level is required";
         return "";
       case "password":
-        if ((!user && !value) || (user && formData.resetPassword && !value)) return "Password is required";
+        // Password only required for existing users when resetting password
+        if (user && formData.resetPassword && !value) return "Password is required";
         return "";
       default:
         return "";
@@ -110,12 +113,13 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
   const isFormValid = useMemo(() => {
     const requiredFields = ["firstName", "lastName", "email"];
-    if (!user || formData.resetPassword) requiredFields.push("password");
+    // Password only required for editing when resetting
+    if (user && formData.resetPassword) requiredFields.push("password");
     if (formData.userRole === "student") requiredFields.push("studentId", "gradeLevel");
 
     return requiredFields.every((f) => formData[f]?.trim()) &&
       !Object.values(errors).some((e) => e) &&
-      (!(!user || formData.resetPassword) || Object.values(passwordChecks).every(Boolean));
+      (!(user && formData.resetPassword) || Object.values(passwordChecks).every(Boolean));
   }, [formData, errors, user, passwordChecks]);
 
   const handleSubmit = async (e) => {
@@ -133,9 +137,17 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
         role: formData.userRole,
         studentId: formData.userRole === "student" ? formData.studentId : "",
       };
-      if (!user || formData.resetPassword) payload.password = formData.password;
+      // Only include password for existing users when resetting
+      if (user && formData.resetPassword) {
+        payload.password = formData.password;
+      }
 
       const savedUser = await onAddUser(payload);
+
+      // If new user, show the generated password and set it to state for display
+      if (!user && savedUser?.temporaryPassword) {
+        setGeneratedPassword(savedUser.temporaryPassword);
+      }
 
       if (formData.userRole === "student") {
         if (savedUser?.id) {
@@ -159,8 +171,14 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
       toast.success(user ? "User updated successfully" : "User registered successfully");
       setApiError(null);
-      onClose();
-      return savedUser;
+      // Don't close immediately if new user - let them see the password
+      if (!user) {
+        // Just reset errors, keep modal open to show password
+        return savedUser;
+      } else {
+        onClose();
+        return savedUser;
+      }
     } catch (error) {
       if (error?.fieldErrors) setErrors((prev) => ({ ...prev, ...error.fieldErrors }));
       else setApiError({ title: "Error", message: error.message || "Unexpected error", source: "client" });
@@ -235,34 +253,79 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
             )}
           </div>
 
-          {/* Password */}
-          {(!user || formData.resetPassword) && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase" }}>{user ? "New Password" : "Temporary Password"}</label>
-              <div style={{ position: "relative" }}>
-                <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange} disabled={loading} placeholder="Enter password" style={{ width: "100%", padding: "12px", fontSize: "14px", borderRadius: "12px", border: errors.password ? "1px solid #ef4444" : "1px solid #d1d5db", outline: "none" }} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: "16px", top: "50%", transform: "translateY(-50%)", color: "#6b7280" }}>
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
+          {/* Password - Different UI for new vs editing users */}
+          {!user ? (
+            // New user - auto-generated password
+            generatedPassword ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase" }}>Temporary Password</label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={generatedPassword}
+                    style={{ width: "100%", padding: "12px", fontSize: "14px", borderRadius: "12px", border: "1px solid #d1d5db", background: "#f9fafb", fontFamily: "monospace", fontWeight: "500" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedPassword);
+                      setPasswordCopied(true);
+                      setTimeout(() => setPasswordCopied(false), 2000);
+                      toast.success("Password copied to clipboard!");
+                    }}
+                    style={{ padding: "12px 20px", background: "#3b82f6", color: "white", borderRadius: "12px", border: "none", cursor: "pointer", fontWeight: "600" }}
+                  >
+                    {passwordCopied ? "✓ Copied" : "Copy"}
+                  </button>
+                </div>
+                <div style={{ padding: "12px", background: "#fef3c7", borderRadius: "8px", borderLeft: "4px solid #f59e0b" }}>
+                  <p style={{ margin: "0 0 4px 0", fontSize: "12px", fontWeight: "600", color: "#92400e" }}>Password sent to email</p>
+                  <p style={{ margin: "0", fontSize: "12px", color: "#b45309" }}>Student will receive temporary password via email and set a new password after OTP verification.</p>
+                </div>
               </div>
+            ) : null
+          ) : (
+            // Editing user - show reset password checkbox and input if selected
+            <>
+              {formData.resetPassword && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase" }}>New Password</label>
+                  <div style={{ position: "relative" }}>
+                    <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleChange} disabled={loading} placeholder="Enter new password" style={{ width: "100%", padding: "12px", fontSize: "14px", borderRadius: "12px", border: errors.password ? "1px solid #ef4444" : "1px solid #d1d5db", outline: "none" }} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: "16px", top: "50%", transform: "translateY(-50%)", color: "#6b7280" }}>
+                      {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
 
-              {/* Password rules */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-                <PasswordRule label="Contains at least 1 number" valid={passwordChecks.hasNumber} />
-                <PasswordRule label="Contains at least 1 lowercase letter" valid={passwordChecks.hasLower} />
-                <PasswordRule label="Contains at least 1 uppercase letter" valid={passwordChecks.hasUpper} />
-                <PasswordRule label="Contains a special character (e.g. @ !)" valid={passwordChecks.hasSpecial} />
-              </div>
-              {errors.password && <p style={{ color: "#ef4444", fontSize: "12px" }}>{errors.password}</p>}
-            </div>
+                  {/* Password rules */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
+                    <PasswordRule label="Contains at least 1 number" valid={passwordChecks.hasNumber} />
+                    <PasswordRule label="Contains at least 1 lowercase letter" valid={passwordChecks.hasLower} />
+                    <PasswordRule label="Contains at least 1 uppercase letter" valid={passwordChecks.hasUpper} />
+                    <PasswordRule label="Contains a special character (e.g. @ !)" valid={passwordChecks.hasSpecial} />
+                  </div>
+                  {errors.password && <p style={{ color: "#ef4444", fontSize: "12px" }}>{errors.password}</p>}
+                </div>
+              )}
+            </>
           )}
 
           {/* Buttons */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px", marginTop: "24px", flexWrap: "wrap" }}>
-            <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} disabled={loading}>Go Back</Button>
-            <Button type="submit" style={{ background: "#dc2626", color: "white", padding: "12px 24px" }} disabled={loading || !isFormValid}>
-              {loading ? "Saving..." : (user ? "Save Changes" : "Register User")}
-            </Button>
+            {!user && generatedPassword ? (
+              <>
+                <Button type="button" onClick={() => { setApiError(null); setGeneratedPassword(""); setFormData({ firstName: "", middleName: "", lastName: "", email: "", userRole: "student", studentId: "", gradeLevel: "", password: "", resetPassword: false }); setErrors({}); }} disabled={loading}>Create Another</Button>
+                <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} style={{ background: "#10b981", color: "white", padding: "12px 24px" }}>Done</Button>
+              </>
+            ) : (
+              <>
+                <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} disabled={loading}>Go Back</Button>
+                <Button type="submit" style={{ background: "#dc2626", color: "white", padding: "12px 24px" }} disabled={loading || !isFormValid}>
+                  {loading ? "Saving..." : (user ? "Save Changes" : "Register User")}
+                </Button>
+              </>
+            )}
           </div>
         </form>
       </motion.div>

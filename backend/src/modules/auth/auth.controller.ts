@@ -16,6 +16,7 @@ import express from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './DTO/login.dto';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
+import { ChangePasswordDto } from './DTO/change-password.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -119,6 +120,39 @@ export class AuthController {
     return {
       success: true,
       data: { user },
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    if (!user || !user.userId) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    await this.authService.changePassword(user.userId, dto);
+
+    return {
+      success: true,
+      message: 'Password changed successfully',
+    };
+  }
+
+  @Public()
+  @Post('set-initial-password')
+  @HttpCode(HttpStatus.OK)
+  async setInitialPassword(
+    @Body() dto: { email: string; code: string; newPassword: string },
+  ) {
+    await this.authService.setInitialPassword(dto.email, dto.code, dto.newPassword);
+
+    return {
+      success: true,
+      message: 'Password set successfully. You can now log in.',
     };
   }
 

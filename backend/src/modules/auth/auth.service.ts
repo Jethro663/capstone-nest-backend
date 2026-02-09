@@ -81,7 +81,9 @@ export class AuthService {
 
   async requestPasswordReset(email: string): Promise<void> {
     const user = await this.usersService.findByEmail(email);
-    if (!user) return; // Silent fail to prevent email enumeration
+    if (!user) {
+      throw new NotFoundException('Email/Account not found');
+    }
     await this.otpService.createAndSendOTP(
       user.id,
       user.email,
@@ -100,6 +102,39 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
     await this.usersService.updatePassword(user.id, dto.newPassword);
+  }
+
+  async changePassword(userId: string, dto: any): Promise<void> {
+    const { oldPassword, newPassword } = dto;
+
+    // 1. Get user by ID
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // 2. Verify old password
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Old password is incorrect');
+    }
+
+    // 3. Update to new password
+    await this.usersService.updatePassword(userId, newPassword);
+  }
+
+  async setInitialPassword(email: string, otpCode: string, newPassword: string): Promise<void> {
+    // 1. Verify the OTP (this also marks email as verified and activates account)
+    await this.otpService.verifyOTP(email, otpCode);
+
+    // 2. Find user by email
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // 3. Update password
+    await this.usersService.updatePassword(user.id, newPassword);
   }
 
   async refreshToken(refreshToken: string) {

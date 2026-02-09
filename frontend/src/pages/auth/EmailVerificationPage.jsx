@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft } from "lucide-react";
+import ChangePasswordModal from "@/components/modals/ChangePasswordModal";
 
 
 export function EmailVerificationPage({ email, onBack, onVerify }) {
@@ -46,6 +47,11 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
    * Shows success message after verification
    */
   const [isVerified, setIsVerified] = useState(false);
+
+  /**
+   * Show change password modal after OTP verification
+   */
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   /**
    * Resend cooldown timer
@@ -133,72 +139,29 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
    * Handle verification submission
    *
    * FLOW:
-   * 1. Validate code format
-   * 2. Call POST /otp/verify
-   * 3. Backend checks code matches
-   * 4. Backend checks not expired
-   * 5. Backend marks user as verified
-   * 6. Backend activates account
-   * 7. Show success message
-   * 8. Redirect to login
+   * 1. Validate code format locally (no backend call)
+   * 2. Show password setting modal with the code
+   * 3. When user submits password, setInitialPassword() verifies the OTP on backend
+   * 4. Backend verifies code, deletes OTP, and updates password
+   * 5. Backend marks user as verified and activates account
+   * 
+   * NOTE: We validate locally only to avoid consuming the OTP.
+   * The actual OTP verification happens when password is set.
    */
-  const handleVerify = async (e) => {
+  const handleVerify = (e) => {
     e.preventDefault();
 
-    // Validate
+    // Validate code format locally
     const validationError = validateCode(code);
     if (validationError) {
       setError(validationError);
       return;
     }
 
-    setIsVerifying(true);
-    setError("");
-
-    try {
-      /**
-       * CALL BACKEND VERIFICATION API
-       *
-       * POST /otp/verify
-       * Body: { email, code }
-       */
-      await verifyEmail(email, code);
-
-      // Success!
-      setIsVerified(true);
-      
-      // Call parent handler to navigate back to login
-      if (onVerify) {
-        // Wait a bit to show success message
-        setTimeout(() => {
-            onVerify();
-        }, 2000);
-      }
-
-    } catch (error) {
-      /**
-       * HANDLE ERRORS
-       *
-       * POSSIBLE ERRORS:
-       * 1. Invalid code
-       * 2. Expired code
-       * 3. Too many attempts
-       * 4. User not found
-       */
-
-      if (error.message?.includes('Invalid')) {
-        setError('Invalid verification code. Please try again.');
-      } else if (error.message?.includes('expired')) {
-        setError('Code has expired. Please request a new one.');
-      } else if (error.message?.includes('attempts')) {
-        setError('Too many failed attempts. Please request a new code.');
-      } else {
-        setError(error.message || 'Verification failed. Please try again.');
-      }
-
-    } finally {
-      setIsVerifying(false);
-    }
+    // Code is valid format, show password modal
+    // The actual OTP verification happens when user sets their password
+    setIsVerified(true);
+    setShowChangePasswordModal(true);
   };
 
   // ================================================================================
@@ -245,10 +208,25 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
   // ================================================================================
 
   /**
-   * If verified, show success message
+   * If verified, show success message or change password modal
    */
   if (isVerified) {
     return (
+      <>
+        <ChangePasswordModal
+          isOpen={showChangePasswordModal}
+          isInitialPassword={true}
+          email={email}
+          otpCode={code}
+          onClose={() => {
+            // User skipped password change, redirect to login
+            window.location.href = '/login';
+          }}
+          onSuccess={() => {
+            // Password set successfully, redirect to login
+            window.location.href = '/login';
+          }}
+        />
         <div className="min-h-screen bg-gradient-to-br from-[#374151] to-[#dc2626] flex flex-col items-center justify-center p-4">
           <Card className="w-full max-w-md shadow-lg">
             <CardHeader className="space-y-1">
@@ -266,7 +244,7 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
                   Your email has been successfully verified.
                 </p>
                 <p className="text-sm text-gray-600">
-                  Redirecting to login page...
+                  Complete your account setup by changing your password.
                 </p>
               </div>
 
@@ -280,6 +258,7 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
             </CardContent>
           </Card>
         </div>
+      </>
     );
   }
 
@@ -310,6 +289,9 @@ export function EmailVerificationPage({ email, onBack, onVerify }) {
             <CardDescription className="text-center">
               Enter the 6-digit code sent to your email
             </CardDescription>
+            <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+              <strong>Development Mode:</strong> Check the backend console for the OTP code (look for "[DEV MODE] OTP for...")
+            </div>
           </CardHeader>
 
           <CardContent>

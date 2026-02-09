@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   assessments,
@@ -50,6 +50,32 @@ export class AssessmentsService {
       },
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
+
+    return assessmentList;
+  }
+
+  /**
+   * Get all assessments for a teacher (across all their classes)
+   */
+  async getAssessmentsByTeacher(teacherId: string) {
+    // Get all classes for this teacher
+    const teacherClasses = await this.db.query.classes.findMany({
+      where: eq(classes.teacherId, teacherId),
+      columns: { id: true },
+    });
+
+    const classIds = teacherClasses.map((c) => c.id);
+
+    // If teacher has no classes, return empty array
+    if (classIds.length === 0) {
+      return [];
+    }
+
+    // Get all assessments for those classes
+    const assessmentList = await this.db
+      .select()
+      .from(assessments)
+      .where(inArray(assessments.classId, classIds));
 
     return assessmentList;
   }
