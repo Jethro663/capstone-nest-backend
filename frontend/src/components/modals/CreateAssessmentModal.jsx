@@ -1,180 +1,220 @@
-import React, { useState } from 'react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
-import teacherService from '@/services/teacherService';
-import { toast } from 'sonner';
+import React, { useState, useMemo } from "react";
+import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const CreateAssessmentModal = ({ isOpen, onClose, classes, onAssessmentCreated }) => {
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    classId: '',
-    type: 'quiz',
+    title: "",
+    description: "",
+    classId: "",
+    type: "quiz",
     totalPoints: 100,
-    dueDate: ''
+    dueDate: ""
   });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (!value.trim()) setErrors((prev) => ({ ...prev, [name]: "This field is required" }));
+    else setErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleSelectChange = (name, value) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (!value) setErrors((prev) => ({ ...prev, [name]: "This field is required" }));
+    else setErrors((prev) => ({ ...prev, [name]: "" }));
   };
+
+  const isFormValid = useMemo(() => {
+    return (
+      formData.title.trim() &&
+      formData.classId &&
+      formData.type &&
+      formData.totalPoints &&
+      formData.dueDate
+    );
+  }, [formData]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.classId) {
-      toast.error('Please select a class');
-      return;
-    }
+    if (!isFormValid) return;
 
     try {
       setLoading(true);
       await teacherService.createAssessment(formData);
-      toast.success('Assessment created successfully');
+      toast.success("Assessment created successfully");
       onAssessmentCreated();
       onClose();
       setFormData({
-        title: '',
-        description: '',
-        classId: '',
-        type: 'quiz',
+        title: "",
+        description: "",
+        classId: "",
+        type: "quiz",
         totalPoints: 100,
-        dueDate: ''
+        dueDate: ""
       });
+      setErrors({});
     } catch (error) {
-      console.error('Error creating assessment:', error);
-      toast.error(error.message || 'Failed to create assessment');
+      console.error("Error creating assessment:", error);
+      toast.error(error.message || "Failed to create assessment");
     } finally {
       setLoading(false);
     }
   };
 
+  if (!isOpen) return null; // don’t render if not open
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Create New Assessment</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Assessment Title</Label>
-            <Input 
-              id="title" 
-              name="title" 
-              value={formData.title} 
-              onChange={handleChange} 
-              placeholder="Enter assessment title" 
-              required 
-            />
-          </div>
+    <div style={{ width: "100%", height: "100%", padding: 32, overflowY: "auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 40 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Create New Assessment</h2>
+          <p style={{ fontSize: 14, color: "#6b7280" }}>
+            Fill out the form below to add a new assessment
+          </p>
+        </div>
+        <Button onClick={onClose} disabled={loading} style={{ padding: 8, borderRadius: "50%" }}>
+          <X size={28} />
+        </Button>
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Description / Instructions</Label>
-            <Textarea 
-              id="description" 
-              name="description" 
-              value={formData.description} 
-              onChange={handleChange} 
-              placeholder="Enter instructions" 
-            />
-          </div>
+      {/* Form */}
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <InputField
+          label="Assessment Title"
+          name="title"
+          value={formData.title}
+          onChange={handleChange}
+          error={errors.title}
+          placeholder="Enter assessment title"
+          disabled={loading}
+        />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Class</Label>
-              <Select 
-                value={formData.classId} 
-                onValueChange={(value) => handleSelectChange('classId', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((cls) => (
-                    <SelectItem key={cls.id} value={cls.id}>
-                      {cls.subjectCode} - {cls.sectionName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <InputField
+          label="Description / Instructions"
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          as="textarea"
+          error={errors.description}
+          placeholder="Enter instructions"
+          disabled={loading}
+        />
 
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select 
-                value={formData.type} 
-                onValueChange={(value) => handleSelectChange('type', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="quiz">Quiz</SelectItem>
-                  <SelectItem value="exam">Exam</SelectItem>
-                  <SelectItem value="assignment">Assignment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <SelectField
+            label="Class"
+            value={formData.classId}
+            onChange={(v) => handleSelectChange("classId", v)}
+            options={classes.map((c) => ({ value: c.id, label: `${c.subjectCode} - ${c.sectionName}` }))}
+            error={errors.classId}
+            disabled={loading}
+          />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="totalPoints">Total Points</Label>
-              <Input 
-                id="totalPoints" 
-                name="totalPoints" 
-                type="number" 
-                value={formData.totalPoints} 
-                onChange={handleChange} 
-                required 
-              />
-            </div>
+          <SelectField
+            label="Type"
+            value={formData.type}
+            onChange={(v) => handleSelectChange("type", v)}
+            options={[
+              { value: "quiz", label: "Quiz" },
+              { value: "exam", label: "Exam" },
+              { value: "assignment", label: "Assignment" }
+            ]}
+            error={errors.type}
+            disabled={loading}
+          />
+        </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="dueDate">Due Date</Label>
-              <Input 
-                id="dueDate" 
-                name="dueDate" 
-                type="datetime-local" 
-                value={formData.dueDate} 
-                onChange={handleChange} 
-                required 
-              />
-            </div>
-          </div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          <InputField
+            label="Total Points"
+            name="totalPoints"
+            type="number"
+            value={formData.totalPoints}
+            onChange={handleChange}
+            error={errors.totalPoints}
+            disabled={loading}
+          />
 
-          <DialogFooter className="pt-4">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Assessment'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          <InputField
+            label="Due Date"
+            name="dueDate"
+            type="datetime-local"
+            value={formData.dueDate}
+            onChange={handleChange}
+            error={errors.dueDate}
+            disabled={loading}
+          />
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, flexWrap: "wrap", marginTop: 16 }}>
+          <Button type="button" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button type="submit" style={{ background: "#dc2626", color: "white", padding: "12px 24px" }} disabled={loading || !isFormValid}>
+            {loading ? "Creating..." : "Create Assessment"}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 };
+
+// InputField Component
+const InputField = ({ label, error, as = "input", style = {}, ...props }) => {
+  const Tag = as;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase" }}>{label}</label>
+      <Tag
+        {...props}
+        style={{
+          width: "100%",
+          padding: 12,
+          fontSize: 14,
+          borderRadius: 12,
+          border: error ? "1px solid #ef4444" : "1px solid #d1d5db",
+          outline: "none",
+          resize: as === "textarea" ? "vertical" : "none",
+          minHeight: as === "textarea" ? 80 : "auto",
+          ...style
+        }}
+      />
+      {error && <p style={{ color: "#ef4444", fontSize: 12 }}>{error}</p>}
+    </div>
+  );
+};
+
+// SelectField Component
+const SelectField = ({ label, value, onChange, options = [], error, disabled }) => (
+  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+    <label style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase" }}>{label}</label>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      style={{
+        width: "100%",
+        padding: 12,
+        fontSize: 14,
+        borderRadius: 12,
+        border: error ? "1px solid #ef4444" : "1px solid #d1d5db",
+        appearance: "none",
+        background: "white"
+      }}
+    >
+      <option value="">Select {label}</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
+    {error && <p style={{ color: "#ef4444", fontSize: 12 }}>{error}</p>}
+  </div>
+);
 
 export default CreateAssessmentModal;

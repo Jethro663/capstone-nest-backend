@@ -64,102 +64,128 @@ export const ForgotPasswordPage = ({ onBack, onReset }) => {
   }
 
   return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader className="space-y-1">
-            <div className="flex items-center gap-2 mb-2">
-              <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={step === 'otp' ? () => setStep('email') : onBack}
-                  className="h-8 w-8"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-medium">
-              {step === 'otp' ? 'Back' : 'Back to Login'}
-            </span>
-            </div>
-            <CardTitle className="text-2xl font-bold">
-              {step === 'email' ? 'Forgot Password' : 'Reset Password'}
-            </CardTitle>
-            <CardDescription>
-              {step === 'email'
-                  ? "Enter your email address and we'll send you a verification code."
-                  : 'Enter the code sent to your email and your new password.'
-              }
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {step === 'email' ? (
-                <form onSubmit={handleSendOtp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                        id="email"
-                        type="email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Sending...' : 'Send Code'}
-                  </Button>
-                </form>
-            ) : (
-                <form onSubmit={handleResetPassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="otp">Verification Code</Label>
-                    <Input
-                        id="otp"
-                        type="text"
-                        placeholder="Enter 6-digit code"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        maxLength={6}
-                        required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input
-                        id="newPassword"
-                        type="password"
-                        placeholder="Enter new password"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
-                    <Input
-                        id="confirmPassword"
-                        type="password"
-                        placeholder="Confirm new password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Resetting...' : 'Reset Password'}
-                  </Button>
-                  <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full"
-                      onClick={handleResendOtp}
-                      disabled={isLoading}
-                  >Resend Code
-                  </Button>
-                </form>
-            )}
-          </CardContent>
-        </Card>
+    <div className="min-h-screen bg-gradient-to-br from-[#374151] to-[#dc2626] flex flex-col items-center justify-center p-4">
+      
+      {/* Back Button */}
+      <div className="absolute top-8 left-8">
+        <Button
+          variant="ghost"
+          className="text-white hover:bg-white/10"
+          onClick={step === 'otp' ? () => setStep('email') : onBack}
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          {step === 'otp' ? 'Back' : 'Home'}
+        </Button>
       </div>
+
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl text-center">
+            {step === 'email' ? 'Forgot Password' : 'Reset Password'}
+          </CardTitle>
+          <CardDescription className="text-center">
+            {step === 'email'
+              ? "Enter your email address and we'll send you a verification code."
+              : 'Enter the code sent to your email and your new password.'
+            }
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          {step === 'email' ? (
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <Button 
+                type="submit" 
+                className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white flex justify-center items-center" 
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Sending...
+                  </>
+                ) : 'Send Code'}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="otp">Verification Code</Label>
+                <Input
+                  id="otp"
+                  type="text"
+                  placeholder="Enter 6-digit code"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  maxLength={6}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  placeholder="Enter new password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+              
+              <Button 
+                type="submit" 
+                className="w-full bg-[#dc2626] hover:bg-[#b91c1c] text-white flex justify-center items-center" 
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Resetting...
+                  </>
+                ) : 'Reset Password'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="link"
+                className="w-full text-[#dc2626]"
+                onClick={handleResendOtp}
+                disabled={isLoading}
+              >
+                Resend Code
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

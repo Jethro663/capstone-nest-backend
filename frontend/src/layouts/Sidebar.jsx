@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { cn } from '@/components/ui/utils';
 import {
@@ -15,9 +14,12 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
   const { logout } = useAuth();
 
   const getNavItems = () => {
-    // Only include Profile in common items
-    const commonItems = [
-      
+    const dashboardItem = [
+      {
+        id: 'dashboard',
+        label: 'Dashboard',
+        icon: <LayoutDashboard className="h-5 w-5" />
+      }
     ];
 
     const roleSpecificItems = {
@@ -26,19 +28,19 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
         { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> }
       ],
       teacher: [
-         { id: 'sections', label: 'My Sections', icon: <Users className="h-5 w-5" /> },
-        { id: 'classes', label: 'My Classes', icon: <Users className="h-5 w-5" /> },
-       
+        { id: 'sections', label: 'My Sections', icon: <Users className="h-5 w-5" /> },
+        { id: 'classes', label: 'My Classes', icon: <Users className="h-5 w-5" /> }
       ],
       admin: [
         { id: 'users', label: 'Manage Users', icon: <Users className="h-5 w-5" /> },
         { id: 'sections', label: 'Manage Sections', icon: <Users className="h-5 w-5" /> },
         { id: 'classes', label: 'Manage Classes', icon: <BookOpen className="h-5 w-5" /> },
-        { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
+        { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> }
       ]
     };
 
-    return [...(roleSpecificItems[role] || roleSpecificItems.student), ...commonItems];
+    // Combine dashboard + role-specific items
+    return [...dashboardItem, ...(roleSpecificItems[role] || [])];
   };
 
   const navItems = getNavItems();
