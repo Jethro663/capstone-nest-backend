@@ -1,9 +1,10 @@
 const { getDefaultConfig } = require('expo/metro-config');
-const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// Add web support and fix vector icons
-config.resolver.sourceExts = ['web.js', 'web.jsx', 'web.ts', 'web.tsx', ...config.resolver.sourceExts];
+// Expo's default config already handles platform-specific file resolution
+// correctly (e.g., .android.js, .ios.js, .web.js based on the target platform).
+// Do NOT prepend web.* extensions here — it forces web code to load on native,
+// causing crashes like "View config getter callback for component `style`".
 
 module.exports = config;

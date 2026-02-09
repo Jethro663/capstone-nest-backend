@@ -22,18 +22,27 @@ const StudentCoursesScreen = ({ navigation }) => {
   const [lessonErrors, setLessonErrors] = useState({});
 
   useEffect(() => {
-    if (user?.userId) {
+    console.log('[StudentCoursesScreen] useEffect triggered, user:', user);
+    if (user?.id) {
+      console.log('[StudentCoursesScreen] Loading courses for userId:', user.id);
       loadCourses();
+    } else {
+      console.log('[StudentCoursesScreen] User or userId not available:', { user, userId: user?.id });
+      setLoading(false);
     }
   }, [user]);
 
   const loadCourses = async () => {
-    console.log('Loading courses for user:', user);
+    console.log('[StudentCoursesScreen] loadCourses called for user:', user);
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get(`/classes/student/${user.userId}`);
+      console.log('[StudentCoursesScreen] Making API request to /classes/student/' + user.id);
+      const response = await api.get(`/classes/student/${user.id}`);
+      console.log('[StudentCoursesScreen] API response received:', response);
+      
       if (response?.data?.data && Array.isArray(response.data.data)) {
+        console.log('[StudentCoursesScreen] Processing ' + response.data.data.length + ' courses');
         const courseList = response.data.data.map(c => ({
           id: c.id,
           name: c.subjectName ? `${c.subjectName} (${(c.subjectCode || '').toUpperCase()})` : (c.name || 'Unknown'),
@@ -47,14 +56,19 @@ const StudentCoursesScreen = ({ navigation }) => {
         }));
         setCourses(courseList);
         setLoading(false); // Show UI immediately
+        console.log('[StudentCoursesScreen] Courses set, showing UI. Loading lessons in background...');
 
         // Load lesson details in background (don't block)
         loadLessonsInBackground(courseList);
       } else {
+        console.log('[StudentCoursesScreen] Invalid response structure:', response?.data);
         setLoading(false);
+        setError('Invalid response from server');
       }
     } catch (error) {
-      console.error('Failed to load courses:', error);
+      console.error('[StudentCoursesScreen] Error loading courses:', error);
+      console.error('[StudentCoursesScreen] Error message:', error.message);
+      console.error('[StudentCoursesScreen] Error response:', error.response?.data);
       setError('Could not load courses. Check your connection and try again.');
       setLoading(false);
     }
@@ -71,18 +85,27 @@ const StudentCoursesScreen = ({ navigation }) => {
 
   const loadLessonsForCourse = async (course) => {
     try {
+      console.log('[StudentCoursesScreen] Loading lessons for course:', course.id);
       const res = await lessonService.getLessonsByClass(course.id);
+      console.log('[StudentCoursesScreen] Lessons response for course ' + course.id + ':', res);
+      
       if (res?.data && Array.isArray(res.data)) {
+        console.log('[StudentCoursesScreen] Got ' + res.data.length + ' lessons for course ' + course.id);
         setCourses(prev => 
           prev.map(c => c.id === course.id ? { ...c, lessons: res.data } : c)
         );
 
         // Fetch completion status
+        console.log('[StudentCoursesScreen] Loading completion status for course:', course.id);
         const completionRes = await lessonService.getCompletedLessonsForClass(course.id);
+        console.log('[StudentCoursesScreen] Completion response for course ' + course.id + ':', completionRes);
+        
         if (completionRes?.data && Array.isArray(completionRes.data)) {
           const completed = completionRes.data.length;
           const total = res.data.length || 0;
           const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+          console.log('[StudentCoursesScreen] Course ' + course.id + ' progress: ' + completed + '/' + total + ' = ' + progress + '%');
 
           setCompletions(prev => ({
             ...prev,
@@ -93,9 +116,11 @@ const StudentCoursesScreen = ({ navigation }) => {
             prev.map(c => c.id === course.id ? { ...c, progress } : c)
           );
         }
+      } else {
+        console.log('[StudentCoursesScreen] Invalid lesson response structure for course ' + course.id + ':', res);
       }
     } catch (err) {
-      console.error(`Failed to load lessons for class ${course.id}`, err);
+      console.error('[StudentCoursesScreen] Failed to load lessons for class ' + course.id + ':', err);
       setLessonErrors(prev => ({ ...prev, [course.id]: true }));
     }
   };

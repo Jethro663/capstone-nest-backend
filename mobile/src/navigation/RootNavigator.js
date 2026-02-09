@@ -64,7 +64,7 @@ const StudentTabs = () => (
     screenOptions={({ route }) => ({
       headerShown: true,
       tabBarIcon: ({ focused, color, size }) => {
-        let iconName;
+        let iconName = 'circle';
         if (route.name === 'StudentHome') {
           iconName = focused ? 'home' : 'home-outline';
         } else if (route.name === 'Courses') {
@@ -155,7 +155,7 @@ const TeacherTabs = () => (
     screenOptions={({ route }) => ({
       headerShown: true,
       tabBarIcon: ({ focused, color, size }) => {
-        let iconName;
+        let iconName = 'circle';
         if (route.name === 'TeacherHome') {
           iconName = focused ? 'home' : 'home-outline';
         } else if (route.name === 'Classes') {
@@ -221,7 +221,7 @@ const AdminTabs = () => (
     screenOptions={({ route }) => ({
       headerShown: true,
       tabBarIcon: ({ focused, color, size }) => {
-        let iconName;
+        let iconName = 'circle';
         if (route.name === 'AdminHome') {
           iconName = focused ? 'home' : 'home-outline';
         } else if (route.name === 'Users') {
@@ -291,11 +291,13 @@ export const RootNavigator = () => {
   return (
     <NavigationContainer>
       {isSignedIn ? (
-        <>
-          {user?.role === 'student' && <StudentStack />}
-          {user?.role === 'teacher' && <TeacherStack />}
-          {user?.role === 'admin' && <AdminStack />}
-        </>
+        user?.role === 'student' ? (
+          <StudentStack />
+        ) : user?.role === 'teacher' ? (
+          <TeacherStack />
+        ) : user?.role === 'admin' ? (
+          <AdminStack />
+        ) : null
       ) : (
         <AuthStack />
       )}

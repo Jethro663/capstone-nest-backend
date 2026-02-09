@@ -3,30 +3,36 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Detect the right API host based on platform
+// ============================================================
+// IMPORTANT: Configure your PC's IP address here
+// ============================================================
+// Get your IPv4 address by running: ipconfig (in PowerShell)
+// Then replace '192.168.1.100' with your actual IP address
+// For example: '192.168.0.50' or '10.0.0.5'
+const PC_IP_ADDRESS = '10.206.183.114'; // <-- Your WiFi hotspot IP
+const API_PORT = 3000;
+
 const getApiBaseUrl = () => {
   // Allow override from env
   if (process.env.REACT_APP_API_URL) {
     return process.env.REACT_APP_API_URL;
   }
 
-  // Try to get the dev server host from Expo (works on physical devices)
-  const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest?.debuggerHost;
-  if (debuggerHost) {
-    const host = debuggerHost.split(':')[0];
-    return `http://${host}:3000/api`;
-  }
-
-  // Platform-specific fallbacks
+  // For physical devices, always use the PC's IP address
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000/api'; // Android emulator
+    return `http://${PC_IP_ADDRESS}:${API_PORT}/api`;
   }
 
-  return 'http://localhost:3000/api'; // iOS simulator / web
+  if (Platform.OS === 'ios') {
+    return `http://${PC_IP_ADDRESS}:${API_PORT}/api`;
+  }
+
+  // Web fallback
+  return 'http://localhost:3000/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
-console.log('API Base URL:', API_BASE_URL);
+console.log('🌐 API Base URL:', API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
