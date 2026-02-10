@@ -27,8 +27,7 @@ export class ProfilesController {
   @Get('me')
   @Roles('student', 'teacher', 'admin')
   async getMyProfile(@CurrentUser() user: any) {
-    const profile = await this.profilesService.findByUserId(user.id);
-    console.log(user.id);
+    const profile = await this.profilesService.findByUserId(user.userId);
     console.log(profile);
     return {
       success: true,

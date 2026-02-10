@@ -446,7 +446,31 @@ export const assessmentResponses = pgTable(
 );
 
 // ==========================================
-// 5. RELATIONS
+// 5. ARCHIVED USERS (for safe permanent deletion)
+// ==========================================
+
+export const archivedUsers = pgTable(
+  'archived_users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    originalUserId: uuid('original_user_id').notNull(),
+    email: text('email').notNull(),
+    fullName: text('full_name').notNull(),
+    role: text('role').notNull(),
+    archivedData: json('archived_data').notNull(), // Full JSONB snapshot of user + related data
+    archivedBy: uuid('archived_by').notNull(), // Admin who performed the archive
+    archivedAt: timestamp('archived_at').notNull().defaultNow(),
+    purgedAt: timestamp('purged_at'), // Set when permanently purged
+  },
+  (table) => ({
+    originalUserIdIdx: index('archived_users_original_user_id_idx').on(table.originalUserId),
+    emailIdx: index('archived_users_email_idx').on(table.email),
+    archivedAtIdx: index('archived_users_archived_at_idx').on(table.archivedAt),
+  }),
+);
+
+// ==========================================
+// 6. RELATIONS
 // ==========================================
 
 export const usersRelations = relations(users, ({ many, one }) => ({
@@ -454,6 +478,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   classesTaught: many(classes, { relationName: 'teacherClasses' }),
   advisedSections: many(sections),
   enrollments: many(enrollments),
+  lessonCompletions: many(lessonCompletions),
+  assessmentAttempts: many(assessmentAttempts),
   // Keep the property name `profile` for compatibility but point to student_profiles
   profile: one(studentProfiles, {
     fields: [users.id],

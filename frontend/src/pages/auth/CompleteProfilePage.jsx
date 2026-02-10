@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-export function CompleteProfilePage({ onComplete }) {
+export function CompleteProfilePage({ onComplete, onBack }) {
   const { user, updateProfile } = useAuth();
 
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -167,8 +167,34 @@ export function CompleteProfilePage({ onComplete }) {
           boxShadow: '0 10px 20px rgba(0,0,0,0.1)'
         }}
       >
-        <h2 style={{ textAlign: 'center', fontSize: '28px', marginBottom: '5px' }}>Complete Your Profile</h2>
-        <p style={{ textAlign: 'center', marginBottom: '30px', color: '#555' }}>All fields are required.</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div></div>
+          <div style={{ textAlign: 'center', flex: 1 }}>
+            <h2 style={{ fontSize: '28px', marginBottom: '5px', margin: 0 }}>Complete Your Profile</h2>
+            <p style={{ marginTop: '5px', marginBottom: 0, color: '#555' }}>All fields are required.</p>
+          </div>
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#f3f4f6',
+                color: '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease',
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#e5e7eb'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+            >
+              Back
+            </button>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px' }}>
 

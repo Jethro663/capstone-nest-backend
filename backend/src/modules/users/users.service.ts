@@ -3,11 +3,23 @@ import {
   ConflictException,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { and, eq, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
-import { users, roles, userRoles, studentProfiles } from '../../drizzle/schema';
+import {
+  users,
+  roles,
+  userRoles,
+  studentProfiles,
+  enrollments,
+  lessonCompletions,
+  assessmentAttempts,
+  assessmentResponses,
+  classes,
+  archivedUsers,
+} from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { OtpService } from '../otp/otp.service';
@@ -90,6 +102,7 @@ export class UsersService {
             role: true,
           },
         },
+        profile: true,
       },
     });
 
@@ -399,6 +412,238 @@ export class UsersService {
     return {
       message: 'User successfully deleted',
       userId: id,
+    };
+  }
+
+  // ==========================================
+  // USER LIFECYCLE MANAGEMENT
+  // ==========================================
+
+  /**
+   * Suspend a user — first step of the deletion flow.
+   * User loses access but ALL data is preserved intact.
+   */
+  async suspendUser(id: string, adminId: string) {
+    if (id === adminId) {
+      throw new ForbiddenException('You cannot suspend your own account');
+    }
+
+    const existingUser = await this.findById(id);
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (existingUser.status === 'SUSPENDED') {
+      throw new BadRequestException('User is already suspended');
+    }
+    if (existingUser.status === 'DELETED') {
+      throw new BadRequestException('Cannot suspend a deleted user');
+    }
+
+    // Check if this is a teacher with active classes
+    const userRoleNames = existingUser.roles?.map((r: any) => r.name) || [];
+    let warnings: { activeClasses: number; enrolledStudents: number; message: string } | null = null;
+    if (userRoleNames.includes('teacher')) {
+      const activeClasses = await this.db.query.classes.findMany({
+        where: and(eq(classes.teacherId, id), eq(classes.isActive, true)),
+        with: { enrollments: true },
+      });
+
+      if (activeClasses.length > 0) {
+        const totalStudents = activeClasses.reduce(
+          (sum, c) => sum + (c.enrollments?.length || 0),
+          0,
+        );
+        warnings = {
+          activeClasses: activeClasses.length,
+          enrolledStudents: totalStudents,
+          message: `This teacher had ${activeClasses.length} active class(es) with ${totalStudents} enrolled student(s). Classes will become inaccessible.`,
+        };
+      }
+    }
+
+    await this.db
+      .update(users)
+      .set({ status: 'SUSPENDED', updatedAt: new Date() })
+      .where(eq(users.id, id));
+
+    return {
+      message: warnings ? 'User suspended with warnings' : 'User suspended successfully',
+      userId: id,
+      ...(warnings ? { warnings } : {}),
+    };
+  }
+
+  /**
+   * Reactivate a suspended user — restores full access.
+   */
+  async reactivateUser(id: string, adminId: string) {
+    if (id === adminId) {
+      throw new ForbiddenException('You cannot reactivate your own account');
+    }
+
+    const existingUser = await this.findById(id);
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (existingUser.status !== 'SUSPENDED') {
+      throw new BadRequestException('Only suspended users can be reactivated');
+    }
+
+    await this.db
+      .update(users)
+      .set({ status: 'ACTIVE', updatedAt: new Date() })
+      .where(eq(users.id, id));
+
+    return { message: 'User reactivated successfully', userId: id };
+  }
+
+  /**
+   * Soft-delete a user — archives all data, then sets status to DELETED.
+   * Only works on SUSPENDED users.
+   */
+  async softDeleteUser(id: string, adminId: string) {
+    if (id === adminId) {
+      throw new ForbiddenException('You cannot delete your own account');
+    }
+
+    const existingUser = await this.findById(id);
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (existingUser.status !== 'SUSPENDED') {
+      throw new BadRequestException(
+        'User must be suspended before deletion. Please suspend the user first.',
+      );
+    }
+
+    // Collect all related data for archival
+    const archiveSnapshot = await this.collectUserData(id);
+
+    // Insert archive record
+    const userRoleNames = existingUser.roles?.map((r: any) => r.name) || [];
+    await this.db.insert(archivedUsers).values({
+      originalUserId: id,
+      email: existingUser.email,
+      fullName: `${existingUser.firstName} ${existingUser.middleName || ''} ${existingUser.lastName}`.trim(),
+      role: userRoleNames.join(', '),
+      archivedData: archiveSnapshot,
+      archivedBy: adminId,
+    });
+
+    // Set status to DELETED
+    await this.db
+      .update(users)
+      .set({ status: 'DELETED', updatedAt: new Date() })
+      .where(eq(users.id, id));
+
+    return { message: 'User archived and marked as deleted', userId: id };
+  }
+
+  /**
+   * Export all user data as a JSON object — for admin download before purge.
+   */
+  async exportUserData(id: string) {
+    const existingUser = await this.findById(id);
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.collectUserData(id);
+  }
+
+  /**
+   * Permanently purge a user from the database.
+   * Only works on DELETED users. CASCADE will remove all related records.
+   */
+  async purgeUser(id: string, adminId: string) {
+    if (id === adminId) {
+      throw new ForbiddenException('You cannot purge your own account');
+    }
+
+    const existingUser = await this.findById(id);
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (existingUser.status !== 'DELETED') {
+      throw new BadRequestException(
+        'User must have DELETED status before permanent removal. Follow the lifecycle: Suspend → Delete → Purge.',
+      );
+    }
+
+    // Mark the archived record as purged (if exists)
+    const archiveRecords = await this.db.query.archivedUsers.findMany({
+      where: eq(archivedUsers.originalUserId, id),
+    });
+    if (archiveRecords.length > 0) {
+      await this.db
+        .update(archivedUsers)
+        .set({ purgedAt: new Date() })
+        .where(eq(archivedUsers.originalUserId, id));
+    }
+
+    // Hard delete — CASCADE handles related tables
+    await this.db.delete(users).where(eq(users.id, id));
+
+    return { message: 'User permanently purged from the system', userId: id };
+  }
+
+  /**
+   * Collect all data related to a user for archival/export.
+   */
+  private async collectUserData(id: string) {
+    const user = await this.db.query.users.findFirst({
+      where: eq(users.id, id),
+      with: {
+        userRoles: { with: { role: true } },
+        profile: true,
+        enrollments: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Collect lesson completions
+    const completions = await this.db.query.lessonCompletions.findMany({
+      where: eq(lessonCompletions.studentId, id),
+    });
+
+    // Collect assessment attempts and responses
+    const attempts = await this.db.query.assessmentAttempts.findMany({
+      where: eq(assessmentAttempts.studentId, id),
+      with: { responses: true },
+    });
+
+    // Collect classes taught (if teacher)
+    const classesTaught = await this.db.query.classes.findMany({
+      where: eq(classes.teacherId, id),
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        middleName: user.middleName,
+        lastName: user.lastName,
+        studentId: user.studentId,
+        status: user.status,
+        isEmailVerified: user.isEmailVerified,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
+      },
+      roles: user.userRoles.map((ur) => ur.role),
+      profile: (user as any).profile || null,
+      enrollments: (user as any).enrollments || [],
+      lessonCompletions: completions,
+      assessmentAttempts: attempts,
+      classesTaught,
     };
   }
 

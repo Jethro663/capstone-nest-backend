@@ -8,6 +8,12 @@ const studentService = {
     return response.data;
   },
 
+  // Get student's enrolled classes (GET /classes/student/:studentId)
+  async getEnrolledClasses(studentId) {
+    const response = await api.get(`/classes/student/${studentId}`);
+    return response.data;
+  },
+
   // Get a specific class by ID (GET /classes/:id)
   async getClassById(id) {
     const response = await api.get(`/classes/${id}`);

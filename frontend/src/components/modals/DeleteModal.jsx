@@ -1,5 +1,12 @@
 import React, { useEffect, useRef } from "react";
 
+/**
+ * Reusable confirmation modal with severity levels.
+ * @param {Object} props
+ * @param {"warning"|"danger"|"critical"} props.severity - Visual severity (default: "danger")
+ * @param {string} props.confirmText - Button label (default: "Delete")
+ * @param {string} props.confirmLoadingText - Button label when loading (default: "Deleting...")
+ */
 const DeleteModal = ({
   isOpen,
   onClose,
@@ -9,6 +16,9 @@ const DeleteModal = ({
   title = "Confirm Deletion",
   message,
   Icon: IconComponent = () => <span>🗑️</span>,
+  severity = "danger",
+  confirmText = "Delete",
+  confirmLoadingText = "Processing...",
 }) => {
   const modalRef = useRef(null);
 
@@ -19,6 +29,13 @@ const DeleteModal = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const confirmBtnColor =
+    severity === "warning"
+      ? "#f59e0b"
+      : severity === "critical"
+        ? "#7f1d1d"
+        : "#ef4444";
 
   return (
     <div style={styles.overlay}>
@@ -47,8 +64,12 @@ const DeleteModal = ({
           <button style={styles.cancelButton} onClick={onClose} disabled={loading}>
             Cancel
           </button>
-          <button style={styles.deleteButton} onClick={onDelete} disabled={loading}>
-            {loading ? "Deleting..." : "Delete"}
+          <button
+            style={{ ...styles.deleteButton, backgroundColor: confirmBtnColor }}
+            onClick={onDelete}
+            disabled={loading}
+          >
+            {loading ? confirmLoadingText : confirmText}
           </button>
         </div>
       </div>

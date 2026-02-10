@@ -46,7 +46,7 @@ export function AuthProvider({ children }) {
             const response = await authService.getCurrentUser();
 
             // Success - user is authenticated
-            // The /auth/me endpoint returns JWT payload: { userId, email, roles, type }
+            // The /auth/me endpoint now returns full user data (same shape as login)
             const userData = response.data.user;
             console.log('[AUTH] User authenticated:', userData.email);
 

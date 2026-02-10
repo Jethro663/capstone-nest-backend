@@ -44,9 +44,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Account is not active');
     }
 
+    // Return the full user object (with profile merged from findById)
+    // so that GET /auth/me returns complete data, same as login.
+    const { password, userRoles, ...sanitized } = user as any;
     return {
+      ...sanitized,
       userId: user.id,
-      email: user.email,
       roles: user.roles.map((role) => role.name),
     };
   }

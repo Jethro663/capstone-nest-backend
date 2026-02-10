@@ -15,7 +15,31 @@ const formatDate = (iso) => {
   }
 };
 
-export function ProfilePage() {
+// Helper to check if profile is incomplete (for students only)
+function isProfileIncomplete(user, profile) {
+  // Only students need profile completion — admins/teachers skip
+  if (!user || user.roles?.includes('admin') || user.roles?.includes('teacher')) {
+    return false;
+  }
+
+  const hasValue = (v) =>
+    v !== undefined && v !== null && !(typeof v === 'string' && !v.trim());
+
+  // User-level required fields
+  if (!hasValue(user.firstName) || !hasValue(user.lastName)) return true;
+
+  // Profile-level required fields
+  const fields = ['dateOfBirth', 'gender', 'phone', 'address', 'familyName', 'familyRelationship', 'familyContact'];
+  for (const f of fields) {
+    const v = f === 'dateOfBirth'
+      ? (profile?.dateOfBirth ?? profile?.dob ?? user.dateOfBirth ?? user.dob)
+      : (profile?.[f] ?? user[f]);
+    if (!hasValue(v)) return true;
+  }
+  return false;
+}
+
+export function ProfilePage({ onNavigateToComplete }) {
   const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState("about");
@@ -85,6 +109,7 @@ export function ProfilePage() {
   const tabContainerStyle = { backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' };
 
   const fullName = `${firstName} ${middleName ? (middleName + ' ') : ''}${lastName}`.trim();
+  const isIncomplete = isProfileIncomplete(user, profile);
 
   return (
     <div style={containerStyle}>
@@ -95,17 +120,38 @@ export function ProfilePage() {
           </div>
 
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#111827', margin: '0 0 0.5rem 0' }}>
-              {fullName || user?.email}
-            </h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', marginBottom: '0.5rem' }}>
+              <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#111827', margin: 0 }}>
+                {fullName || user?.email}
+              </h1>
+              {user?.roles?.[0] === 'student' && isIncomplete && onNavigateToComplete && (
+                <button
+                  onClick={onNavigateToComplete}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#dc2626',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'background-color 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#b91c1c'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#dc2626'}
+                >
+                  Complete Profile
+                </button>
+              )}
+            </div>
             <p style={{ color: '#6b7280', fontSize: '1rem', marginBottom: '6px' }}>
               {user?.studentId ? `ID: ${user.studentId}` : ''}
             </p>
             <p style={{ marginTop: 0, color: '#111827', fontSize: '1rem' }}>
               Grade: <strong style={{ fontWeight: 800 }}>{gradeLevel || '—'}</strong>
             </p>
-
-
           </div>
         </div>
       </div>
