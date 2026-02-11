@@ -42,6 +42,7 @@ const CreateClassModal = ({ classItem, onClose, onAddClass }) => {
       if (sectionsRes.data.success) setSections(sectionsRes.data.data || []);
       if (usersRes.data.success) {
         const teachersList = usersRes.data.users.filter(u => u.roles?.some(r => r?.name === "teacher"));
+        console.log("Fetched teachers:", teachersList);
         setTeachers(teachersList);
       }
     } catch (err) { toast.error("Failed to load form options"); }

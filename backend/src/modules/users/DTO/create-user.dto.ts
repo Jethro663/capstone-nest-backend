@@ -34,6 +34,7 @@ function IsPopularEmailProvider(validationOptions?: ValidationOptions) {
             'aol.com',
             'protonmail.com',
             'zoho.com',
+            'nu-moa.edu.ph',
           ];
 
           const domain = value.split('@')[1]?.toLowerCase();

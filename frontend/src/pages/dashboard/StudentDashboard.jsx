@@ -90,6 +90,7 @@ const StudentDashboard = ({ onNavigateToComplete }) => {
       const classesRes = await studentService.getEnrolledClasses(user.id);
       const classList = classesRes?.data || classesRes || [];
       setClasses(classList.slice(0, 5)); // Show up to 5 recent classes
+      console.log('Enrolled classes:', classes);
 
       // Fetch lessons and assessments from enrolled classes
       if (classList.length > 0) {
@@ -143,8 +144,8 @@ const StudentDashboard = ({ onNavigateToComplete }) => {
       <div className="bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 rounded-xl p-6 text-white shadow-xl border border-blue-400">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold mb-1">Welcome back, {fullName}!</h1>
-            <p className="text-blue-100 text-sm">
+            <h1 className="text-3xl font-bold mb-1 text-red-500">Welcome back, {fullName}!</h1>
+            <p className="text-red-500 text-sm">
               {user?.studentId ? `Student ID: ${user.studentId}` : 'Complete your profile to get started'}
             </p>
           </div>
@@ -303,7 +304,7 @@ const StudentDashboard = ({ onNavigateToComplete }) => {
                 <CardContent className="pt-0">
                   <p className="text-xs text-gray-600 mb-2 line-clamp-1">{getDescription(assessment.description)}</p>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-gray-500">
+                    <span className="text-gray-700">
                       Due: {new Date(assessment.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                     <button className="text-blue-600 hover:text-blue-700 font-bold hover:underline">
