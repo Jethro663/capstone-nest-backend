@@ -203,17 +203,6 @@ export function LoginPage({ onBack, onForgotPassword, onUnverified }) {
               )}
             </Button>
 
-            {/* Forgot Password */}
-            <Button
-              type="button"
-              variant="link"
-              className="w-full text-[#dc2626]"
-              onClick={onForgotPassword}
-              disabled={isLoading}
-            >
-              Forgot password?
-            </Button>
-
           </form>
         </CardContent>
       </Card>
