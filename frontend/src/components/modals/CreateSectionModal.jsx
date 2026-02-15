@@ -85,15 +85,20 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
   };
 
   const getFieldError = (name, value) => {
+    // Assigned teacher is optional (the adviserId select is optional as well),
+    // so only validate it when the user provides a manual teacher name.
+    if (name === "assignedTeacher") {
+      if (!value.trim()) return ""; // optional
+      if (/\d/.test(value)) return "Teacher name cannot contain numbers";
+      return "";
+    }
+
     if (!value.trim()) return `${FIELD_LABELS[name]} is required`;
 
     if (name === "studentCapacity") {
       if (!/^\d+$/.test(value) || Number(value) <= 0)
         return "Student Capacity must be a positive number";
     }
-
-    if (name === "assignedTeacher" && /\d/.test(value))
-      return "Teacher name cannot contain numbers";
 
     return "";
   };
@@ -115,7 +120,10 @@ const CreateSectionModal = ({ section, onClose, onAddSection }) => {
   };
 
   const isFormValid = useMemo(() => {
-    return Object.values(formData).every((v) => v.trim()) && !Object.values(errors).some(Boolean);
+    // Teacher (adviserId / assignedTeacher) is optional, so only check truly required fields
+    const requiredFields = ["sectionName", "gradeLevel", "schoolYear", "studentCapacity", "roomNumber"];
+    const allRequiredFilled = requiredFields.every((name) => String(formData[name] ?? "").trim());
+    return allRequiredFilled && !Object.values(errors).some(Boolean);
   }, [formData, errors]);
 
   const handleSubmit = async (e) => {

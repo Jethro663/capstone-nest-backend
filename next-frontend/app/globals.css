@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #000000;
+  --primary: #dc2626;
+  --primary-foreground: #ffffff;
+  --secondary: #374151;
+  --secondary-foreground: #ffffff;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #f59e0b;
+  --accent-foreground: #000000;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #ffffff;
+  --ring: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #000000;
+    --foreground: #ffffff;
+    --primary: #ef4444;
+    --primary-foreground: #000000;
+    --secondary: #6b7280;
+    --secondary-foreground: #ffffff;
+    --muted: #1f2937;
+    --muted-foreground: #9ca3af;
+    --accent: #fbbf24;
+    --accent-foreground: #000000;
+    --destructive: #ef4444;
+    --destructive-foreground: #000000;
+    --border: #374151;
+    --input: #1f2937;
+    --ring: #ef4444;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+/* Slate utilities for consistent styling */
+.text-muted-foreground {
+  @apply text-slate-600;
+}
+
+.bg-slate-50 {
+  @apply bg-slate-50/90;
+}
+
+.text-slate-900 {
+  @apply text-slate-900;
+}

@@ -25,6 +25,7 @@ const Sidebar = ({ role, currentPage, onNavigate }) => {
     const roleSpecificItems = {
       student: [
         { id: 'courses', label: 'My Courses', icon: <BookOpen className="h-5 w-5" /> },
+        { id: 'learningArea', label: 'Learning Area', icon: <User className="h-5 w-5" /> },
         { id: 'profile', label: 'Profile', icon: <User className="h-5 w-5" /> }
       ],
       teacher: [
