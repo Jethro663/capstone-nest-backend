@@ -1,6 +1,7 @@
 import {
   Injectable,
   ExecutionContext,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
@@ -9,30 +10,32 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(private reflector: Reflector) {
     super();
   }
 
   canActivate(context: ExecutionContext) {
-    // Check if route is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request?.headers?.authorization;
-    console.log('[AUTH-GUARD] Authorization header:', authHeader);
-
     if (isPublic) {
-      return true; // Skip authentication
+      return true;
     }
+
+    const request = context.switchToHttp().getRequest();
+    const hasAuth = !!request?.headers?.authorization;
+    this.logger.debug(`[AUTH-GUARD] Authorization header present: ${hasAuth}`);
 
     return super.canActivate(context);
   }
 
-  handleRequest(err, user, info) {
+  handleRequest(err: any, user: any, info: any) {
     if (err || !user) {
+      this.logger.debug(`[AUTH-GUARD] Auth failed: ${info?.message ?? err?.message}`);
       throw err || new UnauthorizedException('Invalid or expired token');
     }
     return user;

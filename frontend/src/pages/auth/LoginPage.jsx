@@ -35,7 +35,7 @@ export function LoginPage({ onBack, onForgotPassword, onUnverified }) {
       setEmailError("Email is required");
       return false;
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.(com|edu|ph|net|org|gov)$/i;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.(com|edu|ph|net|org|gov|local)$/i;
     if (!emailRegex.test(value)) {
       setEmailError("Please enter a valid email");
       return false;

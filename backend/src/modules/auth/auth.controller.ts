@@ -11,39 +11,85 @@ import {
   UnauthorizedException,
   InternalServerErrorException,
   Patch,
+  Logger,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiCookieAuth,
+} from '@nestjs/swagger';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import express from 'express';
 import { AuthService } from './auth.service';
+import { TokenService } from './token.service';
 import { LoginDto } from './DTO/login.dto';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
 import { ChangePasswordDto } from './DTO/change-password.dto';
+import { ValidateCredentialsDto } from './DTO/validate-credentials.dto';
+import { ForgotPasswordDto } from './DTO/forgot-password.dto';
+import { ResetPasswordDto } from './DTO/reset-password.dto';
+import { SetInitialPasswordDto } from './DTO/set-initial-password.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { ApiBearerAuth } from '@nestjs/swagger';
+import { parseExpiryMs } from './utils/parse-expiry.util';
 
-
+@ApiTags('auth')
 @ApiBearerAuth('token')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  private readonly logger = new Logger(AuthController.name);
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+    private readonly tokenService: TokenService,
+  ) {}
+
+  /**
+   * Cookie options built per-request so `secure` is read from the live
+   * environment and `maxAge` stays in sync with the DB token TTL.
+   */
+  private refreshCookieOptions() {
+    const ttlMs = parseExpiryMs(
+      this.configService.get<string>('jwt.refreshTokenExpiry'),
+    );
+    return {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict' as const,
+      path: '/api/auth',
+      maxAge: ttlMs,
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // Login
+  // --------------------------------------------------------------------------
 
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts / 60 s per IP
+  @ApiOperation({ summary: 'Authenticate user and obtain tokens' })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async login(
     @Body() loginDto: LoginDto,
+    @Req() request: express.Request,
     @Res({ passthrough: true }) response: express.Response,
   ) {
-    const result = await this.authService.login(loginDto);
+    const ip = request.ip;
+    const userAgent = request.headers['user-agent'];
+    const result = await this.authService.login(loginDto, ip, userAgent);
 
-    // Set refresh token in HTTP-only cookie
-    response.cookie('refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    response.cookie('refreshToken', result.refreshToken, this.refreshCookieOptions());
 
     return {
       success: true,
@@ -55,31 +101,62 @@ export class AuthController {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Refresh (token rotation)
+  // --------------------------------------------------------------------------
+
   @Public()
   @Post('refresh')
-  // 👇 CHANGE 1: Use 'express.Request' explicitly
-  async refresh(@Req() request: express.Request) {
-    // 👇 CHANGE 2: Fix ESLint error by treating cookies as an object
-    // and ensuring we treat the result as a string
+  @Throttle({ default: { limit: 60, ttl: 60000 } }) // capped but generous — normal clients rotate once per 15 min
+  @ApiCookieAuth('refreshToken')
+  @ApiOperation({ summary: 'Rotate refresh token and obtain new access token' })
+  @ApiResponse({ status: 200, description: 'Token refreshed' })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  async refresh(
+    @Req() request: express.Request,
+    @Res({ passthrough: true }) response: express.Response,
+  ) {
     const refreshToken = request.cookies?.['refreshToken'] as string;
 
     if (!refreshToken) {
       throw new UnauthorizedException('No refresh token found');
     }
 
-    const result = await this.authService.refreshToken(refreshToken);
+    const ip = request.ip;
+    const userAgent = request.headers['user-agent'];
+    const result = await this.authService.refreshToken(refreshToken, ip, userAgent);
+
+    // Rotation: replace cookie with newly issued opaque token
+    response.cookie('refreshToken', result.refreshToken, this.refreshCookieOptions());
 
     return {
       success: true,
       message: 'Token refreshed',
-      data: result,
+      data: { accessToken: result.accessToken },
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Logout
+  // --------------------------------------------------------------------------
+
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Res({ passthrough: true }) response: express.Response) {
-    response.clearCookie('refreshToken');
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Revoke refresh token and clear cookie' })
+  @ApiResponse({ status: 200, description: 'Logout successful' })
+  async logout(
+    @Req() request: express.Request,
+    @Res({ passthrough: true }) response: express.Response,
+  ) {
+    const refreshToken = request.cookies?.['refreshToken'] as string;
+
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+
+    // Clear with same path/domain as when it was set
+    response.clearCookie('refreshToken', { path: '/api/auth' });
 
     return {
       success: true,
@@ -87,35 +164,94 @@ export class AuthController {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Logout all devices
+  // --------------------------------------------------------------------------
+
+  @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Revoke all refresh tokens for the current user (all devices)' })
+  @ApiResponse({ status: 200, description: 'All sessions revoked' })
+  async logoutAll(
+    @CurrentUser() user: any,
+    @Res({ passthrough: true }) response: express.Response,
+  ) {
+    if (!user?.userId) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    await this.tokenService.revokeAllForUser(user.userId);
+    response.clearCookie('refreshToken', { path: '/api/auth' });
+
+    return {
+      success: true,
+      message: 'All sessions revoked successfully.',
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // Password reset (silent — never reveals if email exists)
+  // --------------------------------------------------------------------------
+
   @Public()
   @Post('forgot-password')
-  async forgotPassword(@Body('email') email: string) {
-    await this.authService.requestPasswordReset(email);
-    return { success: true, message: 'Reset code sent if account exists' };
+  @Throttle({ default: { limit: 3, ttl: 300000 } }) // 3 attempts / 5 min
+  @ApiOperation({ summary: 'Request a password reset OTP' })
+  @ApiResponse({
+    status: 200,
+    description: 'If an account exists, a reset code was sent',
+  })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.authService.requestPasswordReset(dto.email);
+    return {
+      success: true,
+      message: 'If an account with that email exists, a reset code has been sent.',
+    };
   }
 
   @Public()
   @Post('reset-password')
-  async resetPassword(
-    @Body() dto: { email: string; code: string; newPassword: string },
-  ) {
+  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @ApiOperation({ summary: 'Reset password using OTP code' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password reset successful' })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.authService.resetPassword(dto);
     return { success: true, message: 'Password reset successful' };
   }
 
-  // Validate credentials endpoint used by frontend to confirm the password
-  // when a login attempt fails due to unverified email.
+  // --------------------------------------------------------------------------
+  // Validate credentials (rate-limited)
+  // --------------------------------------------------------------------------
+
   @Public()
   @Post('validate-credentials')
   @HttpCode(HttpStatus.OK)
-  async validateCredentials(@Body() dto: { email: string; password: string }) {
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // same as login
+  @ApiOperation({
+    summary: 'Validate email + password without completing login',
+    description:
+      'Used by the frontend to confirm a password is correct when the account is unverified.',
+  })
+  @ApiBody({ type: ValidateCredentialsDto })
+  @ApiResponse({ status: 200, description: 'Credentials valid' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async validateCredentials(@Body() dto: ValidateCredentialsDto) {
     await this.authService.validateCredentials(dto.email, dto.password);
-
     return { success: true, message: 'Credentials valid' };
   }
 
+  // --------------------------------------------------------------------------
+  // Get current user
+  // --------------------------------------------------------------------------
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Get the currently authenticated user' })
+  @ApiResponse({ status: 200, description: 'Current user data' })
   async getCurrentUser(@CurrentUser() user: any) {
     return {
       success: true,
@@ -123,9 +259,17 @@ export class AuthController {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Change password
+  // --------------------------------------------------------------------------
+
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: "Change the authenticated user's password" })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
   async changePassword(
     @CurrentUser() user: any,
     @Body() dto: ChangePasswordDto,
@@ -142,12 +286,18 @@ export class AuthController {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Set initial password (account activation)
+  // --------------------------------------------------------------------------
+
   @Public()
   @Post('set-initial-password')
   @HttpCode(HttpStatus.OK)
-  async setInitialPassword(
-    @Body() dto: { email: string; code: string; newPassword: string },
-  ) {
+  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @ApiOperation({ summary: 'Set the first password when activating via OTP' })
+  @ApiBody({ type: SetInitialPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password set successfully' })
+  async setInitialPassword(@Body() dto: SetInitialPasswordDto) {
     await this.authService.setInitialPassword(dto.email, dto.code, dto.newPassword);
 
     return {
@@ -156,17 +306,26 @@ export class AuthController {
     };
   }
 
+  // --------------------------------------------------------------------------
+  // Update profile
+  // --------------------------------------------------------------------------
+
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
+  @SkipThrottle()
+  @ApiOperation({ summary: "Update the authenticated user's profile" })
+  @ApiBody({ type: UpdateProfileDto })
+  @ApiResponse({ status: 200, description: 'Profile updated' })
   async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
-    // JwtStrategy.validate() returns { userId, email, roles }
-    // so the property is "userId", NOT "id"
     if (!user || !user.userId) {
-      console.warn('[AUTH] updateProfile called without authenticated user');
+      this.logger.warn('[AUTH] updateProfile called without authenticated user');
       throw new UnauthorizedException('Not authenticated');
     }
 
-    console.log('[AUTH] PATCH /auth/profile body for user:', user.userId, dto);
+    this.logger.debug(
+      `[AUTH] PATCH /auth/profile for user ${user.userId}`,
+    );
+
     try {
       const updated = await this.authService.updateProfile(user.userId, dto);
       return {
@@ -175,10 +334,11 @@ export class AuthController {
         data: { user: updated },
       };
     } catch (error) {
-      console.error('[AUTH] updateProfile failed for user:', user.userId, error);
-      throw new InternalServerErrorException(
-        error?.message || 'Profile update failed',
+      this.logger.error(
+        `[AUTH] updateProfile failed for user ${user.userId}`,
+        error instanceof Error ? error.stack : String(error),
       );
+      throw new InternalServerErrorException('Profile update failed');
     }
   }
 }

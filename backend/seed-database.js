@@ -146,7 +146,7 @@ async function seedDatabase() {
     const adminPasswordHash = await hashPassword(ADMIN_USER.password);
     try {
       await client.query(
-        `INSERT INTO users (id, email, password, first_name, last_name, status, is_email_verified)
+        `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO NOTHING
          RETURNING id`,
@@ -168,7 +168,7 @@ async function seedDatabase() {
     const teacherPasswordHash = await hashPassword(TEACHER_USER.password);
     try {
       await client.query(
-        `INSERT INTO users (id, email, password, first_name, last_name, status, is_email_verified)
+        `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO NOTHING
          RETURNING id`,
@@ -190,7 +190,7 @@ async function seedDatabase() {
     const studentPasswordHash = await hashPassword(STUDENT_USER.password);
     try {
       await client.query(
-        `INSERT INTO users (id, email, password, first_name, last_name, status, is_email_verified)
+        `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO NOTHING
          RETURNING id`,

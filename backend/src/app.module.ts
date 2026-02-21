@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { SubjectsModule } from './modules/subjects/subjects.module';
@@ -15,6 +18,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
+import { HealthModule } from './modules/health/health.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 
@@ -24,6 +28,13 @@ import jwtConfig from './config/jwt.config';
       isGlobal: true,
       load: [databaseConfig, jwtConfig],
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,  // 60 seconds
+        limit: 30,  // global fallback: 30 req / 60 s per IP
+      },
+    ]),
+    ScheduleModule.forRoot(),
     DatabaseModule, // Drizzle connection
     AuthModule,
     UsersModule,
@@ -40,11 +51,21 @@ import jwtConfig from './config/jwt.config';
     AdminModule,
     // Teacher module (teacher-specific endpoints)
     TeacherModule,
+    // Health check endpoint
+    HealthModule,
   ],
   providers: [
     {
+      provide: APP_FILTER,
+      useClass: GlobalExceptionFilter, // Sanitise all unhandled errors
+    },
+    {
       provide: APP_GUARD,
       useClass: JwtAuthGuard, // Global auth guard
+    },
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard, // Global rate-limit guard
     },
   ],
 })

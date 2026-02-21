@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -8,18 +9,29 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './DTO/login.dto';
+import { ChangePasswordDto } from './DTO/change-password.dto';
+import { UpdateProfileDto } from './DTO/update-profile.dto';
+import { ResetPasswordDto } from './DTO/reset-password.dto';
 import { OtpService } from '../otp/otp.service';
+import { TokenService } from './token.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private otpService: OtpService,
+    private tokenService: TokenService,
   ) {}
 
-  async login(loginDto: LoginDto) {
+  async login(
+    loginDto: LoginDto,
+    ip?: string,
+    userAgent?: string,
+  ) {
     const { email, password } = loginDto;
 
     // 1. Find user by email
@@ -51,13 +63,16 @@ export class AuthService {
     // 5. Update last login timestamp
     await this.usersService.updateLastLogin(user.id);
 
-    // 6. Generate tokens
-    const tokens = await this.generateTokens(user);
+    // 6. Generate access token + opaque refresh token
+    const accessToken = await this.generateAccessToken(user);
+    const rawRefreshToken = this.tokenService.generateRawRefreshToken();
+    await this.tokenService.storeRefreshToken(user.id, rawRefreshToken, ip, userAgent);
 
     // 7. Return sanitized user + tokens
     return {
       user: this.sanitizeUser(user),
-      ...tokens,
+      accessToken,
+      refreshToken: rawRefreshToken,
     };
   }
 
@@ -80,9 +95,13 @@ export class AuthService {
   }
 
   async requestPasswordReset(email: string): Promise<void> {
+    // Silent — never reveal whether an account exists for this email
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      throw new NotFoundException('Email/Account not found');
+      this.logger.debug(
+        `[AUTH] Password reset requested for unknown email: ${email}`,
+      );
+      return; // Return silently — same response as a real account
     }
     await this.otpService.createAndSendOTP(
       user.id,
@@ -91,20 +110,17 @@ export class AuthService {
     );
   }
 
-  async resetPassword(dto: {
-    email: string;
-    code: string;
-    newPassword: string;
-  }): Promise<void> {
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
     await this.otpService.verifyOTP(dto.email, dto.code);
+    // Silent — do not reveal if the email exists
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
-      throw new NotFoundException('User not found');
+      return;
     }
     await this.usersService.updatePassword(user.id, dto.newPassword);
   }
 
-  async changePassword(userId: string, dto: any): Promise<void> {
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
     const { oldPassword, newPassword } = dto;
 
     // 1. Get user by ID
@@ -137,41 +153,34 @@ export class AuthService {
     await this.usersService.updatePassword(user.id, newPassword);
   }
 
-  async refreshToken(refreshToken: string) {
-    try {
-      // 1. Verify the refresh token
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get('jwt.refreshSecret'),
-      });
+  async refreshToken(
+    rawToken: string,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    // 1. Validate the opaque token in DB, revoke it, issue a new one (rotation)
+    const { newRawToken, userId } =
+      await this.tokenService.validateAndRotate(rawToken, ip, userAgent);
 
-      // 2. Check token type
-      if (payload.type !== 'refresh') {
-        throw new UnauthorizedException('Invalid token type');
-      }
-
-      // 3. Get fresh user data
-      const user = await this.usersService.findById(payload.userId);
-      if (!user || user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('User not found or inactive');
-      }
-
-      // 4. Generate new access token
-      const accessToken = await this.generateAccessToken(user);
-
-      return { accessToken };
-    } catch (error) {
-      throw new UnauthorizedException('Invalid refresh token');
+    // 2. Ensure user is still active
+    const user = await this.usersService.findById(userId);
+    if (!user || user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('User not found or inactive');
     }
+
+    // 3. Issue fresh access token
+    const accessToken = await this.generateAccessToken(user);
+
+    return { accessToken, refreshToken: newRawToken };
   }
 
-  private async generateTokens(user: any) {
-    const accessToken = await this.generateAccessToken(user);
-    const refreshToken = await this.generateRefreshToken(user);
-
-    return {
-      accessToken,
-      refreshToken,
-    };
+  async logout(rawToken: string): Promise<void> {
+    // Revoke the specific refresh token; silently no-op if already gone
+    try {
+      await this.tokenService.revokeByToken(rawToken);
+    } catch {
+      // Non-critical — cookie will be cleared regardless
+    }
   }
 
   private async generateAccessToken(user: any): Promise<string> {
@@ -188,18 +197,6 @@ export class AuthService {
     });
   }
 
-  private async generateRefreshToken(user: any): Promise<string> {
-    const payload = {
-      userId: user.id,
-      type: 'refresh',
-    };
-
-    return this.jwtService.signAsync(payload, {
-      secret: this.configService.get('jwt.refreshSecret'),
-      expiresIn: this.configService.get('jwt.refreshTokenExpiry'),
-    });
-  }
-
   private sanitizeUser(user: any) {
     const { password, userRoles, ...result } = user;
     return {
@@ -209,7 +206,7 @@ export class AuthService {
   }
 
   // Update profile fields for a user
-  async updateProfile(userId: string, dto: any) {
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
     const updated = await this.usersService.updateUser(userId, dto);
     return this.sanitizeUser(updated);
   }

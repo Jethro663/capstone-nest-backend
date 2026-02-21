@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -6,7 +6,8 @@ import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  // jwt.strategy.ts
+  private readonly logger = new Logger(JwtStrategy.name);
+
   constructor(
     private configService: ConfigService,
     private usersService: UsersService,
@@ -28,13 +29,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: any) {
-    console.log('[JWT-STRAT] Validating payload:', payload);
+    this.logger.debug(`[JWT-STRAT] Validating token for userId: ${payload?.userId}`);
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
     }
 
     const user = await this.usersService.findById(payload.userId);
-    console.log('[JWT-STRAT] lookup user:', payload.userId, 'found:', !!user);
+    this.logger.debug(`[JWT-STRAT] User lookup for ${payload.userId}: found=${!!user}`);
 
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -44,8 +45,6 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Account is not active');
     }
 
-    // Return the full user object (with profile merged from findById)
-    // so that GET /auth/me returns complete data, same as login.
     const { password, userRoles, ...sanitized } = user as any;
     return {
       ...sanitized,

@@ -27,6 +27,11 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
+    // Guard against unauthenticated access when RolesGuard is used without JwtAuthGuard
+    if (!user) {
+      throw new ForbiddenException('Not authenticated');
+    }
+
     // 4. Check if user has required role
     const hasRole = user.roles?.some((role: string) =>
       requiredRoles.includes(role),
