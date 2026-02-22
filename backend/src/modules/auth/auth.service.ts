@@ -111,7 +111,7 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
-    await this.otpService.verifyOTP(dto.email, dto.code);
+    await this.otpService.verifyOTP(dto.email, dto.code, 'password_reset');
     // Silent — do not reveal if the email exists
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
@@ -141,7 +141,7 @@ export class AuthService {
 
   async setInitialPassword(email: string, otpCode: string, newPassword: string): Promise<void> {
     // 1. Verify the OTP (this also marks email as verified and activates account)
-    await this.otpService.verifyOTP(email, otpCode);
+    await this.otpService.verifyOTP(email, otpCode, 'email_verification');
 
     // 2. Find user by email
     const user = await this.usersService.findByEmail(email);

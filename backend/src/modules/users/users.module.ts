@@ -3,12 +3,12 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { OtpModule } from '../otp/otp.module';
 import { RolesModule } from '../roles/roles.module';
-import { MailService } from '../mail/mail.service';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [OtpModule, RolesModule],
+  imports: [OtpModule, RolesModule, MailModule],
   controllers: [UsersController],
-  providers: [UsersService, MailService],
+  providers: [UsersService],
   exports: [UsersService],
 })
 export class UsersModule {}

@@ -14,6 +14,7 @@ import { SectionsService } from './sections.service';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
+import { Throttle } from '@nestjs/throttler';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -169,6 +170,7 @@ export class SectionsController {
    */
   @Post(':id/roster')
   @Roles('admin')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   async addStudentsToSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: BulkStudentsDto,
@@ -188,6 +190,7 @@ export class SectionsController {
    */
   @Delete(':id/roster/:studentId')
   @Roles('admin')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   async removeStudentFromSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,

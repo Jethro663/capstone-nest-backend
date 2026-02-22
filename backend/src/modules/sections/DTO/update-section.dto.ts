@@ -9,6 +9,7 @@ import {
   IsUUID,
   IsIn,
   Validate,
+  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { IsValidSchoolYearConstraint } from '../../classes/DTO/validators';
@@ -46,9 +47,11 @@ export class UpdateSectionDto {
   @Transform(({ value }) => value?.trim())
   roomNumber?: string;
 
-  @IsUUID('4', { message: 'Adviser ID must be a valid UUID' })
+  /** Pass a valid UUID to assign an adviser, or explicitly pass null to clear the current adviser. */
   @IsOptional()
-  adviserId?: string;
+  @ValidateIf((o) => o.adviserId !== null)
+  @IsUUID('4', { message: 'Adviser ID must be a valid UUID' })
+  adviserId?: string | null;
 
   @IsBoolean()
   @IsOptional()

@@ -11,6 +11,7 @@ import { DatabaseService } from '../../database/database.service';
 import { otpVerifications } from '../../drizzle/schema';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service'; // Imported MailService
+import { OTP_TTL_MINUTES } from './otp.constants';
 
 @Injectable()
 export class OtpService {
@@ -44,8 +45,8 @@ export class OtpService {
     // 2. Generate secure 6-digit OTP
     const code = this.generateSecureOTP();
 
-    // 3. Set expiration (10 minutes from now)
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    // 3. Set expiration
+    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
 
     // 4. Save to database
     await this.db.insert(otpVerifications).values({
@@ -61,23 +62,27 @@ export class OtpService {
     await this.mailService.sendOtpEmail(email, code, purpose);
   }
 
-  async verifyOTP(email: string, code: string): Promise<void> {
+  async verifyOTP(
+    email: string,
+    code: string,
+    purpose: 'email_verification' | 'password_reset' = 'email_verification',
+  ): Promise<void> {
     // 1. Find user
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (user.isEmailVerified) {
+    // Only block re-verification when doing email_verification flow
+    if (purpose === 'email_verification' && user.isEmailVerified) {
       throw new BadRequestException('Email already verified');
     }
 
-    // 2. Find the OTP record
+    // 2. Find the OTP record for the given purpose
     const otp = await this.db.query.otpVerifications.findFirst({
       where: and(
         eq(otpVerifications.userId, user.id),
-        eq(otpVerifications.purpose, 'email_verification'),
-        eq(otpVerifications.isUsed, false),
+        eq(otpVerifications.purpose, purpose),
       ),
       orderBy: (otpVerifications, { desc }) => [
         desc(otpVerifications.createdAt),
@@ -85,21 +90,29 @@ export class OtpService {
     });
 
     if (!otp) {
-      console.error('[OTP] No pending OTP found for user:', email);
+      console.error('[OTP] No pending OTP found for user:', email, 'purpose:', purpose);
       throw new BadRequestException('No pending verification found');
     }
 
-    console.log('[OTP] Verifying OTP for:', email, 'provided:', code.substring(0, 2) + '****', 'stored:', otp.code.substring(0, 2) + '****');
+    console.log('[OTP] Verifying OTP for:', email, 'purpose:', purpose, 'provided:', code.substring(0, 2) + '****');
 
-    // 3. Check attempt limit
-    // Use atomic increment with WHERE clause
+    // 3. Check expiration first — before burning an attempt on stale data
+    if (new Date() > otp.expiresAt) {
+      // Clean up the expired record so the next lookup finds nothing
+      await this.db
+        .delete(otpVerifications)
+        .where(eq(otpVerifications.id, otp.id));
+      throw new BadRequestException('Verification code has expired');
+    }
+
+    // 4. Atomically increment attempt count — gate: max 5 attempts
     const [updated] = await this.db
       .update(otpVerifications)
       .set({ attemptCount: sql`${otpVerifications.attemptCount} + 1` })
       .where(
         and(
           eq(otpVerifications.id, otp.id),
-          sql`${otpVerifications.attemptCount} < 5`, // Only update if under limit
+          sql`${otpVerifications.attemptCount} < 5`,
         ),
       )
       .returning();
@@ -108,36 +121,21 @@ export class OtpService {
       throw new BadRequestException('Too many attempts. Request a new code.');
     }
 
-    if (otp.code !== code) {
-      console.warn('[OTP] Invalid code for user:', email, '- provided:', code, 'expected:', otp.code);
-      throw new BadRequestException('Invalid verification code');
-    }
-
-    // 4. Check expiration
-    if (new Date() > otp.expiresAt) {
-      throw new BadRequestException('Verification code has expired');
-    }
-
     // 5. Verify code
     if (otp.code !== code) {
-      // Increment attempt count
-      await this.db
-        .update(otpVerifications)
-        .set({ attemptCount: otp.attemptCount + 1 })
-        .where(eq(otpVerifications.id, otp.id));
-
+      console.warn('[OTP] Invalid code for user:', email);
       throw new BadRequestException('Invalid verification code');
     }
 
-    // 6. Mark OTP as used and delete
-    // Note: Deleting is fine, but marking isUsed=true is better for audit trails if needed later.
-    // For now, sticking to your delete logic to keep it clean.
+    // 6. Delete the consumed OTP
     await this.db
       .delete(otpVerifications)
       .where(eq(otpVerifications.id, otp.id));
 
-    // 7. Verify user's email
-    await this.usersService.verifyEmail(user.id);
+    // 7. For email_verification: mark the user's email as verified
+    if (purpose === 'email_verification') {
+      await this.usersService.verifyEmail(user.id);
+    }
   }
 
   async resendOTP(email: string): Promise<void> {

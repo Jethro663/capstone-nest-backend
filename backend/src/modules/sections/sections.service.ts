@@ -7,14 +7,16 @@ import {
 } from '@nestjs/common';
 import {
   and,
+  count,
+  countDistinct,
   eq,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   notInArray,
   or,
   SQL,
-  count,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -181,40 +183,36 @@ export class SectionsService {
   async getCandidates(sectionId: string, filters?: { gradeLevel?: string; search?: string }) {
     await this.findById(sectionId);
 
-    // Step 1: Collect user IDs that have the 'student' role (roles table is tiny)
-    const studentRoleRows = await this.db
-      .select({ userId: userRoles.userId })
-      .from(userRoles)
-      .innerJoin(roles, eq(roles.id, userRoles.roleId))
-      .where(eq(roles.name, 'student'));
-
-    const studentUserIds = studentRoleRows.map(r => r.userId);
-    if (studentUserIds.length === 0) return [];
-
-    // Step 2: Collect already-enrolled student IDs for this section
-    const enrolledRows = await this.db
+    // Build a subquery for actively-enrolled students in this section.
+    // Using a subquery instead of loading all student IDs into Node.js memory:
+    //   • avoids array overflow on large deployments (old approach used inArray/notInArray
+    //     with potentially thousands of items)
+    //   • eliminates the (SQL | undefined)[] spread that could pass undefined to and()
+    const enrolledSubquery = this.db
       .select({ studentId: enrollments.studentId })
       .from(enrollments)
-      .where(eq(enrollments.sectionId, sectionId));
+      .where(
+        and(
+          eq(enrollments.sectionId, sectionId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+      );
 
-    const enrolledIds = enrolledRows.map(e => e.studentId);
+    // Collect only defined extra conditions — avoids unsafe and(...undefined[]) spread.
+    const extraConditions: SQL<unknown>[] = [];
+    if (filters?.gradeLevel) {
+      extraConditions.push(eq(studentProfiles.gradeLevel, filters.gradeLevel as any));
+    }
+    if (filters?.search) {
+      const searchCond = or(
+        ilike(users.firstName, `%${filters.search}%`),
+        ilike(users.lastName, `%${filters.search}%`),
+        ilike(users.email, `%${filters.search}%`),
+      );
+      if (searchCond) extraConditions.push(searchCond);
+    }
 
-    // Step 3: Compose SQL-level conditions and run one final query
-    const whereConditions: (SQL<unknown> | undefined)[] = [
-      inArray(users.id, studentUserIds),
-      enrolledIds.length > 0 ? notInArray(users.id, enrolledIds) : undefined,
-      filters?.gradeLevel
-        ? eq(studentProfiles.gradeLevel, filters.gradeLevel as any)
-        : undefined,
-      filters?.search
-        ? or(
-            ilike(users.firstName, `%${filters.search}%`),
-            ilike(users.lastName, `%${filters.search}%`),
-            ilike(users.email, `%${filters.search}%`),
-          )
-        : undefined,
-    ];
-
+    // Single query: join to confirm student role + exclude enrolled via NOT IN subquery.
     const results = await this.db
       .select({
         id: users.id,
@@ -225,7 +223,9 @@ export class SectionsService {
       })
       .from(users)
       .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
-      .where(and(...whereConditions))
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, and(eq(roles.id, userRoles.roleId), eq(roles.name, 'student')))
+      .where(and(notInArray(users.id, enrolledSubquery), ...extraConditions))
       .orderBy(users.lastName, users.firstName)
       .limit(200);
 
@@ -238,15 +238,16 @@ export class SectionsService {
     const section = await this.findById(sectionId);
 
     return await this.db.transaction(async (tx) => {
-      // 1. Capacity check — count current section-only enrollments
+      // 1. Capacity check — count DISTINCT enrolled students regardless of classId.
+      // A student whose section-only row was promoted to a class row still occupies a
+      // seat; counting only classId=NULL rows would silently under-report occupancy.
       const [rosterResult] = await tx
-        .select({ count: count() })
+        .select({ count: countDistinct(enrollments.studentId) })
         .from(enrollments)
         .where(
           and(
             eq(enrollments.sectionId, sectionId),
             eq(enrollments.status, 'enrolled'),
-            isNull(enrollments.classId),
           ),
         );
 
@@ -267,6 +268,27 @@ export class SectionsService {
       const invalidIds = dto.studentIds.filter(id => !validIds.has(id));
       if (invalidIds.length > 0) {
         throw new BadRequestException(`Student IDs not found: ${invalidIds.join(', ')}`);
+      }
+
+      // 2b. Verify every provided ID actually holds the 'student' role.
+      // Prevents accidentally enrolling teachers or admins as section members.
+      const studentRoleRows = await tx
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(roles.id, userRoles.roleId))
+        .where(
+          and(
+            inArray(userRoles.userId, dto.studentIds),
+            eq(roles.name, 'student'),
+          ),
+        );
+
+      const confirmedStudentIds = new Set(studentRoleRows.map(r => r.userId));
+      const nonStudentIds = dto.studentIds.filter(id => !confirmedStudentIds.has(id));
+      if (nonStudentIds.length > 0) {
+        throw new BadRequestException(
+          `The following user(s) do not have the student role: ${nonStudentIds.join(', ')}`,
+        );
       }
 
       // 3. Find which students are already enrolled in this section (one query)
@@ -312,28 +334,54 @@ export class SectionsService {
   async removeStudentFromSection(sectionId: string, studentId: string) {
     await this.findById(sectionId);
 
-    // Only target active enrolled rows so historical dropped/completed rows are preserved
-    const enrollment = await this.db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.sectionId, sectionId),
-        eq(enrollments.studentId, studentId),
-        eq(enrollments.status, 'enrolled'),
-      ),
+    // Wrap the guard check and the delete in a transaction to prevent a TOCTOU race
+    // where a concurrent class-enrollment insert lands between the guard read and the
+    // delete, leaving the student with a class row but no section row.
+    return await this.db.transaction(async (tx) => {
+      // Guard: if the student has any class-associated enrollment in this section,
+      // those must be cleared first. Use plain select (not relational query API) so
+      // both checks run inside the same transaction object.
+      const [classEnrollment] = await tx
+        .select({ id: enrollments.id, classId: enrollments.classId })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.sectionId, sectionId),
+            eq(enrollments.studentId, studentId),
+            eq(enrollments.status, 'enrolled'),
+            isNotNull(enrollments.classId),
+          ),
+        )
+        .limit(1);
+
+      if (classEnrollment) {
+        throw new BadRequestException(
+          `Student has an active class enrollment in this section (class ID: ${classEnrollment.classId}); remove the class enrollment first`,
+        );
+      }
+
+      // Target the section-only row (classId = NULL) explicitly.
+      const [sectionEnrollment] = await tx
+        .select({ id: enrollments.id })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.sectionId, sectionId),
+            eq(enrollments.studentId, studentId),
+            eq(enrollments.status, 'enrolled'),
+            isNull(enrollments.classId),
+          ),
+        )
+        .limit(1);
+
+      if (!sectionEnrollment) {
+        throw new BadRequestException('Student is not actively enrolled in this section');
+      }
+
+      await tx.delete(enrollments).where(eq(enrollments.id, sectionEnrollment.id));
+
+      return { removed: true };
     });
-
-    if (!enrollment) {
-      throw new BadRequestException('Student is not actively enrolled in this section');
-    }
-
-    if (enrollment.classId) {
-      throw new BadRequestException(
-        `Student has an active class enrollment in this section (class ID: ${enrollment.classId}); remove the class enrollment first`,
-      );
-    }
-
-    await this.db.delete(enrollments).where(eq(enrollments.id, enrollment.id));
-
-    return { removed: true };
   }
 
   // ─── createSection ────────────────────────────────────────────────────────
@@ -366,20 +414,32 @@ export class SectionsService {
       await this.verifyAdviserHasTeacherRole(createSectionDto.adviserId);
     }
 
-    const [newSection] = await this.db
-      .insert(sections)
-      .values({
-        name: createSectionDto.name,
-        gradeLevel: createSectionDto.gradeLevel,
-        schoolYear: createSectionDto.schoolYear,
-        capacity: createSectionDto.capacity,
-        roomNumber: createSectionDto.roomNumber || null,
-        adviserId: createSectionDto.adviserId || null,
-        isActive: true,
-      })
-      .returning();
+    try {
+      const [newSection] = await this.db
+        .insert(sections)
+        .values({
+          name: createSectionDto.name,
+          gradeLevel: createSectionDto.gradeLevel,
+          schoolYear: createSectionDto.schoolYear,
+          capacity: createSectionDto.capacity,
+          roomNumber: createSectionDto.roomNumber || null,
+          adviserId: createSectionDto.adviserId || null,
+          isActive: true,
+        })
+        .returning();
 
-    return this.findById(newSection.id);
+      return this.findById(newSection.id);
+    } catch (err: any) {
+      // Surface DB-level unique constraint violations (23505) as a friendly 409 instead
+      // of a 500 — these can occur under concurrent requests that both pass the
+      // application-level duplicate check before either commits (TOCTOU window).
+      if (err?.code === '23505') {
+        throw new ConflictException(
+          `Section "${createSectionDto.name}" already exists for grade ${createSectionDto.gradeLevel} in ${createSectionDto.schoolYear}`,
+        );
+      }
+      throw err;
+    }
   }
 
   // ─── updateSection ────────────────────────────────────────────────────────
@@ -407,7 +467,27 @@ export class SectionsService {
       }
     }
 
-    if (updateSectionDto.adviserId) {
+    // Guard: reject capacity reductions that would strand currently-enrolled students.
+    if (updateSectionDto.capacity !== undefined) {
+      const [headcountResult] = await this.db
+        .select({ count: countDistinct(enrollments.studentId) })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.sectionId, id),
+            eq(enrollments.status, 'enrolled'),
+          ),
+        );
+      const currentHeadcount = Number(headcountResult?.count ?? 0);
+      if (updateSectionDto.capacity < currentHeadcount) {
+        throw new BadRequestException(
+          `Cannot reduce capacity to ${updateSectionDto.capacity}: ${currentHeadcount} student(s) are currently enrolled`,
+        );
+      }
+    }
+
+    // Allow null to explicitly clear the adviser; skip role check when clearing.
+    if (updateSectionDto.adviserId !== undefined && updateSectionDto.adviserId !== null) {
       const adviser = await this.db.query.users.findFirst({
         where: eq(users.id, updateSectionDto.adviserId),
       });
@@ -439,9 +519,20 @@ export class SectionsService {
     if (updateSectionDto.adviserId !== undefined) updateData.adviserId = updateSectionDto.adviserId;
     if (updateSectionDto.isActive !== undefined) updateData.isActive = updateSectionDto.isActive;
 
-    await this.db.update(sections).set(updateData).where(eq(sections.id, id));
-
-    return this.findById(id);
+    try {
+      await this.db.update(sections).set(updateData).where(eq(sections.id, id));
+      return this.findById(id);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        const nameToCheck = updateSectionDto.name || existingSection.name;
+        const gradeToCheck = updateSectionDto.gradeLevel || existingSection.gradeLevel;
+        const yearToCheck = updateSectionDto.schoolYear || existingSection.schoolYear;
+        throw new ConflictException(
+          `Section "${nameToCheck}" already exists for grade ${gradeToCheck} in ${yearToCheck}`,
+        );
+      }
+      throw err;
+    }
   }
 
   // ─── deleteSection ────────────────────────────────────────────────────────
@@ -461,29 +552,33 @@ export class SectionsService {
     // Verify section exists first
     await this.findById(id);
 
-    // Pre-flight: block if active classes or enrolled students would be cascade-deleted
-    const [activeClassesResult, enrolledStudentsResult] = await Promise.all([
-      this.db
-        .select({ count: count() })
-        .from(classes)
-        .where(and(eq(classes.sectionId, id), eq(classes.isActive, true))),
-      this.db
-        .select({ count: count() })
-        .from(enrollments)
-        .where(and(eq(enrollments.sectionId, id), eq(enrollments.status, 'enrolled'))),
-    ]);
+    // Wrap the pre-flight count checks and the delete in a single transaction
+    // to prevent a TOCTOU race where new enrolments are inserted between the
+    // reads and the delete.
+    await this.db.transaction(async (tx) => {
+      const [activeClassesResult, enrolledStudentsResult] = await Promise.all([
+        tx
+          .select({ count: count() })
+          .from(classes)
+          .where(and(eq(classes.sectionId, id), eq(classes.isActive, true))),
+        tx
+          .select({ count: count() })
+          .from(enrollments)
+          .where(and(eq(enrollments.sectionId, id), eq(enrollments.status, 'enrolled'))),
+      ]);
 
-    const activeClasses = Number(activeClassesResult[0]?.count ?? 0);
-    const enrolledStudents = Number(enrolledStudentsResult[0]?.count ?? 0);
+      const activeClasses = Number(activeClassesResult[0]?.count ?? 0);
+      const enrolledStudents = Number(enrolledStudentsResult[0]?.count ?? 0);
 
-    if (activeClasses > 0 || enrolledStudents > 0) {
-      throw new BadRequestException(
-        `Cannot permanently delete this section: it has ${activeClasses} active class(es) and ${enrolledStudents} enrolled student(s). ` +
-          `Deactivate or remove them first, or use the soft-delete endpoint instead.`,
-      );
-    }
+      if (activeClasses > 0 || enrolledStudents > 0) {
+        throw new BadRequestException(
+          `Cannot permanently delete this section: it has ${activeClasses} active class(es) and ${enrolledStudents} enrolled student(s). ` +
+            `Deactivate or remove them first, or use the soft-delete endpoint instead.`,
+        );
+      }
 
-    await this.db.delete(sections).where(eq(sections.id, id));
+      await tx.delete(sections).where(eq(sections.id, id));
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -496,6 +591,26 @@ export class SectionsService {
   async getSectionSchedule(sectionId: string, requestingUser?: RequestingUser) {
     // Reuse findById for access-control (teacher ownership check is inherited)
     const section = await this.findById(sectionId, requestingUser);
+
+    // Students may only view schedules for sections they are actively enrolled in.
+    // findById does not enforce this check for the student role.
+    if (
+      requestingUser &&
+      requestingUser.roles.includes('student') &&
+      !requestingUser.roles.includes('admin') &&
+      !requestingUser.roles.includes('teacher')
+    ) {
+      const enrollment = await this.db.query.enrollments.findFirst({
+        where: and(
+          eq(enrollments.sectionId, sectionId),
+          eq(enrollments.studentId, requestingUser.userId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+      });
+      if (!enrollment) {
+        throw new ForbiddenException('You are not enrolled in this section');
+      }
+    }
 
     const classList = await this.db.query.classes.findMany({
       where: eq(classes.sectionId, sectionId),
@@ -514,7 +629,7 @@ export class SectionsService {
         name: section.name,
         gradeLevel: section.gradeLevel,
         schoolYear: section.schoolYear,
-        roomNumber: (section as any).roomNumber ?? null,
+        roomNumber: section.roomNumber ?? null,
       },
       classes: classList.map(cls => ({
         classId: cls.id,
@@ -523,7 +638,20 @@ export class SectionsService {
         room: cls.room,
         isActive: cls.isActive,
         teacher: cls.teacher,
-        schedules: ((cls as any).schedules ?? []).map(toCalendarSlot),
+        // De-duplicate schedule rows with identical days+startTime+endTime before mapping.
+        // The classSchedules table has no DB-level unique constraint on this combination,
+        // so a direct DB edit or migration edge case could produce duplicate rows that
+        // would silently render as overlapping calendar blocks on the frontend.
+        schedules: (cls.schedules ?? [])
+          .filter((s, i, arr) =>
+            arr.findIndex(
+              x =>
+                x.startTime === s.startTime &&
+                x.endTime === s.endTime &&
+                [...x.days].sort().join(',') === [...s.days].sort().join(','),
+            ) === i,
+          )
+          .map(toCalendarSlot),
       })),
     };
   }

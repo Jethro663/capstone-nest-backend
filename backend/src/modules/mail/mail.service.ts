@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { OTP_TTL_MINUTES } from '../../common/constants';
 
 @Injectable()
 export class MailService {
@@ -8,7 +9,7 @@ export class MailService {
 
   constructor() {
     // Only initialize transporter if credentials exist or we are in dev
-    if (process.env.EMAIL_SERVICE === 'gmail') {
+    if (process.env.EMAIL_SERVICE?.toLowerCase() === 'gmail') {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -16,16 +17,20 @@ export class MailService {
           pass: process.env.EMAIL_PASSWORD,
         },
       });
+      // Verify SMTP connectivity at startup so misconfigurations surface early
+      this.transporter.verify().catch((err) => {
+        this.logger.error('[MAIL] SMTP transporter verification failed', err.message);
+      });
     }
   }
 
   async sendOtpEmail(
     email: string,
     otp: string,
-    purpose: string = 'email_verification',
-  ) {
+    purpose: 'email_verification' | 'password_reset' = 'email_verification',
+  ): Promise<{ success: boolean; mode: 'development' | 'production' }> {
     if (!this.transporter) {
-      this.logger.warn(`[DEV MODE] OTP for ${email}: ${otp}`);
+      this.logger.debug(`[DEV MODE] OTP for ${email}: ${otp}`);
       return { success: true, mode: 'development' };
     }
 
@@ -40,7 +45,7 @@ export class MailService {
         to: email,
         subject,
         html: this.getOtpTemplate(otp, purpose),
-        text: `Your Nexora verification code is: ${otp}. Expires in 10 minutes.`,
+        text: `Your Nexora verification code is: ${otp}. Expires in ${OTP_TTL_MINUTES} minutes.`,
       });
       return { success: true, mode: 'production' };
     } catch (error) {
@@ -54,9 +59,12 @@ export class MailService {
    * @param email User's email address
    * @param password Temporary password
    */
-  async sendPasswordEmail(email: string, password: string) {
+  async sendPasswordEmail(
+    email: string,
+    password: string,
+  ): Promise<{ success: boolean; mode: 'development' | 'production' }> {
     if (!this.transporter) {
-      this.logger.warn(`[DEV MODE] Password for ${email}: ${password}`);
+      this.logger.debug(`[DEV MODE] Password email skipped for ${email} (no transporter)`);
       return { success: true, mode: 'development' };
     }
 
@@ -75,8 +83,7 @@ export class MailService {
     }
   }
 
-  // Kept your template logic inside the class
-  private getOtpTemplate(otp: string, purpose: string) {
+  private getOtpTemplate(otp: string, purpose: 'email_verification' | 'password_reset') {
     const isVerification = purpose === 'email_verification';
     const color = isVerification ? '#4CAF50' : '#2196F3';
     const title = isVerification
@@ -94,7 +101,7 @@ export class MailService {
             <div style="font-size: 32px; font-weight: bold; color: ${color}; text-align: center; margin: 20px 0;">
                 ${otp}
             </div>
-            <p><strong>Expires in 10 minutes.</strong></p>
+            <p><strong>Expires in ${OTP_TTL_MINUTES} minutes.</strong></p>
         </div>
       </div>
     `;
@@ -124,7 +131,7 @@ export class MailService {
               </ul>
             </div>
             <p style="margin-top: 20px; text-align: center;">
-              <a href="#" style="display: inline-block; padding: 12px 30px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 6px;">Go to Nexora</a>
+              <a href="${process.env.FRONTEND_URL || '#'}" style="display: inline-block; padding: 12px 30px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 6px;">Go to Nexora</a>
             </p>
         </div>
         <div style="padding: 20px; text-align: center; color: #999; font-size: 12px;">

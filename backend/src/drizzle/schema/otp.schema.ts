@@ -14,7 +14,7 @@ import { users } from './base.schema';
 export const otpPurposeEnum = pgEnum('otp_purpose', [
   'email_verification',
   'password_reset',
-  'login_2fa',
+  'login_2fa', // Reserved for future 2FA — not yet implemented; do not remove without a migration
 ]);
 
 export const otpVerifications = pgTable(
