@@ -7,8 +7,13 @@ import {
   IsInt,
   Min,
   IsUUID,
+  IsIn,
+  Validate,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { IsValidSchoolYearConstraint } from '../../classes/DTO/validators';
+
+const VALID_GRADE_LEVELS = ['7', '8', '9', '10'] as const;
 
 export class CreateSectionDto {
   @IsString()
@@ -20,11 +25,13 @@ export class CreateSectionDto {
 
   @IsString()
   @IsNotEmpty({ message: 'Grade level is required' })
+  @IsIn(VALID_GRADE_LEVELS, { message: 'gradeLevel must be one of: 7, 8, 9, 10' })
   @Transform(({ value }) => value?.trim())
   gradeLevel: string;
 
   @IsString()
   @IsNotEmpty({ message: 'School year is required' })
+  @Validate(IsValidSchoolYearConstraint)
   @Transform(({ value }) => value?.trim())
   schoolYear: string;
 

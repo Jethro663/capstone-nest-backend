@@ -39,6 +39,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     try {
       const client = await this.pool.connect();
       await client.query('SELECT 1');
+
+      // simple sanity check – warn if the student_profiles table is missing
+      // (it may still be named `user_profiles` if migrations were not applied).
+      const tbl = await client.query<{
+        to_regclass: string | null;
+      }>(`SELECT to_regclass('public.student_profiles')`);
+      if (!tbl.rows[0]?.to_regclass) {
+        this.logger.warn(
+          'Could not find table `student_profiles`. ' +
+            'Make sure you have run the database migrations (rename from user_profiles)',
+        );
+      }
+
       client.release();
       this.logger.log('✅ Database connection verified');
     } catch (error) {

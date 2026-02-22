@@ -11,12 +11,15 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ClassesService } from './classes.service';
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
+import { EnrollStudentDto } from './DTO/enroll-student.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Classes')
@@ -66,13 +69,20 @@ export class ClassesController {
   }
 
   /**
-   * Get classes by teacher ID
-   * Admin and Teacher can access
+   * Get classes by teacher ID.
+   * A teacher can only view their own classes; admins may view any.
    */
   @Get('teacher/:teacherId')
   @Roles('admin', 'teacher')
-  async getClassesByTeacher(@Param('teacherId') teacherId: string) {
-    const classes = await this.classesService.getClassesByTeacher(teacherId);
+  async getClassesByTeacher(
+    @Param('teacherId') teacherId: string,
+    @CurrentUser() user: any,
+  ) {
+    const classes = await this.classesService.getClassesByTeacher(
+      teacherId,
+      user?.userId,
+      user?.roles,
+    );
 
     return {
       success: true,
@@ -98,13 +108,14 @@ export class ClassesController {
   }
 
   /**
-   * Get classes by subject ID
-   * Admin and Teacher can access
+   * Get classes by subject code (e.g. "MATH-7").
+   * The param accepts a subject code string, NOT a UUID.
+   * Admin and Teacher can access.
    */
-  @Get('subject/:subjectId')
+  @Get('subject/:subjectCode')
   @Roles('admin', 'teacher')
-  async getClassesBySubject(@Param('subjectId') subjectId: string) {
-    const classes = await this.classesService.getClassesBySubject(subjectId);
+  async getClassesBySubject(@Param('subjectCode') subjectCode: string) {
+    const classes = await this.classesService.getClassesBySubject(subjectCode);
 
     return {
       success: true,
@@ -114,13 +125,20 @@ export class ClassesController {
   }
 
   /**
-   * Get classes enrolled by a student
-   * Students can access their own, teachers/admins can access any student's
+   * Get classes enrolled by a student.
+   * Students can only access their own records; teachers/admins may access any.
    */
   @Get('student/:studentId')
   @Roles('admin', 'teacher', 'student')
-  async getClassesByStudent(@Param('studentId') studentId: string) {
-    const classes = await this.classesService.getClassesByStudent(studentId);
+  async getClassesByStudent(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const classes = await this.classesService.getClassesByStudent(
+      studentId,
+      user?.userId,
+      user?.roles,
+    );
 
     return {
       success: true,
@@ -203,13 +221,9 @@ export class ClassesController {
   @Delete(':id')
   @Roles('admin')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteClass(@Param('id') id: string) {
+  async deleteClass(@Param('id') id: string): Promise<void> {
     await this.classesService.delete(id);
-
-    return {
-      success: true,
-      message: 'Class deleted successfully',
-    };
+    // 204 No Content — must not return a body
   }
 
   /**
@@ -248,19 +262,21 @@ export class ClassesController {
   }
 
   /**
-   * Enroll a student in a class
-   * Teacher (of the class) and Admin can access
+   * Enroll a student in a class.
+   * Teacher (of the class) and Admin can access.
+   * Throttle raised: the UI may fire one request per student when batch-adding.
    */
   @Post(':classId/enrollments')
   @Roles('admin', 'teacher')
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
   async enrollStudent(
     @Param('classId') classId: string,
-    @Body() body: { studentId: string },
+    @Body() dto: EnrollStudentDto,
   ) {
     const enrollment = await this.classesService.enrollStudent(
       classId,
-      body.studentId,
+      dto.studentId,
     );
 
     return {
@@ -276,6 +292,7 @@ export class ClassesController {
    */
   @Delete(':classId/enrollments/:studentId')
   @Roles('admin', 'teacher')
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
   async removeStudent(
     @Param('classId') classId: string,
     @Param('studentId') studentId: string,

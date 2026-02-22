@@ -184,7 +184,6 @@ export const classes = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
 
-    schedule: text('schedule'),
     room: text('room'),
     schoolYear: text('school_year').notNull(),
 
@@ -203,6 +202,27 @@ export const classes = pgTable(
       table.sectionId,
       table.schoolYear,
     ),
+  }),
+);
+
+// ─── Schedule Slots (one class → many time slots) ───────────────────────────
+
+export const classSchedules = pgTable(
+  'class_schedules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    // Array of day abbreviations: M T W Th F Sa Su
+    days: text('days').array().notNull(),
+    startTime: text('start_time').notNull(), // HH:MM 24-hour
+    endTime: text('end_time').notNull(),     // HH:MM 24-hour
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    classIdIdx: index('class_schedules_class_id_idx').on(table.classId),
   }),
 );
 
@@ -514,7 +534,7 @@ export const sectionsRelations = relations(sections, ({ many, one }) => ({
 }));
 
 export const classesRelations = relations(classes, ({ one, many }) => ({
-
+  schedules: many(classSchedules),
   section: one(sections, {
     fields: [classes.sectionId],
     references: [sections.id],
@@ -527,6 +547,13 @@ export const classesRelations = relations(classes, ({ one, many }) => ({
   enrollments: many(enrollments),
   lessons: many(lessons),
   assessments: many(assessments),
+}));
+
+export const classSchedulesRelations = relations(classSchedules, ({ one }) => ({
+  class: one(classes, {
+    fields: [classSchedules.classId],
+    references: [classes.id],
+  }),
 }));
 
 export const enrollmentsRelations = relations(enrollments, ({ one }) => ({

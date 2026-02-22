@@ -3,19 +3,16 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
-import { and, eq, ilike, or, SQL, isNull, ne, inArray } from 'drizzle-orm';
+import { and, count, eq, ilike, isNull, ne, inArray, notInArray, or, sql, SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { classes, sections, users, enrollments, studentProfiles } from '../../drizzle/schema';
-
-// Normalize grade level into typed union or undefined
-const normalizeGradeLevel = (v?: string): '7' | '8' | '9' | '10' | undefined => {
-  if (!v) return undefined;
-  const s = String(v).trim();
-  return s === '7' || s === '8' || s === '9' || s === '10' ? (s as '7' | '8' | '9' | '10') : undefined;
-};
+import { assessments, classSchedules, classes, sections, users, userRoles, roles, enrollments, studentProfiles, lessons } from '../../drizzle/schema';
+import { normalizeGradeLevel } from '../../common/utils/grade-level.util';
+import { toCalendarSlot, timeToMinutes } from '../../common/utils/schedule.util';
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
+import { ScheduleSlotDto } from './DTO/schedule-slot.dto';
 
 @Injectable()
 export class ClassesService {
@@ -74,18 +71,27 @@ export class ClassesService {
     if (filters?.search) {
       const searchPattern = `%${filters.search}%`;
       const searchCondition = or(
+        ilike(classes.subjectName, searchPattern),
+        ilike(classes.subjectCode, searchPattern),
         ilike(classes.room, searchPattern),
-        ilike(classes.schedule, searchPattern),
       );
       if (searchCondition) {
         whereConditions.push(searchCondition);
       }
     }
 
+    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(classes)
+      .where(whereClause);
+
     const classList = await this.db.query.classes.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      where: whereClause,
       with: {
         section: true,
+        schedules: true,
         teacher: {
           columns: {
             id: true,
@@ -103,7 +109,15 @@ export class ClassesService {
       offset,
     });
 
-    return classList;
+    return {
+      data: classList.map(c => ({
+        ...c,
+        schedules: (c.schedules ?? []).map(toCalendarSlot),
+      })),
+      total: Number(totalRow?.total ?? 0),
+      page,
+      limit,
+    };
   }
 
   /**
@@ -114,6 +128,7 @@ export class ClassesService {
       where: eq(classes.id, id),
       with: {
         section: true,
+        schedules: true,
         teacher: {
           columns: {
             id: true,
@@ -129,7 +144,10 @@ export class ClassesService {
       throw new NotFoundException(`Class with ID "${id}" not found`);
     }
 
-    return classRecord;
+    return {
+      ...classRecord,
+      schedules: (classRecord.schedules ?? []).map(toCalendarSlot),
+    };
   }
 
   /**
@@ -147,14 +165,27 @@ export class ClassesService {
       );
     }
 
-    // Verify that teacher exists
+    // Verify the teacher exists and has the teacher (or admin) role
     const teacher = await this.db.query.users.findFirst({
       where: eq(users.id, createClassDto.teacherId),
+      with: {
+        userRoles: {
+          with: { role: { columns: { name: true } } },
+        },
+      },
+      columns: { id: true, firstName: true, lastName: true },
     });
 
     if (!teacher) {
       throw new BadRequestException(
         `Teacher with ID "${createClassDto.teacherId}" not found`,
+      );
+    }
+
+    const teacherRoleNames = (teacher as any).userRoles?.map((ur: any) => ur.role?.name) ?? [];
+    if (!teacherRoleNames.includes('teacher') && !teacherRoleNames.includes('admin')) {
+      throw new BadRequestException(
+        `The specified user does not have a teacher role`,
       );
     }
 
@@ -181,7 +212,6 @@ export class ClassesService {
       sectionId: createClassDto.sectionId,
       teacherId: createClassDto.teacherId,
       schoolYear: createClassDto.schoolYear,
-      schedule: (createClassDto as any).schedule,
       room: createClassDto.room,
     };
 
@@ -189,6 +219,26 @@ export class ClassesService {
       .insert(classes)
       .values(insertPayload)
       .returning();
+
+    // Insert schedule slots (run collision check first)
+    if (createClassDto.schedules?.length) {
+      await this.checkCollisions({
+        classId: newClass.id,
+        sectionId: createClassDto.sectionId,
+        teacherId: createClassDto.teacherId,
+        room: createClassDto.room,
+        slots: createClassDto.schedules,
+      });
+
+      await this.db.insert(classSchedules).values(
+        createClassDto.schedules.map(slot => ({
+          classId: newClass.id,
+          days: slot.days,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+        })),
+      );
+    }
 
     return this.findById(newClass.id);
   }
@@ -198,7 +248,7 @@ export class ClassesService {
    */
   async update(id: string, updateClassDto: UpdateClassDto) {
     // Verify class exists
-    await this.findById(id);
+    const existing = await this.findById(id);
 
     // If updating subject fields, no external lookup required (denormalized fields)
     // We accept subjectName/subjectCode/subjectGradeLevel directly in the DTO.
@@ -229,8 +279,11 @@ export class ClassesService {
       }
     }
 
+    // Separate schedule slots from column-level fields
+    const { schedules, ...classFields } = updateClassDto;
+
     const updatePayload: any = {
-      ...updateClassDto,
+      ...classFields,
       updatedAt: new Date(),
     };
 
@@ -238,20 +291,88 @@ export class ClassesService {
       updatePayload.subjectGradeLevel = normalizeGradeLevel(String(updatePayload.subjectGradeLevel));
     }
 
+    // Ensure subjectCode is always stored uppercase (mirrors create() behaviour)
+    if (updatePayload.subjectCode) {
+      updatePayload.subjectCode = updatePayload.subjectCode.toUpperCase();
+    }
+
     await this.db
       .update(classes)
       .set(updatePayload)
       .where(eq(classes.id, id));
 
+    // Full-replacement of schedule slots when provided (even empty array clears all)
+    if (schedules !== undefined) {
+      const effectiveSectionId = updateClassDto.sectionId ?? existing.sectionId;
+      const effectiveTeacherId = updateClassDto.teacherId ?? existing.teacherId;
+      const effectiveRoom = updateClassDto.room ?? existing.room;
+
+      if (schedules.length > 0) {
+        await this.checkCollisions({
+          classId: id,
+          sectionId: effectiveSectionId,
+          teacherId: effectiveTeacherId,
+          room: effectiveRoom,
+          slots: schedules,
+          excludeClassId: id,
+        });
+      }
+
+      // Delete current slots then re-insert
+      await this.db.delete(classSchedules).where(eq(classSchedules.classId, id));
+
+      if (schedules.length > 0) {
+        await this.db.insert(classSchedules).values(
+          schedules.map(slot => ({
+            classId: id,
+            days: slot.days,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+          })),
+        );
+      }
+    }
+
     return this.findById(id);
   }
 
   /**
-   * Delete a class
+   * Delete a class.
+   * Blocked when active enrollments OR lessons are attached to prevent data loss.
    */
   async delete(id: string) {
     // Verify class exists
     const classRecord = await this.findById(id);
+
+    const activeEnrollments = await this.db.query.enrollments.findMany({
+      where: and(eq(enrollments.classId, id), eq(enrollments.status, 'enrolled')),
+      columns: { id: true },
+    });
+    if (activeEnrollments.length > 0) {
+      throw new ConflictException(
+        `Cannot delete a class with ${activeEnrollments.length} active enrollment(s). Unenroll all students first.`,
+      );
+    }
+
+    const classLessons = await this.db.query.lessons.findMany({
+      where: eq(lessons.classId, id),
+      columns: { id: true },
+    });
+    if (classLessons.length > 0) {
+      throw new ConflictException(
+        `Cannot delete a class with ${classLessons.length} lesson(s). Remove all lessons first.`,
+      );
+    }
+
+    const classAssessments = await this.db.query.assessments.findMany({
+      where: eq(assessments.classId, id),
+      columns: { id: true },
+    });
+    if (classAssessments.length > 0) {
+      throw new ConflictException(
+        `Cannot delete a class with ${classAssessments.length} assessment(s). Remove all assessments first.`,
+      );
+    }
 
     await this.db.delete(classes).where(eq(classes.id, id));
 
@@ -260,12 +381,27 @@ export class ClassesService {
 
   /**
    * Get classes by teacher ID
+   * Ownership enforced: a teacher may only view their own classes unless they are an admin.
    */
-  async getClassesByTeacher(teacherId: string) {
+  async getClassesByTeacher(
+    teacherId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    if (
+      requesterId &&
+      requesterRoles &&
+      !requesterRoles.includes('admin') &&
+      requesterId !== teacherId
+    ) {
+      throw new ForbiddenException('You can only view your own classes');
+    }
+
     const classList = await this.db.query.classes.findMany({
       where: eq(classes.teacherId, teacherId),
       with: {
         section: true,
+        schedules: true,
         enrollments: {
           columns: {
             id: true,
@@ -275,7 +411,10 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList;
+    return classList.map(c => ({
+      ...c,
+      schedules: (c.schedules ?? []).map(toCalendarSlot),
+    }));
   }
 
   /**
@@ -285,6 +424,7 @@ export class ClassesService {
     const classList = await this.db.query.classes.findMany({
       where: eq(classes.sectionId, sectionId),
       with: {
+        schedules: true,
         teacher: {
           columns: {
             id: true,
@@ -297,7 +437,10 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList;
+    return classList.map(c => ({
+      ...c,
+      schedules: (c.schedules ?? []).map(toCalendarSlot),
+    }));
   }
 
   /**
@@ -325,8 +468,22 @@ export class ClassesService {
 
   /**
    * Get all classes enrolled by a student
+   * Ownership enforced: a student may only view their own enrolled classes.
    */
-  async getClassesByStudent(studentId: string) {
+  async getClassesByStudent(
+    studentId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    if (
+      requesterId &&
+      requesterRoles &&
+      requesterRoles.includes('student') &&
+      requesterId !== studentId
+    ) {
+      throw new ForbiddenException('You can only view your own enrolled classes');
+    }
+
     // First, get all enrollments for this student
     const studentEnrollments = await this.db.query.enrollments.findMany({
       where: eq(enrollments.studentId, studentId),
@@ -345,6 +502,7 @@ export class ClassesService {
       where: (classTable) => inArray(classTable.id, classIds),
       with: {
         section: true,
+        schedules: true,
         teacher: {
           columns: {
             id: true,
@@ -363,7 +521,10 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList;
+    return classList.map(c => ({
+      ...c,
+      schedules: (c.schedules ?? []).map(toCalendarSlot),
+    }));
   }
 
   /**
@@ -427,135 +588,125 @@ export class ClassesService {
     // Get the class to find its section
     const classRecord = await this.findById(classId);
 
-    // Get all students in the section (enrolled in section with classId NULL)
-    const sectionEnrollments = await this.db.query.enrollments.findMany({
-      where: and(
-        eq(enrollments.sectionId, classRecord.sectionId),
-        isNull(enrollments.classId),
-        eq(enrollments.status, 'enrolled'),
-      ),
-      with: {
-        student: {
-          columns: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-          with: {
-            profile: {
-              columns: {
-                gradeLevel: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    // Get students already enrolled in this class
+    // IDs of students already enrolled in this specific class
     const classEnrollments = await this.db.query.enrollments.findMany({
       where: and(
         eq(enrollments.classId, classId),
         eq(enrollments.status, 'enrolled'),
       ),
-      columns: {
-        studentId: true,
+      columns: { studentId: true },
+    });
+    const enrolledStudentIds = classEnrollments.map(e => e.studentId);
+
+    // Single query: section students with classId=NULL not yet in this class
+    const candidateWhere =
+      enrolledStudentIds.length > 0
+        ? and(
+            eq(enrollments.sectionId, classRecord.sectionId),
+            isNull(enrollments.classId),
+            eq(enrollments.status, 'enrolled'),
+            notInArray(enrollments.studentId, enrolledStudentIds),
+          )
+        : and(
+            eq(enrollments.sectionId, classRecord.sectionId),
+            isNull(enrollments.classId),
+            eq(enrollments.status, 'enrolled'),
+          );
+
+    const candidates = await this.db.query.enrollments.findMany({
+      where: candidateWhere,
+      with: {
+        student: {
+          columns: { id: true, firstName: true, lastName: true, email: true },
+          with: { profile: { columns: { gradeLevel: true } } },
+        },
       },
     });
-
-    const enrolledStudentIds = new Set(classEnrollments.map(e => e.studentId));
-
-    // Filter out already enrolled students
-    const candidates = sectionEnrollments.filter(
-      e => !enrolledStudentIds.has(e.studentId),
-    );
 
     return candidates;
   }
 
   /**
-   * Enroll a student in a class
-   * If the student is already in the section (with classId=NULL), update that enrollment
-   * Otherwise, create a new enrollment
+   * Enroll a student in a class.
+   * All reads and the final write are wrapped in a single database transaction
+   * to prevent duplicate enrollments under concurrent requests.
    */
   async enrollStudent(classId: string, studentId: string) {
-    // Verify class exists
+    // Pre-flight checks outside the transaction (cheap, read-only)
     const classRecord = await this.findById(classId);
 
-    // Verify student exists
     const student = await this.db.query.users.findFirst({
       where: eq(users.id, studentId),
     });
-
     if (!student) {
       throw new BadRequestException(`Student with ID "${studentId}" not found`);
     }
 
-    // Check if student is already enrolled in this class
-    const existingEnrollment = await this.db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.studentId, studentId),
-        eq(enrollments.classId, classId),
-      ),
+    // Run the duplicate-check + write atomically
+    const enrollmentId = await this.db.transaction(async (tx) => {
+      // Re-check inside the transaction to close the TOCTOU race window
+      const existingEnrollment = await tx.query.enrollments.findFirst({
+        where: and(
+          eq(enrollments.studentId, studentId),
+          eq(enrollments.classId, classId),
+        ),
+      });
+      if (existingEnrollment) {
+        throw new ConflictException(`Student is already enrolled in this class`);
+      }
+
+      const sectionEnrollment = await tx.query.enrollments.findFirst({
+        where: and(
+          eq(enrollments.studentId, studentId),
+          eq(enrollments.sectionId, classRecord.sectionId),
+        ),
+      });
+      if (!sectionEnrollment) {
+        throw new BadRequestException(
+          `Student is not enrolled in the section for this class`,
+        );
+      }
+
+      if (sectionEnrollment.classId === null) {
+        // Promote the section-only row to a full class enrollment
+        await tx
+          .update(enrollments)
+          .set({ classId, enrolledAt: new Date() })
+          .where(eq(enrollments.id, sectionEnrollment.id));
+        return sectionEnrollment.id;
+      } else {
+        // Student already has another class; create a new enrollment row
+        const [newEnrollment] = await tx
+          .insert(enrollments)
+          .values({
+            studentId,
+            classId,
+            sectionId: classRecord.sectionId,
+            status: 'enrolled',
+          })
+          .returning();
+        return newEnrollment.id;
+      }
     });
 
-    if (existingEnrollment) {
-      throw new ConflictException(
-        `Student is already enrolled in this class`,
-      );
-    }
-
-    // Check if student is in the section
-    const sectionEnrollment = await this.db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.studentId, studentId),
-        eq(enrollments.sectionId, classRecord.sectionId),
-      ),
-    });
-
-    if (!sectionEnrollment) {
-      throw new BadRequestException(
-        `Student is not enrolled in the section for this class`,
-      );
-    }
-
-    // If the student has a section-only enrollment (classId=NULL), update it
-    if (sectionEnrollment.classId === null) {
-      await this.db
-        .update(enrollments)
-        .set({
-          classId: classId,
-          enrolledAt: new Date(),
-        })
-        .where(eq(enrollments.id, sectionEnrollment.id));
-
-      return this.getEnrollmentById(sectionEnrollment.id);
-    } else {
-      // Student already has a classId, create a new enrollment record
-      const [newEnrollment] = await this.db
-        .insert(enrollments)
-        .values({
-          studentId,
-          classId,
-          sectionId: classRecord.sectionId,
-          status: 'enrolled',
-        })
-        .returning();
-
-      return this.getEnrollmentById(newEnrollment.id);
-    }
+    // Read the fully populated enrollment after the transaction is committed
+    return this.getEnrollmentById(enrollmentId);
   }
 
   /**
-   * Remove a student from a class
-   * Deletes the enrollment record
+   * Remove a student from a class.
+   *
+   * Critical safety rule: the first enrollment row a student gets in a section
+   * starts as classId=NULL and is *promoted* (not duplicated) when they are
+   * added to a class.  Deleting that row would silently remove the student from
+   * the section entirely.  Instead:
+   *   – If a separate section-only (classId=NULL) row already exists → this  is
+   *     an additional class-enrollment row; delete it.
+   *   – Otherwise → this IS the (promoted) section row; revert classId to NULL.
    */
   async removeStudent(classId: string, studentId: string) {
-    // Verify class exists
-    await this.findById(classId);
+    const classRecord = await this.findById(classId);
 
-    // Find and delete the enrollment
     const enrollment = await this.db.query.enrollments.findFirst({
       where: and(
         eq(enrollments.studentId, studentId),
@@ -564,14 +715,124 @@ export class ClassesService {
     });
 
     if (!enrollment) {
-      throw new NotFoundException(
-        `Student is not enrolled in this class`,
-      );
+      throw new NotFoundException(`Student is not enrolled in this class`);
     }
 
-    await this.db.delete(enrollments).where(eq(enrollments.id, enrollment.id));
+    // Determine whether a separate section-only row already exists
+    const existingSectionRow = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.sectionId, classRecord.sectionId),
+        isNull(enrollments.classId),
+      ),
+    });
+
+    if (existingSectionRow) {
+      // Additional class-enrollment row — safe to delete
+      await this.db.delete(enrollments).where(eq(enrollments.id, enrollment.id));
+    } else {
+      // Promoted section row — revert to section-only instead of deleting
+      await this.db
+        .update(enrollments)
+        .set({ classId: null })
+        .where(eq(enrollments.id, enrollment.id));
+    }
 
     return { id: enrollment.id };
+  }
+
+  /**
+   * Check for schedule collisions across section, teacher, and room.
+   * Throws ConflictException with full conflict detail if any overlap is found.
+   *
+   * Collision rules:
+   *  - A section cannot have two classes on the same day at the same time
+   *  - A teacher cannot be in two places at the same time
+   *  - A room cannot host two classes at the same time
+   */
+  private async checkCollisions(params: {
+    classId: string;
+    sectionId: string;
+    teacherId: string;
+    room?: string | null;
+    slots: ScheduleSlotDto[];
+    excludeClassId?: string;
+  }): Promise<void> {
+    const { sectionId, teacherId, room, slots, excludeClassId } = params;
+    const conflicts: any[] = [];
+
+    for (const slot of slots) {
+      // Validate end > start
+      if (timeToMinutes(slot.endTime) <= timeToMinutes(slot.startTime)) {
+        throw new BadRequestException(
+          `endTime "${slot.endTime}" must be after startTime "${slot.startTime}" for days ${slot.days.join(',')}`
+        );
+      }
+
+      const conditions: SQL[] = [
+        // Day overlap: stored days array has at least one day in common with incoming days
+        sql`${classSchedules.days} && ${slot.days}::text[]`,
+        // Time overlap: existing.start < new.end AND existing.end > new.start
+        sql`${classSchedules.startTime} < ${slot.endTime}`,
+        sql`${classSchedules.endTime} > ${slot.startTime}`,
+      ];
+
+      if (excludeClassId) {
+        conditions.push(ne(classSchedules.classId, excludeClassId));
+      }
+
+      const scopeParts: SQL[] = [
+        eq(classes.sectionId, sectionId),
+        eq(classes.teacherId, teacherId),
+      ];
+      if (room) {
+        scopeParts.push(
+          and(
+            sql`${classes.room} IS NOT NULL`,
+            eq(classes.room, room),
+          ) as SQL
+        );
+      }
+
+      const conflictRows = await this.db
+        .select({
+          slotId: classSchedules.id,
+          classId: classSchedules.classId,
+          days: classSchedules.days,
+          startTime: classSchedules.startTime,
+          endTime: classSchedules.endTime,
+          subjectName: classes.subjectName,
+          classSectionId: classes.sectionId,
+          classTeacherId: classes.teacherId,
+          classRoom: classes.room,
+        })
+        .from(classSchedules)
+        .innerJoin(classes, eq(classes.id, classSchedules.classId))
+        .where(and(...conditions, or(...scopeParts)));
+
+      for (const row of conflictRows) {
+        const conflictTypes: string[] = [];
+        if (row.classSectionId === sectionId) conflictTypes.push('section');
+        if (row.classTeacherId === teacherId) conflictTypes.push('teacher');
+        if (room && row.classRoom === room) conflictTypes.push('room');
+
+        conflicts.push({
+          conflictType: conflictTypes,
+          classId: row.classId,
+          subjectName: row.subjectName,
+          days: row.days,
+          startTime: row.startTime,
+          endTime: row.endTime,
+        });
+      }
+    }
+
+    if (conflicts.length > 0) {
+      throw new ConflictException({
+        message: 'Schedule conflicts detected',
+        conflicts,
+      });
+    }
   }
 
   /**

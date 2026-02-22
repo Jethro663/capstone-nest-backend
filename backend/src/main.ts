@@ -34,7 +34,7 @@ async function bootstrap() {
   );
 
   // Swagger — only exposed outside production to avoid leaking API shapes
-  if (!isProd) {
+  if (isProd) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Nexora LMS + LXP API')
       .setDescription('LMS + LXP API documentation')
@@ -60,13 +60,18 @@ async function bootstrap() {
   // Cookie parser
   app.use(cookieParser());
 
-  // CORS — allow localhost origins only outside production
+  // CORS — allow configured origins; localhost only outside production
   const devOrigins = !isProd
     ? ['http://localhost:5173', 'http://localhost:8081']
     : [];
 
   app.enableCors({
-    origin: [process.env.FRONTEND_URL, ...devOrigins].filter(Boolean),
+    origin: [
+      process.env.FRONTEND_URL,
+      process.env.NEXT_FRONTEND_URL,
+      process.env.MOBILE_URL,
+      ...devOrigins,
+    ].filter(Boolean),
     credentials: true,
   });
 

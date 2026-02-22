@@ -5,11 +5,13 @@ import {
   IsBoolean,
   Validate,
   IsIn,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
-import {
-  IsValidSchoolYearConstraint,
-  IsValidScheduleConstraint,
-} from './validators';
+import { Type } from 'class-transformer';
+import { IsValidSchoolYearConstraint } from './validators';
+import { GRADE_LEVELS } from '../../../common/utils/grade-level.util';
+import { ScheduleSlotDto } from './schedule-slot.dto';
 
 export class UpdateClassDto {
   @IsOptional()
@@ -21,7 +23,7 @@ export class UpdateClassDto {
   subjectCode?: string;
 
   @IsOptional()
-  @IsIn(['7','8','9','10'], { message: 'subjectGradeLevel must be 7,8,9 or 10' })
+  @IsIn([...GRADE_LEVELS], { message: 'subjectGradeLevel must be 7, 8, 9 or 10' })
   subjectGradeLevel?: string;
 
   @IsOptional()
@@ -37,10 +39,15 @@ export class UpdateClassDto {
   @Validate(IsValidSchoolYearConstraint)
   schoolYear?: string;
 
+  /**
+   * Full replacement of schedule slots. Omit to leave existing slots unchanged.
+   * Pass an empty array `[]` to clear all slots.
+   */
   @IsOptional()
-  @IsString({ message: 'schedule must be a string' })
-  @Validate(IsValidScheduleConstraint)
-  schedule?: string;
+  @IsArray({ message: 'schedules must be an array of schedule slots' })
+  @ValidateNested({ each: true })
+  @Type(() => ScheduleSlotDto)
+  schedules?: ScheduleSlotDto[];
 
   @IsOptional()
   @IsString({ message: 'room must be a string' })

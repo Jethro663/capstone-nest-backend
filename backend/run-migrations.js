@@ -34,10 +34,13 @@ async function applyMigrationFile(filePath) {
         err.code === '42P07' || // duplicate_table
         err.code === '42701';   // duplicate_column
       // Skip "does not exist" errors — can happen when CASCADE already dropped
-      // a constraint/index before an explicit DROP statement runs
+      // a constraint/index before an explicit DROP statement runs, or when an
+      // old FK/constraint references a column that was removed in a later
+      // migration (e.g. subject_id after subjects were denormalised into classes).
       const doesNotExist =
         err.code === '42704' || // undefined_object (constraint/index)
-        err.code === '42P01';   // undefined_table
+        err.code === '42P01' || // undefined_table
+        err.code === '42703';   // undefined_column (old FK refs removed column)
 
       if (alreadyExists || doesNotExist) {
         console.log(`  ⚠ Skipped (${err.code}): ${err.message.split('\n')[0]}`);

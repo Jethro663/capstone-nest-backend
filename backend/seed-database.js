@@ -63,10 +63,15 @@ const CLASS = {
   subjectName: 'Mathematics',
   subjectCode: 'MATH-7',
   subjectGradeLevel: '7',
-  schedule: 'MWF 9:00 AM - 10:00 AM',
   room: '101',
   schoolYear: '2024-2025',
 };
+
+// Class schedule slots (MWF 09:00–10:00, Th 13:00–15:00 as a lab slot example)
+const CLASS_SCHEDULES = [
+  { days: ['M', 'W', 'F'], startTime: '09:00', endTime: '10:00' },
+  { days: ['Th'],          startTime: '13:00', endTime: '15:00' },
+];
 
 // ============================================
 // UTILITIES
@@ -144,67 +149,46 @@ async function seedDatabase() {
     // Create Admin
     const adminId = uuid();
     const adminPasswordHash = await hashPassword(ADMIN_USER.password);
-    try {
-      await client.query(
+    {
+      const result = await client.query(
         `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (email) DO NOTHING
+         ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
         [adminId, ADMIN_USER.email, adminPasswordHash, ADMIN_USER.firstName, ADMIN_USER.lastName, 'ACTIVE', true]
       );
-      users.admin = adminId;
+      users.admin = result.rows[0].id;
       log(`  ✓ Admin user created (${ADMIN_USER.email})`, 'success');
-    } catch (err) {
-      if (err.code !== '23505') throw err;
-      const result = await client.query('SELECT id FROM users WHERE email = $1', [ADMIN_USER.email]);
-      if (result.rows.length > 0) {
-        users.admin = result.rows[0].id;
-        log(`  ℹ️  Admin user already exists`, 'info');
-      }
     }
 
     // Create Teacher
     const teacherId = uuid();
     const teacherPasswordHash = await hashPassword(TEACHER_USER.password);
-    try {
-      await client.query(
+    {
+      const result = await client.query(
         `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (email) DO NOTHING
+         ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
         [teacherId, TEACHER_USER.email, teacherPasswordHash, TEACHER_USER.firstName, TEACHER_USER.lastName, 'ACTIVE', true]
       );
-      users.teacher = teacherId;
+      users.teacher = result.rows[0].id;
       log(`  ✓ Teacher user created (${TEACHER_USER.email})`, 'success');
-    } catch (err) {
-      if (err.code !== '23505') throw err;
-      const result = await client.query('SELECT id FROM users WHERE email = $1', [TEACHER_USER.email]);
-      if (result.rows.length > 0) {
-        users.teacher = result.rows[0].id;
-        log(`  ℹ️  Teacher user already exists`, 'info');
-      }
     }
 
     // Create Student
     const studentUserId = uuid();
     const studentPasswordHash = await hashPassword(STUDENT_USER.password);
-    try {
-      await client.query(
+    {
+      const result = await client.query(
         `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (email) DO NOTHING
+         ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
         [studentUserId, STUDENT_USER.email, studentPasswordHash, STUDENT_USER.firstName, STUDENT_USER.lastName, 'ACTIVE', true]
       );
-      users.student = studentUserId;
+      users.student = result.rows[0].id;
       log(`  ✓ Student user created (${STUDENT_USER.email})`, 'success');
-    } catch (err) {
-      if (err.code !== '23505') throw err;
-      const result = await client.query('SELECT id FROM users WHERE email = $1', [STUDENT_USER.email]);
-      if (result.rows.length > 0) {
-        users.student = result.rows[0].id;
-        log(`  ℹ️  Student user already exists`, 'info');
-      }
     }
 
     // ========== STEP 3: ASSIGN ROLES ==========
@@ -289,11 +273,11 @@ async function seedDatabase() {
     const classId = uuid();
     try {
       await client.query(
-        `INSERT INTO classes (id, subject_name, subject_code, subject_grade_level, section_id, teacher_id, schedule, room, school_year, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `INSERT INTO classes (id, subject_name, subject_code, subject_grade_level, section_id, teacher_id, room, school_year, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          ON CONFLICT (subject_code, section_id, school_year) DO NOTHING
          RETURNING id`,
-        [classId, CLASS.subjectName, CLASS.subjectCode, CLASS.subjectGradeLevel, finalSectionId, users.teacher, CLASS.schedule, CLASS.room, CLASS.schoolYear, true]
+        [classId, CLASS.subjectName, CLASS.subjectCode, CLASS.subjectGradeLevel, finalSectionId, users.teacher, CLASS.room, CLASS.schoolYear, true]
       );
       log(`  ✓ Class created: ${CLASS.subjectName} (${CLASS.subjectCode})`, 'success');
     } catch (err) {
@@ -315,6 +299,19 @@ async function seedDatabase() {
       [CLASS.subjectCode, finalSectionId, CLASS.schoolYear]
     );
     const finalClassId = classQuery.rows[0].id;
+
+    // ========== STEP 6b: SEED CLASS SCHEDULES ==========
+    log('Creating class schedule slots...');
+    for (const slot of CLASS_SCHEDULES) {
+      const slotId = uuid();
+      await client.query(
+        `INSERT INTO class_schedules (id, class_id, days, start_time, end_time)
+         VALUES ($1, $2, $3::text[], $4, $5)
+         ON CONFLICT DO NOTHING`,
+        [slotId, finalClassId, slot.days, slot.startTime, slot.endTime]
+      );
+      log(`  ✓ Schedule slot: days=[${slot.days.join(',')}] ${slot.startTime}–${slot.endTime}`, 'success');
+    }
 
     // ========== STEP 7: CREATE ENROLLMENT ==========
     log('Creating student enrollment...');

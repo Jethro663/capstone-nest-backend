@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { and, eq, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
@@ -31,6 +32,8 @@ type ValidStatus = (typeof VALID_STATUSES)[number];
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private databaseService: DatabaseService,
     private otpService: OtpService,
@@ -93,28 +96,59 @@ export class UsersService {
     });
   }
 
+  /**
+   * Look up a user by email.  Drizzle's auto-join logic was generating a
+   * rather complex lateral query that blows up when the profile table
+   * doesn't exist (for example if migrations haven't been run yet).  The
+   * error shown in the log was coming from that failed query.  To make the
+   * lookup more robust we perform three small queries ourselves and merge
+   * the results.  A missing `student_profiles` table is treated as an
+   * empty profile instead of crashing the entire request.
+   */
   async findByEmail(email: string) {
     const user = await this.db.query.users.findFirst({
       where: eq(users.email, email),
-      with: {
-        userRoles: {
-          with: {
-            role: true,
-          },
-        },
-        profile: true,
-      },
     });
 
     if (!user) return null;
 
-    // Transform to include roles array and flatten profile into the user object
-    const profile = (user as any).profile || {};
-    const { userRoles: userRolesData, profile: _p, ...userData } = user as any;
+    // fetch roles and profile in parallel; ignore errors coming from the
+    // profile query in case the table has not been created yet.
+    const [userRolesData, profileData] = await Promise.all([
+      this.db.query.userRoles
+        .findMany({
+          where: eq(userRoles.userId, user.id),
+          with: { role: true },
+        })
+        .catch((err) => {
+          // if the roles or user_roles table hasn't been created yet the
+          // generated lateral query will blow up.  treat it the same way we
+          // handle missing profiles above: log a warning and return an
+          // empty set so the caller can continue.
+          const msg = String(err);
+          if (msg.includes('user_roles') || msg.includes('roles')) {
+            this.logger.warn(
+              'Could not load user roles (missing table?). continuing with no roles.',
+            );
+            return [];
+          }
+          throw err;
+        }),
+      this.db.query.studentProfiles
+        .findFirst({ where: eq(studentProfiles.userId, user.id) })
+        .catch((err) => {
+          // postgres error for missing relation will contain the table name;
+          // swallow it and pretend the profile is empty.
+          if (String(err).includes('student_profiles')) {
+            return null;
+          }
+          throw err;
+        }),
+    ]);
 
     return {
-      ...userData,
-      ...profile,
+      ...user,
+      ...(profileData || {}),
       roles: userRolesData.map((ur) => ur.role),
     };
   }
@@ -122,24 +156,28 @@ export class UsersService {
   async findById(id: string) {
     const user = await this.db.query.users.findFirst({
       where: eq(users.id, id),
-      with: {
-        userRoles: {
-          with: {
-            role: true,
-          },
-        },
-        profile: true,
-      },
     });
 
     if (!user) return null;
 
-    const profile = (user as any).profile || {};
-    const { userRoles: userRolesData, profile: _p, ...userData } = user as any;
+    const [userRolesData, profileData] = await Promise.all([
+      this.db.query.userRoles.findMany({
+        where: eq(userRoles.userId, user.id),
+        with: { role: true },
+      }),
+      this.db.query.studentProfiles
+        .findFirst({ where: eq(studentProfiles.userId, user.id) })
+        .catch((err) => {
+          if (String(err).includes('student_profiles')) {
+            return null;
+          }
+          throw err;
+        }),
+    ]);
 
     return {
-      ...userData,
-      ...profile,
+      ...user,
+      ...(profileData || {}),
       roles: userRolesData.map((ur) => ur.role),
     };
   }

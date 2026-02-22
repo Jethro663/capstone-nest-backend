@@ -127,6 +127,13 @@
       "when": 1771684461275,
       "tag": "0017_sleepy_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1771754622982,
+      "tag": "0018_narrow_wendigo",
+      "breakpoints": true
     }
   ]
 }

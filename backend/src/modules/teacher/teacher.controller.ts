@@ -28,8 +28,12 @@ export class TeacherController {
   @Get('lessons')
   @Roles('teacher', 'admin')
   async getLessons(@CurrentUser() user: any) {
-    // Get teacher's classes first
-    const classes = await this.classesService.getClassesByTeacher(user.userId);
+    // Get teacher's classes first (ownership check is enforced inside the service)
+    const classes = await this.classesService.getClassesByTeacher(
+      user.userId,
+      user.userId,
+      user.roles,
+    );
     const classIds = classes.map((c) => c.id);
 
     // Get all lessons for those classes
@@ -52,7 +56,11 @@ export class TeacherController {
   @Get('classes')
   @Roles('teacher', 'admin')
   async getClasses(@CurrentUser() user: any) {
-    const classes = await this.classesService.getClassesByTeacher(user.userId);
+    const classes = await this.classesService.getClassesByTeacher(
+      user.userId,
+      user.userId,
+      user.roles,
+    );
     return {
       success: true,
       data: classes,
