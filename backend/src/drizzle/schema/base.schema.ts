@@ -2,6 +2,8 @@ import {
   pgTable,
   uuid,
   text,
+  varchar,
+  bigint,
   timestamp,
   integer,
   boolean,
@@ -667,6 +669,49 @@ export const assessmentResponsesRelations = relations(
     selectedOption: one(assessmentQuestionOptions, {
       fields: [assessmentResponses.selectedOptionId],
       references: [assessmentQuestionOptions.id],
+    }),
+  }),
+);
+
+// ==========================================
+// 6. FILE UPLOADS
+// ==========================================
+
+export const uploadedFiles = pgTable(
+  'uploaded_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    originalName: varchar('original_name', { length: 255 }).notNull(),
+    storedName: varchar('stored_name', { length: 255 }).notNull(),
+    mimeType: varchar('mime_type', { length: 100 }).notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    filePath: text('file_path').notNull(),
+    uploadedAt: timestamp('uploaded_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at'),
+  },
+  (table) => ({
+    teacherIdx: index('uploaded_files_teacher_idx').on(table.teacherId),
+    classIdx: index('uploaded_files_class_idx').on(table.classId),
+    uploadedAtIdx: index('uploaded_files_uploaded_at_idx').on(table.uploadedAt),
+  }),
+);
+
+export const uploadedFilesRelations = relations(
+  uploadedFiles,
+  ({ one }) => ({
+    teacher: one(users, {
+      fields: [uploadedFiles.teacherId],
+      references: [users.id],
+    }),
+    class: one(classes, {
+      fields: [uploadedFiles.classId],
+      references: [classes.id],
     }),
   }),
 );

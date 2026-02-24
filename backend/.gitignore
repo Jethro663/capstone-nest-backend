@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# Uploaded files (binary — not committed)
+/uploads
+
 # Logs
 logs
 *.log

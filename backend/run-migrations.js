@@ -14,6 +14,7 @@ const EXTRA_MIGRATIONS = [
   '0018_add_archived_users.sql',
   '0019_add_refresh_tokens.sql',
   '0020_fix_column_types.sql',
+  '0026_add_uploaded_files.sql',
 ];
 
 async function applyMigrationFile(filePath) {

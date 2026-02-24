@@ -20,6 +20,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'An unexpected error occurred';
 
+    // Handle multer file-size limit errors
+    if (
+      exception instanceof Error &&
+      (exception as NodeJS.ErrnoException).code === 'LIMIT_FILE_SIZE'
+    ) {
+      return response.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+        success: false,
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        message: 'File exceeds the 100 MB maximum upload limit',
+        timestamp: new Date().toISOString(),
+        path: request.url,
+      });
+    }
+
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
