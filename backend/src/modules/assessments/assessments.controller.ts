@@ -14,7 +14,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AssessmentsService } from './assessments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   CreateAssessmentDto,
@@ -37,7 +37,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Get('class/:classId')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getAssessmentsByClass(@Param('classId') classId: string) {
     const assessmentList =
       await this.assessmentsService.getAssessmentsByClass(classId);
@@ -55,7 +55,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Get(':id')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getAssessmentById(@Param('id') id: string) {
     const assessment = await this.assessmentsService.getAssessmentById(id);
 
@@ -71,7 +71,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Post()
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   async createAssessment(@Body() createAssessmentDto: CreateAssessmentDto) {
     const assessment =
@@ -89,7 +89,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Put(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async updateAssessment(
     @Param('id') id: string,
     @Body() updateAssessmentDto: UpdateAssessmentDto,
@@ -111,7 +111,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Delete(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
   async deleteAssessment(@Param('id') id: string) {
     const result = await this.assessmentsService.deleteAssessment(id);
@@ -127,7 +127,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Post('questions')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   async createQuestion(@Body() createQuestionDto: CreateQuestionDto) {
     const question = await this.assessmentsService.createQuestion(
@@ -146,7 +146,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Put('questions/:id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async updateQuestion(
     @Param('id') id: string,
     @Body() updateQuestionDto: UpdateQuestionDto,
@@ -168,7 +168,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Delete('questions/:id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
   async deleteQuestion(@Param('id') id: string) {
     const result = await this.assessmentsService.deleteQuestion(id);
@@ -184,7 +184,7 @@ export class AssessmentsController {
    * Student can access
    */
   @Post(':assessmentId/start')
-  @Roles('admin', 'student')
+  @Roles(RoleName.Admin, RoleName.Student)
   @HttpCode(HttpStatus.CREATED)
   async startAttempt(
     @Param('assessmentId') assessmentId: string,
@@ -207,7 +207,7 @@ export class AssessmentsController {
    * Student can access
    */
   @Post('submit')
-  @Roles('admin', 'student')
+  @Roles(RoleName.Admin, RoleName.Student)
   @HttpCode(HttpStatus.OK)
   async submitAssessment(
     @Body() submitAssessmentDto: SubmitAssessmentDto,
@@ -230,7 +230,7 @@ export class AssessmentsController {
    * Student can view own, Teacher can view all
    */
   @Get('attempts/:attemptId/results')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getAttemptResults(@Param('attemptId') attemptId: string) {
     const results = await this.assessmentsService.getAttemptResults(attemptId);
 
@@ -246,7 +246,7 @@ export class AssessmentsController {
    * Student can access for own, Teacher can access any
    */
   @Get(':assessmentId/student-attempts')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getStudentAttempts(
     @Param('assessmentId') assessmentId: string,
     @CurrentUser() user: any,
@@ -269,7 +269,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Get(':assessmentId/all-attempts')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getAssessmentAttempts(@Param('assessmentId') assessmentId: string) {
     const attempts = await this.assessmentsService.getAssessmentAttempts(
       assessmentId,
@@ -288,7 +288,7 @@ export class AssessmentsController {
    * Teacher and Admin can access
    */
   @Get(':assessmentId/stats')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getAssessmentStats(@Param('assessmentId') assessmentId: string) {
     const stats = await this.assessmentsService.getAssessmentStats(
       assessmentId,

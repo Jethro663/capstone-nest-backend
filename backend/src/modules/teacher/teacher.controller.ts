@@ -9,7 +9,7 @@ import { AssessmentsService } from '../assessments/assessments.service';
 import { ClassesService } from '../classes/classes.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiBearerAuth('token')
@@ -26,7 +26,7 @@ export class TeacherController {
    * Get all lessons for the current teacher
    */
   @Get('lessons')
-  @Roles('teacher', 'admin')
+  @Roles(RoleName.Teacher, RoleName.Admin)
   async getLessons(@CurrentUser() user: any) {
     // Get teacher's classes first (ownership check is enforced inside the service)
     const classes = await this.classesService.getClassesByTeacher(
@@ -54,7 +54,7 @@ export class TeacherController {
    * Get all classes for the current teacher
    */
   @Get('classes')
-  @Roles('teacher', 'admin')
+  @Roles(RoleName.Teacher, RoleName.Admin)
   async getClasses(@CurrentUser() user: any) {
     const classes = await this.classesService.getClassesByTeacher(
       user.userId,
@@ -72,7 +72,7 @@ export class TeacherController {
    * Get all assessments for the current teacher
    */
   @Get('assessments')
-  @Roles('teacher', 'admin')
+  @Roles(RoleName.Teacher, RoleName.Admin)
   async getAssessments(@CurrentUser() user: any) {
     const assessments = await this.assessmentsService.getAssessmentsByTeacher(
       user.userId,

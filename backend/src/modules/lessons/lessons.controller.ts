@@ -14,7 +14,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { LessonsService } from './lessons.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   CreateLessonDto,
@@ -36,7 +36,7 @@ export class LessonsController {
    * Admin, Teacher, and Student can access
    */
   @Get('class/:classId')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getLessonsByClass(@Param('classId') classId: string) {
     const lessonList = await this.lessonsService.getLessonsByClass(classId);
 
@@ -53,7 +53,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Get(':id')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getLessonById(@Param('id') id: string) {
     const lesson = await this.lessonsService.getLessonById(id);
 
@@ -69,7 +69,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Post()
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   async createLesson(@Body() createLessonDto: CreateLessonDto) {
     const lesson = await this.lessonsService.createLesson(createLessonDto);
@@ -86,7 +86,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Put(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async updateLesson(
     @Param('id') id: string,
     @Body() updateLessonDto: UpdateLessonDto,
@@ -105,7 +105,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Put(':id/publish')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async publishLesson(@Param('id') id: string) {
     const lesson = await this.lessonsService.publishLesson(id);
 
@@ -121,7 +121,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Delete(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteLesson(@Param('id') id: string) {
     await this.lessonsService.deleteLesson(id);
@@ -137,7 +137,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Post(':lessonId/blocks')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   async addContentBlock(
     @Param('lessonId') lessonId: string,
@@ -160,7 +160,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Put('blocks/:blockId')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async updateContentBlock(
     @Param('blockId') blockId: string,
     @Body() updateBlockDto: UpdateContentBlockDto,
@@ -182,7 +182,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Delete('blocks/:blockId')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteContentBlock(@Param('blockId') blockId: string) {
     await this.lessonsService.deleteContentBlock(blockId);
@@ -198,7 +198,7 @@ export class LessonsController {
    * Teacher and Admin can access
    */
   @Put(':lessonId/reorder-blocks')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async reorderBlocks(
     @Param('lessonId') lessonId: string,
     @Body() reorderDto: ReorderBlocksDto,
@@ -220,7 +220,7 @@ export class LessonsController {
    * Students can mark their own lessons as complete
    */
   @Post(':lessonId/complete')
-  @Roles('student')
+  @Roles(RoleName.Student)
   async markLessonComplete(
     @Param('lessonId') lessonId: string,
     @CurrentUser() user: any,
@@ -242,7 +242,7 @@ export class LessonsController {
    * Students can check their own progress
    */
   @Get(':lessonId/completion-status')
-  @Roles('student')
+  @Roles(RoleName.Student)
   async getCompletionStatus(
     @Param('lessonId') lessonId: string,
     @CurrentUser() user: any,
@@ -263,7 +263,7 @@ export class LessonsController {
    * Students can view their own progress per class
    */
   @Get('class/:classId/completed')
-  @Roles('student')
+  @Roles(RoleName.Student)
   async getCompletedLessons(
     @Param('classId') classId: string,
     @CurrentUser() user: any,

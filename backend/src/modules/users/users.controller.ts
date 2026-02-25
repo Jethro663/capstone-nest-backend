@@ -17,7 +17,7 @@ import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
@@ -29,7 +29,7 @@ export class UsersController {
 
   // Get Commands
   @Get('all')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async getAllUsers(
     @Query('role') role?: string,
     @Query('status') status?: string,
@@ -53,7 +53,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async getUserById(@Param('id') id: string) {
     const user = await this.usersService.findPublicById(id);
 
@@ -66,7 +66,7 @@ export class UsersController {
   //Crud Operations
 
   @Post('create')
-  @Roles('admin') // Only admins can create users
+  @Roles(RoleName.Admin) // Only admins can create users
   async createUser(@Body() createUserDto: CreateUserDto) {
     const user = await this.usersService.createUser(createUserDto);
 
@@ -78,7 +78,7 @@ export class UsersController {
   }
 
   @Put('update/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async updateUser(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
@@ -94,7 +94,7 @@ export class UsersController {
 
   // Legacy soft-delete endpoint (kept for backward compatibility)
   @Delete('delete/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async deleteUser(@Param('id') id: string) {
     await this.usersService.deleteUser(id);
     return {
@@ -112,7 +112,7 @@ export class UsersController {
    * Data is fully preserved. User loses login access.
    */
   @Patch(':id/suspend')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async suspendUser(@Param('id') id: string, @CurrentUser() admin: any) {
     const result = await this.usersService.suspendUser(id, admin.sub || admin.id);
     return { success: true, ...result };
@@ -122,7 +122,7 @@ export class UsersController {
    * Reactivate a suspended user — SUSPENDED → ACTIVE
    */
   @Patch(':id/reactivate')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async reactivateUser(@Param('id') id: string, @CurrentUser() admin: any) {
     const result = await this.usersService.reactivateUser(id, admin.sub || admin.id);
     return { success: true, ...result };
@@ -133,7 +133,7 @@ export class UsersController {
    * Archives all user data into archived_users table before marking DELETED.
    */
   @Delete(':id/soft-delete')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async softDeleteUser(@Param('id') id: string, @CurrentUser() admin: any) {
     const result = await this.usersService.softDeleteUser(id, admin.sub || admin.id);
     return { success: true, ...result };
@@ -143,7 +143,7 @@ export class UsersController {
    * Export user data as JSON — downloadable archive before purge.
    */
   @Get(':id/export')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async exportUserData(@Param('id') id: string, @Res() res: Response) {
     const data = await this.usersService.exportUserData(id);
     const filename = `user-export-${id}-${Date.now()}.json`;
@@ -158,7 +158,7 @@ export class UsersController {
    * CASCADE deletes all related records. Archive snapshot is preserved.
    */
   @Delete(':id/purge')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async purgeUser(@Param('id') id: string, @CurrentUser() admin: any) {
     const result = await this.usersService.purgeUser(id, admin.sub || admin.id);
     return { success: true, ...result };

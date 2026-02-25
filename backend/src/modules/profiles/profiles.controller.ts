@@ -12,7 +12,7 @@ import { ProfilesService } from './profiles.service';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
@@ -25,7 +25,7 @@ export class ProfilesController {
 
   // Get current user's profile
   @Get('me')
-  @Roles('student', 'teacher', 'admin')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
   async getMyProfile(@CurrentUser() user: any) {
     const profile = await this.profilesService.findByUserId(user.userId);
     console.log(profile);
@@ -37,7 +37,7 @@ export class ProfilesController {
 
   // Get profile by userId — admin or owner only
   @Get(':userId')
-  @Roles('admin', 'student', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Student, RoleName.Teacher)
   async getProfileByUserId(@Param('userId') userId: string, @CurrentUser() user: any) {
     const primaryRole = user.roles?.[0];
     console.log('Requested profile for userId:', userId);
@@ -57,7 +57,7 @@ export class ProfilesController {
 
   // Admin: create profile for a user
   @Post('create')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async createProfile(@Body() dto: UpdateProfileDto & { userId: string }) {
     const { userId, ...data } = dto as any;
     const profile = await this.profilesService.createProfile(userId, data);
@@ -70,7 +70,7 @@ export class ProfilesController {
 
   // Update profile - admins can update any; users can update their own
   @Put('update/:userId')
-  @Roles('student', 'teacher', 'admin')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
   async updateProfile(
     @Param('userId') userId: string,
     @Body() dto: UpdateProfileDto,

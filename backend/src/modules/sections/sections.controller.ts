@@ -16,7 +16,7 @@ import { UpdateSectionDto } from './DTO/update-section.dto';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
 import { Throttle } from '@nestjs/throttler';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
@@ -33,7 +33,7 @@ export class SectionsController {
    * Admin and Teacher can access.
    */
   @Get('all')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getAllSections(
     @Query('gradeLevel') gradeLevel?: string,
     @Query('schoolYear') schoolYear?: string,
@@ -68,7 +68,7 @@ export class SectionsController {
    * Admin and Teacher can access (admins without an advisory section get an empty list).
    */
   @Get('my')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getMySections(@CurrentUser() user: { userId: string; roles: string[] }) {
     const result = await this.sectionsService.findAll({ adviserId: user.userId });
 
@@ -80,7 +80,7 @@ export class SectionsController {
    * Teachers can only access sections they advise; admins can access all.
    */
   @Get(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getSectionById(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
@@ -95,7 +95,7 @@ export class SectionsController {
    * Admin only.
    */
   @Post('create')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async createSection(@Body() createSectionDto: CreateSectionDto) {
     const section = await this.sectionsService.createSection(createSectionDto);
 
@@ -107,7 +107,7 @@ export class SectionsController {
    * Admin only.
    */
   @Put('update/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async updateSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSectionDto: UpdateSectionDto,
@@ -122,7 +122,7 @@ export class SectionsController {
    * Admin only.
    */
   @Delete('delete/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async deleteSection(@Param('id', ParseUUIDPipe) id: string) {
     await this.sectionsService.deleteSection(id);
 
@@ -134,7 +134,7 @@ export class SectionsController {
    * Teachers can only view the roster of their own advised section.
    */
   @Get(':id/roster')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getRoster(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
@@ -149,7 +149,7 @@ export class SectionsController {
    * Admin only.
    */
   @Get(':id/candidates')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async getCandidates(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('gradeLevel') gradeLevel?: string,
@@ -169,7 +169,7 @@ export class SectionsController {
    * Admin only.
    */
   @Post(':id/roster')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   async addStudentsToSection(
     @Param('id', ParseUUIDPipe) id: string,
@@ -189,7 +189,7 @@ export class SectionsController {
    * Admin only.
    */
   @Delete(':id/roster/:studentId')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   async removeStudentFromSection(
     @Param('id', ParseUUIDPipe) id: string,
@@ -205,7 +205,7 @@ export class SectionsController {
    * Admin only — blocked if active classes or enrolled students exist.
    */
   @Delete('permanent/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async permanentlyDeleteSection(@Param('id', ParseUUIDPipe) id: string) {
     await this.sectionsService.permanentlyDeleteSection(id);
 
@@ -219,7 +219,7 @@ export class SectionsController {
    * Accessible by admins, teachers (own section), and students enrolled in the section.
    */
   @Get(':id/schedule')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getSectionSchedule(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },

@@ -26,7 +26,7 @@ import { PdfValidationPipe } from './pipes/pdf-validation.pipe';
 import { UploadFileDto } from './dto/file-upload.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   MAX_FILE_SIZE_BYTES,
@@ -78,7 +78,7 @@ export class FileUploadController {
    * Upload a PDF (teacher only). classId is required as a form field.
    */
   @Post('upload')
-  @Roles('teacher')
+  @Roles(RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', multerOptions))
@@ -109,7 +109,7 @@ export class FileUploadController {
    * Admin → all files. Teacher → their own files.
    */
   @Get()
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async listFiles(
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
@@ -128,7 +128,7 @@ export class FileUploadController {
    * Admin only: total file count + storage size consumed.
    */
   @Get('storage-summary')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async getStorageSummary() {
     const summary = await this.fileUploadService.getStorageSummary();
 
@@ -144,7 +144,7 @@ export class FileUploadController {
    * Retrieve metadata for a single file. Teacher must own it.
    */
   @Get(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getFile(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -164,7 +164,7 @@ export class FileUploadController {
    * Teacher must own it; admin can always download.
    */
   @Get(':id/download')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async downloadFile(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -208,7 +208,7 @@ export class FileUploadController {
    * Soft-delete. Teacher must own the file; admins can delete any.
    */
   @Delete(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
   async deleteFile(
     @Param('id', ParseUUIDPipe) id: string,

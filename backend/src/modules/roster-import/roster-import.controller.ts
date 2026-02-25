@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { RosterImportService } from './roster-import.service';
 import { RosterFileValidationPipe } from './pipes/roster-file-validation.pipe';
 import { RosterImportCommitDto, ResolvePendingRowDto } from './dto/roster-import.dto';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   MAX_ROSTER_FILE_SIZE_BYTES,
@@ -67,7 +67,7 @@ const multerOptions = {
 
 @ApiTags('Roster Import')
 @ApiBearerAuth()
-@Roles('admin', 'teacher')
+@Roles(RoleName.Admin, RoleName.Teacher)
 @Controller('roster-import')
 export class RosterImportController {
   constructor(private readonly rosterImportService: RosterImportService) {}

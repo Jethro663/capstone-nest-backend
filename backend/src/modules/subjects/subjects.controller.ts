@@ -14,7 +14,7 @@ import { CreateSubjectDto } from './DTO/create-subject.dto';
 import { UpdateSubjectDto } from './DTO/update-subject.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { ApiBearerAuth } from '@nestjs/swagger';
 
 @ApiBearerAuth('token')
@@ -28,7 +28,7 @@ export class SubjectsController {
    * Admin only
    */
   @Get('all')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getAllSubjects(
     @Query('gradeLevel') gradeLevel?: string,
     @Query('isActive') isActive?: string,
@@ -58,7 +58,7 @@ export class SubjectsController {
    * Admin and Teacher can access
    */
   @Get(':id')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getSubjectById(@Param('id') id: string) {
     const subject = await this.subjectsService.findById(id);
 
@@ -73,7 +73,7 @@ export class SubjectsController {
    * Admin only
    */
   @Post('create')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async createSubject(@Body() createSubjectDto: CreateSubjectDto) {
     const subject = await this.subjectsService.createSubject(createSubjectDto);
 
@@ -89,7 +89,7 @@ export class SubjectsController {
    * Admin only
    */
   @Put('update/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async updateSubject(
     @Param('id') id: string,
     @Body() updateSubjectDto: UpdateSubjectDto,
@@ -111,7 +111,7 @@ export class SubjectsController {
    * Admin only
    */
   @Delete('delete/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async deleteSubject(@Param('id') id: string) {
     await this.subjectsService.deleteSubject(id);
 
@@ -126,7 +126,7 @@ export class SubjectsController {
    * Admin only - Use with extreme caution
    */
   @Delete('permanent/:id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async permanentlyDeleteSubject(@Param('id') id: string) {
     await this.subjectsService.permanentlyDeleteSubject(id);
 

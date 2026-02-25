@@ -74,18 +74,14 @@ export const feedbackLevelEnum = pgEnum('feedback_level', [
 // 1. IDENTITY & ACCESS (Roles & Users)
 // ==========================================
 
-export const roles = pgTable(
-  'roles',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    name: text('name').notNull().unique(), // e.g., 'student', 'teacher', 'admin'
-    description: text('description'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-  },
-  (table) => ({
-    nameIdx: index('roles_name_idx').on(table.name),
-  }),
-);
+export const roles = pgTable('roles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(), // e.g., 'student', 'teacher', 'admin'
+  description: text('description'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  // NOTE: No explicit index here — the UNIQUE constraint above already creates
+  // an implicit B-tree index (roles_name_unique) on the name column.
+});
 
 export const users = pgTable(
   'users',

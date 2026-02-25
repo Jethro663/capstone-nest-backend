@@ -18,7 +18,7 @@ import { UpdateClassDto } from './DTO/update-class.dto';
 import { EnrollStudentDto } from './DTO/enroll-student.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
@@ -34,7 +34,7 @@ export class ClassesController {
    * Admin and Teacher can access
    */
   @Get('all')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getAllClasses(
     @Query('subjectId') subjectId?: string,
     @Query('sectionId') sectionId?: string,
@@ -73,7 +73,7 @@ export class ClassesController {
    * A teacher can only view their own classes; admins may view any.
    */
   @Get('teacher/:teacherId')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getClassesByTeacher(
     @Param('teacherId') teacherId: string,
     @CurrentUser() user: any,
@@ -96,7 +96,7 @@ export class ClassesController {
    * Admin and Teacher can access
    */
   @Get('section/:sectionId')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getClassesBySection(@Param('sectionId') sectionId: string) {
     const classes = await this.classesService.getClassesBySection(sectionId);
 
@@ -113,7 +113,7 @@ export class ClassesController {
    * Admin and Teacher can access.
    */
   @Get('subject/:subjectCode')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getClassesBySubject(@Param('subjectCode') subjectCode: string) {
     const classes = await this.classesService.getClassesBySubject(subjectCode);
 
@@ -129,7 +129,7 @@ export class ClassesController {
    * Students can only access their own records; teachers/admins may access any.
    */
   @Get('student/:studentId')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getClassesByStudent(
     @Param('studentId') studentId: string,
     @CurrentUser() user: any,
@@ -151,7 +151,7 @@ export class ClassesController {
    * Get a specific class by ID
    */
   @Get(':id')
-  @Roles('admin', 'teacher', 'student')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getClassById(@Param('id') id: string) {
     const classRecord = await this.classesService.findById(id);
 
@@ -167,7 +167,7 @@ export class ClassesController {
    * Admin only
    */
   @Post()
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
   async createClass(@Body() createClassDto: CreateClassDto) {
     const newClass = await this.classesService.create(createClassDto);
@@ -184,7 +184,7 @@ export class ClassesController {
    * Admin only
    */
   @Put(':id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async updateClass(
     @Param('id') id: string,
     @Body() updateClassDto: UpdateClassDto,
@@ -203,7 +203,7 @@ export class ClassesController {
    * Admin only
    */
   @Put(':id/toggle-status')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   async toggleClassStatus(@Param('id') id: string) {
     const updatedClass = await this.classesService.toggleActive(id);
 
@@ -219,7 +219,7 @@ export class ClassesController {
    * Admin only
    */
   @Delete(':id')
-  @Roles('admin')
+  @Roles(RoleName.Admin)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteClass(@Param('id') id: string): Promise<void> {
     await this.classesService.delete(id);
@@ -231,7 +231,7 @@ export class ClassesController {
    * Teacher (of the class) and Admin can access
    */
   @Get(':classId/enrollments')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getEnrollments(@Param('classId') classId: string) {
     const enrollments = await this.classesService.getEnrollments(classId);
 
@@ -249,7 +249,7 @@ export class ClassesController {
    * Teacher (of the class) and Admin can access
    */
   @Get(':classId/candidates')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getCandidates(@Param('classId') classId: string) {
     const candidates = await this.classesService.getCandidates(classId);
 
@@ -267,7 +267,7 @@ export class ClassesController {
    * Throttle raised: the UI may fire one request per student when batch-adding.
    */
   @Post(':classId/enrollments')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   async enrollStudent(
@@ -291,7 +291,7 @@ export class ClassesController {
    * Teacher (of the class) and Admin can access
    */
   @Delete(':classId/enrollments/:studentId')
-  @Roles('admin', 'teacher')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   async removeStudent(
     @Param('classId') classId: string,
