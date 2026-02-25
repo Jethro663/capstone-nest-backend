@@ -6,7 +6,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
-import { SubjectsModule } from './modules/subjects/subjects.module';
 import { SectionsModule } from './modules/sections/sections.module';
 import { ClassesModule } from './modules/classes/classes.module';
 import { LessonsModule } from './modules/lessons/lessons.module';
@@ -42,7 +41,6 @@ import jwtConfig from './config/jwt.config';
     UsersModule,
     RolesModule,
     OtpModule,
-    SubjectsModule,
     SectionsModule,
     ClassesModule,
     LessonsModule,
