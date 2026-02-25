@@ -1,7 +1,14 @@
-import { IsOptional, IsString, IsDateString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsIn, Matches } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateProfileDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^[0-9]{12}$/, {
+    message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
+  })
+  lrn?: string;
+
   @IsOptional()
   @IsDateString({}, { message: 'Date of birth must be a valid ISO date' })
   dob?: string;

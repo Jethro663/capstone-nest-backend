@@ -1,3 +1,5 @@
+import { randomInt } from 'crypto';
+
 /**
  * Password Generator Utility
  * Generates random passwords that meet the validation requirements:
@@ -60,7 +62,7 @@ export class PasswordGenerator {
    * Get a random character from a string
    */
   private static getRandomChar(chars: string): string {
-    return chars.charAt(Math.floor(Math.random() * chars.length));
+    return chars.charAt(randomInt(chars.length));
   }
 
   /**
@@ -69,7 +71,7 @@ export class PasswordGenerator {
   private static shuffle(array: string[]): string[] {
     const result = [...array];
     for (let i = result.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = randomInt(i + 1);
       [result[i], result[j]] = [result[j], result[i]];
     }
     return result;

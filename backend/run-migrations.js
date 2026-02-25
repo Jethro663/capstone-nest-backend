@@ -15,6 +15,7 @@ const EXTRA_MIGRATIONS = [
   '0019_add_refresh_tokens.sql',
   '0020_fix_column_types.sql',
   '0026_add_uploaded_files.sql',
+  '0023_move_student_id_to_lrn.sql',
 ];
 
 async function applyMigrationFile(filePath) {

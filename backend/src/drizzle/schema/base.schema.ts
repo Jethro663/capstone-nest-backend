@@ -102,9 +102,6 @@ export const users = pgTable(
     status: accountStatusEnum('account_status').notNull().default('ACTIVE'),
     isEmailVerified: boolean('is_email_verified').notNull().default(false),
 
-    // Student specific identifier (nullable for teachers/admins)
-    studentId: text('student_id'),
-
     lastLoginAt: timestamp('last_login_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -243,12 +240,15 @@ export const studentProfiles = pgTable(
     familyContact: text('family_contact'),
     // Student-specific fields
     gradeLevel: gradeLevelEnum('grade_level'),
+    // Learner Reference Number — format: XXXXXXYYZZZZ (6-digit school ID + 2-digit school year + 4-digit student number)
+    lrn: varchar('lrn', { length: 12 }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
     userIdx: index('student_profiles_user_id_idx').on(table.userId),
     gradeLevelIdx: index('student_profiles_grade_level_idx').on(table.gradeLevel),
+    lrnIdx: unique('student_profiles_lrn_unique').on(table.lrn),
   }),
 );
 
@@ -715,3 +715,47 @@ export const uploadedFilesRelations = relations(
     }),
   }),
 );
+
+// ==========================================
+// 7. ROSTER IMPORT — PENDING ROSTER
+// ==========================================
+
+/**
+ * Stores roster rows for students who do not yet have an LMS account.
+ * Each row is linked to a section and can be resolved (claimed) when the
+ * student eventually registers.
+ */
+export const pendingRoster = pgTable(
+  'pending_roster',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sectionId: uuid('section_id')
+      .notNull()
+      .references(() => sections.id, { onDelete: 'cascade' }),
+    lastName: text('last_name').notNull(),
+    firstName: text('first_name').notNull(),
+    middleInitial: text('middle_initial'),
+    lrn: varchar('lrn', { length: 12 }).notNull(),
+    rosterEmail: text('roster_email').notNull(),
+    resolvedAt: timestamp('resolved_at'),
+    resolvedUserId: uuid('resolved_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    importedAt: timestamp('imported_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    sectionIdx: index('pending_roster_section_id_idx').on(table.sectionId),
+    emailIdx: index('pending_roster_roster_email_idx').on(table.rosterEmail),
+  }),
+);
+
+export const pendingRosterRelations = relations(pendingRoster, ({ one }) => ({
+  section: one(sections, {
+    fields: [pendingRoster.sectionId],
+    references: [sections.id],
+  }),
+  resolvedUser: one(users, {
+    fields: [pendingRoster.resolvedUserId],
+    references: [users.id],
+  }),
+}));

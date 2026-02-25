@@ -11,8 +11,6 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [apiError, setApiError] = useState(null);
-  const [passwordCopied, setPasswordCopied] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState("");
   const [formData, setFormData] = useState({
     firstName: "",
     middleName: "",
@@ -135,7 +133,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
         middleName: formData.middleName.trim(),
         email: formData.email.trim().toLowerCase(),
         role: formData.userRole,
-        studentId: formData.userRole === "student" ? formData.studentId : "",
+        lrn: formData.userRole === "student" ? formData.studentId : undefined,
       };
       // Only include password for existing users when resetting
       if (user && formData.resetPassword) {
@@ -144,11 +142,6 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
       const savedUser = await onAddUser(payload);
 
-      // If new user, show the generated password and set it to state for display
-      if (!user && savedUser?.temporaryPassword) {
-        setGeneratedPassword(savedUser.temporaryPassword);
-      }
-
       if (formData.userRole === "student") {
         if (savedUser?.id) {
           try {
@@ -156,11 +149,7 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
               userId: savedUser.id,
               gradeLevel: formData.gradeLevel || undefined,
             };
-            if (!user) {
-              await api.post("/profiles/create", profilePayload);
-            } else {
-              await api.put(`/profiles/update/${savedUser.id}`, profilePayload);
-            }
+            await api.put(`/profiles/update/${savedUser.id}`, profilePayload);
           } catch (profileErr) {
             console.error("Profile creation/update failed", profileErr);
             toast.error("User created but failed to create student profile");
@@ -169,16 +158,14 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
         }
       }
 
-      toast.success(user ? "User updated successfully" : "User registered successfully");
+      toast.success(
+        user
+          ? "User updated successfully"
+          : "User created. Verification email sent for OTP password setup."
+      );
       setApiError(null);
-      // Don't close immediately if new user - let them see the password
-      if (!user) {
-        // Just reset errors, keep modal open to show password
-        return savedUser;
-      } else {
-        onClose();
-        return savedUser;
-      }
+      onClose();
+      return savedUser;
     } catch (error) {
       if (error?.fieldErrors) setErrors((prev) => ({ ...prev, ...error.fieldErrors }));
       else setApiError({ title: "Error", message: error.message || "Unexpected error", source: "client" });
@@ -255,38 +242,15 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
 
           {/* Password - Different UI for new vs editing users */}
           {!user ? (
-            // New user - auto-generated password
-            generatedPassword ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ fontSize: "12px", fontWeight: "600", textTransform: "uppercase" }}>Temporary Password</label>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <input
-                    type="text"
-                    readOnly
-                    value={generatedPassword}
-                    style={{ width: "100%", padding: "12px", fontSize: "14px", borderRadius: "12px", border: "1px solid #d1d5db", background: "#f9fafb", fontFamily: "monospace", fontWeight: "500" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(generatedPassword);
-                      setPasswordCopied(true);
-                      setTimeout(() => setPasswordCopied(false), 2000);
-                      toast.success("Password copied to clipboard!");
-                    }}
-                    style={{ padding: "12px 20px", background: "#3b82f6", color: "white", borderRadius: "12px", border: "none", cursor: "pointer", fontWeight: "600" }}
-                  >
-                    {passwordCopied ? "✓ Copied" : "Copy"}
-                  </button>
-                </div>
-                <div style={{ padding: "12px", background: "#fef3c7", borderRadius: "8px", borderLeft: "4px solid #f59e0b" }}>
-                  <p style={{ margin: "0 0 4px 0", fontSize: "12px", fontWeight: "600", color: "#92400e" }}>Password sent to email</p>
-                  <p style={{ margin: "0", fontSize: "12px", color: "#b45309" }}>Student will receive temporary password via email and set a new password after OTP verification.</p>
-                </div>
-              </div>
-            ) : null
+            <div style={{ padding: "12px", background: "#eff6ff", borderRadius: "8px", borderLeft: "4px solid #2563eb" }}>
+              <p style={{ margin: "0 0 4px 0", fontSize: "12px", fontWeight: "600", color: "#1e40af" }}>
+                OTP onboarding enabled
+              </p>
+              <p style={{ margin: "0", fontSize: "12px", color: "#1d4ed8" }}>
+                The user will verify email via OTP and set their initial password securely.
+              </p>
+            </div>
           ) : (
-            // Editing user - show reset password checkbox and input if selected
             <>
               {formData.resetPassword && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -310,22 +274,12 @@ const CreateUserModal = ({ user, onClose, onAddUser }) => {
               )}
             </>
           )}
-
           {/* Buttons */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "16px", marginTop: "24px", flexWrap: "wrap" }}>
-            {!user && generatedPassword ? (
-              <>
-                <Button type="button" onClick={() => { setApiError(null); setGeneratedPassword(""); setFormData({ firstName: "", middleName: "", lastName: "", email: "", userRole: "student", studentId: "", gradeLevel: "", password: "", resetPassword: false }); setErrors({}); }} disabled={loading}>Create Another</Button>
-                <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} style={{ background: "#10b981", color: "white", padding: "12px 24px" }}>Done</Button>
-              </>
-            ) : (
-              <>
-                <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} disabled={loading}>Go Back</Button>
-                <Button type="submit" style={{ background: "#dc2626", color: "white", padding: "12px 24px" }} disabled={loading || !isFormValid}>
-                  {loading ? "Saving..." : (user ? "Save Changes" : "Register User")}
-                </Button>
-              </>
-            )}
+            <Button type="button" onClick={() => { setApiError(null); setErrors({}); setLoading(false); onClose(); }} disabled={loading}>Go Back</Button>
+            <Button type="submit" style={{ background: "#dc2626", color: "white", padding: "12px 24px" }} disabled={loading || !isFormValid}>
+              {loading ? "Saving..." : (user ? "Save Changes" : "Register User")}
+            </Button>
           </div>
         </form>
       </motion.div>
@@ -348,3 +302,4 @@ const PasswordRule = ({ label, valid }) => (
 );
 
 export default CreateUserModal;
+

@@ -6,7 +6,8 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { and, eq, SQL } from 'drizzle-orm';
+import { ConfigService } from '@nestjs/config';
+import { and, count, desc, eq, inArray, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -24,7 +25,6 @@ import {
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { OtpService } from '../otp/otp.service';
-import { MailService } from '../mail/mail.service';
 import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
@@ -33,12 +33,21 @@ type ValidStatus = (typeof VALID_STATUSES)[number];
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly passwordHashRounds: number;
 
   constructor(
     private databaseService: DatabaseService,
+    private configService: ConfigService,
     private otpService: OtpService,
-    private mailService: MailService,
-  ) {}
+  ) {
+    const configuredRounds = Number(
+      this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
+    );
+    this.passwordHashRounds =
+      Number.isInteger(configuredRounds) && configuredRounds >= 8
+        ? configuredRounds
+        : 10;
+  }
 
   private get db() {
     return this.databaseService.db;
@@ -56,44 +65,60 @@ export class UsersService {
         `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
       );
     }
-    const page = filters?.page || 1;
-    const limit = Math.min(filters?.limit || 20, 100); // Cap max limit
+    const page = Math.max(1, Number(filters?.page ?? 1) || 1);
+    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20) || 20, 100));
     const offset = (page - 1) * limit;
 
     const whereConditions: SQL<unknown>[] = [];
     if (filters?.status) {
       whereConditions.push(eq(users.status, filters.status as any));
     }
-
-
+    if (filters?.role) {
+      const roleSubquery = this.db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(eq(roles.name, filters.role));
+      whereConditions.push(inArray(users.id, roleSubquery));
+    }
 
     // Build the query step by step
+    const whereClause =
+      whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(users)
+      .where(whereClause);
+
     const usersList = await this.db.query.users.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      where: whereClause,
       with: {
         userRoles: {
           with: { role: true },
         },
       },
+      orderBy: [desc(users.createdAt)],
       limit,
       offset,
     });
 
-    // Filter by role in memory if specified
-    let filteredUsers = usersList;
-    if (filters?.role) {
-      filteredUsers = usersList.filter((user) =>
-        user.userRoles.some((ur) => ur.role.name === filters.role),
-      );
-    }
-
-    return filteredUsers.map((user) => {
+    const data = usersList.map((user) => {
       const { userRoles: userRolesData, ...userData } = user;
-      return {
+      return this.toPublicUser({
         ...userData,
         roles: userRolesData.map((ur) => ur.role),
-      };
+      });
     });
+
+    const total = Number(totalRow?.total ?? 0);
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   }
 
   /**
@@ -191,7 +216,7 @@ export class UsersService {
       middleName,
       lastName,
       role,
-      studentId,
+      lrn,
     } = createUserDto;
 
     // 1. Check if email already exists
@@ -203,21 +228,21 @@ export class UsersService {
       throw new ConflictException('Email already registered');
     }
 
-    // 2. NEW: Validate student ID if role is student
+    // 2. Validate LRN if role is student
     if (role === 'student') {
-      if (!studentId) {
+      if (!lrn) {
         throw new ConflictException(
-          'Student ID is required for student accounts',
+          'LRN is required for student accounts',
         );
       }
 
-      const existingStudent = await this.db.query.users.findFirst({
-        where: eq(users.studentId, studentId),
+      const existingProfile = await this.db.query.studentProfiles.findFirst({
+        where: eq(studentProfiles.lrn, lrn),
       });
 
-      if (existingStudent) {
+      if (existingProfile) {
         throw new ConflictException(
-          `Student ID ${studentId} is already registered`,
+          `LRN ${lrn} is already registered`,
         );
       }
     }
@@ -238,67 +263,83 @@ export class UsersService {
     }
 
     // 5. Hash the password
-    const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+    const hashedPassword = await bcrypt.hash(
+      generatedPassword,
+      this.passwordHashRounds,
+    );
 
     // 6. Create user in transaction
-    const result = await this.db.transaction(async (tx) => {
-      // Insert user
-      const [newUser] = await tx
-        .insert(users)
-        .values({
-          email,
-          password: hashedPassword,
-          firstName,
-          middleName,
-          lastName,
-          studentId: role === 'student' ? studentId : null,
-          status: 'PENDING',
-          isEmailVerified: false,
-        })
-        .returning();
+    let result: typeof users.$inferSelect;
+    try {
+      result = await this.db.transaction(async (tx) => {
+        // Insert user
+        const [newUser] = await tx
+          .insert(users)
+          .values({
+            email,
+            password: hashedPassword,
+            firstName,
+            middleName,
+            lastName,
+            status: 'PENDING',
+            isEmailVerified: false,
+          })
+          .returning();
 
-      // Assign role
-      await tx.insert(userRoles).values({
-        userId: newUser.id,
-        roleId: roleEntity.id,
-        assignedBy: 'ADMIN',
+        // Assign role
+        await tx.insert(userRoles).values({
+          userId: newUser.id,
+          roleId: roleEntity.id,
+          assignedBy: 'ADMIN',
+        });
+
+        // Create student profile with LRN for student accounts
+        if (role === 'student' && lrn) {
+          await tx.insert(studentProfiles).values({
+            userId: newUser.id,
+            lrn,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+
+        return newUser;
       });
-
-      return newUser;
-    });
+    } catch (err) {
+      this.handleUniqueConstraintError(err);
+      throw err;
+    }
 
     // 7. Send emails asynchronously (don't await - fire and forget)
     // This prevents blocking the API response for slow email services
-    Promise.all([
-      this.otpService.createAndSendOTP(
-        result.id,
-        result.email,
-        'email_verification',
-      ),
-      this.mailService.sendPasswordEmail(result.email, generatedPassword),
-    ]).catch((err) => {
-      // Log email errors but don't fail the request
-      console.error('[USERS] Failed to send emails for user:', result.email, err);
-    });
+    this.otpService
+      .createAndSendOTP(result.id, result.email, 'email_verification')
+      .catch((err) => {
+        this.logger.error(
+          `Failed to send verification OTP for user ${result.email}`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      });
 
-    // 8. Return user with generated password (for admin to see in modal)
-    return {
-      ...result,
-      temporaryPassword: generatedPassword,
-    };
+    // 8. Return sanitized user only
+    return this.toPublicUser(result);
   }
 
   // !!Subject to change based on requirements
   async updateUser(id: string, updateUserDto: UpdateUserDto) {
-    console.log('[USERS] updateUser called for id:', id, 'payload:', updateUserDto);
-
     const existingUser = await this.findById(id);
 
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
+    if ((updateUserDto as Record<string, unknown>).status !== undefined) {
+      throw new BadRequestException(
+        'Direct status updates are not allowed. Use lifecycle endpoints.',
+      );
+    }
 
     const updateData: Partial<typeof users.$inferInsert> = {};
+    let shouldSendEmailVerification = false;
 
     if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
       const emailExists = await this.findByEmail(updateUserDto.email);
@@ -307,37 +348,25 @@ export class UsersService {
       }
       updateData.email = updateUserDto.email;
       updateData.isEmailVerified = false;
-
-      // Send new verification email
-      const [updatedUser] = await this.db
-        .update(users)
-        .set({ ...updateData, updatedAt: new Date() })
-        .where(eq(users.id, id))
-        .returning();
-
-      await this.otpService.createAndSendOTP(
-        updatedUser.id,
-        updatedUser.email,
-        'email_verification',
-      );
+      shouldSendEmailVerification = true;
     }
 
     if (updateUserDto.password) {
       updateData.password = await (
         bcrypt.hash as (s: string, r: number) => Promise<string>
-      )(updateUserDto.password, 10);
+      )(updateUserDto.password, this.passwordHashRounds);
     }
 
     if (updateUserDto.firstName) updateData.firstName = updateUserDto.firstName;
     if (updateUserDto.middleName !== undefined)
       updateData.middleName = updateUserDto.middleName;
     if (updateUserDto.lastName) updateData.lastName = updateUserDto.lastName;
-    if (updateUserDto.status) updateData.status = updateUserDto.status as any;
-    if (updateUserDto.studentId !== undefined)
-      updateData.studentId = updateUserDto.studentId;
 
     // New profile fields will be stored in `student_profiles` table as a separate one-to-one record
     const profilePayload: any = {};
+    if (updateUserDto.lrn !== undefined) profilePayload.lrn = updateUserDto.lrn;
+    if (updateUserDto.gradeLevel !== undefined)
+      profilePayload.gradeLevel = updateUserDto.gradeLevel;
     if (updateUserDto.dob) profilePayload.dateOfBirth = new Date(updateUserDto.dob);
     if (updateUserDto.gender !== undefined) profilePayload.gender = updateUserDto.gender;
     if (updateUserDto.phone !== undefined) profilePayload.phone = updateUserDto.phone;
@@ -349,62 +378,91 @@ export class UsersService {
     if (updateUserDto.familyContact !== undefined)
       profilePayload.familyContact = updateUserDto.familyContact;
 
-    let updatedUser;
+    if (updateUserDto.lrn !== undefined) {
+      const lrnConflict = await this.db.query.studentProfiles.findFirst({
+        where: and(
+          eq(studentProfiles.lrn, updateUserDto.lrn),
+          eq(studentProfiles.userId, id),
+        ),
+      });
+      if (!lrnConflict) {
+        const existingLrn = await this.db.query.studentProfiles.findFirst({
+          where: eq(studentProfiles.lrn, updateUserDto.lrn),
+        });
+        if (existingLrn && existingLrn.userId !== id) {
+          throw new ConflictException('LRN is already in use');
+        }
+      }
+    }
+
     try {
-      [updatedUser] = await this.db
-        .update(users)
-        .set({ ...updateData, updatedAt: new Date() })
-        .where(eq(users.id, id))
-        .returning();
+      await this.db.transaction(async (tx) => {
+        if (Object.keys(updateData).length > 0) {
+          await tx
+            .update(users)
+            .set({ ...updateData, updatedAt: new Date() })
+            .where(eq(users.id, id));
+        }
+
+        if (Object.keys(profilePayload).length > 0) {
+          const existingProfile = await tx.query.studentProfiles.findFirst({
+            where: eq(studentProfiles.userId, id),
+          });
+
+          if (existingProfile) {
+            await tx
+              .update(studentProfiles)
+              .set({ ...profilePayload, updatedAt: new Date() })
+              .where(eq(studentProfiles.userId, id));
+          } else {
+            await tx.insert(studentProfiles).values({
+              userId: id,
+              ...profilePayload,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+        }
+
+        if (updateUserDto.role) {
+          const roleRecord = await tx.query.roles.findFirst({
+            where: eq(roles.name, updateUserDto.role),
+          });
+          if (!roleRecord) {
+            throw new NotFoundException(`Role '${updateUserDto.role}' not found`);
+          }
+
+          await tx.delete(userRoles).where(eq(userRoles.userId, id));
+          await tx.insert(userRoles).values({
+            userId: id,
+            roleId: roleRecord.id,
+            assignedBy: 'ADMIN',
+          });
+        }
+      });
     } catch (err) {
-      console.error('[USERS] Failed to update users row for user:', id, err);
+      this.handleUniqueConstraintError(err);
       throw err;
     }
 
-    // Upsert profile record if payload exists
-    if (Object.keys(profilePayload).length > 0) {
-      console.log('[USERS] profilePayload to upsert for user:', id, profilePayload);
-      try {
-        const existingProfile = await this.db.query.studentProfiles.findFirst({
-          where: eq(studentProfiles.userId, id),
-        });
-
-        if (existingProfile) {
-          await this.db
-            .update(studentProfiles)
-            .set({ ...profilePayload, updatedAt: new Date() })
-            .where(eq(studentProfiles.userId, id));
-        } else {
-          await this.db.insert(studentProfiles).values({
-            userId: id,
-            ...profilePayload,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-        }
-      } catch (err) {
-        console.error('[USERS] Failed to upsert profile for user:', id, err);
-        throw err;
-      }
-    }
-
-    if (updateUserDto.role) {
-      await this.db.delete(userRoles).where(eq(userRoles.userId, id));
-
-      const roleRecord = await this.db.query.roles.findFirst({
-        where: eq(roles.name, updateUserDto.role),
+    if (shouldSendEmailVerification) {
+      const refreshedUser = await this.db.query.users.findFirst({
+        where: eq(users.id, id),
       });
-
-      if (roleRecord) {
-        await this.db.insert(userRoles).values({
-          userId: id,
-          roleId: roleRecord.id,
-          assignedBy: 'ADMIN',
-        });
+      if (refreshedUser) {
+        await this.otpService.createAndSendOTP(
+          refreshedUser.id,
+          refreshedUser.email,
+          'email_verification',
+        );
       }
     }
 
-    return this.findById(id);
+    const updatedUser = await this.findById(id);
+    if (!updatedUser) {
+      throw new NotFoundException('User not found after update');
+    }
+    return this.toPublicUser(updatedUser);
   }
 
   async updatePassword(id: string, newPassword: string) {
@@ -412,7 +470,10 @@ export class UsersService {
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(
+      newPassword,
+      this.passwordHashRounds,
+    );
 
     await this.db
       .update(users)
@@ -560,22 +621,23 @@ export class UsersService {
     // Collect all related data for archival
     const archiveSnapshot = await this.collectUserData(id);
 
-    // Insert archive record
+    // Insert archive record and set status atomically
     const userRoleNames = existingUser.roles?.map((r: any) => r.name) || [];
-    await this.db.insert(archivedUsers).values({
-      originalUserId: id,
-      email: existingUser.email,
-      fullName: `${existingUser.firstName} ${existingUser.middleName || ''} ${existingUser.lastName}`.trim(),
-      role: userRoleNames.join(', '),
-      archivedData: archiveSnapshot,
-      archivedBy: adminId,
-    });
+    await this.db.transaction(async (tx) => {
+      await tx.insert(archivedUsers).values({
+        originalUserId: id,
+        email: existingUser.email,
+        fullName: `${existingUser.firstName} ${existingUser.middleName || ''} ${existingUser.lastName}`.trim(),
+        role: userRoleNames.join(', '),
+        archivedData: archiveSnapshot,
+        archivedBy: adminId,
+      });
 
-    // Set status to DELETED
-    await this.db
-      .update(users)
-      .set({ status: 'DELETED', updatedAt: new Date() })
-      .where(eq(users.id, id));
+      await tx
+        .update(users)
+        .set({ status: 'DELETED', updatedAt: new Date() })
+        .where(eq(users.id, id));
+    });
 
     return { message: 'User archived and marked as deleted', userId: id };
   }
@@ -612,19 +674,21 @@ export class UsersService {
       );
     }
 
-    // Mark the archived record as purged (if exists)
-    const archiveRecords = await this.db.query.archivedUsers.findMany({
-      where: eq(archivedUsers.originalUserId, id),
-    });
-    if (archiveRecords.length > 0) {
-      await this.db
-        .update(archivedUsers)
-        .set({ purgedAt: new Date() })
-        .where(eq(archivedUsers.originalUserId, id));
-    }
+    await this.db.transaction(async (tx) => {
+      // Mark the archived record as purged (if exists)
+      const archiveRecords = await tx.query.archivedUsers.findMany({
+        where: eq(archivedUsers.originalUserId, id),
+      });
+      if (archiveRecords.length > 0) {
+        await tx
+          .update(archivedUsers)
+          .set({ purgedAt: new Date() })
+          .where(eq(archivedUsers.originalUserId, id));
+      }
 
-    // Hard delete — CASCADE handles related tables
-    await this.db.delete(users).where(eq(users.id, id));
+      // Hard delete — CASCADE handles related tables
+      await tx.delete(users).where(eq(users.id, id));
+    });
 
     return { message: 'User permanently purged from the system', userId: id };
   }
@@ -670,7 +734,6 @@ export class UsersService {
         firstName: user.firstName,
         middleName: user.middleName,
         lastName: user.lastName,
-        studentId: user.studentId,
         status: user.status,
         isEmailVerified: user.isEmailVerified,
         createdAt: user.createdAt,
@@ -700,5 +763,35 @@ export class UsersService {
         status: 'ACTIVE',
       })
       .where(eq(users.id, userId));
+  }
+
+  async findPublicById(id: string) {
+    const user = await this.findById(id);
+    if (!user) return null;
+    return this.toPublicUser(user);
+  }
+
+  private handleUniqueConstraintError(err: unknown) {
+    const pgError = err as { code?: string; constraint?: string };
+    if (pgError?.code !== '23505') {
+      return;
+    }
+
+    if (
+      pgError.constraint?.includes('users_email') ||
+      pgError.constraint?.includes('users_email_unique')
+    ) {
+      throw new ConflictException('Email already registered');
+    }
+    if (pgError.constraint?.includes('student_profiles_lrn')) {
+      throw new ConflictException('LRN is already in use');
+    }
+
+    throw new ConflictException('Duplicate record violates unique constraint');
+  }
+
+  private toPublicUser<T extends Record<string, any>>(user: T) {
+    const { password, ...safeUser } = user;
+    return safeUser;
   }
 }

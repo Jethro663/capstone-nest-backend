@@ -20,6 +20,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
 import { HealthModule } from './modules/health/health.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
+import { RosterImportModule } from './modules/roster-import/roster-import.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 
@@ -56,6 +57,8 @@ import jwtConfig from './config/jwt.config';
     HealthModule,
     // File upload module (PDF storage)
     FileUploadModule,
+    // Roster import module (CSV/XLSX class roster import)
+    RosterImportModule,
   ],
   providers: [
     {

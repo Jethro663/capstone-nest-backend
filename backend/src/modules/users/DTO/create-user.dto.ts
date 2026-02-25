@@ -88,9 +88,9 @@ export class CreateUserDto {
   role: string;
 
   @ValidateIf((o: { role: string }) => o.role === 'student')
-  @IsString({ message: 'Student ID must be a string' })
-  @Matches(/^[0-9]{9}$/, {
-    message: 'Student ID must be exactly 9 digits (e.g., 202412345)',
+  @IsString({ message: 'LRN must be a string' })
+  @Matches(/^[0-9]{12}$/, {
+    message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
   })
-  studentId?: string;
+  lrn?: string;
 }

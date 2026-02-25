@@ -36,7 +36,7 @@ export class UsersController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
   ) {
-    const users = await this.usersService.findAll({
+    const result = await this.usersService.findAll({
       role,
       status,
       page,
@@ -44,14 +44,18 @@ export class UsersController {
     });
     return {
       success: true,
-      users: [...users],
+      users: [...result.data],
+      page: result.page,
+      limit: result.limit,
+      total: result.total,
+      totalPages: result.totalPages,
     };
   }
 
   @Get(':id')
   @Roles('admin')
   async getUserById(@Param('id') id: string) {
-    const user = await this.usersService.findById(id);
+    const user = await this.usersService.findPublicById(id);
 
     return {
       success: true,

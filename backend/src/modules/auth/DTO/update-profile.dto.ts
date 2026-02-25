@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsDateString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsDateString, IsIn, Matches } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -31,10 +31,13 @@ export class UpdateProfileDto {
   @IsString()
   gender?: string;
 
-  @ApiProperty({ example: '2024-0001', required: false })
+  @ApiProperty({ example: '202401230001', required: false })
   @IsOptional()
   @IsString()
-  studentId?: string;
+  @Matches(/^[0-9]{12}$/, {
+    message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
+  })
+  lrn?: string;
 
   @ApiProperty({ example: '+639171234567', required: false })
   @IsOptional()

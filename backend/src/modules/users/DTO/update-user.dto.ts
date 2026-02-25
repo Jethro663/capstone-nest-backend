@@ -5,7 +5,6 @@ import {
   Matches,
   IsIn,
   IsOptional,
-  ValidateIf,
   IsDateString,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
@@ -53,18 +52,12 @@ export class UpdateUserDto {
   role?: string;
 
   @IsOptional()
-  @IsIn(['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'], {
-    message: 'Status must be ACTIVE, PENDING, SUSPENDED, or DELETED',
+  @IsString({ message: 'LRN must be a string' })
+  @Transform(({ value }: { value: string }) => value?.trim())
+  @Matches(/^[0-9]{12}$/, {
+    message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
   })
-  status?: string;
-
-  @ValidateIf((o: { role: string }) => o.role === 'student')
-  @IsOptional()
-  @IsString({ message: 'Student ID must be a string' })
-  @Matches(/^[0-9]{9}$/, {
-    message: 'Student ID must be exactly 9 digits (e.g., 202412345)',
-  })
-  studentId?: string;
+  lrn?: string;
 
   // Profile fields
   @IsOptional()

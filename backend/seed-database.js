@@ -30,7 +30,7 @@ const ROLES = [
 // Users to create
 const ADMIN_USER = {
   email: 'admin@lms.local',
-  password: 'Admin123!', // Change this in production
+  password: 'Test@123', // Change this in production
   firstName: 'System',
   lastName: 'Admin',
 };
@@ -47,6 +47,8 @@ const STUDENT_USER = {
   password: 'Student123!', // Change this in production
   firstName: 'Jane',
   lastName: 'Smith',
+  // 12-digit Learner Reference Number (stored in student_profiles.lrn)
+  lrn: '202401230001',
 };
 
 // Section configuration
@@ -225,15 +227,17 @@ async function seedDatabase() {
     log('Creating student profile...');
     try {
       await client.query(
-        `INSERT INTO student_profiles (user_id, grade_level)
-         VALUES ($1, $2)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [users.student, SECTION.gradeLevel]
+        `INSERT INTO student_profiles (user_id, grade_level, lrn)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE
+         SET grade_level = EXCLUDED.grade_level,
+             lrn = EXCLUDED.lrn`,
+        [users.student, SECTION.gradeLevel, STUDENT_USER.lrn]
       );
       log(`  ✓ Student profile created`, 'success');
     } catch (err) {
       if (err.code !== '23505') throw err;
-      log(`  ℹ️  Student profile already exists`, 'info');
+      log(`  ℹ️  Student profile already exists or LRN conflicts with another user`, 'info');
     }
 
     // ========== STEP 5: CREATE SECTION ==========
