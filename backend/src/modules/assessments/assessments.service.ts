@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -26,7 +27,10 @@ import {
 
 @Injectable()
 export class AssessmentsService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -474,6 +478,14 @@ export class AssessmentsService {
       })
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
+
+    // Emit event for gradebook score auto-sync
+    this.eventEmitter.emit('assessment.submitted', {
+      assessmentId: submitAssessmentDto.assessmentId,
+      studentId,
+      rawScore: totalPoints,
+      totalPoints: assessment.totalPoints,
+    });
 
     return {
       attempt: finalAttempt,

@@ -10,12 +10,21 @@ const DRIZZLE_DIR = path.join(__dirname, 'drizzle');
 const JOURNAL_PATH = path.join(DRIZZLE_DIR, 'meta', '_journal.json');
 
 // Files added outside drizzle-kit (not in the journal) — applied after journal entries
+// Keep in strict numeric order so FK dependencies are satisfied.
 const EXTRA_MIGRATIONS = [
   '0018_add_archived_users.sql',
   '0019_add_refresh_tokens.sql',
   '0020_fix_column_types.sql',
-  '0026_add_uploaded_files.sql',
+  '0021_partial_unique_enrollment.sql',
+  '0022_add_class_schedules.sql',
+  '0023_add_performance_and_integrity_indexes.sql',
   '0023_move_student_id_to_lrn.sql',
+  '0024_otp_hash_and_used_at.sql',
+  '0025_otp_partial_unique_index.sql',
+  '0026_add_uploaded_files.sql',
+  '0027_add_pending_roster.sql',
+  '0028_drop_redundant_roles_name_idx.sql',
+  '0029_add_gradebook_module.sql',
 ];
 
 async function applyMigrationFile(filePath) {

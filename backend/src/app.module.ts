@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -20,6 +21,7 @@ import { TeacherModule } from './modules/teacher/teacher.module';
 import { HealthModule } from './modules/health/health.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
 import { RosterImportModule } from './modules/roster-import/roster-import.module';
+import { GradebookModule } from './modules/gradebook/gradebook.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 
@@ -36,6 +38,7 @@ import jwtConfig from './config/jwt.config';
       },
     ]),
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
     DatabaseModule, // Drizzle connection
     AuthModule,
     UsersModule,
@@ -57,6 +60,8 @@ import jwtConfig from './config/jwt.config';
     FileUploadModule,
     // Roster import module (CSV/XLSX class roster import)
     RosterImportModule,
+    // Gradebook module (class record, grade computation, intervention flagging)
+    GradebookModule,
   ],
   providers: [
     {
