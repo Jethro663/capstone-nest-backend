@@ -123,12 +123,12 @@ export class MailService {
                 ${password}
             </div>
             <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-              <p style="margin: 0; color: #856404;"><strong>⚠️ Important Security Notice:</strong></p>
-              <ul style="margin: 10px 0 0 0; color: #856404;">
-                <li>This is a temporary password. For your security, please change it after logging in.</li>
+              <p style="margin: 0; color: #856404;"><strong>⚠️ Important — Two steps before you can log in:</strong></p>
+              <ol style="margin: 10px 0 0 0; color: #856404;">
+                <li><strong>Verify your email first</strong> — check the separate verification email we sent you and enter the 6-digit code.</li>
+                <li><strong>Then log in</strong> using the temporary password above.</li>
                 <li>Do not share this password with anyone.</li>
-                <li>Verify your email address after logging in to fully activate your account.</li>
-              </ul>
+              </ol>
             </div>
             <p style="margin-top: 20px; text-align: center;">
               <a href="${process.env.FRONTEND_URL || '#'}" style="display: inline-block; padding: 12px 30px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 6px;">Go to Nexora</a>

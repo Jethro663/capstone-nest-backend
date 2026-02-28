@@ -25,6 +25,7 @@ import {
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
 import { OtpService } from '../otp/otp.service';
+import { MailService } from '../mail/mail.service';
 import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
@@ -39,6 +40,7 @@ export class UsersService {
     private databaseService: DatabaseService,
     private configService: ConfigService,
     private otpService: OtpService,
+    private mailService: MailService,
   ) {
     const configuredRounds = Number(
       this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
@@ -312,11 +314,24 @@ export class UsersService {
 
     // 7. Send emails asynchronously (don't await - fire and forget)
     // This prevents blocking the API response for slow email services
+
+    // 7a. Send OTP verification email
     this.otpService
       .createAndSendOTP(result.id, result.email, 'email_verification')
       .catch((err) => {
         this.logger.error(
           `Failed to send verification OTP for user ${result.email}`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      });
+
+    // 7b. Send generated password email so the user has their credentials
+    // generatedPassword holds the plain-text value before it was hashed
+    this.mailService
+      .sendPasswordEmail(result.email, generatedPassword!)
+      .catch((err) => {
+        this.logger.error(
+          `Failed to send password email for user ${result.email}`,
           err instanceof Error ? err.stack : String(err),
         );
       });

@@ -1,4 +1,4 @@
-import { ForgotPasswordForm } from '@/components-next/auth/ForgotPasswordForm';
+import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 
 export const metadata = {
   title: 'Forgot Password - Nexora',

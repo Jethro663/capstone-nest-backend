@@ -66,7 +66,7 @@ async function bootstrap() {
 
   // CORS — allow configured origins; localhost only outside production
   const devOrigins = !isProd
-    ? ['http://localhost:5173', 'http://localhost:8081']
+    ? ['http://localhost:5173', 'http://localhost:8081', 'http://localhost:3001']
     : [];
 
   app.enableCors({

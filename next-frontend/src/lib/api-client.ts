@@ -16,7 +16,9 @@ let accessToken: string | null = null;
  * Create axios instance with base configuration
  */
 export function createApiClient(): AxiosInstance {
-  const baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+  // Use relative URL so requests go through the Next.js rewrite proxy,
+  // ensuring cookies are set on the same origin as the frontend.
+  const baseURL = '/api';
 
   const api = axios.create({
     baseURL,
@@ -63,17 +65,11 @@ export function createApiClient(): AxiosInstance {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return api(originalRequest);
           } else {
-            // Refresh failed - redirect to login
-            if (typeof window !== 'undefined') {
-              window.location.href = '/login';
-            }
+            // Refresh failed — just reject so the caller can handle it
             return Promise.reject(error);
           }
         } catch (refreshError) {
           refreshPromise = null;
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
-          }
           return Promise.reject(refreshError);
         }
       }
@@ -91,7 +87,7 @@ export function createApiClient(): AxiosInstance {
 async function refreshAccessToken(): Promise<string | null> {
   try {
     const response = await axios.post(
-      `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api'}/auth/refresh`,
+      '/api/auth/refresh',
       {},
       { withCredentials: true }
     );

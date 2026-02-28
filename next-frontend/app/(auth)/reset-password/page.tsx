@@ -1,4 +1,5 @@
-import { ResetPasswordForm } from '@/components-next/auth/ResetPasswordForm';
+import { Suspense } from 'react';
+import { ResetPasswordForm } from '@/components/auth/ResetPasswordForm';
 
 export const metadata = {
   title: 'Reset Password - Nexora',
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function ResetPasswordPage() {
-  return <ResetPasswordForm />;
+  return (
+    <Suspense>
+      <ResetPasswordForm />
+    </Suspense>
+  );
 }

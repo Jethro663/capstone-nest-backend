@@ -1,4 +1,5 @@
-import { LoginForm } from '@/components-next/auth/LoginForm';
+import { Suspense } from 'react';
+import { LoginForm } from '@/components/auth/LoginForm';
 
 export const metadata = {
   title: 'Sign In - Nexora',
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function LoginPage() {
-  return <LoginForm />;
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
 }

@@ -1,4 +1,5 @@
-import { EmailVerificationForm } from '@/components-next/auth/EmailVerificationForm';
+import { Suspense } from 'react';
+import { EmailVerificationForm } from '@/components/auth/EmailVerificationForm';
 
 export const metadata = {
   title: 'Verify Email - Nexora',
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function VerifyEmailPage() {
-  return <EmailVerificationForm />;
+  return (
+    <Suspense>
+      <EmailVerificationForm />
+    </Suspense>
+  );
 }

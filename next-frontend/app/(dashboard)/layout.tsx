@@ -1,37 +1,54 @@
-import { ReactNode } from 'react';
+'use client';
 
-/**
- * Dashboard Layout
- * 
- * This will be enhanced in Phase 2 with:
- * - Sidebar navigation
- * - Top navigation bar
- * - Role-based layout routing
- * 
- * For now, it's a simple flex layout
- */
+import { useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/providers/AuthProvider';
+import { Sidebar } from '@/components/layout/Sidebar';
+import { TopBar } from '@/components/layout/TopBar';
+import { Loader2 } from 'lucide-react';
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { loading, isAuthenticated, isProfileIncomplete, role } = useAuth();
+  const router = useRouter();
+
+  // Show a loading spinner while auth state is being resolved
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Redirect unauthenticated users
+  if (!isAuthenticated) {
+    router.replace('/login');
+    return null;
+  }
+
+  // Force profile completion
+  if (isProfileIncomplete) {
+    router.replace('/complete-profile');
+    return null;
+  }
+
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Placeholder for Sidebar - coming in Phase 2 */}
-      <aside className="w-64 border-r border-slate-200 bg-white p-4">
-        <div className="text-sm text-muted-foreground">
-          [Sidebar - Coming in Phase 2]
-        </div>
-      </aside>
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-      {/* Main Content */}
-      <main className="flex-1">
-        {/* Placeholder for TopBar - coming in Phase 2 */}
-        <header className="border-b border-slate-200 bg-white p-4">
-          <div className="text-sm text-muted-foreground">
-            [Top Navigation - Coming in Phase 2]
-          </div>
-        </header>
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        {/* Page Content */}
-        <div className="p-6">{children}</div>
-      </main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+      </div>
     </div>
   );
 }

@@ -33,6 +33,7 @@ import { ValidateCredentialsDto } from './DTO/validate-credentials.dto';
 import { ForgotPasswordDto } from './DTO/forgot-password.dto';
 import { ResetPasswordDto } from './DTO/reset-password.dto';
 import { SetInitialPasswordDto } from './DTO/set-initial-password.dto';
+import { SetActivationPasswordDto } from './DTO/set-activation-password.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -61,8 +62,8 @@ export class AuthController {
     return {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict' as const,
-      path: '/api/auth',
+      sameSite: 'lax' as const,
+      path: '/',
       maxAge: ttlMs,
     };
   }
@@ -156,7 +157,7 @@ export class AuthController {
     }
 
     // Clear with same path/domain as when it was set
-    response.clearCookie('refreshToken', { path: '/api/auth' });
+    response.clearCookie('refreshToken', { path: '/' });
 
     return {
       success: true,
@@ -182,7 +183,7 @@ export class AuthController {
     }
 
     await this.tokenService.revokeAllForUser(user.userId);
-    response.clearCookie('refreshToken', { path: '/api/auth' });
+    response.clearCookie('refreshToken', { path: '/' });
 
     return {
       success: true,
@@ -300,6 +301,29 @@ export class AuthController {
   async setInitialPassword(@Body() dto: SetInitialPasswordDto) {
     await this.authService.setInitialPassword(dto.email, dto.code, dto.newPassword);
 
+    return {
+      success: true,
+      message: 'Password set successfully. You can now log in.',
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // Set activation password (called AFTER OTP verification — no code needed)
+  // --------------------------------------------------------------------------
+
+  @Public()
+  @Post('set-activation-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 300000 } })
+  @ApiOperation({
+    summary: 'Set password after OTP activation (account already ACTIVE)',
+    description:
+      'Called after the student has verified their OTP. No OTP code required — account ACTIVE status is the gate.',
+  })
+  @ApiBody({ type: SetActivationPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password set successfully' })
+  async setActivationPassword(@Body() dto: SetActivationPasswordDto) {
+    await this.authService.setActivationPassword(dto.email, dto.newPassword);
     return {
       success: true,
       message: 'Password set successfully. You can now log in.',

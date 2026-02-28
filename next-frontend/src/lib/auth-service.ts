@@ -1,240 +1,189 @@
 /**
- * Auth Service - Server Side
- * 
- * Methods for authentication operations
- * Used by Server Actions to communicate with backend
+ * Auth Service
+ *
+ * Thin wrappers around backend auth endpoints.
+ * Matches backend response shapes exactly:
+ *   login  → { success, message, data: { user, accessToken } }   (refreshToken is httpOnly cookie)
+ *   refresh → { success, message, data: { accessToken } }
+ *   me     → { success, data: { user } }
+ *   profile → PATCH /auth/profile → { success, message, data: { user } }
+ *
+ * No self‑registration — accounts are created by admin.
  */
 
 import { api } from './api-client';
+import type { User } from '@/types/user';
+import type { UpdateProfileDto } from '@/types/profile';
 
-export interface RegisterData {
-  email: string;
-  password: string;
-  confirmPassword: string;
-  role?: 'student' | 'teacher';
-}
-
-export interface LoginData {
-  email: string;
-  password: string;
-}
-
-export interface VerifyEmailData {
-  email: string;
-  code: string;
-}
-
-export interface ResetPasswordData {
-  email: string;
-  code: string;
-  password: string;
-  confirmPassword: string;
-}
-
-export interface UpdateProfileData {
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  civilStatus?: string;
-  dateOfBirth?: string;
-  address?: string;
-  gradeLevel?: string;
-}
-
-export interface ChangePasswordData {
-  oldPassword: string;
-  password: string;
-  confirmPassword: string;
-}
+// ---------------------------------------------------------------------------
+// Shared types
+// ---------------------------------------------------------------------------
 
 export interface AuthResponse {
   success: boolean;
-  message: string;
+  message?: string;
   data?: {
-    user?: any;
+    user?: User;
     accessToken?: string;
-    refreshToken?: string;
   };
-  user?: any;
-  accessToken?: string;
 }
 
-/**
- * Register a new user
- */
-export async function register(data: RegisterData): Promise<AuthResponse> {
-  try {
-    const response = await api.post('/auth/register', data);
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Registration failed',
-    };
-  }
-}
+// ---------------------------------------------------------------------------
+// Login / Logout
+// ---------------------------------------------------------------------------
 
-/**
- * Verify email with OTP
- */
-export async function verifyEmail(data: VerifyEmailData): Promise<AuthResponse> {
-  try {
-    const response = await api.post('/otp/verify', data);
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Verification failed',
-    };
-  }
-}
-
-/**
- * Resend OTP to email
- */
-export async function resendOTP(email: string): Promise<AuthResponse> {
-  try {
-    const response = await api.post('/otp/resend', { email });
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Failed to resend OTP',
-    };
-  }
-}
-
-/**
- * Login user with email and password
- */
-export async function login(data: LoginData): Promise<AuthResponse> {
+export async function login(data: { email: string; password: string }): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/login', data);
     return response.data;
   } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Login failed',
-    };
+    throw error.response?.data ?? { success: false, message: error.message || 'Login failed' };
   }
 }
 
-/**
- * Get current user
- */
-export async function getCurrentUser(): Promise<AuthResponse> {
-  try {
-    const response = await api.get('/auth/me');
-    return response.data;
-  } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Failed to get user',
-    };
-  }
-}
-
-/**
- * Logout user
- */
 export async function logout(): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/logout', {});
     return response.data;
   } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Logout failed',
-    };
+    throw error.response?.data ?? { success: false, message: error.message || 'Logout failed' };
   }
 }
 
-/**
- * Request password reset
- */
+export async function logoutAll(): Promise<AuthResponse> {
+  try {
+    const response = await api.post('/auth/logout-all', {});
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Logout all failed' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Current user
+// ---------------------------------------------------------------------------
+
+export async function getCurrentUser(): Promise<AuthResponse> {
+  try {
+    const response = await api.get('/auth/me');
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to get user' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// OTP / Verification
+// ---------------------------------------------------------------------------
+
+export async function verifyEmail(data: { email: string; code: string }): Promise<AuthResponse> {
+  try {
+    const response = await api.post('/otp/verify', data);
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Verification failed' };
+  }
+}
+
+export async function resendOTP(email: string): Promise<AuthResponse> {
+  try {
+    const response = await api.post('/otp/resend', { email });
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to resend OTP' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Password management
+// ---------------------------------------------------------------------------
+
 export async function forgotPassword(email: string): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/forgot-password', { email });
     return response.data;
   } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Failed to request password reset',
-    };
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to request password reset' };
   }
 }
 
-/**
- * Reset password with code
- */
-export async function resetPassword(data: ResetPasswordData): Promise<AuthResponse> {
+export async function resetPassword(data: {
+  email: string;
+  code: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/reset-password', data);
     return response.data;
   } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Failed to reset password',
-    };
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to reset password' };
   }
 }
 
-/**
- * Change password (authenticated user)
- */
-export async function changePassword(data: ChangePasswordData): Promise<AuthResponse> {
+export async function setInitialPassword(data: {
+  email: string;
+  code: string;
+  newPassword: string;
+}): Promise<AuthResponse> {
+  try {
+    const response = await api.post('/auth/set-initial-password', data);
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to set initial password' };
+  }
+}
+
+export async function setActivationPassword(data: {
+  email: string;
+  newPassword: string;
+}): Promise<AuthResponse> {
+  try {
+    const response = await api.post('/auth/set-activation-password', data);
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to set password' };
+  }
+}
+
+export async function changePassword(data: {
+  oldPassword: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/change-password', data);
     return response.data;
   } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Failed to change password',
-    };
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to change password' };
   }
 }
 
-/**
- * Update user profile
- */
-export async function updateProfile(data: UpdateProfileData): Promise<AuthResponse> {
+// ---------------------------------------------------------------------------
+// Validate credentials (for pre‑login checks on unverified accounts)
+// ---------------------------------------------------------------------------
+
+export async function validateCredentials(data: {
+  email: string;
+  password: string;
+}): Promise<AuthResponse> {
   try {
-    const response = await api.patch('/user-profiles', data);
+    const response = await api.post('/auth/validate-credentials', data);
     return response.data;
   } catch (error: any) {
-    if (error.response?.data) {
-      throw error.response.data;
-    }
-    throw {
-      success: false,
-      message: error.message || 'Failed to update profile',
-    };
+    throw error.response?.data ?? { success: false, message: error.message || 'Invalid credentials' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------------------
+
+export async function updateProfile(data: UpdateProfileDto): Promise<AuthResponse> {
+  try {
+    const response = await api.patch('/auth/profile', data);
+    return response.data;
+  } catch (error: any) {
+    throw error.response?.data ?? { success: false, message: error.message || 'Failed to update profile' };
   }
 }

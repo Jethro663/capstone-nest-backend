@@ -153,6 +153,22 @@ export class AuthService {
     await this.usersService.updatePassword(user.id, newPassword);
   }
 
+  /**
+   * Set password after OTP has already been consumed and the account is ACTIVE.
+   * Called from POST /auth/set-activation-password (the optional step after /verify-email).
+   * Uses account status as the gate — no OTP required here.
+   */
+  async setActivationPassword(email: string, newPassword: string): Promise<void> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.isEmailVerified || user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('Account is not yet verified or active');
+    }
+    await this.usersService.updatePassword(user.id, newPassword);
+  }
+
   async refreshToken(
     rawToken: string,
     ip?: string,
