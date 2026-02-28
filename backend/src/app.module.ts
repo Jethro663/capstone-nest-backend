@@ -1,9 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { BullModule } from '@nestjs/bullmq';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -22,14 +23,25 @@ import { HealthModule } from './modules/health/health.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
 import { RosterImportModule } from './modules/roster-import/roster-import.module';
 import { GradebookModule } from './modules/gradebook/gradebook.module';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
+import redisConfig from './config/redis.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, jwtConfig],
+      load: [databaseConfig, jwtConfig, redisConfig],
+    }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          url: config.get<string>('redis.url'),
+        },
+      }),
     }),
     ThrottlerModule.forRoot([
       {
@@ -48,20 +60,15 @@ import jwtConfig from './config/jwt.config';
     ClassesModule,
     LessonsModule,
     AssessmentsModule,
-    // Profiles module (user profile records)
     ProfilesModule,
-    // Admin module (dashboard stats and admin endpoints)
     AdminModule,
-    // Teacher module (teacher-specific endpoints)
     TeacherModule,
-    // Health check endpoint
     HealthModule,
-    // File upload module (PDF storage)
     FileUploadModule,
-    // Roster import module (CSV/XLSX class roster import)
     RosterImportModule,
-    // Gradebook module (class record, grade computation, intervention flagging)
     GradebookModule,
+    AnnouncementsModule,
+    NotificationsModule,
   ],
   providers: [
     {

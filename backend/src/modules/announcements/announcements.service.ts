@@ -1,0 +1,285 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { and, eq, isNull, desc, sql } from 'drizzle-orm';
+import type { IOptions as SanitizeOptions } from 'sanitize-html';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sanitizeHtml = require('sanitize-html') as (dirty: string, options?: SanitizeOptions) => string;
+import { DatabaseService } from '../../database/database.service';
+import {
+  announcements,
+  classes,
+} from '../../drizzle/schema';
+import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
+import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
+import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
+
+const ALLOWED_TAGS: SanitizeOptions = {
+  allowedTags: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li', 'a'],
+  allowedAttributes: {
+    a: ['href', 'target'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+};
+
+@Injectable()
+export class AnnouncementsService {
+  constructor(
+    private readonly databaseService: DatabaseService,
+    @InjectQueue('announcements') private readonly announcementsQueue: Queue,
+  ) {}
+
+  private get db() {
+    return this.databaseService.db;
+  }
+
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
+  private async verifyTeacherOwnsClass(
+    classId: string,
+    teacherId: string,
+  ): Promise<void> {
+    const cls = await this.db.query.classes.findFirst({
+      where: and(eq(classes.id, classId), eq(classes.teacherId, teacherId)),
+    });
+    if (!cls) {
+      throw new ForbiddenException(
+        'You are not the teacher of this class or the class does not exist.',
+      );
+    }
+  }
+
+  private sanitize(html: string): string {
+    return sanitizeHtml(html, ALLOWED_TAGS);
+  }
+
+  // ─── CRUD ───────────────────────────────────────────────────────────────────
+
+  async create(
+    classId: string,
+    teacherId: string,
+    dto: CreateAnnouncementDto,
+  ) {
+    await this.verifyTeacherOwnsClass(classId, teacherId);
+
+    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
+    const now = new Date();
+    const isFuture = scheduledAt && scheduledAt > now;
+
+    // publishedAt is set immediately if not scheduled for the future
+    const publishedAt = isFuture ? null : now;
+
+    const [announcement] = await this.db
+      .insert(announcements)
+      .values({
+        classId,
+        authorId: teacherId,
+        title: dto.title.trim(),
+        content: this.sanitize(dto.content),
+        isPinned: dto.isPinned ?? false,
+        scheduledAt,
+        publishedAt,
+      })
+      .returning();
+
+    // Enqueue fan-out immediately unless scheduled for future
+    if (!isFuture) {
+      await this.announcementsQueue.add(
+        'fan-out',
+        {
+          announcementId: announcement.id,
+          classId,
+          title: announcement.title,
+          content: announcement.content,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+    }
+
+    return announcement;
+  }
+
+  async findAllByClass(
+    classId: string,
+    viewerId: string,
+    viewerIsTeacher: boolean,
+    query: QueryAnnouncementsDto,
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const rows = await this.db.query.announcements.findMany({
+      where: and(
+        eq(announcements.classId, classId),
+        isNull(announcements.archivedAt),
+        // Students only see published; teacher sees all (including pending)
+        viewerIsTeacher
+          ? undefined
+          : sql`${announcements.publishedAt} IS NOT NULL`,
+      ),
+      orderBy: [
+        desc(announcements.isPinned),
+        desc(announcements.createdAt),
+      ],
+      limit,
+      offset,
+      with: {
+        author: {
+          columns: { id: true, firstName: true, lastName: true, email: true },
+        },
+      },
+    });
+
+    return rows;
+  }
+
+  async findOne(classId: string, announcementId: string, viewerIsTeacher: boolean) {
+    const row = await this.db.query.announcements.findFirst({
+      where: and(
+        eq(announcements.id, announcementId),
+        eq(announcements.classId, classId),
+        isNull(announcements.archivedAt),
+        viewerIsTeacher
+          ? undefined
+          : sql`${announcements.publishedAt} IS NOT NULL`,
+      ),
+      with: {
+        author: {
+          columns: { id: true, firstName: true, lastName: true, email: true },
+        },
+      },
+    });
+
+    if (!row) {
+      throw new NotFoundException('Announcement not found.');
+    }
+
+    return row;
+  }
+
+  async update(
+    classId: string,
+    announcementId: string,
+    teacherId: string,
+    dto: UpdateAnnouncementDto,
+  ) {
+    await this.verifyTeacherOwnsClass(classId, teacherId);
+
+    const existing = await this.db.query.announcements.findFirst({
+      where: and(
+        eq(announcements.id, announcementId),
+        eq(announcements.classId, classId),
+        isNull(announcements.archivedAt),
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Announcement not found.');
+    }
+
+    if (existing.authorId !== teacherId) {
+      throw new ForbiddenException('You can only edit your own announcements.');
+    }
+
+    const updates: Partial<typeof announcements.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+
+    if (dto.title !== undefined) updates.title = dto.title.trim();
+    if (dto.content !== undefined) updates.content = this.sanitize(dto.content);
+    if (dto.isPinned !== undefined) updates.isPinned = dto.isPinned;
+    if (dto.scheduledAt !== undefined) {
+      updates.scheduledAt = new Date(dto.scheduledAt);
+    }
+
+    const [updated] = await this.db
+      .update(announcements)
+      .set(updates)
+      .where(eq(announcements.id, announcementId))
+      .returning();
+
+    return updated;
+  }
+
+  async remove(classId: string, announcementId: string, teacherId: string) {
+    await this.verifyTeacherOwnsClass(classId, teacherId);
+
+    const existing = await this.db.query.announcements.findFirst({
+      where: and(
+        eq(announcements.id, announcementId),
+        eq(announcements.classId, classId),
+        isNull(announcements.archivedAt),
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Announcement not found.');
+    }
+
+    if (existing.authorId !== teacherId) {
+      throw new ForbiddenException(
+        'You can only delete your own announcements.',
+      );
+    }
+
+    await this.db
+      .update(announcements)
+      .set({ archivedAt: new Date(), updatedAt: new Date() })
+      .where(eq(announcements.id, announcementId));
+
+    return { message: 'Announcement archived successfully.' };
+  }
+
+  // ─── Called by the scheduler ─────────────────────────────────────────────
+
+  /**
+   * Finds all announcements whose scheduledAt has passed but haven't been
+   * published yet, publishes them, and enqueues their fan-out jobs.
+   * Called by AnnouncementsScheduler every minute.
+   */
+  async publishDueAnnouncements(): Promise<void> {
+    const now = new Date();
+
+    const due = await this.db.query.announcements.findMany({
+      where: and(
+        isNull(announcements.publishedAt),
+        isNull(announcements.archivedAt),
+        sql`${announcements.scheduledAt} <= ${now.toISOString()}`,
+      ),
+    });
+
+    for (const ann of due) {
+      await this.db
+        .update(announcements)
+        .set({ publishedAt: now, updatedAt: now })
+        .where(eq(announcements.id, ann.id));
+
+      await this.announcementsQueue.add(
+        'fan-out',
+        {
+          announcementId: ann.id,
+          classId: ann.classId,
+          title: ann.title,
+          content: ann.content,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+        },
+      );
+    }
+  }
+}

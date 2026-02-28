@@ -1,0 +1,313 @@
+Page 1 of 12
+PRE-PROPOSAL CAPSTONE TOPIC FORM
+TEAM NAME SaJakipir Boys SECTION INF234
+NAME OF THE PROPONENTS SIGNATURE
+Project Manager Raphael V. Mercado
+Systems Analyst Marc Dustin R. Dizon
+Programmer Jethro Joseph V. Dida
+Documenter/Technical
+Writer
+Angelo Miguel C. Jacob
+TITLE OF PROPOSED CAPSTONE PROJECT
+The title should briefly and simply reflect the main topic of the project.
+1. Nexora: A Learning Management with Learning Experience Platform Features for
+Targeted Student Intervention for Gat Andres Bonifacio High School
+SUSTAINABLE DEVELOPMENT
+GOAL (SDG)
+SDG 4 – Quality Education
+SDG 9 – Industry, Innovation, and Infrastructure
+CHOOSE SPECIALIZATION:
+☒Mobile and Web Applications (MWA)
+☐ Multimedia Arts and Animation (MAA)
+☐ General Course
+CAPSTONE PROJECT
+DISCIPLINE: Mobile and Web Software Development
+1. PROJECT CONTEXT
+Please state the rationale of your proposed Capstone Project
+Learning Management Systems (LMS) are widely used in high schools to support lesson delivery,
+assessment, and class management. However, most existing LMS platforms primarily focus on content
+distribution and administrative functions, offering limited support for targeted academic intervention for
+students who demonstrate learning difficulties.
+At Gat Andres Bonifacio High School, students across all high school grade levels exhibit varying levels of
+mastery in different subjects. While teachers can identify struggling students through assessments, providing
+structured and timely intervention remains challenging due to limited instructional time, large class sizes, and
+the absence of an integrated intervention-focused system.
+This project proposes the development of Nexora, a Learning Management System with Learning
+Experience Platform (LXP) features designed to support targeted student intervention for the entire high
+school population of Gat Andres Bonifacio High School. The LMS serves as the primary platform for
+managing classes, lessons, and assessments for all students, while the LXP functions as a performancebased intervention component.
+Page 2 of 12
+Access to the LXP is restricted to selected students who demonstrate learning gaps, such as those obtaining
+scores below the defined performance threshold (e.g., below 60%). The LXP is directly connected to the
+LMS to ensure continuity of instruction, allowing students to revisit previous lessons and assessments as
+part of remediation. Automated instructional formulas generated from uploaded modules guide learning
+paths, while teachers retain full control over instruction and intervention through the LMS.
+Page 3 of 12
+2. OBJECTIVES
+State the general objective and at least 5 specific objectives of the study
+General Objective:
+To design and develop a web and mobile-based Learning Management System (LMS) integrated with a
+Learning Experience Platform (LXP) that supports all subjects across all grade levels, provides targeted
+learning intervention for selected students who demonstrate learning gaps, and assists teachers through
+automated instructional support, performance-based intervention, and system evaluation.
+Specific Objectives:
+1. To develop an LMS that allows teachers and administrators to manage classes, students,
+lessons, assessments, and learning progress effectively, including support for automatic
+formatting and extraction of uploaded learning modules.
+2. To integrate an LXP within the LMS that is accessible only to selected students who
+demonstrate learning gaps (e.g., scores below 60%), ensuring targeted and effective
+intervention.
+3. To design and integrate an AI NPC mentor that assists students by explaining mistakes,
+providing hints, and recommending remedial activities.
+4. To conduct a system evaluation to assess the usability, functionality, performance, and user
+satisfaction of the LMS–LXP integration from the perspectives of teachers and selected
+students.
+5. To provide teacher support features that assist educators in identifying learning gaps, managing
+intervention activities through the LMS-linked LXP, and reducing instructional workload through
+automated content processing.
+Page 4 of 12
+3. SIGNIFICANCE OF THE STUDY
+Discuss the importance of the project once developed
+• For Students, the system provides structured academic support through targeted intervention.
+Selected students are given access to the LXP, allowing them to review previous lessons, revisit
+assessments, and follow guided remediation paths based on their performance. This approach
+supports mastery of learning competencies and reduces learning gaps across subjects.
+• For Teachers, Nexora offers clear instructional benefits. Teachers can easily upload learning
+modules through automatic content extraction, identify students who require intervention, and
+manage LXP activities directly through the LMS. Automated instructional formulas assist in
+recommending remediation without replacing teacher judgment, helping reduce workload while
+improving intervention effectiveness.
+• For the School, the system promotes data-informed academic intervention while maintaining a
+unified learning environment. The integration of LXP within the LMS allows structured remediation
+without disrupting regular instruction. Optional integration of intervention results into the LMS
+provides reference data for academic support, without functioning as official class records.
+• For Future Researchers and Developers, the project serves as a reference for designing LMS–LXP
+systems that support performance-based intervention, controlled access, and system evaluation
+within a high school setting.
+Page 5 of 12
+4. SCOPE AND DELIMITATION
+Refers to the scope and inclusive frame/s of references as well as delimitation/s of the study
+Scope
+• The system supports all high school grade levels and subjects at Gat Andres Bonifacio High School
+through an LMS.
+• The Learning Experience Platform (LXP) is designed for targeted intervention and is accessible only
+to selected students based on assessment performance (e.g., scores below 60%).
+• Students are allowed to revisit previous lessons and assessments as part of the intervention
+process.
+• Teachers access, manage, and monitor LXP activities exclusively through the LMS.
+• The system includes automated instructional formulas generated from uploaded learning modules to
+support intervention.
+• Teachers can upload modules with ease through automatic content extraction and formatting
+features.
+• The platform is accessible via web and mobile devices.
+• System evaluation is included to assess usability, functionality, performance, and user satisfaction.
+Delimitation
+• The system does not replace classroom instruction or teacher decision-making.
+• Full automation of grading and official class record management is excluded.
+• The LXP functions solely as an intervention component and is not intended for general student use.
+• Integration of intervention results into the LMS is optional and for reference purposes only.
+• Advanced predictive analytics and large-scale AI model training are not included.
+• Deployment beyond Gat Andres Bonifacio High School is outside the scope of the study.
+• Offline functionality and third-party content integrations are excluded.
+Page 6 of 12
+5. PROJECT DESIGN / DEVELOPMENT PLAN
+• Program Specification
+• • System Architecture: Web and Mobile-Based Client–Server Model
+• • Core Modules: User Management, LMS Core, LXP Engine, AI Mentor Module, Analytics
+Dashboard
+• • Data Design: Relational Database (Student Records, Progress Logs, Assessments, AI Feedback
+History)
+•
+• Software Specification
+• • Frontend: Web and Mobile Frameworks
+• • Backend: Nextjs
+• • Database: PostgreSQL
+• • AI Logic: Rule-based + Lightweight AI Integration
+during recommendation
+• Hardware Specification
+• • Standard desktop or laptop computers for development
+• • Mobile devices for testing
+• • School-compatible server or cloud deployment environment
+6. REFERENCES
+Use IEEE citation and referencing style
+AI Mentoring Benefits
+AI-assisted mentors in LMS provide instant hints, adaptive difficulty, and feedback without replacing
+teachers, aligning with DepEd curricula for Grade 9 math. Studies show AI NPCs enhance
+comprehension by guiding problem-solving and addressing gaps dynamically. Combined with LMS,
+these features yield better outcomes in resource-limited environments.
+M. Fitrah et al., “Impact of learning management systems and digital skills on TPACK development
+among pre-service mathematics Teachers,” Qubahan Academic Journal, vol. 5, no. 1, pp. 504–518,
+Mar. 2025, doi: 10.48161/qaj.v5n1a1392.
+The Springer article "Learning Experience Platforms (LXPs): A Primer on a Rapidly Evolving Field"
+examines how LXPs advance beyond traditional LMS by integrating AI-driven personalization, content
+curation, and real-time analytics to enhance learner engagement and outcomes. This directly aligns
+with Nexora, your LMS augmented with LXP features for targeted interventions at Gat Andres
+Bonifacio High School, as both emphasize data-informed strategies like progress tracking and early
+identification of at-risk students to deliver adaptive support in resource-constrained educational
+settings. By blending LMS structure with LXP's dynamic, learner-centric tools, Nexora embodies the
+article's vision for hybrid platforms that bridge learning gaps through intuitive, school-specific
+interventions.
+G. Albano, F. Arzarello, and U. D. Iacono, “Digital inquiry through games,” Technology Knowledge and
+Learning, vol. 26, no. 3, pp. 577–595, Aug. 2020, doi: 10.1007/s10758-020-09459-1.
+Problem-based learning approaches have been shown to enhance students’ mathematical connection
+ability and overall performance in mathematics. A study presented in the Journal of Physics:
+Page 7 of 12
+Conference Series reported that students taught using a problem-based learning method with
+structured review activities achieved higher post-test scores and greater gains in mathematical
+connection ability than those receiving conventional instruction, indicating improved conceptual links
+and problem-solving skills. This supports the notion that interactive, structured learning strategies can
+effectively improve mathematics outcomes when embedded within digital or blended environments
+such as a web- and mobile-based LMS.
+P. N. Malasari, H. Nindiasari, and Jaenudin, “A Development of Mathematical Connecting Ability of
+Students in Junior High School through a Problem-Based Learning with Course Review Horay
+Method,” Journal of Physics Conference Series, vol. 812, p. 012025, Feb. 2017, doi: 10.1088/1742-
+6596/812/1/012025.
+Implementing technology in mathematics instruction has been found to support student engagement,
+reduce anxiety, and deepen conceptual understanding. A literature review on the effects of technology
+in high school mathematics classrooms showed that technology tools can increase student
+engagement, improve accuracy in computation tasks, create a less-anxious learning environment, and
+motivate learners toward deeper understanding of mathematics content.
+D. Murphy, “A literature review: The Effect of Implementing Technology in a High School Mathematics
+Classroom,” International Journal of Research in Education and Science, vol. 2–2, pp. 295–299,
+season-02 2016.
+A study on the use of digital escape game intervention examined its impact on secondary school
+students’ mathematics performance and affective constructs. The research with 32 students found that
+participation in the digital escape game significantly improved mathematics performance across
+diverse ability levels, reinforced interest and enjoyment in mathematics, and encouraged collaborative
+learning and communication while solving mathematical tasks.
+D. N. N. P. A. Bakar, M. Shahrill, and Y. F. Zakariya, “Digital Escape game and students’ learning
+outcomes in Mathematics: experience from Brunei,” SAGE Open, vol. 13, no. 4, Oct. 2023, doi:
+10.1177/21582440231216838.
+Page 8 of 12
+ALL MODULES
+## 1. User Management Module
+- User Account Creation (Student, Teacher, Admin)
+• Role-Based Access Control (RBAC)
+• User Authentication (Login / Logout)
+• Account Status Management (Active, Inactive)
+• User Profile Management
+• Password Encryption and Security
+• User Data Validation
+---
+## 2. Role & Access Control Module
+- Role Definition (Student, Teacher, Administrator)
+• Role Assignment to Users
+• Permission Enforcement per Role
+• Restricted Access to LXP (Performance-Based)
+• Admin-Controlled Role Management
+---
+## 3. Student Profile Module
+- Student Personal Information
+• Grade Level Assignment
+• Subject Enrollment Records
+• Learning Progress Tracking
+• Assessment History
+• Intervention Eligibility Status
+---
+## 4. Teacher Profile Module
+Page 9 of 12
+- Teacher Personal Information
+- Class record and monitoring module
+• Subject Handling Assignment
+• Class Management Access
+• Uploaded Learning Module Ownership
+• Intervention Monitoring Access
+---
+## 5. Class & Subject Management Module (LMS Core)
+- Class Creation and Management
+• Subject Assignment per Class
+• Student Enrollment per Class
+• Teacher–Class Mapping
+• Academic Structure Management (Grade Level, Sections)
+---
+## 6. Learning Content Management Module (LMS)
+- Learning Module Upload (Documents / Files)
+• Automatic Content Extraction
+• Automatic Formatting of Uploaded Modules
+• Lesson Organization per Subject
+• Lesson Version Management
+• Content Reuse for Intervention
+---
+## 7. Assessment Management Module
+- Assessment Creation (Quizzes, Tests)
+• Assessment Scheduling
+• Score Recording
+Page 10 of 12
+• Performance Threshold Definition (e.g., below 60%)
+• Assessment Review Access
+• Assessment History Tracking
+---
+## 8. Performance Tracking & Evaluation Module
+- Student Performance Monitoring
+• Identification of Learning Gaps
+• Score-Based Performance Analysis
+• Progress Comparison (Before & After Intervention)
+• Performance Logs Storage
+---
+## 9. Learning Experience Platform (LXP) Module
+- Controlled Access for Selected Students Only
+• Performance-Based Student Eligibility
+• Remedial Learning Path Access
+• Review of Previous Lessons
+• Review of Previous Assessments
+• Guided Remediation Activities
+• LMS–LXP Content Continuity
+---
+## 10. Intervention Management Module
+- Automatic Intervention Trigger (Below Threshold)
+• Teacher-Managed Intervention Activities
+• Assignment of Remedial Tasks
+• Monitoring of Intervention Progress
+• Optional Integration of Intervention Results into LMS
+Page 11 of 12
+---
+## 11. AI Mentor (AI NPC) Module
+- AI-Assisted Explanation of Mistakes
+• Step-by-Step Hints and Guidance
+• Recommendation of Remedial Activities
+• Context-Based Feedback from Assessments
+• AI Feedback History Logging
+• Teacher-Controlled AI Assistance Scope
+---
+## 12. Instructional Support Module (Teacher Support)
+- Automated Instructional Formula Generation
+• Learning Gap Detection Assistance
+• Suggested Remediation Paths
+• Reduced Manual Workload for Teachers
+• Teacher Override and Decision Control
+---
+## 13. Analytics & Dashboard Module
+- Student Progress Visualization
+• Intervention Effectiveness Overview
+• Class Performance Summary
+• Teacher Dashboard View
+• Admin System Overview Dashboard
+---
+## 14. Reporting Module
+- Student Master List Report
+Page 12 of 12
+• Class Enrollment Report
+• Student Performance Report
+• Intervention Participation Report
+• Assessment Summary Report
+• System Usage Report (Teachers & Students)
+---
+## 15. System Evaluation Module
+- Usability Evaluation Tools
+• Functionality Assessment
+• Performance Evaluation
+• User Satisfaction Feedback (Teachers & Students)
+• Evaluation Data Storage
+---
+## 16. Security & Data Management Module
+- Secure Data Storage (PostgreSQL)
+• Encrypted Credentials
+• Access Control Enforcement
+• Data Integrity Validation
+• Activity Logging
+---
+## 17. Web & Mobile Access Module
+- Web-Based System Access
+• Mobile-Friendly Interface
+• Responsive Design
+• Cross-Platform Compatibility

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -11,6 +12,9 @@ async function bootstrap() {
 
   // Graceful shutdown — lets in-flight requests finish before the process exits
   app.enableShutdownHooks();
+
+  // Use Socket.io adapter for WebSocket support (notifications gateway)
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   const isProd = process.env.NODE_ENV === 'production';
 

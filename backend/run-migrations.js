@@ -25,6 +25,9 @@ const EXTRA_MIGRATIONS = [
   '0027_add_pending_roster.sql',
   '0028_drop_redundant_roles_name_idx.sql',
   '0029_add_gradebook_module.sql',
+  '0030_add_announcements.sql',
+  '0031_add_notifications.sql'
+
 ];
 
 async function applyMigrationFile(filePath) {
