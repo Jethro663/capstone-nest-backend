@@ -49,6 +49,23 @@ export class LessonsController {
   }
 
   /**
+   * Get draft lessons for a class
+   * Teachers can see AI-extracted drafts awaiting review
+   */
+  @Get('class/:classId/drafts')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getDraftLessons(@Param('classId') classId: string) {
+    const drafts = await this.lessonsService.getDraftLessons(classId);
+
+    return {
+      success: true,
+      message: `Found ${drafts.length} draft lesson(s)`,
+      data: drafts,
+      count: drafts.length,
+    };
+  }
+
+  /**
    * Get a single lesson with all content blocks
    * Teacher and Admin can access
    */

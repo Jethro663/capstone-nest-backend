@@ -25,15 +25,17 @@ import { RosterImportModule } from './modules/roster-import/roster-import.module
 import { GradebookModule } from './modules/gradebook/gradebook.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AiMentorModule } from './modules/ai-mentor/ai-mentor.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
+import ollamaConfig from './config/ollama.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, jwtConfig, redisConfig],
+      load: [databaseConfig, jwtConfig, redisConfig, ollamaConfig],
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -69,6 +71,7 @@ import redisConfig from './config/redis.config';
     GradebookModule,
     AnnouncementsModule,
     NotificationsModule,
+    AiMentorModule,
   ],
   providers: [
     {

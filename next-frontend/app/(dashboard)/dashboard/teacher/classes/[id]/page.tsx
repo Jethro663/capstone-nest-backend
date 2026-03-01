@@ -7,6 +7,8 @@ import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
+import { extractionService } from '@/services/extraction-service';
+import { fileService } from '@/services/file-service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +26,7 @@ import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
 import type { User } from '@/types/user';
 import type { Announcement } from '@/types/announcement';
+import type { Extraction } from '@/types/extraction';
 
 export default function TeacherClassDetailPage() {
   const params = useParams();
@@ -36,6 +39,7 @@ export default function TeacherClassDetailPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [candidates, setCandidates] = useState<User[]>([]);
+  const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
@@ -43,7 +47,12 @@ export default function TeacherClassDetailPage() {
   const [showCreateAssessment, setShowCreateAssessment] = useState(false);
   const [showAddStudents, setShowAddStudents] = useState(false);
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  const [showExtractModule, setShowExtractModule] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+
+  // Extract module states
+  const [extractFile, setExtractFile] = useState<File | null>(null);
+  const [extracting, setExtracting] = useState(false);
 
   // Form states
   const [lessonTitle, setLessonTitle] = useState('');
@@ -59,18 +68,20 @@ export default function TeacherClassDetailPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes, announcementsRes] = await Promise.all([
+      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes, announcementsRes, extractionsRes] = await Promise.all([
         classService.getById(classId),
         lessonService.getByClass(classId),
         assessmentService.getByClass(classId),
         classService.getEnrollments(classId),
         announcementService.getByClass(classId).catch(() => ({ data: [] as Announcement[] })),
+        extractionService.listByClass(classId).catch(() => ({ data: [] as Extraction[] })),
       ]);
       setClassItem(classRes.data);
       setLessons(lessonsRes.data || []);
       setAssessments(assessmentsRes.data || []);
       setEnrollments(enrollmentsRes.data || []);
       setAnnouncements(Array.isArray(announcementsRes.data) ? announcementsRes.data : []);
+      setExtractions(Array.isArray(extractionsRes.data) ? extractionsRes.data : []);
     } catch {
       toast.error('Failed to load class details');
     } finally {
@@ -192,6 +203,30 @@ export default function TeacherClassDetailPage() {
     }
   };
 
+  const handleExtractModule = async () => {
+    if (!extractFile) return;
+    setExtracting(true);
+    try {
+      // 1. Upload the PDF
+      const uploadRes = await fileService.upload(extractFile, classId);
+      const fileId = uploadRes.data.id;
+
+      // 2. Start extraction
+      const extractRes = await extractionService.extractModule({ fileId });
+
+      toast.success('Extraction queued! Redirecting to review page...');
+      setShowExtractModule(false);
+      setExtractFile(null);
+
+      // 3. Navigate to the extraction review page
+      router.push(`/dashboard/teacher/extractions/${extractRes.data.extractionId}`);
+    } catch {
+      toast.error('Failed to start extraction');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -227,8 +262,41 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="lessons" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{lessons.length} lessons</p>
-            <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setShowExtractModule(true)}>
+                Extract from PDF
+              </Button>
+              <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
+            </div>
           </div>
+
+          {/* Past extractions */}
+          {extractions.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Recent Extractions</p>
+              {extractions.slice(0, 5).map((ext) => (
+                <Card key={ext.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => router.push(`/dashboard/teacher/extractions/${ext.id}`)}>
+                  <CardContent className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-3">
+                      <Badge variant={
+                        ext.extractionStatus === 'completed' ? 'default' :
+                        ext.extractionStatus === 'applied' ? 'default' :
+                        ext.extractionStatus === 'failed' ? 'destructive' : 'secondary'
+                      }>
+                        {ext.extractionStatus}
+                      </Badge>
+                      <span className="text-sm">
+                        {ext.structuredContent?.title || 'Extraction'} — {ext.structuredContent?.lessons?.length ?? '?'} lessons
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(ext.createdAt).toLocaleDateString()}
+                    </span>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
           {lessons.length === 0 ? (
             <Card><CardContent className="p-6 text-center text-muted-foreground">No lessons yet.</CardContent></Card>
           ) : (
@@ -461,6 +529,33 @@ export default function TeacherClassDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateAnnouncement(false)}>Cancel</Button>
             <Button onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Extract Module from PDF Modal */}
+      <Dialog open={showExtractModule} onOpenChange={setShowExtractModule}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Extract Lessons from PDF</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload a PDF module and our AI will automatically extract structured lessons with content blocks.
+              You&apos;ll be able to review, edit, and approve each lesson before it&apos;s published.
+            </p>
+            <div>
+              <Label>PDF File</Label>
+              <Input
+                type="file"
+                accept=".pdf"
+                onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowExtractModule(false); setExtractFile(null); }}>Cancel</Button>
+            <Button onClick={handleExtractModule} disabled={!extractFile || extracting}>
+              {extracting ? 'Uploading & Extracting...' : 'Start Extraction'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

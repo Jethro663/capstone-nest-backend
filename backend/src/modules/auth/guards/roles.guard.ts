@@ -3,12 +3,15 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
+  private readonly logger = new Logger(RolesGuard.name);
+
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -33,11 +36,18 @@ export class RolesGuard implements CanActivate {
     }
 
     // 4. Check if user has required role
+    this.logger.debug(
+      `[ROLES] Required: ${JSON.stringify(requiredRoles)} | User roles: ${JSON.stringify(user.roles)} | Path: ${request.url}`,
+    );
+
     const hasRole = user.roles?.some((role: string) =>
       requiredRoles.includes(role),
     );
 
     if (!hasRole) {
+      this.logger.warn(
+        `[ROLES] DENIED — user ${user.email ?? user.id} has roles ${JSON.stringify(user.roles)} but needs one of ${JSON.stringify(requiredRoles)}`,
+      );
       throw new ForbiddenException('Insufficient permissions');
     }
 

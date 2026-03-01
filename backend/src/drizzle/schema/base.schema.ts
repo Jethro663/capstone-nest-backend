@@ -289,12 +289,17 @@ export const lessons = pgTable(
       .references(() => classes.id, { onDelete: 'cascade' }),
     order: integer('order').notNull().default(0),
     isDraft: boolean('is_draft').notNull().default(true),
+
+    /** Links AI-generated lessons back to the extraction that created them (null for manually created) */
+    sourceExtractionId: uuid('source_extraction_id'),
+
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
     classIdIdx: index('lessons_class_id_idx').on(table.classId),
     classOrderIdx: index('lessons_class_order_idx').on(table.classId, table.order),
+    sourceExtractionIdx: index('lessons_source_extraction_idx').on(table.sourceExtractionId),
   }),
 );
 

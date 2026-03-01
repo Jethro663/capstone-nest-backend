@@ -2,13 +2,13 @@ import { api } from '@/lib/api-client';
 import type { UploadedFile, StorageSummary } from '@/types/file';
 
 export const fileService = {
-  /** POST /files/upload — Teacher (multipart: file + classId) */
+  /** POST /files/upload?classId=... — Teacher (multipart: file) */
   async upload(file: File, classId: string): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('classId', classId);
-    const { data } = await api.post('/files/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    // Pass classId as a query parameter instead of a form field
+    const { data } = await api.post(`/files/upload?classId=${classId}`, formData, {
+      timeout: 120_000, // 2 min for large PDFs
     });
     return data;
   },

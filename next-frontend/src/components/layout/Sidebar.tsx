@@ -16,6 +16,7 @@ import {
   Megaphone,
   FolderOpen,
   User,
+  Bot,
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -52,6 +53,7 @@ const adminNav: NavItem[] = [
   { label: 'Classes', href: '/dashboard/admin/classes', icon: BookOpen },
   { label: 'Roster Import', href: '/dashboard/admin/roster-import', icon: ClipboardList },
   { label: 'Announcements', href: '/dashboard/admin/announcements', icon: Megaphone },
+  { label: 'AI Chatbot', href: '/dashboard/admin/chatbot', icon: Bot },
   { label: 'Audit Trail', href: '/dashboard/admin/audit', icon: Settings },
   { label: 'Profile', href: '/dashboard/profile', icon: User },
 ];

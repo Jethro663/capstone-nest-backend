@@ -5,6 +5,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Res,
   UseGuards,
   UseInterceptors,
@@ -74,8 +75,8 @@ export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 
   /**
-   * POST /api/files/upload
-   * Upload a PDF (teacher only). classId is required as a form field.
+   * POST /api/files/upload?classId=...
+   * Upload a PDF (teacher only). classId is required as a query parameter.
    */
   @Post('upload')
   @Roles(RoleName.Teacher)
@@ -84,12 +85,12 @@ export class FileUploadController {
   @UseInterceptors(FileInterceptor('file', multerOptions))
   async uploadFile(
     @UploadedFile(new PdfValidationPipe()) file: Express.Multer.File,
-    @Body() body: UploadFileDto,
+    @Query('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     const record = await this.fileUploadService.saveFileRecord({
       teacherId: user.id,
-      classId: body.classId,
+      classId,
       originalName: file.originalname,
       storedName: file.filename,
       mimeType: file.mimetype,

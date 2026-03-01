@@ -307,6 +307,26 @@ export class LessonsService {
   }
 
   /**
+   * Get draft lessons for a class — optionally filtered by extraction source
+   */
+  async getDraftLessons(classId: string, sourceExtractionId?: string) {
+    const conditions = [eq(lessons.classId, classId), eq(lessons.isDraft, true)];
+    if (sourceExtractionId) {
+      conditions.push(eq(lessons.sourceExtractionId, sourceExtractionId));
+    }
+
+    return this.db.query.lessons.findMany({
+      where: and(...conditions),
+      with: {
+        contentBlocks: {
+          orderBy: (blocks, { asc }) => [asc(blocks.order)],
+        },
+      },
+      orderBy: (l, { asc }) => [asc(l.order)],
+    });
+  }
+
+  /**
    * Get all completed lessons for a student in a class
    */
   async getCompletedLessonsForClass(studentId: string, classId: string) {
