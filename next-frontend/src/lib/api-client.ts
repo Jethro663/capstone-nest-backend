@@ -65,7 +65,16 @@ export function createApiClient(): AxiosInstance {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return api(originalRequest);
           } else {
-            // Refresh failed — just reject so the caller can handle it
+            // Refresh failed (expired/invalid refresh token) → force re-login
+            accessToken = null;
+            if (typeof window !== 'undefined') {
+              import('sonner').then(({ toast }) => {
+                toast.error('Session expired. Please log in again.');
+              });
+              setTimeout(() => {
+                window.location.href = '/login';
+              }, 1500);
+            }
             return Promise.reject(error);
           }
         } catch (refreshError) {

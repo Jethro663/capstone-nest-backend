@@ -220,8 +220,13 @@ export default function TeacherClassDetailPage() {
 
       // 3. Navigate to the extraction review page
       router.push(`/dashboard/teacher/extractions/${extractRes.data.extractionId}`);
-    } catch {
-      toast.error('Failed to start extraction');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      const msg =
+        axiosErr?.response?.data?.message ||
+        (err instanceof Error ? err.message : null) ||
+        'Failed to start extraction';
+      toast.error(msg);
     } finally {
       setExtracting(false);
     }

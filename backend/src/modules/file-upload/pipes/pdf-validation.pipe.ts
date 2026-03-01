@@ -6,7 +6,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import * as fs from 'fs';
-import { MAX_FILE_SIZE_BYTES, ALLOWED_MIME_TYPES } from '../constants/file-upload.constants';
+import * as path from 'path';
+import { MAX_FILE_SIZE_BYTES } from '../constants/file-upload.constants';
 
 @Injectable()
 export class PdfValidationPipe implements PipeTransform {
@@ -27,24 +28,27 @@ export class PdfValidationPipe implements PipeTransform {
       );
     }
 
-    // Magic-bytes check: read first 4 100 bytes and let file-type detect the real MIME
-    let detected: { mime: string } | undefined;
+    // Magic-bytes check: PDF files always start with %PDF (0x25 0x50 0x44 0x46)
+    const absolutePath = path.resolve(file.path);
+    let isPdf = false;
     try {
-      // file-type@16 is CommonJS; require() avoids ESM interop issues
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { fileTypeFromBuffer } = require('file-type');
-      const fd = fs.openSync(file.path, 'r');
-      const buf = Buffer.alloc(4100);
-      const bytesRead = fs.readSync(fd, buf, 0, 4100, 0);
+      const fd = fs.openSync(absolutePath, 'r');
+      const header = Buffer.alloc(4);
+      fs.readSync(fd, header, 0, 4, 0);
       fs.closeSync(fd);
-      detected = await fileTypeFromBuffer(buf.subarray(0, bytesRead));
-    } catch {
-      await this.cleanup(file.path);
-      throw new BadRequestException('Could not read uploaded file for validation');
+      isPdf =
+        header[0] === 0x25 && // %
+        header[1] === 0x50 && // P
+        header[2] === 0x44 && // D
+        header[3] === 0x46;   // F
+    } catch (err: unknown) {
+      await this.cleanup(absolutePath);
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new BadRequestException(`Could not read uploaded file for validation: ${detail}`);
     }
 
-    if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime as typeof ALLOWED_MIME_TYPES[number])) {
-      await this.cleanup(file.path);
+    if (!isPdf) {
+      await this.cleanup(absolutePath);
       throw new UnsupportedMediaTypeException(
         'Only PDF files are permitted. The uploaded file is not a valid PDF.',
       );
