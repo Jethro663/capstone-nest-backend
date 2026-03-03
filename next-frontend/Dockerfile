@@ -15,8 +15,12 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Copy Docker-specific env file so NEXT_PUBLIC_* vars are baked into the build
-COPY .env.docker .env.local
+# Copy or create Docker-specific env file so NEXT_PUBLIC_* vars are baked into the build.
+# If .env.docker exists, use it; otherwise create a default one with sensible Docker values.
+RUN if [ -f .env.docker ]; then cp .env.docker .env.local; else \
+    echo "NEXT_PUBLIC_API_URL=http://backend:3000" > .env.local && \
+    echo "NEXT_PUBLIC_WS_URL=http://localhost:3000" >> .env.local; \
+    fi
 
 RUN npm run build
 
