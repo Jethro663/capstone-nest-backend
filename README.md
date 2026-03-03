@@ -10,7 +10,8 @@
 6. [Database Seeding](#database-seeding)
 7. [Project Structure](#project-structure)
 8. [API Documentation](#api-documentation)
-9. [Troubleshooting](#troubleshooting)
+9. [Docker + Ollama Startup](#docker--ollama-startup)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -449,6 +450,47 @@ curl -X POST http://localhost:3000/api/auth/login \
 | POST | `/assessments/:id/submit` | Submit assessment |
 
 Full documentation available at `/api/docs` when server is running.
+
+---
+
+## Docker + Ollama Startup
+
+If you run the full stack with Docker Compose, the `ollama` service now blocks startup until the configured model is available.
+
+### Default model
+
+- Docker default: `llama3.2:3b`
+- Config path: `backend/.env.docker` (`OLLAMA_MODEL`)
+
+### First run behavior
+
+- On the first `docker compose up --build`, Ollama will pull `llama3.2:3b` before backend starts.
+- This can take several minutes depending on network speed.
+- Subsequent starts are faster because the model is cached in the `ollama_data` named volume.
+
+### Watch startup logs
+
+```bash
+docker compose logs -f ollama
+docker compose logs -f backend
+```
+
+You should see Ollama logs that it pulled and verified the model, then backend starts after Ollama is healthy.
+
+### Troubleshoot model pull/startup failures
+
+```bash
+# Validate effective compose config
+docker compose config
+
+# Check if Ollama reports your model in tags
+docker compose exec ollama sh -lc "curl -sf http://localhost:11434/api/tags"
+
+# Restart only ollama/backend after fixing env/network
+docker compose up -d ollama backend
+```
+
+If pull fails (for example, no internet), backend will wait and not start until Ollama becomes healthy with the configured model.
 
 ---
 

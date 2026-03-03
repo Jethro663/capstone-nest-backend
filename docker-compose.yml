@@ -42,24 +42,33 @@ services:
       - -c
       - |
           ollama serve &
+          SERVE_PID=$$!
+
           echo '==> Waiting for Ollama server to start...'
-          until curl -sf http://localhost:11434/ > /dev/null 2>&1; do
-            sleep 1
+          i=0
+          while [ $$i -lt 30 ]; do
+            if curl -sf http://localhost:11434/ > /dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+            i=$$((i+1))
           done
-          echo "==> Ollama ready. Pulling model: $$OLLAMA_MODEL..."
-          ollama pull $$OLLAMA_MODEL
-          echo '==> Model pull complete. Ollama is serving.'
-          wait
+
+          echo "==> Pulling model: $$OLLAMA_MODEL"
+          ollama pull "$$OLLAMA_MODEL"
+          echo "==> Pull finished. Ollama is serving."
+
+          wait "$$SERVE_PID"
     environment:
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
+      test: ["CMD-SHELL", "ollama list | grep -q . || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
     networks:
       - lms-network
 
@@ -81,7 +90,7 @@ services:
       redis:
         condition: service_healthy
       ollama:
-        condition: service_started
+        condition: service_healthy
     networks:
       - lms-network
 

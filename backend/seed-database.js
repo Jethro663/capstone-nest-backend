@@ -121,12 +121,12 @@ async function seedDatabase() {
     for (const role of ROLES) {
       const roleId = uuid();
       try {
-        await client.query(
-          'INSERT INTO roles (id, name, description) VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET description = $3 RETURNING id',
+        const result = await client.query(
+          'INSERT INTO roles (id, name, description) VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING id',
           [roleId, role.name, role.description]
         );
-        createdRoles[role.name] = roleId;
-        log(`  ✓ Role '${role.name}' created`, 'success');
+        createdRoles[role.name] = result.rows[0].id;
+        log(`  ✓ Role '${role.name}' created/verified`, 'success');
       } catch (err) {
         if (err.code === '23505') { // unique_violation
           // Role already exists, fetch the existing ID
