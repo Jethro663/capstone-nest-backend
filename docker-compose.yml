@@ -1,0 +1,111 @@
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: capstone
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "200411"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # Exposed for optional debugging; remove in production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d capstone"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - lms-network
+
+  # ── Redis ───────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - lms-network
+
+  # ── Ollama (AI Service) ────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    entrypoint: >
+      sh -c "
+        ollama serve &
+        echo '==> Waiting for Ollama server to start...'
+        until curl -sf http://localhost:11434/ > /dev/null 2>&1; do
+          sleep 1
+        done
+        echo '==> Ollama is ready. Pulling model: $${OLLAMA_MODEL:-llama3.1}...'
+        ollama pull $${OLLAMA_MODEL:-llama3.1}
+        echo '==> Model pull complete. Ollama is serving.'
+        wait
+      "
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - lms-network
+
+  # ── NestJS Backend ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.docker
+    ports:
+      - "3000:3000"
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - lms-network
+
+  # ── Next.js Frontend ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./next-frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=3001
+      - HOSTNAME=0.0.0.0
+    ports:
+      - "3001:3001"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - lms-network
+
+volumes:
+  postgres_data:
+  ollama_data:
+  backend_uploads:
+
+networks:
+  lms-network:
+    driver: bridge

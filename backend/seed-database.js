@@ -18,7 +18,7 @@ const { v4: uuid } = require('uuid');
 // ============================================
 // CONFIGURATION
 // ============================================
-const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:200411@localhost:5432/capstone';
+const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:200411@postgres:5432/capstone';
 
 // Sample data - customize these as needed
 const ROLES = [
