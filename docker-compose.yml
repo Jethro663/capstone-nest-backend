@@ -37,18 +37,19 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
-    entrypoint: >
-      sh -c "
-        ollama serve &
-        echo '==> Waiting for Ollama server to start...'
-        until curl -sf http://localhost:11434/ > /dev/null 2>&1; do
-          sleep 1
-        done
-        echo '==> Ollama is ready. Pulling model: $${OLLAMA_MODEL:-llama3.1}...'
-        ollama pull $${OLLAMA_MODEL:-llama3.1}
-        echo '==> Model pull complete. Ollama is serving.'
-        wait
-      "
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+          ollama serve &
+          echo '==> Waiting for Ollama server to start...'
+          until curl -sf http://localhost:11434/ > /dev/null 2>&1; do
+            sleep 1
+          done
+          echo "==> Ollama ready. Pulling model: $$OLLAMA_MODEL..."
+          ollama pull $$OLLAMA_MODEL
+          echo '==> Model pull complete. Ollama is serving.'
+          wait
     environment:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1}
     volumes:
