@@ -2,11 +2,25 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { lessons, lessonContentBlocks, classes, lessonCompletions, users } from '../../drizzle/schema';
-import { CreateLessonDto, UpdateLessonDto, CreateContentBlockDto, UpdateContentBlockDto, ReorderBlocksDto } from './DTO/lesson.dto';
+import {
+  lessons,
+  lessonContentBlocks,
+  classes,
+  lessonCompletions,
+  users,
+} from '../../drizzle/schema';
+import {
+  CreateLessonDto,
+  UpdateLessonDto,
+  CreateContentBlockDto,
+  UpdateContentBlockDto,
+  ReorderBlocksDto,
+} from './DTO/lesson.dto';
+import { RoleName } from '../auth/decorators/roles.decorator';
 
 @Injectable()
 export class LessonsService {
@@ -16,25 +30,64 @@ export class LessonsService {
     return this.databaseService.db;
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
   /**
-   * Get all lessons for a class
+   * Verifies that the authenticated user owns the class that a lesson belongs
+   * to. Admins bypass this check entirely.
    */
-  async getLessonsByClass(classId: string) {
-    const lessonList = await this.db.query.lessons.findMany({
-      where: eq(lessons.classId, classId),
+  private async assertTeacherOwnership(
+    classId: string,
+    userId: string,
+    userRoles: string[],
+  ): Promise<void> {
+    if (userRoles.includes(RoleName.Admin)) return;
+
+    const classRecord = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { teacherId: true },
+    });
+
+    if (!classRecord) {
+      throw new NotFoundException(`Class with ID "${classId}" not found`);
+    }
+
+    if (classRecord.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You do not have permission to modify lessons in this class',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lesson CRUD
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Get all lessons for a class, ordered by `order`.
+   * When `filterDrafts` is true, only published (isDraft = false) lessons are
+   * returned — use this when the caller is a student.
+   */
+  async getLessonsByClass(classId: string, filterDrafts = false) {
+    const conditions = filterDrafts
+      ? and(eq(lessons.classId, classId), eq(lessons.isDraft, false))
+      : eq(lessons.classId, classId);
+
+    return this.db.query.lessons.findMany({
+      where: conditions,
       with: {
         contentBlocks: {
           orderBy: (blocks, { asc }) => [asc(blocks.order)],
         },
       },
-      orderBy: (lessons, { asc }) => [asc(lessons.order)],
+      orderBy: (l, { asc }) => [asc(l.order)],
     });
-
-    return lessonList;
   }
 
   /**
-   * Get a single lesson by ID with all content blocks
+   * Get a single lesson by ID with all content blocks and its parent class.
    */
   async getLessonById(lessonId: string) {
     const lesson = await this.db.query.lessons.findFirst({
@@ -55,65 +108,78 @@ export class LessonsService {
   }
 
   /**
-   * Create a new lesson
+   * Create a new lesson.
+   * Order assignment is wrapped in a transaction to prevent duplicate sequence
+   * numbers under concurrent requests.
    */
-  async createLesson(createLessonDto: CreateLessonDto) {
-    // Verify class exists
-    const classRecord = await this.db.query.classes.findFirst({
-      where: eq(classes.id, createLessonDto.classId),
+  async createLesson(
+    createLessonDto: CreateLessonDto,
+    userId: string,
+    userRoles: string[],
+  ) {
+    await this.assertTeacherOwnership(
+      createLessonDto.classId,
+      userId,
+      userRoles,
+    );
+
+    const newLessonId = await this.db.transaction(async (tx) => {
+      // Lock the latest lesson row to prevent concurrent order collision
+      const lastLesson = await tx.query.lessons.findFirst({
+        where: eq(lessons.classId, createLessonDto.classId),
+        orderBy: (l, { desc }) => [desc(l.order)],
+        columns: { order: true },
+      });
+
+      const nextOrder = (lastLesson?.order ?? 0) + 1;
+
+      const [newLesson] = await tx
+        .insert(lessons)
+        .values({
+          title: createLessonDto.title,
+          description: createLessonDto.description,
+          classId: createLessonDto.classId,
+          order: createLessonDto.order ?? nextOrder,
+          isDraft: true,
+        })
+        .returning({ id: lessons.id });
+
+      return newLesson.id;
     });
 
-    if (!classRecord) {
-      throw new BadRequestException(
-        `Class with ID "${createLessonDto.classId}" not found`,
-      );
-    }
-
-    // Get the highest order number for this class
-    const lastLesson = await this.db.query.lessons.findFirst({
-      where: eq(lessons.classId, createLessonDto.classId),
-      orderBy: (lessons, { desc }) => [desc(lessons.order)],
-    });
-
-    const nextOrder = (lastLesson?.order || 0) + 1;
-
-    const [newLesson] = await this.db
-      .insert(lessons)
-      .values({
-        title: createLessonDto.title,
-        description: createLessonDto.description,
-        classId: createLessonDto.classId,
-        order: createLessonDto.order || nextOrder,
-        isDraft: true,
-      })
-      .returning();
-
-    return this.getLessonById(newLesson.id);
+    return this.getLessonById(newLessonId);
   }
 
   /**
-   * Update a lesson
+   * Update a lesson's editable fields.
    */
-  async updateLesson(lessonId: string, updateLessonDto: UpdateLessonDto) {
-    // Verify lesson exists
-    await this.getLessonById(lessonId);
+  async updateLesson(
+    lessonId: string,
+    updateLessonDto: UpdateLessonDto,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
     await this.db
       .update(lessons)
-      .set({
-        ...updateLessonDto,
-        updatedAt: new Date(),
-      })
+      .set({ ...updateLessonDto, updatedAt: new Date() })
       .where(eq(lessons.id, lessonId));
 
     return this.getLessonById(lessonId);
   }
 
   /**
-   * Delete a lesson (cascades to content blocks)
+   * Delete a lesson and all its content blocks (cascade).
    */
-  async deleteLesson(lessonId: string) {
+  async deleteLesson(
+    lessonId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
     const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
     await this.db.delete(lessons).where(eq(lessons.id, lessonId));
 
@@ -121,33 +187,42 @@ export class LessonsService {
   }
 
   /**
-   * Publish a lesson (toggle isDraft to false)
+   * Publish a lesson (sets isDraft = false).
    */
-  async publishLesson(lessonId: string) {
+  async publishLesson(
+    lessonId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
     const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
     await this.db
       .update(lessons)
-      .set({
-        isDraft: false,
-        updatedAt: new Date(),
-      })
+      .set({ isDraft: false, updatedAt: new Date() })
       .where(eq(lessons.id, lessonId));
 
     return this.getLessonById(lessonId);
   }
 
+  // ---------------------------------------------------------------------------
+  // Content blocks
+  // ---------------------------------------------------------------------------
+
   /**
-   * Add a content block to a lesson
+   * Add a content block to a lesson.
    */
-  async addContentBlock(createBlockDto: CreateContentBlockDto) {
-    // Ensure lessonId was provided (controller should merge lessonId param)
+  async addContentBlock(
+    createBlockDto: CreateContentBlockDto,
+    userId: string,
+    userRoles: string[],
+  ) {
     if (!createBlockDto.lessonId) {
       throw new BadRequestException('lessonId is required');
     }
 
-    // Verify lesson exists
     const lesson = await this.getLessonById(createBlockDto.lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
     const [newBlock] = await this.db
       .insert(lessonContentBlocks)
@@ -156,7 +231,7 @@ export class LessonsService {
         type: createBlockDto.type as any,
         order: createBlockDto.order,
         content: createBlockDto.content,
-        metadata: createBlockDto.metadata || {},
+        metadata: createBlockDto.metadata ?? {},
       })
       .returning();
 
@@ -164,7 +239,7 @@ export class LessonsService {
   }
 
   /**
-   * Get a single content block
+   * Fetch a single content block; throws 404 if not found.
    */
   async getContentBlockById(blockId: string) {
     const block = await this.db.query.lessonContentBlocks.findFirst({
@@ -181,17 +256,20 @@ export class LessonsService {
   }
 
   /**
-   * Update a content block
+   * Update a content block's fields.
    */
   async updateContentBlock(
     blockId: string,
     updateBlockDto: UpdateContentBlockDto,
+    userId: string,
+    userRoles: string[],
   ) {
-    // Verify block exists
-    await this.getContentBlockById(blockId);
+    const block = await this.getContentBlockById(blockId);
+    const lesson = await this.getLessonById(block.lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
-    const updateData: any = { updatedAt: new Date() };
-    
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
     if (updateBlockDto.type !== undefined) updateData.type = updateBlockDto.type as any;
     if (updateBlockDto.order !== undefined) updateData.order = updateBlockDto.order;
     if (updateBlockDto.content !== undefined) updateData.content = updateBlockDto.content;
@@ -206,10 +284,16 @@ export class LessonsService {
   }
 
   /**
-   * Delete a content block
+   * Delete a content block.
    */
-  async deleteContentBlock(blockId: string) {
+  async deleteContentBlock(
+    blockId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
     const block = await this.getContentBlockById(blockId);
+    const lesson = await this.getLessonById(block.lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
     await this.db
       .delete(lessonContentBlocks)
@@ -219,35 +303,68 @@ export class LessonsService {
   }
 
   /**
-   * Reorder content blocks within a lesson
+   * Atomically reorder content blocks within a lesson.
+   * All block IDs in the payload must belong to the specified lesson; the
+   * entire operation is wrapped in a database transaction.
    */
-  async reorderBlocks(lessonId: string, reorderDto: ReorderBlocksDto) {
-    // Verify lesson exists
-    await this.getLessonById(lessonId);
+  async reorderBlocks(
+    lessonId: string,
+    reorderDto: ReorderBlocksDto,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
-    // Update order for each block
-    for (const blockUpdate of reorderDto.blocks) {
-      await this.db
-        .update(lessonContentBlocks)
-        .set({
-          order: blockUpdate.order,
-          updatedAt: new Date(),
-        })
-        .where(eq(lessonContentBlocks.id, blockUpdate.id));
+    const requestedIds = reorderDto.blocks.map((b) => b.id);
+
+    // Validate that every submitted block ID belongs to this lesson
+    const existingBlocks = await this.db.query.lessonContentBlocks.findMany({
+      where: and(
+        eq(lessonContentBlocks.lessonId, lessonId),
+        inArray(lessonContentBlocks.id, requestedIds),
+      ),
+      columns: { id: true },
+    });
+
+    if (existingBlocks.length !== requestedIds.length) {
+      const foundIds = new Set(existingBlocks.map((b) => b.id));
+      const unknownIds = requestedIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `The following block IDs do not belong to lesson "${lessonId}": ${unknownIds.join(', ')}`,
+      );
     }
 
-    // Return updated lesson
+    // Wrap all updates in a single transaction
+    await this.db.transaction(async (tx) => {
+      for (const blockUpdate of reorderDto.blocks) {
+        await tx
+          .update(lessonContentBlocks)
+          .set({ order: blockUpdate.order, updatedAt: new Date() })
+          .where(eq(lessonContentBlocks.id, blockUpdate.id));
+      }
+    });
+
     return this.getLessonById(lessonId);
   }
 
+  // ---------------------------------------------------------------------------
+  // Student progress
+  // ---------------------------------------------------------------------------
+
   /**
-   * Mark a lesson as complete for a student
+   * Mark a lesson as complete for a student.
+   * Prevents completing a lesson that is still a draft.
    */
   async markLessonComplete(studentId: string, lessonId: string) {
-    // Verify lesson exists
-    await this.getLessonById(lessonId);
+    const lesson = await this.getLessonById(lessonId);
 
-    // Verify student exists
+    if (lesson.isDraft) {
+      throw new BadRequestException(
+        'Cannot mark a draft lesson as complete. The lesson has not been published yet.',
+      );
+    }
+
     const student = await this.db.query.users.findFirst({
       where: eq(users.id, studentId),
     });
@@ -255,42 +372,39 @@ export class LessonsService {
       throw new NotFoundException(`Student with ID "${studentId}" not found`);
     }
 
-    // Try to insert or update completion
     try {
       const result = await this.db
         .insert(lessonCompletions)
-        .values({
-          studentId,
-          lessonId,
-          progressPercentage: 100,
-        })
+        .values({ studentId, lessonId, progressPercentage: 100 })
         .returning();
 
       return { isCompleted: true, completedAt: result[0].completedAt };
-    } catch (error) {
-      // If unique constraint violation, update existing record
-      if (error.code === '23505') {
-        await this.db
+    } catch (error: any) {
+      // Unique constraint violation — already completed; update timestamp
+      if (error?.code === '23505') {
+        const [updated] = await this.db
           .update(lessonCompletions)
-          .set({
-            progressPercentage: 100,
-            completedAt: new Date(),
-          })
+          .set({ progressPercentage: 100, completedAt: new Date() })
           .where(
             and(
               eq(lessonCompletions.studentId, studentId),
               eq(lessonCompletions.lessonId, lessonId),
             ),
-          );
+          )
+          .returning();
 
-        return { isCompleted: true, message: 'Lesson already marked as complete' };
+        return {
+          isCompleted: true,
+          completedAt: updated.completedAt,
+          message: 'Lesson already marked as complete',
+        };
       }
       throw error;
     }
   }
 
   /**
-   * Check if a student has completed a lesson
+   * Check if a student has completed a specific lesson.
    */
   async isLessonCompleted(studentId: string, lessonId: string) {
     const completion = await this.db.query.lessonCompletions.findFirst({
@@ -302,15 +416,18 @@ export class LessonsService {
 
     return {
       isCompleted: !!completion,
-      completedAt: completion?.completedAt || null,
+      completedAt: completion?.completedAt ?? null,
     };
   }
 
   /**
-   * Get draft lessons for a class — optionally filtered by extraction source
+   * Get draft lessons for a class; optionally filtered by extraction source.
    */
   async getDraftLessons(classId: string, sourceExtractionId?: string) {
-    const conditions = [eq(lessons.classId, classId), eq(lessons.isDraft, true)];
+    const conditions: ReturnType<typeof eq>[] = [
+      eq(lessons.classId, classId),
+      eq(lessons.isDraft, true),
+    ];
     if (sourceExtractionId) {
       conditions.push(eq(lessons.sourceExtractionId, sourceExtractionId));
     }
@@ -327,25 +444,27 @@ export class LessonsService {
   }
 
   /**
-   * Get all completed lessons for a student in a class
+   * Get all completed lessons for a student within a specific class.
+   * Filtering is performed at the database level via a JOIN to avoid in-memory
+   * scans over the entire completions table.
    */
   async getCompletedLessonsForClass(studentId: string, classId: string) {
-    const completions = await this.db.query.lessonCompletions.findMany({
-      where: and(
-        eq(lessonCompletions.studentId, studentId),
-      ),
-      with: {
-        lesson: true,
-      },
-    });
+    const rows = await this.db
+      .select({
+        lessonId: lessonCompletions.lessonId,
+        completedAt: lessonCompletions.completedAt,
+        progressPercentage: lessonCompletions.progressPercentage,
+      })
+      .from(lessonCompletions)
+      .innerJoin(lessons, eq(lessonCompletions.lessonId, lessons.id))
+      .where(
+        and(
+          eq(lessonCompletions.studentId, studentId),
+          eq(lessons.classId, classId),
+        ),
+      );
 
-    // Filter completions for lessons in the specified class
-    return completions
-      .filter(c => c.lesson?.classId === classId)
-      .map(c => ({
-        lessonId: c.lessonId,
-        completedAt: c.completedAt,
-      }));
+    return rows;
   }
 }
 

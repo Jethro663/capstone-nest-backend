@@ -32,13 +32,20 @@ export class LessonsController {
   constructor(private lessonsService: LessonsService) {}
 
   /**
-   * Get all lessons for a class (ordered)
-   * Admin, Teacher, and Student can access
+   * Get all lessons for a class (ordered).
+   * Students only receive published lessons; Admin/Teacher see all (including drafts).
    */
   @Get('class/:classId')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getLessonsByClass(@Param('classId') classId: string) {
-    const lessonList = await this.lessonsService.getLessonsByClass(classId);
+  async getLessonsByClass(
+    @Param('classId') classId: string,
+    @CurrentUser() user: any,
+  ) {
+    const filterDrafts: boolean = user.roles.includes(RoleName.Student);
+    const lessonList = await this.lessonsService.getLessonsByClass(
+      classId,
+      filterDrafts,
+    );
 
     return {
       success: true,
@@ -49,8 +56,8 @@ export class LessonsController {
   }
 
   /**
-   * Get draft lessons for a class
-   * Teachers can see AI-extracted drafts awaiting review
+   * Get draft lessons for a class.
+   * Teachers can see AI-extracted drafts awaiting review.
    */
   @Get('class/:classId/drafts')
   @Roles(RoleName.Admin, RoleName.Teacher)
@@ -66,8 +73,7 @@ export class LessonsController {
   }
 
   /**
-   * Get a single lesson with all content blocks
-   * Teacher and Admin can access
+   * Get a single lesson with all content blocks.
    */
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
@@ -82,14 +88,20 @@ export class LessonsController {
   }
 
   /**
-   * Create a new lesson
-   * Teacher and Admin can access
+   * Create a new lesson (Teacher / Admin).
    */
   @Post()
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
-  async createLesson(@Body() createLessonDto: CreateLessonDto) {
-    const lesson = await this.lessonsService.createLesson(createLessonDto);
+  async createLesson(
+    @Body() createLessonDto: CreateLessonDto,
+    @CurrentUser() user: any,
+  ) {
+    const lesson = await this.lessonsService.createLesson(
+      createLessonDto,
+      user.userId,
+      user.roles,
+    );
 
     return {
       success: true,
@@ -99,16 +111,21 @@ export class LessonsController {
   }
 
   /**
-   * Update a lesson
-   * Teacher and Admin can access
+   * Update a lesson (Teacher / Admin).
    */
   @Put(':id')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async updateLesson(
     @Param('id') id: string,
     @Body() updateLessonDto: UpdateLessonDto,
+    @CurrentUser() user: any,
   ) {
-    const lesson = await this.lessonsService.updateLesson(id, updateLessonDto);
+    const lesson = await this.lessonsService.updateLesson(
+      id,
+      updateLessonDto,
+      user.userId,
+      user.roles,
+    );
 
     return {
       success: true,
@@ -118,13 +135,19 @@ export class LessonsController {
   }
 
   /**
-   * Publish a lesson
-   * Teacher and Admin can access
+   * Publish a lesson — sets isDraft = false (Teacher / Admin).
    */
   @Put(':id/publish')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async publishLesson(@Param('id') id: string) {
-    const lesson = await this.lessonsService.publishLesson(id);
+  async publishLesson(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    const lesson = await this.lessonsService.publishLesson(
+      id,
+      user.userId,
+      user.roles,
+    );
 
     return {
       success: true,
@@ -134,14 +157,16 @@ export class LessonsController {
   }
 
   /**
-   * Delete a lesson
-   * Teacher and Admin can access
+   * Delete a lesson and all its content (Teacher / Admin).
+   * Returns 200 with a JSON body for consistency with the rest of the API.
    */
   @Delete(':id')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteLesson(@Param('id') id: string) {
-    await this.lessonsService.deleteLesson(id);
+  async deleteLesson(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    await this.lessonsService.deleteLesson(id, user.userId, user.roles);
 
     return {
       success: true,
@@ -150,8 +175,9 @@ export class LessonsController {
   }
 
   /**
-   * Add a content block to a lesson
-   * Teacher and Admin can access
+   * Add a content block to a lesson (Teacher / Admin).
+   * The lessonId is always taken from the URL parameter; any lessonId value
+   * in the request body is overwritten.
    */
   @Post(':lessonId/blocks')
   @Roles(RoleName.Admin, RoleName.Teacher)
@@ -159,11 +185,13 @@ export class LessonsController {
   async addContentBlock(
     @Param('lessonId') lessonId: string,
     @Body() createBlockDto: CreateContentBlockDto,
+    @CurrentUser() user: any,
   ) {
-    const block = await this.lessonsService.addContentBlock({
-      ...createBlockDto,
-      lessonId,
-    });
+    const block = await this.lessonsService.addContentBlock(
+      { ...createBlockDto, lessonId },
+      user.userId,
+      user.roles,
+    );
 
     return {
       success: true,
@@ -173,18 +201,20 @@ export class LessonsController {
   }
 
   /**
-   * Update a content block
-   * Teacher and Admin can access
+   * Update a content block (Teacher / Admin).
    */
   @Put('blocks/:blockId')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async updateContentBlock(
     @Param('blockId') blockId: string,
     @Body() updateBlockDto: UpdateContentBlockDto,
+    @CurrentUser() user: any,
   ) {
     const block = await this.lessonsService.updateContentBlock(
       blockId,
       updateBlockDto,
+      user.userId,
+      user.roles,
     );
 
     return {
@@ -195,14 +225,20 @@ export class LessonsController {
   }
 
   /**
-   * Delete a content block
-   * Teacher and Admin can access
+   * Delete a content block (Teacher / Admin).
+   * Returns 200 with a JSON body for consistency with the rest of the API.
    */
   @Delete('blocks/:blockId')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteContentBlock(@Param('blockId') blockId: string) {
-    await this.lessonsService.deleteContentBlock(blockId);
+  async deleteContentBlock(
+    @Param('blockId') blockId: string,
+    @CurrentUser() user: any,
+  ) {
+    await this.lessonsService.deleteContentBlock(
+      blockId,
+      user.userId,
+      user.roles,
+    );
 
     return {
       success: true,
@@ -211,18 +247,20 @@ export class LessonsController {
   }
 
   /**
-   * Reorder content blocks within a lesson
-   * Teacher and Admin can access
+   * Atomically reorder content blocks within a lesson (Teacher / Admin).
    */
   @Put(':lessonId/reorder-blocks')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async reorderBlocks(
     @Param('lessonId') lessonId: string,
     @Body() reorderDto: ReorderBlocksDto,
+    @CurrentUser() user: any,
   ) {
     const lesson = await this.lessonsService.reorderBlocks(
       lessonId,
       reorderDto,
+      user.userId,
+      user.roles,
     );
 
     return {
@@ -233,8 +271,7 @@ export class LessonsController {
   }
 
   /**
-   * Mark a lesson as complete for the current student
-   * Students can mark their own lessons as complete
+   * Mark a lesson as complete for the authenticated student.
    */
   @Post(':lessonId/complete')
   @Roles(RoleName.Student)
@@ -255,8 +292,7 @@ export class LessonsController {
   }
 
   /**
-   * Check if a student has completed a lesson
-   * Students can check their own progress
+   * Check if the authenticated student has completed a lesson.
    */
   @Get(':lessonId/completion-status')
   @Roles(RoleName.Student)
@@ -276,8 +312,7 @@ export class LessonsController {
   }
 
   /**
-   * Get all completed lessons for a student in a class
-   * Students can view their own progress per class
+   * Get all completed lessons for the authenticated student in a class.
    */
   @Get('class/:classId/completed')
   @Roles(RoleName.Student)
@@ -297,4 +332,3 @@ export class LessonsController {
     };
   }
 }
-

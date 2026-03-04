@@ -1,7 +1,33 @@
-import { IsString, IsUUID, IsOptional, IsBoolean, IsNumber, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsUUID,
+  IsOptional,
+  IsBoolean,
+  IsInt,
+  IsObject,
+  IsNotEmpty,
+  IsIn,
+  IsArray,
+  ArrayNotEmpty,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+const CONTENT_BLOCK_TYPES = ['text', 'image', 'video', 'question', 'file', 'divider'] as const;
+export type ContentBlockType = (typeof CONTENT_BLOCK_TYPES)[number];
+
+/** Used for nested validation in ReorderBlocksDto */
+export class BlockOrderItem {
+  @IsUUID()
+  id: string;
+
+  @IsInt()
+  order: number;
+}
 
 export class CreateLessonDto {
   @IsString()
+  @IsNotEmpty()
   title: string;
 
   @IsOptional()
@@ -12,13 +38,14 @@ export class CreateLessonDto {
   classId: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   order?: number;
 }
 
 export class UpdateLessonDto {
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   title?: string;
 
   @IsOptional()
@@ -26,7 +53,7 @@ export class UpdateLessonDto {
   description?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   order?: number;
 
   @IsOptional()
@@ -35,31 +62,35 @@ export class UpdateLessonDto {
 }
 
 export class CreateContentBlockDto {
+  /** Injected from the URL param by the controller — optional in body */
   @IsOptional()
   @IsUUID()
   lessonId?: string;
 
   @IsString()
-  type: 'text' | 'image' | 'video' | 'question' | 'file' | 'divider';
+  @IsIn(CONTENT_BLOCK_TYPES)
+  type: ContentBlockType;
 
-  @IsNumber()
+  @IsInt()
   order: number;
 
-  @IsOptional()
-  content?: any;
+  /** Must be present — matches the NOT NULL constraint in the schema */
+  @IsNotEmpty()
+  content: any;
 
   @IsOptional()
   @IsObject()
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export class UpdateContentBlockDto {
   @IsOptional()
   @IsString()
-  type?: string;
+  @IsIn(CONTENT_BLOCK_TYPES)
+  type?: ContentBlockType;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   order?: number;
 
   @IsOptional()
@@ -67,10 +98,13 @@ export class UpdateContentBlockDto {
 
   @IsOptional()
   @IsObject()
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export class ReorderBlocksDto {
-  @IsObject()
-  blocks: Array<{ id: string; order: number }>;
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => BlockOrderItem)
+  blocks: BlockOrderItem[];
 }
