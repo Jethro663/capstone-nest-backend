@@ -3,7 +3,7 @@ export { sectionService } from './section-service';
 export { classService } from './class-service';
 export { lessonService } from './lesson-service';
 export { assessmentService } from './assessment-service';
-export { gradebookService } from './gradebook-service';
+export { classRecordService } from './class-record-service';
 export { announcementService } from './announcement-service';
 export { notificationService } from './notification-service';
 export { fileService } from './file-service';

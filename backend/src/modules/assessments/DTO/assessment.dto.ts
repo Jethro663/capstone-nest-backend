@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray, Min, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray, Min, ValidateNested, ArrayNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum QuestionType {
@@ -20,6 +20,19 @@ export enum FeedbackLevel {
   IMMEDIATE = 'immediate',       // Score only, no answers
   STANDARD = 'standard',         // Answers + explanations (delayed)
   DETAILED = 'detailed',         // Full feedback with hints (delayed longer)
+}
+
+export enum ClassRecordCategory {
+  WRITTEN_WORK = 'written_work',
+  PERFORMANCE_TASK = 'performance_task',
+  QUARTERLY_ASSESSMENT = 'quarterly_assessment',
+}
+
+export enum Quarter {
+  Q1 = 'Q1',
+  Q2 = 'Q2',
+  Q3 = 'Q3',
+  Q4 = 'Q4',
 }
 
 // ==========================================
@@ -66,6 +79,14 @@ export class CreateAssessmentDto {
   @IsOptional()
   @IsInt()
   feedbackDelayHours?: number = 24;
+
+  @IsOptional()
+  @IsEnum(ClassRecordCategory)
+  classRecordCategory?: ClassRecordCategory;
+
+  @IsOptional()
+  @IsEnum(Quarter)
+  quarter?: Quarter;
 }
 
 export class UpdateAssessmentDto {
@@ -110,6 +131,14 @@ export class UpdateAssessmentDto {
   @IsOptional()
   @IsInt()
   feedbackDelayHours?: number;
+
+  @IsOptional()
+  @IsEnum(ClassRecordCategory)
+  classRecordCategory?: ClassRecordCategory;
+
+  @IsOptional()
+  @IsEnum(Quarter)
+  quarter?: Quarter;
 }
 
 // ==========================================
@@ -222,4 +251,25 @@ export class SubmitAssessmentDto {
 export class StartAssessmentDto {
   @IsUUID()
   assessmentId: string;
+}
+
+// ==========================================
+// Grade Return DTOs (MS Teams-like)
+// ==========================================
+
+export class ReturnGradeDto {
+  @IsOptional()
+  @IsString()
+  teacherFeedback?: string;
+}
+
+export class BulkReturnGradesDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  attemptIds: string[];
+
+  @IsOptional()
+  @IsString()
+  teacherFeedback?: string;
 }

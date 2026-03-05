@@ -2,8 +2,6 @@ import {
   Controller,
   Post,
   Get,
-  Patch,
-  Delete,
   Param,
   Body,
   UseGuards,
@@ -12,43 +10,42 @@ import {
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { AdviserSectionGuard } from './guards/adviser-section.guard';
-import { GradebookService } from './gradebook.service';
-import { GradebookSyncService } from './gradebook-sync.service';
-import { CreateGradebookDto } from './DTO/create-gradebook.dto';
-import { CreateCategoryDto } from './DTO/create-category.dto';
-import { UpdateCategoryDto } from './DTO/update-category.dto';
-import { CreateItemDto } from './DTO/create-item.dto';
-import { UpdateItemDto } from './DTO/update-item.dto';
+import { ClassRecordService } from './class-record.service';
+import { ClassRecordSyncService } from './class-record-sync.service';
+import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
 
-@Controller('gradebook')
+@Controller('class-record')
 @UseGuards(RolesGuard)
-export class GradebookController {
+export class ClassRecordController {
   constructor(
-    private readonly gradebookService: GradebookService,
-    private readonly syncService: GradebookSyncService,
+    private readonly classRecordService: ClassRecordService,
+    private readonly syncService: ClassRecordSyncService,
   ) {}
 
-  // ── Gradebook ─────────────────────────────────────────────────────────────
+  // ── Class Record ─────────────────────────────────────────────────────────
 
   @Post()
   @Roles(RoleName.Teacher, RoleName.Admin)
-  createGradebook(
-    @Body() dto: CreateGradebookDto,
+  generateClassRecord(
+    @Body() dto: CreateClassRecordDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.createGradebook(dto, user.userId, user.roles);
+    return this.classRecordService.generateClassRecord(
+      dto,
+      user.userId,
+      user.roles,
+    );
   }
 
   @Get(':id')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  getGradebook(
+  getClassRecord(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.getGradebook(id, user.userId, user.roles);
+    return this.classRecordService.getClassRecord(id, user.userId, user.roles);
   }
 
   @Get('by-class/:classId')
@@ -57,73 +54,26 @@ export class GradebookController {
     @Param('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.listGradebooksForClass(
+    return this.classRecordService.listForClass(
       classId,
       user.userId,
       user.roles,
     );
   }
 
-  // ── Categories ────────────────────────────────────────────────────────────
+  // ── Spreadsheet ──────────────────────────────────────────────────────────
 
-  @Post(':id/categories')
+  @Get(':id/spreadsheet')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  addCategory(
-    @Param('id', ParseUUIDPipe) gradebookId: string,
-    @Body() dto: CreateCategoryDto,
+  getSpreadsheet(
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.addCategory(gradebookId, dto, user.userId, user.roles);
-  }
-
-  @Patch('categories/:categoryId')
-  @Roles(RoleName.Teacher, RoleName.Admin)
-  updateCategory(
-    @Param('categoryId', ParseUUIDPipe) categoryId: string,
-    @Body() dto: UpdateCategoryDto,
-    @CurrentUser() user: { userId: string; roles: string[] },
-  ) {
-    return this.gradebookService.updateCategory(categoryId, dto, user.userId, user.roles);
-  }
-
-  @Delete('categories/:categoryId')
-  @Roles(RoleName.Teacher, RoleName.Admin)
-  deleteCategory(
-    @Param('categoryId', ParseUUIDPipe) categoryId: string,
-    @CurrentUser() user: { userId: string; roles: string[] },
-  ) {
-    return this.gradebookService.deleteCategory(categoryId, user.userId, user.roles);
-  }
-
-  // ── Items ─────────────────────────────────────────────────────────────────
-
-  @Post(':id/items')
-  @Roles(RoleName.Teacher, RoleName.Admin)
-  addItem(
-    @Param('id', ParseUUIDPipe) gradebookId: string,
-    @Body() dto: CreateItemDto,
-    @CurrentUser() user: { userId: string; roles: string[] },
-  ) {
-    return this.gradebookService.addItem(gradebookId, dto, user.userId, user.roles);
-  }
-
-  @Patch('items/:itemId')
-  @Roles(RoleName.Teacher, RoleName.Admin)
-  updateItem(
-    @Param('itemId', ParseUUIDPipe) itemId: string,
-    @Body() dto: UpdateItemDto,
-    @CurrentUser() user: { userId: string; roles: string[] },
-  ) {
-    return this.gradebookService.updateItem(itemId, dto, user.userId, user.roles);
-  }
-
-  @Delete('items/:itemId')
-  @Roles(RoleName.Teacher, RoleName.Admin)
-  deleteItem(
-    @Param('itemId', ParseUUIDPipe) itemId: string,
-    @CurrentUser() user: { userId: string; roles: string[] },
-  ) {
-    return this.gradebookService.deleteItem(itemId, user.userId, user.roles);
+    return this.classRecordService.getSpreadsheet(
+      id,
+      user.userId,
+      user.roles,
+    );
   }
 
   // ── Scores ────────────────────────────────────────────────────────────────
@@ -135,7 +85,12 @@ export class GradebookController {
     @Body() dto: RecordScoreDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.recordScore(itemId, dto, user.userId, user.roles);
+    return this.classRecordService.recordScore(
+      itemId,
+      dto,
+      user.userId,
+      user.roles,
+    );
   }
 
   @Post('items/:itemId/scores/bulk')
@@ -145,7 +100,12 @@ export class GradebookController {
     @Body() dto: BulkRecordScoresDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.bulkRecordScores(itemId, dto, user.userId, user.roles);
+    return this.classRecordService.bulkRecordScores(
+      itemId,
+      dto,
+      user.userId,
+      user.roles,
+    );
   }
 
   @Post('items/:itemId/sync-scores')
@@ -154,7 +114,11 @@ export class GradebookController {
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.syncScoresFromAssessment(itemId, user.userId, user.roles);
+    return this.classRecordService.syncScoresFromAssessment(
+      itemId,
+      user.userId,
+      user.roles,
+    );
   }
 
   // ── Grades ────────────────────────────────────────────────────────────────
@@ -165,16 +129,20 @@ export class GradebookController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.previewGrades(id, user.userId, user.roles);
+    return this.classRecordService.previewGrades(id, user.userId, user.roles);
   }
 
   @Post(':id/finalize')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  finalizeGradebook(
+  finalizeClassRecord(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.finalizeGradebook(id, user.userId, user.roles);
+    return this.classRecordService.finalizeClassRecord(
+      id,
+      user.userId,
+      user.roles,
+    );
   }
 
   @Get(':id/final-grades')
@@ -183,18 +151,22 @@ export class GradebookController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.getFinalGrades(id, user.userId, user.roles);
+    return this.classRecordService.getFinalGrades(
+      id,
+      user.userId,
+      user.roles,
+    );
   }
 
-  @Get(':gradebookId/final-grades/:studentId')
+  @Get(':classRecordId/final-grades/:studentId')
   @Roles(RoleName.Teacher, RoleName.Admin, RoleName.Student)
   getStudentGrade(
-    @Param('gradebookId', ParseUUIDPipe) gradebookId: string,
+    @Param('classRecordId', ParseUUIDPipe) classRecordId: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.getStudentGrade(
-      gradebookId,
+    return this.classRecordService.getStudentGrade(
+      classRecordId,
       studentId,
       user.userId,
       user.roles,
@@ -209,7 +181,11 @@ export class GradebookController {
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.listAdviserSection(sectionId, user.userId, user.roles);
+    return this.classRecordService.listAdviserSection(
+      sectionId,
+      user.userId,
+      user.roles,
+    );
   }
 
   // ── Reports ───────────────────────────────────────────────────────────────
@@ -220,7 +196,11 @@ export class GradebookController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.getClassAverage(id, user.userId, user.roles);
+    return this.classRecordService.getClassAverage(
+      id,
+      user.userId,
+      user.roles,
+    );
   }
 
   @Get(':id/reports/distribution')
@@ -229,7 +209,11 @@ export class GradebookController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.getGradeDistribution(id, user.userId, user.roles);
+    return this.classRecordService.getGradeDistribution(
+      id,
+      user.userId,
+      user.roles,
+    );
   }
 
   @Get(':id/reports/intervention')
@@ -238,6 +222,10 @@ export class GradebookController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.gradebookService.getInterventionList(id, user.userId, user.roles);
+    return this.classRecordService.getInterventionList(
+      id,
+      user.userId,
+      user.roles,
+    );
   }
 }

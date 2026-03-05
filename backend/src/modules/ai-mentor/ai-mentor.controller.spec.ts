@@ -150,13 +150,8 @@ describe('AiMentorController', () => {
   describe('extractModule()', () => {
     const extractResult = {
       extractionId: EXTRACTION_ID,
-      modelUsed: 'rule-based',
-      responseTimeMs: 150,
-      structured: {
-        title: 'Module',
-        description: 'Desc',
-        lessons: [],
-      },
+      status: 'pending',
+      message: 'Extraction queued — poll GET /ai/extractions/:id/status for progress',
     };
 
     it('should return success envelope with extraction data', async () => {
@@ -169,7 +164,7 @@ describe('AiMentorController', () => {
 
       expect(result).toEqual({
         success: true,
-        message: 'Module extracted successfully (rule-based)',
+        message: extractResult.message,
         data: extractResult,
       });
     });
@@ -185,18 +180,15 @@ describe('AiMentorController', () => {
       );
     });
 
-    it('should include modelUsed in the success message', async () => {
-      mockAiMentorService.extractModule.mockResolvedValue({
-        ...extractResult,
-        modelUsed: 'llama3.2:3b',
-      });
+    it('should include message in response', async () => {
+      mockAiMentorService.extractModule.mockResolvedValue(extractResult);
 
       const result = await controller.extractModule(
         { fileId: 'file-uuid-1' },
         TEACHER_USER,
       );
 
-      expect(result.message).toContain('llama3.2:3b');
+      expect(result.message).toContain('Extraction queued');
     });
   });
 
@@ -288,7 +280,7 @@ describe('AiMentorController', () => {
     it('should return success envelope with created lessons data', async () => {
       mockAiMentorService.applyExtraction.mockResolvedValue(applyResult);
 
-      const result = await controller.applyExtraction(EXTRACTION_ID, TEACHER_USER);
+      const result = await controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER);
 
       expect(result).toEqual({
         success: true,
@@ -300,11 +292,12 @@ describe('AiMentorController', () => {
     it('should pass extractionId and user to service', async () => {
       mockAiMentorService.applyExtraction.mockResolvedValue(applyResult);
 
-      await controller.applyExtraction(EXTRACTION_ID, TEACHER_USER);
+      await controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER);
 
       expect(mockAiMentorService.applyExtraction).toHaveBeenCalledWith(
         EXTRACTION_ID,
         TEACHER_USER,
+        undefined,
       );
     });
 
@@ -314,7 +307,7 @@ describe('AiMentorController', () => {
         lessonsCreated: 5,
       });
 
-      const result = await controller.applyExtraction(EXTRACTION_ID, TEACHER_USER);
+      const result = await controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER);
 
       expect(result.message).toBe('Created 5 lesson(s) from extraction');
     });

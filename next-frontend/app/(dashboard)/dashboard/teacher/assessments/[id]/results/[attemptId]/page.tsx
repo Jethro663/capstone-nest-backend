@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { AttemptResult } from '@/types/assessment';
 
-export default function StudentAssessmentResultsPage() {
+export default function TeacherAttemptResultsPage() {
   const params = useParams();
   const router = useRouter();
   const attemptId = params.attemptId as string;
@@ -22,7 +22,6 @@ export default function StudentAssessmentResultsPage() {
     try {
       setLoading(true);
       const res = await assessmentService.getAttemptResults(attemptId);
-      console.log('Attempt results:', res.data);
       setResult(res.data);
     } catch {
       toast.error('Failed to load results');
@@ -37,7 +36,7 @@ export default function StudentAssessmentResultsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-3xl mx-auto space-y-6 py-6">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-40 rounded-lg" />
         <Skeleton className="h-40 rounded-lg" />
@@ -46,53 +45,30 @@ export default function StudentAssessmentResultsPage() {
   }
 
   if (!result) {
-    return <p className="text-muted-foreground">Results not found.</p>;
+    return <p className="text-muted-foreground p-6">Results not found.</p>;
   }
 
   const { attempt, responses, score, passed } = result;
-
-  // If grade is not returned yet, show a pending message
-  if (attempt.isReturned === false) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">
-            ← Back
-          </Button>
-          <h1 className="text-2xl font-bold">Assessment Results</h1>
-        </div>
-        <Card>
-          <CardContent className="p-6 text-center space-y-4">
-            <div className="text-5xl">⏳</div>
-            <h2 className="text-xl font-semibold">Awaiting Review</h2>
-            <p className="text-muted-foreground">
-              Your teacher hasn&apos;t returned your grade yet. Check back later.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
- 
-  // score is already a percentage (0-100)
   const pct = score ?? 0;
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="max-w-3xl mx-auto space-y-6 py-6">
       <div>
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">
           ← Back
         </Button>
-        <h1 className="text-2xl font-bold">Assessment Results</h1>
+        <h1 className="text-2xl font-bold">Student Attempt Results</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Attempt #{attempt.attemptNumber ?? '?'}
+          {attempt.isReturned && <Badge variant="outline" className="ml-2">Returned</Badge>}
+        </p>
       </div>
 
-      {/* Score Card */}
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-2 gap-6 text-center">
+          <div className="grid grid-cols-3 gap-6 text-center">
             <div>
-              <p className="text-5xl font-bold">{pct}%</p>
+              <p className="text-4xl font-bold">{pct}%</p>
               <p className="text-sm text-muted-foreground mt-1">Score</p>
             </div>
             <div className="flex items-center justify-center">
@@ -100,20 +76,21 @@ export default function StudentAssessmentResultsPage() {
                 variant={passed ? 'default' : 'destructive'}
                 className="text-lg px-4 py-2"
               >
-                {passed ? '✓ PASSED' : '✗ FAILED'}
+                {passed ? 'PASSED' : 'FAILED'}
               </Badge>
             </div>
-          </div>
-          {attempt.teacherFeedback && (
-            <div className="mt-4 border-l-4 border-primary bg-primary/5 p-3 rounded-r">
-              <p className="text-sm font-medium mb-1">Teacher Feedback</p>
-              <p className="text-sm text-muted-foreground">{attempt.teacherFeedback}</p>
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {attempt.isReturned ? 'Returned' : 'Not returned'}
+              </p>
+              {attempt.teacherFeedback && (
+                <p className="text-sm mt-1 italic">&ldquo;{attempt.teacherFeedback}&rdquo;</p>
+              )}
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Question Review */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Question Review</h2>
         <div className="space-y-3">
@@ -132,18 +109,20 @@ export default function StudentAssessmentResultsPage() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">Q{i + 1}</span>
-                    <Badge variant={
-                      response.isCorrect === null || response.isCorrect === undefined
-                        ? 'secondary'
-                        : response.isCorrect
-                          ? 'default'
-                          : 'destructive'
-                    }>
+                    <Badge
+                      variant={
+                        response.isCorrect === null || response.isCorrect === undefined
+                          ? 'secondary'
+                          : response.isCorrect
+                            ? 'default'
+                            : 'destructive'
+                      }
+                    >
                       {response.isCorrect === null || response.isCorrect === undefined
-                        ? '⏳ Pending Review'
+                        ? 'Pending Review'
                         : response.isCorrect
-                          ? '✓ Correct'
-                          : '✗ Incorrect'}
+                          ? 'Correct'
+                          : 'Incorrect'}
                     </Badge>
                   </div>
                   <span className="text-sm text-muted-foreground">
@@ -153,42 +132,15 @@ export default function StudentAssessmentResultsPage() {
                 <p className="font-medium">{response.question?.content}</p>
                 {response.studentAnswer && (
                   <p className="mt-2 text-sm">
-                    <span className="text-muted-foreground">Your answer: </span>
+                    <span className="text-muted-foreground">Answer: </span>
                     {response.studentAnswer}
                   </p>
-                )}
-                {response.question?.explanation && (
-                  <div className="mt-3 border-l-4 border-blue-400 bg-blue-50 p-3 rounded-r">
-                    <p className="text-sm">💡 {response.question.explanation}</p>
-                  </div>
                 )}
               </CardContent>
             </Card>
           ))}
         </div>
       </div>
-
-      {/* Study Tips */}
-      <Card>
-        <CardContent className="p-6">
-          <h3 className="font-semibold mb-3">
-            {passed ? 'Great Work!' : 'Study Resources'}
-          </h3>
-          {passed ? (
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>• Keep up the excellent work! Review the feedback for any areas to improve.</li>
-              <li>• Continue to the next lesson or assessment.</li>
-            </ul>
-          ) : (
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>• Review the lesson content related to missed questions.</li>
-              <li>• Practice with similar questions to strengthen understanding.</li>
-              <li>• Ask your teacher for additional help on difficult topics.</li>
-              <li>• Consider retaking the assessment when you feel ready.</li>
-            </ul>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

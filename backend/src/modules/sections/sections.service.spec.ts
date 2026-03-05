@@ -63,13 +63,18 @@ const makeUser = (id = STUDENT_ID, overrides: Partial<any> = {}) => ({
 // Mock DB chain helpers
 // ---------------------------------------------------------------------------
 
-const makeSelectChain = (rows: any[] = []) => ({
-  from: jest.fn().mockReturnThis(),
-  innerJoin: jest.fn().mockReturnThis(),
-  where: jest.fn().mockResolvedValue(rows),
-  orderBy: jest.fn().mockReturnThis(),
-  limit: jest.fn().mockReturnThis(),
-});
+const makeSelectChain = (rows: any[] = []) => {
+  const chain: any = {
+    from: jest.fn().mockImplementation(() => chain),
+    innerJoin: jest.fn().mockImplementation(() => chain),
+    where: jest.fn().mockImplementation(() => chain),
+    orderBy: jest.fn().mockImplementation(() => chain),
+    limit: jest.fn().mockImplementation(() => chain),
+    // Make the chain thenable so `await chain.where()` resolves to rows
+    then: (resolve: any) => resolve(rows),
+  };
+  return chain;
+};
 
 const makeInsertChain = (rows: any[] = []) => ({
   values: jest.fn().mockReturnThis(),
@@ -287,8 +292,6 @@ describe('SectionsService', () => {
     it('executes a SQL-level join query and returns candidate rows', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
 
-      const studentRoleRow = { userId: STUDENT_ID };
-      const enrolledRow = { studentId: 'other-student' };
       const candidateRow = {
         id: STUDENT_ID,
         firstName: 'Juan',
@@ -297,17 +300,10 @@ describe('SectionsService', () => {
         gradeLevel: '7',
       };
 
-      // Three chained .select() calls: roles, enrollments, candidates
+      // Two select() calls: enrolled subquery + main candidates query
       mockDb.select
-        .mockReturnValueOnce(makeSelectChain([studentRoleRow]))  // student role IDs
-        .mockReturnValueOnce(makeSelectChain([enrolledRow]))      // already enrolled
-        .mockReturnValueOnce({                                    // final candidate query
-          from: jest.fn().mockReturnThis(),
-          innerJoin: jest.fn().mockReturnThis(),
-          where: jest.fn().mockReturnThis(),
-          orderBy: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockResolvedValue([candidateRow]),
-        });
+        .mockReturnValueOnce(makeSelectChain([]))             // enrolled subquery
+        .mockReturnValueOnce(makeSelectChain([candidateRow])); // main candidates query
 
       const result = await service.getCandidates(SECTION_ID);
 
@@ -342,6 +338,8 @@ describe('SectionsService', () => {
       tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
       // Validate students exist
       tx.select.mockReturnValueOnce(makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]));
+      // Verify student role
+      tx.select.mockReturnValueOnce(makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]));
       // Already enrolled check (none)
       tx.select.mockReturnValueOnce(makeSelectChain([]));
       // Bulk insert
@@ -393,6 +391,8 @@ describe('SectionsService', () => {
       const tx = makeTx();
       tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
       tx.select.mockReturnValueOnce(makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]));
+      // Verify student role
+      tx.select.mockReturnValueOnce(makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]));
       // Both already enrolled
       tx.select.mockReturnValueOnce(makeSelectChain([
         { studentId: STUDENT_ID },
@@ -423,33 +423,50 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('removeStudentFromSection', () => {
+    const makeTxForRemove = (classEnrollment: any[], sectionEnrollment: any[]) => {
+      const tx: any = {
+        select: jest.fn(),
+        delete: jest.fn().mockReturnValue(makeDeleteChain()),
+      };
+      tx.select
+        .mockReturnValueOnce(makeSelectChain(classEnrollment))
+        .mockReturnValueOnce(makeSelectChain(sectionEnrollment));
+      return tx;
+    };
+
     it('deletes the enrollment row when the student has no class assignment', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.query.enrollments.findFirst.mockResolvedValue(makeEnrollment({ classId: null }));
-      mockDb.delete.mockReturnValue(makeDeleteChain());
+      const tx = makeTxForRemove(
+        [],                                    // no class enrollment
+        [{ id: ENROLLMENT_ID }],               // section enrollment found
+      );
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(service.removeStudentFromSection(SECTION_ID, STUDENT_ID)).resolves.toEqual({
         removed: true,
       });
-      expect(mockDb.delete).toHaveBeenCalledTimes(1);
+      expect(tx.delete).toHaveBeenCalledTimes(1);
     });
 
     it('throws BadRequestException when the student has an active class enrollment', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.query.enrollments.findFirst.mockResolvedValue(
-        makeEnrollment({ classId: 'class-uuid-1' }),
+      const tx = makeTxForRemove(
+        [{ id: ENROLLMENT_ID, classId: 'class-uuid-1' }], // active class enrollment
+        [],
       );
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(
         service.removeStudentFromSection(SECTION_ID, STUDENT_ID),
       ).rejects.toThrow(BadRequestException);
 
-      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(tx.delete).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when the student is not enrolled (not found)', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+      const tx = makeTxForRemove([], []); // no class enrollment, no section enrollment
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(
         service.removeStudentFromSection(SECTION_ID, STUDENT_ID),
@@ -457,17 +474,17 @@ describe('SectionsService', () => {
     });
 
     it('does not touch dropped or completed enrollment history rows', async () => {
-      // The query itself already filters by status='enrolled'; a null return means
+      // The query itself already filters by status='enrolled'; an empty result means
       // there is no *active* enrollment — we expect BadRequestException, not a silent delete
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      // findFirst returns null because the status filter excluded the dropped row
-      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+      const tx = makeTxForRemove([], []); // no matching rows
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(
         service.removeStudentFromSection(SECTION_ID, STUDENT_ID),
       ).rejects.toThrow(BadRequestException);
 
-      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(tx.delete).not.toHaveBeenCalled();
     });
   });
 
@@ -643,40 +660,46 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('permanentlyDeleteSection', () => {
+    const makeTxForDelete = (activeClasses: string, enrolledStudents: string) => {
+      const tx: any = {
+        select: jest.fn(),
+        delete: jest.fn().mockReturnValue(makeDeleteChain()),
+      };
+      tx.select
+        .mockReturnValueOnce(makeSelectChain([{ count: activeClasses }]))
+        .mockReturnValueOnce(makeSelectChain([{ count: enrolledStudents }]));
+      return tx;
+    };
+
     it('deletes the section when it has no active classes or enrolled students', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      // parallel count queries: active classes = 0, enrolled students = 0
-      mockDb.select
-        .mockReturnValueOnce(makeSelectChain([{ count: '0' }])) // active classes
-        .mockReturnValueOnce(makeSelectChain([{ count: '0' }])); // enrolled students
-      mockDb.delete.mockReturnValue(makeDeleteChain());
+      const tx = makeTxForDelete('0', '0');
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(service.permanentlyDeleteSection(SECTION_ID)).resolves.not.toThrow();
-      expect(mockDb.delete).toHaveBeenCalledTimes(1);
+      expect(tx.delete).toHaveBeenCalledTimes(1);
     });
 
     it('throws BadRequestException when there are active classes', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.select
-        .mockReturnValueOnce(makeSelectChain([{ count: '2' }])) // 2 active classes
-        .mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
+      const tx = makeTxForDelete('2', '0');
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(service.permanentlyDeleteSection(SECTION_ID)).rejects.toThrow(
         BadRequestException,
       );
-      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(tx.delete).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when there are enrolled students', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.select
-        .mockReturnValueOnce(makeSelectChain([{ count: '0' }]))
-        .mockReturnValueOnce(makeSelectChain([{ count: '5' }])); // 5 enrolled students
+      const tx = makeTxForDelete('0', '5');
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(service.permanentlyDeleteSection(SECTION_ID)).rejects.toThrow(
         BadRequestException,
       );
-      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(tx.delete).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the section does not exist', async () => {

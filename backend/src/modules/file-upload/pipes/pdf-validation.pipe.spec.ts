@@ -3,6 +3,7 @@ import {
   PayloadTooLargeException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
+import * as path from 'path';
 import { PdfValidationPipe } from './pdf-validation.pipe';
 import { MAX_FILE_SIZE_BYTES } from '../constants/file-upload.constants';
 
@@ -190,12 +191,15 @@ describe('PdfValidationPipe', () => {
     });
 
     it('cleans up the temp file on MIME mismatch', async () => {
-      mockFileTypeResult = { mime: 'image/png' };
+      mockReadSync.mockImplementation((_fd: number, buf: Buffer) => {
+        PNG_MAGIC.copy(buf);
+        return PNG_MAGIC.length;
+      });
       const file = makeFile();
 
       await expect(pipe.transform(file)).rejects.toThrow(UnsupportedMediaTypeException);
 
-      expect(mockUnlink).toHaveBeenCalledWith(file.path);
+      expect(mockUnlink).toHaveBeenCalledWith(path.resolve(file.path));
     });
 
     it('throws UnsupportedMediaTypeException when file-type returns undefined (unrecognised bytes)', async () => {
@@ -211,7 +215,10 @@ describe('PdfValidationPipe', () => {
     });
 
     it('error message mentions PDF', async () => {
-      mockFileTypeResult = { mime: 'application/zip' };
+      mockReadSync.mockImplementation((_fd: number, buf: Buffer) => {
+        EMPTY_BUF.copy(buf);
+        return EMPTY_BUF.length;
+      });
 
       await expect(pipe.transform(makeFile())).rejects.toThrow(/PDF/i);
     });
@@ -268,7 +275,10 @@ describe('PdfValidationPipe', () => {
 
     it('does not throw a secondary error when unlink fails during MIME rejection', async () => {
       mockUnlink.mockRejectedValue(new Error('unlink failed'));
-      mockFileTypeResult = { mime: 'image/jpeg' };
+      mockReadSync.mockImplementation((_fd: number, buf: Buffer) => {
+        PNG_MAGIC.copy(buf);
+        return PNG_MAGIC.length;
+      });
 
       await expect(pipe.transform(makeFile())).rejects.toThrow(
         UnsupportedMediaTypeException,

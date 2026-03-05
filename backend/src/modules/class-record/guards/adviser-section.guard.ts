@@ -7,18 +7,8 @@ import {
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
-import { gradebooks, classes, sections } from '../../../drizzle/schema';
+import { classRecords, classes, sections } from '../../../drizzle/schema';
 
-/**
- * AdviserSectionGuard
- *
- * Allows access when either:
- *  - The authenticated user is an admin, OR
- *  - The authenticated user is the adviser of the section that owns the
- *    class referenced by the gradebook (sections.adviser_id = req.user.userId)
- *
- * Expects `gradebookId` in req.params.
- */
 @Injectable()
 export class AdviserSectionGuard implements CanActivate {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -35,20 +25,19 @@ export class AdviserSectionGuard implements CanActivate {
       throw new ForbiddenException('Not authenticated');
     }
 
-    // Admins bypass this guard
     if (user.roles?.includes('admin')) {
       return true;
     }
 
-    const gradebookId: string = request.params.id ?? request.params.gradebookId;
+    const classRecordId: string =
+      request.params.id ?? request.params.classRecordId;
 
-    if (!gradebookId) {
-      throw new ForbiddenException('Gradebook ID is required');
+    if (!classRecordId) {
+      throw new ForbiddenException('Class record ID is required');
     }
 
-    // Resolve: gradebook → class → section
-    const gradebook = await this.db.query.gradebooks.findFirst({
-      where: eq(gradebooks.id, gradebookId),
+    const record = await this.db.query.classRecords.findFirst({
+      where: eq(classRecords.id, classRecordId),
       with: {
         class: {
           with: {
@@ -60,11 +49,11 @@ export class AdviserSectionGuard implements CanActivate {
       },
     });
 
-    if (!gradebook) {
-      throw new NotFoundException(`Gradebook "${gradebookId}" not found`);
+    if (!record) {
+      throw new NotFoundException(`Class record "${classRecordId}" not found`);
     }
 
-    const adviserId = gradebook.class?.section?.adviserId;
+    const adviserId = record.class?.section?.adviserId;
 
     if (adviserId && adviserId === user.userId) {
       return true;

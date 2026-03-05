@@ -1,6 +1,6 @@
 import { IsUUID, IsIn } from 'class-validator';
 
-export class CreateGradebookDto {
+export class CreateClassRecordDto {
   @IsUUID('4', { message: 'classId must be a valid UUID' })
   classId: string;
 

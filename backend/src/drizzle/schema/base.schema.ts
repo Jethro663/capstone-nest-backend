@@ -38,6 +38,19 @@ export const assessmentTypeEnum = pgEnum('assessment_type', [
   'assignment',
 ]);
 
+export const classRecordCategoryEnum = pgEnum('class_record_category', [
+  'written_work',
+  'performance_task',
+  'quarterly_assessment',
+]);
+
+export const gradingPeriodEnum = pgEnum('grading_period', [
+  'Q1',
+  'Q2',
+  'Q3',
+  'Q4',
+]);
+
 export const enrollmentStatusEnum = pgEnum('enrollment_status', [
   'enrolled',
   'dropped',
@@ -365,6 +378,8 @@ export const assessments = pgTable('assessments', {
   isPublished: boolean('is_published').default(false),
   feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
   feedbackDelayHours: integer('feedback_delay_hours').default(24),
+  classRecordCategory: classRecordCategoryEnum('class_record_category'),
+  quarter: gradingPeriodEnum('quarter'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -429,6 +444,9 @@ export const assessmentAttempts = pgTable(
     passed: boolean('passed'),
     isSubmitted: boolean('is_submitted').default(false),
     timeSpentSeconds: integer('time_spent_seconds').default(0),
+    isReturned: boolean('is_returned').default(false),
+    returnedAt: timestamp('returned_at'),
+    teacherFeedback: text('teacher_feedback'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

@@ -147,9 +147,13 @@ export default function StudentAssessmentPage() {
                     <p className="text-sm text-muted-foreground">{formatDate(attempt.submittedAt || attempt.createdAt || '')}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant={attempt.passed ? 'default' : 'destructive'}>
-                      {attempt.passed ? 'PASSED' : 'FAILED'} — {attempt.score}%
-                    </Badge>
+                    {attempt.isReturned === false ? (
+                      <Badge variant="secondary">Awaiting Review</Badge>
+                    ) : (
+                      <Badge variant={attempt.passed ? 'default' : 'destructive'}>
+                        {attempt.passed ? 'PASSED' : 'FAILED'} — {attempt.score}%
+                      </Badge>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

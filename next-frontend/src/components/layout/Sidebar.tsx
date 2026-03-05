@@ -41,7 +41,7 @@ const teacherNav: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/teacher', icon: LayoutDashboard },
   { label: 'My Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
   { label: 'My Sections', href: '/dashboard/teacher/sections', icon: Users },
-  { label: 'Gradebook', href: '/dashboard/teacher/gradebook', icon: ClipboardList },
+  { label: 'Class Record', href: '/dashboard/teacher/class-record', icon: ClipboardList },
   { label: 'Announcements', href: '/dashboard/teacher/announcements', icon: Megaphone },
   { label: 'Profile', href: '/dashboard/profile', icon: User },
 ];

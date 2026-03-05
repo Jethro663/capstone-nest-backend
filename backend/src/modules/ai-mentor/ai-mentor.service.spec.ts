@@ -7,6 +7,7 @@ import {
 import { AiMentorService } from './ai-mentor.service';
 import { DatabaseService } from '../../database/database.service';
 import { OllamaService } from './ollama.service';
+import { getQueueToken } from '@nestjs/bullmq';
 
 // Mock external modules before imports
 jest.mock('pdf-parse', () => {
@@ -179,6 +180,10 @@ describe('AiMentorService', () => {
 
   const mockDatabaseService = { db: mockDb };
 
+  const mockExtractionQueue = {
+    add: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -187,6 +192,7 @@ describe('AiMentorService', () => {
         AiMentorService,
         { provide: DatabaseService, useValue: mockDatabaseService },
         { provide: OllamaService, useValue: mockOllamaService },
+        { provide: getQueueToken('module-extraction'), useValue: mockExtractionQueue },
       ],
     }).compile();
 
@@ -376,22 +382,14 @@ describe('AiMentorService', () => {
   // =========================================================================
 
   describe('extractModule()', () => {
-    const PDF_TEXT = 'Lesson 1: Introduction to Fractions\nA fraction represents a part of a whole.';
-
     beforeEach(() => {
       mockDb.query.uploadedFiles.findFirst.mockResolvedValue(makeFile());
       (mockedFs.existsSync as jest.Mock).mockReturnValue(true);
-      (mockedFs.readFileSync as jest.Mock).mockReturnValue(Buffer.from('fake-pdf-data'));
-      mockedPdfParse.mockResolvedValue({ text: PDF_TEXT, numpages: 1, numrender: 1, info: {}, metadata: null, version: '1' } as any);
-      mockedExtractWithRules.mockReturnValue(VALID_EXTRACTION_RESULT);
-      mockOllamaService.isAvailable.mockResolvedValue({ available: false, models: [] });
 
-      // insert for extraction record
-      const insertChain = makeInsertChain([makeExtraction({ extractionStatus: 'processing' })]);
+      // insert for extraction record (status: pending)
+      const insertChain = makeInsertChain([makeExtraction({ extractionStatus: 'pending', progressPercent: 0 })]);
       mockDb.insert.mockReturnValue(insertChain);
-
-      // update for setting completed status
-      mockDb.update.mockReturnValue(makeUpdateChain());
+      mockExtractionQueue.add.mockResolvedValue({ id: 'job-1' });
     });
 
     it('should throw NotFoundException when file is not found', async () => {
@@ -428,72 +426,14 @@ describe('AiMentorService', () => {
       }
     });
 
-    it('should throw BadRequestException when PDF parsing fails', async () => {
-      mockedPdfParse.mockRejectedValue(new Error('corrupted PDF'));
-
-      await expect(service.extractModule(FILE_ID, TEACHER_USER)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should throw BadRequestException when PDF has too little text', async () => {
-      mockedPdfParse.mockResolvedValue({ text: 'short', numpages: 1, numrender: 1, info: {}, metadata: null, version: '1' } as any);
-
-      await expect(service.extractModule(FILE_ID, TEACHER_USER)).rejects.toThrow(
-        'too little extractable text',
-      );
-    });
-
-    it('should use rule-based extraction when Ollama is unavailable', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: false, models: [] });
-
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(mockedExtractWithRules).toHaveBeenCalledWith(PDF_TEXT);
-      expect(result.modelUsed).toBe('rule-based');
-    });
-
-    it('should use Ollama when available and parse JSON response', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: true, models: ['llama3.2:3b'] });
-      mockOllamaService.generate.mockResolvedValue(JSON.stringify(VALID_EXTRACTION_RESULT));
-
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(mockOllamaService.generate).toHaveBeenCalled();
-      expect(result.modelUsed).toBe('llama3.2:3b');
-    });
-
-    it('should fallback to rule-based when Ollama returns invalid JSON', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: true, models: ['llama3.2:3b'] });
-      mockOllamaService.generate.mockResolvedValue('This is not JSON at all');
-
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(mockedExtractWithRules).toHaveBeenCalled();
-      expect(result.modelUsed).toBe('rule-based (ollama-fallback)');
-    });
-
-    it('should fallback to rule-based when Ollama throws an error', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: true, models: ['llama3.2:3b'] });
-      mockOllamaService.generate.mockRejectedValue(new Error('timeout'));
-
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(mockedExtractWithRules).toHaveBeenCalled();
-      expect(result.modelUsed).toBe('rule-based (ollama-fallback)');
-    });
-
-    it('should create extraction record with processing status', async () => {
+    it('should create extraction record with pending status', async () => {
       await service.extractModule(FILE_ID, TEACHER_USER);
 
-      // First insert call = extraction record
       expect(mockDb.insert).toHaveBeenCalled();
-      const firstInsert = mockDb.insert.mock.calls[0];
-      // The values call on the chain
       const chain = mockDb.insert.mock.results[0].value;
       expect(chain.values).toHaveBeenCalledWith(
         expect.objectContaining({
-          extractionStatus: 'processing',
+          extractionStatus: 'pending',
           fileId: FILE_ID,
           classId: CLASS_ID,
           teacherId: TEACHER_ID,
@@ -501,112 +441,30 @@ describe('AiMentorService', () => {
       );
     });
 
-    it('should update extraction to completed status after successful extraction', async () => {
+    it('should enqueue a BullMQ job with correct data', async () => {
       await service.extractModule(FILE_ID, TEACHER_USER);
 
-      expect(mockDb.update).toHaveBeenCalled();
-      const updateChain = mockDb.update.mock.results[0].value;
-      expect(updateChain.set).toHaveBeenCalledWith(
+      expect(mockExtractionQueue.add).toHaveBeenCalledWith(
+        'extract',
         expect.objectContaining({
-          extractionStatus: 'completed',
-        }),
-      );
-    });
-
-    it('should log the AI interaction with correct metadata', async () => {
-      await service.extractModule(FILE_ID, TEACHER_USER);
-
-      // Second insert call = interaction log
-      expect(mockDb.insert).toHaveBeenCalledTimes(2);
-      const logChain = mockDb.insert.mock.results[1].value;
-      expect(logChain.values).toHaveBeenCalledWith(
-        expect.objectContaining({
+          extractionId: EXTRACTION_ID,
+          fileId: FILE_ID,
           userId: TEACHER_ID,
-          sessionType: 'module_extraction',
-          contextMetadata: expect.objectContaining({
-            fileId: FILE_ID,
-            classId: CLASS_ID,
-            extractionId: EXTRACTION_ID,
-          }),
         }),
-      );
-    });
-
-    it('should cap rawText at 50,000 characters', async () => {
-      const longText = 'A'.repeat(60_000);
-      mockedPdfParse.mockResolvedValue({ text: longText, numpages: 1, numrender: 1, info: {}, metadata: null, version: '1' } as any);
-
-      await service.extractModule(FILE_ID, TEACHER_USER);
-
-      // rule-based extractor should receive capped text
-      expect(mockedExtractWithRules).toHaveBeenCalledWith(
-        expect.any(String),
-      );
-      const receivedText = mockedExtractWithRules.mock.calls[0][0];
-      expect(receivedText.length).toBe(50_000);
-    });
-
-    it('should mark extraction as failed when pipeline throws unexpectedly', async () => {
-      // Make the update (step 5) throw to simulate pipeline failure
-      mockOllamaService.isAvailable.mockResolvedValue({ available: false, models: [] });
-      mockedExtractWithRules.mockImplementation(() => { throw new Error('Unexpected crash'); });
-
-      const updateChain = makeUpdateChain();
-      mockDb.update.mockReturnValue(updateChain);
-
-      await expect(service.extractModule(FILE_ID, TEACHER_USER)).rejects.toThrow(
-        'Unexpected crash',
-      );
-
-      // Should have called update to set failed status
-      expect(mockDb.update).toHaveBeenCalled();
-      expect(updateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          extractionStatus: 'failed',
-          errorMessage: 'Unexpected crash',
+          attempts: 2,
         }),
       );
     });
 
-    it('should handle Ollama response wrapped in markdown fences', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: true, models: ['llama3.2:3b'] });
-      const fencedJson = '```json\n' + JSON.stringify(VALID_EXTRACTION_RESULT) + '\n```';
-      mockOllamaService.generate.mockResolvedValue(fencedJson);
-
+    it('should return extractionId, status, and message', async () => {
       const result = await service.extractModule(FILE_ID, TEACHER_USER);
 
-      expect(result.modelUsed).toBe('llama3.2:3b');
-      expect(result.structured).toEqual(VALID_EXTRACTION_RESULT);
-    });
-
-    it('should handle Ollama response with surrounding text', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: true, models: ['llama3.2:3b'] });
-      const wrappedJson = 'Here is the output: ' + JSON.stringify(VALID_EXTRACTION_RESULT) + ' Hope this helps!';
-      mockOllamaService.generate.mockResolvedValue(wrappedJson);
-
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(result.modelUsed).toBe('llama3.2:3b');
-    });
-
-    it('should fallback when Ollama returns JSON without lessons array', async () => {
-      mockOllamaService.isAvailable.mockResolvedValue({ available: true, models: ['llama3.2:3b'] });
-      mockOllamaService.generate.mockResolvedValue('{"title": "No lessons here"}');
-
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(mockedExtractWithRules).toHaveBeenCalled();
-      expect(result.modelUsed).toBe('rule-based (ollama-fallback)');
-    });
-
-    it('should return extractionId, modelUsed, responseTimeMs, and structured data', async () => {
-      const result = await service.extractModule(FILE_ID, TEACHER_USER);
-
-      expect(result).toHaveProperty('extractionId');
-      expect(result).toHaveProperty('modelUsed');
-      expect(result).toHaveProperty('responseTimeMs');
-      expect(result).toHaveProperty('structured');
-      expect(typeof result.responseTimeMs).toBe('number');
+      expect(result).toEqual({
+        extractionId: EXTRACTION_ID,
+        status: 'pending',
+        message: expect.stringContaining('queued'),
+      });
     });
   });
 
@@ -844,6 +702,7 @@ describe('AiMentorService', () => {
         classId: CLASS_ID,
         extractionId: EXTRACTION_ID,
         lessonsCreated: 1,
+        totalLessonsAvailable: 1,
         lessons: expect.arrayContaining([
           expect.objectContaining({ id: expect.any(String), title: expect.any(String) }),
         ]),

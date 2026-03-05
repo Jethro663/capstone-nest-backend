@@ -22,7 +22,7 @@ import { TeacherModule } from './modules/teacher/teacher.module';
 import { HealthModule } from './modules/health/health.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
 import { RosterImportModule } from './modules/roster-import/roster-import.module';
-import { GradebookModule } from './modules/gradebook/gradebook.module';
+import { ClassRecordModule } from './modules/class-record/class-record.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AiMentorModule } from './modules/ai-mentor/ai-mentor.module';
@@ -68,7 +68,7 @@ import ollamaConfig from './config/ollama.config';
     HealthModule,
     FileUploadModule,
     RosterImportModule,
-    GradebookModule,
+    ClassRecordModule,
     AnnouncementsModule,
     NotificationsModule,
     AiMentorModule,

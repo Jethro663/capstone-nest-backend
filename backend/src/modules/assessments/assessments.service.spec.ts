@@ -34,6 +34,8 @@ const MOCK_ASSESSMENT = {
   isPublished: false,
   feedbackLevel: 'immediate',
   feedbackDelayHours: 0,
+  classRecordCategory: null,
+  quarter: null,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
   questions: [],
@@ -72,6 +74,9 @@ const MOCK_ATTEMPT = {
   timeSpentSeconds: null,
   startedAt: new Date(),
   submittedAt: null,
+  isReturned: false,
+  returnedAt: null,
+  teacherFeedback: null,
 };
 
 // ─── DB mock builder (follows lessons.service.spec pattern) ──────────────────
@@ -136,14 +141,12 @@ describe('AssessmentsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssessmentsService,
-        { provide: DatabaseService, useValue: db },
+        { provide: DatabaseService, useValue: { db } },
         { provide: EventEmitter2, useValue: eventEmitter },
       ],
     }).compile();
 
     service = module.get<AssessmentsService>(AssessmentsService);
-    // Override the db getter (service expects this.db which is injected via DatabaseService)
-    (service as any).db = db;
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -153,7 +156,9 @@ describe('AssessmentsService', () => {
   describe('createAssessment', () => {
     it('should create an assessment with default totalPoints 0', async () => {
       const created = { ...MOCK_ASSESSMENT, totalPoints: 0 };
+      db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID });
       mockInsert(db, [created]);
+      db.query.assessments.findFirst.mockResolvedValue(created);
 
       const result = await service.createAssessment({
         title: 'Test Quiz',
@@ -166,7 +171,9 @@ describe('AssessmentsService', () => {
 
     it('should pass maxAttempts and timeLimitMinutes through', async () => {
       const created = { ...MOCK_ASSESSMENT, totalPoints: 0, maxAttempts: 3, timeLimitMinutes: 30 };
+      db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID });
       mockInsert(db, [created]);
+      db.query.assessments.findFirst.mockResolvedValue(created);
 
       const result = await service.createAssessment({
         title: 'Timed Quiz',
@@ -206,8 +213,11 @@ describe('AssessmentsService', () => {
 
   describe('updateAssessment', () => {
     it('should update title without validation when not publishing', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT);
-      mockUpdateReturning(db, [{ ...MOCK_ASSESSMENT, title: 'Updated' }]);
+      const updated = { ...MOCK_ASSESSMENT, title: 'Updated' };
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(MOCK_ASSESSMENT)
+        .mockResolvedValueOnce(updated);
+      mockUpdateReturning(db, [updated]);
 
       const result = await service.updateAssessment(ASSESSMENT_ID, {
         title: 'Updated',
@@ -441,15 +451,18 @@ describe('AssessmentsService', () => {
 
   describe('createQuestion', () => {
     it('should create a question and recalculate total points', async () => {
+      // Verify assessment exists
+      db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT);
       // Insert question
       mockInsert(db, [{ ...MOCK_QUESTION }]);
-      // Insert options (2 calls)
-      mockInsert(db, [MOCK_QUESTION.options[0]]);
-      mockInsert(db, [MOCK_QUESTION.options[1]]);
+      // Insert options (batch)
+      mockInsert(db, []);
       // Recalculate total points: select sum
       mockSelect(db, [{ total: 5 }]);
       // Update assessment totalPoints
       mockUpdateReturning(db, [{ ...MOCK_ASSESSMENT, totalPoints: 5 }]);
+      // getQuestionById at the end
+      db.query.assessmentQuestions.findFirst.mockResolvedValue(MOCK_QUESTION);
 
       const result = await service.createQuestion({
         assessmentId: ASSESSMENT_ID,

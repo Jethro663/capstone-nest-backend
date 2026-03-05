@@ -15,6 +15,7 @@ import {
   assessmentResponses,
   classes,
   users,
+  enrollments,
 } from '../../drizzle/schema';
 import {
   CreateAssessmentDto,
@@ -23,6 +24,8 @@ import {
   UpdateQuestionDto,
   SubmitAssessmentDto,
   QuestionType,
+  ReturnGradeDto,
+  BulkReturnGradesDto,
 } from './DTO/assessment.dto';
 
 @Injectable()
@@ -142,6 +145,8 @@ export class AssessmentsService {
         isPublished: false,
         feedbackLevel: createAssessmentDto.feedbackLevel,
         feedbackDelayHours: createAssessmentDto.feedbackDelayHours,
+        classRecordCategory: createAssessmentDto.classRecordCategory,
+        quarter: createAssessmentDto.quarter,
       })
       .returning();
 
@@ -249,6 +254,8 @@ export class AssessmentsService {
     if (updateAssessmentDto.isPublished !== undefined) updateData.isPublished = updateAssessmentDto.isPublished;
     if (updateAssessmentDto.feedbackLevel !== undefined) updateData.feedbackLevel = updateAssessmentDto.feedbackLevel;
     if (updateAssessmentDto.feedbackDelayHours !== undefined) updateData.feedbackDelayHours = updateAssessmentDto.feedbackDelayHours;
+    if (updateAssessmentDto.classRecordCategory !== undefined) updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
+    if (updateAssessmentDto.quarter !== undefined) updateData.quarter = updateAssessmentDto.quarter;
 
     const [updated] = await this.db
       .update(assessments)
@@ -647,12 +654,14 @@ export class AssessmentsService {
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
 
-    // Emit event for gradebook score auto-sync
+    // Emit event for class record score auto-sync
     this.eventEmitter.emit('assessment.submitted', {
       assessmentId: submitAssessmentDto.assessmentId,
       studentId,
       rawScore: totalPoints,
       totalPoints: assessmentTotal,
+      classRecordCategory: assessment.classRecordCategory,
+      quarter: assessment.quarter,
     });
 
     return {
@@ -666,8 +675,10 @@ export class AssessmentsService {
 
   /**
    * Get student's attempt results
+   * For students: only show score/details if grade has been returned
+   * For teachers: always show full results
    */
-  async getAttemptResults(attemptId: string) {
+  async getAttemptResults(attemptId: string, userRole?: string) {
     const attempt = await this.db.query.assessmentAttempts.findFirst({
       where: eq(assessmentAttempts.id, attemptId),
       with: {
@@ -698,8 +709,40 @@ export class AssessmentsService {
       throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
     }
 
+    // If student role and grade not returned yet, hide score details
+    if (userRole === 'student' && !attempt.isReturned) {
+      return {
+        id: attempt.id,
+        assessmentId: attempt.assessmentId,
+        attemptNumber: attempt.attemptNumber,
+        isSubmitted: attempt.isSubmitted,
+        submittedAt: attempt.submittedAt,
+        isReturned: false,
+        // Hide score and detailed results
+        score: null,
+        passed: null,
+        responses: [],
+        feedbackStatus: {
+          level: 'awaiting_return',
+          unlocked: false,
+          message: 'Your teacher hasn\'t returned your grade yet. Please wait for your teacher to review and return your work.',
+        },
+        assessment: {
+          id: attempt.assessment.id,
+          title: attempt.assessment.title,
+          type: attempt.assessment.type,
+          totalPoints: attempt.assessment.totalPoints,
+        },
+      };
+    }
+
     // Apply smart feedback filtering based on assessment settings
-    return this.applyFeedbackFiltering(attempt);
+    const filtered = this.applyFeedbackFiltering(attempt);
+    // Add return status info
+    filtered.isReturned = attempt.isReturned;
+    filtered.returnedAt = attempt.returnedAt;
+    filtered.teacherFeedback = attempt.teacherFeedback;
+    return filtered;
   }
 
   /**
@@ -879,6 +922,7 @@ export class AssessmentsService {
 
   /**
    * Get all attempts for a student in an assessment
+   * Hides score if grade hasn't been returned
    */
   async getStudentAttempts(studentId: string, assessmentId: string) {
     const attempts = await this.db.query.assessmentAttempts.findMany({
@@ -889,7 +933,12 @@ export class AssessmentsService {
       orderBy: (a, { desc }) => [desc(a.submittedAt)],
     });
 
-    return attempts;
+    return attempts.map((attempt) => ({
+      ...attempt,
+      // Hide score if not returned yet
+      score: attempt.isReturned ? attempt.score : null,
+      passed: attempt.isReturned ? attempt.passed : null,
+    }));
   }
 
   /**
@@ -918,8 +967,21 @@ export class AssessmentsService {
    * Get high-level assessment stats for teacher
    */
   async getAssessmentStats(assessmentId: string) {
+    const assessment = await this.getAssessmentById(assessmentId);
     const attempts = await this.getAssessmentAttempts(assessmentId);
     const submittedAttempts = attempts.filter((a) => a.isSubmitted);
+
+    // Count enrolled students for completion rate
+    const enrolledStudents = await this.db
+      .select({ studentId: enrollments.studentId })
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.classId, assessment.classId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+      );
+    const totalEnrolled = enrolledStudents.length;
 
     if (submittedAttempts.length === 0) {
       return {
@@ -929,11 +991,25 @@ export class AssessmentsService {
         passRate: 0,
         highestScore: 0,
         lowestScore: 0,
+        averageTimeSeconds: 0,
+        completionRate: 0,
+        totalEnrolled,
       };
     }
 
     const scores = submittedAttempts.map((a) => a.score || 0);
     const passedCount = submittedAttempts.filter((a) => a.passed).length;
+    const timesWithValues = submittedAttempts
+      .map((a) => a.timeSpentSeconds)
+      .filter((t): t is number => t != null && t > 0);
+    const averageTimeSeconds =
+      timesWithValues.length > 0
+        ? Math.round(timesWithValues.reduce((a, b) => a + b, 0) / timesWithValues.length)
+        : 0;
+
+    // Unique students who submitted
+    const uniqueSubmitters = new Set(submittedAttempts.map((a) => a.studentId)).size;
+    const completionRate = totalEnrolled > 0 ? Math.round((uniqueSubmitters / totalEnrolled) * 100) : 0;
 
     return {
       totalAttempts: attempts.length,
@@ -944,6 +1020,295 @@ export class AssessmentsService {
       passRate: Math.round((passedCount / submittedAttempts.length) * 100),
       highestScore: Math.max(...scores),
       lowestScore: Math.min(...scores),
+      averageTimeSeconds,
+      completionRate,
+      totalEnrolled,
+    };
+  }
+
+  // ==========================================
+  // MS Teams-like Grade Return Methods
+  // ==========================================
+
+  /**
+   * Get all student submissions for an assessment (teacher view)
+   * Shows ALL enrolled students with their submission status
+   */
+  async getAssessmentSubmissions(assessmentId: string) {
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    // Get all enrolled students in this class
+    const enrolledStudents = await this.db
+      .select({
+        studentId: enrollments.studentId,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+      })
+      .from(enrollments)
+      .innerJoin(users, eq(users.id, enrollments.studentId))
+      .where(
+        and(
+          eq(enrollments.classId, assessment.classId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+      )
+      .orderBy(users.lastName, users.firstName);
+
+    // Get all attempts for this assessment
+    const attempts = await this.db.query.assessmentAttempts.findMany({
+      where: eq(assessmentAttempts.assessmentId, assessmentId),
+      orderBy: (a, { desc: d }) => [d(a.submittedAt)],
+    });
+
+    // Map students to their submission status
+    const submissions = enrolledStudents.map((student) => {
+      const studentAttempts = attempts.filter(
+        (a) => a.studentId === student.studentId,
+      );
+
+      // Determine status
+      let status: 'not_started' | 'in_progress' | 'turned_in' | 'returned' = 'not_started';
+      let latestAttempt: (typeof attempts)[number] | null = null;
+
+      if (studentAttempts.length > 0) {
+        // Get the latest attempt
+        latestAttempt = studentAttempts[0];
+
+        if (latestAttempt.isReturned) {
+          status = 'returned';
+        } else if (latestAttempt.isSubmitted) {
+          status = 'turned_in';
+        } else {
+          status = 'in_progress';
+        }
+      }
+
+      return {
+        studentId: student.studentId,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        email: student.email,
+        status,
+        attempt: latestAttempt
+          ? {
+              id: latestAttempt.id,
+              attemptNumber: latestAttempt.attemptNumber,
+              score: latestAttempt.score,
+              passed: latestAttempt.passed,
+              isSubmitted: latestAttempt.isSubmitted,
+              isReturned: latestAttempt.isReturned,
+              submittedAt: latestAttempt.submittedAt,
+              returnedAt: latestAttempt.returnedAt,
+              teacherFeedback: latestAttempt.teacherFeedback,
+              timeSpentSeconds: latestAttempt.timeSpentSeconds,
+            }
+          : null,
+        totalAttempts: studentAttempts.length,
+      };
+    });
+
+    return {
+      assessment: {
+        id: assessment.id,
+        title: assessment.title,
+        type: assessment.type,
+        classRecordCategory: assessment.classRecordCategory,
+        quarter: assessment.quarter,
+        totalPoints: assessment.totalPoints,
+        dueDate: assessment.dueDate,
+        isPublished: assessment.isPublished,
+      },
+      submissions,
+      summary: {
+        total: submissions.length,
+        notStarted: submissions.filter((s) => s.status === 'not_started').length,
+        inProgress: submissions.filter((s) => s.status === 'in_progress').length,
+        turnedIn: submissions.filter((s) => s.status === 'turned_in').length,
+        returned: submissions.filter((s) => s.status === 'returned').length,
+      },
+    };
+  }
+
+  /**
+   * Return a grade to a student (make score visible)
+   */
+  async returnGrade(attemptId: string, dto: ReturnGradeDto) {
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: eq(assessmentAttempts.id, attemptId),
+    });
+
+    if (!attempt) {
+      throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
+    }
+
+    if (!attempt.isSubmitted) {
+      throw new BadRequestException('Cannot return grade for an unsubmitted attempt');
+    }
+
+    if (attempt.isReturned) {
+      throw new BadRequestException('Grade has already been returned for this attempt');
+    }
+
+    const [updated] = await this.db
+      .update(assessmentAttempts)
+      .set({
+        isReturned: true,
+        returnedAt: new Date(),
+        teacherFeedback: dto.teacherFeedback || null,
+      })
+      .where(eq(assessmentAttempts.id, attemptId))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * Bulk return grades for multiple attempts
+   */
+  async bulkReturnGrades(dto: BulkReturnGradesDto) {
+    const results = await this.db
+      .update(assessmentAttempts)
+      .set({
+        isReturned: true,
+        returnedAt: new Date(),
+        teacherFeedback: dto.teacherFeedback || null,
+      })
+      .where(
+        and(
+          inArray(assessmentAttempts.id, dto.attemptIds),
+          eq(assessmentAttempts.isSubmitted, true),
+          eq(assessmentAttempts.isReturned, false),
+        ),
+      )
+      .returning();
+
+    return {
+      returned: results.length,
+      attemptIds: results.map((r) => r.id),
+    };
+  }
+
+  /**
+   * Get per-question analytics for an assessment (teacher view)
+   */
+  async getQuestionAnalytics(assessmentId: string) {
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    // Get all submitted attempts
+    const submittedAttemptsList = await this.db.query.assessmentAttempts.findMany({
+      where: and(
+        eq(assessmentAttempts.assessmentId, assessmentId),
+        eq(assessmentAttempts.isSubmitted, true),
+      ),
+    });
+
+    const attemptIds = submittedAttemptsList.map((a) => a.id);
+
+    if (attemptIds.length === 0) {
+      return {
+        totalResponses: 0,
+        questions: (assessment.questions || []).map((q) => ({
+          questionId: q.id,
+          content: q.content,
+          type: q.type,
+          points: q.points,
+          totalResponses: 0,
+          correctCount: 0,
+          correctPercent: 0,
+          averagePoints: 0,
+          options: (q.options || []).map((o) => ({
+            optionId: o.id,
+            text: o.text,
+            isCorrect: o.isCorrect,
+            selectionCount: 0,
+            selectionPercent: 0,
+          })),
+          textAnswers: [],
+        })),
+      };
+    }
+
+    // Get all responses for these attempts
+    const allResponses = await this.db.query.assessmentResponses.findMany({
+      where: inArray(assessmentResponses.attemptId, attemptIds),
+    });
+
+    // Build per-question analytics
+    const questionAnalytics = (assessment.questions || []).map((q) => {
+      const qResponses = allResponses.filter((r) => r.questionId === q.id);
+      const totalResponses = qResponses.length;
+      const correctCount = qResponses.filter((r) => r.isCorrect === true).length;
+      const totalPointsEarned = qResponses.reduce((sum, r) => sum + (r.pointsEarned || 0), 0);
+
+      // Per-option stats
+      const optionStats = (q.options || []).map((o) => {
+        // Count single-select
+        const singleSelections = qResponses.filter((r) => r.selectedOptionId === o.id).length;
+        // Count multi-select
+        const multiSelections = qResponses.filter(
+          (r) => r.selectedOptionIds && r.selectedOptionIds.includes(o.id),
+        ).length;
+        const selectionCount = singleSelections + multiSelections;
+        return {
+          optionId: o.id,
+          text: o.text,
+          isCorrect: o.isCorrect,
+          selectionCount,
+          selectionPercent: totalResponses > 0 ? Math.round((selectionCount / totalResponses) * 100) : 0,
+        };
+      });
+
+      // Text answers (for short_answer / fill_blank)
+      const textAnswers = qResponses
+        .filter((r) => r.studentAnswer)
+        .map((r) => r.studentAnswer as string);
+
+      return {
+        questionId: q.id,
+        content: q.content,
+        type: q.type,
+        points: q.points,
+        totalResponses,
+        correctCount,
+        correctPercent: totalResponses > 0 ? Math.round((correctCount / totalResponses) * 100) : 0,
+        averagePoints: totalResponses > 0 ? Math.round((totalPointsEarned / totalResponses) * 100) / 100 : 0,
+        options: optionStats,
+        textAnswers,
+      };
+    });
+
+    return {
+      totalResponses: submittedAttemptsList.length,
+      questions: questionAnalytics,
+    };
+  }
+
+  /**
+   * Return all submitted (unreturned) grades for an assessment
+   */
+  async returnAllGrades(assessmentId: string, teacherFeedback?: string) {
+    await this.getAssessmentById(assessmentId);
+
+    const results = await this.db
+      .update(assessmentAttempts)
+      .set({
+        isReturned: true,
+        returnedAt: new Date(),
+        teacherFeedback: teacherFeedback || null,
+      })
+      .where(
+        and(
+          eq(assessmentAttempts.assessmentId, assessmentId),
+          eq(assessmentAttempts.isSubmitted, true),
+          eq(assessmentAttempts.isReturned, false),
+        ),
+      )
+      .returning();
+
+    return {
+      returned: results.length,
+      attemptIds: results.map((r) => r.id),
     };
   }
 }

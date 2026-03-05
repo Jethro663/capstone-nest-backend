@@ -112,7 +112,7 @@ describe('FileUploadController', () => {
 
       const result = await controller.uploadFile(
         makeFile(),
-        { classId: CLASS_ID },
+        CLASS_ID,
         TEACHER_USER,
       );
 
@@ -128,7 +128,7 @@ describe('FileUploadController', () => {
       const record = makeRecord();
       mockFileUploadService.saveFileRecord.mockResolvedValue(record);
 
-      await controller.uploadFile(file, { classId: CLASS_ID }, TEACHER_USER);
+      await controller.uploadFile(file, CLASS_ID, TEACHER_USER);
 
       expect(mockFileUploadService.saveFileRecord).toHaveBeenCalledWith({
         teacherId:    TEACHER_USER.id,
@@ -145,7 +145,7 @@ describe('FileUploadController', () => {
       mockFileUploadService.saveFileRecord.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        controller.uploadFile(makeFile(), { classId: CLASS_ID }, TEACHER_USER),
+        controller.uploadFile(makeFile(), CLASS_ID, TEACHER_USER),
       ).rejects.toThrow('DB error');
     });
   });

@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { Assessment, AssessmentQuestion, CreateQuestionDto, UpdateQuestionDto } from '@/types/assessment';
+import type { ClassRecordCategory } from '@/types/assessment';
 
 /* ── Question type metadata ─────────────────────────── */
 const QUESTION_TYPES = [
@@ -51,6 +52,8 @@ export default function AssessmentEditorPage() {
   const [feedbackLevel, setFeedbackLevel] = useState<string>('immediate');
   const [feedbackDelayHours, setFeedbackDelayHours] = useState<number>(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [classRecordCategory, setClassRecordCategory] = useState<string>('');
+  const [quarter, setQuarter] = useState<string>('');
 
   // Inline editing for questions
   const [editingQId, setEditingQId] = useState<string | null>(null);
@@ -79,6 +82,8 @@ export default function AssessmentEditorPage() {
       setDueDate(a.dueDate ? a.dueDate.slice(0, 16) : '');
       setFeedbackLevel(a.feedbackLevel || 'immediate');
       setFeedbackDelayHours(a.feedbackDelayHours ?? 0);
+      setClassRecordCategory(a.classRecordCategory || '');
+      setQuarter(a.quarter || '');
       setQuestions((a.questions || []).sort((x, y) => x.order - y.order));
     } catch {
       toast.error('Failed to load assessment');
@@ -106,6 +111,8 @@ export default function AssessmentEditorPage() {
         dueDate: dueDate || undefined,
         feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
         feedbackDelayHours,
+        classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
+        quarter: (quarter || undefined) as Assessment['quarter'],
       });
       setAssessment(res.data);
       toast.success('Settings saved');
@@ -124,7 +131,13 @@ export default function AssessmentEditorPage() {
       setAssessment(res.data);
       toast.success(assessment.isPublished ? 'Assessment unpublished' : 'Assessment published');
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to toggle publish');
+      const data = err?.response?.data;
+      const errors = data?.errors;
+      if (Array.isArray(errors) && errors.length > 0) {
+        toast.error(errors.join('. '));
+      } else {
+        toast.error(data?.message || 'Failed to toggle publish');
+      }
     }
   };
 
@@ -374,6 +387,35 @@ export default function AssessmentEditorPage() {
                   <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
                 </div>
               )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Class Record Category</Label>
+                <select
+                  value={classRecordCategory}
+                  onChange={(e) => setClassRecordCategory(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">None</option>
+                  <option value="written_work">Written Work</option>
+                  <option value="performance_task">Performance Task</option>
+                  <option value="quarterly_assessment">Quarterly Assessment</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Quarter</Label>
+                <select
+                  value={quarter}
+                  onChange={(e) => setQuarter(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                >
+                  <option value="">None</option>
+                  <option value="Q1">Q1</option>
+                  <option value="Q2">Q2</option>
+                  <option value="Q3">Q3</option>
+                  <option value="Q4">Q4</option>
+                </select>
+              </div>
             </div>
 
             <div className="flex justify-end">

@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from './users.service';
 import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
+import { MailService } from '../mail/mail.service';
 import { archivedUsers, roles, studentProfiles, userRoles, users } from '../../drizzle/schema';
 
 jest.mock('bcrypt', () => ({
@@ -39,6 +40,11 @@ describe('UsersService', () => {
 
   const mockOtpService = {
     createAndSendOTP: jest.fn(),
+  };
+
+  const mockMailService = {
+    sendOtpEmail: jest.fn().mockResolvedValue(undefined),
+    sendPasswordEmail: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockConfigService = {
@@ -93,6 +99,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: DatabaseService, useValue: { db: mockDb } },
         { provide: OtpService, useValue: mockOtpService },
+        { provide: MailService, useValue: mockMailService },
         { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();

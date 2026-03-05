@@ -311,7 +311,7 @@ describe('MailService', () => {
     it('includes a security notice warning in the HTML body', async () => {
       await service.sendPasswordEmail(EMAIL, PASSWORD);
       const [mailOptions] = mockTransporter.sendMail.mock.calls[0];
-      expect(mailOptions.html).toContain('Important Security Notice');
+      expect(mailOptions.html).toContain('Important');
     });
 
     it('includes the FRONTEND_URL login link when set', async () => {

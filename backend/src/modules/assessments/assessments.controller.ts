@@ -23,6 +23,8 @@ import {
   UpdateQuestionDto,
   SubmitAssessmentDto,
   StartAssessmentDto,
+  ReturnGradeDto,
+  BulkReturnGradesDto,
 } from './DTO/assessment.dto';
 
 @ApiTags('Assessments')
@@ -230,12 +232,18 @@ export class AssessmentsController {
 
   /**
    * Get attempt results
-   * Student can view own, Teacher can view all
+   * Student can view own (score hidden until returned), Teacher can view all
    */
   @Get('attempts/:attemptId/results')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getAttemptResults(@Param('attemptId') attemptId: string) {
-    const results = await this.assessmentsService.getAttemptResults(attemptId);
+  async getAttemptResults(
+    @Param('attemptId') attemptId: string,
+    @CurrentUser() user: any,
+  ) {
+    const results = await this.assessmentsService.getAttemptResults(
+      attemptId,
+      user.role,
+    );
 
     return {
       success: true,
@@ -301,6 +309,90 @@ export class AssessmentsController {
       success: true,
       message: 'Assessment statistics retrieved successfully',
       data: stats,
+    };
+  }
+
+  /**
+   * Get per-question analytics for an assessment
+   * Teacher and Admin can access
+   */
+  @Get(':assessmentId/question-analytics')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getQuestionAnalytics(@Param('assessmentId') assessmentId: string) {
+    const analytics =
+      await this.assessmentsService.getQuestionAnalytics(assessmentId);
+
+    return {
+      success: true,
+      message: 'Question analytics retrieved successfully',
+      data: analytics,
+    };
+  }
+
+  // ==========================================
+  // MS Teams-like Submission & Grade Return
+  // ==========================================
+
+  /**
+   * Get all student submissions for an assessment
+   * Teacher and Admin can access
+   */
+  @Get(':assessmentId/submissions')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getAssessmentSubmissions(@Param('assessmentId') assessmentId: string) {
+    const submissions =
+      await this.assessmentsService.getAssessmentSubmissions(assessmentId);
+
+    return {
+      success: true,
+      message: 'Assessment submissions retrieved successfully',
+      data: submissions,
+    };
+  }
+
+  /**
+   * Return a grade to a student (make score visible)
+   * Teacher and Admin can access
+   */
+  @Post('attempts/:attemptId/return')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async returnGrade(
+    @Param('attemptId') attemptId: string,
+    @Body() returnGradeDto: ReturnGradeDto,
+  ) {
+    const result = await this.assessmentsService.returnGrade(
+      attemptId,
+      returnGradeDto,
+    );
+
+    return {
+      success: true,
+      message: 'Grade returned to student successfully',
+      data: result,
+    };
+  }
+
+  /**
+   * Return all submitted grades for an assessment
+   * Teacher and Admin can access
+   */
+  @Post(':assessmentId/return-all')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async returnAllGrades(
+    @Param('assessmentId') assessmentId: string,
+    @Body() returnGradeDto: ReturnGradeDto,
+  ) {
+    const result = await this.assessmentsService.returnAllGrades(
+      assessmentId,
+      returnGradeDto.teacherFeedback,
+    );
+
+    return {
+      success: true,
+      message: `${result.returned} grades returned to students`,
+      data: result,
     };
   }
 }

@@ -241,7 +241,7 @@ export default function TeacherClassDetailPage() {
           <TabsTrigger value="lessons">Lessons</TabsTrigger>
           <TabsTrigger value="assessments">Assessments</TabsTrigger>
           <TabsTrigger value="announcements">Announcements</TabsTrigger>
-          <TabsTrigger value="gradebook">Gradebook</TabsTrigger>
+          <TabsTrigger value="class-record">Class Record</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
 
@@ -340,6 +340,9 @@ export default function TeacherClassDetailPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Link href={`/dashboard/teacher/assessments/${a.id}`}>
+                        <Button variant="outline" size="sm">View</Button>
+                      </Link>
                       <Link href={`/dashboard/teacher/assessments/${a.id}/edit`}>
                         <Button variant="outline" size="sm">Edit</Button>
                       </Link>
@@ -380,13 +383,13 @@ export default function TeacherClassDetailPage() {
           )}
         </TabsContent>
 
-        {/* Gradebook Tab */}
-        <TabsContent value="gradebook" className="mt-4">
+        {/* Class Record Tab */}
+        <TabsContent value="class-record" className="mt-4">
           <Card>
             <CardContent className="p-6 text-center">
               <p className="text-muted-foreground">
-                <Link href={`/dashboard/teacher/gradebook?classId=${classId}`} className="text-blue-600 hover:underline">
-                  Open Gradebook →
+                <Link href={`/dashboard/teacher/class-record?classId=${classId}`} className="text-blue-600 hover:underline">
+                  Open Class Record →
                 </Link>
               </p>
             </CardContent>
