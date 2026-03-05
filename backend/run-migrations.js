@@ -1,6 +1,8 @@
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const env = require('dotenv');
+env.config(); // Load .env if present
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 // Reads DATABASE_URL from env, falls back to the local dev default.

@@ -14,6 +14,8 @@
 const { Client } = require('pg');
 const bcrypt = require('bcrypt');
 const { v4: uuid } = require('uuid');
+const env = require('dotenv');
+env.config(); 
 
 // ============================================
 // CONFIGURATION

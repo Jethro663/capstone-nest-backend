@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { assessmentService } from '@/services/assessment-service';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,13 +41,21 @@ export default function StudentAssessmentPage() {
     fetchData();
   }, [fetchData]);
 
+  const submittedAttempts = attempts.filter((a) => a.isSubmitted !== false);
+  const maxAttempts = assessment?.maxAttempts ?? 1;
+  const attemptsRemaining = maxAttempts - submittedAttempts.length;
+  const canStart = attemptsRemaining > 0;
+
   const handleStart = async () => {
     try {
       setStarting(true);
       const res = await assessmentService.startAttempt(assessmentId);
-      router.push(`/dashboard/student/assessments/${assessmentId}/take?attemptId=${res.data.id}`);
-    } catch {
-      toast.error('Failed to start assessment');
+      const { attempt, timeLimitMinutes } = res.data;
+      let url = `/dashboard/student/assessments/${assessmentId}/take?attemptId=${attempt.id}`;
+      if (timeLimitMinutes) url += `&timeLimit=${timeLimitMinutes}`;
+      router.push(url);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to start assessment');
     } finally {
       setStarting(false);
     }
@@ -87,41 +95,60 @@ export default function StudentAssessmentPage() {
           {assessment.description && (
             <p className="text-muted-foreground">{getDescription(assessment.description)}</p>
           )}
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
             <div>
-              <p className="text-2xl font-bold">{assessment.totalPoints ?? '—'}</p>
+              <p className="text-2xl font-bold">{assessment.totalPoints ?? 0}</p>
               <p className="text-xs text-muted-foreground">Total Points</p>
             </div>
             <div>
-              <p className="text-2xl font-bold">{assessment.passingScore ?? '—'}</p>
+              <p className="text-2xl font-bold">{assessment.passingScore ?? 60}%</p>
               <p className="text-xs text-muted-foreground">Passing Score</p>
             </div>
             <div>
-              <p className="text-2xl font-bold">{assessment.questions?.length ?? 0}</p>
-              <p className="text-xs text-muted-foreground">Questions</p>
+              <p className="text-2xl font-bold">{maxAttempts}</p>
+              <p className="text-xs text-muted-foreground">Max Attempts</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{assessment.timeLimitMinutes ?? '∞'}</p>
+              <p className="text-xs text-muted-foreground">{assessment.timeLimitMinutes ? 'Minutes' : 'No Limit'}</p>
             </div>
           </div>
-          <Button onClick={handleStart} disabled={starting} className="w-full">
-            {starting ? 'Starting...' : '▶ Start Assessment'}
-          </Button>
+
+          {assessment.dueDate && (
+            <p className="text-sm text-muted-foreground text-center">Due: {formatDate(assessment.dueDate)}</p>
+          )}
+
+          {canStart ? (
+            <Button onClick={handleStart} disabled={starting} className="w-full">
+              {starting
+                ? 'Starting...'
+                : submittedAttempts.length > 0
+                  ? `▶ Retake Assessment (${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} left)`
+                  : '▶ Start Assessment'}
+            </Button>
+          ) : (
+            <Button disabled className="w-full">
+              No attempts remaining
+            </Button>
+          )}
         </CardContent>
       </Card>
 
       {/* My Attempts */}
-      {attempts.length > 0 && (
+      {submittedAttempts.length > 0 && (
         <div>
           <h2 className="text-lg font-semibold mb-3">My Attempts</h2>
           <div className="space-y-3">
-            {attempts.map((attempt, i) => (
+            {submittedAttempts.map((attempt) => (
               <Card key={attempt.id}>
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
-                    <p className="font-medium">Attempt #{attempts.length - i}</p>
+                    <p className="font-medium">Attempt #{attempt.attemptNumber ?? '?'}</p>
                     <p className="text-sm text-muted-foreground">{formatDate(attempt.submittedAt || attempt.createdAt || '')}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <Badge variant={attempt.passed ? 'default' : 'destructive'}>
-                      {attempt.passed ? 'PASSED' : 'FAILED'} — {attempt.score}/{attempt.totalPoints}
+                      {attempt.passed ? 'PASSED' : 'FAILED'} — {attempt.score}%
                     </Badge>
                     <Button
                       variant="outline"
@@ -140,3 +167,5 @@ export default function StudentAssessmentPage() {
     </div>
   );
 }
+  
+

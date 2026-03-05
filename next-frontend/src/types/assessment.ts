@@ -8,6 +8,8 @@ export interface Assessment {
   type: AssessmentType;
   totalPoints?: number;
   passingScore?: number;
+  maxAttempts?: number;
+  timeLimitMinutes?: number | null;
   dueDate?: string;
   isPublished: boolean;
   feedbackLevel?: FeedbackLevel;
@@ -42,8 +44,9 @@ export interface CreateAssessmentDto {
   classId: string;
   type?: AssessmentType;
   dueDate?: string;
-  totalPoints?: number;
   passingScore?: number;
+  maxAttempts?: number;
+  timeLimitMinutes?: number;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
 }
@@ -53,8 +56,9 @@ export interface UpdateAssessmentDto {
   description?: string;
   type?: AssessmentType;
   dueDate?: string;
-  totalPoints?: number;
   passingScore?: number;
+  maxAttempts?: number;
+  timeLimitMinutes?: number | null;
   isPublished?: boolean;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
@@ -85,10 +89,13 @@ export interface AssessmentAttempt {
   id: string;
   assessmentId: string;
   studentId: string;
+  attemptNumber?: number;
   score?: number;
   totalPoints?: number;
   passed?: boolean;
+  isSubmitted?: boolean;
   timeSpentSeconds?: number;
+  startedAt?: string;
   submittedAt?: string;
   createdAt?: string;
 }
@@ -106,14 +113,22 @@ export interface SubmitAssessmentDto {
 
 export interface AttemptResult {
   attempt: AssessmentAttempt;
+  score: number;
+  passed: boolean;
   responses: {
     questionId: string;
     studentAnswer?: string;
     selectedOptionId?: string;
+    selectedOptionIds?: string[];
     isCorrect?: boolean;
     pointsEarned?: number;
     question?: AssessmentQuestion;
   }[];
+}
+
+export interface StartAttemptResult {
+  attempt: AssessmentAttempt;
+  timeLimitMinutes: number | null;
 }
 
 export interface AssessmentStats {

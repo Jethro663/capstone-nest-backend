@@ -190,7 +190,7 @@ export class AssessmentsController {
     @Param('assessmentId') assessmentId: string,
     @CurrentUser() user: any,
   ) {
-    const attempt = await this.assessmentsService.startAttempt(
+    const result = await this.assessmentsService.startAttempt(
       user.userId,
       assessmentId,
     );
@@ -198,7 +198,10 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Assessment attempt started',
-      data: attempt,
+      data: {
+        attempt: result.attempt,
+        timeLimitMinutes: result.timeLimitMinutes,
+      },
     };
   }
 

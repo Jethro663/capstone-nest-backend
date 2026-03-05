@@ -358,12 +358,15 @@ export const assessments = pgTable('assessments', {
     .references(() => classes.id, { onDelete: 'cascade' }),
   type: assessmentTypeEnum('type').notNull().default('quiz'),
   dueDate: timestamp('due_date'),
-  totalPoints: integer('total_points').notNull().default(100),
+  totalPoints: integer('total_points').notNull().default(0),
   passingScore: integer('passing_score').default(60),
+  maxAttempts: integer('max_attempts').notNull().default(1),
+  timeLimitMinutes: integer('time_limit_minutes'),
   isPublished: boolean('is_published').default(false),
   feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
   feedbackDelayHours: integer('feedback_delay_hours').default(24),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
 export const assessmentQuestions = pgTable(
@@ -419,6 +422,7 @@ export const assessmentAttempts = pgTable(
     assessmentId: uuid('assessment_id')
       .notNull()
       .references(() => assessments.id, { onDelete: 'cascade' }),
+    attemptNumber: integer('attempt_number').notNull().default(1),
     startedAt: timestamp('started_at').notNull().defaultNow(),
     submittedAt: timestamp('submitted_at'),
     score: integer('score'),
@@ -434,9 +438,10 @@ export const assessmentAttempts = pgTable(
       table.assessmentId,
     ),
     submittedIdx: index('assessment_attempts_submitted_idx').on(table.isSubmitted),
-    uniqueAttempt: unique('assessment_attempts_student_assessment_unique').on(
+    uniqueAttemptNumber: unique('assessment_attempts_student_assessment_attempt_unique').on(
       table.studentId,
       table.assessmentId,
+      table.attemptNumber,
     ),
   }),
 );
@@ -456,6 +461,7 @@ export const assessmentResponses = pgTable(
       () => assessmentQuestionOptions.id,
       { onDelete: 'set null' },
     ),
+    selectedOptionIds: text('selected_option_ids').array(),
     isCorrect: boolean('is_correct'),
     pointsEarned: integer('points_earned').default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),

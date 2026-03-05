@@ -6,8 +6,9 @@ export const createAssessmentSchema = z.object({
   classId: z.string().min(1, 'Class is required'),
   type: z.enum(['quiz', 'exam', 'assignment']).optional(),
   dueDate: z.string().optional(),
-  totalPoints: z.coerce.number().positive().optional(),
   passingScore: z.coerce.number().positive().optional(),
+  maxAttempts: z.coerce.number().int().min(1).optional(),
+  timeLimitMinutes: z.coerce.number().int().min(1).optional(),
   feedbackLevel: z.enum(['immediate', 'standard', 'detailed']).optional(),
   feedbackDelayHours: z.coerce.number().int().min(0).optional(),
 });

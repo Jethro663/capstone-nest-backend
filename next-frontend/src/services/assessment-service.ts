@@ -66,7 +66,7 @@ export const assessmentService = {
   // --- Attempts ---
 
   /** POST /assessments/:assessmentId/start — Admin, Student */
-  async startAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
+  async startAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: { attempt: AssessmentAttempt; timeLimitMinutes: number | null } }> {
     const { data } = await api.post(`/assessments/${assessmentId}/start`);
     return data;
   },

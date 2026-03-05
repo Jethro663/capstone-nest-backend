@@ -26,6 +26,7 @@ export default function StudentAssessmentTakePage() {
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [timeLimit, setTimeLimit] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
 
   const fetchData = useCallback(async () => {
@@ -35,12 +36,19 @@ export default function StudentAssessmentTakePage() {
       setAssessment(res.data);
       const sorted = (res.data.questions || []).sort((a, b) => a.order - b.order);
       setQuestions(sorted);
+      // Get time limit from query param or assessment
+      const limitParam = searchParams.get('timeLimit');
+      if (limitParam) {
+        setTimeLimit(Number(limitParam));
+      } else if (res.data.timeLimitMinutes) {
+        setTimeLimit(res.data.timeLimitMinutes);
+      }
     } catch {
       toast.error('Failed to load assessment');
     } finally {
       setLoading(false);
     }
-  }, [assessmentId]);
+  }, [assessmentId, searchParams]);
 
   useEffect(() => {
     fetchData();
@@ -56,11 +64,23 @@ export default function StudentAssessmentTakePage() {
     };
   }, []);
 
+  // Auto-submit when time limit is reached
+  useEffect(() => {
+    if (timeLimit && timeElapsed >= timeLimit * 60) {
+      toast.warning('Time is up! Auto-submitting your assessment.');
+      handleSubmit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeElapsed, timeLimit]);
+
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
+
+  const remainingSeconds = timeLimit ? Math.max(0, timeLimit * 60 - timeElapsed) : null;
+  const isTimeLow = remainingSeconds !== null && remainingSeconds <= 60;
 
   const setResponse = (questionId: string, value: string | string[]) => {
     setResponses((prev) => ({ ...prev, [questionId]: value }));
@@ -130,7 +150,15 @@ export default function StudentAssessmentTakePage() {
             Question {currentIdx + 1} of {questions.length}
           </p>
         </div>
-        <span className="font-mono text-lg">{formatTime(timeElapsed)}</span>
+        <div className="text-right">
+          {remainingSeconds !== null ? (
+            <span className={`font-mono text-lg ${isTimeLow ? 'text-red-600 animate-pulse font-bold' : ''}`}>
+              ⏱ {formatTime(remainingSeconds)}
+            </span>
+          ) : (
+            <span className="font-mono text-lg">{formatTime(timeElapsed)}</span>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_250px]">
@@ -302,7 +330,7 @@ function AnswerInput({
       );
 
     case 'short_answer':
-    case 'fill_in_blank':
+    case 'fill_blank':
       return (
         <textarea
           value={(value as string) || ''}

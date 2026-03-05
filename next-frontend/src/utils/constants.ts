@@ -20,7 +20,7 @@ export const QUESTION_TYPES = [
   'multiple_select',
   'true_false',
   'short_answer',
-  'fill_in_blank',
+  'fill_blank',
   'dropdown',
 ] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];

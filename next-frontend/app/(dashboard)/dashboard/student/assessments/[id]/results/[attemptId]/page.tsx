@@ -22,6 +22,7 @@ export default function StudentAssessmentResultsPage() {
     try {
       setLoading(true);
       const res = await assessmentService.getAttemptResults(attemptId);
+      console.log('Attempt results:', res.data);
       setResult(res.data);
     } catch {
       toast.error('Failed to load results');
@@ -48,10 +49,10 @@ export default function StudentAssessmentResultsPage() {
     return <p className="text-muted-foreground">Results not found.</p>;
   }
 
-  const { attempt, responses } = result;
-  const pct = attempt.totalPoints
-    ? Math.round(((attempt.score ?? 0) / attempt.totalPoints) * 100)
-    : 0;
+  const { attempt, responses, score, passed } = result;
+ 
+  // score is already a percentage (0-100)
+  const pct = score ?? 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -69,16 +70,14 @@ export default function StudentAssessmentResultsPage() {
           <div className="grid grid-cols-2 gap-6 text-center">
             <div>
               <p className="text-5xl font-bold">{pct}%</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {attempt.score}/{attempt.totalPoints} points
-              </p>
+              <p className="text-sm text-muted-foreground mt-1">Score</p>
             </div>
             <div className="flex items-center justify-center">
               <Badge
-                variant={attempt.passed ? 'default' : 'destructive'}
+                variant={passed ? 'default' : 'destructive'}
                 className="text-lg px-4 py-2"
               >
-                {attempt.passed ? '✓ PASSED' : '✗ FAILED'}
+                {passed ? '✓ PASSED' : '✗ FAILED'}
               </Badge>
             </div>
           </div>
@@ -93,15 +92,29 @@ export default function StudentAssessmentResultsPage() {
             <Card
               key={response.questionId}
               className={`border-l-4 ${
-                response.isCorrect ? 'border-l-green-500' : 'border-l-red-500'
+                response.isCorrect === null || response.isCorrect === undefined
+                  ? 'border-l-yellow-400'
+                  : response.isCorrect
+                    ? 'border-l-green-500'
+                    : 'border-l-red-500'
               }`}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">Q{i + 1}</span>
-                    <Badge variant={response.isCorrect ? 'default' : 'destructive'}>
-                      {response.isCorrect ? '✓ Correct' : '✗ Incorrect'}
+                    <Badge variant={
+                      response.isCorrect === null || response.isCorrect === undefined
+                        ? 'secondary'
+                        : response.isCorrect
+                          ? 'default'
+                          : 'destructive'
+                    }>
+                      {response.isCorrect === null || response.isCorrect === undefined
+                        ? '⏳ Pending Review'
+                        : response.isCorrect
+                          ? '✓ Correct'
+                          : '✗ Incorrect'}
                     </Badge>
                   </div>
                   <span className="text-sm text-muted-foreground">
@@ -130,9 +143,9 @@ export default function StudentAssessmentResultsPage() {
       <Card>
         <CardContent className="p-6">
           <h3 className="font-semibold mb-3">
-            {attempt.passed ? 'Great Work!' : 'Study Resources'}
+            {passed ? 'Great Work!' : 'Study Resources'}
           </h3>
-          {attempt.passed ? (
+          {passed ? (
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>• Keep up the excellent work! Review the feedback for any areas to improve.</li>
               <li>• Continue to the next lesson or assessment.</li>

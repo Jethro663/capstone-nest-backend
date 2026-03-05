@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum QuestionType {
@@ -46,11 +46,18 @@ export class CreateAssessmentDto {
 
   @IsOptional()
   @IsInt()
-  totalPoints?: number = 100;
+  @Min(1)
+  passingScore?: number = 60;
 
   @IsOptional()
   @IsInt()
-  passingScore?: number = 60;
+  @Min(1)
+  maxAttempts?: number = 1;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  timeLimitMinutes?: number;
 
   @IsOptional()
   @IsEnum(FeedbackLevel)
@@ -58,7 +65,7 @@ export class CreateAssessmentDto {
 
   @IsOptional()
   @IsInt()
-  feedbackDelayHours?: number = 24; // 24 hours default delay
+  feedbackDelayHours?: number = 24;
 }
 
 export class UpdateAssessmentDto {
@@ -79,11 +86,18 @@ export class UpdateAssessmentDto {
 
   @IsOptional()
   @IsInt()
-  totalPoints?: number;
+  @Min(1)
+  passingScore?: number;
 
   @IsOptional()
   @IsInt()
-  passingScore?: number;
+  @Min(1)
+  maxAttempts?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  timeLimitMinutes?: number;
 
   @IsOptional()
   @IsBoolean()
@@ -139,6 +153,7 @@ export class CreateQuestionDto {
 
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => OptionDto)
   options?: OptionDto[];
 }
@@ -166,6 +181,7 @@ export class UpdateQuestionDto {
 
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => OptionDto)
   options?: OptionDto[];
 }

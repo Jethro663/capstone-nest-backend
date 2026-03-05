@@ -44,7 +44,6 @@ export default function TeacherClassDetailPage() {
 
   // Modal states
   const [showCreateLesson, setShowCreateLesson] = useState(false);
-  const [showCreateAssessment, setShowCreateAssessment] = useState(false);
   const [showAddStudents, setShowAddStudents] = useState(false);
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
   const [showExtractModule, setShowExtractModule] = useState(false);
@@ -57,11 +56,6 @@ export default function TeacherClassDetailPage() {
   // Form states
   const [lessonTitle, setLessonTitle] = useState('');
   const [lessonDesc, setLessonDesc] = useState('');
-  const [assessmentTitle, setAssessmentTitle] = useState('');
-  const [assessmentDesc, setAssessmentDesc] = useState('');
-  const [assessmentType, setAssessmentType] = useState<'quiz' | 'exam' | 'assignment'>('quiz');
-  const [totalPoints, setTotalPoints] = useState(100);
-  const [passingScore, setPassingScore] = useState(60);
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
 
@@ -120,22 +114,10 @@ export default function TeacherClassDetailPage() {
   };
 
   const handleCreateAssessment = async () => {
-    if (!assessmentTitle.trim()) return;
     try {
-      await assessmentService.create({
-        title: assessmentTitle,
-        description: assessmentDesc,
-        classId,
-        type: assessmentType,
-        totalPoints,
-        passingScore,
-      });
-      toast.success('Assessment created');
-      setShowCreateAssessment(false);
-      setAssessmentTitle('');
-      setAssessmentDesc('');
-      const res = await assessmentService.getByClass(classId);
-      setAssessments(res.data || []);
+      const res = await assessmentService.create({ title: 'Untitled Assessment', classId });
+      toast.success('Assessment created — redirecting to editor');
+      router.push(`/dashboard/teacher/assessments/${res.data.id}/edit`);
     } catch {
       toast.error('Failed to create assessment');
     }
@@ -336,7 +318,7 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="assessments" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
-            <Button size="sm" onClick={() => setShowCreateAssessment(true)}>+ New Assessment</Button>
+            <Button size="sm" onClick={handleCreateAssessment}>+ New Assessment</Button>
           </div>
           {assessments.length === 0 ? (
             <Card><CardContent className="p-6 text-center text-muted-foreground">No assessments yet.</CardContent></Card>
@@ -463,32 +445,7 @@ export default function TeacherClassDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Assessment Modal */}
-      <Dialog open={showCreateAssessment} onOpenChange={setShowCreateAssessment}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Assessment</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Title</Label><Input value={assessmentTitle} onChange={(e) => setAssessmentTitle(e.target.value)} placeholder="Assessment title" /></div>
-            <div><Label>Description</Label><Textarea value={assessmentDesc} onChange={(e) => setAssessmentDesc(e.target.value)} placeholder="Brief description" /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Type</Label>
-                <select value={assessmentType} onChange={(e) => setAssessmentType(e.target.value as 'quiz' | 'exam' | 'assignment')} className="w-full rounded-md border px-3 py-2 text-sm">
-                  <option value="quiz">Quiz</option>
-                  <option value="exam">Exam</option>
-                  <option value="assignment">Assignment</option>
-                </select>
-              </div>
-              <div><Label>Total Points</Label><Input type="number" value={totalPoints} onChange={(e) => setTotalPoints(Number(e.target.value))} /></div>
-            </div>
-            <div><Label>Passing Score (%)</Label><Input type="number" value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateAssessment(false)}>Cancel</Button>
-            <Button onClick={handleCreateAssessment} disabled={!assessmentTitle.trim()}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create Assessment Modal removed — create-and-redirect flow instead */}
 
       {/* Add Students Modal */}
       <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>

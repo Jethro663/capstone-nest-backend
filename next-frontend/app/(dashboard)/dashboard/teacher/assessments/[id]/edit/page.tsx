@@ -3,17 +3,18 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { assessmentService } from '@/services/assessment-service';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import type { Assessment, AssessmentQuestion, CreateQuestionDto } from '@/types/assessment';
+import type { Assessment, AssessmentQuestion, CreateQuestionDto, UpdateQuestionDto } from '@/types/assessment';
 
+/* ── Question type metadata ─────────────────────────── */
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'multiple_select', label: 'Multiple Select' },
@@ -21,34 +22,64 @@ const QUESTION_TYPES = [
   { value: 'short_answer', label: 'Short Answer' },
   { value: 'fill_blank', label: 'Fill in the Blank' },
   { value: 'dropdown', label: 'Dropdown' },
-];
+] as const;
 
-const OPTION_TYPES = ['multiple_choice', 'multiple_select', 'true_false', 'dropdown'];
+const OPTION_QUESTION_TYPES = ['multiple_choice', 'multiple_select', 'true_false', 'dropdown'];
 
+/* ── Main page component ────────────────────────────── */
 export default function AssessmentEditorPage() {
   const params = useParams();
   const router = useRouter();
   const assessmentId = params.id as string;
 
+  /* ---------- state ---------- */
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  // Form state
-  const [qContent, setQContent] = useState('');
-  const [qType, setQType] = useState<string>('multiple_choice');
-  const [qPoints, setQPoints] = useState(1);
-  const [qExplanation, setQExplanation] = useState('');
-  const [qOptions, setQOptions] = useState<{ text: string; isCorrect: boolean; order: number }[]>([]);
+  // Header fields (inline-editable)
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
 
+  // Settings
+  const [assessmentType, setAssessmentType] = useState<string>('quiz');
+  const [passingScore, setPassingScore] = useState<number>(60);
+  const [maxAttempts, setMaxAttempts] = useState<number>(1);
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number | ''>('');
+  const [dueDate, setDueDate] = useState('');
+  const [feedbackLevel, setFeedbackLevel] = useState<string>('immediate');
+  const [feedbackDelayHours, setFeedbackDelayHours] = useState<number>(0);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Inline editing for questions
+  const [editingQId, setEditingQId] = useState<string | null>(null);
+  const [addingType, setAddingType] = useState<string | null>(null);
+  const [draftQuestion, setDraftQuestion] = useState<{
+    content: string;
+    type: string;
+    points: number;
+    explanation: string;
+    options: { text: string; isCorrect: boolean; order: number }[];
+  } | null>(null);
+
+  /* ---------- fetch ---------- */
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await assessmentService.getById(assessmentId);
-      setAssessment(res.data);
-      setQuestions((res.data.questions || []).sort((a, b) => a.order - b.order));
+      const a = res.data;
+      setAssessment(a);
+      setTitle(a.title);
+      setDescription(a.description || '');
+      setAssessmentType(a.type || 'quiz');
+      setPassingScore(a.passingScore ?? 60);
+      setMaxAttempts(a.maxAttempts ?? 1);
+      setTimeLimitMinutes(a.timeLimitMinutes ?? '');
+      setDueDate(a.dueDate ? a.dueDate.slice(0, 16) : '');
+      setFeedbackLevel(a.feedbackLevel || 'immediate');
+      setFeedbackDelayHours(a.feedbackDelayHours ?? 0);
+      setQuestions((a.questions || []).sort((x, y) => x.order - y.order));
     } catch {
       toast.error('Failed to load assessment');
     } finally {
@@ -56,75 +87,118 @@ export default function AssessmentEditorPage() {
     }
   }, [assessmentId]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleTogglePublish = async () => {
-    if (!assessment) return;
+  /* ---------- computed ---------- */
+  const totalPoints = questions.reduce((s, q) => s + q.points, 0);
+
+  /* ---------- save assessment metadata ---------- */
+  const handleSaveSettings = async () => {
+    setSaving(true);
     try {
-      await assessmentService.update(assessmentId, { isPublished: !assessment.isPublished });
-      setAssessment((prev) => prev ? { ...prev, isPublished: !prev.isPublished } : prev);
-      toast.success(assessment.isPublished ? 'Assessment unpublished' : 'Assessment published');
-    } catch {
-      toast.error('Failed to toggle publish');
+      const res = await assessmentService.update(assessmentId, {
+        title,
+        description: description || undefined,
+        type: assessmentType as Assessment['type'],
+        passingScore,
+        maxAttempts,
+        timeLimitMinutes: timeLimitMinutes === '' ? undefined : Number(timeLimitMinutes),
+        dueDate: dueDate || undefined,
+        feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
+        feedbackDelayHours,
+      });
+      setAssessment(res.data);
+      toast.success('Settings saved');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save settings');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const resetForm = () => {
-    setQContent('');
-    setQType('multiple_choice');
-    setQPoints(1);
-    setQExplanation('');
-    setQOptions([]);
-    setEditingId(null);
+  /* ---------- publish / unpublish ---------- */
+  const handleTogglePublish = async () => {
+    if (!assessment) return;
+    try {
+      const res = await assessmentService.update(assessmentId, { isPublished: !assessment.isPublished });
+      setAssessment(res.data);
+      toast.success(assessment.isPublished ? 'Assessment unpublished' : 'Assessment published');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to toggle publish');
+    }
   };
 
-  const handleOpenCreate = () => {
-    resetForm();
-    setShowModal(true);
+  /* ---------- question CRUD (inline) ---------- */
+  const startAddQuestion = (type: string) => {
+    setEditingQId(null);
+    setAddingType(type);
+    const defaultOptions =
+      type === 'true_false'
+        ? [
+            { text: 'True', isCorrect: true, order: 1 },
+            { text: 'False', isCorrect: false, order: 2 },
+          ]
+        : OPTION_QUESTION_TYPES.includes(type)
+          ? [
+              { text: '', isCorrect: false, order: 1 },
+              { text: '', isCorrect: false, order: 2 },
+            ]
+          : [];
+    setDraftQuestion({ content: '', type, points: 1, explanation: '', options: defaultOptions });
   };
 
-  const handleOpenEdit = (q: AssessmentQuestion) => {
-    setEditingId(q.id);
-    setQContent(q.content);
-    setQType(q.type);
-    setQPoints(q.points);
-    setQExplanation(q.explanation || '');
-    setQOptions(q.options?.map((o) => ({ text: o.text, isCorrect: o.isCorrect, order: o.order })) || []);
-    setShowModal(true);
+  const startEditQuestion = (q: AssessmentQuestion) => {
+    setAddingType(null);
+    setEditingQId(q.id);
+    setDraftQuestion({
+      content: q.content,
+      type: q.type,
+      points: q.points,
+      explanation: q.explanation || '',
+      options: q.options?.map((o) => ({ text: o.text, isCorrect: o.isCorrect, order: o.order })) || [],
+    });
+  };
+
+  const cancelDraft = () => {
+    setAddingType(null);
+    setEditingQId(null);
+    setDraftQuestion(null);
   };
 
   const handleSaveQuestion = async () => {
-    if (!qContent.trim()) return;
+    if (!draftQuestion || !draftQuestion.content.trim()) { toast.error('Question text is required'); return; }
+    const d = draftQuestion;
     try {
-      if (editingId) {
-        const res = await assessmentService.updateQuestion(editingId, {
-          content: qContent,
-          points: qPoints,
-          explanation: qExplanation || undefined,
-          options: OPTION_TYPES.includes(qType) ? qOptions : undefined,
-        });
-        setQuestions((prev) => prev.map((q) => (q.id === editingId ? res.data : q)));
+      if (editingQId) {
+        const dto: UpdateQuestionDto = {
+          content: d.content,
+          points: d.points,
+          explanation: d.explanation || undefined,
+          options: OPTION_QUESTION_TYPES.includes(d.type) ? d.options : undefined,
+        };
+        const res = await assessmentService.updateQuestion(editingQId, dto);
+        setQuestions((prev) => prev.map((q) => (q.id === editingQId ? res.data : q)));
         toast.success('Question updated');
       } else {
         const dto: CreateQuestionDto = {
           assessmentId,
-          type: qType as CreateQuestionDto['type'],
-          content: qContent,
-          points: qPoints,
+          type: d.type as CreateQuestionDto['type'],
+          content: d.content,
+          points: d.points,
           order: questions.length + 1,
-          explanation: qExplanation || undefined,
-          options: OPTION_TYPES.includes(qType) ? qOptions : undefined,
+          explanation: d.explanation || undefined,
+          options: OPTION_QUESTION_TYPES.includes(d.type) ? d.options : undefined,
         };
         const res = await assessmentService.createQuestion(dto);
         setQuestions((prev) => [...prev, res.data]);
         toast.success('Question added');
       }
-      setShowModal(false);
-      resetForm();
-    } catch {
-      toast.error('Failed to save question');
+      cancelDraft();
+      // Re-fetch to get updated totalPoints from backend
+      const fresh = await assessmentService.getById(assessmentId);
+      setAssessment(fresh.data);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save question');
     }
   };
 
@@ -133,163 +207,382 @@ export default function AssessmentEditorPage() {
     try {
       await assessmentService.deleteQuestion(id);
       setQuestions((prev) => prev.filter((q) => q.id !== id));
+      if (editingQId === id) cancelDraft();
+      const fresh = await assessmentService.getById(assessmentId);
+      setAssessment(fresh.data);
       toast.success('Question deleted');
     } catch {
       toast.error('Failed to delete question');
     }
   };
 
+  /* ---------- draft helpers ---------- */
+  const setDraftField = <K extends keyof NonNullable<typeof draftQuestion>>(key: K, val: NonNullable<typeof draftQuestion>[K]) => {
+    setDraftQuestion((prev) => prev ? { ...prev, [key]: val } : prev);
+  };
+
   const addOption = () => {
-    setQOptions((prev) => [...prev, { text: '', isCorrect: false, order: prev.length + 1 }]);
+    if (!draftQuestion) return;
+    setDraftQuestion((prev) =>
+      prev ? { ...prev, options: [...prev.options, { text: '', isCorrect: false, order: prev.options.length + 1 }] } : prev,
+    );
   };
 
   const removeOption = (idx: number) => {
-    setQOptions((prev) => prev.filter((_, i) => i !== idx));
+    setDraftQuestion((prev) =>
+      prev ? { ...prev, options: prev.options.filter((_, i) => i !== idx) } : prev,
+    );
   };
 
+  const toggleOptionCorrect = (idx: number) => {
+    if (!draftQuestion) return;
+    setDraftQuestion((prev) => {
+      if (!prev) return prev;
+      // For single-select types, uncheck others
+      if (['multiple_choice', 'true_false', 'dropdown'].includes(prev.type)) {
+        return { ...prev, options: prev.options.map((o, i) => ({ ...o, isCorrect: i === idx })) };
+      }
+      // For multi-select, toggle
+      return { ...prev, options: prev.options.map((o, i) => i === idx ? { ...o, isCorrect: !o.isCorrect } : o) };
+    });
+  };
+
+  /* ---------- loading / error ---------- */
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-3xl mx-auto space-y-6 py-6">
         <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-32 rounded-lg" />
         <Skeleton className="h-40 rounded-lg" />
       </div>
     );
   }
 
-  if (!assessment) return <p className="text-muted-foreground">Assessment not found.</p>;
+  if (!assessment) return <p className="text-muted-foreground p-6">Assessment not found.</p>;
 
+  /* ── RENDER ────────────────────────────────────────── */
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">← Back</Button>
-          <h1 className="text-2xl font-bold">{assessment.title}</h1>
-          <p className="text-muted-foreground">Edit questions and answers</p>
+    <div className="max-w-3xl mx-auto space-y-6 py-6 pb-24">
+      {/* ════ Top bar ════ */}
+      <div className="flex items-center justify-between gap-4">
+        <Button variant="ghost" size="sm" onClick={() => router.back()}>← Back</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowSettings((s) => !s)}>
+            ⚙ Settings
+          </Button>
+          <Button
+            variant={assessment.isPublished ? 'secondary' : 'default'}
+            size="sm"
+            onClick={handleTogglePublish}
+          >
+            {assessment.isPublished ? 'Unpublish' : 'Publish'}
+          </Button>
         </div>
-        <Button
-          variant={assessment.isPublished ? 'secondary' : 'default'}
-          onClick={handleTogglePublish}
-        >
-          {assessment.isPublished ? 'Unpublish' : 'Publish'}
-        </Button>
       </div>
 
-      {/* Info Card */}
-      <Card>
-        <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
-          <div><p className="text-muted-foreground">Type</p><p className="font-medium">{assessment.type}</p></div>
-          <div><p className="text-muted-foreground">Points</p><p className="font-medium">{assessment.totalPoints}</p></div>
-          <div><p className="text-muted-foreground">Passing</p><p className="font-medium">{assessment.passingScore}%</p></div>
-          <div><p className="text-muted-foreground">Status</p>
-            <Badge variant={assessment.isPublished ? 'default' : 'secondary'}>
+      {/* ════ Title & Description (Forms-like header card) ════ */}
+      <Card className="border-t-4 border-t-primary">
+        <CardContent className="p-5 space-y-3">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleSaveSettings}
+            placeholder="Untitled assessment"
+            className="text-2xl font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
+          />
+          <Input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={handleSaveSettings}
+            placeholder="Assessment description (optional)"
+            className="text-sm text-muted-foreground border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
+          />
+          <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
+            <span>Total: <strong className="text-foreground">{totalPoints} pts</strong></span>
+            <span>Questions: <strong className="text-foreground">{questions.length}</strong></span>
+            <span>Passing: <strong className="text-foreground">{assessment.passingScore ?? 60}%</strong></span>
+            <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className="ml-auto">
               {assessment.isPublished ? 'Published' : 'Draft'}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-      {/* Questions */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">{questions.length} Questions</CardTitle>
-            <Button size="sm" onClick={handleOpenCreate}>+ Add Question</Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {questions.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No questions yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {questions.map((q, i) => (
-                <div key={q.id} className="p-4 border rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">Q{i + 1}</Badge>
-                      <Badge variant="secondary">{q.type.replace('_', ' ')}</Badge>
-                      <span className="text-xs text-muted-foreground">{q.points} pts</span>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(q)}>Edit</Button>
-                      <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDeleteQuestion(q.id)}>Delete</Button>
-                    </div>
-                  </div>
-                  <p className="font-medium">{q.content}</p>
-                  {q.options && q.options.length > 0 && (
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {q.options.sort((a, b) => a.order - b.order).map((opt) => (
-                        <li key={opt.id} className={`pl-4 ${opt.isCorrect ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
-                          {opt.isCorrect ? '✓' : '○'} {opt.text}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* ════ Collapsible Settings Panel ════ */}
+      {showSettings && (
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <h3 className="font-semibold text-sm">Assessment Settings</h3>
+            <Separator />
 
-      {/* Question Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? 'Edit Question' : 'Add Question'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            <div><Label>Question</Label><Textarea value={qContent} onChange={(e) => setQContent(e.target.value)} rows={3} /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Type</Label>
-                <select value={qType} onChange={(e) => setQType(e.target.value)} className="w-full rounded-md border px-3 py-2 text-sm" disabled={!!editingId}>
-                  {QUESTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Type</Label>
+                <select
+                  value={assessmentType}
+                  onChange={(e) => setAssessmentType(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                >
+                  <option value="quiz">Quiz</option>
+                  <option value="exam">Exam</option>
+                  <option value="assignment">Assignment</option>
                 </select>
               </div>
-              <div><Label>Points</Label><Input type="number" value={qPoints} onChange={(e) => setQPoints(Number(e.target.value))} min={1} /></div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Passing Score (%)</Label>
+                <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Max Attempts</Label>
+                <Input type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Time Limit (minutes)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={timeLimitMinutes}
+                  onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="No limit"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Due Date</Label>
+                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Feedback Level</Label>
+                <select
+                  value={feedbackLevel}
+                  onChange={(e) => setFeedbackLevel(e.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                >
+                  <option value="immediate">Immediate</option>
+                  <option value="standard">Standard</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </div>
+
+              {feedbackLevel !== 'immediate' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Feedback Delay (hours)</Label>
+                  <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
+                </div>
+              )}
             </div>
-            <div><Label>Explanation (optional)</Label><Textarea value={qExplanation} onChange={(e) => setQExplanation(e.target.value)} rows={2} /></div>
-            {OPTION_TYPES.includes(qType) && (
-              <div>
-                <Label>Options</Label>
-                <div className="space-y-2 mt-2">
-                  {qOptions.map((opt, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={opt.isCorrect}
-                        onChange={() => {
-                          setQOptions((prev) =>
-                            prev.map((o, idx) => (idx === i ? { ...o, isCorrect: !o.isCorrect } : o)),
-                          );
-                        }}
-                        title="Mark as correct"
-                      />
-                      <Input
-                        value={opt.text}
-                        onChange={(e) =>
-                          setQOptions((prev) =>
-                            prev.map((o, idx) => (idx === i ? { ...o, text: e.target.value } : o)),
-                          )
-                        }
-                        placeholder={`Option ${i + 1}`}
-                        className="flex-1"
-                      />
-                      <Button variant="ghost" size="sm" className="text-red-600" onClick={() => removeOption(i)}>✕</Button>
-                    </div>
-                  ))}
-                  <Button variant="outline" size="sm" onClick={addOption}>+ Add Option</Button>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleSaveSettings} disabled={saving}>
+                {saving ? 'Saving…' : 'Save Settings'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ════ Question Cards (inline, Forms-style) ════ */}
+      {questions.map((q, i) => {
+        const isEditing = editingQId === q.id;
+
+        if (isEditing && draftQuestion) {
+          return (
+            <QuestionEditCard
+              key={q.id}
+              index={i}
+              draft={draftQuestion}
+              setField={setDraftField}
+              addOption={addOption}
+              removeOption={removeOption}
+              toggleCorrect={toggleOptionCorrect}
+              onSave={handleSaveQuestion}
+              onCancel={cancelDraft}
+              onDelete={() => handleDeleteQuestion(q.id)}
+            />
+          );
+        }
+
+        return (
+          <Card key={q.id} className="group hover:shadow-md transition-shadow cursor-pointer" onClick={() => startEditQuestion(q)}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold text-primary bg-primary/10 rounded px-1.5 py-0.5">Q{i + 1}</span>
+                  <Badge variant="secondary" className="text-[10px]">{q.type.replace(/_/g, ' ')}</Badge>
+                  <span className="text-xs text-muted-foreground">{q.points} pt{q.points !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); startEditQuestion(q); }}>Edit</Button>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q.id); }}>Delete</Button>
                 </div>
               </div>
+              <p className="font-medium text-sm">{q.content}</p>
+              {q.options && q.options.length > 0 && (
+                <ul className="mt-2 space-y-0.5 text-sm">
+                  {q.options.sort((a, b) => a.order - b.order).map((opt) => (
+                    <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
+                      <span className="w-3">{opt.isCorrect ? '✓' : '○'}</span>{opt.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* ════ New question being added (inline card at bottom) ════ */}
+      {addingType && draftQuestion && (
+        <QuestionEditCard
+          index={questions.length}
+          draft={draftQuestion}
+          setField={setDraftField}
+          addOption={addOption}
+          removeOption={removeOption}
+          toggleCorrect={toggleOptionCorrect}
+          onSave={handleSaveQuestion}
+          onCancel={cancelDraft}
+        />
+      )}
+
+      {/* ════ Add Question Bar ════ */}
+      {!addingType && (
+        <Card className="border-dashed">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground mb-2 font-medium">Add question</p>
+            <div className="flex flex-wrap gap-2">
+              {QUESTION_TYPES.map((t) => (
+                <Button key={t.value} variant="outline" size="sm" className="text-xs" onClick={() => startAddQuestion(t.value)}>
+                  + {t.label}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+/* ── Inline question editing card ────────────────────── */
+function QuestionEditCard({
+  index,
+  draft,
+  setField,
+  addOption,
+  removeOption,
+  toggleCorrect,
+  onSave,
+  onCancel,
+  onDelete,
+}: {
+  index: number;
+  draft: { content: string; type: string; points: number; explanation: string; options: { text: string; isCorrect: boolean; order: number }[] };
+  setField: <K extends keyof typeof draft>(key: K, val: (typeof draft)[K]) => void;
+  addOption: () => void;
+  removeOption: (idx: number) => void;
+  toggleCorrect: (idx: number) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}) {
+  const hasOptions = OPTION_QUESTION_TYPES.includes(draft.type);
+
+  return (
+    <Card className="border-primary shadow-md">
+      <CardContent className="p-5 space-y-4">
+        {/* header */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold text-primary bg-primary/10 rounded px-1.5 py-0.5">Q{index + 1}</span>
+          <Badge variant="secondary" className="text-[10px]">{draft.type.replace(/_/g, ' ')}</Badge>
+        </div>
+
+        {/* question text */}
+        <Textarea
+          value={draft.content}
+          onChange={(e) => setField('content', e.target.value)}
+          placeholder="Type your question here…"
+          rows={2}
+          className="text-sm"
+          autoFocus
+        />
+
+        {/* points + explanation */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Points</Label>
+            <Input type="number" min={0} value={draft.points} onChange={(e) => setField('points', Number(e.target.value))} className="h-8 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Explanation (optional)</Label>
+            <Input value={draft.explanation} onChange={(e) => setField('explanation', e.target.value)} placeholder="Shown after grading" className="h-8 text-sm" />
+          </div>
+        </div>
+
+        {/* options */}
+        {hasOptions && (
+          <div className="space-y-2">
+            <Label className="text-xs">Options</Label>
+            {draft.options.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {['multiple_choice', 'true_false', 'dropdown'].includes(draft.type) ? (
+                  <input
+                    type="radio"
+                    name="correct-option"
+                    checked={opt.isCorrect}
+                    onChange={() => toggleCorrect(i)}
+                    className="accent-primary"
+                    title="Mark as correct"
+                  />
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={opt.isCorrect}
+                    onChange={() => toggleCorrect(i)}
+                    className="accent-primary"
+                    title="Mark as correct"
+                  />
+                )}
+                <Input
+                  value={opt.text}
+                  onChange={(e) => {
+                    const newOpts = [...draft.options];
+                    newOpts[i] = { ...newOpts[i], text: e.target.value };
+                    setField('options', newOpts);
+                  }}
+                  placeholder={`Option ${i + 1}`}
+                  className="flex-1 h-8 text-sm"
+                />
+                {draft.type !== 'true_false' && (
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-destructive" onClick={removeOption.bind(null, i)}>✕</Button>
+                )}
+              </div>
+            ))}
+            {draft.type !== 'true_false' && (
+              <Button variant="outline" size="sm" className="text-xs" onClick={addOption}>+ Add option</Button>
             )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowModal(false); resetForm(); }}>Cancel</Button>
-            <Button onClick={handleSaveQuestion} disabled={!qContent.trim()}>{editingId ? 'Update' : 'Add'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        )}
+
+        <Separator />
+
+        {/* actions */}
+        <div className="flex items-center justify-between">
+          <div>
+            {onDelete && (
+              <Button variant="ghost" size="sm" className="text-destructive text-xs" onClick={onDelete}>Delete question</Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+            <Button size="sm" onClick={onSave} disabled={!draft.content.trim()}>Save</Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
