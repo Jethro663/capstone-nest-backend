@@ -65,6 +65,16 @@ export const assessmentService = {
     return data;
   },
 
+  /** POST /assessments/questions/:id/image — Upload question image */
+  async uploadQuestionImage(questionId: string, file: File): Promise<{ success: boolean; message: string; data: { imageUrl: string } }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const { data } = await api.post(`/assessments/questions/${questionId}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
   // --- Attempts ---
 
   /** POST /assessments/:assessmentId/start — Admin, Student */

@@ -6,16 +6,27 @@ import {
   Delete,
   Body,
   Param,
+  Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { diskStorage } from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { AssessmentsService } from './assessments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import {
   CreateAssessmentDto,
   UpdateAssessmentDto,
@@ -26,6 +37,10 @@ import {
   ReturnGradeDto,
   BulkReturnGradesDto,
 } from './DTO/assessment.dto';
+
+const IMAGE_UPLOAD_DEST = './uploads/question-images';
+const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @ApiTags('Assessments')
 @ApiBearerAuth('token')
@@ -179,6 +194,71 @@ export class AssessmentsController {
       success: result.success,
       message: result.message,
     };
+  }
+
+  /**
+   * Upload an image for a question
+   * Teacher and Admin can access
+   */
+  @Post('questions/:id/image')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(IMAGE_UPLOAD_DEST, { recursive: true });
+          cb(null, IMAGE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only JPEG, PNG, GIF and WebP images are allowed'), false);
+        }
+      },
+    }),
+  )
+  async uploadQuestionImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    const imageUrl = `/api/assessments/questions/images/${file.filename}`;
+    await this.assessmentsService.updateQuestion(id, { imageUrl });
+
+    return {
+      success: true,
+      message: 'Image uploaded successfully',
+      data: { imageUrl },
+    };
+  }
+
+  /**
+   * Serve a question image (public — used by img tags)
+   */
+  @Public()
+  @Get('questions/images/:filename')
+  async serveQuestionImage(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    // Sanitize filename to prevent path traversal
+    const sanitized = path.basename(filename);
+    const filePath = path.join(IMAGE_UPLOAD_DEST, sanitized);
+    if (!fs.existsSync(filePath)) {
+      throw new BadRequestException('Image not found');
+    }
+    return res.sendFile(path.resolve(filePath));
   }
 
   /**

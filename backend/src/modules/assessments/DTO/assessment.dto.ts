@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray, Min, ValidateNested, ArrayNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray, Min, ValidateNested, ArrayNotEmpty, IsDateString, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum QuestionType {
@@ -55,7 +55,8 @@ export class CreateAssessmentDto {
   type?: AssessmentType = AssessmentType.QUIZ;
 
   @IsOptional()
-  dueDate?: Date;
+  @IsDateString()
+  dueDate?: string;
 
   @IsOptional()
   @IsInt()
@@ -68,9 +69,10 @@ export class CreateAssessmentDto {
   maxAttempts?: number = 1;
 
   @IsOptional()
+  @ValidateIf((o) => o.timeLimitMinutes !== null)
   @IsInt()
   @Min(1)
-  timeLimitMinutes?: number;
+  timeLimitMinutes?: number | null;
 
   @IsOptional()
   @IsEnum(FeedbackLevel)
@@ -103,7 +105,8 @@ export class UpdateAssessmentDto {
   type?: AssessmentType;
 
   @IsOptional()
-  dueDate?: Date;
+  @IsDateString()
+  dueDate?: string;
 
   @IsOptional()
   @IsInt()
@@ -116,9 +119,10 @@ export class UpdateAssessmentDto {
   maxAttempts?: number;
 
   @IsOptional()
+  @ValidateIf((o) => o.timeLimitMinutes !== null)
   @IsInt()
   @Min(1)
-  timeLimitMinutes?: number;
+  timeLimitMinutes?: number | null;
 
   @IsOptional()
   @IsBoolean()
@@ -181,6 +185,10 @@ export class CreateQuestionDto {
   explanation?: string;
 
   @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OptionDto)
@@ -207,6 +215,10 @@ export class UpdateQuestionDto {
   @IsOptional()
   @IsString()
   explanation?: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
 
   @IsOptional()
   @IsArray()

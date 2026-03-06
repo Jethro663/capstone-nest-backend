@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
 import type { ClassItem } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
@@ -167,27 +168,47 @@ export default function StudentDashboardPage() {
             {assessments
               .filter((a) => a.isPublished)
               .slice(0, 4)
-              .map((assessment) => (
-                <Card key={assessment.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium">{assessment.title}</p>
-                      <Badge variant="secondary">{assessment.type}</Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                      {getDescription(assessment.description)}
-                    </p>
-                    {assessment.dueDate && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Due: {new Date(assessment.dueDate).toLocaleDateString()}
-                      </p>
-                    )}
-                    <Link href={`/dashboard/student/assessments/${assessment.id}`}>
-                      <Button size="sm" className="mt-2">Start</Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              ))}
+              .map((assessment, i) => {
+                const typeColor = assessment.type === 'exam'
+                  ? 'border-l-red-500 bg-red-50 dark:bg-red-950/20'
+                  : assessment.type === 'assignment'
+                    ? 'border-l-amber-500 bg-amber-50 dark:bg-amber-950/20'
+                    : 'border-l-blue-500 bg-blue-50 dark:bg-blue-950/20';
+                const typeIcon = assessment.type === 'exam' ? '📝' : assessment.type === 'assignment' ? '📋' : '❓';
+                const isPastDue = assessment.dueDate && new Date(assessment.dueDate) < new Date();
+
+                return (
+                  <motion.div
+                    key={assessment.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.06, duration: 0.3 }}
+                  >
+                    <Card className={`border-l-4 ${typeColor} hover:shadow-lg transition-all duration-200 h-full`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">{typeIcon}</span>
+                          <p className="font-semibold truncate flex-1">{assessment.title}</p>
+                          <Badge variant="secondary" className="capitalize shrink-0">{assessment.type}</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                          {getDescription(assessment.description)}
+                        </p>
+                        <div className="flex items-center justify-between mt-3">
+                          {assessment.dueDate && (
+                            <p className={`text-xs ${isPastDue ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+                              {isPastDue ? 'Past due' : 'Due'}: {new Date(assessment.dueDate).toLocaleDateString()}
+                            </p>
+                          )}
+                          <Link href={`/dashboard/student/assessments/${assessment.id}`}>
+                            <Button size="sm">Start</Button>
+                          </Link>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
           </div>
         </div>
       )}

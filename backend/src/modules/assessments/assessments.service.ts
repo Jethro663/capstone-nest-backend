@@ -137,11 +137,11 @@ export class AssessmentsService {
         description: createAssessmentDto.description,
         classId: createAssessmentDto.classId,
         type: createAssessmentDto.type,
-        dueDate: createAssessmentDto.dueDate,
+        dueDate: createAssessmentDto.dueDate ? new Date(createAssessmentDto.dueDate) : undefined,
         totalPoints: 0,
         passingScore: createAssessmentDto.passingScore,
         maxAttempts: createAssessmentDto.maxAttempts ?? 1,
-        timeLimitMinutes: createAssessmentDto.timeLimitMinutes,
+        timeLimitMinutes: createAssessmentDto.timeLimitMinutes ?? null,
         isPublished: false,
         feedbackLevel: createAssessmentDto.feedbackLevel,
         feedbackDelayHours: createAssessmentDto.feedbackDelayHours,
@@ -247,7 +247,7 @@ export class AssessmentsService {
     if (updateAssessmentDto.title !== undefined) updateData.title = updateAssessmentDto.title;
     if (updateAssessmentDto.description !== undefined) updateData.description = updateAssessmentDto.description;
     if (updateAssessmentDto.type !== undefined) updateData.type = updateAssessmentDto.type;
-    if (updateAssessmentDto.dueDate !== undefined) updateData.dueDate = updateAssessmentDto.dueDate;
+    if (updateAssessmentDto.dueDate !== undefined) updateData.dueDate = updateAssessmentDto.dueDate ? new Date(updateAssessmentDto.dueDate) : null;
     if (updateAssessmentDto.passingScore !== undefined) updateData.passingScore = updateAssessmentDto.passingScore;
     if (updateAssessmentDto.maxAttempts !== undefined) updateData.maxAttempts = updateAssessmentDto.maxAttempts;
     if (updateAssessmentDto.timeLimitMinutes !== undefined) updateData.timeLimitMinutes = updateAssessmentDto.timeLimitMinutes;
@@ -294,6 +294,7 @@ export class AssessmentsService {
         order: createQuestionDto.order,
         isRequired: createQuestionDto.isRequired,
         explanation: createQuestionDto.explanation,
+        imageUrl: createQuestionDto.imageUrl,
       })
       .returning();
 
@@ -355,7 +356,8 @@ export class AssessmentsService {
       updateQuestionDto.points !== undefined ||
       updateQuestionDto.order !== undefined ||
       updateQuestionDto.isRequired !== undefined ||
-      updateQuestionDto.explanation !== undefined
+      updateQuestionDto.explanation !== undefined ||
+      updateQuestionDto.imageUrl !== undefined
     ) {
       const setData: Record<string, any> = { updatedAt: new Date() };
       if (updateQuestionDto.content !== undefined) setData.content = updateQuestionDto.content;
@@ -363,6 +365,7 @@ export class AssessmentsService {
       if (updateQuestionDto.order !== undefined) setData.order = updateQuestionDto.order;
       if (updateQuestionDto.isRequired !== undefined) setData.isRequired = updateQuestionDto.isRequired;
       if (updateQuestionDto.explanation !== undefined) setData.explanation = updateQuestionDto.explanation;
+      if (updateQuestionDto.imageUrl !== undefined) setData.imageUrl = updateQuestionDto.imageUrl;
 
       await this.db
         .update(assessmentQuestions)

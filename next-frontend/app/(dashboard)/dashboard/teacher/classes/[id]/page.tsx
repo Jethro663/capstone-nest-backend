@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { getDescription } from '@/utils/helpers';
 import type { ClassItem, Enrollment } from '@/types/class';
@@ -324,33 +325,60 @@ export default function TeacherClassDetailPage() {
             <Card><CardContent className="p-6 text-center text-muted-foreground">No assessments yet.</CardContent></Card>
           ) : (
             <div className="space-y-3">
-              {assessments.map((a) => (
-                <Card key={a.id}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{a.title}</p>
-                        <Badge variant={a.isPublished ? 'default' : 'secondary'}>
-                          {a.isPublished ? 'Published' : 'Draft'}
-                        </Badge>
-                        <Badge variant="outline">{a.type}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {a.totalPoints} pts • Passing: {a.passingScore}% • {a.questions?.length ?? 0} questions
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/dashboard/teacher/assessments/${a.id}`}>
-                        <Button variant="outline" size="sm">View</Button>
-                      </Link>
-                      <Link href={`/dashboard/teacher/assessments/${a.id}/edit`}>
-                        <Button variant="outline" size="sm">Edit</Button>
-                      </Link>
-                      <Button variant="destructive" size="sm" onClick={() => handleDeleteAssessment(a.id)}>Delete</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              {assessments.map((a, i) => {
+                const typeColor = a.type === 'exam'
+                  ? 'border-l-red-500 bg-red-50 dark:bg-red-950/20'
+                  : a.type === 'assignment'
+                    ? 'border-l-amber-500 bg-amber-50 dark:bg-amber-950/20'
+                    : 'border-l-blue-500 bg-blue-50 dark:bg-blue-950/20';
+                const typeIcon = a.type === 'exam' ? '📝' : a.type === 'assignment' ? '📋' : '❓';
+                const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
+
+                return (
+                  <motion.div
+                    key={a.id}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.06, duration: 0.3 }}
+                  >
+                    <Card className={`border-l-4 ${typeColor} hover:shadow-lg transition-all duration-200 group`}>
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-lg">{typeIcon}</span>
+                              <h4 className="font-semibold truncate">{a.title}</h4>
+                              <Badge variant={a.isPublished ? 'default' : 'secondary'} className="shrink-0">
+                                {a.isPublished ? 'Published' : 'Draft'}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1.5">
+                              <span className="capitalize font-medium">{a.type}</span>
+                              <span>{a.totalPoints} pts</span>
+                              <span>Passing: {a.passingScore}%</span>
+                              <span>{a.questions?.length ?? 0} questions</span>
+                              {a.dueDate && (
+                                <span className={isPastDue ? 'text-red-500 font-medium' : ''}>
+                                  {isPastDue ? 'Past due' : 'Due'}: {new Date(a.dueDate).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            <Link href={`/dashboard/teacher/assessments/${a.id}`}>
+                              <Button variant="outline" size="sm">View</Button>
+                            </Link>
+                            <Link href={`/dashboard/teacher/assessments/${a.id}/edit`}>
+                              <Button variant="outline" size="sm">Edit</Button>
+                            </Link>
+                            <Button variant="destructive" size="sm" onClick={() => handleDeleteAssessment(a.id)}>Delete</Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </TabsContent>

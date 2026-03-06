@@ -111,7 +111,7 @@ export default function StudentAssessmentTakePage() {
 
       toast.success('Assessment submitted!');
       setTimeout(() => {
-        router.push(`/dashboard/student/assessments/${assessmentId}`);
+        router.replace(`/dashboard/student/assessments/${assessmentId}`);
       }, 1500);
     } catch {
       toast.error('Failed to submit assessment');

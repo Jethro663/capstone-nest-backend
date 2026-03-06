@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { getDescription, formatDate } from '@/utils/helpers';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
@@ -76,10 +77,15 @@ export default function StudentAssessmentPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="max-w-3xl mx-auto space-y-6"
+    >
       {/* Header */}
       <div>
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">
+        <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/student')} className="mb-2">
           ← Back
         </Button>
         <h1 className="text-2xl font-bold">{assessment.title}</h1>
@@ -139,8 +145,14 @@ export default function StudentAssessmentPage() {
         <div>
           <h2 className="text-lg font-semibold mb-3">My Attempts</h2>
           <div className="space-y-3">
-            {submittedAttempts.map((attempt) => (
-              <Card key={attempt.id}>
+            {submittedAttempts.map((attempt, i) => (
+              <motion.div
+                key={attempt.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07, duration: 0.3 }}
+              >
+              <Card>
                 <CardContent className="flex items-center justify-between p-4">
                   <div>
                     <p className="font-medium">Attempt #{attempt.attemptNumber ?? '?'}</p>
@@ -164,11 +176,12 @@ export default function StudentAssessmentPage() {
                   </div>
                 </CardContent>
               </Card>
+              </motion.div>
             ))}
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
   

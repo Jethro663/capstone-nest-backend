@@ -397,6 +397,7 @@ export const assessmentQuestions = pgTable(
     order: integer('order').notNull().default(0),
     isRequired: boolean('is_required').default(true),
     explanation: text('explanation'),
+    imageUrl: text('image_url'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

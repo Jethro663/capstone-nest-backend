@@ -162,7 +162,7 @@ export async function setInitialPasswordAction(formData: {
 
 /**
  * Set activation password (called AFTER OTP verification — no code needed).
- * Automatically logs the user in with the new password on success.
+ * Sets the password and returns success. User should be redirected to login page.
  */
 export async function setActivationPasswordAction(formData: {
   email: string;
@@ -173,9 +173,7 @@ export async function setActivationPasswordAction(formData: {
     if (!setResponse.success) {
       return { success: false, message: setResponse.message || 'Failed to set password' };
     }
-    // Auto-login so the student lands on the dashboard immediately
-    const loginResult = await loginAction({ email: formData.email, password: formData.newPassword });
-    return loginResult;
+    return { success: true, message: 'Password set successfully' };
   } catch (error: any) {
     return { success: false, message: error.message || 'Failed to set password. Please try again.' };
   }

@@ -32,6 +32,7 @@ export interface AssessmentQuestion {
   order: number;
   isRequired?: boolean;
   explanation?: string;
+  imageUrl?: string;
   options?: QuestionOption[];
 }
 
@@ -61,7 +62,7 @@ export interface UpdateAssessmentDto {
   title?: string;
   description?: string;
   type?: AssessmentType;
-  dueDate?: string;
+  dueDate?: string | null;
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
@@ -80,6 +81,7 @@ export interface CreateQuestionDto {
   order: number;
   isRequired?: boolean;
   explanation?: string;
+  imageUrl?: string;
   options?: { text: string; isCorrect: boolean; order: number }[];
 }
 
@@ -90,6 +92,7 @@ export interface UpdateQuestionDto {
   order?: number;
   isRequired?: boolean;
   explanation?: string;
+  imageUrl?: string;
   options?: { text: string; isCorrect: boolean; order: number }[];
 }
 

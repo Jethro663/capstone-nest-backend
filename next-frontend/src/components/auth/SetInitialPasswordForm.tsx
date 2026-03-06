@@ -23,7 +23,6 @@ import {
   type SetActivationPasswordFormValues,
 } from '@/schemas/auth';
 import { setActivationPasswordAction } from '@/lib/auth-actions';
-import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,7 +37,6 @@ const strengthChecks = [
 export function SetInitialPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser } = useAuth();
   const [serverError, setServerError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -72,9 +70,8 @@ export function SetInitialPasswordForm() {
       return;
     }
 
-    if ('user' in result && result.user) setUser(result.user);
-    setSuccess('Password set! Taking you to your dashboard…');
-    setTimeout(() => router.push('/dashboard'), 1200);
+    setSuccess('Password set! Redirecting to login…');
+    setTimeout(() => router.push('/login?activated=true'), 1200);
   };
 
   const handleSkip = () => {
@@ -169,7 +166,7 @@ export function SetInitialPasswordForm() {
               <Loader2 className="h-4 w-4 animate-spin" /> Setting password…
             </span>
           ) : (
-            'Set password & go to dashboard'
+            'Set password & continue to login'
           )}
         </Button>
 

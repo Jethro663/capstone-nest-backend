@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { Assessment, AssessmentQuestion, CreateQuestionDto, UpdateQuestionDto } from '@/types/assessment';
 import type { ClassRecordCategory } from '@/types/assessment';
@@ -63,6 +65,7 @@ export default function AssessmentEditorPage() {
     type: string;
     points: number;
     explanation: string;
+    imageUrl: string;
     options: { text: string; isCorrect: boolean; order: number }[];
   } | null>(null);
 
@@ -107,8 +110,8 @@ export default function AssessmentEditorPage() {
         type: assessmentType as Assessment['type'],
         passingScore,
         maxAttempts,
-        timeLimitMinutes: timeLimitMinutes === '' ? undefined : Number(timeLimitMinutes),
-        dueDate: dueDate || undefined,
+        timeLimitMinutes: timeLimitMinutes === '' ? null : Number(timeLimitMinutes),
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
         feedbackDelayHours,
         classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
@@ -157,7 +160,7 @@ export default function AssessmentEditorPage() {
               { text: '', isCorrect: false, order: 2 },
             ]
           : [];
-    setDraftQuestion({ content: '', type, points: 1, explanation: '', options: defaultOptions });
+    setDraftQuestion({ content: '', type, points: 1, explanation: '', imageUrl: '', options: defaultOptions });
   };
 
   const startEditQuestion = (q: AssessmentQuestion) => {
@@ -168,6 +171,7 @@ export default function AssessmentEditorPage() {
       type: q.type,
       points: q.points,
       explanation: q.explanation || '',
+      imageUrl: q.imageUrl || '',
       options: q.options?.map((o) => ({ text: o.text, isCorrect: o.isCorrect, order: o.order })) || [],
     });
   };
@@ -226,6 +230,17 @@ export default function AssessmentEditorPage() {
       toast.success('Question deleted');
     } catch {
       toast.error('Failed to delete question');
+    }
+  };
+
+  const handleImageUpload = async (questionId: string, file: File) => {
+    try {
+      const res = await assessmentService.uploadQuestionImage(questionId, file);
+      setDraftQuestion((prev) => prev ? { ...prev, imageUrl: res.data.imageUrl } : prev);
+      setQuestions((prev) => prev.map((q) => q.id === questionId ? { ...q, imageUrl: res.data.imageUrl } : q));
+      toast.success('Image uploaded');
+    } catch {
+      toast.error('Failed to upload image');
     }
   };
 
@@ -321,111 +336,159 @@ export default function AssessmentEditorPage() {
         </CardContent>
       </Card>
 
-      {/* ════ Collapsible Settings Panel ════ */}
-      {showSettings && (
-        <Card>
-          <CardContent className="p-5 space-y-4">
-            <h3 className="font-semibold text-sm">Assessment Settings</h3>
-            <Separator />
+      {/* ════ Tabbed Settings Panel ════ */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            className="overflow-hidden"
+          >
+            <Card>
+              <CardContent className="p-5 space-y-4">
+                <Tabs defaultValue="general" className="w-full">
+                  <TabsList className="w-full grid grid-cols-3">
+                    <TabsTrigger value="general">General</TabsTrigger>
+                    <TabsTrigger value="timing">Timing &amp; Attempts</TabsTrigger>
+                    <TabsTrigger value="grading">Grading &amp; Feedback</TabsTrigger>
+                  </TabsList>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Type</Label>
-                <select
-                  value={assessmentType}
-                  onChange={(e) => setAssessmentType(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                >
-                  <option value="quiz">Quiz</option>
-                  <option value="exam">Exam</option>
-                  <option value="assignment">Assignment</option>
-                </select>
-              </div>
+                  {/* ── General Tab ── */}
+                  <TabsContent value="general" className="mt-4">
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                    >
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Type</Label>
+                        <select
+                          value={assessmentType}
+                          onChange={(e) => setAssessmentType(e.target.value)}
+                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                        >
+                          <option value="quiz">Quiz</option>
+                          <option value="exam">Exam</option>
+                          <option value="assignment">Assignment</option>
+                        </select>
+                      </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Passing Score (%)</Label>
-                <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
-              </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Class Record Category</Label>
+                        <select
+                          value={classRecordCategory}
+                          onChange={(e) => setClassRecordCategory(e.target.value)}
+                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                        >
+                          <option value="">None</option>
+                          <option value="written_work">Written Work</option>
+                          <option value="performance_task">Performance Task</option>
+                          <option value="quarterly_assessment">Quarterly Assessment</option>
+                        </select>
+                      </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Max Attempts</Label>
-                <Input type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
-              </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Quarter</Label>
+                        <select
+                          value={quarter}
+                          onChange={(e) => setQuarter(e.target.value)}
+                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                        >
+                          <option value="">None</option>
+                          <option value="Q1">Q1</option>
+                          <option value="Q2">Q2</option>
+                          <option value="Q3">Q3</option>
+                          <option value="Q4">Q4</option>
+                        </select>
+                      </div>
+                    </motion.div>
+                  </TabsContent>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Time Limit (minutes)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={timeLimitMinutes}
-                  onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="No limit"
-                />
-              </div>
+                  {/* ── Timing & Attempts Tab ── */}
+                  <TabsContent value="timing" className="mt-4">
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                    >
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Due Date</Label>
+                        <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                      </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Due Date</Label>
-                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Time Limit (minutes)</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={timeLimitMinutes}
+                          onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="No limit"
+                        />
+                      </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Feedback Level</Label>
-                <select
-                  value={feedbackLevel}
-                  onChange={(e) => setFeedbackLevel(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                >
-                  <option value="immediate">Immediate</option>
-                  <option value="standard">Standard</option>
-                  <option value="detailed">Detailed</option>
-                </select>
-              </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Max Attempts</Label>
+                        <Input type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
+                      </div>
+                    </motion.div>
+                  </TabsContent>
 
-              {feedbackLevel !== 'immediate' && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Feedback Delay (hours)</Label>
-                  <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
+                  {/* ── Grading & Feedback Tab ── */}
+                  <TabsContent value="grading" className="mt-4">
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                    >
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Passing Score (%)</Label>
+                        <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Feedback Level</Label>
+                        <select
+                          value={feedbackLevel}
+                          onChange={(e) => setFeedbackLevel(e.target.value)}
+                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                        >
+                          <option value="immediate">Immediate</option>
+                          <option value="standard">Standard</option>
+                          <option value="detailed">Detailed</option>
+                        </select>
+                      </div>
+
+                      {feedbackLevel !== 'immediate' && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-1.5"
+                        >
+                          <Label className="text-xs">Feedback Delay (hours)</Label>
+                          <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  </TabsContent>
+                </Tabs>
+
+                <div className="flex justify-end pt-2">
+                  <Button size="sm" onClick={handleSaveSettings} disabled={saving}>
+                    {saving ? 'Saving…' : 'Save Settings'}
+                  </Button>
                 </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Class Record Category</Label>
-                <select
-                  value={classRecordCategory}
-                  onChange={(e) => setClassRecordCategory(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">None</option>
-                  <option value="written_work">Written Work</option>
-                  <option value="performance_task">Performance Task</option>
-                  <option value="quarterly_assessment">Quarterly Assessment</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Quarter</Label>
-                <select
-                  value={quarter}
-                  onChange={(e) => setQuarter(e.target.value)}
-                  className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                >
-                  <option value="">None</option>
-                  <option value="Q1">Q1</option>
-                  <option value="Q2">Q2</option>
-                  <option value="Q3">Q3</option>
-                  <option value="Q4">Q4</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <Button size="sm" onClick={handleSaveSettings} disabled={saving}>
-                {saving ? 'Saving…' : 'Save Settings'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ════ Question Cards (inline, Forms-style) ════ */}
       {questions.map((q, i) => {
@@ -444,6 +507,8 @@ export default function AssessmentEditorPage() {
               onSave={handleSaveQuestion}
               onCancel={cancelDraft}
               onDelete={() => handleDeleteQuestion(q.id)}
+              questionId={q.id}
+              onImageUpload={handleImageUpload}
             />
           );
         }
@@ -463,6 +528,15 @@ export default function AssessmentEditorPage() {
                 </div>
               </div>
               <p className="font-medium text-sm">{q.content}</p>
+              {q.imageUrl && (
+                <div className="mt-2">
+                  <img
+                    src={q.imageUrl}
+                    alt="Question image"
+                    className="max-h-40 rounded-md border object-contain"
+                  />
+                </div>
+              )}
               {q.options && q.options.length > 0 && (
                 <ul className="mt-2 space-y-0.5 text-sm">
                   {q.options.sort((a, b) => a.order - b.order).map((opt) => (
@@ -521,9 +595,11 @@ function QuestionEditCard({
   onSave,
   onCancel,
   onDelete,
+  questionId,
+  onImageUpload,
 }: {
   index: number;
-  draft: { content: string; type: string; points: number; explanation: string; options: { text: string; isCorrect: boolean; order: number }[] };
+  draft: { content: string; type: string; points: number; explanation: string; imageUrl: string; options: { text: string; isCorrect: boolean; order: number }[] };
   setField: <K extends keyof typeof draft>(key: K, val: (typeof draft)[K]) => void;
   addOption: () => void;
   removeOption: (idx: number) => void;
@@ -531,8 +607,18 @@ function QuestionEditCard({
   onSave: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  questionId?: string;
+  onImageUpload?: (questionId: string, file: File) => void;
 }) {
   const hasOptions = OPTION_QUESTION_TYPES.includes(draft.type);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && questionId && onImageUpload) {
+      onImageUpload(questionId, file);
+    }
+    e.target.value = '';
+  };
 
   return (
     <Card className="border-primary shadow-md">
@@ -552,6 +638,39 @@ function QuestionEditCard({
           className="text-sm"
           autoFocus
         />
+
+        {/* image preview + upload */}
+        {draft.imageUrl && (
+          <div className="relative group/img inline-block">
+            <img
+              src={draft.imageUrl}
+              alt="Question image"
+              className="max-h-48 rounded-md border object-contain"
+            />
+            <Button
+              variant="destructive"
+              size="sm"
+              className="absolute top-1 right-1 h-6 px-2 text-xs opacity-0 group-hover/img:opacity-100 transition-opacity"
+              onClick={() => setField('imageUrl', '')}
+            >
+              ✕
+            </Button>
+          </div>
+        )}
+        {questionId && (
+          <div>
+            <Label htmlFor={`img-${questionId}`} className="text-xs cursor-pointer inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+              📷 {draft.imageUrl ? 'Replace image' : 'Add image'}
+            </Label>
+            <input
+              id={`img-${questionId}`}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+        )}
 
         {/* points + explanation */}
         <div className="grid grid-cols-2 gap-3">
