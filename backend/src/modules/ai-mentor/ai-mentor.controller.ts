@@ -20,7 +20,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 
-import { AiMentorService } from './ai-mentor.service';
+import { AiProxyService } from './ai-proxy.service';
 import { ChatRequestDto } from './DTO/chat.dto';
 import { ExtractModuleDto, ApplyExtractionDto, UpdateExtractionDto } from './DTO/extract-module.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -34,7 +34,7 @@ import { Public } from '../auth/decorators/public.decorator';
 @Controller('ai')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AiMentorController {
-  constructor(private readonly aiMentorService: AiMentorService) {}
+  constructor(private readonly proxy: AiProxyService) {}
 
   // ─── JAKIPIR Chat ──────────────────────────────────────────────────────
 
@@ -55,16 +55,7 @@ export class AiMentorController {
     @Body() dto: ChatRequestDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.chat(
-      dto.message,
-      user,
-      dto.sessionId,
-    );
-    return {
-      success: true,
-      message: 'Ja responded',
-      data,
-    };
+    return this.proxy.forward('POST', '/chat', user, dto);
   }
 
   // ─── Health check ─────────────────────────────────────────────────────
@@ -78,12 +69,7 @@ export class AiMentorController {
   @Public()
   @ApiOperation({ summary: 'Check Ollama availability' })
   async health() {
-    const data = await this.aiMentorService.healthCheck();
-    return {
-      success: true,
-      message: 'AI health status',
-      data,
-    };
+    return this.proxy.forward('GET', '/health', { id: '', email: '', roles: [] });
   }
 
   // ─── Module Extraction ─────────────────────────────────────────────────
@@ -102,12 +88,7 @@ export class AiMentorController {
     @Body() dto: ExtractModuleDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.extractModule(dto.fileId, user);
-    return {
-      success: true,
-      message: data.message,
-      data,
-    };
+    return this.proxy.forward('POST', '/extract', user, dto);
   }
 
   // ─── Extraction status (polling) ──────────────────────────────────────
@@ -123,12 +104,7 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.getExtractionStatus(id, user);
-    return {
-      success: true,
-      message: `Extraction is ${data.status}`,
-      data,
-    };
+    return this.proxy.forward('GET', `/extractions/${id}/status`, user);
   }
 
   // ─── List extractions ─────────────────────────────────────────────────
@@ -145,12 +121,7 @@ export class AiMentorController {
     @Query('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.listExtractions(classId, user);
-    return {
-      success: true,
-      message: `Found ${data.length} extraction(s)`,
-      data,
-    };
+    return this.proxy.forward('GET', `/extractions?classId=${classId}`, user);
   }
 
   // ─── Get single extraction ─────────────────────────────────────────────
@@ -166,12 +137,7 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.getExtraction(id, user);
-    return {
-      success: true,
-      message: 'Extraction details',
-      data,
-    };
+    return this.proxy.forward('GET', `/extractions/${id}`, user);
   }
 
   // ─── Update extraction (edit before applying) ─────────────────────────
@@ -190,26 +156,7 @@ export class AiMentorController {
     @Body() dto: UpdateExtractionDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const structuredContent = {
-      title: dto.title || '',
-      description: dto.description || '',
-      lessons: dto.lessons.map((l) => ({
-        title: l.title,
-        description: l.description || '',
-        blocks: l.blocks.map((b) => ({
-          type: b.type as 'text' | 'question' | 'divider',
-          order: b.order,
-          content: { text: b.content } as Record<string, unknown>,
-          metadata: (b.metadata || {}) as Record<string, unknown>,
-        })),
-      })),
-    };
-    const data = await this.aiMentorService.updateExtraction(id, structuredContent, user);
-    return {
-      success: true,
-      message: 'Extraction content updated',
-      data,
-    };
+    return this.proxy.forward('PATCH', `/extractions/${id}`, user, dto);
   }
 
   // ─── Apply extraction → create lessons ─────────────────────────────────
@@ -229,12 +176,7 @@ export class AiMentorController {
     @Body() dto: ApplyExtractionDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.applyExtraction(id, user, dto.lessonIndices);
-    return {
-      success: true,
-      message: `Created ${data.lessonsCreated} lesson(s) from extraction`,
-      data,
-    };
+    return this.proxy.forward('POST', `/extractions/${id}/apply`, user, dto);
   }
 
   // ─── Delete extraction ─────────────────────────────────────────────────
@@ -250,12 +192,7 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.deleteExtraction(id, user);
-    return {
-      success: true,
-      message: 'Extraction deleted',
-      data,
-    };
+    return this.proxy.forward('DELETE', `/extractions/${id}`, user);
   }
 
   // ─── AI interaction history ────────────────────────────────────────────
@@ -270,11 +207,6 @@ export class AiMentorController {
   async history(
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.aiMentorService.getInteractionHistory(user);
-    return {
-      success: true,
-      message: `Found ${data.length} interaction(s)`,
-      data,
-    };
+    return this.proxy.forward('GET', '/history', user);
   }
 }

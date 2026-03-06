@@ -66,6 +66,27 @@ export class LessonsService {
   // ---------------------------------------------------------------------------
 
   /**
+   * Get lessons for multiple classes in a single query, ordered by `order`.
+   */
+  async getLessonsByClassIds(classIds: string[], filterDrafts = false) {
+    if (classIds.length === 0) return [];
+
+    const conditions = filterDrafts
+      ? and(inArray(lessons.classId, classIds), eq(lessons.isDraft, false))
+      : inArray(lessons.classId, classIds);
+
+    return this.db.query.lessons.findMany({
+      where: conditions,
+      with: {
+        contentBlocks: {
+          orderBy: (blocks, { asc }) => [asc(blocks.order)],
+        },
+      },
+      orderBy: (l, { asc }) => [asc(l.order)],
+    });
+  }
+
+  /**
    * Get all lessons for a class, ordered by `order`.
    * When `filterDrafts` is true, only published (isDraft = false) lessons are
    * returned — use this when the caller is a student.

@@ -4,9 +4,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { LessonsService } from '../lessons/lessons.service';
-import { AssessmentsService } from '../assessments/assessments.service';
-import { ClassesService } from '../classes/classes.service';
+import { TeacherService } from './teacher.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -16,11 +14,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @Controller('teacher')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TeacherController {
-  constructor(
-    private lessonsService: LessonsService,
-    private assessmentsService: AssessmentsService,
-    private classesService: ClassesService,
-  ) {}
+  constructor(private teacherService: TeacherService) {}
 
   /**
    * Get all lessons for the current teacher
@@ -28,21 +22,10 @@ export class TeacherController {
   @Get('lessons')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getLessons(@CurrentUser() user: any) {
-    // Get teacher's classes first (ownership check is enforced inside the service)
-    const classes = await this.classesService.getClassesByTeacher(
-      user.userId,
+    const lessons = await this.teacherService.getTeacherLessons(
       user.userId,
       user.roles,
     );
-    const classIds = classes.map((c) => c.id);
-
-    // Get all lessons for those classes
-    let lessons: any[] = [];
-    for (const classId of classIds) {
-      const classLessons = await this.lessonsService.getLessonsByClass(classId);
-      lessons = lessons.concat(classLessons);
-    }
-
     return {
       success: true,
       data: lessons,
@@ -56,8 +39,7 @@ export class TeacherController {
   @Get('classes')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getClasses(@CurrentUser() user: any) {
-    const classes = await this.classesService.getClassesByTeacher(
-      user.userId,
+    const classes = await this.teacherService.getTeacherClasses(
       user.userId,
       user.roles,
     );
@@ -74,7 +56,7 @@ export class TeacherController {
   @Get('assessments')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getAssessments(@CurrentUser() user: any) {
-    const assessments = await this.assessmentsService.getAssessmentsByTeacher(
+    const assessments = await this.teacherService.getTeacherAssessments(
       user.userId,
     );
     return {

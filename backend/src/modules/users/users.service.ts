@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { and, count, desc, eq, inArray, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
 import {
   users,
@@ -24,8 +25,7 @@ import {
 } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
-import { OtpService } from '../otp/otp.service';
-import { MailService } from '../mail/mail.service';
+import { UserCreatedEvent } from '../../common/events';
 import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
@@ -39,8 +39,7 @@ export class UsersService {
   constructor(
     private databaseService: DatabaseService,
     private configService: ConfigService,
-    private otpService: OtpService,
-    private mailService: MailService,
+    private eventEmitter: EventEmitter2,
   ) {
     const configuredRounds = Number(
       this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
@@ -312,29 +311,16 @@ export class UsersService {
       throw err;
     }
 
-    // 7. Send emails asynchronously (don't await - fire and forget)
-    // This prevents blocking the API response for slow email services
-
-    // 7a. Send OTP verification email
-    this.otpService
-      .createAndSendOTP(result.id, result.email, 'email_verification')
-      .catch((err) => {
-        this.logger.error(
-          `Failed to send verification OTP for user ${result.email}`,
-          err instanceof Error ? err.stack : String(err),
-        );
-      });
-
-    // 7b. Send generated password email so the user has their credentials
-    // generatedPassword holds the plain-text value before it was hashed
-    this.mailService
-      .sendPasswordEmail(result.email, generatedPassword!)
-      .catch((err) => {
-        this.logger.error(
-          `Failed to send password email for user ${result.email}`,
-          err instanceof Error ? err.stack : String(err),
-        );
-      });
+    // 7. Emit user.created event — listeners handle OTP + password emails
+    this.eventEmitter.emit(
+      UserCreatedEvent.eventName,
+      new UserCreatedEvent({
+        userId: result.id,
+        email: result.email,
+        generatedPassword: generatedPassword!,
+        requiresOTP: true,
+      }),
+    );
 
     // 8. Return sanitized user only
     return this.toPublicUser(result);
@@ -461,16 +447,14 @@ export class UsersService {
     }
 
     if (shouldSendEmailVerification) {
-      const refreshedUser = await this.db.query.users.findFirst({
-        where: eq(users.id, id),
-      });
-      if (refreshedUser) {
-        await this.otpService.createAndSendOTP(
-          refreshedUser.id,
-          refreshedUser.email,
-          'email_verification',
-        );
-      }
+      this.eventEmitter.emit(
+        UserCreatedEvent.eventName,
+        new UserCreatedEvent({
+          userId: id,
+          email: updateData.email!,
+          requiresOTP: true,
+        }),
+      );
     }
 
     const updatedUser = await this.findById(id);

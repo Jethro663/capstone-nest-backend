@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AssessmentSubmittedEvent } from '../../common/events';
 import { eq, and, desc, inArray, sql, sum } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -27,12 +28,14 @@ import {
   ReturnGradeDto,
   BulkReturnGradesDto,
 } from './DTO/assessment.dto';
+import { FeedbackService } from './feedback.service';
 
 @Injectable()
 export class AssessmentsService {
   constructor(
     private databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly feedbackService: FeedbackService,
   ) {}
 
   private get db() {
@@ -561,84 +564,11 @@ export class AssessmentsService {
     attempt = updatedAttempt;
 
     // Process responses and auto-grade
-    let totalPoints = 0;
-    const responses: any[] = [];
-
-    for (const response of submitAssessmentDto.responses) {
-      const question = assessment.questions.find(
-        (q) => q.id === response.questionId,
-      );
-
-      if (!question) {
-        throw new BadRequestException(
-          `Question ${response.questionId} not found in assessment`,
-        );
-      }
-
-      let isCorrect = false;
-      let pointsEarned = 0;
-      let selectedOptionId: string | null = null;
-      let selectedOptionIds: string[] | null = null;
-
-      // Auto-grade objective questions
-      if (
-        question.type === QuestionType.MULTIPLE_CHOICE ||
-        question.type === QuestionType.TRUE_FALSE ||
-        question.type === QuestionType.DROPDOWN
-      ) {
-        if (response.selectedOptionId) {
-          const option = question.options.find(
-            (o) => o.id === response.selectedOptionId,
-          );
-          if (option && option.isCorrect) {
-            isCorrect = true;
-            pointsEarned = question.points;
-          }
-          selectedOptionId = response.selectedOptionId;
-        }
-      } else if (question.type === QuestionType.MULTIPLE_SELECT) {
-        // For multiple select, all correct options must be selected
-        if (response.selectedOptionIds && response.selectedOptionIds.length > 0) {
-          selectedOptionIds = response.selectedOptionIds;
-          const correctOptions = question.options.filter((o) => o.isCorrect);
-          const selectedCorrectly =
-            response.selectedOptionIds.length === correctOptions.length &&
-            response.selectedOptionIds.every((id) =>
-              correctOptions.some((o) => o.id === id),
-            );
-
-          if (selectedCorrectly) {
-            isCorrect = true;
-            pointsEarned = question.points;
-          }
-        }
-      }
-      // Short answer and fill blank are not auto-graded (teacher grades manually)
-
-      totalPoints += pointsEarned;
-
-      // Store response
-      const [storedResponse] = await this.db
-        .insert(assessmentResponses)
-        .values({
-          attemptId: attempt.id,
-          questionId: response.questionId,
-          studentAnswer: response.studentAnswer,
-          selectedOptionId: selectedOptionId,
-          selectedOptionIds: selectedOptionIds,
-          isCorrect:
-            question.type === QuestionType.MULTIPLE_CHOICE ||
-            question.type === QuestionType.TRUE_FALSE ||
-            question.type === QuestionType.DROPDOWN ||
-            question.type === QuestionType.MULTIPLE_SELECT
-              ? isCorrect
-              : null,
-          pointsEarned,
-        })
-        .returning();
-
-      responses.push(storedResponse);
-    }
+    const { totalPoints, responses } = await this.autoGradeResponses(
+      submitAssessmentDto.responses,
+      assessment.questions,
+      attempt.id,
+    );
 
     // Calculate score as percentage using actual totalPoints from questions
     const assessmentTotal = assessment.totalPoints || 1;
@@ -658,14 +588,14 @@ export class AssessmentsService {
       .returning();
 
     // Emit event for class record score auto-sync
-    this.eventEmitter.emit('assessment.submitted', {
-      assessmentId: submitAssessmentDto.assessmentId,
+    this.emitSubmissionEvent(
+      submitAssessmentDto.assessmentId,
       studentId,
-      rawScore: totalPoints,
-      totalPoints: assessmentTotal,
-      classRecordCategory: assessment.classRecordCategory,
-      quarter: assessment.quarter,
-    });
+      totalPoints,
+      assessmentTotal,
+      assessment.classRecordCategory ?? undefined,
+      assessment.quarter ?? undefined,
+    );
 
     return {
       attempt: finalAttempt,
@@ -739,8 +669,8 @@ export class AssessmentsService {
       };
     }
 
-    // Apply smart feedback filtering based on assessment settings
-    const filtered = this.applyFeedbackFiltering(attempt);
+    // Apply smart feedback filtering via dedicated FeedbackService
+    const filtered = this.feedbackService.applyFeedbackFiltering(attempt);
     // Add return status info
     filtered.isReturned = attempt.isReturned;
     filtered.returnedAt = attempt.returnedAt;
@@ -749,178 +679,116 @@ export class AssessmentsService {
   }
 
   /**
-   * Apply feedback filtering based on assessment's feedbackLevel and delay
-   * Prevents cheating while supporting learning
+  // ─── Private helpers (extracted from submitAssessment) ──────────────
+
+  /**
+   * Auto-grade objective questions and store responses.
+   * Returns total points earned and the stored response records.
    */
-  private applyFeedbackFiltering(attemptWithData: any) {
-    const assessment = attemptWithData.assessment;
-    const feedbackLevel = assessment.feedbackLevel || 'standard';
-    const feedbackDelayHours = assessment.feedbackDelayHours || 24;
-    
-    // Check if feedback delay has passed
-    const submittedTime = new Date(attemptWithData.submittedAt);
-    const now = new Date();
-    const hoursElapsed = (now.getTime() - submittedTime.getTime()) / (1000 * 60 * 60);
-    const feedbackUnlocked = hoursElapsed >= feedbackDelayHours;
+  private async autoGradeResponses(
+    submittedResponses: any[],
+    questions: any[],
+    attemptId: string,
+  ): Promise<{ totalPoints: number; responses: any[] }> {
+    let totalPoints = 0;
+    const responses: any[] = [];
 
-    let filteredAttempt = JSON.parse(JSON.stringify(attemptWithData));
+    for (const response of submittedResponses) {
+      const question = questions.find((q) => q.id === response.questionId);
 
-    if (feedbackLevel === 'immediate') {
-      // IMMEDIATE: Show ONLY score, pass/fail, and question count
-      // Hide all answer information and options
-      filteredAttempt.responses = filteredAttempt.responses.map(r => ({
-        id: r.id,
-        questionId: r.questionId,
-        // Strip out all answer details
-        studentAnswer: null,
-        selectedOptionId: null,
-        isCorrect: null,
-        pointsEarned: null,
-        question: {
-          id: r.question.id,
-          content: r.question.content,
-          type: r.question.type,
-          points: r.question.points,
-          // No options shown
-          options: [],
-        },
-      }));
-
-      filteredAttempt.assessment.questions = filteredAttempt.assessment.questions.map(q => ({
-        id: q.id,
-        content: q.content,
-        type: q.type,
-        points: q.points,
-        // No options shown
-        options: [],
-      }));
-
-      // Add feedback locked message
-      filteredAttempt.feedbackStatus = {
-        level: 'immediate',
-        unlocked: true,
-        message: 'You can see your score. Detailed feedback not available for immediate assessments.',
-      };
-
-    } else if (feedbackLevel === 'standard') {
-      // STANDARD: Show answers ONLY after delay
-      if (!feedbackUnlocked) {
-        // Hide all answer information until delay passes
-        filteredAttempt.responses = filteredAttempt.responses.map(r => ({
-          id: r.id,
-          questionId: r.questionId,
-          // Strip out answers, show only question
-          studentAnswer: null,
-          selectedOptionId: null,
-          isCorrect: null,
-          pointsEarned: null,
-          question: {
-            id: r.question.id,
-            content: r.question.content,
-            type: r.question.type,
-            points: r.question.points,
-            // Mark options but don't show which is correct
-            options: r.question.options?.map(o => ({
-              id: o.id,
-              text: o.text,
-              order: o.order,
-              isCorrect: null, // Hidden
-            })) || [],
-          },
-        }));
-
-        const hoursUntilUnlock = Math.ceil(feedbackDelayHours - hoursElapsed);
-        filteredAttempt.feedbackStatus = {
-          level: 'standard',
-          unlocked: false,
-          hoursRemaining: Math.max(0, hoursUntilUnlock),
-          message: `Detailed feedback available in ${Math.max(0, hoursUntilUnlock)} hours. Review lessons to learn why answers are correct!`,
-        };
-      } else {
-        // Feedback unlocked - show everything
-        filteredAttempt.feedbackStatus = {
-          level: 'standard',
-          unlocked: true,
-          message: 'Detailed feedback is now available. Review your answers and explanations.',
-        };
+      if (!question) {
+        throw new BadRequestException(
+          `Question ${response.questionId} not found in assessment`,
+        );
       }
 
-    } else if (feedbackLevel === 'detailed') {
-      // DETAILED: Longer delay, more detailed hints
-      if (!feedbackUnlocked) {
-        const hoursUntilUnlock = Math.ceil(feedbackDelayHours - hoursElapsed);
-        
-        // Show hints about which questions were wrong, but NOT the answers
-        filteredAttempt.responses = filteredAttempt.responses.map(r => ({
-          id: r.id,
-          questionId: r.questionId,
-          // Show if correct/wrong as hint, but not the actual answer
-          studentAnswer: null,
-          selectedOptionId: null,
-          isCorrect: r.isCorrect, // Hint: show if they got it right/wrong
-          pointsEarned: null,      // Hide partial credit until unlocked
-          questionType: r.question.type,
-          hint: this.generateLearningHint(r.question, r.isCorrect),
-          question: {
-            id: r.question.id,
-            content: r.question.content,
-            type: r.question.type,
-            points: r.question.points,
-            // No options shown
-            options: [],
-          },
-        }));
+      let isCorrect = false;
+      let pointsEarned = 0;
+      let selectedOptionId: string | null = null;
+      let selectedOptionIds: string[] | null = null;
 
-        filteredAttempt.feedbackStatus = {
-          level: 'detailed',
-          unlocked: false,
-          hoursRemaining: Math.max(0, hoursUntilUnlock),
-          message: `Full feedback available in ${Math.max(0, hoursUntilUnlock)} hours. Use the hints below to study!`,
-        };
-      } else {
-        // Full feedback available
-        filteredAttempt.responses = filteredAttempt.responses.map(r => ({
-          ...r,
-          hint: this.generateLearningHint(r.question, r.isCorrect),
-        }));
+      if (
+        question.type === QuestionType.MULTIPLE_CHOICE ||
+        question.type === QuestionType.TRUE_FALSE ||
+        question.type === QuestionType.DROPDOWN
+      ) {
+        if (response.selectedOptionId) {
+          const option = question.options.find(
+            (o) => o.id === response.selectedOptionId,
+          );
+          if (option && option.isCorrect) {
+            isCorrect = true;
+            pointsEarned = question.points;
+          }
+          selectedOptionId = response.selectedOptionId;
+        }
+      } else if (question.type === QuestionType.MULTIPLE_SELECT) {
+        if (response.selectedOptionIds && response.selectedOptionIds.length > 0) {
+          selectedOptionIds = response.selectedOptionIds;
+          const correctOptions = question.options.filter((o) => o.isCorrect);
+          const selectedCorrectly =
+            response.selectedOptionIds.length === correctOptions.length &&
+            response.selectedOptionIds.every((id) =>
+              correctOptions.some((o) => o.id === id),
+            );
 
-        filteredAttempt.feedbackStatus = {
-          level: 'detailed',
-          unlocked: true,
-          message: 'Full feedback with learning hints available. Review to improve!',
-        };
+          if (selectedCorrectly) {
+            isCorrect = true;
+            pointsEarned = question.points;
+          }
+        }
       }
+      // Short answer and fill blank are not auto-graded
+
+      totalPoints += pointsEarned;
+
+      const [storedResponse] = await this.db
+        .insert(assessmentResponses)
+        .values({
+          attemptId,
+          questionId: response.questionId,
+          studentAnswer: response.studentAnswer,
+          selectedOptionId,
+          selectedOptionIds,
+          isCorrect:
+            question.type === QuestionType.MULTIPLE_CHOICE ||
+            question.type === QuestionType.TRUE_FALSE ||
+            question.type === QuestionType.DROPDOWN ||
+            question.type === QuestionType.MULTIPLE_SELECT
+              ? isCorrect
+              : null,
+          pointsEarned,
+        })
+        .returning();
+
+      responses.push(storedResponse);
     }
 
-    return filteredAttempt;
+    return { totalPoints, responses };
   }
 
   /**
-   * Generate learning-focused hints rather than just showing answers
+   * Emit typed assessment.submitted event for class record auto-sync.
    */
-  private generateLearningHint(question: any, isCorrect: boolean): string {
-    if (isCorrect) {
-      return `✓ Correct! You understood the concept in question "${question.content.substring(0, 50)}..."`;
-    }
-
-    switch (question.type) {
-      case QuestionType.MULTIPLE_CHOICE:
-      case QuestionType.DROPDOWN:
-        return `Review the lesson content about this topic. The correct answer involves understanding the key concept.`;
-      
-      case QuestionType.TRUE_FALSE:
-        return `Think about whether the statement is always true or if there are exceptions. Review the lesson.`;
-      
-      case QuestionType.MULTIPLE_SELECT:
-        return `This question requires selecting ALL correct answers. Review which concepts apply.`;
-      
-      case QuestionType.SHORT_ANSWER:
-      case QuestionType.FILL_BLANK:
-        return `Compare your answer with the key terms in the lesson. Make sure you used precise language.`;
-      
-      default:
-        return `Review this question and the related lesson content.`;
-    }
+  private emitSubmissionEvent(
+    assessmentId: string,
+    studentId: string,
+    rawScore: number,
+    totalPoints: number,
+    classRecordCategory?: string,
+    quarter?: string,
+  ): void {
+    this.eventEmitter.emit(
+      AssessmentSubmittedEvent.eventName,
+      new AssessmentSubmittedEvent({
+        assessmentId,
+        studentId,
+        rawScore,
+        totalPoints,
+        classRecordCategory,
+        quarter,
+      }),
+    );
   }
 
   /**

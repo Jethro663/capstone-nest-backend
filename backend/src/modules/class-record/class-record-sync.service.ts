@@ -15,15 +15,7 @@ import {
   assessments,
   assessmentAttempts,
 } from '../../drizzle/schema';
-
-export interface AssessmentSubmittedEvent {
-  assessmentId: string;
-  studentId: string;
-  rawScore: number;
-  totalPoints: number;
-  classRecordCategory?: string;
-  quarter?: string;
-}
+import { AssessmentSubmittedEvent } from '../../common/events';
 
 @Injectable()
 export class ClassRecordSyncService {
@@ -146,7 +138,7 @@ export class ClassRecordSyncService {
    * Matches assessment's classRecordCategory + quarter to find the correct
    * class record + category, then auto-links and syncs the score.
    */
-  @OnEvent('assessment.submitted')
+  @OnEvent(AssessmentSubmittedEvent.eventName)
   async handleAssessmentSubmitted(
     event: AssessmentSubmittedEvent,
   ): Promise<void> {

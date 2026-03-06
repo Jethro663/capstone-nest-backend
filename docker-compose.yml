@@ -89,6 +89,24 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ai-service:
+        condition: service_started
+    networks:
+      - lms-network
+
+  # ── Python AI Service ──────────────────────────────────────
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./ai-service/.env.docker
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
       ollama:
         condition: service_healthy
     networks:

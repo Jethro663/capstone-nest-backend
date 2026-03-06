@@ -1,15 +1,12 @@
 import {
   Injectable,
   BadRequestException,
-  Inject,
-  forwardRef,
   Logger,
 } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../../database/database.service';
-import { otpVerifications } from '../../drizzle/schema';
-import { UsersService } from '../users/users.service';
+import { otpVerifications, users } from '../../drizzle/schema';
 import { MailService } from '../mail/mail.service';
 import { OTP_TTL_MINUTES } from './otp.constants';
 
@@ -22,8 +19,6 @@ export class OtpService {
 
   constructor(
     private readonly databaseService: DatabaseService,
-    @Inject(forwardRef(() => UsersService))
-    private readonly usersService: UsersService,
     private readonly mailService: MailService,
   ) {}
 
@@ -96,7 +91,10 @@ export class OtpService {
     purpose: 'email_verification' | 'password_reset' = 'email_verification',
   ): Promise<void> {
     // 1. Look up the user — return a generic error to prevent account enumeration.
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.db.query.users.findFirst({
+      where: eq(users.email, email),
+      columns: { id: true, email: true, isEmailVerified: true },
+    });
     if (!user) {
       throw new BadRequestException('Invalid or expired verification code');
     }
@@ -165,13 +163,19 @@ export class OtpService {
 
     // 7. For email_verification: mark the user's email as verified
     if (purpose === 'email_verification') {
-      await this.usersService.verifyEmail(user.id);
+      await this.db
+        .update(users)
+        .set({ isEmailVerified: true, status: 'ACTIVE' })
+        .where(eq(users.id, user.id));
     }
   }
 
   async resendOTP(email: string): Promise<void> {
     // Look up silently — do NOT reveal whether the email is registered
-    const user = await this.usersService.findByEmail(email);
+    const user = await this.db.query.users.findFirst({
+      where: eq(users.email, email),
+      columns: { id: true, email: true, isEmailVerified: true },
+    });
     if (!user || user.isEmailVerified) {
       // Return silently; caller receives an identical 200 either way
       return;

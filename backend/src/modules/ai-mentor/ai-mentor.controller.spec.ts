@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
-import { AiMentorService } from './ai-mentor.service';
+import { AiProxyService } from './ai-proxy.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -8,7 +8,6 @@ import { AiMentorService } from './ai-mentor.service';
 
 const EXTRACTION_ID = 'extraction-uuid-1';
 const CLASS_ID = 'class-uuid-1';
-const SESSION_ID = 'session-uuid-1';
 
 const STUDENT_USER = { id: 'user-1', email: 'student@school.edu', roles: ['student'] };
 const TEACHER_USER = { id: 'teacher-1', email: 'teacher@school.edu', roles: ['teacher'] };
@@ -18,15 +17,7 @@ const ADMIN_USER = { id: 'admin-1', email: 'admin@school.edu', roles: ['admin'] 
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockAiMentorService = {
-  chat: jest.fn(),
-  healthCheck: jest.fn(),
-  extractModule: jest.fn(),
-  listExtractions: jest.fn(),
-  getExtraction: jest.fn(),
-  applyExtraction: jest.fn(),
-  getInteractionHistory: jest.fn(),
-};
+const mockProxy = { forward: jest.fn() };
 
 // ---------------------------------------------------------------------------
 // Test suite
@@ -40,9 +31,7 @@ describe('AiMentorController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiMentorController],
-      providers: [
-        { provide: AiMentorService, useValue: mockAiMentorService },
-      ],
+      providers: [{ provide: AiProxyService, useValue: mockProxy }],
     }).compile();
 
     controller = module.get<AiMentorController>(AiMentorController);
@@ -53,57 +42,22 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('chat()', () => {
-    const chatResult = {
-      reply: 'Hello from Ja!',
-      sessionId: SESSION_ID,
-      modelUsed: 'llama3.2:3b',
-    };
+    it('should forward POST /chat with dto and user', async () => {
+      const dto = { message: 'Hi Ja', sessionId: undefined };
+      mockProxy.forward.mockResolvedValue({ reply: 'Hello!' });
 
-    it('should return success envelope with chat data', async () => {
-      mockAiMentorService.chat.mockResolvedValue(chatResult);
+      const result = await controller.chat(dto, STUDENT_USER);
 
-      const result = await controller.chat(
-        { message: 'Hi Ja', sessionId: undefined },
-        STUDENT_USER,
-      );
-
-      expect(result).toEqual({
-        success: true,
-        message: 'Ja responded',
-        data: chatResult,
-      });
+      expect(mockProxy.forward).toHaveBeenCalledWith('POST', '/chat', STUDENT_USER, dto);
+      expect(result).toEqual({ reply: 'Hello!' });
     });
 
-    it('should pass message and user to service', async () => {
-      mockAiMentorService.chat.mockResolvedValue(chatResult);
-
-      await controller.chat({ message: 'Hello', sessionId: undefined }, STUDENT_USER);
-
-      expect(mockAiMentorService.chat).toHaveBeenCalledWith(
-        'Hello',
-        STUDENT_USER,
-        undefined,
-      );
-    });
-
-    it('should pass sessionId when provided', async () => {
-      mockAiMentorService.chat.mockResolvedValue(chatResult);
-
-      await controller.chat({ message: 'Follow up', sessionId: SESSION_ID }, STUDENT_USER);
-
-      expect(mockAiMentorService.chat).toHaveBeenCalledWith(
-        'Follow up',
-        STUDENT_USER,
-        SESSION_ID,
-      );
-    });
-
-    it('should propagate service errors', async () => {
-      mockAiMentorService.chat.mockRejectedValue(new Error('Service error'));
+    it('should propagate proxy errors', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('timeout'));
 
       await expect(
         controller.chat({ message: 'Hi', sessionId: undefined }, STUDENT_USER),
-      ).rejects.toThrow('Service error');
+      ).rejects.toThrow('timeout');
     });
   });
 
@@ -112,34 +66,15 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('health()', () => {
-    it('should return success envelope with health data', async () => {
-      const healthData = {
-        ollamaAvailable: true,
-        configuredModel: 'llama3.2:3b',
-        availableModels: ['llama3.2:3b'],
-      };
-      mockAiMentorService.healthCheck.mockResolvedValue(healthData);
+    it('should forward GET /health with empty user', async () => {
+      mockProxy.forward.mockResolvedValue({ status: 'ok' });
 
       const result = await controller.health();
 
-      expect(result).toEqual({
-        success: true,
-        message: 'AI health status',
-        data: healthData,
-      });
-    });
-
-    it('should return unavailable health data', async () => {
-      const healthData = {
-        ollamaAvailable: false,
-        configuredModel: 'llama3.2:3b',
-        availableModels: [],
-      };
-      mockAiMentorService.healthCheck.mockResolvedValue(healthData);
-
-      const result = await controller.health();
-
-      expect(result.data.ollamaAvailable).toBe(false);
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET', '/health', { id: '', email: '', roles: [] },
+      );
+      expect(result).toEqual({ status: 'ok' });
     });
   });
 
@@ -148,47 +83,31 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('extractModule()', () => {
-    const extractResult = {
-      extractionId: EXTRACTION_ID,
-      status: 'pending',
-      message: 'Extraction queued — poll GET /ai/extractions/:id/status for progress',
-    };
+    it('should forward POST /extract with dto and user', async () => {
+      const dto = { fileId: 'file-uuid-1' };
+      mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
 
-    it('should return success envelope with extraction data', async () => {
-      mockAiMentorService.extractModule.mockResolvedValue(extractResult);
+      const result = await controller.extractModule(dto, TEACHER_USER);
 
-      const result = await controller.extractModule(
-        { fileId: 'file-uuid-1' },
-        TEACHER_USER,
-      );
-
-      expect(result).toEqual({
-        success: true,
-        message: extractResult.message,
-        data: extractResult,
-      });
+      expect(mockProxy.forward).toHaveBeenCalledWith('POST', '/extract', TEACHER_USER, dto);
+      expect(result).toEqual({ extractionId: EXTRACTION_ID });
     });
+  });
 
-    it('should pass fileId and user to service', async () => {
-      mockAiMentorService.extractModule.mockResolvedValue(extractResult);
+  // =========================================================================
+  // GET /ai/extractions/:id/status
+  // =========================================================================
 
-      await controller.extractModule({ fileId: 'file-uuid-1' }, TEACHER_USER);
+  describe('getExtractionStatus()', () => {
+    it('should forward GET /extractions/:id/status', async () => {
+      mockProxy.forward.mockResolvedValue({ status: 'completed' });
 
-      expect(mockAiMentorService.extractModule).toHaveBeenCalledWith(
-        'file-uuid-1',
-        TEACHER_USER,
+      const result = await controller.getExtractionStatus(EXTRACTION_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET', `/extractions/${EXTRACTION_ID}/status`, TEACHER_USER,
       );
-    });
-
-    it('should include message in response', async () => {
-      mockAiMentorService.extractModule.mockResolvedValue(extractResult);
-
-      const result = await controller.extractModule(
-        { fileId: 'file-uuid-1' },
-        TEACHER_USER,
-      );
-
-      expect(result.message).toContain('Extraction queued');
+      expect(result).toEqual({ status: 'completed' });
     });
   });
 
@@ -197,37 +116,15 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('listExtractions()', () => {
-    it('should return success envelope with extraction list', async () => {
-      const extractions = [{ id: EXTRACTION_ID }];
-      mockAiMentorService.listExtractions.mockResolvedValue(extractions);
+    it('should forward GET /extractions with classId query', async () => {
+      mockProxy.forward.mockResolvedValue([{ id: EXTRACTION_ID }]);
 
       const result = await controller.listExtractions(CLASS_ID, TEACHER_USER);
 
-      expect(result).toEqual({
-        success: true,
-        message: 'Found 1 extraction(s)',
-        data: extractions,
-      });
-    });
-
-    it('should pass classId and user to service', async () => {
-      mockAiMentorService.listExtractions.mockResolvedValue([]);
-
-      await controller.listExtractions(CLASS_ID, TEACHER_USER);
-
-      expect(mockAiMentorService.listExtractions).toHaveBeenCalledWith(
-        CLASS_ID,
-        TEACHER_USER,
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET', `/extractions?classId=${CLASS_ID}`, TEACHER_USER,
       );
-    });
-
-    it('should handle empty results', async () => {
-      mockAiMentorService.listExtractions.mockResolvedValue([]);
-
-      const result = await controller.listExtractions(CLASS_ID, TEACHER_USER);
-
-      expect(result.message).toBe('Found 0 extraction(s)');
-      expect(result.data).toEqual([]);
+      expect(result).toEqual([{ id: EXTRACTION_ID }]);
     });
   });
 
@@ -236,28 +133,33 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('getExtraction()', () => {
-    it('should return success envelope with extraction details', async () => {
-      const extraction = { id: EXTRACTION_ID, classId: CLASS_ID };
-      mockAiMentorService.getExtraction.mockResolvedValue(extraction);
+    it('should forward GET /extractions/:id', async () => {
+      mockProxy.forward.mockResolvedValue({ id: EXTRACTION_ID });
 
-      const result = await controller.getExtraction(EXTRACTION_ID, TEACHER_USER);
+      const result = await controller.getExtraction(EXTRACTION_ID, ADMIN_USER);
 
-      expect(result).toEqual({
-        success: true,
-        message: 'Extraction details',
-        data: extraction,
-      });
-    });
-
-    it('should pass id and user to service', async () => {
-      mockAiMentorService.getExtraction.mockResolvedValue({});
-
-      await controller.getExtraction(EXTRACTION_ID, ADMIN_USER);
-
-      expect(mockAiMentorService.getExtraction).toHaveBeenCalledWith(
-        EXTRACTION_ID,
-        ADMIN_USER,
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET', `/extractions/${EXTRACTION_ID}`, ADMIN_USER,
       );
+      expect(result).toEqual({ id: EXTRACTION_ID });
+    });
+  });
+
+  // =========================================================================
+  // PATCH /ai/extractions/:id
+  // =========================================================================
+
+  describe('updateExtraction()', () => {
+    it('should forward PATCH /extractions/:id with dto', async () => {
+      const dto = { structuredContent: { lessons: [] } };
+      mockProxy.forward.mockResolvedValue({ updated: true });
+
+      const result = await controller.updateExtraction(EXTRACTION_ID, dto as any, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'PATCH', `/extractions/${EXTRACTION_ID}`, TEACHER_USER, dto,
+      );
+      expect(result).toEqual({ updated: true });
     });
   });
 
@@ -266,50 +168,33 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('applyExtraction()', () => {
-    const applyResult = {
-      classId: CLASS_ID,
-      extractionId: EXTRACTION_ID,
-      lessonsCreated: 3,
-      lessons: [
-        { id: 'lesson-1', title: 'Lesson 1' },
-        { id: 'lesson-2', title: 'Lesson 2' },
-        { id: 'lesson-3', title: 'Lesson 3' },
-      ],
-    };
+    it('should forward POST /extractions/:id/apply with dto', async () => {
+      const dto = {};
+      mockProxy.forward.mockResolvedValue({ lessonsCreated: 3 });
 
-    it('should return success envelope with created lessons data', async () => {
-      mockAiMentorService.applyExtraction.mockResolvedValue(applyResult);
+      const result = await controller.applyExtraction(EXTRACTION_ID, dto, TEACHER_USER);
 
-      const result = await controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER);
-
-      expect(result).toEqual({
-        success: true,
-        message: 'Created 3 lesson(s) from extraction',
-        data: applyResult,
-      });
-    });
-
-    it('should pass extractionId and user to service', async () => {
-      mockAiMentorService.applyExtraction.mockResolvedValue(applyResult);
-
-      await controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER);
-
-      expect(mockAiMentorService.applyExtraction).toHaveBeenCalledWith(
-        EXTRACTION_ID,
-        TEACHER_USER,
-        undefined,
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST', `/extractions/${EXTRACTION_ID}/apply`, TEACHER_USER, dto,
       );
+      expect(result).toEqual({ lessonsCreated: 3 });
     });
+  });
 
-    it('should include lessonsCreated count in message', async () => {
-      mockAiMentorService.applyExtraction.mockResolvedValue({
-        ...applyResult,
-        lessonsCreated: 5,
-      });
+  // =========================================================================
+  // DELETE /ai/extractions/:id
+  // =========================================================================
 
-      const result = await controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER);
+  describe('deleteExtraction()', () => {
+    it('should forward DELETE /extractions/:id', async () => {
+      mockProxy.forward.mockResolvedValue({ deleted: true });
 
-      expect(result.message).toBe('Created 5 lesson(s) from extraction');
+      const result = await controller.deleteExtraction(EXTRACTION_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'DELETE', `/extractions/${EXTRACTION_ID}`, TEACHER_USER,
+      );
+      expect(result).toEqual({ deleted: true });
     });
   });
 
@@ -318,39 +203,13 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('history()', () => {
-    it('should return success envelope with interaction history', async () => {
-      const history = [
-        { id: 'log-1', sessionType: 'mentor_chat' },
-        { id: 'log-2', sessionType: 'module_extraction' },
-      ];
-      mockAiMentorService.getInteractionHistory.mockResolvedValue(history);
+    it('should forward GET /history with user', async () => {
+      mockProxy.forward.mockResolvedValue([{ id: 'log-1' }]);
 
       const result = await controller.history(STUDENT_USER);
 
-      expect(result).toEqual({
-        success: true,
-        message: 'Found 2 interaction(s)',
-        data: history,
-      });
-    });
-
-    it('should pass user to service', async () => {
-      mockAiMentorService.getInteractionHistory.mockResolvedValue([]);
-
-      await controller.history(TEACHER_USER);
-
-      expect(mockAiMentorService.getInteractionHistory).toHaveBeenCalledWith(
-        TEACHER_USER,
-      );
-    });
-
-    it('should handle empty history', async () => {
-      mockAiMentorService.getInteractionHistory.mockResolvedValue([]);
-
-      const result = await controller.history(STUDENT_USER);
-
-      expect(result.message).toBe('Found 0 interaction(s)');
-      expect(result.data).toEqual([]);
+      expect(mockProxy.forward).toHaveBeenCalledWith('GET', '/history', STUDENT_USER);
+      expect(result).toEqual([{ id: 'log-1' }]);
     });
   });
 });
