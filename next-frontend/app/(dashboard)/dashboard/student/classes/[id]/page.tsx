@@ -107,8 +107,7 @@ export default function StudentClassDetailPage() {
 
       <StudentActionCard className="border-0 bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-white">
         <StudentSectionHeader
-          title={classItem.subjectName || classItem.className}
-          subtitle={`${classItem.section?.name} • Grade ${classItem.section?.gradeLevel}`}
+title={classItem.subjectName || classItem.className || "Class"}          subtitle={`${classItem.section?.name} • Grade ${classItem.section?.gradeLevel}`}
           className="[&_h2]:text-white [&_p]:text-red-100"
         />
       </StudentActionCard>
