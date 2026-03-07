@@ -405,11 +405,19 @@ export default function NexoraLibraryPage() {
                   <>
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {folders.map((folder) => (
-                        <motion.button
+                        <motion.div
                           key={folder.id}
                           whileHover={{ y: -2 }}
                           className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 text-left shadow-sm transition"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => setFolderTrail((prev) => [...prev, folder])}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              setFolderTrail((prev) => [...prev, folder]);
+                            }
+                          }}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-center gap-3">
@@ -450,7 +458,7 @@ export default function NexoraLibraryPage() {
                               </Button>
                             </div>
                           </div>
-                        </motion.button>
+                        </motion.div>
                       ))}
                     </div>
 

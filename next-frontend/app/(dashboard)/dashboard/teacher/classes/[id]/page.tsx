@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { classService } from '@/services/class-service';
@@ -768,7 +768,7 @@ export default function TeacherClassDetailPage() {
                           </tr>
                           <tr className="bg-muted/40">
                             {spreadsheet.categories.map((cat) => (
-                              <>
+                              <Fragment key={`header-${cat.id}`}>
                                 {cat.items.map((item) => (
                                   <th key={item.id} className="border px-1.5 py-1 text-center font-medium min-w-[50px]">
                                     <div className="flex flex-col items-center gap-0.5">
@@ -789,14 +789,14 @@ export default function TeacherClassDetailPage() {
                                 <th key={`${cat.id}-total`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[50px]">Total</th>
                                 <th key={`${cat.id}-ps`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[40px]">PS</th>
                                 <th key={`${cat.id}-ws`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[40px]">WS</th>
-                              </>
+                              </Fragment>
                             ))}
                             <th className="border px-1.5 py-1 text-center font-medium bg-yellow-50 min-w-[50px]">IG</th>
                             <th className="border px-1.5 py-1 text-center font-medium bg-green-50 min-w-[50px]">QG</th>
                           </tr>
                           <tr className="bg-amber-50/50">
                             {spreadsheet.categories.map((cat) => (
-                              <>
+                              <Fragment key={`hps-${cat.id}`}>
                                 {cat.items.map((item) => (
                                   <td key={`hps-${item.id}`} className="border px-1.5 py-1 text-center font-semibold text-amber-700">
                                     {item.hps ?? ''}
@@ -807,7 +807,7 @@ export default function TeacherClassDetailPage() {
                                 </td>
                                 <td key={`hps-ps-${cat.id}`} className="border px-1.5 py-1 text-center">—</td>
                                 <td key={`hps-ws-${cat.id}`} className="border px-1.5 py-1 text-center">—</td>
-                              </>
+                              </Fragment>
                             ))}
                             <td className="border px-1.5 py-1 text-center">—</td>
                             <td className="border px-1.5 py-1 text-center">—</td>
@@ -822,7 +822,7 @@ export default function TeacherClassDetailPage() {
                               {spreadsheet.categories.map((cat, catIdx) => {
                                 const catData = student.categories[catIdx];
                                 return (
-                                  <>
+                                  <Fragment key={`${student.studentId}-${cat.id}`}>
                                     {cat.items.map((item, itemIdx) => {
                                       const score = catData?.scores[itemIdx];
                                       const isEditing =
@@ -866,7 +866,7 @@ export default function TeacherClassDetailPage() {
                                     <td key={`${student.studentId}-ws-${cat.id}`} className="border px-1 py-0.5 text-center bg-blue-50/50">
                                       {catData?.ws != null ? catData.ws.toFixed(2) : ''}
                                     </td>
-                                  </>
+                                  </Fragment>
                                 );
                               })}
                               <td className="border px-1 py-0.5 text-center font-medium bg-yellow-50/50">
