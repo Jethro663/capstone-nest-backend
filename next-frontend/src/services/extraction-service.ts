@@ -1,25 +1,43 @@
 import { api } from '@/lib/api-client';
 import type {
+  ApplyExtractionDto,
   Extraction,
   ExtractModuleDto,
-  ApplyExtractionDto,
   UpdateExtractionDto,
 } from '@/types/extraction';
 
+function normalizeExtraction(raw: Record<string, any>): Extraction {
+  return {
+    id: raw.id,
+    fileId: raw.fileId ?? raw.file_id,
+    classId: raw.classId ?? raw.class_id,
+    teacherId: raw.teacherId ?? raw.teacher_id,
+    extractionStatus: raw.extractionStatus ?? raw.extraction_status,
+    modelUsed: raw.modelUsed ?? raw.model_used ?? null,
+    errorMessage: raw.errorMessage ?? raw.error_message ?? null,
+    structuredContent: raw.structuredContent ?? raw.structured_content ?? null,
+    isApplied: raw.isApplied ?? raw.is_applied ?? false,
+    progressPercent: raw.progressPercent ?? raw.progress_percent ?? 0,
+    totalChunks: raw.totalChunks ?? raw.total_chunks ?? null,
+    processedChunks: raw.processedChunks ?? raw.processed_chunks ?? 0,
+    createdAt: raw.createdAt ?? raw.created_at,
+    updatedAt: raw.updatedAt ?? raw.updated_at,
+    originalName: raw.originalName ?? raw.original_name ?? null,
+  };
+}
+
 export const extractionService = {
-  /** POST /ai/extract-module — Teacher, Admin */
   async extractModule(
     dto: ExtractModuleDto,
   ): Promise<{
     success: boolean;
     message: string;
-    data: { extractionId: string; status: string; message: string };
+    data: { extractionId: string; status: string; message?: string };
   }> {
     const { data } = await api.post('/ai/extract-module', dto);
     return data;
   },
 
-  /** GET /ai/extractions/:id/status — Teacher, Admin (polling) */
   async getStatus(
     id: string,
   ): Promise<{
@@ -32,40 +50,46 @@ export const extractionService = {
       totalChunks: number | null;
       processedChunks: number;
       modelUsed: string | null;
+      errorMessage?: string | null;
     };
   }> {
     const { data } = await api.get(`/ai/extractions/${id}/status`);
     return data;
   },
 
-  /** GET /ai/extractions?classId=... — Teacher, Admin */
   async listByClass(
     classId: string,
   ): Promise<{ success: boolean; message: string; data: Extraction[] }> {
     const { data } = await api.get('/ai/extractions', {
       params: { classId },
     });
-    return data;
+    return {
+      ...data,
+      data: Array.isArray(data.data) ? data.data.map(normalizeExtraction) : [],
+    };
   },
 
-  /** GET /ai/extractions/:id — Teacher, Admin */
   async getById(
     id: string,
   ): Promise<{ success: boolean; message: string; data: Extraction }> {
     const { data } = await api.get(`/ai/extractions/${id}`);
-    return data;
+    return {
+      ...data,
+      data: normalizeExtraction(data.data),
+    };
   },
 
-  /** PATCH /ai/extractions/:id — Teacher, Admin */
   async update(
     id: string,
     dto: UpdateExtractionDto,
   ): Promise<{ success: boolean; message: string; data: Extraction }> {
     const { data } = await api.patch(`/ai/extractions/${id}`, dto);
-    return data;
+    return {
+      ...data,
+      data: normalizeExtraction(data.data),
+    };
   },
 
-  /** POST /ai/extractions/:id/apply — Teacher, Admin */
   async apply(
     id: string,
     dto?: ApplyExtractionDto,
@@ -78,7 +102,6 @@ export const extractionService = {
     return data;
   },
 
-  /** DELETE /ai/extractions/:id — Teacher, Admin */
   async delete(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/ai/extractions/${id}`);
     return data;

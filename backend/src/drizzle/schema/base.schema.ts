@@ -83,6 +83,8 @@ export const feedbackLevelEnum = pgEnum('feedback_level', [
   'detailed',
 ]);
 
+export const fileScopeEnum = pgEnum('file_scope', ['private', 'general']);
+
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
 // ==========================================
@@ -707,12 +709,12 @@ export const uploadedFiles = pgTable(
   'uploaded_files',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    folderId: uuid('folder_id'),
     teacherId: uuid('teacher_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    classId: uuid('class_id')
-      .notNull()
-      .references(() => classes.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id').references(() => classes.id, { onDelete: 'cascade' }),
+    scope: fileScopeEnum('scope').notNull().default('private'),
     originalName: varchar('original_name', { length: 255 }).notNull(),
     storedName: varchar('stored_name', { length: 255 }).notNull(),
     mimeType: varchar('mime_type', { length: 100 }).notNull(),
@@ -722,9 +724,32 @@ export const uploadedFiles = pgTable(
     deletedAt: timestamp('deleted_at'),
   },
   (table) => ({
+    folderIdx: index('uploaded_files_folder_idx').on(table.folderId),
     teacherIdx: index('uploaded_files_teacher_idx').on(table.teacherId),
     classIdx: index('uploaded_files_class_idx').on(table.classId),
+    scopeIdx: index('uploaded_files_scope_idx').on(table.scope),
     uploadedAtIdx: index('uploaded_files_uploaded_at_idx').on(table.uploadedAt),
+  }),
+);
+
+export const libraryFolders = pgTable(
+  'library_folders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 255 }).notNull(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    parentId: uuid('parent_id'),
+    scope: fileScopeEnum('scope').notNull().default('private'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    deletedAt: timestamp('deleted_at'),
+  },
+  (table) => ({
+    ownerIdx: index('library_folders_owner_idx').on(table.ownerId),
+    parentIdx: index('library_folders_parent_idx').on(table.parentId),
+    scopeIdx: index('library_folders_scope_idx').on(table.scope),
   }),
 );
 
@@ -739,6 +764,29 @@ export const uploadedFilesRelations = relations(
       fields: [uploadedFiles.classId],
       references: [classes.id],
     }),
+    folder: one(libraryFolders, {
+      fields: [uploadedFiles.folderId],
+      references: [libraryFolders.id],
+    }),
+  }),
+);
+
+export const libraryFoldersRelations = relations(
+  libraryFolders,
+  ({ one, many }) => ({
+    owner: one(users, {
+      fields: [libraryFolders.ownerId],
+      references: [users.id],
+    }),
+    parent: one(libraryFolders, {
+      fields: [libraryFolders.parentId],
+      references: [libraryFolders.id],
+      relationName: 'libraryFolderTree',
+    }),
+    children: many(libraryFolders, {
+      relationName: 'libraryFolderTree',
+    }),
+    files: many(uploadedFiles),
   }),
 );
 

@@ -112,7 +112,7 @@ describe('FileUploadController', () => {
 
       const result = await controller.uploadFile(
         makeFile(),
-        CLASS_ID,
+        { classId: CLASS_ID },
         TEACHER_USER,
       );
 
@@ -128,7 +128,7 @@ describe('FileUploadController', () => {
       const record = makeRecord();
       mockFileUploadService.saveFileRecord.mockResolvedValue(record);
 
-      await controller.uploadFile(file, CLASS_ID, TEACHER_USER);
+      await controller.uploadFile(file, { classId: CLASS_ID }, TEACHER_USER);
 
       expect(mockFileUploadService.saveFileRecord).toHaveBeenCalledWith({
         teacherId:    TEACHER_USER.id,
@@ -137,15 +137,17 @@ describe('FileUploadController', () => {
         storedName:   file.filename,
         mimeType:     file.mimetype,
         sizeBytes:    2_097_152,
-        filePath:     file.path,
-      });
+        filePath:     'uploads/pdfs/uuid_1700000000.pdf',
+        folderId:     undefined,
+        scope:        'private',
+      }, TEACHER_USER);
     });
 
     it('propagates service errors (e.g. DB failure)', async () => {
       mockFileUploadService.saveFileRecord.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        controller.uploadFile(makeFile(), CLASS_ID, TEACHER_USER),
+        controller.uploadFile(makeFile(), { classId: CLASS_ID }, TEACHER_USER),
       ).rejects.toThrow('DB error');
     });
   });
@@ -181,9 +183,9 @@ describe('FileUploadController', () => {
     it('forwards the current user to the service', async () => {
       mockFileUploadService.findAll.mockResolvedValue([]);
 
-      await controller.listFiles(ADMIN_USER);
+      await controller.listFiles(ADMIN_USER, {} as any);
 
-      expect(mockFileUploadService.findAll).toHaveBeenCalledWith(ADMIN_USER);
+      expect(mockFileUploadService.findAll).toHaveBeenCalledWith(ADMIN_USER, {});
     });
   });
 

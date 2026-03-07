@@ -5,7 +5,7 @@
 export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'applied';
 
 export interface ExtractionBlock {
-  type: 'text' | 'heading' | 'list' | 'code' | 'image' | 'divider' | 'quote' | 'table';
+  type: 'text' | 'image' | 'video' | 'question' | 'file' | 'divider';
   content: Record<string, unknown> | string;
   order: number;
   metadata?: Record<string, unknown>;
@@ -28,7 +28,7 @@ export interface Extraction {
   id: string;
   fileId: string;
   classId: string;
-  userId: string;
+  teacherId: string;
   extractionStatus: ExtractionStatus;
   modelUsed: string | null;
   errorMessage?: string | null;
@@ -39,6 +39,7 @@ export interface Extraction {
   processedChunks: number;
   createdAt: string;
   updatedAt: string;
+  originalName?: string;
 }
 
 export interface ExtractModuleDto {

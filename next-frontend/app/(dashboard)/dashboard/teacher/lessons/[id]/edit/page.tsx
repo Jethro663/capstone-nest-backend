@@ -22,6 +22,27 @@ const BLOCK_TYPES = [
   { type: 'divider', label: '➖ Divider' },
 ] as const;
 
+function getBlockTextValue(content: ContentBlock['content']): string {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object') {
+    const maybeText = content.text;
+    if (typeof maybeText === 'string') return maybeText;
+    return JSON.stringify(content, null, 2);
+  }
+  return '';
+}
+
+function getBlockUrlValue(content: ContentBlock['content']): string {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object') {
+    const maybeUrl = content.url;
+    if (typeof maybeUrl === 'string') return maybeUrl;
+    const maybeText = content.text;
+    if (typeof maybeText === 'string') return maybeText;
+  }
+  return '';
+}
+
 export default function LessonEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -222,7 +243,11 @@ export default function LessonEditorPage() {
 }
 
 function BlockEditor({ block, onSave, onCancel }: { block: ContentBlock; onSave: (content: string) => void; onCancel: () => void }) {
-  const [value, setValue] = useState(block.content || '');
+  const [value, setValue] = useState(
+    block.type === 'text' || block.type === 'question'
+      ? getBlockTextValue(block.content)
+      : getBlockUrlValue(block.content),
+  );
 
   return (
     <div className="space-y-2">
@@ -242,15 +267,15 @@ function BlockEditor({ block, onSave, onCancel }: { block: ContentBlock; onSave:
 function BlockPreview({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
-      return <p className="text-sm whitespace-pre-wrap">{block.content || 'Empty text block'}</p>;
+      return <p className="text-sm whitespace-pre-wrap">{getBlockTextValue(block.content) || 'Empty text block'}</p>;
     case 'image':
-      return <p className="text-sm text-muted-foreground">🖼️ Image: {block.content || 'No URL'}</p>;
+      return <p className="text-sm text-muted-foreground">🖼️ Image: {getBlockUrlValue(block.content) || 'No URL'}</p>;
     case 'video':
-      return <p className="text-sm text-muted-foreground">🎥 Video: {block.content || 'No URL'}</p>;
+      return <p className="text-sm text-muted-foreground">🎥 Video: {getBlockUrlValue(block.content) || 'No URL'}</p>;
     case 'question':
-      return <p className="text-sm">{block.content || 'Empty question'}</p>;
+      return <p className="text-sm whitespace-pre-wrap">{getBlockTextValue(block.content) || 'Empty question'}</p>;
     case 'file':
-      return <p className="text-sm text-muted-foreground">📎 File: {block.content || 'No URL'}</p>;
+      return <p className="text-sm text-muted-foreground">📎 File: {getBlockUrlValue(block.content) || 'No URL'}</p>;
     case 'divider':
       return <hr className="my-2" />;
     default:

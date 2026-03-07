@@ -72,6 +72,9 @@ describe('FileUploadService', () => {
 
   const mockDb: any = {
     query: {
+      classes: {
+        findFirst: jest.fn(),
+      },
       uploadedFiles: {
         findFirst: jest.fn(),
         findMany:  jest.fn(),
@@ -85,6 +88,10 @@ describe('FileUploadService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

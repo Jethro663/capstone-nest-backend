@@ -165,6 +165,7 @@ async def run_extraction(
         original_name = file_row["original_name"]
 
         file_path = resolve_uploaded_file_path(file_path)
+        logger.info("[extraction] Resolved file %s to %s", file_id, file_path)
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Physical file not found: {file_path}")
@@ -308,8 +309,8 @@ async def run_extraction(
                     "modelUsed": model_used,
                     "responseTimeMs": response_time_ms,
                     "ctx": {
-                        "fileId": file_id,
-                        "extractionId": extraction_id,
+                        "fileId": str(file_id),
+                        "extractionId": str(extraction_id),
                         "originalFileName": original_name,
                         "chunks": len(chunks),
                         "sanitizationWarnings": sanitization.warnings,
@@ -366,8 +367,8 @@ async def run_extraction(
                     "modelUsed": model_used,
                     "responseTimeMs": response_time_ms,
                     "ctx": {
-                        "fileId": file_id,
-                        "extractionId": extraction_id,
+                        "fileId": str(file_id),
+                        "extractionId": str(extraction_id),
                         "originalFileName": original_name,
                         "ollamaOffline": True,
                         "sanitizationWarnings": sanitization.warnings,

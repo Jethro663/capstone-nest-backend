@@ -17,7 +17,7 @@ export interface ContentBlock {
   lessonId: string;
   type: ContentBlockType;
   order: number;
-  content?: string;
+  content?: string | Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 

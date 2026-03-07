@@ -31,6 +31,7 @@ import type { Announcement } from '@/types/announcement';
 import type { Extraction } from '@/types/extraction';
 import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
 import type { GradingPeriod } from '@/utils/constants';
+import type { UploadedFile } from '@/types/file';
 
 const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
 
@@ -52,12 +53,13 @@ export default function TeacherClassDetailPage() {
   const [showCreateLesson, setShowCreateLesson] = useState(false);
   const [showAddStudents, setShowAddStudents] = useState(false);
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
-  const [showExtractModule, setShowExtractModule] = useState(false);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
 
   // Extract module states
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [libraryFiles, setLibraryFiles] = useState<UploadedFile[]>([]);
+  const [selectedLibraryFileId, setSelectedLibraryFileId] = useState('');
 
   // Class record state
   const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
@@ -78,13 +80,14 @@ export default function TeacherClassDetailPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes, announcementsRes, extractionsRes] = await Promise.all([
+      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes, announcementsRes, extractionsRes, libraryRes] = await Promise.all([
         classService.getById(classId),
         lessonService.getByClass(classId),
         assessmentService.getByClass(classId),
         classService.getEnrollments(classId),
         announcementService.getByClass(classId).catch(() => ({ data: [] as Announcement[] })),
         extractionService.listByClass(classId).catch(() => ({ data: [] as Extraction[] })),
+        fileService.getAll().catch(() => ({ data: [] as UploadedFile[] })),
       ]);
       setClassItem(classRes.data);
       setLessons(lessonsRes.data || []);
@@ -92,6 +95,7 @@ export default function TeacherClassDetailPage() {
       setEnrollments(enrollmentsRes.data || []);
       setAnnouncements(Array.isArray(announcementsRes.data) ? announcementsRes.data : []);
       setExtractions(Array.isArray(extractionsRes.data) ? extractionsRes.data : []);
+      setLibraryFiles(Array.isArray(libraryRes.data) ? libraryRes.data : []);
     } catch {
       toast.error('Failed to load class details');
     } finally {
@@ -327,22 +331,13 @@ export default function TeacherClassDetailPage() {
 
   // ── Extract Module ────────────────────────────────────────────────────────
 
-  const handleExtractModule = async () => {
-    if (!extractFile) return;
+  const queueExtraction = async (fileId: string) => {
     setExtracting(true);
     try {
-      // 1. Upload the PDF
-      const uploadRes = await fileService.upload(extractFile, classId);
-      const fileId = uploadRes.data.id;
-
-      // 2. Start extraction
       const extractRes = await extractionService.extractModule({ fileId });
-
       toast.success('Extraction queued! Redirecting to review page...');
-      setShowExtractModule(false);
       setExtractFile(null);
-
-      // 3. Navigate to the extraction review page
+      setSelectedLibraryFileId('');
       router.push(`/dashboard/teacher/extractions/${extractRes.data.extractionId}`);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -352,6 +347,24 @@ export default function TeacherClassDetailPage() {
         'Failed to start extraction';
       toast.error(msg);
     } finally {
+      setExtracting(false);
+    }
+  };
+
+  const handleExtractModule = async () => {
+    if (!extractFile) return;
+    setExtracting(true);
+    try {
+      const uploadRes = await fileService.upload(extractFile, { classId });
+      setLibraryFiles((prev) => [uploadRes.data, ...prev]);
+      await queueExtraction(uploadRes.data.id);
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast.error(
+        axiosErr?.response?.data?.message ||
+          (err instanceof Error ? err.message : null) ||
+          'Failed to start extraction',
+      );
       setExtracting(false);
     }
   };
@@ -378,54 +391,22 @@ export default function TeacherClassDetailPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="lessons">
-        <TabsList>
-          <TabsTrigger value="lessons">Lessons</TabsTrigger>
-          <TabsTrigger value="assessments">Assessments</TabsTrigger>
-          <TabsTrigger value="announcements">Announcements</TabsTrigger>
-          <TabsTrigger value="class-record">Class Record</TabsTrigger>
-          <TabsTrigger value="students">Students</TabsTrigger>
+        <Tabs defaultValue="lessons">
+          <TabsList>
+            <TabsTrigger value="lessons">Lessons</TabsTrigger>
+            <TabsTrigger value="assessments">Assessments</TabsTrigger>
+            <TabsTrigger value="extraction">Extraction</TabsTrigger>
+            <TabsTrigger value="announcements">Announcements</TabsTrigger>
+            <TabsTrigger value="class-record">Class Record</TabsTrigger>
+            <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
 
         {/* Lessons Tab */}
         <TabsContent value="lessons" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{lessons.length} lessons</p>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setShowExtractModule(true)}>
-                Extract from PDF
-              </Button>
-              <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
-            </div>
+            <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
           </div>
-
-          {/* Past extractions */}
-          {extractions.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Recent Extractions</p>
-              {extractions.slice(0, 5).map((ext) => (
-                <Card key={ext.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => router.push(`/dashboard/teacher/extractions/${ext.id}`)}>
-                  <CardContent className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-3">
-                      <Badge variant={
-                        ext.extractionStatus === 'completed' ? 'default' :
-                        ext.extractionStatus === 'applied' ? 'default' :
-                        ext.extractionStatus === 'failed' ? 'destructive' : 'secondary'
-                      }>
-                        {ext.extractionStatus}
-                      </Badge>
-                      <span className="text-sm">
-                        {ext.structuredContent?.title || 'Extraction'} — {ext.structuredContent?.lessons?.length ?? '?'} lessons
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(ext.createdAt).toLocaleDateString()}
-                    </span>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
           {lessons.length === 0 ? (
             <Card><CardContent className="p-6 text-center text-muted-foreground">No lessons yet.</CardContent></Card>
           ) : (
@@ -454,6 +435,128 @@ export default function TeacherClassDetailPage() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="extraction" className="mt-4">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            <Card className="overflow-hidden border-red-100 bg-[radial-gradient(circle_at_top_left,_rgba(220,38,38,0.1),_transparent_40%),linear-gradient(135deg,#ffffff_0%,#fff8f5_100%)]">
+              <CardHeader>
+                <CardTitle className="text-xl">Extraction Workspace</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Upload a new PDF for this class or reuse one from Nexora Library. Completed extractions stay here for review and lesson drafting.
+                </p>
+              </CardHeader>
+              <CardContent className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-3 rounded-2xl border bg-white/80 p-4">
+                  <Label>Upload a fresh module PDF</Label>
+                  <Input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
+                  />
+                  <Button onClick={handleExtractModule} disabled={!extractFile || extracting}>
+                    {extracting ? 'Uploading & Extracting...' : 'Start New Extraction'}
+                  </Button>
+                </div>
+                <div className="space-y-3 rounded-2xl border bg-white/80 p-4">
+                  <Label>Pick an existing library PDF</Label>
+                  <select
+                    value={selectedLibraryFileId}
+                    onChange={(e) => setSelectedLibraryFileId(e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">Select from Nexora Library</option>
+                    {libraryFiles.map((file) => (
+                      <option key={file.id} value={file.id}>
+                        {file.originalName} {file.scope === 'general' ? '• General' : '• My Library'}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    onClick={() => selectedLibraryFileId && queueExtraction(selectedLibraryFileId)}
+                    disabled={!selectedLibraryFileId || extracting}
+                  >
+                    Use Selected PDF
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-base font-semibold">Extraction Queue</p>
+                  <p className="text-sm text-muted-foreground">
+                    {extractions.length} extraction run(s) for this class
+                  </p>
+                </div>
+              </div>
+
+              {extractions.length === 0 ? (
+                <Card>
+                  <CardContent className="p-6 text-center text-muted-foreground">
+                    No extraction history yet. Start with a PDF upload or choose a library file above.
+                  </CardContent>
+                </Card>
+              ) : (
+                extractions.map((ext) => (
+                  <Card key={ext.id} className="border-slate-200 shadow-sm">
+                    <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={
+                            ext.extractionStatus === 'completed' || ext.extractionStatus === 'applied'
+                              ? 'default'
+                              : ext.extractionStatus === 'failed'
+                                ? 'destructive'
+                                : 'secondary'
+                          }>
+                            {ext.extractionStatus}
+                          </Badge>
+                          <span className="text-sm font-medium">
+                            {ext.originalName || ext.structuredContent?.title || 'PDF extraction'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {ext.structuredContent?.lessons?.length ?? 0} lesson(s) • {new Date(ext.createdAt).toLocaleString()}
+                        </p>
+                        {ext.errorMessage && (
+                          <p className="text-sm text-red-600">{ext.errorMessage}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" onClick={() => router.push(`/dashboard/teacher/extractions/${ext.id}`)}>
+                          Review
+                        </Button>
+                        {!ext.isApplied && ext.extractionStatus !== 'applied' && (
+                          <Button
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            onClick={async () => {
+                              try {
+                                await extractionService.delete(ext.id);
+                                toast.success('Extraction deleted');
+                                fetchData();
+                              } catch {
+                                toast.error('Failed to delete extraction');
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </motion.div>
         </TabsContent>
 
         {/* Assessments Tab */}
@@ -904,33 +1007,6 @@ export default function TeacherClassDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateAnnouncement(false)}>Cancel</Button>
             <Button onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Extract Module from PDF Modal */}
-      <Dialog open={showExtractModule} onOpenChange={setShowExtractModule}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Extract Lessons from PDF</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Upload a PDF module and our AI will automatically extract structured lessons with content blocks.
-              You&apos;ll be able to review, edit, and approve each lesson before it&apos;s published.
-            </p>
-            <div>
-              <Label>PDF File</Label>
-              <Input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowExtractModule(false); setExtractFile(null); }}>Cancel</Button>
-            <Button onClick={handleExtractModule} disabled={!extractFile || extracting}>
-              {extracting ? 'Uploading & Extracting...' : 'Start Extraction'}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -10,6 +10,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { Lesson, ContentBlock } from '@/types/lesson';
 
+function getBlockTextValue(content: ContentBlock['content']): string {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object') {
+    const maybeText = content.text;
+    if (typeof maybeText === 'string') return maybeText;
+    return '';
+  }
+  return '';
+}
+
+function getBlockUrlValue(content: ContentBlock['content']): string {
+  if (typeof content === 'string') return content;
+  if (content && typeof content === 'object') {
+    const maybeUrl = content.url;
+    if (typeof maybeUrl === 'string') return maybeUrl;
+    const maybeText = content.text;
+    if (typeof maybeText === 'string') return maybeText;
+  }
+  return '';
+}
+
 export default function StudentLessonViewPage() {
   const params = useParams();
   const router = useRouter();
@@ -141,10 +162,10 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
       return (
-        <div className="prose max-w-none leading-relaxed" dangerouslySetInnerHTML={{ __html: block.content || '' }} />
+        <div className="prose max-w-none leading-relaxed" dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }} />
       );
     case 'image': {
-      const src = block.content || (block.metadata as Record<string, string>)?.url;
+      const src = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
       const caption = (block.metadata as Record<string, string>)?.caption;
       return (
         <figure>
@@ -154,7 +175,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       );
     }
     case 'video': {
-      const url = block.content || (block.metadata as Record<string, string>)?.url;
+      const url = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
       if (!url) return null;
       const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
       const embedUrl = isYouTube
@@ -171,12 +192,12 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         <Card className="border-blue-200 bg-blue-50">
           <CardContent className="p-4">
             <Badge variant="secondary" className="mb-2">Quiz Question</Badge>
-            <p className="font-medium">{block.content}</p>
+            <p className="font-medium whitespace-pre-wrap">{getBlockTextValue(block.content)}</p>
           </CardContent>
         </Card>
       );
     case 'file': {
-      const fileName = (block.metadata as Record<string, string>)?.fileName || block.content || 'File';
+      const fileName = (block.metadata as Record<string, string>)?.fileName || getBlockTextValue(block.content) || 'File';
       const fileUrl = (block.metadata as Record<string, string>)?.url;
       return (
         <Card>

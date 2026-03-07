@@ -3,8 +3,7 @@ import {
   Get,
   Post,
   Delete,
-  Body,
-  Param,
+  Patch,
   Query,
   Res,
   UseGuards,
@@ -13,6 +12,8 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  Param,
+  Body,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
@@ -24,7 +25,6 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { FileUploadService } from './file-upload.service';
 import { PdfValidationPipe } from './pipes/pdf-validation.pipe';
-import { UploadFileDto } from './dto/file-upload.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -33,22 +33,27 @@ import {
   MAX_FILE_SIZE_BYTES,
   UPLOAD_DEST,
 } from './constants/file-upload.constants';
+import {
+  CreateLibraryFolderDto,
+  FileQueryDto,
+  FileScopeDto,
+  UpdateFileMetadataDto,
+  UpdateLibraryFolderDto,
+  UploadFileDto,
+} from './dto/file-upload.dto';
 
-// Multer disk-storage config ─────────────────────────────────────────────────
 const multerOptions = {
   storage: diskStorage({
     destination: (_req, _file, cb) => {
-      // Ensure the directory exists at runtime
       fs.mkdirSync(UPLOAD_DEST, { recursive: true });
       cb(null, UPLOAD_DEST);
     },
     filename: (_req, _file, cb) => {
-      // Generate a collision-resistant name; extension is always .pdf
       cb(null, `${uuidv4()}_${Date.now()}.pdf`);
     },
   }),
   limits: {
-    fileSize: MAX_FILE_SIZE_BYTES, // 100 MB hard limit at multer level
+    fileSize: MAX_FILE_SIZE_BYTES,
     files: 1,
   },
   fileFilter: (
@@ -56,16 +61,10 @@ const multerOptions = {
     file: Express.Multer.File,
     cb: (error: Error | null, accept: boolean) => void,
   ) => {
-    // Coarse MIME pre-check (spoofable — PdfValidationPipe does the real check)
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(null, false); // Reject silently; PdfValidationPipe will throw proper exception
-    }
+    if (file.mimetype === 'application/pdf') cb(null, true);
+    else cb(null, false);
   },
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 @ApiTags('File Uploads')
 @ApiBearerAuth('token')
@@ -74,30 +73,32 @@ const multerOptions = {
 export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 
-  /**
-   * POST /api/files/upload?classId=...
-   * Upload a PDF (teacher only). classId is required as a query parameter.
-   */
   @Post('upload')
-  @Roles(RoleName.Teacher)
+  @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', multerOptions))
   async uploadFile(
     @UploadedFile(new PdfValidationPipe()) file: Express.Multer.File,
-    @Query('classId', ParseUUIDPipe) classId: string,
+    @Query() query: UploadFileDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const record = await this.fileUploadService.saveFileRecord({
-      teacherId: user.id,
-      classId,
-      originalName: file.originalname,
-      storedName: file.filename,
-      mimeType: file.mimetype,
-      sizeBytes: file.size,
-      // Persist a normalized relative path for cross-service portability.
-      filePath: path.posix.join('uploads', 'pdfs', file.filename),
-    });
+    const scope = query.scope ?? FileScopeDto.Private;
+
+    const record = await this.fileUploadService.saveFileRecord(
+      {
+        teacherId: user.id,
+        classId: query.classId,
+        folderId: query.folderId,
+        scope,
+        originalName: file.originalname,
+        storedName: file.filename,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        filePath: path.posix.join('uploads', 'pdfs', file.filename),
+      },
+      user,
+    );
 
     return {
       success: true,
@@ -106,16 +107,13 @@ export class FileUploadController {
     };
   }
 
-  /**
-   * GET /api/files
-   * Admin → all files. Teacher → their own files.
-   */
   @Get()
   @Roles(RoleName.Admin, RoleName.Teacher)
   async listFiles(
     @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @Query() query: FileQueryDto,
   ) {
-    const files = await this.fileUploadService.findAll(user);
+    const files = await this.fileUploadService.findAll(user, query);
 
     return {
       success: true,
@@ -125,10 +123,68 @@ export class FileUploadController {
     };
   }
 
-  /**
-   * GET /api/files/storage-summary
-   * Admin only: total file count + storage size consumed.
-   */
+  @Get('folders')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async listFolders(
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @Query() query: FileQueryDto,
+  ) {
+    const folders = await this.fileUploadService.listFolders(user, query);
+
+    return {
+      success: true,
+      message: 'Folders retrieved successfully',
+      data: folders,
+      count: folders.length,
+    };
+  }
+
+  @Post('folders')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async createFolder(
+    @Body() dto: CreateLibraryFolderDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    const folder = await this.fileUploadService.createFolder(dto, user);
+
+    return {
+      success: true,
+      message: 'Folder created successfully',
+      data: folder,
+    };
+  }
+
+  @Patch('folders/:id')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async updateFolder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLibraryFolderDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    const folder = await this.fileUploadService.updateFolder(id, dto, user);
+
+    return {
+      success: true,
+      message: 'Folder updated successfully',
+      data: folder,
+    };
+  }
+
+  @Delete('folders/:id')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async deleteFolder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.fileUploadService.deleteFolder(id, user);
+
+    return {
+      success: true,
+      message: 'Folder deleted successfully',
+    };
+  }
+
   @Get('storage-summary')
   @Roles(RoleName.Admin)
   async getStorageSummary() {
@@ -141,10 +197,6 @@ export class FileUploadController {
     };
   }
 
-  /**
-   * GET /api/files/:id
-   * Retrieve metadata for a single file. Teacher must own it.
-   */
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getFile(
@@ -160,11 +212,22 @@ export class FileUploadController {
     };
   }
 
-  /**
-   * GET /api/files/:id/download
-   * Stream the PDF through the API — never exposes raw disk paths.
-   * Teacher must own it; admin can always download.
-   */
+  @Patch(':id')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async updateFile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateFileMetadataDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    const file = await this.fileUploadService.updateFileMetadata(id, dto, user);
+
+    return {
+      success: true,
+      message: 'File updated successfully',
+      data: file,
+    };
+  }
+
   @Get(':id/download')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async downloadFile(
@@ -173,12 +236,9 @@ export class FileUploadController {
     @Res() res: Response,
   ) {
     const filePath = await this.fileUploadService.getFilePath(id, user);
-
-    // Resolve to an absolute path for sendFile
     const absolutePath = path.resolve(filePath);
-
-    // Safety check: ensure the resolved path is still under uploads/pdfs
     const uploadsRoot = path.resolve(UPLOAD_DEST);
+
     if (!absolutePath.startsWith(uploadsRoot)) {
       res.status(403).json({
         success: false,
@@ -205,10 +265,6 @@ export class FileUploadController {
     res.sendFile(absolutePath);
   }
 
-  /**
-   * DELETE /api/files/:id
-   * Soft-delete. Teacher must own the file; admins can delete any.
-   */
   @Delete(':id')
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)

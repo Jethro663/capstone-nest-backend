@@ -32,13 +32,11 @@ const statusVariant: Record<ExtractionStatus, 'default' | 'secondary' | 'destruc
 /* ── Block type display names ──────────────────────────────────────────── */
 const blockTypeLabel: Record<string, string> = {
   text: 'Text',
-  heading: 'Heading',
-  list: 'List',
-  code: 'Code',
   image: 'Image',
+  video: 'Video',
+  question: 'Question',
+  file: 'File',
   divider: 'Divider',
-  quote: 'Quote',
-  table: 'Table',
 };
 
 function getBlockTextContent(block: ExtractionBlock): string {
@@ -373,7 +371,7 @@ export default function ExtractionReviewPage() {
           <CardContent className="p-6">
             <p className="text-destructive font-medium">This extraction failed.</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Try uploading the PDF again or contact support if the issue persists.
+              Start a new run from the class Extraction tab. Scanned PDFs and image-only files usually need OCR-friendly source text first.
             </p>
             {extraction.errorMessage && (
               <pre className="mt-3 whitespace-pre-wrap rounded-md bg-destructive/10 p-3 text-xs text-destructive">
@@ -428,7 +426,7 @@ export default function ExtractionReviewPage() {
           </h2>
 
           {editLessons.map((lesson, li) => (
-            <Card key={li} className={`transition-all ${selectedLessons.has(li) ? 'ring-2 ring-primary' : ''}`}>
+            <Card key={li} className={`transition-all shadow-sm ${selectedLessons.has(li) ? 'ring-2 ring-primary' : ''}`}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
@@ -529,7 +527,7 @@ export default function ExtractionReviewPage() {
                         )
                       }
                       disabled={!isEditable || isApplied}
-                      rows={block.type === 'heading' ? 1 : 4}
+                      rows={block.type === 'divider' ? 1 : 4}
                       className="text-sm font-mono"
                     />
                   </div>
@@ -572,3 +570,5 @@ export default function ExtractionReviewPage() {
     </div>
   );
 }
+
+

@@ -13,7 +13,7 @@ import logging
 import os
 import uuid
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -204,7 +204,6 @@ async def health():
 @app.post("/extract", status_code=202)
 async def extract_module(
     body: ExtractRequest,
-    background_tasks: BackgroundTasks,
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -241,19 +240,21 @@ async def extract_module(
     await db.commit()
     extraction_id = result.scalar_one()
 
-    # Run extraction in background
+    # Run extraction in background on the active event loop.
     async def _run():
         from .database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as bg_db:
+            logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
             await run_extraction(bg_db, extraction_id, body.file_id, user.id)
 
     try:
-        asyncio.create_task(_run())
-    except RuntimeError:
-        # Fallback for worker thread contexts where there's no running loop.
-        # Schedule the coroutine by running it in a new event loop inside a background task.
-        background_tasks.add_task(lambda: asyncio.run(_run()))
+        loop = asyncio.get_running_loop()
+        loop.create_task(_run())
+        logger.info("[extract] Queued extraction %s on running event loop", extraction_id)
+    except RuntimeError as exc:
+        logger.exception("[extract] Failed to schedule extraction %s: %s", extraction_id, exc)
+        raise HTTPException(500, "Failed to schedule extraction task") from exc
 
     return {
         "success": True,
@@ -566,14 +567,17 @@ async def apply_extraction(
             await db.execute(
                 sa_text(
                     'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
-                    "VALUES (:lessonId, :type, :order, :content::jsonb, :metadata::jsonb)"
+                    "VALUES (:lessonId, :type, :order, :content, :metadata)"
+                ).bindparams(
+                    bindparam("content", type_=postgresql.JSONB),
+                    bindparam("metadata", type_=postgresql.JSONB),
                 ),
                 {
                     "lessonId": new_lesson["id"],
                     "type": block_type,
                     "order": block.get("order", idx),
-                    "content": json.dumps(block.get("content", {})),
-                    "metadata": json.dumps(block.get("metadata", {})),
+                    "content": block.get("content", {}),
+                    "metadata": block.get("metadata", {}),
                 },
             )
 

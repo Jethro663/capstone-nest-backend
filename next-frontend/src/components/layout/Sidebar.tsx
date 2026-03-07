@@ -42,6 +42,7 @@ const studentNav: NavItem[] = [
 const teacherNav: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/teacher', icon: LayoutDashboard },
   { label: 'My Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
+  { label: 'Nexora Library', href: '/dashboard/library', icon: FolderOpen },
   { label: 'My Sections', href: '/dashboard/teacher/sections', icon: Users },
   { label: 'Class Record', href: '/dashboard/teacher/class-record', icon: ClipboardList },
   { label: 'Interventions', href: '/dashboard/teacher/interventions', icon: Users },
@@ -55,6 +56,7 @@ const adminNav: NavItem[] = [
   { label: 'Users', href: '/dashboard/admin/users', icon: Users },
   { label: 'Sections', href: '/dashboard/admin/sections', icon: FolderOpen },
   { label: 'Classes', href: '/dashboard/admin/classes', icon: BookOpen },
+  { label: 'Nexora Library', href: '/dashboard/library', icon: FolderOpen },
   { label: 'Roster Import', href: '/dashboard/admin/roster-import', icon: ClipboardList },
   { label: 'Announcements', href: '/dashboard/admin/announcements', icon: Megaphone },
   { label: 'AI Chatbot', href: '/dashboard/admin/chatbot', icon: Bot },

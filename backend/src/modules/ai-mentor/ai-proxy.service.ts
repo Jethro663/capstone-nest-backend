@@ -43,20 +43,34 @@ export class AiProxyService {
       });
       clearTimeout(timer);
 
-      const json = await res.json();
+      const rawText = await res.text();
+      let payload: any = null;
+
+      if (rawText) {
+        try {
+          payload = JSON.parse(rawText);
+        } catch {
+          payload = { message: rawText };
+        }
+      }
 
       if (!res.ok) {
         this.logger.warn(
           `AI service returned ${res.status} for ${method} ${path}: %j`,
-          json,
+          payload,
         );
         throw new HttpException(
-          { message: json?.detail || json?.message || 'AI service error' },
+          {
+            message:
+              payload?.detail ||
+              payload?.message ||
+              'AI service error',
+          },
           res.status,
         );
       }
 
-      return json;
+      return payload;
     } catch (err) {
       clearTimeout(timer);
       this.logger.error(
