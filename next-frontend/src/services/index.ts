@@ -9,3 +9,4 @@ export { notificationService } from './notification-service';
 export { fileService } from './file-service';
 export { dashboardService } from './dashboard-service';
 export { rosterImportService } from './roster-import-service';
+export { performanceService } from './performance-service';

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DatabaseModule } from '../../database/database.module';
 import { ClassRecordController } from './class-record.controller';
 import { ClassRecordService } from './class-record.service';
@@ -7,7 +8,7 @@ import { ClassRecordSyncService } from './class-record-sync.service';
 import { AdviserSectionGuard } from './guards/adviser-section.guard';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, EventEmitterModule],
   controllers: [ClassRecordController],
   providers: [
     ClassRecordService,

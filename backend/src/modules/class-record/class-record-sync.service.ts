@@ -1,10 +1,11 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { and, eq, isNull, asc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -15,13 +16,19 @@ import {
   assessments,
   assessmentAttempts,
 } from '../../drizzle/schema';
-import { AssessmentSubmittedEvent } from '../../common/events';
+import {
+  AssessmentSubmittedEvent,
+  ClassRecordScoresUpdatedEvent,
+} from '../../common/events';
 
 @Injectable()
 export class ClassRecordSyncService {
   private readonly logger = new Logger(ClassRecordSyncService.name);
 
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -60,7 +67,27 @@ export class ClassRecordSyncService {
       );
     }
 
-    return this._syncItemFromAssessment(classRecordItemId, item.assessmentId);
+    if (item.classRecord.teacherId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const result = await this._syncItemFromAssessment(
+      classRecordItemId,
+      item.assessmentId,
+    );
+
+    if (result.synced > 0 && result.classId) {
+      this.eventEmitter.emit(
+        ClassRecordScoresUpdatedEvent.eventName,
+        new ClassRecordScoresUpdatedEvent({
+          classId: result.classId,
+          studentIds: result.studentIds,
+          triggerSource: 'manual_sync',
+        }),
+      );
+    }
+
+    return { synced: result.synced };
   }
 
   /**
@@ -70,13 +97,18 @@ export class ClassRecordSyncService {
   private async _syncItemFromAssessment(
     classRecordItemId: string,
     assessmentId: string,
-  ): Promise<{ synced: number }> {
+  ): Promise<{ synced: number; studentIds: string[]; classId: string | null }> {
     const item = await this.db.query.classRecordItems.findFirst({
       where: eq(classRecordItems.id, classRecordItemId),
       columns: { id: true, maxScore: true },
+      with: {
+        classRecord: {
+          columns: { classId: true },
+        },
+      },
     });
 
-    if (!item) return { synced: 0 };
+    if (!item) return { synced: 0, studentIds: [], classId: null };
 
     // Get latest submitted attempt per student
     const attempts = await this.db.query.assessmentAttempts.findMany({
@@ -92,7 +124,9 @@ export class ClassRecordSyncService {
       orderBy: (a, { desc }) => [desc(a.submittedAt)],
     });
 
-    if (attempts.length === 0) return { synced: 0 };
+    if (attempts.length === 0) {
+      return { synced: 0, studentIds: [], classId: item.classRecord.classId };
+    }
 
     // Deduplicate: keep latest per student
     const latestPerStudent = new Map<string, { score: number }>();
@@ -130,7 +164,11 @@ export class ClassRecordSyncService {
       synced++;
     }
 
-    return { synced };
+    return {
+      synced,
+      studentIds: [...latestPerStudent.keys()],
+      classId: item.classRecord.classId,
+    };
   }
 
   /**
@@ -249,6 +287,15 @@ export class ClassRecordSyncService {
           },
         });
 
+      this.eventEmitter.emit(
+        ClassRecordScoresUpdatedEvent.eventName,
+        new ClassRecordScoresUpdatedEvent({
+          classId: assessment.classId,
+          studentIds: [event.studentId],
+          triggerSource: 'assessment_sync',
+        }),
+      );
+
       this.logger.log(
         `Auto-synced score for student "${event.studentId}" → ` +
           `item "${item.id}" (${categoryName}, ${event.quarter})`,
@@ -284,6 +331,16 @@ export class ClassRecordSyncService {
           item.id,
           event.assessmentId,
         );
+        if (result.synced > 0 && result.classId) {
+          this.eventEmitter.emit(
+            ClassRecordScoresUpdatedEvent.eventName,
+            new ClassRecordScoresUpdatedEvent({
+              classId: result.classId,
+              studentIds: result.studentIds,
+              triggerSource: 'assessment_sync',
+            }),
+          );
+        }
         this.logger.log(
           `Legacy sync: ${result.synced} scores for item "${item.id}"`,
         );

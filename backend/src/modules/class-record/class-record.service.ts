@@ -6,6 +6,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -21,6 +22,7 @@ import {
 } from '../../drizzle/schema';
 import { ClassRecordComputationService } from './class-record-computation.service';
 import { ClassRecordSyncService } from './class-record-sync.service';
+import { ClassRecordScoresUpdatedEvent } from '../../common/events';
 import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
@@ -40,6 +42,7 @@ export class ClassRecordService {
     private readonly databaseService: DatabaseService,
     private readonly computationService: ClassRecordComputationService,
     private readonly syncService: ClassRecordSyncService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private get db() {
@@ -432,6 +435,15 @@ export class ClassRecordService {
       })
       .returning();
 
+    this.eventEmitter.emit(
+      ClassRecordScoresUpdatedEvent.eventName,
+      new ClassRecordScoresUpdatedEvent({
+        classId: item.classRecord.classId,
+        studentIds: [dto.studentId],
+        triggerSource: 'manual_single',
+      }),
+    );
+
     return score;
   }
 
@@ -487,6 +499,15 @@ export class ClassRecordService {
           })
           .returning();
         return score;
+      }),
+    );
+
+    this.eventEmitter.emit(
+      ClassRecordScoresUpdatedEvent.eventName,
+      new ClassRecordScoresUpdatedEvent({
+        classId: item.classRecord.classId,
+        studentIds: [...new Set(dto.scores.map((entry) => entry.studentId))],
+        triggerSource: 'manual_bulk',
       }),
     );
 

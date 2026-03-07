@@ -26,6 +26,7 @@ import { ClassRecordModule } from './modules/class-record/class-record.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AiMentorModule } from './modules/ai-mentor/ai-mentor.module';
+import { PerformanceModule } from './modules/performance/performance.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
@@ -72,6 +73,7 @@ import ollamaConfig from './config/ollama.config';
     AnnouncementsModule,
     NotificationsModule,
     AiMentorModule,
+    PerformanceModule,
   ],
   providers: [
     {

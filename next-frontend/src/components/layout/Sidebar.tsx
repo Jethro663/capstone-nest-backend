@@ -17,6 +17,7 @@ import {
   User,
   Bot,
   X,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
@@ -32,6 +33,7 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/student', icon: LayoutDashboard },
   { label: 'My Courses', href: '/dashboard/student/courses', icon: BookOpen },
+  { label: 'Performance', href: '/dashboard/student/performance', icon: BarChart3 },
   { label: 'Announcements', href: '/dashboard/student/announcements', icon: Megaphone },
   { label: 'Profile', href: '/dashboard/profile', icon: User },
 ];
@@ -41,6 +43,7 @@ const teacherNav: NavItem[] = [
   { label: 'My Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
   { label: 'My Sections', href: '/dashboard/teacher/sections', icon: Users },
   { label: 'Class Record', href: '/dashboard/teacher/class-record', icon: ClipboardList },
+  { label: 'Performance', href: '/dashboard/teacher/performance', icon: BarChart3 },
   { label: 'Announcements', href: '/dashboard/teacher/announcements', icon: Megaphone },
   { label: 'Profile', href: '/dashboard/profile', icon: User },
 ];
