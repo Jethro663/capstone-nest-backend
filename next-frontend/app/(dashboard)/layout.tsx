@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -9,28 +9,22 @@ import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { loading, isAuthenticated, isProfileIncomplete, role } = useAuth();
+  const { loading, isAuthenticated, isProfileIncomplete } = useAuth();
   const router = useRouter();
+  const shouldRedirect = !loading && (!isAuthenticated || isProfileIncomplete);
+
+  useEffect(() => {
+    if (!shouldRedirect) return;
+    router.replace(!isAuthenticated ? '/login' : '/complete-profile');
+  }, [shouldRedirect, isAuthenticated, router]);
 
   // Show a loading spinner while auth state is being resolved
-  if (loading) {
+  if (loading || shouldRedirect) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
-
-  // Redirect unauthenticated users
-  if (!isAuthenticated) {
-    router.replace('/login');
-    return null;
-  }
-
-  // Force profile completion
-  if (isProfileIncomplete) {
-    router.replace('/complete-profile');
-    return null;
   }
 
   return (

@@ -2,13 +2,18 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, CircleCheckBig, CircleX, Hourglass } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  StudentActionCard,
+  StudentSectionHeader,
+  StudentStatusChip,
+} from '@/components/student/student-primitives';
+import { getMotionProps } from '@/components/student/student-motion';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
 import type { AttemptResult } from '@/types/assessment';
 
 export default function StudentAssessmentResultsPage() {
@@ -16,6 +21,8 @@ export default function StudentAssessmentResultsPage() {
   const router = useRouter();
   const attemptId = params.attemptId as string;
   const assessmentId = params.id as string;
+  const reduceMotion = useReducedMotion();
+  const motionProps = getMotionProps(!!reduceMotion);
 
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +31,6 @@ export default function StudentAssessmentResultsPage() {
     try {
       setLoading(true);
       const res = await assessmentService.getAttemptResults(attemptId);
-      console.log('Attempt results:', res.data);
       setResult(res.data);
     } catch {
       toast.error('Failed to load results');
@@ -39,10 +45,10 @@ export default function StudentAssessmentResultsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-40 rounded-lg" />
-        <Skeleton className="h-40 rounded-lg" />
+      <div className="max-w-4xl space-y-6">
+        <Skeleton className="h-10 w-64 rounded-xl" />
+        <Skeleton className="h-44 rounded-2xl" />
+        <Skeleton className="h-40 rounded-2xl" />
       </div>
     );
   }
@@ -52,209 +58,182 @@ export default function StudentAssessmentResultsPage() {
   }
 
   const { attempt, responses, score, passed } = result;
+  const pct = score ?? 0;
+  const correctCount = responses.filter((r) => r.isCorrect === true).length;
 
-  // If grade is not returned yet, show a pending message
   if (attempt.isReturned === false) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}`)} className="mb-2">
-            ← Back
+      <div className="student-page rounded-3xl p-1">
+        <div className="mx-auto max-w-4xl space-y-6">
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}`)} className="text-red-700 hover:bg-red-50">
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Back
           </Button>
-          <h1 className="text-2xl font-bold">Assessment Results</h1>
+          <StudentActionCard>
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <div className="rounded-full border border-amber-200 bg-amber-50 p-3 text-amber-700">
+                <Hourglass className="h-5 w-5" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900">Awaiting Teacher Review</h2>
+              <p className="max-w-md text-sm student-muted-text">
+                Your submission is complete. Your teacher will return the grade and feedback soon.
+              </p>
+            </div>
+          </StudentActionCard>
         </div>
-        <Card>
-          <CardContent className="p-6 text-center space-y-4">
-            <div className="text-5xl">⏳</div>
-            <h2 className="text-xl font-semibold">Awaiting Review</h2>
-            <p className="text-muted-foreground">
-              Your teacher hasn&apos;t returned your grade yet. Check back later.
-            </p>
-          </CardContent>
-        </Card>
       </div>
     );
   }
- 
-  // score is already a percentage (0-100)
-  const pct = score ?? 0;
 
   return (
-    <motion.div
-      className="max-w-3xl mx-auto space-y-6"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
-      {/* Header */}
-      <div>
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}`)} className="mb-2">
-          ← Back
-        </Button>
-        <h1 className="text-2xl font-bold">Assessment Results</h1>
-      </div>
+    <div className="student-page rounded-3xl p-1">
+      <motion.div {...motionProps.container} className="mx-auto max-w-4xl space-y-6">
+        <motion.div {...motionProps.item}>
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}`)} className="text-red-700 hover:bg-red-50">
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Back
+          </Button>
+        </motion.div>
 
-      {/* Score Card */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.3 }}>
-      <Card>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-2 gap-6 text-center">
-            <div>
-              <p className="text-5xl font-bold">{pct}%</p>
-              <p className="text-sm text-muted-foreground mt-1">Score</p>
+        <motion.div {...motionProps.item}>
+          <StudentActionCard className="border-0 bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-white">
+            <StudentSectionHeader
+              title="Assessment Results"
+              subtitle={`You answered ${correctCount} out of ${responses.length} correctly.`}
+              className="[&_h2]:text-white [&_p]:text-red-100"
+              action={<StudentStatusChip tone={passed ? 'success' : 'danger'}>{passed ? 'Passed' : 'Needs Improvement'}</StudentStatusChip>}
+            />
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center">
+                <p className="text-xs uppercase tracking-wide text-red-100">Score</p>
+                <p className="mt-1 text-4xl font-black">{pct}%</p>
+              </div>
+              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center">
+                <p className="text-xs uppercase tracking-wide text-red-100">Correct</p>
+                <p className="mt-1 text-4xl font-black">{correctCount}</p>
+              </div>
+              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center">
+                <p className="text-xs uppercase tracking-wide text-red-100">Attempt</p>
+                <p className="mt-1 text-4xl font-black">#{attempt.attemptNumber ?? '?'}</p>
+              </div>
             </div>
-            <div className="flex items-center justify-center">
-              <Badge
-                variant={passed ? 'default' : 'destructive'}
-                className="text-lg px-4 py-2"
-              >
-                {passed ? '✓ PASSED' : '✗ FAILED'}
-              </Badge>
-            </div>
-          </div>
-          {attempt.teacherFeedback && (
-            <div className="mt-4 border-l-4 border-primary bg-primary/5 p-3 rounded-r">
-              <p className="text-sm font-medium mb-1">Teacher Feedback</p>
-              <p className="text-sm text-muted-foreground">{attempt.teacherFeedback}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </StudentActionCard>
+        </motion.div>
+
+        {attempt.teacherFeedback && (
+          <motion.div {...motionProps.item}>
+            <StudentActionCard className="border-blue-300 bg-blue-50/70">
+              <p className="text-sm font-semibold text-blue-900">Teacher Feedback</p>
+              <p className="mt-1 text-sm text-blue-800">{attempt.teacherFeedback}</p>
+            </StudentActionCard>
+          </motion.div>
+        )}
+
+        <motion.section {...motionProps.item} className="space-y-3">
+          <StudentSectionHeader title="Question Review" subtitle="Check which answers were correct and learn from the feedback." />
+          <motion.div {...motionProps.container} className="space-y-3">
+            {responses.map((response, i) => (
+              <motion.div key={response.questionId} {...motionProps.item}>
+                <StudentActionCard className={response.isCorrect ? 'border-emerald-300 bg-emerald-50/60' : 'border-rose-300 bg-rose-50/60'}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-slate-900">Question {i + 1}</p>
+                      {response.isCorrect ? (
+                        <StudentStatusChip tone="success">
+                          <CircleCheckBig className="mr-1 h-3.5 w-3.5" />
+                          Correct
+                        </StudentStatusChip>
+                      ) : (
+                        <StudentStatusChip tone="danger">
+                          <CircleX className="mr-1 h-3.5 w-3.5" />
+                          Incorrect
+                        </StudentStatusChip>
+                      )}
+                    </div>
+                    <p className="text-xs student-muted-text">
+                      {response.pointsEarned ?? 0}/{response.question?.points ?? 0} pts
+                    </p>
+                  </div>
+
+                  <p className="mt-2 font-medium text-slate-900">{response.question?.content}</p>
+
+                  {response.question?.imageUrl && (
+                    <div className="mt-3">
+                      <img src={response.question.imageUrl} alt="Question" className="max-h-48 rounded-xl border object-contain" />
+                    </div>
+                  )}
+
+                  {(() => {
+                    const options = response.question?.options || [];
+                    if (response.selectedOptionId) {
+                      const selected = options.find((o) => o.id === response.selectedOptionId);
+                      return (
+                        <p className="mt-3 text-sm">
+                          <span className="student-muted-text">Your answer: </span>
+                          <span className="font-semibold text-slate-900">{selected?.text || response.selectedOptionId}</span>
+                        </p>
+                      );
+                    }
+                    if (response.selectedOptionIds && response.selectedOptionIds.length > 0) {
+                      const selectedTexts = response.selectedOptionIds.map(
+                        (id) => options.find((o) => o.id === id)?.text || id,
+                      );
+                      return (
+                        <p className="mt-3 text-sm">
+                          <span className="student-muted-text">Your answers: </span>
+                          <span className="font-semibold text-slate-900">{selectedTexts.join(', ')}</span>
+                        </p>
+                      );
+                    }
+                    if (response.studentAnswer) {
+                      return (
+                        <p className="mt-3 text-sm">
+                          <span className="student-muted-text">Your answer: </span>
+                          <span className="font-semibold text-slate-900">{response.studentAnswer}</span>
+                        </p>
+                      );
+                    }
+                    return <p className="mt-3 text-sm italic student-muted-text">No answer provided</p>;
+                  })()}
+
+                  {response.isCorrect === false && response.question?.options && (
+                    <p className="mt-2 text-sm">
+                      <span className="student-muted-text">Correct answer: </span>
+                      <span className="font-semibold text-emerald-700">
+                        {response.question.options.filter((o) => o.isCorrect).map((o) => o.text).join(', ')}
+                      </span>
+                    </p>
+                  )}
+
+                  {response.question?.explanation && (
+                    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                      {response.question.explanation}
+                    </div>
+                  )}
+                </StudentActionCard>
+              </motion.div>
+            ))}
+          </motion.div>
+        </motion.section>
+
+        <motion.div {...motionProps.item}>
+          <StudentActionCard className={passed ? 'border-emerald-300 bg-emerald-50/70' : 'border-amber-300 bg-amber-50/70'}>
+            <p className="font-semibold text-slate-900">{passed ? 'Great Work' : 'Study Tips'}</p>
+            {passed ? (
+              <ul className="mt-2 space-y-1 text-sm student-muted-text">
+                <li>Keep your momentum and continue to the next lesson.</li>
+                <li>Review feedback notes to sharpen weak spots.</li>
+              </ul>
+            ) : (
+              <ul className="mt-2 space-y-1 text-sm student-muted-text">
+                <li>Review lesson materials for missed topics.</li>
+                <li>Practice similar questions before your next attempt.</li>
+                <li>Ask your teacher for help on difficult items.</li>
+              </ul>
+            )}
+          </StudentActionCard>
+        </motion.div>
       </motion.div>
-
-      {/* Question Review */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Question Review</h2>
-        <div className="space-y-3">
-          {responses.map((response, i) => (
-            <motion.div
-              key={response.questionId}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 + i * 0.06, duration: 0.3 }}
-            >
-            <Card
-              className={`border-l-4 ${
-                response.isCorrect === null || response.isCorrect === undefined
-                  ? 'border-l-yellow-400'
-                  : response.isCorrect
-                    ? 'border-l-green-500'
-                    : 'border-l-red-500'
-              }`}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Q{i + 1}</span>
-                    <Badge variant={
-                      response.isCorrect === null || response.isCorrect === undefined
-                        ? 'secondary'
-                        : response.isCorrect
-                          ? 'default'
-                          : 'destructive'
-                    }>
-                      {response.isCorrect === null || response.isCorrect === undefined
-                        ? '⏳ Pending Review'
-                        : response.isCorrect
-                          ? '✓ Correct'
-                          : '✗ Incorrect'}
-                    </Badge>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {response.pointsEarned ?? 0}/{response.question?.points ?? 0} pts
-                  </span>
-                </div>
-                <p className="font-medium">{response.question?.content}</p>
-                {/* Question image */}
-                {response.question?.imageUrl && (
-                  <div className="mt-2">
-                    <img src={response.question.imageUrl} alt="Question image" className="max-h-40 rounded-md border object-contain" />
-                  </div>
-                )}
-                {/* Student answer resolution */}
-                {(() => {
-                  const options = response.question?.options || [];
-                  // Choice-based answer
-                  if (response.selectedOptionId) {
-                    const selected = options.find((o) => o.id === response.selectedOptionId);
-                    return (
-                      <p className="mt-2 text-sm">
-                        <span className="text-muted-foreground">Your answer: </span>
-                        <span className={response.isCorrect ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                          {selected?.text || response.selectedOptionId}
-                        </span>
-                      </p>
-                    );
-                  }
-                  if (response.selectedOptionIds && response.selectedOptionIds.length > 0) {
-                    const selectedTexts = response.selectedOptionIds.map(
-                      (id) => options.find((o) => o.id === id)?.text || id,
-                    );
-                    return (
-                      <p className="mt-2 text-sm">
-                        <span className="text-muted-foreground">Your answers: </span>
-                        <span className={response.isCorrect ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                          {selectedTexts.join(', ')}
-                        </span>
-                      </p>
-                    );
-                  }
-                  if (response.studentAnswer) {
-                    return (
-                      <p className="mt-2 text-sm">
-                        <span className="text-muted-foreground">Your answer: </span>
-                        <span className={response.isCorrect ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                          {response.studentAnswer}
-                        </span>
-                      </p>
-                    );
-                  }
-                  return (
-                    <p className="mt-2 text-sm text-muted-foreground italic">No answer provided</p>
-                  );
-                })()}
-                {/* Show correct answer if incorrect */}
-                {response.isCorrect === false && response.question?.options && (
-                  <p className="mt-1 text-sm">
-                    <span className="text-muted-foreground">Correct answer: </span>
-                    <span className="text-green-600 font-medium">
-                      {response.question.options.filter((o) => o.isCorrect).map((o) => o.text).join(', ')}
-                    </span>
-                  </p>
-                )}
-                {response.question?.explanation && (
-                  <div className="mt-3 border-l-4 border-blue-400 bg-blue-50 p-3 rounded-r">
-                    <p className="text-sm">💡 {response.question.explanation}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
-      {/* Study Tips */}
-      <Card>
-        <CardContent className="p-6">
-          <h3 className="font-semibold mb-3">
-            {passed ? 'Great Work!' : 'Study Resources'}
-          </h3>
-          {passed ? (
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>• Keep up the excellent work! Review the feedback for any areas to improve.</li>
-              <li>• Continue to the next lesson or assessment.</li>
-            </ul>
-          ) : (
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>• Review the lesson content related to missed questions.</li>
-              <li>• Practice with similar questions to strengthen understanding.</li>
-              <li>• Ask your teacher for additional help on difficult topics.</li>
-              <li>• Consider retaking the assessment when you feel ready.</li>
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-    </motion.div>
+    </div>
   );
 }

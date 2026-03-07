@@ -3,15 +3,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, BookOpen, Megaphone } from 'lucide-react';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  StudentActionCard,
+  StudentEmptyState,
+  StudentSectionHeader,
+  StudentStatusChip,
+} from '@/components/student/student-primitives';
+import { getMotionProps } from '@/components/student/student-motion';
 import { getDescription } from '@/utils/helpers';
 import type { ClassItem } from '@/types/class';
 import type { Lesson, LessonCompletion } from '@/types/lesson';
@@ -22,6 +29,8 @@ export default function StudentClassDetailPage() {
   const params = useParams();
   const router = useRouter();
   const classId = params.id as string;
+  const reduceMotion = useReducedMotion();
+  const motionProps = getMotionProps(!!reduceMotion);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -53,7 +62,6 @@ export default function StudentClassDetailPage() {
       });
       setCompletions(completionMap);
 
-      // Fetch attempts for published assessments
       const published = (assessmentsRes.data || []).filter((a) => a.isPublished);
       const attemptResults = await Promise.all(
         published.map((a) =>
@@ -79,11 +87,9 @@ export default function StudentClassDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-10 w-full" />
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
-        </div>
+        <Skeleton className="h-12 w-72 rounded-xl" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-80 rounded-2xl" />
       </div>
     );
   }
@@ -93,17 +99,19 @@ export default function StudentClassDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">
-          ← Back
-        </Button>
-        <h1 className="text-2xl font-bold">{classItem.subjectName || classItem.className}</h1>
-        <p className="text-muted-foreground">
-          {classItem.section?.name} • Grade {classItem.section?.gradeLevel}
-        </p>
-      </div>
+    <div className="student-page space-y-6 rounded-3xl p-1">
+      <Button variant="ghost" size="sm" onClick={() => router.back()} className="w-fit text-red-700 hover:bg-red-50">
+        <ArrowLeft className="mr-1 h-4 w-4" />
+        Back
+      </Button>
+
+      <StudentActionCard className="border-0 bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-white">
+        <StudentSectionHeader
+          title={classItem.subjectName || classItem.className}
+          subtitle={`${classItem.section?.name} • Grade ${classItem.section?.gradeLevel}`}
+          className="[&_h2]:text-white [&_p]:text-red-100"
+        />
+      </StudentActionCard>
 
       <Tabs defaultValue="lessons">
         <TabsList>
@@ -112,104 +120,94 @@ export default function StudentClassDetailPage() {
           <TabsTrigger value="announcements">Announcements</TabsTrigger>
         </TabsList>
 
-        {/* Lessons Tab */}
-        <TabsContent value="lessons" className="space-y-3 mt-4">
-          <p className="text-sm text-muted-foreground">{lessons.length} lessons</p>
+        <TabsContent value="lessons" className="mt-4 space-y-3">
+          <StudentSectionHeader title="Lessons" subtitle={`${lessons.length} lesson(s)`} />
           {lessons.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No lessons yet.</CardContent></Card>
+            <StudentEmptyState title="No lessons yet" description="Your teacher hasn't posted lessons yet." icon={<BookOpen className="h-5 w-5" />} />
           ) : (
-            lessons
-              .filter((l) => !l.isDraft)
-              .sort((a, b) => a.order - b.order)
-              .map((lesson) => (
-                <Link key={lesson.id} href={`/dashboard/student/lessons/${lesson.id}?classId=${classId}`}>
-                  <Card className="hover:shadow-sm transition-shadow cursor-pointer">
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div>
-                        <p className="font-medium">{lesson.title}</p>
-                        <p className="text-sm text-muted-foreground line-clamp-1">{getDescription(lesson.description)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {completions[lesson.id] && (
-                          <Badge variant="secondary" className="bg-green-100 text-green-700">✓ Completed</Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))
-          )}
-        </TabsContent>
-
-        {/* Assessments Tab */}
-        <TabsContent value="assessments" className="space-y-3 mt-4">
-          <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
-          {assessments.filter((a) => a.isPublished).length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No assessments available.</CardContent></Card>
-          ) : (
-            assessments
-              .filter((a) => a.isPublished)
-              .map((assessment) => {
-                const myAttempts = attempts[assessment.id] || [];
-                const bestAttempt = myAttempts.length > 0
-                  ? myAttempts.reduce((best, a) => ((a.score ?? 0) > (best.score ?? 0) ? a : best), myAttempts[0])
-                  : null;
-
-                return (
-                  <Link key={assessment.id} href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
-                    <Card className="hover:shadow-sm transition-shadow cursor-pointer">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
+            <motion.div {...motionProps.container} className="space-y-3">
+              {lessons
+                .filter((l) => !l.isDraft)
+                .sort((a, b) => a.order - b.order)
+                .map((lesson) => (
+                  <motion.div key={lesson.id} {...motionProps.item}>
+                    <Link href={`/dashboard/student/lessons/${lesson.id}?classId=${classId}`}>
+                      <StudentActionCard>
+                        <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className="font-medium">{assessment.title}</p>
-                            <p className="text-sm text-muted-foreground line-clamp-1">{getDescription(assessment.description)}</p>
-                            <div className="flex gap-2 mt-1">
-                              <Badge variant="outline">{assessment.type}</Badge>
-                              {assessment.totalPoints && (
-                                <span className="text-xs text-muted-foreground">{assessment.totalPoints} pts</span>
-                              )}
-                            </div>
+                            <p className="font-semibold text-slate-900">{lesson.title}</p>
+                            <p className="line-clamp-1 text-sm student-muted-text">{getDescription(lesson.description)}</p>
                           </div>
-                          <div className="text-right">
-                            {bestAttempt ? (
-                              <Badge variant={bestAttempt.passed ? 'default' : 'destructive'}>
-                                {bestAttempt.passed ? 'PASSED' : 'FAILED'} — {bestAttempt.score}/{bestAttempt.totalPoints}
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">Not Started</Badge>
-                            )}
-                            {myAttempts.length > 0 && (
-                              <p className="text-xs text-muted-foreground mt-1">{myAttempts.length} attempt(s)</p>
-                            )}
-                          </div>
+                          {completions[lesson.id] && <StudentStatusChip tone="success">Completed</StudentStatusChip>}
                         </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })
+                      </StudentActionCard>
+                    </Link>
+                  </motion.div>
+                ))}
+            </motion.div>
           )}
         </TabsContent>
 
-        {/* Announcements Tab */}
-        <TabsContent value="announcements" className="space-y-3 mt-4">
-          {announcements.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No announcements yet.</CardContent></Card>
+        <TabsContent value="assessments" className="mt-4 space-y-3">
+          <StudentSectionHeader title="Assessments" subtitle={`${assessments.filter((a) => a.isPublished).length} published`} />
+          {assessments.filter((a) => a.isPublished).length === 0 ? (
+            <StudentEmptyState title="No assessments" description="Published assessments will appear here." icon={<BookOpen className="h-5 w-5" />} />
           ) : (
-            announcements.map((ann) => (
-              <Card key={ann.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium">{ann.title}</p>
-                    {ann.isPinned && <Badge variant="secondary">📌 Pinned</Badge>}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{ann.content}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {ann.author?.firstName} {ann.author?.lastName} • {new Date(ann.createdAt!).toLocaleDateString()}
-                  </p>
-                </CardContent>
-              </Card>
-            ))
+            <motion.div {...motionProps.container} className="space-y-3">
+              {assessments
+                .filter((a) => a.isPublished)
+                .map((assessment) => {
+                  const myAttempts = attempts[assessment.id] || [];
+                  const bestAttempt = myAttempts.length > 0
+                    ? myAttempts.reduce((best, a) => ((a.score ?? 0) > (best.score ?? 0) ? a : best), myAttempts[0])
+                    : null;
+                  return (
+                    <motion.div key={assessment.id} {...motionProps.item}>
+                      <Link href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
+                        <StudentActionCard>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-slate-900">{assessment.title}</p>
+                              <p className="line-clamp-1 text-sm student-muted-text">{getDescription(assessment.description)}</p>
+                            </div>
+                            {bestAttempt ? (
+                              <StudentStatusChip tone={bestAttempt.passed ? 'success' : 'danger'}>
+                                {bestAttempt.passed ? 'Passed' : 'Needs Improvement'} • {bestAttempt.score}/{bestAttempt.totalPoints}
+                              </StudentStatusChip>
+                            ) : (
+                              <StudentStatusChip tone="warning">Not Started</StudentStatusChip>
+                            )}
+                          </div>
+                        </StudentActionCard>
+                      </Link>
+                    </motion.div>
+                  );
+                })}
+            </motion.div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="announcements" className="mt-4 space-y-3">
+          <StudentSectionHeader title="Announcements" subtitle={`${announcements.length} update(s)`} />
+          {announcements.length === 0 ? (
+            <StudentEmptyState title="No announcements" description="Class updates from your teacher will appear here." icon={<Megaphone className="h-5 w-5" />} />
+          ) : (
+            <motion.div {...motionProps.container} className="space-y-3">
+              {announcements.map((ann) => (
+                <motion.div key={ann.id} {...motionProps.item}>
+                  <StudentActionCard>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900">{ann.title}</p>
+                      {ann.isPinned && <StudentStatusChip tone="warning">Pinned</StudentStatusChip>}
+                    </div>
+                    <p className="mt-2 text-sm student-muted-text">{ann.content}</p>
+                    <p className="mt-2 text-xs student-muted-text">
+                      {ann.author?.firstName} {ann.author?.lastName} • {new Date(ann.createdAt!).toLocaleDateString()}
+                    </p>
+                  </StudentActionCard>
+                </motion.div>
+              ))}
+            </motion.div>
           )}
         </TabsContent>
       </Tabs>

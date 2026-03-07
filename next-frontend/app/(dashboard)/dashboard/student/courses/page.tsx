@@ -1,22 +1,17 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
+import { motion, useReducedMotion } from 'framer-motion';
+import { BookOpen, GraduationCap } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
-import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import Link from 'next/link';
+import { StudentActionCard, StudentEmptyState, StudentSectionHeader } from '@/components/student/student-primitives';
+import { getMotionProps } from '@/components/student/student-motion';
 import type { ClassItem } from '@/types/class';
-
-const COLORS = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-red-500', 'bg-teal-500', 'bg-pink-500', 'bg-indigo-500'];
-
-function getClassColor(code: string) {
-  let hash = 0;
-  for (let i = 0; i < (code || '').length; i++) hash = code.charCodeAt(i) + ((hash << 5) - hash);
-  return COLORS[Math.abs(hash) % COLORS.length];
-}
 
 interface ClassWithProgress extends ClassItem {
   progress: number;
@@ -26,6 +21,8 @@ interface ClassWithProgress extends ClassItem {
 
 export default function StudentCoursesPage() {
   const { user } = useAuth();
+  const reduceMotion = useReducedMotion();
+  const motionProps = getMotionProps(!!reduceMotion);
   const [courses, setCourses] = useState<ClassWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,53 +69,56 @@ export default function StudentCoursesPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
+        <Skeleton className="h-12 w-72 rounded-xl" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-52 rounded-lg" />)}
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">My Courses</h1>
-        <p className="text-muted-foreground">View your enrolled classes and track your progress</p>
-      </div>
+    <div className="student-page space-y-6 rounded-3xl p-1">
+      <StudentSectionHeader
+        title="My Courses"
+        subtitle="Track your class progress and continue where you left off."
+      />
 
       {courses.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <span className="text-4xl mb-3">🎓</span>
-            <p className="text-lg font-medium">No courses yet</p>
-            <p className="text-sm text-muted-foreground">You are not enrolled in any classes.</p>
-          </CardContent>
-        </Card>
+        <StudentEmptyState
+          title="No courses yet"
+          description="You are not enrolled in any classes yet."
+          icon={<GraduationCap className="h-5 w-5" />}
+        />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <motion.div {...motionProps.container} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {courses.map((course) => (
-            <Link key={course.id} href={`/dashboard/student/classes/${course.id}`}>
-              <Card className="overflow-hidden hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer h-full">
-                <div className={`h-2 ${getClassColor(course.subjectCode)}`} />
-                <CardContent className="p-4 space-y-3">
-                  <div>
-                    <p className="font-semibold text-base">{course.subjectName || course.className || course.name}</p>
-                    <p className="text-sm text-muted-foreground">{course.section?.name} • Grade {course.section?.gradeLevel}</p>
+            <motion.div key={course.id} {...motionProps.item}>
+              <Link href={`/dashboard/student/classes/${course.id}`}>
+                <StudentActionCard>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">{course.subjectName || course.className || course.name}</p>
+                      <p className="text-sm student-muted-text">{course.section?.name} • Grade {course.section?.gradeLevel}</p>
+                    </div>
+                    <div className="rounded-lg bg-red-50 p-2 text-red-600">
+                      <BookOpen className="h-4 w-4" />
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground">{course.totalLessons} lessons</p>
-                  <div>
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span>{course.completedCount} of {course.totalLessons} completed</span>
+
+                  <p className="mt-3 text-sm student-muted-text">{course.totalLessons} lessons</p>
+                  <div className="mt-2">
+                    <div className="mb-1 flex justify-between text-xs student-muted-text">
+                      <span>{course.completedCount} completed</span>
                       <span>{course.progress}%</span>
                     </div>
                     <Progress value={course.progress} className="h-2" />
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
+                </StudentActionCard>
+              </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
     </div>
   );
