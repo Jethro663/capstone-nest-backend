@@ -14,7 +14,8 @@ import time
 from typing import Any
 
 import fitz  # PyMuPDF
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, bindparam
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
@@ -29,6 +30,43 @@ from .pdf_chunker import TextChunk, chunk_text, merge_chunk_results
 from .rule_based_extractor import extract_with_rules
 
 logger = logging.getLogger(__name__)
+
+def resolve_uploaded_file_path(raw_path: str) -> str:
+    """Resolve backend-stored upload paths against ai-service UPLOAD_DIR robustly."""
+    normalized = (raw_path or "").strip()
+    upload_root = os.path.abspath(settings.upload_dir)
+
+    candidates: list[str] = []
+    if os.path.isabs(normalized):
+        candidates.append(normalized)
+
+    normalized_slash = normalized.replace("\\", "/").lstrip("./")
+    if normalized_slash.startswith("uploads/"):
+        normalized_slash = normalized_slash[len("uploads/") :]
+
+    candidates.extend(
+        [
+            os.path.abspath(normalized),
+            os.path.join(upload_root, normalized_slash),
+            os.path.join(upload_root, os.path.basename(normalized)),
+        ]
+    )
+
+    seen: set[str] = set()
+    deduped_candidates: list[str] = []
+    for candidate in candidates:
+        abs_candidate = os.path.abspath(candidate)
+        if abs_candidate in seen:
+            continue
+        seen.add(abs_candidate)
+        deduped_candidates.append(abs_candidate)
+
+    for candidate in deduped_candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    return deduped_candidates[0] if deduped_candidates else normalized
+
 
 # ---------------------------------------------------------------------------
 # Prompts
@@ -123,12 +161,10 @@ async def run_extraction(
         if not file_row:
             raise FileNotFoundError(f"File {file_id} not found in database")
 
-        file_path = file_row["file_path"]
+        file_path = str(file_row["file_path"])
         original_name = file_row["original_name"]
 
-        # Resolve the file path relative to upload dir if needed
-        if not os.path.isabs(file_path):
-            file_path = os.path.join(settings.upload_dir, file_path)
+        file_path = resolve_uploaded_file_path(file_path)
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Physical file not found: {file_path}")
@@ -249,10 +285,10 @@ async def run_extraction(
             await db.execute(
                 sa_text(
                     "UPDATE extracted_modules "
-                    "SET structured_content = :sc::jsonb, updated_at = NOW() "
+                    "SET structured_content = :sc, updated_at = NOW() "
                     "WHERE id = :id"
-                ),
-                {"sc": json.dumps(final_result), "id": extraction_id},
+                ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+                {"sc": final_result, "id": extraction_id},
             )
             await db.commit()
 
@@ -263,22 +299,22 @@ async def run_extraction(
                     "(user_id, session_type, input_text, output_text, model_used, "
                     "response_time_ms, context_metadata) "
                     "VALUES (:userId, 'module_extraction', :inputText, :outputText, "
-                    ":modelUsed, :responseTimeMs, :ctx::jsonb)"
-                ),
+                    ":modelUsed, :responseTimeMs, :ctx)"
+                ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
                 {
                     "userId": user_id,
                     "inputText": cleaned_text[:2000],
                     "outputText": json.dumps(final_result)[:5000],
                     "modelUsed": model_used,
                     "responseTimeMs": response_time_ms,
-                    "ctx": json.dumps({
+                    "ctx": {
                         "fileId": file_id,
                         "extractionId": extraction_id,
                         "originalFileName": original_name,
                         "chunks": len(chunks),
                         "sanitizationWarnings": sanitization.warnings,
                         "validationErrors": validation.errors,
-                    }),
+                    },
                 },
             )
             await db.commit()
@@ -294,7 +330,7 @@ async def run_extraction(
         else:
             # Ollama offline → rule-based extraction
             logger.info("[extraction] Ollama unavailable — using rule-based extraction")
-            await _update_extraction(db, extraction_id, {"progressPercent": 50})
+            await _update_extraction(db, extraction_id, {"progress_percent": 50})
 
             result = extract_with_rules(cleaned_text)
             model_used = "rule-based"
@@ -308,10 +344,10 @@ async def run_extraction(
             await db.execute(
                 sa_text(
                     "UPDATE extracted_modules "
-                    "SET structured_content = :sc::jsonb, updated_at = NOW() "
+                    "SET structured_content = :sc, updated_at = NOW() "
                     "WHERE id = :id"
-                ),
-                {"sc": json.dumps(result), "id": extraction_id},
+                ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+                {"sc": result, "id": extraction_id},
             )
             await db.commit()
 
@@ -321,21 +357,21 @@ async def run_extraction(
                     "(user_id, session_type, input_text, output_text, model_used, "
                     "response_time_ms, context_metadata) "
                     "VALUES (:userId, 'module_extraction', :inputText, :outputText, "
-                    ":modelUsed, :responseTimeMs, :ctx::jsonb)"
-                ),
+                    ":modelUsed, :responseTimeMs, :ctx)"
+                ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
                 {
                     "userId": user_id,
                     "inputText": cleaned_text[:2000],
                     "outputText": json.dumps(result)[:5000],
                     "modelUsed": model_used,
                     "responseTimeMs": response_time_ms,
-                    "ctx": json.dumps({
+                    "ctx": {
                         "fileId": file_id,
                         "extractionId": extraction_id,
                         "originalFileName": original_name,
                         "ollamaOffline": True,
                         "sanitizationWarnings": sanitization.warnings,
-                    }),
+                    },
                 },
             )
             await db.commit()

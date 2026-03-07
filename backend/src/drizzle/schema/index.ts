@@ -5,3 +5,4 @@ export * from './class-record.schema';
 export * from './announcements-notifications.schema';
 export * from './ai-mentor.schema';
 export * from './performance.schema';
+export * from './lxp.schema';

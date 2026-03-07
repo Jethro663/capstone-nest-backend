@@ -8,7 +8,7 @@ to `performance_logs`.
 
 - `assessment.submitted` -> `PerformanceEventsListener.handleAssessmentSubmitted()` -> `PerformanceService.recomputeFromAssessmentSubmission()`
 - `class-record.scores.updated` -> `PerformanceEventsListener.handleClassRecordScoresUpdated()` -> `PerformanceService.recomputeStudentsForClass()`
-- `performance.status.changed` -> emitted by `PerformanceService` when `is_at_risk` flips; reserved for future LXP/intervention consumers
+- `performance.status.changed` -> `LxpPerformanceListener.handlePerformanceStatusChanged()` -> creates/resolves intervention cases and notifies student/teacher
 
 ## Source Emitters
 

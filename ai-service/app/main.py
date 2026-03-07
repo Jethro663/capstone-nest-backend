@@ -10,10 +10,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import uuid
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query
-from sqlalchemy import text as sa_text
+from sqlalchemy import text as sa_text, bindparam
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
@@ -150,8 +152,8 @@ async def chat(
             "(user_id, session_type, input_text, output_text, model_used, "
             "response_time_ms, session_id, context_metadata) "
             "VALUES (:userId, 'mentor_chat', :inputText, :outputText, "
-            ":modelUsed, :responseTimeMs, :sessionId, :ctx::jsonb)"
-        ),
+            ":modelUsed, :responseTimeMs, :sessionId, :ctx)"
+        ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
         {
             "userId": user.id,
             "inputText": body.message[:2000],
@@ -159,7 +161,7 @@ async def chat(
             "modelUsed": model_used,
             "responseTimeMs": response_time_ms,
             "sessionId": chat_session_id,
-            "ctx": json.dumps({"sessionId": chat_session_id}),
+            "ctx": {"sessionId": chat_session_id},
         },
     )
     await db.commit()
@@ -206,8 +208,6 @@ async def extract_module(
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    import os
-
     # Validate file exists
     row = await db.execute(
         sa_text(
@@ -224,9 +224,7 @@ async def extract_module(
     if not is_admin and str(file["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only extract your own files")
 
-    file_path = file["file_path"]
-    if not os.path.isabs(file_path):
-        file_path = os.path.join(settings.upload_dir, file_path)
+    file_path = resolve_uploaded_file_path(str(file["file_path"]))
     if not os.path.exists(file_path):
         raise HTTPException(404, "Physical file not found on server")
 
@@ -250,7 +248,12 @@ async def extract_module(
         async with AsyncSessionLocal() as bg_db:
             await run_extraction(bg_db, extraction_id, body.file_id, user.id)
 
-    background_tasks.add_task(asyncio.ensure_future, _run())
+    try:
+        asyncio.create_task(_run())
+    except RuntimeError:
+        # Fallback for worker thread contexts where there's no running loop.
+        # Schedule the coroutine by running it in a new event loop inside a background task.
+        background_tasks.add_task(lambda: asyncio.run(_run()))
 
     return {
         "success": True,
@@ -665,3 +668,41 @@ async def interaction_history(
         "message": f"Found {len(data)} interaction(s)",
         "data": data,
     }
+def resolve_uploaded_file_path(raw_path: str) -> str:
+    """Resolve backend-stored upload paths against ai-service UPLOAD_DIR robustly."""
+    normalized = (raw_path or "").strip()
+    upload_root = os.path.abspath(settings.upload_dir)
+
+    candidates: list[str] = []
+    if os.path.isabs(normalized):
+        candidates.append(normalized)
+
+    # Backend can store paths like "./uploads/pdfs/file.pdf" or "uploads/pdfs/file.pdf"
+    normalized_slash = normalized.replace("\\", "/").lstrip("./")
+    if normalized_slash.startswith("uploads/"):
+        normalized_slash = normalized_slash[len("uploads/") :]
+
+    candidates.extend(
+        [
+            os.path.abspath(normalized),
+            os.path.join(upload_root, normalized_slash),
+            os.path.join(upload_root, os.path.basename(normalized)),
+        ]
+    )
+
+    seen: set[str] = set()
+    deduped_candidates: list[str] = []
+    for candidate in candidates:
+        abs_candidate = os.path.abspath(candidate)
+        if abs_candidate in seen:
+            continue
+        seen.add(abs_candidate)
+        deduped_candidates.append(abs_candidate)
+
+    for candidate in deduped_candidates:
+        if os.path.exists(candidate):
+            return candidate
+
+    # Return the most likely candidate for error messaging.
+    return deduped_candidates[0] if deduped_candidates else normalized
+

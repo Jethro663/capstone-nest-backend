@@ -95,7 +95,8 @@ export class FileUploadController {
       storedName: file.filename,
       mimeType: file.mimetype,
       sizeBytes: file.size,
-      filePath: file.path,
+      // Persist a normalized relative path for cross-service portability.
+      filePath: path.posix.join('uploads', 'pdfs', file.filename),
     });
 
     return {

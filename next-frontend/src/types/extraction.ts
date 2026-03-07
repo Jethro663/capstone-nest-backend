@@ -6,7 +6,7 @@ export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface ExtractionBlock {
   type: 'text' | 'heading' | 'list' | 'code' | 'image' | 'divider' | 'quote' | 'table';
-  content: string;
+  content: Record<string, unknown> | string;
   order: number;
   metadata?: Record<string, unknown>;
 }
@@ -31,6 +31,7 @@ export interface Extraction {
   userId: string;
   extractionStatus: ExtractionStatus;
   modelUsed: string | null;
+  errorMessage?: string | null;
   structuredContent: ExtractionStructuredContent | null;
   isApplied: boolean;
   progressPercent: number;

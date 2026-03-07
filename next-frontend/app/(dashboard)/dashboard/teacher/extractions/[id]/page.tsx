@@ -41,6 +41,38 @@ const blockTypeLabel: Record<string, string> = {
   table: 'Table',
 };
 
+function getBlockTextContent(block: ExtractionBlock): string {
+  if (typeof block.content === 'string') return block.content;
+  if (block.content && typeof block.content === 'object') {
+    const fromText = (block.content as Record<string, unknown>).text;
+    if (typeof fromText === 'string') return fromText;
+    return JSON.stringify(block.content, null, 2);
+  }
+  return '';
+}
+
+function buildBlockContent(
+  block: ExtractionBlock,
+  rawValue: string,
+): Record<string, unknown> {
+  if (block.type === 'divider') return {};
+  const trimmed = rawValue.trim();
+  if (!trimmed) return { text: '' };
+
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // no-op: fallback to plain text
+    }
+  }
+
+  return { text: rawValue };
+}
+
 export default function ExtractionReviewPage() {
   const params = useParams();
   const router = useRouter();
@@ -202,7 +234,12 @@ export default function ExtractionReviewPage() {
     setDirty(true);
   };
 
-  const updateBlock = (lessonIdx: number, blockIdx: number, field: keyof ExtractionBlock, value: string | number) => {
+  const updateBlock = (
+    lessonIdx: number,
+    blockIdx: number,
+    field: keyof ExtractionBlock,
+    value: string | number | Record<string, unknown>,
+  ) => {
     setEditLessons((prev) => {
       const copy = [...prev];
       const blocks = [...copy[lessonIdx].blocks];
@@ -239,7 +276,11 @@ export default function ExtractionReviewPage() {
   const toggleLessonSelected = (idx: number) => {
     setSelectedLessons((prev) => {
       const next = new Set(prev);
-      next.has(idx) ? next.delete(idx) : next.add(idx);
+      if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
       return next;
     });
   };
@@ -334,6 +375,11 @@ export default function ExtractionReviewPage() {
             <p className="text-sm text-muted-foreground mt-1">
               Try uploading the PDF again or contact support if the issue persists.
             </p>
+            {extraction.errorMessage && (
+              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-destructive/10 p-3 text-xs text-destructive">
+                {extraction.errorMessage}
+              </pre>
+            )}
           </CardContent>
         </Card>
       )}
@@ -473,8 +519,15 @@ export default function ExtractionReviewPage() {
 
                     {/* Block content */}
                     <Textarea
-                      value={block.content}
-                      onChange={(e) => updateBlock(li, bi, 'content', e.target.value)}
+                      value={getBlockTextContent(block)}
+                      onChange={(e) =>
+                        updateBlock(
+                          li,
+                          bi,
+                          'content',
+                          buildBlockContent(block, e.target.value),
+                        )
+                      }
                       disabled={!isEditable || isApplied}
                       rows={block.type === 'heading' ? 1 : 4}
                       className="text-sm font-mono"

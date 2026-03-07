@@ -1,17 +1,19 @@
 export interface UploadedFile {
   id: string;
-  fileName: string;
+  teacherId: string;
+  classId: string;
   originalName: string;
+  storedName: string;
   mimeType: string;
   sizeBytes: number;
-  classId: string;
-  uploadedBy: string;
-  isDeleted: boolean;
-  createdAt: string;
+  filePath: string;
+  uploadedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface StorageSummary {
   totalFiles: number;
-  totalSizeBytes: number;
-  byUser: { userId: string; fileCount: number; totalSize: number }[];
+  totalBytes: number;
+  totalMB: number;
+  totalGB: number;
 }
