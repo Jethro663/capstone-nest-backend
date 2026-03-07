@@ -96,7 +96,12 @@ export default function ClassRecordPage() {
       toast.success(`Class record for ${quarter} generated`);
       await fetchClassRecords();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to generate class record');
+      if (err?.response?.status === 409) {
+        toast.info(`${quarter} record already exists — loading it now`);
+        await fetchClassRecords();
+      } else {
+        toast.error(err?.response?.data?.message || 'Failed to generate class record');
+      }
     } finally {
       setGenerating(false);
     }

@@ -323,16 +323,15 @@ export class ClassRecordService {
 
         return {
           categoryId: category.id,
-          itemScores,
-          totalRaw: Math.round(totalRaw * 100) / 100,
-          totalHPS: Math.round(totalHPS * 100) / 100,
-          percentageScore: Math.round(percentageScore * 1000) / 1000,
-          weightedScore: Math.round(weightedScore * 1000) / 1000,
+          scores: itemScores.map((s) => s.score),
+          total: Math.round(totalRaw * 100) / 100,
+          ps: Math.round(percentageScore * 1000) / 1000,
+          ws: Math.round(weightedScore * 1000) / 1000,
         };
       });
 
       const initialGrade = categoryData.reduce(
-        (sum, c) => sum + c.weightedScore,
+        (sum, c) => sum + c.ws,
         0,
       );
       const quarterlyGrade = this.computationService.transmute(initialGrade);
@@ -359,28 +358,24 @@ export class ClassRecordService {
         status: record.status,
       },
       header: {
-        gradeLevel: cls?.section?.gradeLevel ?? null,
-        sectionName: cls?.section?.name ?? null,
-        subjectName: cls?.subjectName ?? null,
-        subjectCode: cls?.subjectCode ?? null,
+        quarter: record.gradingPeriod as string,
+        gradeLevel: cls?.section?.gradeLevel ?? undefined,
+        section: cls?.section?.name ?? undefined,
+        subject: cls?.subjectName ?? undefined,
         teacher: cls?.teacher
-          ? {
-              firstName: cls.teacher.firstName,
-              lastName: cls.teacher.lastName,
-              middleName: cls.teacher.middleName,
-            }
-          : null,
+          ? `${cls.teacher.lastName}, ${cls.teacher.firstName}${cls.teacher.middleName ? ` ${cls.teacher.middleName.charAt(0)}.` : ''}`
+          : undefined,
       },
       categories: categories.map((c) => ({
         id: c.id,
         name: c.name,
-        weightPercentage: parseFloat(c.weightPercentage),
+        weight: parseFloat(c.weightPercentage),
         items: c.items.map((item) => ({
           id: item.id,
           title: item.title,
-          maxScore: parseFloat(item.maxScore),
-          assessmentId: item.assessmentId,
-          itemOrder: item.itemOrder,
+          hps: parseFloat(item.maxScore),
+          assessmentId: item.assessmentId ?? undefined,
+          order: item.itemOrder,
         })),
       })),
       students: studentRows,

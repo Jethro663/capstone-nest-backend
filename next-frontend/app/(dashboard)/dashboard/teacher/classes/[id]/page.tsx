@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { classService } from '@/services/class-service';
@@ -9,6 +9,7 @@ import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { extractionService } from '@/services/extraction-service';
 import { fileService } from '@/services/file-service';
+import { classRecordService } from '@/services/class-record-service';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,10 @@ import type { Assessment } from '@/types/assessment';
 import type { User } from '@/types/user';
 import type { Announcement } from '@/types/announcement';
 import type { Extraction } from '@/types/extraction';
+import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
+import type { GradingPeriod } from '@/utils/constants';
+
+const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
 
 export default function TeacherClassDetailPage() {
   const params = useParams();
@@ -53,6 +58,16 @@ export default function TeacherClassDetailPage() {
   // Extract module states
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
+
+  // Class record state
+  const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<ClassRecord | null>(null);
+  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
+  const [generatingQuarter, setGeneratingQuarter] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ itemId: string; studentId: string } | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
+  const editRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [lessonTitle, setLessonTitle] = useState('');
@@ -86,7 +101,9 @@ export default function TeacherClassDetailPage() {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchClassRecords();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classId]);
 
   const handleCreateLesson = async () => {
     if (!lessonTitle.trim()) return;
@@ -185,6 +202,130 @@ export default function TeacherClassDetailPage() {
       toast.error('Failed to create announcement');
     }
   };
+
+  // ── Class Record handlers ─────────────────────────────────────────────────
+
+  const fetchClassRecords = useCallback(async () => {
+    try {
+      const res = await classRecordService.getByClass(classId);
+      const records = Array.isArray(res.data) ? res.data : [];
+      setClassRecords(records);
+      if (records.length > 0 && !selectedRecord) {
+        setSelectedRecord(records[0]);
+      } else if (records.length === 0) {
+        setSelectedRecord(null);
+        setSpreadsheet(null);
+      }
+    } catch {
+      toast.error('Failed to load class records');
+    }
+  }, [classId, selectedRecord]);
+
+  const fetchSpreadsheet = useCallback(async () => {
+    if (!selectedRecord) {
+      setSpreadsheet(null);
+      return;
+    }
+    try {
+      const res = await classRecordService.getSpreadsheet(selectedRecord.id);
+      setSpreadsheet(res.data);
+    } catch {
+      toast.error('Failed to load spreadsheet');
+      setSpreadsheet(null);
+    }
+  }, [selectedRecord]);
+
+  useEffect(() => { fetchSpreadsheet(); }, [fetchSpreadsheet]);
+
+  const handleGenerateQuarter = async (quarter: GradingPeriod) => {
+    try {
+      setGeneratingQuarter(true);
+      await classRecordService.generate({ classId, gradingPeriod: quarter });
+      toast.success(`Class record for ${quarter} generated`);
+    } catch (err: any) {
+      if (err?.response?.status === 409) {
+        toast.info(`${quarter} record already exists — loading it now`);
+      } else {
+        toast.error(err?.response?.data?.message || 'Failed to generate class record');
+        return;
+      }
+    } finally {
+      setGeneratingQuarter(false);
+    }
+    // Refresh and auto-select the newly created/existing record
+    try {
+      const res = await classRecordService.getByClass(classId);
+      const records = Array.isArray(res.data) ? res.data : [];
+      setClassRecords(records);
+      const target = records.find((r) => r.gradingPeriod === quarter) ?? records[0] ?? null;
+      setSelectedRecord(target);
+    } catch {
+      toast.error('Failed to reload records');
+    }
+  };
+
+  const handleFinalizeRecord = async () => {
+    if (!selectedRecord || !confirm('Finalize this quarter? This cannot be undone.')) return;
+    try {
+      await classRecordService.finalize(selectedRecord.id);
+      toast.success('Quarter finalized');
+      const res = await classRecordService.getByClass(classId);
+      const records = Array.isArray(res.data) ? res.data : [];
+      setClassRecords(records);
+      const updated = records.find((r) => r.id === selectedRecord.id) ?? null;
+      setSelectedRecord(updated);
+    } catch {
+      toast.error('Failed to finalize');
+    }
+  };
+
+  const handleCellClick = (itemId: string, studentId: string, currentScore: number | null) => {
+    if (selectedRecord?.status !== 'draft') return;
+    setEditingCell({ itemId, studentId });
+    setEditValue(currentScore != null ? String(currentScore) : '');
+    setTimeout(() => editRef.current?.focus(), 0);
+  };
+
+  const handleCellSave = async () => {
+    if (!editingCell) return;
+    const score = parseFloat(editValue);
+    if (isNaN(score) || score < 0) {
+      toast.error('Invalid score');
+      setEditingCell(null);
+      return;
+    }
+    try {
+      await classRecordService.recordScore(editingCell.itemId, {
+        studentId: editingCell.studentId,
+        score,
+      });
+      setEditingCell(null);
+      fetchSpreadsheet();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save score');
+    }
+  };
+
+  const handleCellKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleCellSave();
+    if (e.key === 'Escape') setEditingCell(null);
+  };
+
+  const handleSyncItem = async (itemId: string) => {
+    try {
+      setSyncingItemId(itemId);
+      const res = await classRecordService.syncScores(itemId);
+      const synced = (res.data as any)?.synced ?? 0;
+      toast.success(`Synced ${synced} score(s) from assessment`);
+      fetchSpreadsheet();
+    } catch {
+      toast.error('Failed to sync scores');
+    } finally {
+      setSyncingItemId(null);
+    }
+  };
+
+  // ── Extract Module ────────────────────────────────────────────────────────
 
   const handleExtractModule = async () => {
     if (!extractFile) return;
@@ -412,16 +553,257 @@ export default function TeacherClassDetailPage() {
         </TabsContent>
 
         {/* Class Record Tab */}
-        <TabsContent value="class-record" className="mt-4">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-muted-foreground">
-                <Link href={`/dashboard/teacher/class-record?classId=${classId}`} className="text-blue-600 hover:underline">
-                  Open Class Record →
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
+        <TabsContent value="class-record" className="space-y-4 mt-4">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-4"
+          >
+            {/* Quarter selector */}
+            <div className="flex gap-2 items-center flex-wrap">
+              {QUARTERS.map((q) => {
+                const record = classRecords.find((r) => r.gradingPeriod === q);
+                if (record) {
+                  return (
+                    <Button
+                      key={q}
+                      variant={selectedRecord?.id === record.id ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedRecord(record)}
+                    >
+                      {q}
+                      <Badge variant="secondary" className="ml-2 text-[10px]">
+                        {record.status}
+                      </Badge>
+                    </Button>
+                  );
+                }
+                return (
+                  <Button
+                    key={q}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleGenerateQuarter(q)}
+                    disabled={generatingQuarter}
+                  >
+                    + {q}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {!selectedRecord && (
+              <Card>
+                <CardContent className="p-6 text-center text-muted-foreground">
+                  No class record yet. Click a quarter button above to generate one.
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Spreadsheet Header Info */}
+            {spreadsheet && (
+              <>
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Quarter: </span>
+                        <strong>{spreadsheet.header.quarter}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Grade &amp; Section: </span>
+                        <strong>
+                          {spreadsheet.header.gradeLevel && `Grade ${spreadsheet.header.gradeLevel} - `}
+                          {spreadsheet.header.section || '—'}
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Subject: </span>
+                        <strong>{spreadsheet.header.subject || '—'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Teacher: </span>
+                        <strong>{spreadsheet.header.teacher || '—'}</strong>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 mt-3">
+                      {selectedRecord?.status === 'draft' && (
+                        <Button size="sm" variant="outline" onClick={handleFinalizeRecord}>
+                          Finalize Quarter
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Spreadsheet Grid */}
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-muted/70">
+                            <th
+                              className="sticky left-0 z-20 bg-muted/70 border px-2 py-1.5 text-left font-semibold min-w-[180px]"
+                              rowSpan={3}
+                            >
+                              Learner&apos;s Name
+                            </th>
+                            {spreadsheet.categories.map((cat) => (
+                              <th
+                                key={cat.id}
+                                colSpan={cat.items.length + 3}
+                                className="border px-2 py-1.5 text-center font-semibold bg-muted/50"
+                              >
+                                {cat.name} ({cat.weight}%)
+                              </th>
+                            ))}
+                            <th colSpan={2} className="border px-2 py-1.5 text-center font-semibold bg-muted/50">
+                              Grades
+                            </th>
+                          </tr>
+                          <tr className="bg-muted/40">
+                            {spreadsheet.categories.map((cat) => (
+                              <>
+                                {cat.items.map((item) => (
+                                  <th key={item.id} className="border px-1.5 py-1 text-center font-medium min-w-[50px]">
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span>{item.title}</span>
+                                      {item.assessmentId && selectedRecord?.status === 'draft' && (
+                                        <button
+                                          title="Sync scores from assessment"
+                                          onClick={() => handleSyncItem(item.id)}
+                                          disabled={syncingItemId === item.id}
+                                          className="text-[9px] text-indigo-500 hover:text-indigo-700 disabled:opacity-50 leading-none"
+                                        >
+                                          {syncingItemId === item.id ? '⟳' : '⇄ sync'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </th>
+                                ))}
+                                <th key={`${cat.id}-total`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[50px]">Total</th>
+                                <th key={`${cat.id}-ps`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[40px]">PS</th>
+                                <th key={`${cat.id}-ws`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[40px]">WS</th>
+                              </>
+                            ))}
+                            <th className="border px-1.5 py-1 text-center font-medium bg-yellow-50 min-w-[50px]">IG</th>
+                            <th className="border px-1.5 py-1 text-center font-medium bg-green-50 min-w-[50px]">QG</th>
+                          </tr>
+                          <tr className="bg-amber-50/50">
+                            {spreadsheet.categories.map((cat) => (
+                              <>
+                                {cat.items.map((item) => (
+                                  <td key={`hps-${item.id}`} className="border px-1.5 py-1 text-center font-semibold text-amber-700">
+                                    {item.hps ?? ''}
+                                  </td>
+                                ))}
+                                <td key={`hps-total-${cat.id}`} className="border px-1.5 py-1 text-center font-semibold text-amber-700">
+                                  {cat.items.reduce((s, i) => s + (i.hps || 0), 0) || ''}
+                                </td>
+                                <td key={`hps-ps-${cat.id}`} className="border px-1.5 py-1 text-center">—</td>
+                                <td key={`hps-ws-${cat.id}`} className="border px-1.5 py-1 text-center">—</td>
+                              </>
+                            ))}
+                            <td className="border px-1.5 py-1 text-center">—</td>
+                            <td className="border px-1.5 py-1 text-center">—</td>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {spreadsheet.students.map((student) => (
+                            <tr key={student.studentId} className="hover:bg-muted/20">
+                              <td className="sticky left-0 z-10 bg-white border px-2 py-1.5 font-medium whitespace-nowrap">
+                                {student.lastName}, {student.firstName}
+                              </td>
+                              {spreadsheet.categories.map((cat, catIdx) => {
+                                const catData = student.categories[catIdx];
+                                return (
+                                  <>
+                                    {cat.items.map((item, itemIdx) => {
+                                      const score = catData?.scores[itemIdx];
+                                      const isEditing =
+                                        editingCell?.itemId === item.id &&
+                                        editingCell?.studentId === student.studentId;
+                                      return (
+                                        <td
+                                          key={`${student.studentId}-${item.id}`}
+                                          className={`border px-1 py-0.5 text-center cursor-pointer hover:bg-blue-50 ${
+                                            item.assessmentId ? 'bg-indigo-50/30' : ''
+                                          }`}
+                                          onClick={() =>
+                                            handleCellClick(item.id, student.studentId, score ?? null)
+                                          }
+                                        >
+                                          {isEditing ? (
+                                            <Input
+                                              ref={editRef}
+                                              type="number"
+                                              min={0}
+                                              value={editValue}
+                                              onChange={(e) => setEditValue(e.target.value)}
+                                              onBlur={handleCellSave}
+                                              onKeyDown={handleCellKeyDown}
+                                              className="h-6 w-14 text-xs text-center p-0 border-0 focus-visible:ring-1"
+                                            />
+                                          ) : (
+                                            <span className={score == null ? 'text-muted-foreground' : ''}>
+                                              {score ?? ''}
+                                            </span>
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+                                    <td key={`${student.studentId}-total-${cat.id}`} className="border px-1 py-0.5 text-center font-medium bg-blue-50/50">
+                                      {catData?.total != null ? catData.total.toFixed(1) : ''}
+                                    </td>
+                                    <td key={`${student.studentId}-ps-${cat.id}`} className="border px-1 py-0.5 text-center bg-blue-50/50">
+                                      {catData?.ps != null ? catData.ps.toFixed(1) : ''}
+                                    </td>
+                                    <td key={`${student.studentId}-ws-${cat.id}`} className="border px-1 py-0.5 text-center bg-blue-50/50">
+                                      {catData?.ws != null ? catData.ws.toFixed(2) : ''}
+                                    </td>
+                                  </>
+                                );
+                              })}
+                              <td className="border px-1 py-0.5 text-center font-medium bg-yellow-50/50">
+                                {student.initialGrade != null ? student.initialGrade.toFixed(2) : ''}
+                              </td>
+                              <td
+                                className={`border px-1 py-0.5 text-center font-bold ${
+                                  student.quarterlyGrade != null
+                                    ? student.quarterlyGrade >= 75
+                                      ? 'text-green-700 bg-green-50'
+                                      : 'text-red-700 bg-red-50'
+                                    : ''
+                                }`}
+                              >
+                                {student.quarterlyGrade != null ? student.quarterlyGrade : ''}
+                              </td>
+                            </tr>
+                          ))}
+                          {spreadsheet.students.length === 0 && (
+                            <tr>
+                              <td
+                                colSpan={
+                                  1 +
+                                  spreadsheet.categories.reduce((s, c) => s + c.items.length + 3, 0) +
+                                  2
+                                }
+                                className="px-4 py-8 text-center text-muted-foreground"
+                              >
+                                No students enrolled in this class.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </motion.div>
         </TabsContent>
 
         {/* Students Tab */}

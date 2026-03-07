@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Routes that do NOT require authentication
-const PUBLIC_ROUTES = ['/login', '/verify-email', '/forgot-password', '/reset-password', '/set-initial-password'];
+// Include root '/' so the public landing page can load without forcing /login
+const PUBLIC_ROUTES = ['/', '/login', '/verify-email', '/forgot-password', '/reset-password', '/set-initial-password'];
 
 // Routes that require authentication
 const PROTECTED_PREFIXES = ['/dashboard'];

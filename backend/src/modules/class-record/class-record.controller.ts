@@ -28,204 +28,219 @@ export class ClassRecordController {
 
   @Post()
   @Roles(RoleName.Teacher, RoleName.Admin)
-  generateClassRecord(
+  async generateClassRecord(
     @Body() dto: CreateClassRecordDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.generateClassRecord(
+    const data = await this.classRecordService.generateClassRecord(
       dto,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Get(':id')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  getClassRecord(
+  async getClassRecord(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getClassRecord(id, user.userId, user.roles);
+    const data = await this.classRecordService.getClassRecord(id, user.userId, user.roles);
+    return { success: true, data };
   }
 
   @Get('by-class/:classId')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  listForClass(
+  async listForClass(
     @Param('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.listForClass(
+    const data = await this.classRecordService.listForClass(
       classId,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   // ── Spreadsheet ──────────────────────────────────────────────────────────
 
   @Get(':id/spreadsheet')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  getSpreadsheet(
+  async getSpreadsheet(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getSpreadsheet(
+    const data = await this.classRecordService.getSpreadsheet(
       id,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   // ── Scores ────────────────────────────────────────────────────────────────
 
   @Post('items/:itemId/scores')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  recordScore(
+  async recordScore(
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: RecordScoreDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.recordScore(
+    const data = await this.classRecordService.recordScore(
       itemId,
       dto,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Post('items/:itemId/scores/bulk')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  bulkRecordScores(
+  async bulkRecordScores(
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: BulkRecordScoresDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.bulkRecordScores(
+    const data = await this.classRecordService.bulkRecordScores(
       itemId,
       dto,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Post('items/:itemId/sync-scores')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  syncScores(
+  async syncScores(
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.syncScoresFromAssessment(
+    const data = await this.classRecordService.syncScoresFromAssessment(
       itemId,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   // ── Grades ────────────────────────────────────────────────────────────────
 
   @Get(':id/preview-grades')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  previewGrades(
+  async previewGrades(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.previewGrades(id, user.userId, user.roles);
+    const data = await this.classRecordService.previewGrades(id, user.userId, user.roles);
+    return { success: true, data };
   }
 
   @Post(':id/finalize')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  finalizeClassRecord(
+  async finalizeClassRecord(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.finalizeClassRecord(
+    const data = await this.classRecordService.finalizeClassRecord(
       id,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Get(':id/final-grades')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  getFinalGrades(
+  async getFinalGrades(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getFinalGrades(
+    const data = await this.classRecordService.getFinalGrades(
       id,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Get(':classRecordId/final-grades/:studentId')
   @Roles(RoleName.Teacher, RoleName.Admin, RoleName.Student)
-  getStudentGrade(
+  async getStudentGrade(
     @Param('classRecordId', ParseUUIDPipe) classRecordId: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getStudentGrade(
+    const data = await this.classRecordService.getStudentGrade(
       classRecordId,
       studentId,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   // ── Adviser Section View ──────────────────────────────────────────────────
 
   @Get('adviser/section/:sectionId')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  listAdviserSection(
+  async listAdviserSection(
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.listAdviserSection(
+    const data = await this.classRecordService.listAdviserSection(
       sectionId,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   // ── Reports ───────────────────────────────────────────────────────────────
 
   @Get(':id/reports/class-average')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  classAverage(
+  async classAverage(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getClassAverage(
+    const data = await this.classRecordService.getClassAverage(
       id,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Get(':id/reports/distribution')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  gradeDistribution(
+  async gradeDistribution(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getGradeDistribution(
+    const data = await this.classRecordService.getGradeDistribution(
       id,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 
   @Get(':id/reports/intervention')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  interventionList(
+  async interventionList(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    return this.classRecordService.getInterventionList(
+    const data = await this.classRecordService.getInterventionList(
       id,
       user.userId,
       user.roles,
     );
+    return { success: true, data };
   }
 }

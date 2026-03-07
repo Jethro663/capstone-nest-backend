@@ -23,15 +23,18 @@ export const classRecordService = {
   },
 
   /** GET /class-record/by-class/:classId — Teacher, Admin */
-  async getByClass(classId: string): Promise<{ success: boolean; data: ClassRecord[] }> {
+  async getByClass(classId: string): Promise<{ success?: boolean; data: ClassRecord[] }> {
     const { data } = await api.get(`/class-record/by-class/${classId}`);
-    return data;
+    // Normalize: old backend returns raw array, new backend returns { success, data }
+    return Array.isArray(data) ? { data } : data;
   },
 
   /** GET /class-record/:id/spreadsheet — Teacher, Admin */
-  async getSpreadsheet(id: string): Promise<{ success: boolean; data: SpreadsheetData }> {
+  async getSpreadsheet(id: string): Promise<{ success?: boolean; data: SpreadsheetData }> {
     const { data } = await api.get(`/class-record/${id}/spreadsheet`);
-    return data;
+    // Normalize: old backend returns raw object, new backend returns { success, data }
+    if (data && typeof data === 'object' && 'success' in data) return data;
+    return { data };
   },
 
   // --- Scores ---
