@@ -8,6 +8,7 @@ export interface User {
   roles: string[];
   status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED';
   isEmailVerified: boolean;
+  lastLoginAt?: string;
   createdAt?: string;
   updatedAt?: string;
   // Merged profile fields
@@ -44,6 +45,7 @@ export interface UpdateUserDto {
   role?: string;
   lrn?: string;
   dob?: string;
+  dateOfBirth?: string;
   gender?: string;
   phone?: string;
   address?: string;
@@ -51,4 +53,5 @@ export interface UpdateUserDto {
   familyRelationship?: string;
   familyContact?: string;
   gradeLevel?: string;
+  profilePicture?: string;
 }

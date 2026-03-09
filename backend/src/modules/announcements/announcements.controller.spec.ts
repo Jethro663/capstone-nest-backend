@@ -9,6 +9,7 @@ const ANN_ID = 'ann-uuid-1';
 
 const TEACHER_USER = { userId: 'teacher-uuid-1', roles: ['teacher'] };
 const STUDENT_USER = { userId: 'student-uuid-1', roles: ['student'] };
+const ADMIN_USER = { userId: 'admin-uuid-1', roles: ['admin'] };
 
 const makeAnnouncement = (overrides: Partial<any> = {}) => ({
   id: ANN_ID,
@@ -70,6 +71,7 @@ describe('AnnouncementsController', () => {
         CLASS_ID,
         TEACHER_USER.userId,
         dto,
+        false,
       );
     });
 
@@ -104,6 +106,15 @@ describe('AnnouncementsController', () => {
 
       const [, , isTeacher] = mockService.findAllByClass.mock.calls[0];
       expect(isTeacher).toBe(false);
+    });
+
+    it('treats admin as a privileged class viewer', async () => {
+      mockService.findAllByClass.mockResolvedValue([]);
+
+      await controller.findAll(CLASS_ID, {} as any, ADMIN_USER);
+
+      const [, , isTeacher] = mockService.findAllByClass.mock.calls[0];
+      expect(isTeacher).toBe(true);
     });
 
     it('returns standard success envelope with data array', async () => {
@@ -165,6 +176,7 @@ describe('AnnouncementsController', () => {
         ANN_ID,
         TEACHER_USER.userId,
         dto,
+        false,
       );
     });
   });
@@ -185,6 +197,7 @@ describe('AnnouncementsController', () => {
         CLASS_ID,
         ANN_ID,
         TEACHER_USER.userId,
+        false,
       );
     });
   });

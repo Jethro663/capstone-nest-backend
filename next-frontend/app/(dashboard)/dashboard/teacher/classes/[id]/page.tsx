@@ -15,13 +15,21 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api-error';
 import { getDescription } from '@/utils/helpers';
 import type { ClassItem, Enrollment } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
@@ -76,30 +84,47 @@ export default function TeacherClassDetailPage() {
   const [lessonDesc, setLessonDesc] = useState('');
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
+  const [activeTab, setActiveTab] = useState('lessons');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes, announcementsRes, extractionsRes, libraryRes] = await Promise.all([
+      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes] = await Promise.all([
         classService.getById(classId),
         lessonService.getByClass(classId),
         assessmentService.getByClass(classId),
         classService.getEnrollments(classId),
-        announcementService.getByClass(classId).catch(() => ({ data: [] as Announcement[] })),
-        extractionService.listByClass(classId).catch(() => ({ data: [] as Extraction[] })),
-        fileService.getAll().catch(() => ({ data: [] as UploadedFile[] })),
       ]);
       setClassItem(classRes.data);
       setLessons(lessonsRes.data || []);
       setAssessments(assessmentsRes.data || []);
       setEnrollments(enrollmentsRes.data || []);
-      setAnnouncements(Array.isArray(announcementsRes.data) ? announcementsRes.data : []);
-      setExtractions(Array.isArray(extractionsRes.data) ? extractionsRes.data : []);
-      setLibraryFiles(Array.isArray(libraryRes.data) ? libraryRes.data : []);
     } catch {
       toast.error('Failed to load class details');
     } finally {
       setLoading(false);
+    }
+  }, [classId]);
+
+  const fetchAnnouncements = useCallback(async () => {
+    try {
+      const res = await announcementService.getByClass(classId);
+      setAnnouncements(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      toast.error('Failed to load announcements');
+    }
+  }, [classId]);
+
+  const fetchExtractionWorkspace = useCallback(async () => {
+    try {
+      const [extractionsRes, libraryRes] = await Promise.all([
+        extractionService.listByClass(classId),
+        fileService.getAll(),
+      ]);
+      setExtractions(Array.isArray(extractionsRes.data) ? extractionsRes.data : []);
+      setLibraryFiles(Array.isArray(libraryRes.data) ? libraryRes.data : []);
+    } catch {
+      toast.error('Failed to load extraction workspace');
     }
   }, [classId]);
 
@@ -108,6 +133,15 @@ export default function TeacherClassDetailPage() {
     fetchClassRecords();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
+
+  useEffect(() => {
+    if (activeTab === 'announcements') {
+      fetchAnnouncements();
+    }
+    if (activeTab === 'extraction') {
+      fetchExtractionWorkspace();
+    }
+  }, [activeTab, fetchAnnouncements, fetchExtractionWorkspace]);
 
   const handleCreateLesson = async () => {
     if (!lessonTitle.trim()) return;
@@ -187,8 +221,8 @@ export default function TeacherClassDetailPage() {
       await classService.unenrollStudent(classId, studentId);
       toast.success('Student removed');
       setEnrollments((prev) => prev.filter((e) => e.studentId !== studentId));
-    } catch {
-      toast.error('Failed to remove student');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to remove student'));
     }
   };
 
@@ -391,7 +425,7 @@ export default function TeacherClassDetailPage() {
         </p>
       </div>
 
-        <Tabs defaultValue="lessons">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="lessons">Lessons</TabsTrigger>
             <TabsTrigger value="assessments">Assessments</TabsTrigger>
@@ -949,7 +983,12 @@ export default function TeacherClassDetailPage() {
       {/* Create Lesson Modal */}
       <Dialog open={showCreateLesson} onOpenChange={setShowCreateLesson}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Create Lesson</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Create Lesson</DialogTitle>
+            <DialogDescription>
+              Add a lesson title and optional summary before opening the editor.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={lessonTitle} onChange={(e) => setLessonTitle(e.target.value)} placeholder="Lesson title" /></div>
             <div><Label>Description (optional)</Label><Textarea value={lessonDesc} onChange={(e) => setLessonDesc(e.target.value)} placeholder="Brief description" /></div>
@@ -966,7 +1005,12 @@ export default function TeacherClassDetailPage() {
       {/* Add Students Modal */}
       <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Students</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Add Students</DialogTitle>
+            <DialogDescription>
+              Enroll students who already belong to this class section.
+            </DialogDescription>
+          </DialogHeader>
           <div className="max-h-64 overflow-y-auto space-y-2">
             {candidates.length === 0 ? (
               <p className="text-sm text-muted-foreground">No candidates available.</p>
@@ -999,7 +1043,12 @@ export default function TeacherClassDetailPage() {
       {/* Create Announcement Modal */}
       <Dialog open={showCreateAnnouncement} onOpenChange={setShowCreateAnnouncement}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Create Announcement</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Create Announcement</DialogTitle>
+            <DialogDescription>
+              Post a class announcement for enrolled students.
+            </DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} placeholder="Announcement title" /></div>
             <div><Label>Content</Label><Textarea value={annContent} onChange={(e) => setAnnContent(e.target.value)} placeholder="Announcement content" /></div>

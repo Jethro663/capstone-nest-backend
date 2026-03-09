@@ -1,0 +1,84 @@
+@startuml use_case_current_backend
+left to right direction
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor Student
+actor Teacher
+actor Admin
+actor "AI Model Service" as AI
+actor "Email Service" as Email
+
+rectangle "Nexora LMS + LXP Backend" {
+  usecase "Authenticate /\nAccount Recovery" as UC_AUTH
+  usecase "Manage Profile" as UC_PROFILE
+  usecase "View Notifications" as UC_NOTIF
+
+  usecase "View Classes" as UC_VIEW_CLASSES
+  usecase "View Lessons" as UC_VIEW_LESSONS
+  usecase "Start / Submit\nAssessment" as UC_ASSESS_TAKE
+  usecase "View Assessment\nResults" as UC_ASSESS_RESULTS
+
+  usecase "Check LXP Eligibility" as UC_LXP_ELIG
+  usecase "Access LXP Playlist" as UC_LXP_PLAYLIST
+  usecase "Complete LXP\nCheckpoints" as UC_LXP_CHECKPOINT
+  usecase "Submit System\nEvaluation" as UC_EVAL_SUBMIT
+
+  usecase "Manage Classes,\nSections, Enrollments" as UC_CLASS_MGMT
+  usecase "Create / Publish\nLessons" as UC_LESSON_MGMT
+  usecase "Create / Manage\nAssessments & Questions" as UC_ASSESS_MGMT
+  usecase "Record / Sync / Finalize\nClass Records" as UC_RECORD_MGMT
+  usecase "Post Announcements" as UC_ANNOUNCE
+  usecase "Monitor Performance /\nAt-Risk Students" as UC_PERF
+  usecase "Assign / Resolve\nInterventions" as UC_INTERVENE
+  usecase "View LXP Reports" as UC_LXP_REPORTS
+  usecase "Run AI Module\nExtraction" as UC_AI_EXTRACT
+  usecase "View Evaluation\nResults" as UC_EVAL_VIEW
+
+  usecase "Manage Users\nand Roles" as UC_USER_ROLE
+  usecase "View Admin\nDashboard Stats" as UC_DASH
+  usecase "Archive / Reactivate /\nPurge Users" as UC_ARCHIVE
+}
+
+Student --> UC_AUTH
+Student --> UC_PROFILE
+Student --> UC_NOTIF
+Student --> UC_VIEW_CLASSES
+Student --> UC_VIEW_LESSONS
+Student --> UC_ASSESS_TAKE
+Student --> UC_ASSESS_RESULTS
+Student --> UC_LXP_ELIG
+Student --> UC_LXP_PLAYLIST
+Student --> UC_LXP_CHECKPOINT
+Student --> UC_EVAL_SUBMIT
+
+Teacher --> UC_AUTH
+Teacher --> UC_PROFILE
+Teacher --> UC_NOTIF
+Teacher --> UC_CLASS_MGMT
+Teacher --> UC_LESSON_MGMT
+Teacher --> UC_ASSESS_MGMT
+Teacher --> UC_RECORD_MGMT
+Teacher --> UC_ANNOUNCE
+Teacher --> UC_PERF
+Teacher --> UC_INTERVENE
+Teacher --> UC_LXP_REPORTS
+Teacher --> UC_AI_EXTRACT
+Teacher --> UC_EVAL_VIEW
+
+Admin --> UC_AUTH
+Admin --> UC_PROFILE
+Admin --> UC_NOTIF
+Admin --> UC_USER_ROLE
+Admin --> UC_DASH
+Admin --> UC_ARCHIVE
+Admin --> UC_EVAL_VIEW
+Admin --> UC_CLASS_MGMT
+Admin --> UC_PERF
+Admin --> UC_LXP_REPORTS
+
+UC_AI_EXTRACT --> AI
+UC_ASSESS_RESULTS --> AI
+UC_AUTH --> Email
+
+@enduml

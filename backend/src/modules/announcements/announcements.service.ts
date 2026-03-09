@@ -40,16 +40,21 @@ export class AnnouncementsService {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  private async verifyTeacherOwnsClass(
+  private async verifyClassAnnouncementAccess(
     classId: string,
-    teacherId: string,
+    actorId: string,
+    isAdmin = false,
   ): Promise<void> {
     const cls = await this.db.query.classes.findFirst({
-      where: and(eq(classes.id, classId), eq(classes.teacherId, teacherId)),
+      where: isAdmin
+        ? eq(classes.id, classId)
+        : and(eq(classes.id, classId), eq(classes.teacherId, actorId)),
     });
     if (!cls) {
       throw new ForbiddenException(
-        'You are not the teacher of this class or the class does not exist.',
+        isAdmin
+          ? 'Class does not exist.'
+          : 'You are not the teacher of this class or the class does not exist.',
       );
     }
   }
@@ -62,10 +67,11 @@ export class AnnouncementsService {
 
   async create(
     classId: string,
-    teacherId: string,
+    actorId: string,
     dto: CreateAnnouncementDto,
+    isAdmin = false,
   ) {
-    await this.verifyTeacherOwnsClass(classId, teacherId);
+    await this.verifyClassAnnouncementAccess(classId, actorId, isAdmin);
 
     const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : null;
     const now = new Date();
@@ -78,7 +84,7 @@ export class AnnouncementsService {
       .insert(announcements)
       .values({
         classId,
-        authorId: teacherId,
+        authorId: actorId,
         title: dto.title.trim(),
         content: this.sanitize(dto.content),
         isPinned: dto.isPinned ?? false,
@@ -171,10 +177,11 @@ export class AnnouncementsService {
   async update(
     classId: string,
     announcementId: string,
-    teacherId: string,
+    actorId: string,
     dto: UpdateAnnouncementDto,
+    isAdmin = false,
   ) {
-    await this.verifyTeacherOwnsClass(classId, teacherId);
+    await this.verifyClassAnnouncementAccess(classId, actorId, isAdmin);
 
     const existing = await this.db.query.announcements.findFirst({
       where: and(
@@ -188,7 +195,7 @@ export class AnnouncementsService {
       throw new NotFoundException('Announcement not found.');
     }
 
-    if (existing.authorId !== teacherId) {
+    if (!isAdmin && existing.authorId !== actorId) {
       throw new ForbiddenException('You can only edit your own announcements.');
     }
 
@@ -212,8 +219,13 @@ export class AnnouncementsService {
     return updated;
   }
 
-  async remove(classId: string, announcementId: string, teacherId: string) {
-    await this.verifyTeacherOwnsClass(classId, teacherId);
+  async remove(
+    classId: string,
+    announcementId: string,
+    actorId: string,
+    isAdmin = false,
+  ) {
+    await this.verifyClassAnnouncementAccess(classId, actorId, isAdmin);
 
     const existing = await this.db.query.announcements.findFirst({
       where: and(
@@ -227,7 +239,7 @@ export class AnnouncementsService {
       throw new NotFoundException('Announcement not found.');
     }
 
-    if (existing.authorId !== teacherId) {
+    if (!isAdmin && existing.authorId !== actorId) {
       throw new ForbiddenException(
         'You can only delete your own announcements.',
       );

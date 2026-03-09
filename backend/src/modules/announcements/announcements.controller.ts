@@ -38,18 +38,19 @@ export class AnnouncementsController {
   // ─── Teacher: create ────────────────────────────────────────────────────────
 
   @Post()
-  @Roles(RoleName.Teacher)
+  @Roles(RoleName.Teacher, RoleName.Admin)
   @ApiOperation({ summary: 'Teacher posts a new announcement to a class' })
   @ApiParam({ name: 'classId', type: String })
   async create(
     @Param('classId', ParseUUIDPipe) classId: string,
     @Body() dto: CreateAnnouncementDto,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.announcementsService.create(
       classId,
       user.userId,
       dto,
+      user.roles.includes(RoleName.Admin),
     );
     return { success: true, message: 'Announcement created.', data };
   }
@@ -57,7 +58,7 @@ export class AnnouncementsController {
   // ─── Shared: list ───────────────────────────────────────────────────────────
 
   @Get()
-  @Roles(RoleName.Teacher, RoleName.Student)
+  @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
   @ApiOperation({ summary: 'List announcements for a class' })
   @ApiParam({ name: 'classId', type: String })
   async findAll(
@@ -65,7 +66,9 @@ export class AnnouncementsController {
     @Query() query: QueryAnnouncementsDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const isTeacher = user.roles.includes(RoleName.Teacher);
+    const isTeacher =
+      user.roles.includes(RoleName.Teacher) ||
+      user.roles.includes(RoleName.Admin);
     const data = await this.announcementsService.findAllByClass(
       classId,
       user.userId,
@@ -78,7 +81,7 @@ export class AnnouncementsController {
   // ─── Shared: get one ────────────────────────────────────────────────────────
 
   @Get(':id')
-  @Roles(RoleName.Teacher, RoleName.Student)
+  @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
   @ApiOperation({ summary: 'Get a single announcement' })
   @ApiParam({ name: 'classId', type: String })
   @ApiParam({ name: 'id', type: String })
@@ -87,7 +90,9 @@ export class AnnouncementsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const isTeacher = user.roles.includes(RoleName.Teacher);
+    const isTeacher =
+      user.roles.includes(RoleName.Teacher) ||
+      user.roles.includes(RoleName.Admin);
     const data = await this.announcementsService.findOne(
       classId,
       id,
@@ -99,7 +104,7 @@ export class AnnouncementsController {
   // ─── Teacher: update ────────────────────────────────────────────────────────
 
   @Patch(':id')
-  @Roles(RoleName.Teacher)
+  @Roles(RoleName.Teacher, RoleName.Admin)
   @ApiOperation({ summary: 'Teacher edits an announcement' })
   @ApiParam({ name: 'classId', type: String })
   @ApiParam({ name: 'id', type: String })
@@ -107,13 +112,14 @@ export class AnnouncementsController {
     @Param('classId', ParseUUIDPipe) classId: string,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAnnouncementDto,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.announcementsService.update(
       classId,
       id,
       user.userId,
       dto,
+      user.roles.includes(RoleName.Admin),
     );
     return { success: true, message: 'Announcement updated.', data };
   }
@@ -121,7 +127,7 @@ export class AnnouncementsController {
   // ─── Teacher: soft-delete ───────────────────────────────────────────────────
 
   @Delete(':id')
-  @Roles(RoleName.Teacher)
+  @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Teacher archives (soft-deletes) an announcement' })
   @ApiParam({ name: 'classId', type: String })
@@ -129,12 +135,13 @@ export class AnnouncementsController {
   async remove(
     @Param('classId', ParseUUIDPipe) classId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: { userId: string },
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.announcementsService.remove(
       classId,
       id,
       user.userId,
+      user.roles.includes(RoleName.Admin),
     );
     return { success: true, ...data };
   }

@@ -1,23 +1,93 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { toast } from 'sonner';
-import type { ClassItem } from '@/types/class';
+import type { ClassItem, ClassSchedule } from '@/types/class';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
+import { SCHEDULE_DAYS, type ScheduleDay } from '@/utils/constants';
+
+type EditableSchedule = {
+  id: string;
+  days: ScheduleDay[];
+  startTime: string;
+  endTime: string;
+};
+
+type ClassFormState = {
+  subjectName: string;
+  subjectCode: string;
+  subjectGradeLevel: string;
+  sectionId: string;
+  teacherId: string;
+  schoolYear: string;
+  room: string;
+  schedules: EditableSchedule[];
+};
+
+const EMPTY_SCHEDULE: EditableSchedule = {
+  id: 'slot-1',
+  days: [],
+  startTime: '',
+  endTime: '',
+};
+
+function createEmptyForm(defaultSchoolYear: string): ClassFormState {
+  return {
+    subjectName: '',
+    subjectCode: '',
+    subjectGradeLevel: '7',
+    sectionId: '',
+    teacherId: '',
+    schoolYear: defaultSchoolYear,
+    room: '',
+    schedules: [{ ...EMPTY_SCHEDULE }],
+  };
+}
+
+function mapSchedules(
+  schedules?: ClassSchedule[],
+): EditableSchedule[] {
+  if (!schedules || schedules.length === 0) {
+    return [{ ...EMPTY_SCHEDULE }];
+  }
+
+  return schedules.map((schedule, index) => ({
+    id: schedule.id || `slot-${index + 1}`,
+    days: [...schedule.days],
+    startTime: schedule.startTime,
+    endTime: schedule.endTime,
+  }));
+}
 
 export default function ClassManagementPage() {
+  const router = useRouter();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
@@ -25,29 +95,36 @@ export default function ClassManagementPage() {
   const [gradeFilter, setGradeFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  // Modal states
+  const currentYear = new Date().getFullYear();
+  const schoolYears = useMemo(
+    () =>
+      Array.from(
+        { length: 5 },
+        (_, index) => `${currentYear - 2 + index}-${currentYear - 1 + index}`,
+      ),
+    [currentYear],
+  );
+
+  const defaultSchoolYear = schoolYears[2] || '';
+
   const [showCreate, setShowCreate] = useState(false);
   const [editClass, setEditClass] = useState<ClassItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ClassItem | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<ClassItem | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<ClassFormState>(() =>
+    createEmptyForm(defaultSchoolYear),
+  );
 
-  // Form state
-  const [form, setForm] = useState({
-    subjectName: '',
-    subjectCode: '',
-    subjectGradeLevel: '7',
-    sectionId: '',
-    teacherId: '',
-    schoolYear: '',
-    room: '',
-  });
-
-  const formatSchedules = (schedules?: { days: string[]; startTime: string; endTime: string }[]) => {
-    if (!schedules?.length) return '—';
-    return schedules.map((s) => `${s.days.join('/')} ${s.startTime}-${s.endTime}`).join(', ');
+  const formatSchedules = (
+    schedules?: { days: string[]; startTime: string; endTime: string }[],
+  ) => {
+    if (!schedules?.length) return 'N/A';
+    return schedules
+      .map((schedule) =>
+        `${schedule.days.join('/')} ${schedule.startTime}-${schedule.endTime}`,
+      )
+      .join(', ');
   };
-
-  const currentYear = new Date().getFullYear();
-  const schoolYears = Array.from({ length: 5 }, (_, i) => `${currentYear - 2 + i}-${currentYear - 1 + i}`);
 
   const fetchData = useCallback(async () => {
     try {
@@ -71,21 +148,30 @@ export default function ClassManagementPage() {
     fetchData();
   }, [fetchData]);
 
-  const resetForm = () => setForm({ subjectName: '', subjectCode: '', subjectGradeLevel: '7', sectionId: '', teacherId: '', schoolYear: schoolYears[2] || '', room: '' });
+  const resetForm = () => {
+    setForm(createEmptyForm(defaultSchoolYear));
+  };
 
-  const filtered = classes.filter((c) => {
-    if (gradeFilter !== 'all' && c.subjectGradeLevel !== gradeFilter) return false;
+  const filtered = classes.filter((classItem) => {
+    if (
+      gradeFilter !== 'all' &&
+      classItem.subjectGradeLevel !== gradeFilter
+    ) {
+      return false;
+    }
+
     if (search) {
-      const q = search.toLowerCase();
+      const query = search.toLowerCase();
       return (
-        c.subjectName?.toLowerCase().includes(q) ||
-        c.subjectCode?.toLowerCase().includes(q) ||
-        c.section?.name?.toLowerCase().includes(q) ||
-        c.teacher?.firstName?.toLowerCase().includes(q) ||
-        c.teacher?.lastName?.toLowerCase().includes(q) ||
-        c.room?.toLowerCase().includes(q)
+        classItem.subjectName?.toLowerCase().includes(query) ||
+        classItem.subjectCode?.toLowerCase().includes(query) ||
+        classItem.section?.name?.toLowerCase().includes(query) ||
+        classItem.teacher?.firstName?.toLowerCase().includes(query) ||
+        classItem.teacher?.lastName?.toLowerCase().includes(query) ||
+        classItem.room?.toLowerCase().includes(query)
       );
     }
+
     return true;
   });
 
@@ -95,39 +181,136 @@ export default function ClassManagementPage() {
     setShowCreate(true);
   };
 
-  const handleOpenEdit = (c: ClassItem) => {
-    setEditClass(c);
+  const handleOpenEdit = (classItem: ClassItem) => {
+    setEditClass(classItem);
     setForm({
-      subjectName: c.subjectName || '',
-      subjectCode: c.subjectCode || '',
-      subjectGradeLevel: c.subjectGradeLevel || '7',
-      sectionId: c.sectionId || '',
-      teacherId: c.teacherId || '',
-      schoolYear: c.schoolYear || '',
-      room: c.room || '',
+      subjectName: classItem.subjectName || '',
+      subjectCode: classItem.subjectCode || '',
+      subjectGradeLevel: classItem.subjectGradeLevel || '7',
+      sectionId: classItem.sectionId || '',
+      teacherId: classItem.teacherId || '',
+      schoolYear: classItem.schoolYear || defaultSchoolYear,
+      room: classItem.room || '',
+      schedules: mapSchedules(classItem.schedules),
     });
     setShowCreate(true);
   };
 
+  const setField = (field: keyof ClassFormState, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const setScheduleField = (
+    index: number,
+    field: keyof EditableSchedule,
+    value: EditableSchedule[keyof EditableSchedule],
+  ) => {
+    setForm((current) => ({
+      ...current,
+      schedules: current.schedules.map((schedule, scheduleIndex) =>
+        scheduleIndex === index
+          ? { ...schedule, [field]: value }
+          : schedule,
+      ),
+    }));
+  };
+
+  const toggleScheduleDay = (index: number, day: ScheduleDay) => {
+    const currentDays = form.schedules[index]?.days || [];
+    const nextDays = currentDays.includes(day)
+      ? currentDays.filter((value) => value !== day)
+      : [...currentDays, day];
+    setScheduleField(index, 'days', nextDays);
+  };
+
+  const addScheduleRow = () => {
+    setForm((current) => ({
+      ...current,
+      schedules: [
+        ...current.schedules,
+        { ...EMPTY_SCHEDULE, id: `slot-${current.schedules.length + 1}` },
+      ],
+    }));
+  };
+
+  const removeScheduleRow = (index: number) => {
+    setForm((current) => {
+      if (current.schedules.length === 1) {
+        return {
+          ...current,
+          schedules: [{ ...EMPTY_SCHEDULE }],
+        };
+      }
+
+      return {
+        ...current,
+        schedules: current.schedules.filter(
+          (_, scheduleIndex) => scheduleIndex !== index,
+        ),
+      };
+    });
+  };
+
+  const normalizedSchedules = () => {
+    const completed = form.schedules.filter(
+      (schedule) =>
+        schedule.days.length > 0 &&
+        schedule.startTime &&
+        schedule.endTime,
+    );
+    const hasPartial = form.schedules.some(
+      (schedule) =>
+        schedule.days.length > 0 ||
+        Boolean(schedule.startTime) ||
+        Boolean(schedule.endTime),
+    );
+
+    if (hasPartial && completed.length !== form.schedules.filter(
+      (schedule) =>
+        schedule.days.length > 0 ||
+        Boolean(schedule.startTime) ||
+        Boolean(schedule.endTime),
+    ).length) {
+      toast.error(
+        'Each schedule slot needs at least one day, a start time, and an end time',
+      );
+      return null;
+    }
+
+    return completed.map((schedule) => ({
+      days: schedule.days,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+    }));
+  };
+
   const handleSave = async () => {
     if (!form.subjectName.trim() || !form.subjectCode.trim()) return;
+    if (!form.sectionId || !form.teacherId) {
+      toast.error('Section and teacher are required');
+      return;
+    }
+
+    const schedules = normalizedSchedules();
+    if (schedules === null) {
+      return;
+    }
+
     try {
+      setSaving(true);
       if (editClass) {
         await classService.update(editClass.id, {
           subjectName: form.subjectName,
           subjectCode: form.subjectCode,
           subjectGradeLevel: form.subjectGradeLevel,
-          sectionId: form.sectionId || undefined,
-          teacherId: form.teacherId || undefined,
+          sectionId: form.sectionId,
+          teacherId: form.teacherId,
           schoolYear: form.schoolYear,
           room: form.room || undefined,
+          schedules,
         });
         toast.success('Class updated');
       } else {
-        if (!form.sectionId || !form.teacherId) {
-          toast.error('Section and Teacher are required');
-          return;
-        }
         await classService.create({
           subjectName: form.subjectName,
           subjectCode: form.subjectCode,
@@ -136,25 +319,36 @@ export default function ClassManagementPage() {
           teacherId: form.teacherId,
           schoolYear: form.schoolYear,
           room: form.room || undefined,
+          schedules,
         });
         toast.success('Class created');
       }
+
       setShowCreate(false);
+      resetForm();
       fetchData();
     } catch {
       toast.error('Failed to save class');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleToggleArchive = async () => {
+    if (!archiveTarget) return;
     try {
-      await classService.delete(deleteTarget.id);
-      toast.success('Class deleted');
-      setDeleteTarget(null);
+      await classService.toggleStatus(archiveTarget.id);
+      toast.success(
+        archiveTarget.isActive ? 'Class archived' : 'Class restored',
+      );
+      setArchiveTarget(null);
       fetchData();
     } catch {
-      toast.error('Failed to delete class');
+      toast.error(
+        archiveTarget.isActive
+          ? 'Failed to archive class'
+          : 'Failed to restore class',
+      );
     }
   };
 
@@ -177,13 +371,22 @@ export default function ClassManagementPage() {
         <Button onClick={handleOpenCreate}>+ Add Class</Button>
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-4">
-        <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+        <Input
+          placeholder="Search..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="max-w-sm"
+        />
         <div className="flex gap-2">
-          {['all', '7', '8', '9', '10'].map((g) => (
-            <Button key={g} variant={gradeFilter === g ? 'default' : 'outline'} size="sm" onClick={() => setGradeFilter(g)}>
-              {g === 'all' ? 'All' : `Grade ${g}`}
+          {['all', '7', '8', '9', '10'].map((grade) => (
+            <Button
+              key={grade}
+              variant={gradeFilter === grade ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setGradeFilter(grade)}
+            >
+              {grade === 'all' ? 'All' : `Grade ${grade}`}
             </Button>
           ))}
         </div>
@@ -206,97 +409,320 @@ export default function ClassManagementPage() {
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No classes found.</TableCell></TableRow>
-            ) : filtered.map((c) => (
-              <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.subjectName} ({c.subjectCode})</TableCell>
-                <TableCell>{c.section?.name || '—'}</TableCell>
-                <TableCell>Grade {c.subjectGradeLevel}</TableCell>
-                <TableCell>{c.teacher ? `${c.teacher.firstName} ${c.teacher.lastName}` : '—'}</TableCell>
-                <TableCell className="text-muted-foreground">{c.schoolYear}</TableCell>
-                <TableCell className="text-muted-foreground">{formatSchedules(c.schedules)}</TableCell>
-                <TableCell className="text-muted-foreground">{c.room || '—'}</TableCell>
-                <TableCell>
-                  <Badge variant={c.isActive ? 'default' : 'secondary'}>{c.isActive ? 'Active' : 'Inactive'}</Badge>
-                </TableCell>
-                <TableCell className="text-right space-x-1">
-                  <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(c)}>Edit</Button>
-                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleteTarget(c)}>Delete</Button>
+              <TableRow>
+                <TableCell
+                  colSpan={9}
+                  className="py-8 text-center text-muted-foreground"
+                >
+                  No classes found.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              filtered.map((classItem) => (
+                <TableRow
+                  key={classItem.id}
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() =>
+                    router.push(`/dashboard/admin/classes/${classItem.id}`)
+                  }
+                >
+                  <TableCell className="font-medium">
+                    {classItem.subjectName} ({classItem.subjectCode})
+                  </TableCell>
+                  <TableCell>{classItem.section?.name || 'N/A'}</TableCell>
+                  <TableCell>Grade {classItem.subjectGradeLevel}</TableCell>
+                  <TableCell>
+                    {classItem.teacher
+                      ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}`
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {classItem.schoolYear}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatSchedules(classItem.schedules)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {classItem.room || 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={classItem.isActive ? 'default' : 'secondary'}
+                    >
+                      {classItem.isActive ? 'Active' : 'Archived'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell
+                    className="space-x-1 text-right"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        router.push(`/dashboard/admin/classes/${classItem.id}`)
+                      }
+                    >
+                      View
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleOpenEdit(classItem)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={
+                        classItem.isActive ? 'text-red-600' : 'text-green-600'
+                      }
+                      onClick={() => setArchiveTarget(classItem)}
+                    >
+                      {classItem.isActive ? 'Archive' : 'Restore'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
 
-      {/* Create/Edit Modal */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editClass ? 'Edit Class' : 'Create Class'}</DialogTitle>
+            <DialogDescription>
+              Build the class schedule with weekday chips and time ranges so the
+              admin view matches the existing backend schedule model.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Subject Name</Label><Input value={form.subjectName} onChange={(e) => setForm({ ...form, subjectName: e.target.value })} placeholder="e.g. Mathematics" /></div>
-              <div><Label>Subject Code</Label><Input value={form.subjectCode} onChange={(e) => setForm({ ...form, subjectCode: e.target.value })} placeholder="e.g. MATH7" /></div>
+          <div className="max-h-[70vh] space-y-6 overflow-y-auto pr-1">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Subject Name">
+                <Input
+                  value={form.subjectName}
+                  onChange={(event) =>
+                    setField('subjectName', event.target.value)
+                  }
+                  placeholder="e.g. Mathematics 7"
+                />
+              </Field>
+              <Field label="Subject Code">
+                <Input
+                  value={form.subjectCode}
+                  onChange={(event) =>
+                    setField('subjectCode', event.target.value)
+                  }
+                  placeholder="e.g. MATH-7"
+                />
+              </Field>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Grade Level</Label>
-                <select value={form.subjectGradeLevel} onChange={(e) => setForm({ ...form, subjectGradeLevel: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                  {['7', '8', '9', '10'].map((g) => <option key={g} value={g}>Grade {g}</option>)}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Grade Level">
+                <select
+                  value={form.subjectGradeLevel}
+                  onChange={(event) =>
+                    setField('subjectGradeLevel', event.target.value)
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {['7', '8', '9', '10'].map((grade) => (
+                    <option key={grade} value={grade}>
+                      Grade {grade}
+                    </option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <Label>School Year</Label>
-                <select value={form.schoolYear} onChange={(e) => setForm({ ...form, schoolYear: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
+              </Field>
+              <Field label="School Year">
+                <select
+                  value={form.schoolYear}
+                  onChange={(event) => setField('schoolYear', event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
                   <option value="">Select year</option>
-                  {schoolYears.map((y) => <option key={y} value={y}>{y}</option>)}
+                  {schoolYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
                 </select>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Section">
+                <select
+                  value={form.sectionId}
+                  onChange={(event) => setField('sectionId', event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Select section</option>
+                  {sections.map((section) => (
+                    <option key={section.id} value={section.id}>
+                      {section.name} (Grade {section.gradeLevel})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Teacher">
+                <select
+                  value={form.teacherId}
+                  onChange={(event) => setField('teacherId', event.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Select teacher</option>
+                  {teachers.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.firstName} {teacher.lastName}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Room">
+              <Input
+                value={form.room}
+                onChange={(event) => setField('room', event.target.value)}
+                placeholder="e.g. Room 201"
+              />
+            </Field>
+
+            <div className="space-y-4 rounded-2xl border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Weekly Schedule</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Add one or more schedule slots for lecture, lab, or split
+                    meetings.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addScheduleRow}>
+                  + Add Slot
+                </Button>
               </div>
-            </div>
-            <div>
-              <Label>Section</Label>
-              <select value={form.sectionId} onChange={(e) => setForm({ ...form, sectionId: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                <option value="">Select section</option>
-                {sections.map((s) => <option key={s.id} value={s.id}>{s.name} (Grade {s.gradeLevel})</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>Teacher</Label>
-              <select value={form.teacherId} onChange={(e) => setForm({ ...form, teacherId: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                <option value="">Select teacher</option>
-                {teachers.map((t) => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Room</Label><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} placeholder="e.g. Room 201" /></div>
+
+              <div className="space-y-4">
+                {form.schedules.map((schedule, index) => (
+                  <div
+                    key={schedule.id}
+                    className="space-y-4 rounded-xl border border-dashed p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Schedule Slot {index + 1}</p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600"
+                        onClick={() => removeScheduleRow(index)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {SCHEDULE_DAYS.map((day) => {
+                        const selected = schedule.days.includes(day);
+                        return (
+                          <Button
+                            key={`${schedule.id}-${day}`}
+                            type="button"
+                            size="sm"
+                            variant={selected ? 'default' : 'outline'}
+                            onClick={() => toggleScheduleDay(index, day)}
+                          >
+                            {day}
+                          </Button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field label="Start Time">
+                        <Input
+                          type="time"
+                          value={schedule.startTime}
+                          onChange={(event) =>
+                            setScheduleField(index, 'startTime', event.target.value)
+                          }
+                        />
+                      </Field>
+                      <Field label="End Time">
+                        <Input
+                          type="time"
+                          value={schedule.endTime}
+                          onChange={(event) =>
+                            setScheduleField(index, 'endTime', event.target.value)
+                          }
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!form.subjectName.trim() || !form.subjectCode.trim()}>
-              {editClass ? 'Update' : 'Create'}
+            <Button variant="outline" onClick={() => setShowCreate(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving || !form.subjectName.trim() || !form.subjectCode.trim()}
+            >
+              {saving ? 'Saving...' : editClass ? 'Update' : 'Create'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+      <Dialog
+        open={!!archiveTarget}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-600">Delete Class</DialogTitle>
+            <DialogTitle>
+              {archiveTarget?.isActive ? 'Archive Class' : 'Restore Class'}
+            </DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{deleteTarget?.subjectName}</strong>? This cannot be undone.
+              {archiveTarget?.isActive
+                ? 'Archiving will mark this class inactive while preserving lessons, schedules, and related history for backtracking.'
+                : 'Restoring will mark this class active again and return it to the main class list.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setArchiveTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleToggleArchive}>
+              {archiveTarget?.isActive ? 'Archive' : 'Restore'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </Label>
+      {children}
     </div>
   );
 }

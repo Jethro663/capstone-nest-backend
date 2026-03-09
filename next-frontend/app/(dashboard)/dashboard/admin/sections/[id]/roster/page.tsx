@@ -7,9 +7,17 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api-error';
 import type { Section } from '@/types/section';
 
 interface Candidate {
@@ -30,6 +38,9 @@ export default function AdminSectionRosterPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddStudents, setShowAddStudents] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<RosterStudent | null>(
+    null,
+  );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [candidateSearch, setCandidateSearch] = useState('');
 
@@ -42,8 +53,8 @@ export default function AdminSectionRosterPage() {
       ]);
       setSection(sectionRes.data);
       setRoster(rosterRes.data || []);
-    } catch {
-      toast.error('Failed to load roster');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load roster'));
     } finally {
       setLoading(false);
     }
@@ -60,8 +71,8 @@ export default function AdminSectionRosterPage() {
       setSelectedIds([]);
       setCandidateSearch('');
       setShowAddStudents(true);
-    } catch {
-      toast.error('Failed to load candidates');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load candidates'));
     }
   };
 
@@ -72,8 +83,8 @@ export default function AdminSectionRosterPage() {
       toast.success(`Added ${selectedIds.length} student(s)`);
       setShowAddStudents(false);
       fetchData();
-    } catch {
-      toast.error('Failed to add students');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to add students'));
     }
   };
 
@@ -82,19 +93,27 @@ export default function AdminSectionRosterPage() {
     try {
       await sectionService.removeStudent(sectionId, studentId);
       toast.success('Student removed');
-      setRoster((prev) => prev.filter((s) => s.id !== studentId));
-    } catch {
-      toast.error('Failed to remove student');
+      setRoster((prev) => prev.filter((student) => student.id !== studentId));
+      if (selectedStudent?.id === studentId) {
+        setSelectedStudent(null);
+      }
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(
+          error,
+          'Failed to remove student',
+        ),
+      );
     }
   };
 
-  const filteredCandidates = candidates.filter((c) => {
+  const filteredCandidates = candidates.filter((candidate) => {
     if (!candidateSearch) return true;
-    const q = candidateSearch.toLowerCase();
+    const query = candidateSearch.toLowerCase();
     return (
-      c.firstName?.toLowerCase().includes(q) ||
-      c.lastName?.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q)
+      candidate.firstName?.toLowerCase().includes(query) ||
+      candidate.lastName?.toLowerCase().includes(query) ||
+      candidate.email?.toLowerCase().includes(query)
     );
   });
 
@@ -110,20 +129,32 @@ export default function AdminSectionRosterPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">← Back</Button>
-        <h1 className="text-2xl font-bold">{section?.name} — Roster</h1>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.back()}
+          className="mb-2"
+        >
+          Back
+        </Button>
+        <h1 className="text-2xl font-bold">{section?.name} - Roster</h1>
         <p className="text-muted-foreground">
-          Grade {section?.gradeLevel} • {section?.schoolYear} • {roster.length} students
+          Grade {section?.gradeLevel} - {section?.schoolYear} - {roster.length}{' '}
+          students
         </p>
       </div>
 
       <div className="flex items-center justify-end">
-        <Button size="sm" onClick={handleOpenAddStudents}>+ Add Students</Button>
+        <Button size="sm" onClick={handleOpenAddStudents}>
+          + Add Students
+        </Button>
       </div>
 
       {roster.length === 0 ? (
         <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">No students in this section yet.</CardContent>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            No students in this section yet.
+          </CardContent>
         </Card>
       ) : (
         <Card>
@@ -134,18 +165,42 @@ export default function AdminSectionRosterPage() {
                 <TableHead>Student</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>LRN</TableHead>
+                <TableHead>Grade</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roster.map((s, i) => (
-                <TableRow key={s.id}>
-                  <TableCell>{i + 1}</TableCell>
-                  <TableCell>{s.firstName} {s.lastName}</TableCell>
-                  <TableCell className="text-muted-foreground">{s.email}</TableCell>
-                  <TableCell className="text-muted-foreground">{s.lrn || '—'}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleRemoveStudent(s.id)}>Remove</Button>
+              {roster.map((student, index) => (
+                <TableRow key={student.id}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell>
+                    {student.firstName} {student.lastName}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {student.email || 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {student.lrn || 'N/A'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {student.gradeLevel || 'N/A'}
+                  </TableCell>
+                  <TableCell className="space-x-1 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedStudent(student)}
+                    >
+                      View
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600"
+                      onClick={() => handleRemoveStudent(student.id)}
+                    >
+                      Remove
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -154,39 +209,123 @@ export default function AdminSectionRosterPage() {
         </Card>
       )}
 
-      {/* Add Students Modal */}
       <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Add Students to {section?.name}</DialogTitle></DialogHeader>
-          <Input placeholder="Search students..." value={candidateSearch} onChange={(e) => setCandidateSearch(e.target.value)} />
-          <div className="max-h-64 overflow-y-auto space-y-2">
+          <DialogHeader>
+            <DialogTitle>Add Students to {section?.name}</DialogTitle>
+            <DialogDescription>
+              Select students who are not yet enrolled in this section.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Search students..."
+            value={candidateSearch}
+            onChange={(event) => setCandidateSearch(event.target.value)}
+          />
+          <div className="max-h-64 space-y-2 overflow-y-auto">
             {filteredCandidates.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No candidates available.</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No candidates available.
+              </p>
             ) : (
-              filteredCandidates.map((c) => (
-                <label key={c.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
+              filteredCandidates.map((candidate) => (
+                <label
+                  key={candidate.id}
+                  className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-gray-50"
+                >
                   <input
                     type="checkbox"
-                    checked={selectedIds.includes(c.id)}
+                    checked={selectedIds.includes(candidate.id)}
                     onChange={() =>
                       setSelectedIds((prev) =>
-                        prev.includes(c.id) ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                        prev.includes(candidate.id)
+                          ? prev.filter((id) => id !== candidate.id)
+                          : [...prev, candidate.id],
                       )
                     }
                   />
-                  <span className="text-sm">{c.firstName} {c.lastName} — {c.email}</span>
+                  <span className="text-sm">
+                    {candidate.firstName} {candidate.lastName} -{' '}
+                    {candidate.email}
+                  </span>
                 </label>
               ))
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddStudents(false)}>Cancel</Button>
-            <Button onClick={handleAddStudents} disabled={selectedIds.length === 0}>
+            <Button variant="outline" onClick={() => setShowAddStudents(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddStudents}
+              disabled={selectedIds.length === 0}
+            >
               Add {selectedIds.length} Student(s)
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!selectedStudent}
+        onOpenChange={(open) => !open && setSelectedStudent(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Student Info</DialogTitle>
+            <DialogDescription>
+              Quick profile summary for the selected student.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <InfoRow
+              label="Name"
+              value={`${selectedStudent?.firstName || ''} ${
+                selectedStudent?.lastName || ''
+              }`.trim()}
+            />
+            <InfoRow label="Email" value={selectedStudent?.email} />
+            <div className="grid grid-cols-2 gap-4">
+              <InfoRow label="LRN" value={selectedStudent?.lrn} />
+              <InfoRow
+                label="Grade Level"
+                value={selectedStudent?.gradeLevel}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedStudent(null)}>
+              Close
+            </Button>
+            {selectedStudent ? (
+              <Button
+                onClick={() =>
+                  router.push(`/dashboard/admin/users/${selectedStudent.id}`)
+                }
+              >
+                Open Full Profile
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string;
+}) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p>{value || 'N/A'}</p>
     </div>
   );
 }

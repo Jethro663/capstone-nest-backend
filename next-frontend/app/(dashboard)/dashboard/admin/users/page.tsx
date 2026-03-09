@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { userService } from '@/services/user-service';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import CreateUserModal from '@/components/modals/CreateUserModal';
 type StatusTab = 'active' | 'pending' | 'suspended' | 'deleted';
 
 export default function UserManagementPage() {
+  const router = useRouter();
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +33,6 @@ export default function UserManagementPage() {
   const [showSuspend, setShowSuspend] = useState<User | null>(null);
   const [showPurge, setShowPurge] = useState<User | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
-  const [editUser, setEditUser] = useState<User | null>(null);
 
   const statusMap: Record<StatusTab, string> = {
     active: 'ACTIVE',
@@ -73,18 +74,15 @@ export default function UserManagementPage() {
   });
 
   const handleOpenCreate = () => {
-    setEditUser(null);
     setShowCreate(true);
   };
 
-  const handleOpenEdit = (u: User) => {
-    setEditUser(u);
-    setShowCreate(true);
+  const handleOpenView = (userId: string) => {
+    router.push(`/dashboard/admin/users/${userId}`);
   };
 
   const handleModalSaved = () => {
     setShowCreate(false);
-    setEditUser(null);
     fetchUsers();
   };
 
@@ -207,7 +205,11 @@ export default function UserManagementPage() {
                   {filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No users found.</TableCell></TableRow>
                   ) : filtered.map((u) => (
-                    <TableRow key={u.id}>
+                    <TableRow
+                      key={u.id}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleOpenView(u.id)}
+                    >
                       <TableCell>
                         {u.firstName} {u.lastName}
                         {isSelf(u.id) && <Badge variant="outline" className="ml-2">YOU</Badge>}
@@ -215,8 +217,8 @@ export default function UserManagementPage() {
                       <TableCell className="text-muted-foreground">{u.email}</TableCell>
                       <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
                       <TableCell><Badge variant={u.status === 'ACTIVE' ? 'default' : 'secondary'}>{u.status}</Badge></TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)}>Edit</Button>
+                      <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenView(u.id)}>View</Button>
                         {!isSelf(u.id) && (
                           <Button variant="ghost" size="sm" className="text-amber-600" onClick={() => setShowSuspend(u)}>Suspend</Button>
                         )}
@@ -250,7 +252,11 @@ export default function UserManagementPage() {
                   {filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No pending accounts.</TableCell></TableRow>
                   ) : filtered.map((u) => (
-                    <TableRow key={u.id} className="opacity-90">
+                    <TableRow
+                      key={u.id}
+                      className="cursor-pointer opacity-90 hover:bg-gray-50"
+                      onClick={() => handleOpenView(u.id)}
+                    >
                       <TableCell>{u.firstName} {u.lastName}</TableCell>
                       <TableCell className="text-muted-foreground">{u.email}</TableCell>
                       <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
@@ -259,8 +265,8 @@ export default function UserManagementPage() {
                           {u.isEmailVerified ? 'Verified' : 'Awaiting Verification'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)}>Edit</Button>
+                      <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenView(u.id)}>View</Button>
                         <Button variant="ghost" size="sm" className="text-amber-600" onClick={() => setShowSuspend(u)}>Suspend</Button>
                       </TableCell>
                     </TableRow>
@@ -291,11 +297,16 @@ export default function UserManagementPage() {
                   {filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No suspended users.</TableCell></TableRow>
                   ) : filtered.map((u) => (
-                    <TableRow key={u.id} className="opacity-80">
+                    <TableRow
+                      key={u.id}
+                      className="cursor-pointer opacity-80 hover:bg-gray-50"
+                      onClick={() => handleOpenView(u.id)}
+                    >
                       <TableCell>{u.firstName} {u.lastName}</TableCell>
                       <TableCell className="text-muted-foreground">{u.email}</TableCell>
                       <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
-                      <TableCell className="text-right space-x-1">
+                      <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenView(u.id)}>View</Button>
                         <Button variant="ghost" size="sm" className="text-green-600" onClick={() => handleReactivate(u.id)}>Reactivate</Button>
                         <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleSoftDelete(u.id)}>Archive & Delete</Button>
                       </TableCell>
@@ -327,11 +338,16 @@ export default function UserManagementPage() {
                   {filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No deleted users.</TableCell></TableRow>
                   ) : filtered.map((u) => (
-                    <TableRow key={u.id} className="opacity-60">
+                    <TableRow
+                      key={u.id}
+                      className="cursor-pointer opacity-60 hover:bg-gray-50"
+                      onClick={() => handleOpenView(u.id)}
+                    >
                       <TableCell>{u.firstName} {u.lastName}</TableCell>
                       <TableCell className="text-muted-foreground">{u.email}</TableCell>
                       <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
-                      <TableCell className="text-right space-x-1">
+                      <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenView(u.id)}>View</Button>
                         <Button variant="ghost" size="sm" onClick={() => handleExport(u.id)}>Export</Button>
                         <Button variant="ghost" size="sm" className="text-red-600" onClick={() => { setShowPurge(u); setPurgeConfirmName(''); }}>Purge</Button>
                       </TableCell>
@@ -346,9 +362,9 @@ export default function UserManagementPage() {
 
       {/* Create / Edit User Modal */}
       <CreateUserModal
-        user={editUser}
+        user={null}
         open={showCreate}
-        onClose={() => { setShowCreate(false); setEditUser(null); }}
+        onClose={() => { setShowCreate(false); }}
         onSaved={handleModalSaved}
       />
 

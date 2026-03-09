@@ -17,6 +17,7 @@ import {
   notInArray,
   or,
   SQL,
+  sql,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -114,10 +115,37 @@ export class SectionsService {
       this.db.select({ total: count() }).from(sections).where(whereClause),
     ]);
 
+    const studentCountsBySection = new Map<string, number>();
+
+    if (sectionsList.length > 0) {
+      const sectionIds = sectionsList.map((section) => section.id);
+      const headcounts = await this.db
+        .select({
+          sectionId: enrollments.sectionId,
+          studentCount:
+            sql<number>`count(distinct ${enrollments.studentId})`.mapWith(Number),
+        })
+        .from(enrollments)
+        .where(
+          and(
+            inArray(enrollments.sectionId, sectionIds),
+            eq(enrollments.status, 'enrolled'),
+          ),
+        )
+        .groupBy(enrollments.sectionId);
+
+      for (const row of headcounts) {
+        studentCountsBySection.set(row.sectionId, row.studentCount ?? 0);
+      }
+    }
+
     const total = Number(totalResult[0]?.total ?? 0);
 
     return {
-      data: sectionsList,
+      data: sectionsList.map((section) => ({
+        ...section,
+        studentCount: studentCountsBySection.get(section.id) ?? 0,
+      })),
       pagination: {
         page,
         limit,
@@ -163,18 +191,27 @@ export class SectionsService {
       with: {
         student: {
           columns: { id: true, firstName: true, lastName: true, email: true },
-          with: { profile: { columns: { gradeLevel: true } } },
+          with: {
+            profile: {
+              columns: { gradeLevel: true, lrn: true },
+            },
+          },
         },
       },
       orderBy: (enrollments, { asc }) => [asc(enrollments.enrolledAt)],
     });
 
     return roster.map(r => ({
+      id: r.student.id,
       enrollmentId: r.id,
       studentId: r.studentId,
       status: r.status,
       enrolledAt: r.enrolledAt,
-      student: r.student,
+      firstName: r.student.firstName,
+      lastName: r.student.lastName,
+      email: r.student.email,
+      lrn: r.student.profile?.lrn ?? null,
+      gradeLevel: r.student.profile?.gradeLevel ?? null,
     }));
   }
 

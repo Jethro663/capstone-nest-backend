@@ -1,0 +1,679 @@
+@startuml LMS_ERD
+!define PRIMARY_KEY(x) <<PK>> **x**
+!define FOREIGN_KEY(x) <<FK>> **x**
+!define ENUM_COLOR #FFE4B5
+!define TABLE_COLOR #E1F5FF
+
+skinparam class {
+    BackgroundColor<<module>> #F0F0F0
+    BackgroundColor<<enum>> #FFE4B5
+    BorderColor Black
+}
+
+' ==========================================
+' 1. IDENTITY & ACCESS CONTROL MODULE
+' ==========================================
+
+package "Identity & Access Control" {
+    entity "roles" as roles #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        name: text (UNIQUE)
+        description: text
+        created_at: timestamp
+    }
+
+    entity "users" as users #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        email: text (UNIQUE)
+        password: text
+        first_name: text
+        middle_name: text
+        last_name: text
+        account_status: enum
+        is_email_verified: boolean
+        last_login_at: timestamp
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "user_roles" as user_roles #E1F5FF {
+        --
+        user_id: uuid <<FK>>
+        role_id: uuid <<FK>>
+        assigned_at: timestamp
+        assigned_by: text
+    }
+
+    entity "refresh_tokens" as refresh_tokens #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        user_id: uuid <<FK>>
+        token_hash: text (UNIQUE)
+        user_agent: text
+        ip: text
+        revoked: boolean
+        expires_at: timestamp
+        created_at: timestamp
+    }
+
+    entity "otp_verifications" as otp_verifications #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        user_id: uuid <<FK>>
+        code_hash: text
+        purpose: enum
+        expires_at: timestamp
+        is_used: boolean
+        used_at: timestamp
+        created_at: timestamp
+        attempt_count: integer
+    }
+}
+
+' ==========================================
+' 2. USER PROFILES MODULE
+' ==========================================
+
+package "User Profiles" {
+    entity "student_profiles" as student_profiles #E1F5FF {
+        {user_id}
+        --
+        user_id: uuid <<PK, FK>>
+        date_of_birth: timestamp
+        gender: text
+        phone: text
+        address: text
+        family_name: text
+        family_relationship: text
+        family_contact: text
+        grade_level: enum
+        lrn: varchar(12) (UNIQUE)
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "archived_users" as archived_users #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        original_user_id: uuid
+        email: text
+        full_name: text
+        role: text
+        archived_data: json
+        archived_by: uuid
+        archived_at: timestamp
+        purged_at: timestamp
+    }
+}
+
+' ==========================================
+' 3. ACADEMIC STRUCTURE MODULE
+' ==========================================
+
+package "Academic Structure" {
+    entity "sections" as sections #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        name: text
+        grade_level: text
+        school_year: text
+        capacity: integer
+        room_number: text
+        adviser_id: uuid <<FK>>
+        is_active: boolean
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "classes" as classes #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        subject_name: text
+        subject_code: text
+        subject_grade_level: enum
+        section_id: uuid <<FK>>
+        teacher_id: uuid <<FK>>
+        room: text
+        school_year: text
+        is_active: boolean
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "class_schedules" as class_schedules #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_id: uuid <<FK>>
+        days: text[]
+        start_time: text
+        end_time: text
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "enrollments" as enrollments #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        student_id: uuid <<FK>>
+        class_id: uuid <<FK>>
+        section_id: uuid <<FK>>
+        status: enum
+        enrolled_at: timestamp
+        created_at: timestamp
+    }
+}
+
+' ==========================================
+' 4. CONTENT & LEARNING MODULE
+' ==========================================
+
+package "Content & Learning" {
+    entity "lessons" as lessons #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        title: text
+        description: text
+        class_id: uuid <<FK>>
+        order: integer
+        is_draft: boolean
+        source_extraction_id: uuid
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "lesson_content_blocks" as lesson_content_blocks #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        lesson_id: uuid <<FK>>
+        type: enum
+        order: integer
+        content: json
+        metadata: json
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "lesson_completions" as lesson_completions #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        student_id: uuid <<FK>>
+        lesson_id: uuid <<FK>>
+        completed_at: timestamp
+        progress_percentage: integer
+    }
+}
+
+' ==========================================
+' 5. ASSESSMENTS MODULE
+' ==========================================
+
+package "Assessments" {
+    entity "assessments" as assessments #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        title: text
+        description: text
+        class_id: uuid <<FK>>
+        type: enum
+        due_date: timestamp
+        total_points: integer
+        passing_score: integer
+        max_attempts: integer
+        time_limit_minutes: integer
+        is_published: boolean
+        feedback_level: enum
+        feedback_delay_hours: integer
+        class_record_category: enum
+        quarter: enum
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "assessment_questions" as assessment_questions #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        assessment_id: uuid <<FK>>
+        type: enum
+        content: text
+        points: integer
+        order: integer
+        is_required: boolean
+        explanation: text
+        image_url: text
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "assessment_question_options" as assessment_question_options #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        question_id: uuid <<FK>>
+        text: text
+        is_correct: boolean
+        order: integer
+        created_at: timestamp
+    }
+
+    entity "assessment_attempts" as assessment_attempts #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        student_id: uuid <<FK>>
+        assessment_id: uuid <<FK>>
+        attempt_number: integer
+        started_at: timestamp
+        submitted_at: timestamp
+        score: integer
+        passed: boolean
+        is_submitted: boolean
+        time_spent_seconds: integer
+        is_returned: boolean
+        returned_at: timestamp
+        teacher_feedback: text
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "assessment_responses" as assessment_responses #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        attempt_id: uuid <<FK>>
+        question_id: uuid <<FK>>
+        student_answer: text
+        selected_option_id: uuid <<FK>>
+        selected_option_ids: text[]
+        is_correct: boolean
+        points_earned: integer
+        created_at: timestamp
+    }
+}
+
+' ==========================================
+' 6. FILE MANAGEMENT MODULE
+' ==========================================
+
+package "File Management" {
+    entity "library_folders" as library_folders #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        name: varchar(255)
+        owner_id: uuid <<FK>>
+        parent_id: uuid <<FK>> (self-ref)
+        scope: enum
+        created_at: timestamp
+        updated_at: timestamp
+        deleted_at: timestamp
+    }
+
+    entity "uploaded_files" as uploaded_files #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        folder_id: uuid <<FK>>
+        teacher_id: uuid <<FK>>
+        class_id: uuid <<FK>>
+        scope: enum
+        original_name: varchar(255)
+        stored_name: varchar(255)
+        mime_type: varchar(100)
+        size_bytes: bigint
+        file_path: text
+        uploaded_at: timestamp
+        deleted_at: timestamp
+    }
+
+    entity "pending_roster" as pending_roster #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        section_id: uuid <<FK>>
+        last_name: text
+        first_name: text
+        middle_initial: text
+        lrn: varchar(12)
+        roster_email: text
+        resolved_at: timestamp
+        resolved_user_id: uuid <<FK>>
+        imported_at: timestamp
+    }
+}
+
+' ==========================================
+' 7. CLASS RECORDS & GRADING MODULE
+' ==========================================
+
+package "Class Records & Grading" {
+    entity "class_records" as class_records #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_id: uuid <<FK>>
+        teacher_id: uuid <<FK>>
+        grading_period: enum
+        status: enum
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "class_record_categories" as class_record_categories #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_record_id: uuid <<FK>>
+        name: text
+        weight_percentage: numeric(5,2)
+        created_at: timestamp
+    }
+
+    entity "class_record_items" as class_record_items #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_record_id: uuid <<FK>>
+        category_id: uuid <<FK>>
+        assessment_id: uuid <<FK>>
+        title: text
+        max_score: numeric(8,2)
+        item_order: integer
+        date_given: date
+        created_at: timestamp
+    }
+
+    entity "class_record_scores" as class_record_scores #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_record_item_id: uuid <<FK>>
+        student_id: uuid <<FK>>
+        score: numeric(8,2)
+        recorded_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "class_record_final_grades" as class_record_final_grades #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_record_id: uuid <<FK>>
+        student_id: uuid <<FK>>
+        final_percentage: numeric(6,3)
+        remarks: enum
+        computed_at: timestamp
+    }
+}
+
+' ==========================================
+' 8. LXP & INTERVENTIONS MODULE
+' ==========================================
+
+package "LXP & Interventions" {
+    entity "intervention_cases" as intervention_cases #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_id: uuid <<FK>>
+        student_id: uuid <<FK>>
+        status: enum
+        trigger_source: text
+        trigger_score: numeric(6,3)
+        threshold_applied: numeric(6,3)
+        note: text
+        opened_at: timestamp
+        closed_at: timestamp
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "intervention_assignments" as intervention_assignments #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        case_id: uuid <<FK>>
+        assignment_type: enum
+        lesson_id: uuid <<FK>>
+        assessment_id: uuid <<FK>>
+        checkpoint_label: text
+        order_index: integer
+        is_completed: boolean
+        completed_at: timestamp
+        xp_awarded: integer
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "lxp_progress" as lxp_progress #E1F5FF {
+        --
+        student_id: uuid <<PK, FK>>
+        class_id: uuid <<PK, FK>>
+        xp_total: integer
+        streak_days: integer
+        checkpoints_completed: integer
+        last_activity_at: timestamp
+        created_at: timestamp
+        updated_at: timestamp
+    }
+}
+
+' ==========================================
+' 9. PERFORMANCE MONITORING MODULE
+' ==========================================
+
+package "Performance Monitoring" {
+    entity "performance_snapshots" as performance_snapshots #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_id: uuid <<FK>>
+        student_id: uuid <<FK>>
+        assessment_average: numeric(6,3)
+        class_record_average: numeric(6,3)
+        blended_score: numeric(6,3)
+        assessment_sample_size: integer
+        class_record_sample_size: integer
+        has_data: boolean
+        is_at_risk: boolean
+        threshold_applied: numeric(6,3)
+        last_computed_at: timestamp
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "performance_logs" as performance_logs #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_id: uuid <<FK>>
+        student_id: uuid <<FK>>
+        previous_is_at_risk: boolean
+        current_is_at_risk: boolean
+        assessment_average: numeric(6,3)
+        class_record_average: numeric(6,3)
+        blended_score: numeric(6,3)
+        threshold_applied: numeric(6,3)
+        trigger_source: text
+        created_at: timestamp
+    }
+}
+
+' ==========================================
+' 10. COMMUNICATIONS MODULE
+' ==========================================
+
+package "Communications" {
+    entity "announcements" as announcements #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        class_id: uuid <<FK>>
+        author_id: uuid <<FK>>
+        title: varchar(255)
+        content: text
+        is_pinned: boolean
+        scheduled_at: timestamp
+        published_at: timestamp
+        archived_at: timestamp
+        created_at: timestamp
+        updated_at: timestamp
+    }
+
+    entity "notifications" as notifications #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        user_id: uuid <<FK>>
+        type: enum
+        reference_id: uuid
+        title: varchar(255)
+        body: text
+        is_read: boolean
+        read_at: timestamp
+        created_at: timestamp
+    }
+}
+
+' ==========================================
+' 11. AI FEATURES MODULE
+' ==========================================
+
+package "AI Features" {
+    entity "ai_interaction_logs" as ai_interaction_logs #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        user_id: uuid <<FK>>
+        session_type: enum
+        input_text: text
+        output_text: text
+        model_used: text
+        context_metadata: json
+        response_time_ms: integer
+        session_id: uuid
+        created_at: timestamp
+    }
+
+    entity "extracted_modules" as extracted_modules #E1F5FF {
+        {id}
+        --
+        id: uuid <<PK>>
+        file_id: uuid <<FK>>
+        class_id: uuid <<FK>>
+        teacher_id: uuid <<FK>>
+        raw_text: text
+        structured_content: json
+        extraction_status: enum
+        error_message: text
+        model_used: text
+        is_applied: boolean
+        progress_percent: integer
+        total_chunks: integer
+        processed_chunks: integer
+        created_at: timestamp
+        updated_at: timestamp
+    }
+}
+
+' ==========================================
+' RELATIONSHIPS
+' ==========================================
+
+' Identity & Access
+users ||--o{ user_roles : has
+roles ||--o{ user_roles : assigned_to
+users ||--o{ refresh_tokens : generates
+users ||--o{ otp_verifications : requests
+
+' User Profiles
+users ||--|| student_profiles : has
+users ||--o{ archived_users : archive_of
+
+' Academic Structure
+users ||--o{ sections : advises
+sections ||--o{ classes : contains
+classes ||--o{ class_schedules : has
+sections ||--o{ enrollments : enrolls_in
+classes ||--o{ enrollments : enrolls_in
+users ||--o{ enrollments : enroll_as_student
+users ||--o{ classes : teaches
+
+' Content & Learning
+classes ||--o{ lessons : contains
+lessons ||--o{ lesson_content_blocks : contains
+users ||--o{ lesson_completions : complete
+lessons ||--o{ lesson_completions : track
+
+' Assessments
+classes ||--o{ assessments : contains
+assessments ||--o{ assessment_questions : contains
+assessment_questions ||--o{ assessment_question_options : has_options
+users ||--o{ assessment_attempts : takes
+assessments ||--o{ assessment_attempts : has_attempts
+assessment_attempts ||--o{ assessment_responses : has_responses
+assessment_questions ||--o{ assessment_responses : answered_by
+
+' File Management
+users ||--o{ library_folders : owns
+library_folders ||--o{ library_folders : parent_child
+users ||--o{ uploaded_files : uploads
+library_folders ||--o{ uploaded_files : contains
+classes ||--o{ uploaded_files : attached_to
+sections ||--o{ pending_roster : import_to
+users ||--o{ pending_roster : resolves
+
+' Class Records
+classes ||--o{ class_records : has
+users ||--o{ class_records : records_for
+class_records ||--o{ class_record_categories : categorized_by
+class_records ||--o{ class_record_items : contains
+class_record_categories ||--o{ class_record_items : within
+assessments ||--o{ class_record_items : links_to
+class_record_items ||--o{ class_record_scores : has_scores
+users ||--o{ class_record_scores : student_has_scores
+class_records ||--o{ class_record_final_grades : computed_from
+users ||--o{ class_record_final_grades : has_final_grade
+
+' LXP & Interventions
+classes ||--o{ intervention_cases : triggers
+users ||--o{ intervention_cases : for_student
+intervention_cases ||--o{ intervention_assignments : has_assignments
+lessons ||--o{ intervention_assignments : assigned_as
+assessments ||--o{ intervention_assignments : assigned_as
+users ||--|| lxp_progress : track_progress
+classes ||--o{ lxp_progress : progress_in
+
+' Performance
+classes ||--o{ performance_snapshots : compute_for
+users ||--o{ performance_snapshots : for_student
+classes ||--o{ performance_logs : log_for
+users ||--o{ performance_logs : student_performance
+
+' Communications
+classes ||--o{ announcements : has_announcements
+users ||--o{ announcements : author_of
+users ||--o{ notifications : user_has
+
+' AI
+users ||--o{ ai_interaction_logs : initiates
+uploaded_files ||--o{ extracted_modules : extracted_from
+classes ||--o{ extracted_modules : extracted_for
+users ||--o{ extracted_modules : extracted_by
+
+@enduml

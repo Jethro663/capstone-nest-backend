@@ -1,0 +1,78 @@
+flowchart LR
+  student[Student]
+  teacher[Teacher]
+  admin[Admin]
+  ai[AI Model Service]
+  email[Email Service]
+
+  subgraph nexora["Nexora LMS + LXP Backend"]
+    uc_auth[Authenticate / Account Recovery]
+    uc_profile[Manage Profile]
+    uc_notif[View Notifications]
+
+    uc_view_classes[View Classes]
+    uc_view_lessons[View Lessons]
+    uc_assessment_take[Start / Submit Assessment]
+    uc_assessment_results[View Assessment Results]
+
+    uc_lxp_elig[Check LXP Eligibility]
+    uc_lxp_playlist[Access LXP Playlist]
+    uc_lxp_checkpoint[Complete LXP Checkpoints]
+    uc_eval_submit[Submit System Evaluation]
+
+    uc_class_mgmt[Manage Classes, Sections, Enrollments]
+    uc_lesson_mgmt[Create / Publish Lessons]
+    uc_assessment_mgmt[Create / Manage Assessments & Questions]
+    uc_record_mgmt[Record / Sync / Finalize Class Records]
+    uc_announce[Post Announcements]
+    uc_perf_monitor[Monitor Performance / At-Risk Students]
+    uc_intervene[Assign / Resolve Interventions]
+    uc_lxp_reports[View LXP Reports]
+    uc_ai_extract[Run AI Module Extraction]
+    uc_eval_view[View Evaluation Results]
+
+    uc_user_role[Manage Users and Roles]
+    uc_dashboard[View Admin Dashboard Stats]
+    uc_archive[Archive / Reactivate / Purge Users]
+  end
+
+  student --> uc_auth
+  student --> uc_profile
+  student --> uc_notif
+  student --> uc_view_classes
+  student --> uc_view_lessons
+  student --> uc_assessment_take
+  student --> uc_assessment_results
+  student --> uc_lxp_elig
+  student --> uc_lxp_playlist
+  student --> uc_lxp_checkpoint
+  student --> uc_eval_submit
+
+  teacher --> uc_auth
+  teacher --> uc_profile
+  teacher --> uc_notif
+  teacher --> uc_class_mgmt
+  teacher --> uc_lesson_mgmt
+  teacher --> uc_assessment_mgmt
+  teacher --> uc_record_mgmt
+  teacher --> uc_announce
+  teacher --> uc_perf_monitor
+  teacher --> uc_intervene
+  teacher --> uc_lxp_reports
+  teacher --> uc_ai_extract
+  teacher --> uc_eval_view
+
+  admin --> uc_auth
+  admin --> uc_profile
+  admin --> uc_notif
+  admin --> uc_user_role
+  admin --> uc_dashboard
+  admin --> uc_archive
+  admin --> uc_eval_view
+  admin --> uc_class_mgmt
+  admin --> uc_perf_monitor
+  admin --> uc_lxp_reports
+
+  uc_ai_extract --> ai
+  uc_assessment_results --> ai
+  uc_auth --> email

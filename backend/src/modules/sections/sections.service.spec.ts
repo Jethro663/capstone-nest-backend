@@ -68,6 +68,7 @@ const makeSelectChain = (rows: any[] = []) => {
     from: jest.fn().mockImplementation(() => chain),
     innerJoin: jest.fn().mockImplementation(() => chain),
     where: jest.fn().mockImplementation(() => chain),
+    groupBy: jest.fn().mockImplementation(() => chain),
     orderBy: jest.fn().mockImplementation(() => chain),
     limit: jest.fn().mockImplementation(() => chain),
     // Make the chain thenable so `await chain.where()` resolves to rows
@@ -184,11 +185,15 @@ describe('SectionsService', () => {
 
     it('returns paginated result with total, page, limit, and totalPages', async () => {
       setupFindAll([makeSection()], 1);
+      mockDb.select
+        .mockReturnValueOnce(makeSelectChain([{ total: 1 }]))
+        .mockReturnValueOnce(makeSelectChain([{ sectionId: SECTION_ID, studentCount: 2 }]));
 
       const result = await service.findAll({ page: 1, limit: 10 });
 
       expect(result.pagination).toEqual({ page: 1, limit: 10, total: 1, totalPages: 1 });
       expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({ id: SECTION_ID, studentCount: 2 });
     });
 
     it('uses page=1 and limit=50 by default', async () => {
@@ -240,7 +245,7 @@ describe('SectionsService', () => {
           firstName: 'Juan',
           lastName: 'Dela Cruz',
           email: 'juan@school.edu',
-          profile: { gradeLevel: '7' },
+          profile: { gradeLevel: '7', lrn: '202401230001' },
         },
       };
 
@@ -251,9 +256,15 @@ describe('SectionsService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
+        id: STUDENT_ID,
         enrollmentId: ENROLLMENT_ID,
         studentId: STUDENT_ID,
         status: 'enrolled',
+        firstName: 'Juan',
+        lastName: 'Dela Cruz',
+        email: 'juan@school.edu',
+        lrn: '202401230001',
+        gradeLevel: '7',
       });
     });
 

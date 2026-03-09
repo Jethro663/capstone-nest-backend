@@ -14,14 +14,18 @@ export interface SectionsQuery {
 export interface SectionsListResponse {
   success: boolean;
   data: Section[];
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export interface RosterStudent {
   id: string;
+  enrollmentId?: string;
+  studentId?: string;
   firstName?: string;
   lastName?: string;
   email?: string;
