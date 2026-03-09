@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "nexora-lms",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -19,9 +19,9 @@
     "web": {
     },
     "plugins": [
-      [
-        "expo-font"
-      ]
+      "expo-font",
+      "expo-secure-store",
+      "expo-image-picker"
     ]
   }
 }

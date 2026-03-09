@@ -1,4 +1,5 @@
 const { getDefaultConfig } = require('expo/metro-config');
+const { withNativeWind } = require('nativewind/metro');
 
 const config = getDefaultConfig(__dirname);
 
@@ -7,4 +8,6 @@ const config = getDefaultConfig(__dirname);
 // Do NOT prepend web.* extensions here — it forces web code to load on native,
 // causing crashes like "View config getter callback for component `style`".
 
-module.exports = config;
+module.exports = withNativeWind(config, {
+  input: './global.css',
+});
