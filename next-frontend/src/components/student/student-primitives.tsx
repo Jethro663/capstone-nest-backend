@@ -21,7 +21,7 @@ export function StudentSectionHeader({
   return (
     <div className={cn('flex items-start justify-between gap-3', className)}>
       <div>
-        <h2 className="text-xl font-bold tracking-tight text-slate-900">{title}</h2>
+        <h2 className="text-xl font-bold tracking-tight text-[var(--student-text-strong)]">{title}</h2>
         {subtitle && <p className="mt-1 text-sm student-muted-text">{subtitle}</p>}
       </div>
       {action}
@@ -46,9 +46,9 @@ export function StudentStatCard({
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <p className="text-sm student-muted-text">{label}</p>
-            <span className={cn('rounded-full p-2 text-white', accent)}>{icon}</span>
+            <span className={cn('rounded-full p-2 text-white shadow-sm', accent)}>{icon}</span>
           </div>
-          <p className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900">{value}</p>
+          <p className="mt-3 text-3xl font-extrabold tracking-tight text-[var(--student-text-strong)]">{value}</p>
         </CardContent>
       </Card>
     </motion.div>
@@ -67,8 +67,8 @@ export function StudentEmptyState({
   return (
     <Card className="student-card">
       <CardContent className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-        <div className="rounded-full border border-red-200 bg-red-50 p-3 text-red-600">{icon}</div>
-        <p className="text-lg font-semibold text-slate-900">{title}</p>
+        <div className="rounded-full border border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)] p-3 text-[var(--student-accent)]">{icon}</div>
+        <p className="text-lg font-semibold text-[var(--student-text-strong)]">{title}</p>
         <p className="max-w-md text-sm student-muted-text">{description}</p>
       </CardContent>
     </Card>
@@ -89,11 +89,11 @@ export function StudentStatusChip({
       ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
       : tone === 'warning'
         ? 'bg-amber-100 text-amber-900 border-amber-300'
-        : tone === 'danger'
+      : tone === 'danger'
           ? 'bg-rose-100 text-rose-800 border-rose-300'
           : tone === 'info'
             ? 'bg-blue-100 text-blue-800 border-blue-300'
-            : 'bg-slate-100 text-slate-700 border-slate-300';
+            : 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]';
 
   return (
     <Badge variant="outline" className={cn('border font-semibold', toneClass, className)}>

@@ -242,7 +242,7 @@ export default function StudentProfilePage() {
   if (loadingProfile) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--student-accent)]" />
       </div>
     );
   }
@@ -273,7 +273,7 @@ export default function StudentProfilePage() {
               type="button"
               onClick={handleChooseAvatar}
               disabled={isLocked || uploadingAvatar}
-              className="bg-slate-900 hover:bg-red-500 text-white font-black rounded-xl gap-2"
+              className="student-button-solid rounded-xl font-black gap-2"
             >
               {uploadingAvatar ? (
                 <>
@@ -286,23 +286,23 @@ export default function StudentProfilePage() {
               )}
             </Button>
             {isLocked ? (
-              <p className="text-[11px] font-semibold text-slate-500">Profile picture is locked after confirmation.</p>
+              <p className="text-[11px] font-semibold text-[var(--student-text-muted)]">Profile picture is locked after confirmation.</p>
             ) : (
-              <p className="text-[11px] font-semibold text-slate-500">PNG, JPG, GIF, or WebP up to 5 MB.</p>
+              <p className="text-[11px] font-semibold text-[var(--student-text-muted)]">PNG, JPG, GIF, or WebP up to 5 MB.</p>
             )}
           </div>
         }
         left={
-          <Card className="border-[1.5px] border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm hover:border-red-200 transition-colors">
-            <div className="bg-slate-50/50 px-6 py-4 border-b border-slate-100">
-              <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-red-500" /> Student Information
+          <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
+            <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
+              <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
+                <ShieldCheck className="h-4 w-4 text-[var(--student-accent)]" /> Student Information
               </h3>
             </div>
             <CardContent className="p-6 space-y-6">
               <div
                 className={`rounded-2xl border px-4 py-3 text-sm ${
-                  isLocked ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-100 bg-red-50 text-red-700'
+                  isLocked ? 'student-note-success' : 'student-note-danger'
                 }`}
               >
                 {isLocked
@@ -312,31 +312,31 @@ export default function StudentProfilePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-slate-400">First Name</Label>
-                  <Input className="rounded-xl border-slate-200" value={user?.firstName ?? ''} disabled />
+                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">First Name</Label>
+                  <Input className="student-input rounded-xl" value={user?.firstName ?? ''} disabled />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-slate-400">Middle Name</Label>
-                  <Input className="rounded-xl border-slate-200" value={user?.middleName ?? ''} disabled />
+                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Middle Name</Label>
+                  <Input className="student-input rounded-xl" value={user?.middleName ?? ''} disabled />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-slate-400">Last Name</Label>
-                  <Input className="rounded-xl border-slate-200" value={user?.lastName ?? ''} disabled />
+                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Last Name</Label>
+                  <Input className="student-input rounded-xl" value={user?.lastName ?? ''} disabled />
                 </div>
               </div>
 
-              <div className="pt-4 space-y-4 border-t border-slate-50">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-red-500">Student Identity</h4>
+              <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Student Identity</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">LRN</Label>
-                    <Input className="rounded-xl border-slate-200" value={form.lrn} disabled />
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">LRN</Label>
+                    <Input className="student-input rounded-xl" value={form.lrn} disabled />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">Date of Birth</Label>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Date of Birth</Label>
                     <Input
                       type="date"
-                      className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+                      className="student-input rounded-xl"
                       value={form.dateOfBirth}
                       onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
                       disabled={isLocked}
@@ -345,12 +345,12 @@ export default function StudentProfilePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">Gender</Label>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Gender</Label>
                     <select
                       value={form.gender}
                       onChange={(e) => handleFieldChange('gender', e.target.value)}
                       disabled={isLocked}
-                      className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <option value="">Select</option>
                       <option value="Male">Male</option>
@@ -358,9 +358,9 @@ export default function StudentProfilePage() {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">Contact Number</Label>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
                     <Input
-                      className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+                      className="student-input rounded-xl"
                       value={form.phone}
                       onChange={(e) => handleFieldChange('phone', e.target.value)}
                       disabled={isLocked}
@@ -369,39 +369,39 @@ export default function StudentProfilePage() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-slate-400">Home Address</Label>
+                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Home Address</Label>
                   <Input
-                    className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+                    className="student-input rounded-xl"
                     value={form.address}
                     onChange={(e) => handleFieldChange('address', e.target.value)}
                     disabled={isLocked}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-slate-400">Grade Level</Label>
-                  <Input className="rounded-xl border-slate-200" value={form.gradeLevel} disabled />
+                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Grade Level</Label>
+                  <Input className="student-input rounded-xl" value={form.gradeLevel} disabled />
                 </div>
               </div>
 
-              <div className="pt-4 space-y-4 border-t border-slate-50">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-red-500">Emergency Contact</h4>
+              <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Emergency Contact</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">Guardian Name</Label>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Guardian Name</Label>
                     <Input
-                      className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+                      className="student-input rounded-xl"
                       value={form.familyName}
                       onChange={(e) => handleFieldChange('familyName', e.target.value)}
                       disabled={isLocked}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">Relationship</Label>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Relationship</Label>
                     <select
                       value={form.familyRelationship}
                       onChange={(e) => handleFieldChange('familyRelationship', e.target.value)}
                       disabled={isLocked}
-                      className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <option value="">Select</option>
                       <option value="Father">Father</option>
@@ -412,9 +412,9 @@ export default function StudentProfilePage() {
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-slate-400">Contact Number</Label>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
                     <Input
-                      className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+                      className="student-input rounded-xl"
                       value={form.familyContact}
                       onChange={(e) => handleFieldChange('familyContact', e.target.value)}
                       disabled={isLocked}
@@ -427,7 +427,7 @@ export default function StudentProfilePage() {
               <Button
                 onClick={handleSaveAttempt}
                 disabled={isLocked || saving}
-                className="w-full md:w-auto bg-slate-900 hover:bg-red-500 text-white font-black rounded-xl transition-all gap-2"
+                className="student-button-solid w-full rounded-xl font-black transition-all gap-2 md:w-auto"
               >
                 {saving ? (
                   <>
@@ -450,16 +450,16 @@ export default function StudentProfilePage() {
       <Dialog open={missingDialogOpen} onOpenChange={setMissingDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
+            <DialogTitle className="flex items-center gap-2 text-[var(--student-accent)]">
               <AlertTriangle className="h-5 w-5" /> Missing Required Fields
             </DialogTitle>
             <DialogDescription>Please fill up the missing student details before saving.</DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
+          <div className="student-note-danger rounded-xl px-4 py-3 text-sm">
             Please fill up missing: {missingFields.join(', ')}
           </div>
           <DialogFooter>
-            <Button onClick={() => setMissingDialogOpen(false)} className="bg-slate-900 hover:bg-red-500">
+            <Button onClick={() => setMissingDialogOpen(false)} className="student-button-solid">
               Review Details
             </Button>
           </DialogFooter>
@@ -478,7 +478,7 @@ export default function StudentProfilePage() {
             <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleConfirmSave} className="bg-slate-900 hover:bg-red-500">
+            <Button onClick={handleConfirmSave} className="student-button-solid">
               Yes, Save and Lock
             </Button>
           </DialogFooter>

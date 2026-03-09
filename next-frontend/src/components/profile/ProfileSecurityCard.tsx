@@ -44,36 +44,36 @@ export function ProfileSecurityCard() {
   };
 
   return (
-    <Card className="border-[1.5px] border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm hover:border-red-200 transition-colors">
-      <div className="bg-slate-50/50 px-6 py-4 border-b border-slate-100">
-        <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-          <Lock className="h-4 w-4 text-red-500" /> Security
+    <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
+      <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
+        <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
+          <Lock className="h-4 w-4 text-[var(--student-accent)]" /> Security
         </h3>
       </div>
       <CardContent className="p-6 space-y-4">
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase text-slate-400">Current Password</Label>
+          <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Current Password</Label>
           <Input
             type="password"
-            className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+            className="student-input rounded-xl"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase text-slate-400">New Password</Label>
+          <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">New Password</Label>
           <Input
             type="password"
-            className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+            className="student-input rounded-xl"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase text-slate-400">Confirm New Password</Label>
+          <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Confirm New Password</Label>
           <Input
             type="password"
-            className="rounded-xl border-slate-200 focus-visible:ring-red-500"
+            className="student-input rounded-xl"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
@@ -82,7 +82,7 @@ export function ProfileSecurityCard() {
           variant="outline"
           onClick={handleChangePassword}
           disabled={changingPw}
-          className="w-full border-slate-200 font-bold hover:border-red-500 hover:text-red-500 transition-all rounded-xl mt-2"
+          className="student-button-outline mt-2 w-full rounded-xl font-bold transition-all"
         >
           {changingPw ? 'Processing...' : 'Update Password'}
         </Button>

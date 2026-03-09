@@ -1,5 +1,5 @@
 /**
- * Sidebar — role‑aware navigation
+ * Sidebar - role-aware navigation
  */
 
 'use client';
@@ -109,22 +109,22 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     <aside
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-200 md:static md:translate-x-0',
-        isStudentRoute && 'border-red-100 bg-gradient-to-b from-white via-red-50/20 to-white',
-        open ? 'translate-x-0' : '-translate-x-full'
+        isStudentRoute && 'student-sidebar',
+        open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
-      {/* Header */}
-      <div className={cn('flex h-16 items-center justify-between border-b px-4', isStudentRoute && 'border-red-100')}>
+      <div className={cn('flex h-16 items-center justify-between border-b px-4', isStudentRoute && 'border-[var(--student-outline)]')}>
         <div>
-          <h1 className="text-xl font-bold text-primary">Nexora</h1>
-          <p className="text-xs text-muted-foreground">{getRoleLabel(role)}</p>
+          <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]')}>Nexora</h1>
+          <p className={cn('text-xs text-muted-foreground', isStudentRoute && 'text-[var(--student-text-muted)]')}>
+            {getRoleLabel(role)}
+          </p>
         </div>
         <button className="md:hidden" onClick={onClose}>
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
@@ -139,11 +139,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 active
                   ? isStudentRoute
-                    ? 'bg-red-100 text-red-700'
+                    ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]'
                     : 'bg-primary/10 text-primary'
                   : isStudentRoute
-                    ? 'text-muted-foreground hover:bg-red-50 hover:text-red-700'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -153,11 +153,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="border-t p-3">
+      <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]')}>
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive"
+          className={cn(
+            'w-full justify-start gap-3 text-muted-foreground hover:text-destructive',
+            isStudentRoute && 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]',
+          )}
           onClick={handleLogout}
         >
           <LogOut className="h-4 w-4" />

@@ -1,5 +1,5 @@
 /**
- * TopBar — welcome text, notifications, messages, profile
+ * TopBar - welcome text, notifications, messages, profile
  */
 
 'use client';
@@ -9,6 +9,7 @@ import { Bell, MessageSquare, Menu } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StudentThemeSwitcher } from '@/components/layout/StudentThemeSwitcher';
 import { getProfileRoute } from '@/utils/profile';
 
 interface TopBarProps {
@@ -29,24 +30,25 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   const profileHref = getProfileRoute(role);
 
   return (
-    <header className={`flex h-16 items-center justify-between border-b bg-white px-4 ${isStudentRoute ? 'border-red-100 bg-gradient-to-r from-white to-red-50/40' : ''}`}>
-      {/* Left — mobile menu + welcome */}
+    <header className={`flex h-16 items-center justify-between border-b px-4 ${isStudentRoute ? 'student-topbar' : 'bg-white'}`}>
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuToggle}>
           <Menu className="h-5 w-5" />
         </Button>
-        <span className="hidden text-sm text-muted-foreground sm:block">
-          Welcome, <span className="font-medium text-slate-900">{displayName}</span>
+        <span className={`hidden text-sm sm:block ${isStudentRoute ? 'text-[var(--student-text-muted)]' : 'text-muted-foreground'}`}>
+          Welcome, <span className={`font-medium ${isStudentRoute ? 'text-[var(--student-text-strong)]' : 'text-slate-900'}`}>{displayName}</span>
         </span>
       </div>
 
-      {/* Right — actions */}
       <div className="flex items-center gap-1">
+        {isStudentRoute ? <StudentThemeSwitcher /> : null}
+
         <Button
           variant="ghost"
           size="icon"
           onClick={() => router.push('/dashboard/messages')}
           title="Messages"
+          className={isStudentRoute ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]' : undefined}
         >
           <MessageSquare className="h-5 w-5" />
         </Button>
@@ -55,23 +57,24 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
           size="icon"
           onClick={() => router.push('/dashboard/notifications')}
           title="Notifications"
+          className={isStudentRoute ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]' : undefined}
         >
           <Bell className="h-5 w-5" />
         </Button>
 
-        <div className={`mx-2 h-6 w-px ${isStudentRoute ? 'bg-red-200' : 'bg-slate-200'}`} />
+        <div className={`mx-2 h-6 w-px ${isStudentRoute ? 'student-divider' : 'bg-slate-200'}`} />
 
         <button
           onClick={() => router.push(profileHref)}
-          className={`flex items-center gap-2 rounded-md px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-red-50' : 'hover:bg-slate-100'}`}
+          className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-[var(--student-accent-soft)]' : 'hover:bg-slate-100'}`}
         >
           <Avatar className="h-8 w-8">
             {user?.profilePicture ? <AvatarImage src={user.profilePicture} alt={displayName} /> : null}
-            <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>
+            <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]' : 'bg-primary/10 text-primary'}`}>
               {initials}
             </AvatarFallback>
           </Avatar>
-          <span className="hidden text-sm font-medium text-slate-700 md:block">Profile</span>
+          <span className={`hidden text-sm font-medium md:block ${isStudentRoute ? 'text-[var(--student-text-strong)]' : 'text-slate-700'}`}>Profile</span>
         </button>
       </div>
     </header>
