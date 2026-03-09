@@ -11,7 +11,7 @@
  * No self‑registration — accounts are created by admin.
  */
 
-import { api } from './api-client';
+import { api, type ApiRequestConfig } from './api-client';
 import type { User } from '@/types/user';
 import type { UpdateProfileDto } from '@/types/profile';
 
@@ -28,13 +28,19 @@ export interface AuthResponse {
   };
 }
 
+const publicAuthRequestConfig: ApiRequestConfig = {
+  withCredentials: true,
+  skipAuthRefresh: true,
+  skipSessionExpiredRedirect: true,
+};
+
 // ---------------------------------------------------------------------------
 // Login / Logout
 // ---------------------------------------------------------------------------
 
 export async function login(data: { email: string; password: string }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/login', data);
+    const response = await api.post('/auth/login', data, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Login failed' };
@@ -78,7 +84,7 @@ export async function getCurrentUser(): Promise<AuthResponse> {
 
 export async function verifyEmail(data: { email: string; code: string }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/otp/verify', data);
+    const response = await api.post('/otp/verify', data, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Verification failed' };
@@ -87,7 +93,7 @@ export async function verifyEmail(data: { email: string; code: string }): Promis
 
 export async function resendOTP(email: string): Promise<AuthResponse> {
   try {
-    const response = await api.post('/otp/resend', { email });
+    const response = await api.post('/otp/resend', { email }, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Failed to resend OTP' };
@@ -100,7 +106,7 @@ export async function resendOTP(email: string): Promise<AuthResponse> {
 
 export async function forgotPassword(email: string): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/forgot-password', { email });
+    const response = await api.post('/auth/forgot-password', { email }, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Failed to request password reset' };
@@ -114,7 +120,7 @@ export async function resetPassword(data: {
   confirmPassword: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/reset-password', data);
+    const response = await api.post('/auth/reset-password', data, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Failed to reset password' };
@@ -127,7 +133,7 @@ export async function setInitialPassword(data: {
   newPassword: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/set-initial-password', data);
+    const response = await api.post('/auth/set-initial-password', data, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Failed to set initial password' };
@@ -139,7 +145,7 @@ export async function setActivationPassword(data: {
   newPassword: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/set-activation-password', data);
+    const response = await api.post('/auth/set-activation-password', data, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Failed to set password' };
@@ -148,11 +154,12 @@ export async function setActivationPassword(data: {
 
 export async function changePassword(data: {
   oldPassword: string;
-  password: string;
+  newPassword: string;
   confirmPassword: string;
 }): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/change-password', data);
+    console.log('Change password response:', response.data);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Failed to change password' };
@@ -168,7 +175,7 @@ export async function validateCredentials(data: {
   password: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/validate-credentials', data);
+    const response = await api.post('/auth/validate-credentials', data, publicAuthRequestConfig);
     return response.data;
   } catch (error: any) {
     throw error.response?.data ?? { success: false, message: error.message || 'Invalid credentials' };

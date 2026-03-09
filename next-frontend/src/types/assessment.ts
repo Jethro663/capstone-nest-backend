@@ -129,6 +129,9 @@ export interface AttemptResult {
   attempt: AssessmentAttempt;
   score: number;
   passed: boolean;
+  isReturned: boolean;
+  attemptNumber: number;
+  teacherFeedback: string;
   responses: {
     questionId: string;
     studentAnswer?: string;

@@ -104,7 +104,7 @@ export default function ProfilePage() {
     }
     try {
       setChangingPw(true);
-      await changePassword({ oldPassword, password: newPassword, confirmPassword });
+      await changePassword({ oldPassword, newPassword: newPassword, confirmPassword });
       toast.success('Password changed');
       setOldPassword('');
       setNewPassword('');

@@ -57,6 +57,7 @@ export function LoginForm() {
       const msg = result.message ?? '';
       if (msg.toLowerCase().includes('not verified')) {
         const validation = await validateCredentialsAction({ email: data.email, password: data.password });
+        
         if (validation.success) {
           router.push(`/verify-email?flow=activation&email=${encodeURIComponent(data.email)}`);
         } else {
@@ -110,9 +111,7 @@ export function LoginForm() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="password">Password</Label>
-          <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-            Forgot password?
-          </Link>
+          
         </div>
         <Input
           id="password"

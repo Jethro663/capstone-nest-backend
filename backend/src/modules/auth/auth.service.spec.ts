@@ -292,6 +292,7 @@ describe('AuthService', () => {
       await service.changePassword(user.id, {
         oldPassword: 'OldP@ss1',
         newPassword: 'NewP@ss2!',
+        confirmPassword: 'NewP@ss2!',
       });
 
       expect(mockUsersService.updatePassword).toHaveBeenCalledWith(
@@ -308,6 +309,7 @@ describe('AuthService', () => {
         service.changePassword('user-uuid-1', {
           oldPassword: 'wrong',
           newPassword: 'NewP@ss2!',
+          confirmPassword: 'NewP@ss2!',
         }),
       ).rejects.toThrow('Old password is incorrect');
     });

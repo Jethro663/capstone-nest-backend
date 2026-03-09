@@ -22,7 +22,7 @@ import {
   setActivationPasswordSchema,
   type SetActivationPasswordFormValues,
 } from '@/schemas/auth';
-import { setActivationPasswordAction } from '@/lib/auth-actions';
+import { completeActivationPasswordAction } from '@/lib/auth-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,7 +60,7 @@ export function SetInitialPasswordForm() {
 
   const onSubmit = async (data: SetActivationPasswordFormValues) => {
     setServerError('');
-    const result = await setActivationPasswordAction({
+    const result = await completeActivationPasswordAction({
       email: data.email,
       newPassword: data.newPassword,
     });

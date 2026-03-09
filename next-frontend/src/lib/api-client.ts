@@ -8,9 +8,25 @@
  * - Base URL configuration
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosInstance,
+  AxiosError,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from 'axios';
 
 let accessToken: string | null = null;
+
+export interface ApiRequestConfig extends AxiosRequestConfig {
+  _retry?: boolean;
+  skipAuthRefresh?: boolean;
+  skipSessionExpiredRedirect?: boolean;
+}
+
+export type ApiRequestOptions = Pick<
+  ApiRequestConfig,
+  'skipAuthRefresh' | 'skipSessionExpiredRedirect'
+>;
 
 /**
  * Create axios instance with base configuration
@@ -45,10 +61,18 @@ export function createApiClient(): AxiosInstance {
   api.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
-      const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+      const originalRequest = error.config as ApiRequestConfig | undefined;
+
+      if (!originalRequest) {
+        return Promise.reject(error);
+      }
 
       // If 401 and not already retried
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      if (
+        error.response?.status === 401 &&
+        !originalRequest._retry &&
+        !originalRequest.skipAuthRefresh
+      ) {
         originalRequest._retry = true;
 
         // Prevent multiple refresh attempts
@@ -62,12 +86,16 @@ export function createApiClient(): AxiosInstance {
 
           if (newToken) {
             accessToken = newToken;
+            originalRequest.headers = originalRequest.headers ?? {};
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return api(originalRequest);
           } else {
             // Refresh failed (expired/invalid refresh token) → force re-login
             accessToken = null;
-            if (typeof window !== 'undefined') {
+            if (
+              typeof window !== 'undefined' &&
+              !originalRequest.skipSessionExpiredRedirect
+            ) {
               import('sonner').then(({ toast }) => {
                 toast.error('Session expired. Please log in again.');
               });

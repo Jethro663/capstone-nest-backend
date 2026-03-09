@@ -164,7 +164,7 @@ export async function setInitialPasswordAction(formData: {
  * Set activation password (called AFTER OTP verification — no code needed).
  * Sets the password and returns success. User should be redirected to login page.
  */
-export async function setActivationPasswordAction(formData: {
+export async function completeActivationPasswordAction(formData: {
   email: string;
   newPassword: string;
 }) {
@@ -179,13 +179,19 @@ export async function setActivationPasswordAction(formData: {
   }
 }
 
+export const setActivationPasswordAction = completeActivationPasswordAction;
+
 export async function changePasswordAction(formData: {
   oldPassword: string;
   password: string;
   confirmPassword: string;
 }) {
   try {
-    const response = await authService.changePassword(formData);
+    const response = await authService.changePassword({
+      oldPassword: formData.oldPassword,
+      newPassword: formData.password,
+      confirmPassword: formData.confirmPassword,
+    });
     if (!response.success) {
       return { success: false, message: response.message || 'Password change failed' };
     }

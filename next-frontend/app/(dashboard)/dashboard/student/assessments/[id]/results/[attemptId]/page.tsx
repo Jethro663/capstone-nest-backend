@@ -31,6 +31,7 @@ export default function StudentAssessmentResultsPage() {
     try {
       setLoading(true);
       const res = await assessmentService.getAttemptResults(attemptId);
+      console.log(res)
       setResult(res.data);
     } catch {
       toast.error('Failed to load results');
@@ -57,11 +58,11 @@ export default function StudentAssessmentResultsPage() {
     return <p className="text-muted-foreground">Results not found.</p>;
   }
 
-  const { attempt, responses, score, passed } = result;
+  const { attempt, responses, score, passed, isReturned, attemptNumber, teacherFeedback } = result;
   const pct = score ?? 0;
   const correctCount = responses.filter((r) => r.isCorrect === true).length;
 
-  if (attempt.isReturned === false) {
+  if (isReturned === false) {
     return (
       <div className="student-page rounded-3xl p-1">
         <div className="mx-auto max-w-4xl space-y-6">
@@ -103,28 +104,28 @@ export default function StudentAssessmentResultsPage() {
               className="[&_h2]:text-white [&_p]:text-red-100"
               action={<StudentStatusChip tone={passed ? 'success' : 'danger'}>{passed ? 'Passed' : 'Needs Improvement'}</StudentStatusChip>}
             />
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center">
-                <p className="text-xs uppercase tracking-wide text-red-100">Score</p>
-                <p className="mt-1 text-4xl font-black">{pct}%</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3 items-stretch">
+              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center text-white flex flex-col items-center justify-center h-28">
+                <p className="text-xs uppercase tracking-wide text-red-500">Score</p>
+                <p className="mt-1 text-4xl font-black text-red-500 leading-tight">{pct}%</p>
               </div>
-              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center">
-                <p className="text-xs uppercase tracking-wide text-red-100">Correct</p>
-                <p className="mt-1 text-4xl font-black">{correctCount}</p>
+              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center text-white flex flex-col items-center justify-center h-28">
+                <p className="text-xs uppercase tracking-wide text-red-500">Correct</p>
+                <p className="mt-1 text-4xl font-black text-red-500 leading-tight">{correctCount}</p>
               </div>
-              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center">
-                <p className="text-xs uppercase tracking-wide text-red-100">Attempt</p>
-                <p className="mt-1 text-4xl font-black">#{attempt.attemptNumber ?? '?'}</p>
+              <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-center text-white flex flex-col items-center justify-center h-28">
+                <p className="text-xs uppercase tracking-wide text-red-500">Attempt</p>
+                <p className="mt-1 text-4xl font-black text-red-500 leading-tight">#{attemptNumber ?? '?'}</p>
               </div>
             </div>
           </StudentActionCard>
         </motion.div>
 
-        {attempt.teacherFeedback && (
+        {teacherFeedback && (
           <motion.div {...motionProps.item}>
             <StudentActionCard className="border-blue-300 bg-blue-50/70">
               <p className="text-sm font-semibold text-blue-900">Teacher Feedback</p>
-              <p className="mt-1 text-sm text-blue-800">{attempt.teacherFeedback}</p>
+              <p className="mt-1 text-sm text-blue-800">{teacherFeedback}</p>
             </StudentActionCard>
           </motion.div>
         )}
