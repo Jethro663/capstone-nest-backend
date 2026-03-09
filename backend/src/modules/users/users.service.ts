@@ -368,7 +368,8 @@ export class UsersService {
     if (updateUserDto.lrn !== undefined) profilePayload.lrn = updateUserDto.lrn;
     if (updateUserDto.gradeLevel !== undefined)
       profilePayload.gradeLevel = updateUserDto.gradeLevel;
-    if (updateUserDto.dob) profilePayload.dateOfBirth = new Date(updateUserDto.dob);
+    const dob = updateUserDto.dateOfBirth ?? updateUserDto.dob;
+    if (dob !== undefined) profilePayload.dateOfBirth = dob ? new Date(dob) : null;
     if (updateUserDto.gender !== undefined) profilePayload.gender = updateUserDto.gender;
     if (updateUserDto.phone !== undefined) profilePayload.phone = updateUserDto.phone;
     if (updateUserDto.address !== undefined) profilePayload.address = updateUserDto.address;
@@ -378,6 +379,8 @@ export class UsersService {
       profilePayload.familyRelationship = updateUserDto.familyRelationship;
     if (updateUserDto.familyContact !== undefined)
       profilePayload.familyContact = updateUserDto.familyContact;
+    if (updateUserDto.profilePicture !== undefined)
+      profilePayload.profilePicture = updateUserDto.profilePicture;
 
     if (updateUserDto.lrn !== undefined) {
       const lrnConflict = await this.db.query.studentProfiles.findFirst({

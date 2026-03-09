@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UsersService } from './users.service';
 import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
@@ -54,6 +55,10 @@ describe('UsersService', () => {
     }),
   };
 
+  const mockEventEmitter = {
+    emit: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     bcrypt.hash.mockResolvedValue('hashed-password');
@@ -101,6 +106,7 @@ describe('UsersService', () => {
         { provide: OtpService, useValue: mockOtpService },
         { provide: MailService, useValue: mockMailService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 
@@ -188,10 +194,13 @@ describe('UsersService', () => {
 
       expect(result.password).toBeUndefined();
       expect((result as any).temporaryPassword).toBeUndefined();
-      expect(mockOtpService.createAndSendOTP).toHaveBeenCalledWith(
-        'new-user',
-        'teacher@example.com',
-        'email_verification',
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'user.created',
+        expect.objectContaining({
+          userId: 'new-user',
+          email: 'teacher@example.com',
+          requiresOTP: true,
+        }),
       );
     });
 
@@ -274,6 +283,55 @@ describe('UsersService', () => {
       await expect(
         service.updateUser('user-1', { phone: '0917-123-4567' } as any),
       ).rejects.toThrow('profile fail');
+    });
+
+    it('maps dateOfBirth and profilePicture into the student profile payload', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(makeUser({ email: 'a@b.com' }));
+
+      const where = jest.fn().mockResolvedValue(undefined);
+      const set = jest.fn().mockReturnValue({ where });
+      const tx = {
+        query: {
+          studentProfiles: { findFirst: jest.fn().mockResolvedValue({ userId: 'user-1' }) },
+          roles: { findFirst: jest.fn() },
+        },
+        update: jest.fn().mockImplementation((table: any) => {
+          if (table === studentProfiles) {
+            return { set };
+          }
+          return {
+            set: jest.fn().mockReturnValue({
+              where: jest.fn().mockResolvedValue(undefined),
+            }),
+          };
+        }),
+        insert: jest.fn(),
+        delete: jest.fn(),
+      };
+
+      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
+      jest.spyOn(service, 'findById').mockResolvedValueOnce(makeUser({ email: 'a@b.com' })).mockResolvedValueOnce(
+        makeUser({
+          email: 'a@b.com',
+          dateOfBirth: '2005-08-15T00:00:00.000Z',
+          profilePicture: '/api/profiles/images/test.png',
+        }),
+      );
+
+      const result = await service.updateUser('user-1', {
+        dateOfBirth: '2005-08-15',
+        profilePicture: '/api/profiles/images/test.png',
+      } as any);
+
+      expect(set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: expect.any(Date),
+          profilePicture: '/api/profiles/images/test.png',
+          updatedAt: expect.any(Date),
+        }),
+      );
+      expect(result.profilePicture).toBe('/api/profiles/images/test.png');
+      expect(result.dateOfBirth).toBe('2005-08-15T00:00:00.000Z');
     });
   });
 

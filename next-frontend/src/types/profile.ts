@@ -4,6 +4,7 @@ export interface StudentProfile {
   lrn?: string;
   dob?: string;
   dateOfBirth?: string;
+  profilePicture?: string;
   gender?: string;
   phone?: string;
   address?: string;
@@ -18,6 +19,7 @@ export interface StudentProfile {
 export interface UpdateProfileDto {
   lrn?: string;
   dob?: string;
+  dateOfBirth?: string;
   gender?: string;
   phone?: string;
   address?: string;
@@ -25,6 +27,7 @@ export interface UpdateProfileDto {
   familyRelationship?: string;
   familyContact?: string;
   gradeLevel?: string;
+  profilePicture?: string;
   firstName?: string;
   middleName?: string;
   lastName?: string;

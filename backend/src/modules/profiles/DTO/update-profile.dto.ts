@@ -4,6 +4,21 @@ import { Transform } from 'class-transformer';
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
+  @Transform(({ value }: { value: string }) => value?.trim())
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }: { value: string }) => value?.trim())
+  middleName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }: { value: string }) => value?.trim())
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
   @Matches(/^[0-9]{12}$/, {
     message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
   })
@@ -12,6 +27,10 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsDateString({}, { message: 'Date of birth must be a valid ISO date' })
   dob?: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'Date of birth must be a valid ISO date' })
+  dateOfBirth?: string;
 
   @IsOptional()
   @IsString()
@@ -44,4 +63,8 @@ export class UpdateProfileDto {
     message: 'Grade level must be one of: 7, 8, 9, 10',
   })
   gradeLevel?: '7' | '8' | '9' | '10';
+
+  @IsOptional()
+  @IsString()
+  profilePicture?: string;
 }

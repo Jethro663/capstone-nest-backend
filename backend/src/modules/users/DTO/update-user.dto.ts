@@ -65,6 +65,10 @@ export class UpdateUserDto {
   dob?: string;
 
   @IsOptional()
+  @IsDateString({}, { message: 'Date of birth must be a valid ISO date' })
+  dateOfBirth?: string;
+
+  @IsOptional()
   @IsString()
   gender?: string;
 
@@ -96,4 +100,8 @@ export class UpdateUserDto {
     message: 'Grade level must be one of: 7, 8, 9, 10',
   })
   gradeLevel?: '7' | '8' | '9' | '10';
+
+  @IsOptional()
+  @IsString()
+  profilePicture?: string;
 }

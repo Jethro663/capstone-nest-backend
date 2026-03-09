@@ -14,6 +14,7 @@ export interface User {
   lrn?: string;
   dob?: string;
   dateOfBirth?: string;
+  profilePicture?: string;
   gender?: string;
   phone?: string;
   address?: string;

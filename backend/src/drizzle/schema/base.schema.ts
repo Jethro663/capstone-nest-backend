@@ -243,6 +243,7 @@ export const studentProfiles = pgTable(
       .primaryKey()
       .references(() => users.id, { onDelete: 'cascade' }),
     dateOfBirth: timestamp('date_of_birth'),
+    profilePicture: text('profile_picture'),
     gender: text('gender'),
     phone: text('phone'),
     address: text('address'),

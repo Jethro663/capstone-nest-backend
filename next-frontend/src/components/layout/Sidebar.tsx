@@ -23,6 +23,7 @@ import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
 import { logoutAction } from '@/lib/auth-actions';
 import { Button } from '@/components/ui/button';
+import { getProfileRoute } from '@/utils/profile';
 
 interface NavItem {
   label: string;
@@ -36,7 +37,7 @@ const studentNav: NavItem[] = [
   { label: 'LXP', href: '/dashboard/student/lxp', icon: ClipboardList },
   { label: 'Performance', href: '/dashboard/student/performance', icon: BarChart3 },
   { label: 'Announcements', href: '/dashboard/student/announcements', icon: Megaphone },
-  { label: 'Profile', href: '/dashboard/profile', icon: User },
+  { label: 'Profile', href: '/dashboard/student/profile', icon: User },
 ];
 
 const teacherNav: NavItem[] = [
@@ -48,7 +49,7 @@ const teacherNav: NavItem[] = [
   { label: 'Interventions', href: '/dashboard/teacher/interventions', icon: Users },
   { label: 'Performance', href: '/dashboard/teacher/performance', icon: BarChart3 },
   { label: 'Announcements', href: '/dashboard/teacher/announcements', icon: Megaphone },
-  { label: 'Profile', href: '/dashboard/profile', icon: User },
+  { label: 'Profile', href: '/dashboard/teacher/profile', icon: User },
 ];
 
 const adminNav: NavItem[] = [
@@ -61,7 +62,7 @@ const adminNav: NavItem[] = [
   { label: 'Announcements', href: '/dashboard/admin/announcements', icon: Megaphone },
   { label: 'AI Chatbot', href: '/dashboard/admin/chatbot', icon: Bot },
   { label: 'Audit Trail', href: '/dashboard/admin/audit', icon: Settings },
-  { label: 'Profile', href: '/dashboard/profile', icon: User },
+  { label: 'Profile', href: '/dashboard/admin/profile', icon: User },
 ];
 
 function getNavItems(role: string | null): NavItem[] {
@@ -95,7 +96,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { role } = useAuth();
-  const items = getNavItems(role);
+  const items = getNavItems(role).map((item) =>
+    item.label === 'Profile' ? { ...item, href: getProfileRoute(role) } : item,
+  );
   const isStudentRoute = pathname.startsWith('/dashboard/student');
 
   const handleLogout = async () => {

@@ -1,3 +1,5 @@
+import { normalizePhilippinePhone } from '@/utils/profile';
+
 /** Backend may return role as a plain string OR as an object { id, name, ... } */
 export function getRoleName(role: unknown): string {
   if (!role) return '';
@@ -89,6 +91,5 @@ export function isProfileIncomplete(user: Record<string, unknown> | null, profil
 }
 
 export function isValidPHPhone(value: string): boolean {
-  const digits = (value || '').replace(/\D/g, '');
-  return digits.length === 11 && digits.startsWith('09');
+  return normalizePhilippinePhone(value) !== null;
 }

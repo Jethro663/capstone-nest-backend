@@ -26,6 +26,11 @@ export class UpdateProfileDto {
   @IsDateString({}, { message: 'Date of birth must be a valid ISO date' })
   dob?: string;
 
+  @ApiProperty({ example: '2005-08-15', required: false })
+  @IsOptional()
+  @IsDateString({}, { message: 'Date of birth must be a valid ISO date' })
+  dateOfBirth?: string;
+
   @ApiProperty({ example: 'Male', required: false })
   @IsOptional()
   @IsString()
@@ -70,4 +75,9 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   familyContact?: string;
+
+  @ApiProperty({ example: '/api/profiles/images/student-avatar.png', required: false })
+  @IsOptional()
+  @IsString()
+  profilePicture?: string;
 }
