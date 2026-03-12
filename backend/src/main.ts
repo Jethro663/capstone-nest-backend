@@ -1,14 +1,22 @@
+import './tracing'
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
+import { MetricsInterceptor } from './monitoring/utils/metrics.interceptor';
+import { winstonLogger } from './common/logger/winston.config';
+import { WinstonLoggerService } from './common/logger/winston-logger.service';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
+
+  // Register Winston as the global logger
+  app.useLogger(new WinstonLoggerService(winstonLogger));
 
   // Graceful shutdown — lets in-flight requests finish before the process exits
   app.enableShutdownHooks();
@@ -36,6 +44,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  // Global metrics interceptor
+  app.useGlobalInterceptors(new MetricsInterceptor());
 
   // Swagger — only exposed outside production to avoid leaking API shapes
   if (isProd) {

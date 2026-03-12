@@ -1,4 +1,4 @@
-const fallbackApiUrl = 'http://192.168.254.102:3000/api';
+const fallbackApiUrl = 'http://10.127.113.114:3000/api';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL?.trim() || fallbackApiUrl;
 

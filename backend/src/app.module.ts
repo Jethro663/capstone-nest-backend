@@ -20,6 +20,7 @@ import { ProfilesModule } from './modules/profiles/profiles.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
 import { HealthModule } from './modules/health/health.module';
+import { MetricsModule } from './monitoring/metrics.module';
 import { FileUploadModule } from './modules/file-upload/file-upload.module';
 import { RosterImportModule } from './modules/roster-import/roster-import.module';
 import { ClassRecordModule } from './modules/class-record/class-record.module';
@@ -68,6 +69,7 @@ import ollamaConfig from './config/ollama.config';
     AdminModule,
     TeacherModule,
     HealthModule,
+    MetricsModule,
     FileUploadModule,
     RosterImportModule,
     ClassRecordModule,
