@@ -14,6 +14,7 @@ import {
   DEFAULT_THEME,
   getThemeDefinition,
   isThemeId,
+  normalizeThemeId,
   THEME_OPTIONS,
   THEME_STORAGE_KEY,
   type ThemeDefinition,
@@ -38,7 +39,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
 
     const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemeId(storedTheme) ? storedTheme : DEFAULT_THEME;
+    return normalizeThemeId(storedTheme) ?? DEFAULT_THEME;
   });
   const isHydrated = useSyncExternalStore(
     () => () => undefined,
@@ -49,7 +50,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = theme;
+    root.dataset.theme = normalizeThemeId(theme) ?? DEFAULT_THEME;
     root.dataset.studentRoute = String(isStudentRoute);
 
     if (isHydrated) {

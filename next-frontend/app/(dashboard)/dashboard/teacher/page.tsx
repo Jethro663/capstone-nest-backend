@@ -98,8 +98,8 @@ export default function TeacherDashboardPage() {
         <Link href="/dashboard/teacher/lessons">
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">My Lessons</p>
-              <p className="text-3xl font-bold text-blue-600">{lessons.length}</p>
+            <p className="text-sm text-muted-foreground">My Lessons</p>
+            <p className="text-3xl font-bold text-blue-600">{lessons.length}</p>
             </CardContent>
           </Card>
         </Link>

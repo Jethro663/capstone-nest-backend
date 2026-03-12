@@ -41,7 +41,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-1">
-        {isStudentRoute ? <StudentThemeSwitcher /> : null}
+        {isStudentRoute ? <StudentThemeSwitcher/> : null}
 
         <Button
           variant="ghost"

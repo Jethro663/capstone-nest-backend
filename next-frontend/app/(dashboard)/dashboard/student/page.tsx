@@ -109,7 +109,7 @@ export default function StudentDashboardPage() {
               <Sparkles className="h-3 w-3" /> Learning Hub
             </div>
             <h1 className="text-3xl font-black tracking-tight text-[var(--student-text-strong)]">
-              Hello, <span className="student-accent-text">{user?.firstName || 'Student'}</span>.
+              Welcome back, <span className="student-accent-text">{user?.firstName || 'Student'}</span>.
             </h1>
             <p className="text-sm font-medium text-[var(--student-text-muted)]">
               You have <span className="border-b-2 border-[var(--student-accent)] font-bold text-[var(--student-text-strong)]">{publishedAssessments.length} pending tasks</span> to finalize.
