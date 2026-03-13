@@ -231,8 +231,17 @@ export class UsersService {
   //CRUD Operations
 
   async createUser(createUserDto: CreateUserDto) {
-    const { email, password, firstName, middleName, lastName, role, lrn } =
-      createUserDto;
+    const {
+      email,
+      password,
+      firstName,
+      middleName,
+      lastName,
+      role,
+      lrn,
+      employeeId,
+      contactNumber,
+    } = createUserDto;
 
     // 1. Check if email already exists
     const existingUser = await this.db.query.users.findFirst({
@@ -255,6 +264,20 @@ export class UsersService {
 
       if (existingProfile) {
         throw new ConflictException(`LRN ${lrn} is already registered`);
+      }
+    }
+
+    if (role === 'teacher') {
+      if (!employeeId) {
+        throw new ConflictException(
+          'Employee ID is required for teacher accounts',
+        );
+      }
+
+      if (!contactNumber) {
+        throw new ConflictException(
+          'Contact number is required for teacher accounts',
+        );
       }
     }
 
@@ -324,6 +347,8 @@ export class UsersService {
           if (!existingTeacherProfile) {
             await tx.insert(teacherProfiles).values({
               userId: newUser.id,
+              employeeId: employeeId ?? null,
+              contactNumber: contactNumber ?? null,
               createdAt: new Date(),
               updatedAt: new Date(),
             });
@@ -485,10 +510,45 @@ export class UsersService {
             if (!existingTeacherProfile) {
               await tx.insert(teacherProfiles).values({
                 userId: id,
+                employeeId: updateUserDto.employeeId,
+                contactNumber: updateUserDto.contactNumber,
                 createdAt: new Date(),
                 updatedAt: new Date(),
               });
             }
+          }
+        }
+
+        if (
+          updateUserDto.employeeId !== undefined ||
+          updateUserDto.contactNumber !== undefined
+        ) {
+          const existingTeacherProfile = tx.query?.teacherProfiles
+            ? await tx.query.teacherProfiles.findFirst({
+                where: eq(teacherProfiles.userId, id),
+              })
+            : null;
+
+          if (existingTeacherProfile) {
+            await tx
+              .update(teacherProfiles)
+              .set({
+                employeeId:
+                  updateUserDto.employeeId ?? existingTeacherProfile.employeeId,
+                contactNumber:
+                  updateUserDto.contactNumber ??
+                  existingTeacherProfile.contactNumber,
+                updatedAt: new Date(),
+              })
+              .where(eq(teacherProfiles.userId, id));
+          } else {
+            await tx.insert(teacherProfiles).values({
+              userId: id,
+              employeeId: updateUserDto.employeeId,
+              contactNumber: updateUserDto.contactNumber,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
           }
         }
       });
@@ -844,6 +904,9 @@ export class UsersService {
     }
     if (pgError.constraint?.includes('student_profiles_lrn')) {
       throw new ConflictException('LRN is already in use');
+    }
+    if (pgError.constraint?.includes('teacher_profiles_employee_id')) {
+      throw new ConflictException('Employee ID is already in use');
     }
 
     throw new ConflictException('Duplicate record violates unique constraint');

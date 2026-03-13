@@ -276,6 +276,7 @@ export const teacherProfiles = pgTable(
     specialization: text('specialization'),
     profilePicture: text('profile_picture'),
     contactNumber: text('contact_number'),
+    employeeId: varchar('employee_id', { length: 20 }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -283,6 +284,9 @@ export const teacherProfiles = pgTable(
     userIdx: index('teacher_profiles_user_id_idx').on(table.userId),
     departmentIdx: index('teacher_profiles_department_idx').on(
       table.department,
+    ),
+    employeeIdIdx: index('teacher_profiles_employee_id_idx').on(
+      table.employeeId,
     ),
   }),
 );

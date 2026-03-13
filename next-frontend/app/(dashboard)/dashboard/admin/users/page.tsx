@@ -15,7 +15,6 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import type { User } from '@/types/user';
 import { getRoleName } from '@/utils/helpers';
-import CreateUserModal from '@/components/modals/CreateUserModal';
 
 type StatusTab = 'active' | 'pending' | 'suspended' | 'deleted';
 
@@ -28,8 +27,6 @@ export default function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
 
-  // Modal states
-  const [showCreate, setShowCreate] = useState(false);
   const [showSuspend, setShowSuspend] = useState<User | null>(null);
   const [showPurge, setShowPurge] = useState<User | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
@@ -74,16 +71,11 @@ export default function UserManagementPage() {
   });
 
   const handleOpenCreate = () => {
-    setShowCreate(true);
+    router.push('/dashboard/admin/users/create');
   };
 
   const handleOpenView = (userId: string) => {
     router.push(`/dashboard/admin/users/${userId}`);
-  };
-
-  const handleModalSaved = () => {
-    setShowCreate(false);
-    fetchUsers();
   };
 
   const handleSuspend = async () => {
@@ -359,14 +351,6 @@ export default function UserManagementPage() {
           )}
         </TabsContent>
       </Tabs>
-
-      {/* Create / Edit User Modal */}
-      <CreateUserModal
-        user={null}
-        open={showCreate}
-        onClose={() => { setShowCreate(false); }}
-        onSaved={handleModalSaved}
-      />
 
       {/* Suspend Confirmation */}
       <Dialog open={!!showSuspend} onOpenChange={() => setShowSuspend(null)}>

@@ -581,6 +581,40 @@ describe('ClassesService', () => {
   });
 
   // =========================================================================
+  // purge
+  // =========================================================================
+
+  describe('purge', () => {
+    it('deletes an archived class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({ isActive: false }),
+      );
+      mockDb.delete.mockReturnValue(makeDeleteChain());
+
+      await expect(service.purge(CLASS_ID)).resolves.not.toThrow();
+      expect(mockDb.delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws ConflictException when class is still active', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({ isActive: true }),
+      );
+
+      await expect(service.purge(CLASS_ID)).rejects.toThrow(ConflictException);
+      expect(mockDb.delete).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when class does not exist', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(null);
+
+      await expect(service.purge('nonexistent-id')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(mockDb.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
   // getClassesByTeacher
   // =========================================================================
 

@@ -6,6 +6,7 @@ export interface UpdateTeacherProfileDto {
   specialization?: string;
   profilePicture?: string;
   contactNumber?: string;
+  employeeId?: string;
 }
 
 export const teacherProfileService = {

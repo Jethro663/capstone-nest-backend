@@ -25,6 +25,8 @@ export interface User {
   familyName?: string;
   familyRelationship?: string;
   familyContact?: string;
+  contactNumber?: string;
+  employeeId?: string;
   profile?: StudentProfile | null;
   teacherProfile?: TeacherProfile | null;
   [key: string]: unknown;
@@ -38,6 +40,8 @@ export interface CreateUserDto {
   lastName: string;
   role: 'student' | 'teacher' | 'admin';
   lrn?: string;
+  employeeId?: string;
+  contactNumber?: string;
 }
 
 export interface UpdateUserDto {
@@ -56,6 +60,8 @@ export interface UpdateUserDto {
   familyName?: string;
   familyRelationship?: string;
   familyContact?: string;
+  contactNumber?: string;
+  employeeId?: string;
   gradeLevel?: string;
   profilePicture?: string;
 }

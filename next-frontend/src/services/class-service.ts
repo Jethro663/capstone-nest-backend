@@ -73,6 +73,12 @@ export const classService = {
     await api.delete(`/classes/${id}`);
   },
 
+  /** DELETE /classes/:id/purge — Admin only */
+  async purge(id: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.delete(`/classes/${id}/purge`);
+    return data;
+  },
+
   /** GET /classes/:classId/enrollments — Admin, Teacher */
   async getEnrollments(classId: string): Promise<{ success: boolean; message: string; data: Enrollment[]; count: number }> {
     const { data } = await api.get(`/classes/${classId}/enrollments`);

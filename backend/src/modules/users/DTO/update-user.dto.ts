@@ -52,6 +52,24 @@ export class UpdateUserDto {
   role?: string;
 
   @IsOptional()
+  @IsString({ message: 'Employee ID must be a string' })
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  @Matches(/^[A-Za-z0-9-]{1,20}$/, {
+    message:
+      'Employee ID must be 1-20 characters using letters, numbers, or hyphens',
+  })
+  employeeId?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Contact number must be a string' })
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  @Matches(/^(?:\+63|0)9\d{9}$/, {
+    message:
+      'Contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+  })
+  contactNumber?: string;
+
+  @IsOptional()
   @IsString({ message: 'LRN must be a string' })
   @Transform(({ value }: { value: string }) => value?.trim())
   @Matches(/^[0-9]{12}$/, {

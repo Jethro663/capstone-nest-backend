@@ -417,6 +417,24 @@ export class ClassesService {
   }
 
   /**
+   * Permanently purge an archived class and all related cascade data.
+   * This intentionally bypasses delete blockers used by the regular delete flow.
+   */
+  async purge(id: string) {
+    const classRecord = await this.findById(id);
+
+    if (classRecord.isActive) {
+      throw new ConflictException(
+        'Only archived classes can be permanently deleted. Archive the class first.',
+      );
+    }
+
+    await this.db.delete(classes).where(eq(classes.id, id));
+
+    return classRecord;
+  }
+
+  /**
    * Get classes by teacher ID
    * Ownership enforced: a teacher may only view their own classes unless they are an admin.
    */

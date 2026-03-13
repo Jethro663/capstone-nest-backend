@@ -22,6 +22,7 @@ export interface TeacherProfile {
   specialization?: string;
   profilePicture?: string;
   contactNumber?: string;
+  employeeId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

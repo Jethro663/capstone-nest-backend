@@ -27,6 +27,7 @@ export class TeacherProfilesService {
         specialization: dto.specialization,
         profilePicture: dto.profilePicture,
         contactNumber: dto.contactNumber,
+        employeeId: dto.employeeId,
       })
       .returning();
 
@@ -47,6 +48,7 @@ export class TeacherProfilesService {
         specialization: dto.specialization ?? existing.specialization,
         profilePicture: dto.profilePicture ?? existing.profilePicture,
         contactNumber: dto.contactNumber ?? existing.contactNumber,
+        employeeId: dto.employeeId ?? existing.employeeId,
         updatedAt: new Date(),
       })
       .where(eq(teacherProfiles.userId, userId))

@@ -87,6 +87,24 @@ export class CreateUserDto {
   })
   role: string;
 
+  @ValidateIf((o: { role: string }) => o.role === 'teacher')
+  @IsString({ message: 'Employee ID is required for teacher accounts' })
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  @Matches(/^[A-Za-z0-9-]{1,20}$/, {
+    message:
+      'Employee ID must be 1-20 characters using letters, numbers, or hyphens',
+  })
+  employeeId?: string;
+
+  @ValidateIf((o: { role: string }) => o.role === 'teacher')
+  @IsString({ message: 'Contact number is required for teacher accounts' })
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  @Matches(/^(?:\+63|0)9\d{9}$/, {
+    message:
+      'Contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+  })
+  contactNumber?: string;
+
   @ValidateIf((o: { role: string }) => o.role === 'student')
   @IsString({ message: 'LRN must be a string' })
   @Matches(/^[0-9]{12}$/, {

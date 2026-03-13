@@ -215,6 +215,21 @@ export class ClassesController {
   }
 
   /**
+   * Permanently purge an archived class and all related cascade data
+   * Admin only
+   */
+  @Delete(':id/purge')
+  @Roles(RoleName.Admin)
+  async purgeClass(@Param('id') id: string) {
+    await this.classesService.purge(id);
+
+    return {
+      success: true,
+      message: 'Class permanently deleted',
+    };
+  }
+
+  /**
    * Delete a class
    * Admin only
    */
