@@ -80,7 +80,9 @@ export class PerformanceController {
   @Get('students/me/summary')
   @Roles(RoleName.Student)
   async getStudentSummary(@CurrentUser() user: { userId: string }) {
-    const data = await this.performanceService.getStudentOwnSummary(user.userId);
+    const data = await this.performanceService.getStudentOwnSummary(
+      user.userId,
+    );
     return { success: true, data };
   }
 }

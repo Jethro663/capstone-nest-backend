@@ -41,7 +41,9 @@ describe('ProfilesService', () => {
   });
 
   it('maps dob aliases and profilePicture when updating an existing profile', async () => {
-    mockDb.query.studentProfiles.findFirst.mockResolvedValue({ userId: 'user-1' });
+    mockDb.query.studentProfiles.findFirst.mockResolvedValue({
+      userId: 'user-1',
+    });
     const returning = jest.fn().mockResolvedValue([{ userId: 'user-1' }]);
     const where = jest.fn().mockReturnValue({ returning });
     const set = jest.fn().mockReturnValue({ where });

@@ -9,9 +9,21 @@ import { AiProxyService } from './ai-proxy.service';
 const EXTRACTION_ID = 'extraction-uuid-1';
 const CLASS_ID = 'class-uuid-1';
 
-const STUDENT_USER = { id: 'user-1', email: 'student@school.edu', roles: ['student'] };
-const TEACHER_USER = { id: 'teacher-1', email: 'teacher@school.edu', roles: ['teacher'] };
-const ADMIN_USER = { id: 'admin-1', email: 'admin@school.edu', roles: ['admin'] };
+const STUDENT_USER = {
+  id: 'user-1',
+  email: 'student@school.edu',
+  roles: ['student'],
+};
+const TEACHER_USER = {
+  id: 'teacher-1',
+  email: 'teacher@school.edu',
+  roles: ['teacher'],
+};
+const ADMIN_USER = {
+  id: 'admin-1',
+  email: 'admin@school.edu',
+  roles: ['admin'],
+};
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -48,7 +60,12 @@ describe('AiMentorController', () => {
 
       const result = await controller.chat(dto, STUDENT_USER);
 
-      expect(mockProxy.forward).toHaveBeenCalledWith('POST', '/chat', STUDENT_USER, dto);
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/chat',
+        STUDENT_USER,
+        dto,
+      );
       expect(result).toEqual({ reply: 'Hello!' });
     });
 
@@ -71,9 +88,11 @@ describe('AiMentorController', () => {
 
       const result = await controller.health();
 
-      expect(mockProxy.forward).toHaveBeenCalledWith(
-        'GET', '/health', { id: '', email: '', roles: [] },
-      );
+      expect(mockProxy.forward).toHaveBeenCalledWith('GET', '/health', {
+        id: '',
+        email: '',
+        roles: [],
+      });
       expect(result).toEqual({ status: 'ok' });
     });
   });
@@ -89,7 +108,12 @@ describe('AiMentorController', () => {
 
       const result = await controller.extractModule(dto, TEACHER_USER);
 
-      expect(mockProxy.forward).toHaveBeenCalledWith('POST', '/extract', TEACHER_USER, dto);
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/extract',
+        TEACHER_USER,
+        dto,
+      );
       expect(result).toEqual({ extractionId: EXTRACTION_ID });
     });
   });
@@ -102,10 +126,15 @@ describe('AiMentorController', () => {
     it('should forward GET /extractions/:id/status', async () => {
       mockProxy.forward.mockResolvedValue({ status: 'completed' });
 
-      const result = await controller.getExtractionStatus(EXTRACTION_ID, TEACHER_USER);
+      const result = await controller.getExtractionStatus(
+        EXTRACTION_ID,
+        TEACHER_USER,
+      );
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
-        'GET', `/extractions/${EXTRACTION_ID}/status`, TEACHER_USER,
+        'GET',
+        `/extractions/${EXTRACTION_ID}/status`,
+        TEACHER_USER,
       );
       expect(result).toEqual({ status: 'completed' });
     });
@@ -122,7 +151,9 @@ describe('AiMentorController', () => {
       const result = await controller.listExtractions(CLASS_ID, TEACHER_USER);
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
-        'GET', `/extractions?classId=${CLASS_ID}`, TEACHER_USER,
+        'GET',
+        `/extractions?classId=${CLASS_ID}`,
+        TEACHER_USER,
       );
       expect(result).toEqual([{ id: EXTRACTION_ID }]);
     });
@@ -139,7 +170,9 @@ describe('AiMentorController', () => {
       const result = await controller.getExtraction(EXTRACTION_ID, ADMIN_USER);
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
-        'GET', `/extractions/${EXTRACTION_ID}`, ADMIN_USER,
+        'GET',
+        `/extractions/${EXTRACTION_ID}`,
+        ADMIN_USER,
       );
       expect(result).toEqual({ id: EXTRACTION_ID });
     });
@@ -154,10 +187,17 @@ describe('AiMentorController', () => {
       const dto = { structuredContent: { lessons: [] } };
       mockProxy.forward.mockResolvedValue({ updated: true });
 
-      const result = await controller.updateExtraction(EXTRACTION_ID, dto as any, TEACHER_USER);
+      const result = await controller.updateExtraction(
+        EXTRACTION_ID,
+        dto as any,
+        TEACHER_USER,
+      );
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
-        'PATCH', `/extractions/${EXTRACTION_ID}`, TEACHER_USER, dto,
+        'PATCH',
+        `/extractions/${EXTRACTION_ID}`,
+        TEACHER_USER,
+        dto,
       );
       expect(result).toEqual({ updated: true });
     });
@@ -172,10 +212,17 @@ describe('AiMentorController', () => {
       const dto = {};
       mockProxy.forward.mockResolvedValue({ lessonsCreated: 3 });
 
-      const result = await controller.applyExtraction(EXTRACTION_ID, dto, TEACHER_USER);
+      const result = await controller.applyExtraction(
+        EXTRACTION_ID,
+        dto,
+        TEACHER_USER,
+      );
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
-        'POST', `/extractions/${EXTRACTION_ID}/apply`, TEACHER_USER, dto,
+        'POST',
+        `/extractions/${EXTRACTION_ID}/apply`,
+        TEACHER_USER,
+        dto,
       );
       expect(result).toEqual({ lessonsCreated: 3 });
     });
@@ -189,10 +236,15 @@ describe('AiMentorController', () => {
     it('should forward DELETE /extractions/:id', async () => {
       mockProxy.forward.mockResolvedValue({ deleted: true });
 
-      const result = await controller.deleteExtraction(EXTRACTION_ID, TEACHER_USER);
+      const result = await controller.deleteExtraction(
+        EXTRACTION_ID,
+        TEACHER_USER,
+      );
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
-        'DELETE', `/extractions/${EXTRACTION_ID}`, TEACHER_USER,
+        'DELETE',
+        `/extractions/${EXTRACTION_ID}`,
+        TEACHER_USER,
       );
       expect(result).toEqual({ deleted: true });
     });
@@ -208,7 +260,11 @@ describe('AiMentorController', () => {
 
       const result = await controller.history(STUDENT_USER);
 
-      expect(mockProxy.forward).toHaveBeenCalledWith('GET', '/history', STUDENT_USER);
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET',
+        '/history',
+        STUDENT_USER,
+      );
       expect(result).toEqual([{ id: 'log-1' }]);
     });
   });

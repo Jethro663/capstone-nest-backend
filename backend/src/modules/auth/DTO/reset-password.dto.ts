@@ -14,6 +14,9 @@ export class ResetPasswordDto {
   @IsNotEmpty({ message: 'Code is required' })
   code: string;
 
-  @IsStrongPassword('NewP@ss1!', 'New password (min 8 chars, uppercase, lowercase, digit, special character)')
+  @IsStrongPassword(
+    'NewP@ss1!',
+    'New password (min 8 chars, uppercase, lowercase, digit, special character)',
+  )
   newPassword: string;
 }

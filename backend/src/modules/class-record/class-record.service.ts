@@ -82,19 +82,14 @@ export class ClassRecordService {
     return record;
   }
 
-  private assertEditable(
-    record: { status: string },
-    allowFinalized = false,
-  ) {
+  private assertEditable(record: { status: string }, allowFinalized = false) {
     if (record.status === 'locked') {
       throw new ConflictException(
         'This class record is locked and cannot be edited',
       );
     }
     if (!allowFinalized && record.status === 'finalized') {
-      throw new ConflictException(
-        'This class record is already finalized',
-      );
+      throw new ConflictException('This class record is already finalized');
     }
   }
 
@@ -237,16 +232,8 @@ export class ClassRecordService {
    * Includes header info, student list (alphabetical), all items with HPS,
    * scores, and computed columns (Total, PS, WS, Initial Grade, Quarterly Grade).
    */
-  async getSpreadsheet(
-    classRecordId: string,
-    userId: string,
-    roles: string[],
-  ) {
-    const record = await this.assertClassRecord(
-      classRecordId,
-      userId,
-      roles,
-    );
+  async getSpreadsheet(classRecordId: string, userId: string, roles: string[]) {
+    const record = await this.assertClassRecord(classRecordId, userId, roles);
 
     // Load class with section info for header
     const cls = await this.db.query.classes.findFirst({
@@ -320,8 +307,7 @@ export class ClassRecordService {
           };
         });
 
-        const percentageScore =
-          totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
+        const percentageScore = totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
         const weightedScore = percentageScore * (weight / 100);
 
         return {
@@ -333,10 +319,7 @@ export class ClassRecordService {
         };
       });
 
-      const initialGrade = categoryData.reduce(
-        (sum, c) => sum + c.ws,
-        0,
-      );
+      const initialGrade = categoryData.reduce((sum, c) => sum + c.ws, 0);
       const quarterlyGrade = this.computationService.transmute(initialGrade);
 
       return {
@@ -537,14 +520,9 @@ export class ClassRecordService {
 
   // ── Grade Preview & Finalization ──────────────────────────────────────────
 
-  async previewGrades(
-    classRecordId: string,
-    userId: string,
-    roles: string[],
-  ) {
+  async previewGrades(classRecordId: string, userId: string, roles: string[]) {
     await this.assertClassRecord(classRecordId, userId, roles);
-    const results =
-      await this.computationService.computeGrades(classRecordId);
+    const results = await this.computationService.computeGrades(classRecordId);
     return {
       classRecordId,
       preview: [...results.values()],
@@ -559,11 +537,7 @@ export class ClassRecordService {
     userId: string,
     roles: string[],
   ) {
-    const record = await this.assertClassRecord(
-      classRecordId,
-      userId,
-      roles,
-    );
+    const record = await this.assertClassRecord(classRecordId, userId, roles);
 
     if (record.status === 'locked') {
       throw new ConflictException('Class record is already locked');
@@ -578,8 +552,10 @@ export class ClassRecordService {
         tx as any,
       );
 
-      const grades =
-        await this.computationService.computeGrades(classRecordId, tx as any);
+      const grades = await this.computationService.computeGrades(
+        classRecordId,
+        tx as any,
+      );
 
       await tx
         .delete(classRecordFinalGrades)
@@ -589,7 +565,7 @@ export class ClassRecordService {
         classRecordId,
         studentId: g.studentId,
         finalPercentage: g.quarterlyGrade.toString(),
-        remarks: g.remarks as 'Passed' | 'For Intervention',
+        remarks: g.remarks,
         computedAt: new Date(),
       }));
 
@@ -613,11 +589,7 @@ export class ClassRecordService {
 
   // ── Final Grade Reads ─────────────────────────────────────────────────────
 
-  async getFinalGrades(
-    classRecordId: string,
-    userId: string,
-    roles: string[],
-  ) {
+  async getFinalGrades(classRecordId: string, userId: string, roles: string[]) {
     await this.assertClassRecord(classRecordId, userId, roles);
 
     return this.db.query.classRecordFinalGrades.findMany({
@@ -757,9 +729,8 @@ export class ClassRecordService {
       classRecordId,
       average: Math.round(avg * 1000) / 1000,
       count: grades.length,
-      interventionCount: grades.filter(
-        (g) => g.remarks === 'For Intervention',
-      ).length,
+      interventionCount: grades.filter((g) => g.remarks === 'For Intervention')
+        .length,
     };
   }
 

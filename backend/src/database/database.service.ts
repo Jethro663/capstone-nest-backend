@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
@@ -27,7 +32,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.pool.on('error', (err) => {
-      this.logger.error('Unexpected database pool error', err instanceof Error ? err.stack : String(err));
+      this.logger.error(
+        'Unexpected database pool error',
+        err instanceof Error ? err.stack : String(err),
+      );
     });
 
     this.pool.on('connect', () => {
@@ -55,7 +63,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       client.release();
       this.logger.log('✅ Database connection verified');
     } catch (error) {
-      this.logger.error('❌ Database connection failed', error instanceof Error ? error.stack : String(error));
+      this.logger.error(
+        '❌ Database connection failed',
+        error instanceof Error ? error.stack : String(error),
+      );
       throw error;
     }
   }

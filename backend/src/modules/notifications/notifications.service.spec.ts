@@ -66,8 +66,18 @@ describe('NotificationsService', () => {
       mockDb.insert.mockReturnValue(insertChain);
 
       const inputs = [
-        { userId: 'u1', type: 'announcement_posted' as const, title: 'T', body: 'B' },
-        { userId: 'u2', type: 'announcement_posted' as const, title: 'T', body: 'B' },
+        {
+          userId: 'u1',
+          type: 'announcement_posted' as const,
+          title: 'T',
+          body: 'B',
+        },
+        {
+          userId: 'u2',
+          type: 'announcement_posted' as const,
+          title: 'T',
+          body: 'B',
+        },
       ];
 
       await service.createBulk(inputs);
@@ -94,7 +104,12 @@ describe('NotificationsService', () => {
       });
 
       await service.createBulk([
-        { userId: 'u1', type: 'announcement_posted' as const, title: 'T', body: 'B' },
+        {
+          userId: 'u1',
+          type: 'announcement_posted' as const,
+          title: 'T',
+          body: 'B',
+        },
       ]);
 
       expect(capturedRows[0].isRead).toBe(false);
@@ -185,7 +200,10 @@ describe('NotificationsService', () => {
   describe('markRead()', () => {
     it('marks notification as read and returns the updated row', async () => {
       const notif = makeNotification({ isRead: false });
-      const updatedNotif = makeNotification({ isRead: true, readAt: new Date() });
+      const updatedNotif = makeNotification({
+        isRead: true,
+        readAt: new Date(),
+      });
 
       mockDb.query.notifications.findFirst.mockResolvedValue(notif);
       mockDb.update = jest.fn().mockReturnValue({
@@ -220,7 +238,10 @@ describe('NotificationsService', () => {
     });
 
     it('returns notification immediately without DB update when already read', async () => {
-      const alreadyRead = makeNotification({ isRead: true, readAt: new Date() });
+      const alreadyRead = makeNotification({
+        isRead: true,
+        readAt: new Date(),
+      });
       mockDb.query.notifications.findFirst.mockResolvedValue(alreadyRead);
 
       const result = await service.markRead(NOTIF_ID, USER_ID);
@@ -240,11 +261,9 @@ describe('NotificationsService', () => {
       mockDb.update = jest.fn().mockReturnValue({
         set: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([
-              { id: 'n1' },
-              { id: 'n2' },
-              { id: 'n3' },
-            ]),
+            returning: jest
+              .fn()
+              .mockResolvedValue([{ id: 'n1' }, { id: 'n2' }, { id: 'n3' }]),
           }),
         }),
       });

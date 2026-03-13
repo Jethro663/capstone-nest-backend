@@ -1,10 +1,4 @@
-import {
-  IsEnum,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Length,
-} from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID, Length } from 'class-validator';
 
 export enum FileScopeDto {
   Private = 'private',

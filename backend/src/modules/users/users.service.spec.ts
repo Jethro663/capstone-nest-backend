@@ -10,7 +10,13 @@ import { UsersService } from './users.service';
 import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
 import { MailService } from '../mail/mail.service';
-import { archivedUsers, roles, studentProfiles, userRoles, users } from '../../drizzle/schema';
+import {
+  archivedUsers,
+  roles,
+  studentProfiles,
+  userRoles,
+  users,
+} from '../../drizzle/schema';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
@@ -135,7 +141,11 @@ describe('UsersService', () => {
         },
       ]);
 
-      const result = await service.findAll({ role: 'teacher', page: 1, limit: 20 });
+      const result = await service.findAll({
+        role: 'teacher',
+        page: 1,
+        limit: 20,
+      });
 
       expect(result.page).toBe(1);
       expect(result.limit).toBe(20);
@@ -147,16 +157,19 @@ describe('UsersService', () => {
     });
 
     it('throws BadRequestException on invalid status filter', async () => {
-      await expect(service.findAll({ status: 'BROKEN' as any })).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.findAll({ status: 'BROKEN' as any }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('createUser', () => {
     it('creates a user and does not expose temporaryPassword or password', async () => {
       mockDb.query.users.findFirst.mockResolvedValue(null);
-      mockDb.query.roles.findFirst.mockResolvedValue({ id: 'role-teacher', name: 'teacher' });
+      mockDb.query.roles.findFirst.mockResolvedValue({
+        id: 'role-teacher',
+        name: 'teacher',
+      });
 
       const tx = {
         insert: jest.fn().mockImplementation((table: any) => {
@@ -206,7 +219,10 @@ describe('UsersService', () => {
 
     it('maps DB unique email violation to ConflictException', async () => {
       mockDb.query.users.findFirst.mockResolvedValue(null);
-      mockDb.query.roles.findFirst.mockResolvedValue({ id: 'role-teacher', name: 'teacher' });
+      mockDb.query.roles.findFirst.mockResolvedValue({
+        id: 'role-teacher',
+        name: 'teacher',
+      });
       mockDb.transaction.mockRejectedValue({
         code: '23505',
         constraint: 'users_email_unique',
@@ -235,10 +251,15 @@ describe('UsersService', () => {
     });
 
     it('fails role update atomically when role does not exist (no role wipe)', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(makeUser({ email: 'a@b.com' }));
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ email: 'a@b.com' }));
 
       const tx = {
-        query: { roles: { findFirst: jest.fn().mockResolvedValue(null) }, studentProfiles: { findFirst: jest.fn() } },
+        query: {
+          roles: { findFirst: jest.fn().mockResolvedValue(null) },
+          studentProfiles: { findFirst: jest.fn() },
+        },
         delete: jest.fn(),
         insert: jest.fn(),
         update: jest.fn(),
@@ -253,11 +274,15 @@ describe('UsersService', () => {
     });
 
     it('rolls back when profile upsert fails inside transaction', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(makeUser({ email: 'a@b.com' }));
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ email: 'a@b.com' }));
 
       const tx = {
         query: {
-          studentProfiles: { findFirst: jest.fn().mockResolvedValue({ userId: 'user-1' }) },
+          studentProfiles: {
+            findFirst: jest.fn().mockResolvedValue({ userId: 'user-1' }),
+          },
           roles: { findFirst: jest.fn() },
         },
         update: jest.fn().mockImplementation((table: any) => {
@@ -286,13 +311,17 @@ describe('UsersService', () => {
     });
 
     it('maps dateOfBirth and profilePicture into the student profile payload', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(makeUser({ email: 'a@b.com' }));
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ email: 'a@b.com' }));
 
       const where = jest.fn().mockResolvedValue(undefined);
       const set = jest.fn().mockReturnValue({ where });
       const tx = {
         query: {
-          studentProfiles: { findFirst: jest.fn().mockResolvedValue({ userId: 'user-1' }) },
+          studentProfiles: {
+            findFirst: jest.fn().mockResolvedValue({ userId: 'user-1' }),
+          },
           roles: { findFirst: jest.fn() },
         },
         update: jest.fn().mockImplementation((table: any) => {
@@ -310,13 +339,16 @@ describe('UsersService', () => {
       };
 
       mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
-      jest.spyOn(service, 'findById').mockResolvedValueOnce(makeUser({ email: 'a@b.com' })).mockResolvedValueOnce(
-        makeUser({
-          email: 'a@b.com',
-          dateOfBirth: '2005-08-15T00:00:00.000Z',
-          profilePicture: '/api/profiles/images/test.png',
-        }),
-      );
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeUser({ email: 'a@b.com' }))
+        .mockResolvedValueOnce(
+          makeUser({
+            email: 'a@b.com',
+            dateOfBirth: '2005-08-15T00:00:00.000Z',
+            profilePicture: '/api/profiles/images/test.png',
+          }),
+        );
 
       const result = await service.updateUser('user-1', {
         dateOfBirth: '2005-08-15',
@@ -337,14 +369,19 @@ describe('UsersService', () => {
 
   describe('softDeleteUser', () => {
     it('archives and sets deleted status inside one transaction', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(
-        makeUser({ status: 'SUSPENDED', roles: [{ name: 'teacher' }] }),
-      );
-      (service as any).collectUserData = jest.fn().mockResolvedValue({ snapshot: true });
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(
+          makeUser({ status: 'SUSPENDED', roles: [{ name: 'teacher' }] }),
+        );
+      (service as any).collectUserData = jest
+        .fn()
+        .mockResolvedValue({ snapshot: true });
 
       const tx = {
         insert: jest.fn().mockImplementation((table: any) => {
-          if (table === archivedUsers) return { values: jest.fn().mockResolvedValue(undefined) };
+          if (table === archivedUsers)
+            return { values: jest.fn().mockResolvedValue(undefined) };
           return { values: jest.fn().mockResolvedValue(undefined) };
         }),
         update: jest.fn().mockImplementation(() => ({
@@ -364,11 +401,15 @@ describe('UsersService', () => {
 
   describe('purgeUser', () => {
     it('marks archive as purged and deletes user in transaction', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(makeUser({ status: 'DELETED' }));
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'DELETED' }));
 
       const tx = {
         query: {
-          archivedUsers: { findMany: jest.fn().mockResolvedValue([{ id: 'archive-1' }]) },
+          archivedUsers: {
+            findMany: jest.fn().mockResolvedValue([{ id: 'archive-1' }]),
+          },
         },
         update: jest.fn().mockImplementation(() => ({
           set: jest.fn().mockReturnValue({
@@ -389,9 +430,9 @@ describe('UsersService', () => {
 
   describe('findPublicById', () => {
     it('never returns password', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(
-        makeUser({ password: 'sensitive-hash' }),
-      );
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ password: 'sensitive-hash' }));
 
       const result = await service.findPublicById('user-1');
       expect(result?.password).toBeUndefined();

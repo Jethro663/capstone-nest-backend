@@ -32,7 +32,9 @@ export class TokenService {
    * Falls back to 7 days if the config value is missing or unparseable.
    */
   private refreshTtlMs(): number {
-    return parseExpiryMs(this.configService.get<string>('jwt.refreshTokenExpiry'));
+    return parseExpiryMs(
+      this.configService.get<string>('jwt.refreshTokenExpiry'),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -165,11 +167,7 @@ export class TokenService {
       .update(refreshTokens)
       .set({ revoked: true })
       .where(
-        and(
-          eq(refreshTokens.userId, userId),
-          eq(refreshTokens.revoked, false),
-        ),
+        and(eq(refreshTokens.userId, userId), eq(refreshTokens.revoked, false)),
       );
   }
 }
-

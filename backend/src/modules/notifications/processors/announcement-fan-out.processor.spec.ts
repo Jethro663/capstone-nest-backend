@@ -18,7 +18,7 @@ const JOB_DATA = {
 };
 
 const makeJob = (data: any = JOB_DATA): Job<any> =>
-  ({ id: 'job-1', name: 'fan-out', data } as any);
+  ({ id: 'job-1', name: 'fan-out', data }) as any;
 
 const makeEnrollmentRow = (studentId: string) => ({ studentId });
 
@@ -39,7 +39,9 @@ describe('AnnouncementFanOutProcessor', () => {
       },
     };
 
-    mockNotificationsService = { createBulk: jest.fn().mockResolvedValue(undefined) };
+    mockNotificationsService = {
+      createBulk: jest.fn().mockResolvedValue(undefined),
+    };
     mockGateway = { emitToUser: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -51,7 +53,9 @@ describe('AnnouncementFanOutProcessor', () => {
       ],
     }).compile();
 
-    processor = module.get<AnnouncementFanOutProcessor>(AnnouncementFanOutProcessor);
+    processor = module.get<AnnouncementFanOutProcessor>(
+      AnnouncementFanOutProcessor,
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -73,7 +77,9 @@ describe('AnnouncementFanOutProcessor', () => {
   });
 
   it('sets type="announcement_posted" on every notification', async () => {
-    mockDb.query.enrollments.findMany.mockResolvedValue([makeEnrollmentRow('s-1')]);
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      makeEnrollmentRow('s-1'),
+    ]);
 
     await processor.process(makeJob());
 
@@ -82,7 +88,9 @@ describe('AnnouncementFanOutProcessor', () => {
   });
 
   it('sets referenceId to announcementId on every notification', async () => {
-    mockDb.query.enrollments.findMany.mockResolvedValue([makeEnrollmentRow('s-1')]);
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      makeEnrollmentRow('s-1'),
+    ]);
 
     await processor.process(makeJob());
 
@@ -101,7 +109,10 @@ describe('AnnouncementFanOutProcessor', () => {
     expect(mockGateway.emitToUser).toHaveBeenCalledTimes(2);
     expect(mockGateway.emitToUser).toHaveBeenCalledWith(
       's-1',
-      expect.objectContaining({ type: 'announcement_posted', title: JOB_DATA.title }),
+      expect.objectContaining({
+        type: 'announcement_posted',
+        title: JOB_DATA.title,
+      }),
     );
     expect(mockGateway.emitToUser).toHaveBeenCalledWith(
       's-2',
@@ -110,9 +121,13 @@ describe('AnnouncementFanOutProcessor', () => {
   });
 
   it('strips HTML tags from content for notification body preview', async () => {
-    mockDb.query.enrollments.findMany.mockResolvedValue([makeEnrollmentRow('s-1')]);
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      makeEnrollmentRow('s-1'),
+    ]);
 
-    await processor.process(makeJob({ ...JOB_DATA, content: '<p>Hello <strong>class</strong>!</p>' }));
+    await processor.process(
+      makeJob({ ...JOB_DATA, content: '<p>Hello <strong>class</strong>!</p>' }),
+    );
 
     const [inputs] = mockNotificationsService.createBulk.mock.calls[0];
     expect(inputs[0].body).not.toContain('<p>');
@@ -122,7 +137,9 @@ describe('AnnouncementFanOutProcessor', () => {
 
   it('truncates notification body to 200 characters', async () => {
     const longContent = '<p>' + 'A'.repeat(500) + '</p>';
-    mockDb.query.enrollments.findMany.mockResolvedValue([makeEnrollmentRow('s-1')]);
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      makeEnrollmentRow('s-1'),
+    ]);
 
     await processor.process(makeJob({ ...JOB_DATA, content: longContent }));
 
@@ -155,7 +172,9 @@ describe('AnnouncementFanOutProcessor', () => {
 
   it('does not throw when gateway.emitToUser is called with an offline user', async () => {
     // emitToUser is fire-and-forget; even if the room is empty, no error should propagate
-    mockDb.query.enrollments.findMany.mockResolvedValue([makeEnrollmentRow('offline-user')]);
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      makeEnrollmentRow('offline-user'),
+    ]);
     mockGateway.emitToUser.mockImplementation(() => {
       // No-op: normal when user is not connected
     });

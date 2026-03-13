@@ -61,10 +61,7 @@ export class AiProxyService {
         );
         throw new HttpException(
           {
-            message:
-              payload?.detail ||
-              payload?.message ||
-              'AI service error',
+            message: payload?.detail || payload?.message || 'AI service error',
           },
           res.status,
         );

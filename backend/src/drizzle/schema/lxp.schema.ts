@@ -43,7 +43,9 @@ export const interventionCases = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     status: interventionCaseStatusEnum('status').notNull().default('active'),
-    triggerSource: text('trigger_source').notNull().default('performance_event'),
+    triggerSource: text('trigger_source')
+      .notNull()
+      .default('performance_event'),
     triggerScore: numeric('trigger_score', { precision: 6, scale: 3 }),
     thresholdApplied: numeric('threshold_applied', {
       precision: 6,
@@ -56,11 +58,9 @@ export const interventionCases = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    classStudentStatusIdx: index('intervention_cases_class_student_status_idx').on(
-      table.classId,
-      table.studentId,
-      table.status,
-    ),
+    classStudentStatusIdx: index(
+      'intervention_cases_class_student_status_idx',
+    ).on(table.classId, table.studentId, table.status),
     studentStatusIdx: index('intervention_cases_student_status_idx').on(
       table.studentId,
       table.status,
@@ -200,9 +200,12 @@ export const lxpProgressRelations = relations(lxpProgress, ({ one }) => ({
   }),
 }));
 
-export const systemEvaluationsRelations = relations(systemEvaluations, ({ one }) => ({
-  submitter: one(users, {
-    fields: [systemEvaluations.submittedBy],
-    references: [users.id],
+export const systemEvaluationsRelations = relations(
+  systemEvaluations,
+  ({ one }) => ({
+    submitter: one(users, {
+      fields: [systemEvaluations.submittedBy],
+      references: [users.id],
+    }),
   }),
-}));
+);

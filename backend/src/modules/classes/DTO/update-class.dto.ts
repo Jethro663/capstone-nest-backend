@@ -23,7 +23,9 @@ export class UpdateClassDto {
   subjectCode?: string;
 
   @IsOptional()
-  @IsIn([...GRADE_LEVELS], { message: 'subjectGradeLevel must be 7, 8, 9 or 10' })
+  @IsIn([...GRADE_LEVELS], {
+    message: 'subjectGradeLevel must be 7, 8, 9 or 10',
+  })
   subjectGradeLevel?: string;
 
   @IsOptional()

@@ -17,7 +17,9 @@ export class TokenCleanupService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async cleanupExpiredTokens(): Promise<void> {
-    this.logger.log('[TOKEN-CLEANUP] Starting expired/revoked token cleanup...');
+    this.logger.log(
+      '[TOKEN-CLEANUP] Starting expired/revoked token cleanup...',
+    );
 
     try {
       const now = new Date();
@@ -31,7 +33,10 @@ export class TokenCleanupService {
             // Revoked tokens older than 24 hours (keep recent ones for audit window)
             and(
               eq(refreshTokens.revoked, true),
-              lt(refreshTokens.createdAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+              lt(
+                refreshTokens.createdAt,
+                new Date(now.getTime() - 24 * 60 * 60 * 1000),
+              ),
             ),
           ),
         )

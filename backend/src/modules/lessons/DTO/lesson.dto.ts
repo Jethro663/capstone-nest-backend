@@ -13,7 +13,14 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-const CONTENT_BLOCK_TYPES = ['text', 'image', 'video', 'question', 'file', 'divider'] as const;
+const CONTENT_BLOCK_TYPES = [
+  'text',
+  'image',
+  'video',
+  'question',
+  'file',
+  'divider',
+] as const;
 export type ContentBlockType = (typeof CONTENT_BLOCK_TYPES)[number];
 
 /** Used for nested validation in ReorderBlocksDto */

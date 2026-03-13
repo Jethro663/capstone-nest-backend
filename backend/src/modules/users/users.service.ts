@@ -16,10 +16,9 @@ import {
   roles,
   userRoles,
   studentProfiles,
-  enrollments,
+  teacherProfiles,
   lessonCompletions,
   assessmentAttempts,
-  assessmentResponses,
   classes,
   archivedUsers,
 } from '../../drizzle/schema';
@@ -29,7 +28,6 @@ import { UserCreatedEvent } from '../../common/events';
 import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
-type ValidStatus = (typeof VALID_STATUSES)[number];
 
 @Injectable()
 export class UsersService {
@@ -67,7 +65,10 @@ export class UsersService {
       );
     }
     const page = Math.max(1, Number(filters?.page ?? 1) || 1);
-    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20) || 20, 100));
+    const limit = Math.max(
+      1,
+      Math.min(Number(filters?.limit ?? 20) || 20, 100),
+    );
     const offset = (page - 1) * limit;
 
     const whereConditions: SQL<unknown>[] = [];
@@ -172,9 +173,19 @@ export class UsersService {
         }),
     ]);
 
+    const teacherProfileData = await this.db.query.teacherProfiles
+      .findFirst({ where: eq(teacherProfiles.userId, user.id) })
+      .catch((err) => {
+        if (String(err).includes('teacher_profiles')) {
+          return null;
+        }
+        throw err;
+      });
+
     return {
       ...user,
       ...(profileData || {}),
+      teacherProfile: teacherProfileData || null,
       roles: userRolesData.map((ur) => ur.role),
     };
   }
@@ -201,24 +212,27 @@ export class UsersService {
         }),
     ]);
 
+    const teacherProfileData = await this.db.query.teacherProfiles
+      .findFirst({ where: eq(teacherProfiles.userId, user.id) })
+      .catch((err) => {
+        if (String(err).includes('teacher_profiles')) {
+          return null;
+        }
+        throw err;
+      });
+
     return {
       ...user,
       ...(profileData || {}),
+      teacherProfile: teacherProfileData || null,
       roles: userRolesData.map((ur) => ur.role),
     };
   }
   //CRUD Operations
 
   async createUser(createUserDto: CreateUserDto) {
-    const {
-      email,
-      password,
-      firstName,
-      middleName,
-      lastName,
-      role,
-      lrn,
-    } = createUserDto;
+    const { email, password, firstName, middleName, lastName, role, lrn } =
+      createUserDto;
 
     // 1. Check if email already exists
     const existingUser = await this.db.query.users.findFirst({
@@ -232,9 +246,7 @@ export class UsersService {
     // 2. Validate LRN if role is student
     if (role === 'student') {
       if (!lrn) {
-        throw new ConflictException(
-          'LRN is required for student accounts',
-        );
+        throw new ConflictException('LRN is required for student accounts');
       }
 
       const existingProfile = await this.db.query.studentProfiles.findFirst({
@@ -242,9 +254,7 @@ export class UsersService {
       });
 
       if (existingProfile) {
-        throw new ConflictException(
-          `LRN ${lrn} is already registered`,
-        );
+        throw new ConflictException(`LRN ${lrn} is already registered`);
       }
     }
 
@@ -304,6 +314,22 @@ export class UsersService {
           });
         }
 
+        if (role === 'teacher') {
+          const existingTeacherProfile = tx.query?.teacherProfiles
+            ? await tx.query.teacherProfiles.findFirst({
+                where: eq(teacherProfiles.userId, newUser.id),
+              })
+            : null;
+
+          if (!existingTeacherProfile) {
+            await tx.insert(teacherProfiles).values({
+              userId: newUser.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+        }
+
         return newUser;
       });
     } catch (err) {
@@ -317,7 +343,7 @@ export class UsersService {
       new UserCreatedEvent({
         userId: result.id,
         email: result.email,
-        generatedPassword: generatedPassword!,
+        generatedPassword: generatedPassword,
         requiresOTP: true,
       }),
     );
@@ -369,10 +395,14 @@ export class UsersService {
     if (updateUserDto.gradeLevel !== undefined)
       profilePayload.gradeLevel = updateUserDto.gradeLevel;
     const dob = updateUserDto.dateOfBirth ?? updateUserDto.dob;
-    if (dob !== undefined) profilePayload.dateOfBirth = dob ? new Date(dob) : null;
-    if (updateUserDto.gender !== undefined) profilePayload.gender = updateUserDto.gender;
-    if (updateUserDto.phone !== undefined) profilePayload.phone = updateUserDto.phone;
-    if (updateUserDto.address !== undefined) profilePayload.address = updateUserDto.address;
+    if (dob !== undefined)
+      profilePayload.dateOfBirth = dob ? new Date(dob) : null;
+    if (updateUserDto.gender !== undefined)
+      profilePayload.gender = updateUserDto.gender;
+    if (updateUserDto.phone !== undefined)
+      profilePayload.phone = updateUserDto.phone;
+    if (updateUserDto.address !== undefined)
+      profilePayload.address = updateUserDto.address;
     if (updateUserDto.familyName !== undefined)
       profilePayload.familyName = updateUserDto.familyName;
     if (updateUserDto.familyRelationship !== undefined)
@@ -433,7 +463,9 @@ export class UsersService {
             where: eq(roles.name, updateUserDto.role),
           });
           if (!roleRecord) {
-            throw new NotFoundException(`Role '${updateUserDto.role}' not found`);
+            throw new NotFoundException(
+              `Role '${updateUserDto.role}' not found`,
+            );
           }
 
           await tx.delete(userRoles).where(eq(userRoles.userId, id));
@@ -442,6 +474,22 @@ export class UsersService {
             roleId: roleRecord.id,
             assignedBy: 'ADMIN',
           });
+
+          if (updateUserDto.role === 'teacher') {
+            const existingTeacherProfile = tx.query?.teacherProfiles
+              ? await tx.query.teacherProfiles.findFirst({
+                  where: eq(teacherProfiles.userId, id),
+                })
+              : null;
+
+            if (!existingTeacherProfile) {
+              await tx.insert(teacherProfiles).values({
+                userId: id,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            }
+          }
         }
       });
     } catch (err) {
@@ -543,7 +591,11 @@ export class UsersService {
 
     // Check if this is a teacher with active classes
     const userRoleNames = existingUser.roles?.map((r: any) => r.name) || [];
-    let warnings: { activeClasses: number; enrolledStudents: number; message: string } | null = null;
+    let warnings: {
+      activeClasses: number;
+      enrolledStudents: number;
+      message: string;
+    } | null = null;
     if (userRoleNames.includes('teacher')) {
       const activeClasses = await this.db.query.classes.findMany({
         where: and(eq(classes.teacherId, id), eq(classes.isActive, true)),
@@ -569,7 +621,9 @@ export class UsersService {
       .where(eq(users.id, id));
 
     return {
-      message: warnings ? 'User suspended with warnings' : 'User suspended successfully',
+      message: warnings
+        ? 'User suspended with warnings'
+        : 'User suspended successfully',
       userId: id,
       ...(warnings ? { warnings } : {}),
     };
@@ -629,7 +683,8 @@ export class UsersService {
       await tx.insert(archivedUsers).values({
         originalUserId: id,
         email: existingUser.email,
-        fullName: `${existingUser.firstName} ${existingUser.middleName || ''} ${existingUser.lastName}`.trim(),
+        fullName:
+          `${existingUser.firstName} ${existingUser.middleName || ''} ${existingUser.lastName}`.trim(),
         role: userRoleNames.join(', '),
         archivedData: archiveSnapshot,
         archivedBy: adminId,
@@ -704,6 +759,7 @@ export class UsersService {
       with: {
         userRoles: { with: { role: true } },
         profile: true,
+        teacherProfile: true,
         enrollments: true,
       },
     });
@@ -742,8 +798,9 @@ export class UsersService {
         lastLoginAt: user.lastLoginAt,
       },
       roles: user.userRoles.map((ur) => ur.role),
-      profile: (user as any).profile || null,
-      enrollments: (user as any).enrollments || [],
+      profile: user.profile || null,
+      teacherProfile: user.teacherProfile || null,
+      enrollments: user.enrollments || [],
       lessonCompletions: completions,
       assessmentAttempts: attempts,
       classesTaught,

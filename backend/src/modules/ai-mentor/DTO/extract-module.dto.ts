@@ -1,4 +1,12 @@
-import { IsUUID, IsOptional, IsArray, IsNumber, IsString, ValidateNested, IsObject } from 'class-validator';
+import {
+  IsUUID,
+  IsOptional,
+  IsArray,
+  IsNumber,
+  IsString,
+  ValidateNested,
+  IsObject,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -67,7 +75,10 @@ export class ExtractionLessonDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Content blocks for this lesson', type: [ExtractionBlockDto] })
+  @ApiProperty({
+    description: 'Content blocks for this lesson',
+    type: [ExtractionBlockDto],
+  })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ExtractionBlockDto)
@@ -89,7 +100,10 @@ export class UpdateExtractionDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ description: 'Array of lessons with blocks', type: [ExtractionLessonDto] })
+  @ApiProperty({
+    description: 'Array of lessons with blocks',
+    type: [ExtractionLessonDto],
+  })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ExtractionLessonDto)

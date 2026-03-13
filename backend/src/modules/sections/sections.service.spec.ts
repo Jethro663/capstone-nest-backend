@@ -21,7 +21,10 @@ const SCHOOL_YEAR = '2026-2027';
 
 const TEACHER_USER: RequestingUser = { userId: ADVISER_ID, roles: ['teacher'] };
 const ADMIN_USER: RequestingUser = { userId: 'admin-uuid-1', roles: ['admin'] };
-const OTHER_TEACHER: RequestingUser = { userId: 'other-teacher-uuid', roles: ['teacher'] };
+const OTHER_TEACHER: RequestingUser = {
+  userId: 'other-teacher-uuid',
+  roles: ['teacher'],
+};
 
 // Keep this type local for fixture clarity
 type RequestingUser = { userId: string; roles: string[] };
@@ -37,7 +40,12 @@ const makeSection = (overrides: Partial<any> = {}) => ({
   isActive: true,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
-  adviser: { id: ADVISER_ID, firstName: 'Jane', lastName: 'Smith', email: 'jane@school.edu' },
+  adviser: {
+    id: ADVISER_ID,
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane@school.edu',
+  },
   ...overrides,
 });
 
@@ -144,29 +152,45 @@ describe('SectionsService', () => {
     it('throws NotFoundException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
-      await expect(service.findById('nonexistent-id')).rejects.toThrow(NotFoundException);
+      await expect(service.findById('nonexistent-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('allows a teacher to access a section they advise', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
 
-      await expect(service.findById(SECTION_ID, TEACHER_USER)).resolves.toBeDefined();
+      await expect(
+        service.findById(SECTION_ID, TEACHER_USER),
+      ).resolves.toBeDefined();
     });
 
     it('throws ForbiddenException when a teacher tries to access a section they do not advise', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
 
-      await expect(service.findById(SECTION_ID, OTHER_TEACHER)).rejects.toThrow(ForbiddenException);
+      await expect(service.findById(SECTION_ID, OTHER_TEACHER)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('allows an admin to access any section regardless of adviserId', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
 
-      await expect(service.findById(SECTION_ID, ADMIN_USER)).resolves.toBeDefined();
+      await expect(
+        service.findById(SECTION_ID, ADMIN_USER),
+      ).resolves.toBeDefined();
     });
 
     it('performs no ownership check when no requestingUser is provided (internal calls)', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
 
       await expect(service.findById(SECTION_ID)).resolves.toBeDefined();
     });
@@ -187,11 +211,18 @@ describe('SectionsService', () => {
       setupFindAll([makeSection()], 1);
       mockDb.select
         .mockReturnValueOnce(makeSelectChain([{ total: 1 }]))
-        .mockReturnValueOnce(makeSelectChain([{ sectionId: SECTION_ID, studentCount: 2 }]));
+        .mockReturnValueOnce(
+          makeSelectChain([{ sectionId: SECTION_ID, studentCount: 2 }]),
+        );
 
       const result = await service.findAll({ page: 1, limit: 10 });
 
-      expect(result.pagination).toEqual({ page: 1, limit: 10, total: 1, totalPages: 1 });
+      expect(result.pagination).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+      });
       expect(result.data).toHaveLength(1);
       expect(result.data[0]).toMatchObject({ id: SECTION_ID, studentCount: 2 });
     });
@@ -269,9 +300,13 @@ describe('SectionsService', () => {
     });
 
     it('throws ForbiddenException when a non-adviser teacher requests the roster', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
 
-      await expect(service.getRoster(SECTION_ID, OTHER_TEACHER)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.getRoster(SECTION_ID, OTHER_TEACHER),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('returns an empty array when the section has no enrolled students', async () => {
@@ -313,7 +348,7 @@ describe('SectionsService', () => {
 
       // Two select() calls: enrolled subquery + main candidates query
       mockDb.select
-        .mockReturnValueOnce(makeSelectChain([]))             // enrolled subquery
+        .mockReturnValueOnce(makeSelectChain([])) // enrolled subquery
         .mockReturnValueOnce(makeSelectChain([candidateRow])); // main candidates query
 
       const result = await service.getCandidates(SECTION_ID);
@@ -324,7 +359,9 @@ describe('SectionsService', () => {
     it('throws NotFoundException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
-      await expect(service.getCandidates('nonexistent-id')).rejects.toThrow(NotFoundException);
+      await expect(service.getCandidates('nonexistent-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -342,19 +379,28 @@ describe('SectionsService', () => {
     const dto = { studentIds: [STUDENT_ID, STUDENT_ID_2] };
 
     it('bulk inserts new students in a single transaction', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ capacity: 40 }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ capacity: 40 }),
+      );
 
       const tx = makeTx();
       // Count current enrolled (0)
       tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
       // Validate students exist
-      tx.select.mockReturnValueOnce(makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]),
+      );
       // Verify student role
-      tx.select.mockReturnValueOnce(makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
+      );
       // Already enrolled check (none)
       tx.select.mockReturnValueOnce(makeSelectChain([]));
       // Bulk insert
-      const insertedRows = [makeEnrollment(), makeEnrollment({ id: 'e2', studentId: STUDENT_ID_2 })];
+      const insertedRows = [
+        makeEnrollment(),
+        makeEnrollment({ id: 'e2', studentId: STUDENT_ID_2 }),
+      ];
       tx.insert.mockReturnValue(makeInsertChain(insertedRows));
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
@@ -366,7 +412,9 @@ describe('SectionsService', () => {
     });
 
     it('throws BadRequestException when adding students would exceed capacity', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ capacity: 2 }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ capacity: 2 }),
+      );
 
       const tx = makeTx();
       // Roster already has 2 members
@@ -374,14 +422,16 @@ describe('SectionsService', () => {
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await expect(service.addStudentsToSection(SECTION_ID, dto as any)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.addStudentsToSection(SECTION_ID, dto as any),
+      ).rejects.toThrow(BadRequestException);
       expect(tx.insert).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when any of the student IDs do not exist', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ capacity: 40 }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ capacity: 40 }),
+      );
 
       const tx = makeTx();
       tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
@@ -390,25 +440,33 @@ describe('SectionsService', () => {
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await expect(service.addStudentsToSection(SECTION_ID, dto as any)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.addStudentsToSection(SECTION_ID, dto as any),
+      ).rejects.toThrow(BadRequestException);
       expect(tx.insert).not.toHaveBeenCalled();
     });
 
     it('skips already-enrolled students and returns a skipped count', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ capacity: 40 }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ capacity: 40 }),
+      );
 
       const tx = makeTx();
       tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
-      tx.select.mockReturnValueOnce(makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]),
+      );
       // Verify student role
-      tx.select.mockReturnValueOnce(makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
+      );
       // Both already enrolled
-      tx.select.mockReturnValueOnce(makeSelectChain([
-        { studentId: STUDENT_ID },
-        { studentId: STUDENT_ID_2 },
-      ]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { studentId: STUDENT_ID },
+          { studentId: STUDENT_ID_2 },
+        ]),
+      );
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
@@ -422,9 +480,9 @@ describe('SectionsService', () => {
     it('throws NotFoundException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
-      await expect(service.addStudentsToSection('nonexistent', dto as any)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.addStudentsToSection('nonexistent', dto as any),
+      ).rejects.toThrow(NotFoundException);
       expect(mockDb.transaction).not.toHaveBeenCalled();
     });
   });
@@ -434,7 +492,10 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('removeStudentFromSection', () => {
-    const makeTxForRemove = (classEnrollment: any[], sectionEnrollment: any[]) => {
+    const makeTxForRemove = (
+      classEnrollment: any[],
+      sectionEnrollment: any[],
+    ) => {
       const tx: any = {
         select: jest.fn(),
         delete: jest.fn().mockReturnValue(makeDeleteChain()),
@@ -448,12 +509,14 @@ describe('SectionsService', () => {
     it('deletes the enrollment row when the student has no class assignment', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const tx = makeTxForRemove(
-        [],                                    // no class enrollment
-        [{ id: ENROLLMENT_ID }],               // section enrollment found
+        [], // no class enrollment
+        [{ id: ENROLLMENT_ID }], // section enrollment found
       );
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await expect(service.removeStudentFromSection(SECTION_ID, STUDENT_ID)).resolves.toEqual({
+      await expect(
+        service.removeStudentFromSection(SECTION_ID, STUDENT_ID),
+      ).resolves.toEqual({
         removed: true,
       });
       expect(tx.delete).toHaveBeenCalledTimes(1);
@@ -515,7 +578,7 @@ describe('SectionsService', () => {
     const setupHappyPath = () => {
       // No duplicate section
       mockDb.query.sections.findFirst
-        .mockResolvedValueOnce(null)        // duplicate check
+        .mockResolvedValueOnce(null) // duplicate check
         .mockResolvedValueOnce(makeSection()); // findById after insert
       // Adviser exists
       mockDb.query.users.findFirst.mockResolvedValue({ id: ADVISER_ID });
@@ -536,7 +599,9 @@ describe('SectionsService', () => {
     it('throws ConflictException when a section with the same name/grade/year already exists', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
 
-      await expect(service.createSection(dto as any)).rejects.toThrow(ConflictException);
+      await expect(service.createSection(dto as any)).rejects.toThrow(
+        ConflictException,
+      );
       expect(mockDb.insert).not.toHaveBeenCalled();
     });
 
@@ -544,7 +609,9 @@ describe('SectionsService', () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
       mockDb.query.users.findFirst.mockResolvedValue(null);
 
-      await expect(service.createSection(dto as any)).rejects.toThrow(NotFoundException);
+      await expect(service.createSection(dto as any)).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockDb.insert).not.toHaveBeenCalled();
     });
 
@@ -554,7 +621,9 @@ describe('SectionsService', () => {
       // select returns no teacher role rows
       mockDb.select.mockReturnValue(makeSelectChain([]));
 
-      await expect(service.createSection(dto as any)).rejects.toThrow(BadRequestException);
+      await expect(service.createSection(dto as any)).rejects.toThrow(
+        BadRequestException,
+      );
       expect(mockDb.insert).not.toHaveBeenCalled();
     });
 
@@ -565,7 +634,9 @@ describe('SectionsService', () => {
         .mockResolvedValueOnce(makeSection({ adviserId: null }));
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: SECTION_ID }]));
 
-      await expect(service.createSection(dtoWithoutAdviser as any)).resolves.toBeDefined();
+      await expect(
+        service.createSection(dtoWithoutAdviser as any),
+      ).resolves.toBeDefined();
       // No user or role lookups needed
       expect(mockDb.query.users.findFirst).not.toHaveBeenCalled();
     });
@@ -578,12 +649,14 @@ describe('SectionsService', () => {
   describe('updateSection', () => {
     it('updates section fields and returns the refreshed record', async () => {
       mockDb.query.sections.findFirst
-        .mockResolvedValueOnce(makeSection())                      // findById (initial load)
-        .mockResolvedValueOnce(makeSection())                      // duplicate check — same ID, no conflict
+        .mockResolvedValueOnce(makeSection()) // findById (initial load)
+        .mockResolvedValueOnce(makeSection()) // duplicate check — same ID, no conflict
         .mockResolvedValueOnce(makeSection({ name: 'Bonifacio' })); // findById after update
       mockDb.update.mockReturnValue(makeUpdateChain());
 
-      const result = await service.updateSection(SECTION_ID, { name: 'Bonifacio' });
+      const result = await service.updateSection(SECTION_ID, {
+        name: 'Bonifacio',
+      });
 
       expect(result.name).toBe('Bonifacio');
       expect(mockDb.update).toHaveBeenCalledTimes(1);
@@ -591,7 +664,7 @@ describe('SectionsService', () => {
 
     it('throws ConflictException when the updated name+grade+year matches another section', async () => {
       mockDb.query.sections.findFirst
-        .mockResolvedValueOnce(makeSection())               // current section
+        .mockResolvedValueOnce(makeSection()) // current section
         .mockResolvedValueOnce(makeSection({ id: 'other-section' })); // collision
 
       await expect(
@@ -603,9 +676,9 @@ describe('SectionsService', () => {
 
     it('does not throw ConflictException when the only match is the section itself', async () => {
       mockDb.query.sections.findFirst
-        .mockResolvedValueOnce(makeSection())   // current section
-        .mockResolvedValueOnce(makeSection())   // "duplicate" — same ID        (collision check)
-        .mockResolvedValueOnce(makeSection());  // findById after update
+        .mockResolvedValueOnce(makeSection()) // current section
+        .mockResolvedValueOnce(makeSection()) // "duplicate" — same ID        (collision check)
+        .mockResolvedValueOnce(makeSection()); // findById after update
       mockDb.update.mockReturnValue(makeUpdateChain());
 
       await expect(
@@ -652,7 +725,9 @@ describe('SectionsService', () => {
     it('throws NotFoundException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
-      await expect(service.deleteSection('nonexistent-id')).rejects.toThrow(NotFoundException);
+      await expect(service.deleteSection('nonexistent-id')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('does not perform a second DB fetch after the soft-delete', async () => {
@@ -671,7 +746,10 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('permanentlyDeleteSection', () => {
-    const makeTxForDelete = (activeClasses: string, enrolledStudents: string) => {
+    const makeTxForDelete = (
+      activeClasses: string,
+      enrolledStudents: string,
+    ) => {
       const tx: any = {
         select: jest.fn(),
         delete: jest.fn().mockReturnValue(makeDeleteChain()),
@@ -687,7 +765,9 @@ describe('SectionsService', () => {
       const tx = makeTxForDelete('0', '0');
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await expect(service.permanentlyDeleteSection(SECTION_ID)).resolves.not.toThrow();
+      await expect(
+        service.permanentlyDeleteSection(SECTION_ID),
+      ).resolves.not.toThrow();
       expect(tx.delete).toHaveBeenCalledTimes(1);
     });
 
@@ -696,9 +776,9 @@ describe('SectionsService', () => {
       const tx = makeTxForDelete('2', '0');
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await expect(service.permanentlyDeleteSection(SECTION_ID)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.permanentlyDeleteSection(SECTION_ID),
+      ).rejects.toThrow(BadRequestException);
       expect(tx.delete).not.toHaveBeenCalled();
     });
 
@@ -707,18 +787,18 @@ describe('SectionsService', () => {
       const tx = makeTxForDelete('0', '5');
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await expect(service.permanentlyDeleteSection(SECTION_ID)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.permanentlyDeleteSection(SECTION_ID),
+      ).rejects.toThrow(BadRequestException);
       expect(tx.delete).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
-      await expect(service.permanentlyDeleteSection('nonexistent-id')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.permanentlyDeleteSection('nonexistent-id'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -738,9 +818,18 @@ describe('SectionsService', () => {
     });
 
     it('returns structured calendar payload with section info and transformed schedule slots', async () => {
-      const slots = [{ id: 'slot-1', days: ['M', 'W', 'F'], startTime: '09:00', endTime: '10:00' }];
+      const slots = [
+        {
+          id: 'slot-1',
+          days: ['M', 'W', 'F'],
+          startTime: '09:00',
+          endTime: '10:00',
+        },
+      ];
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.query.classes.findMany.mockResolvedValue([makeClassWithSchedules(slots)]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClassWithSchedules(slots),
+      ]);
 
       const result = await service.getSectionSchedule(SECTION_ID, ADMIN_USER);
 
@@ -775,7 +864,9 @@ describe('SectionsService', () => {
 
     it('returns an empty schedules array for a class that has no assigned slots', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.query.classes.findMany.mockResolvedValue([makeClassWithSchedules([])]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClassWithSchedules([]),
+      ]);
 
       const result = await service.getSectionSchedule(SECTION_ID, ADMIN_USER);
 
@@ -783,9 +874,13 @@ describe('SectionsService', () => {
     });
 
     it('correctly maps a Thursday lab slot (Th) to its full English name', async () => {
-      const labSlot = [{ id: 'slot-2', days: ['Th'], startTime: '13:00', endTime: '15:00' }];
+      const labSlot = [
+        { id: 'slot-2', days: ['Th'], startTime: '13:00', endTime: '15:00' },
+      ];
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.query.classes.findMany.mockResolvedValue([makeClassWithSchedules(labSlot)]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClassWithSchedules(labSlot),
+      ]);
 
       const result = await service.getSectionSchedule(SECTION_ID, ADMIN_USER);
 
@@ -795,28 +890,34 @@ describe('SectionsService', () => {
     });
 
     it('inherits teacher ownership check from findById — throws ForbiddenException for non-adviser teacher', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
-
-      await expect(service.getSectionSchedule(SECTION_ID, OTHER_TEACHER)).rejects.toThrow(
-        ForbiddenException,
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
       );
+
+      await expect(
+        service.getSectionSchedule(SECTION_ID, OTHER_TEACHER),
+      ).rejects.toThrow(ForbiddenException);
       // Classes should never be queried when access is denied
       expect(mockDb.query.classes.findMany).not.toHaveBeenCalled();
     });
 
     it('allows an adviser teacher to retrieve their own section schedule', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(makeSection({ adviserId: ADVISER_ID }));
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
       mockDb.query.classes.findMany.mockResolvedValue([]);
 
-      await expect(service.getSectionSchedule(SECTION_ID, TEACHER_USER)).resolves.toBeDefined();
+      await expect(
+        service.getSectionSchedule(SECTION_ID, TEACHER_USER),
+      ).resolves.toBeDefined();
     });
 
     it('throws NotFoundException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
-      await expect(service.getSectionSchedule('bad-id', ADMIN_USER)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.getSectionSchedule('bad-id', ADMIN_USER),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -830,12 +931,17 @@ describe('SectionsService', () => {
       mockDb.query.users.findFirst.mockResolvedValue({ id: ADVISER_ID });
       mockDb.select.mockReturnValue(makeSelectChain([{ roleName: 'teacher' }]));
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: SECTION_ID }]));
-      mockDb.query.sections.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(makeSection());
+      mockDb.query.sections.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeSection());
 
       await expect(
         service.createSection({
-          name: 'Rizal', gradeLevel: '7', schoolYear: SCHOOL_YEAR,
-          capacity: 40, adviserId: ADVISER_ID,
+          name: 'Rizal',
+          gradeLevel: '7',
+          schoolYear: SCHOOL_YEAR,
+          capacity: 40,
+          adviserId: ADVISER_ID,
         }),
       ).resolves.toBeDefined();
     });
@@ -847,8 +953,11 @@ describe('SectionsService', () => {
 
       await expect(
         service.createSection({
-          name: 'Rizal', gradeLevel: '7', schoolYear: SCHOOL_YEAR,
-          capacity: 40, adviserId: ADVISER_ID,
+          name: 'Rizal',
+          gradeLevel: '7',
+          schoolYear: SCHOOL_YEAR,
+          capacity: 40,
+          adviserId: ADVISER_ID,
         }),
       ).rejects.toThrow(BadRequestException);
     });

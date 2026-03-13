@@ -94,7 +94,9 @@ export class RosterFileValidationPipe implements PipeTransform {
         throw err;
       }
       await this.cleanup(file.path);
-      throw new BadRequestException('Could not read uploaded file for validation.');
+      throw new BadRequestException(
+        'Could not read uploaded file for validation.',
+      );
     }
 
     return file;

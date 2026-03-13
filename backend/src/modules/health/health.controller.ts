@@ -7,7 +7,9 @@ import { Public } from '../auth/decorators/public.decorator';
 export class HealthController {
   @Public()
   @Get()
-  @ApiOperation({ summary: 'Liveness check — returns 200 when the server is up' })
+  @ApiOperation({
+    summary: 'Liveness check — returns 200 when the server is up',
+  })
   @ApiResponse({ status: 200, description: 'Server is healthy' })
   check() {
     return {

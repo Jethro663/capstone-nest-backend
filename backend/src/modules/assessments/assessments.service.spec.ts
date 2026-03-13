@@ -170,7 +170,12 @@ describe('AssessmentsService', () => {
     });
 
     it('should pass maxAttempts and timeLimitMinutes through', async () => {
-      const created = { ...MOCK_ASSESSMENT, totalPoints: 0, maxAttempts: 3, timeLimitMinutes: 30 };
+      const created = {
+        ...MOCK_ASSESSMENT,
+        totalPoints: 0,
+        maxAttempts: 3,
+        timeLimitMinutes: 30,
+      };
       db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID });
       mockInsert(db, [created]);
       db.query.assessments.findFirst.mockResolvedValue(created);
@@ -200,7 +205,9 @@ describe('AssessmentsService', () => {
     });
 
     it('should return assessment with nested questions', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       const result = await service.getAssessmentById(ASSESSMENT_ID);
       expect(result.id).toBe(ASSESSMENT_ID);
       expect(result.questions).toHaveLength(1);
@@ -236,7 +243,11 @@ describe('AssessmentsService', () => {
     });
 
     it('should reject publish when passingScore is not set', async () => {
-      const noPassing = { ...MOCK_ASSESSMENT, passingScore: null, questions: [MOCK_QUESTION] };
+      const noPassing = {
+        ...MOCK_ASSESSMENT,
+        passingScore: null,
+        questions: [MOCK_QUESTION],
+      };
       db.query.assessments.findFirst.mockResolvedValue(noPassing);
 
       await expect(
@@ -245,7 +256,9 @@ describe('AssessmentsService', () => {
     });
 
     it('should allow publish when assessment has valid questions', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT }]);
 
       const result = await service.updateAssessment(ASSESSMENT_ID, {
@@ -282,7 +295,9 @@ describe('AssessmentsService', () => {
     });
 
     it('should resume existing unsubmitted attempt', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       // findFirst for unsubmitted attempt
       db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
 
@@ -291,7 +306,9 @@ describe('AssessmentsService', () => {
     });
 
     it('should reject when maxAttempts reached', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       // No unsubmitted attempt
       db.query.assessmentAttempts.findFirst.mockResolvedValue(null);
       // 2 submitted attempts (maxAttempts is 2)
@@ -306,7 +323,9 @@ describe('AssessmentsService', () => {
     });
 
     it('should create new attempt when attempts remain', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(null);
       db.query.assessmentAttempts.findMany.mockResolvedValue([
         { ...MOCK_ATTEMPT, isSubmitted: true, attemptNumber: 1 },
@@ -321,7 +340,10 @@ describe('AssessmentsService', () => {
     });
 
     it('should return timeLimitMinutes when assessment has time limit', async () => {
-      const timedAssessment = { ...MOCK_PUBLISHED_ASSESSMENT, timeLimitMinutes: 30 };
+      const timedAssessment = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        timeLimitMinutes: 30,
+      };
       db.query.assessments.findFirst.mockResolvedValue(timedAssessment);
       db.query.assessmentAttempts.findFirst.mockResolvedValue(null);
       db.query.assessmentAttempts.findMany.mockResolvedValue([]);
@@ -338,7 +360,9 @@ describe('AssessmentsService', () => {
 
   describe('submitAssessment', () => {
     it('should throw if no active attempt found', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(null);
 
       await expect(
@@ -351,27 +375,33 @@ describe('AssessmentsService', () => {
     });
 
     it('should auto-grade multiple_choice correctly', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
 
       // update attempt as submitted
       mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
       // insert response
-      mockInsert(db, [{
-        id: 'resp-1',
-        attemptId: ATTEMPT_ID,
-        questionId: QUESTION_ID,
-        selectedOptionId: OPTION_ID_A,
-        isCorrect: true,
-        pointsEarned: 5,
-      }]);
+      mockInsert(db, [
+        {
+          id: 'resp-1',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          selectedOptionId: OPTION_ID_A,
+          isCorrect: true,
+          pointsEarned: 5,
+        },
+      ]);
       // update attempt with score
-      mockUpdateReturning(db, [{
-        ...MOCK_ATTEMPT,
-        isSubmitted: true,
-        score: 100,
-        passed: true,
-      }]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 100,
+          passed: true,
+        },
+      ]);
 
       const result = await service.submitAssessment(STUDENT_ID, {
         assessmentId: ASSESSMENT_ID,
@@ -388,24 +418,30 @@ describe('AssessmentsService', () => {
     });
 
     it('should give 0 points for wrong answer', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
 
       mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
-      mockInsert(db, [{
-        id: 'resp-1',
-        attemptId: ATTEMPT_ID,
-        questionId: QUESTION_ID,
-        selectedOptionId: OPTION_ID_B,
-        isCorrect: false,
-        pointsEarned: 0,
-      }]);
-      mockUpdateReturning(db, [{
-        ...MOCK_ATTEMPT,
-        isSubmitted: true,
-        score: 0,
-        passed: false,
-      }]);
+      mockInsert(db, [
+        {
+          id: 'resp-1',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          selectedOptionId: OPTION_ID_B,
+          isCorrect: false,
+          pointsEarned: 0,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 0,
+          passed: false,
+        },
+      ]);
 
       const result = await service.submitAssessment(STUDENT_ID, {
         assessmentId: ASSESSMENT_ID,
@@ -418,14 +454,18 @@ describe('AssessmentsService', () => {
     });
 
     it('should throw for unknown questionId', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
       mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
 
       await expect(
         service.submitAssessment(STUDENT_ID, {
           assessmentId: ASSESSMENT_ID,
-          responses: [{ questionId: 'unknown-id', selectedOptionId: OPTION_ID_A }],
+          responses: [
+            { questionId: 'unknown-id', selectedOptionId: OPTION_ID_A },
+          ],
           timeSpentSeconds: 10,
         }),
       ).rejects.toThrow(BadRequestException);

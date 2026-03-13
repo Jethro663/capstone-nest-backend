@@ -136,7 +136,9 @@ describe('AnnouncementsService', () => {
       mockDb.insert = jest.fn().mockReturnValue({
         values: jest.fn().mockImplementation((vals) => {
           capturedValues.push(vals);
-          return { returning: jest.fn().mockResolvedValue([makeAnnouncement()]) };
+          return {
+            returning: jest.fn().mockResolvedValue([makeAnnouncement()]),
+          };
         }),
       });
 
@@ -155,7 +157,9 @@ describe('AnnouncementsService', () => {
       mockDb.insert = jest.fn().mockReturnValue({
         values: jest.fn().mockImplementation((vals) => {
           capturedValues.push(vals);
-          return { returning: jest.fn().mockResolvedValue([makeAnnouncement()]) };
+          return {
+            returning: jest.fn().mockResolvedValue([makeAnnouncement()]),
+          };
         }),
       });
 
@@ -172,7 +176,12 @@ describe('AnnouncementsService', () => {
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       Object.assign(
         mockDb,
-        makeInsertChain([makeAnnouncement({ scheduledAt: new Date(futureDate), publishedAt: null })]),
+        makeInsertChain([
+          makeAnnouncement({
+            scheduledAt: new Date(futureDate),
+            publishedAt: null,
+          }),
+        ]),
       );
 
       await service.create(CLASS_ID, TEACHER_ID, {
@@ -206,7 +215,10 @@ describe('AnnouncementsService', () => {
     it('calls findMany with correct pagination offset', async () => {
       mockDb.query.announcements.findMany.mockResolvedValue([]);
 
-      await service.findAllByClass(CLASS_ID, TEACHER_ID, true, { page: 3, limit: 10 });
+      await service.findAllByClass(CLASS_ID, TEACHER_ID, true, {
+        page: 3,
+        limit: 10,
+      });
 
       expect(mockDb.query.announcements.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 10, offset: 20 }),
@@ -217,7 +229,12 @@ describe('AnnouncementsService', () => {
       const rows = [makeAnnouncement(), makeAnnouncement({ id: 'ann-2' })];
       mockDb.query.announcements.findMany.mockResolvedValue(rows);
 
-      const result = await service.findAllByClass(CLASS_ID, TEACHER_ID, true, {});
+      const result = await service.findAllByClass(
+        CLASS_ID,
+        TEACHER_ID,
+        true,
+        {},
+      );
 
       expect(result).toHaveLength(2);
     });
@@ -251,10 +268,15 @@ describe('AnnouncementsService', () => {
 
   describe('update()', () => {
     it('updates allowed fields and returns the updated row', async () => {
-      const updated = makeAnnouncement({ title: 'Updated Title', isPinned: true });
+      const updated = makeAnnouncement({
+        title: 'Updated Title',
+        isPinned: true,
+      });
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.announcements.findFirst.mockResolvedValue(makeAnnouncement());
+      mockDb.query.announcements.findFirst.mockResolvedValue(
+        makeAnnouncement(),
+      );
       Object.assign(mockDb, makeUpdateReturningChain([updated]));
 
       const result = await service.update(CLASS_ID, ANN_ID, TEACHER_ID, {
@@ -298,7 +320,9 @@ describe('AnnouncementsService', () => {
     it('re-sanitizes content on update', async () => {
       const capturedSet: any[] = [];
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.announcements.findFirst.mockResolvedValue(makeAnnouncement());
+      mockDb.query.announcements.findFirst.mockResolvedValue(
+        makeAnnouncement(),
+      );
       mockDb.update = jest.fn().mockReturnValue({
         set: jest.fn().mockImplementation((vals) => {
           capturedSet.push(vals);
@@ -326,7 +350,9 @@ describe('AnnouncementsService', () => {
     it('sets archivedAt (soft delete) and returns success message', async () => {
       const capturedSet: any[] = [];
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.announcements.findFirst.mockResolvedValue(makeAnnouncement());
+      mockDb.query.announcements.findFirst.mockResolvedValue(
+        makeAnnouncement(),
+      );
       mockDb.update = jest.fn().mockReturnValue({
         set: jest.fn().mockImplementation((vals) => {
           capturedSet.push(vals);
@@ -344,9 +370,9 @@ describe('AnnouncementsService', () => {
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.query.announcements.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove(CLASS_ID, ANN_ID, TEACHER_ID)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.remove(CLASS_ID, ANN_ID, TEACHER_ID),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('throws ForbiddenException when teacher did not author the announcement', async () => {

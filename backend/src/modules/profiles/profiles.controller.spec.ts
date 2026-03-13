@@ -18,12 +18,13 @@ describe('ProfilesController', () => {
   });
 
   it('uploads the student avatar and stores the public path', async () => {
-    mockProfilesService.updateProfile.mockResolvedValue({ userId: 'student-1' });
+    mockProfilesService.updateProfile.mockResolvedValue({
+      userId: 'student-1',
+    });
 
-    const result = await controller.uploadMyAvatar(
-      { userId: 'student-1' },
-      { filename: 'avatar.png' } as Express.Multer.File,
-    );
+    const result = await controller.uploadMyAvatar({ userId: 'student-1' }, {
+      filename: 'avatar.png',
+    } as Express.Multer.File);
 
     expect(mockProfilesService.updateProfile).toHaveBeenCalledWith(
       'student-1',
@@ -47,16 +48,16 @@ describe('ProfilesController', () => {
 
     await controller.serveProfileImage('avatar.png', { sendFile } as any);
 
-    expect(sendFile).toHaveBeenCalledWith(
-      path.resolve(storedFile),
-    );
+    expect(sendFile).toHaveBeenCalledWith(path.resolve(storedFile));
 
     fs.unlinkSync(storedFile);
   });
 
   it('rejects unknown profile images', async () => {
     await expect(
-      controller.serveProfileImage('missing.png', { sendFile: jest.fn() } as any),
+      controller.serveProfileImage('missing.png', {
+        sendFile: jest.fn(),
+      } as any),
     ).rejects.toThrow(BadRequestException);
   });
 });

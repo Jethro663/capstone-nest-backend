@@ -17,7 +17,7 @@ export class AdminService {
       .select({ count: count() })
       .from(users)
       .where(eq(users.status, 'ACTIVE'));
-    
+
     const totalUsers = totalUsersResult[0]?.count || 0;
 
     // Get teachers count (users with teacher role)
@@ -26,11 +26,8 @@ export class AdminService {
       .from(users)
       .innerJoin(userRoles, eq(users.id, userRoles.userId))
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .where(and(
-        eq(users.status, 'ACTIVE'),
-        eq(roles.name, 'teacher')
-      ));
-    
+      .where(and(eq(users.status, 'ACTIVE'), eq(roles.name, 'teacher')));
+
     const teachers = teachersResult[0]?.count || 0;
 
     // Get students count (users with student role)
@@ -39,11 +36,8 @@ export class AdminService {
       .from(users)
       .innerJoin(userRoles, eq(users.id, userRoles.userId))
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .where(and(
-        eq(users.status, 'ACTIVE'),
-        eq(roles.name, 'student')
-      ));
-    
+      .where(and(eq(users.status, 'ACTIVE'), eq(roles.name, 'student')));
+
     const students = studentsResult[0]?.count || 0;
 
     // Get active subjects count (distinct subject names in classes)
@@ -51,7 +45,7 @@ export class AdminService {
       .selectDistinct({ subjectName: classes.subjectName })
       .from(classes)
       .where(eq(classes.isActive, true));
-    
+
     const activeSubjects = activeSubjectsResult.length || 0;
 
     // Get active classes count
@@ -59,7 +53,7 @@ export class AdminService {
       .select({ count: count() })
       .from(classes)
       .where(eq(classes.isActive, true));
-    
+
     const activeClasses = activeClassesResult[0]?.count || 0;
 
     return {

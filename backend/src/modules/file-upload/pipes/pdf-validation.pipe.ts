@@ -40,11 +40,13 @@ export class PdfValidationPipe implements PipeTransform {
         header[0] === 0x25 && // %
         header[1] === 0x50 && // P
         header[2] === 0x44 && // D
-        header[3] === 0x46;   // F
+        header[3] === 0x46; // F
     } catch (err: unknown) {
       await this.cleanup(absolutePath);
       const detail = err instanceof Error ? err.message : String(err);
-      throw new BadRequestException(`Could not read uploaded file for validation: ${detail}`);
+      throw new BadRequestException(
+        `Could not read uploaded file for validation: ${detail}`,
+      );
     }
 
     if (!isPdf) {

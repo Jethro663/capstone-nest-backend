@@ -63,4 +63,3 @@ describe('UsersController', () => {
     expect(result.data.user.password).toBeUndefined();
   });
 });
-

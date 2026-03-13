@@ -147,9 +147,7 @@ export const extractedModules = pgTable(
     fileIdIdx: index('extracted_modules_file_id_idx').on(table.fileId),
     classIdIdx: index('extracted_modules_class_id_idx').on(table.classId),
     teacherIdIdx: index('extracted_modules_teacher_id_idx').on(table.teacherId),
-    statusIdx: index('extracted_modules_status_idx').on(
-      table.extractionStatus,
-    ),
+    statusIdx: index('extracted_modules_status_idx').on(table.extractionStatus),
   }),
 );
 

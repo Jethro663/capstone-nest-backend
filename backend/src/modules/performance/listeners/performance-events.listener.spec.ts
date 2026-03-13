@@ -22,10 +22,9 @@ describe('PerformanceEventsListener', () => {
       }),
     );
 
-    expect(performanceService.recomputeFromAssessmentSubmission).toHaveBeenCalledWith(
-      'assessment-1',
-      'student-1',
-    );
+    expect(
+      performanceService.recomputeFromAssessmentSubmission,
+    ).toHaveBeenCalledWith('assessment-1', 'student-1');
   });
 
   it('should trigger recompute from class-record.scores.updated', async () => {

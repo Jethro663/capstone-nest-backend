@@ -13,9 +13,7 @@ import {
  * - End year must be exactly startYear + 1
  */
 @ValidatorConstraint({ name: 'isValidSchoolYear', async: false })
-export class IsValidSchoolYearConstraint
-  implements ValidatorConstraintInterface
-{
+export class IsValidSchoolYearConstraint implements ValidatorConstraintInterface {
   validate(value: string): boolean {
     // Check format: YYYY-YYYY
     const regex = /^\d{4}-\d{4}$/;
@@ -36,4 +34,3 @@ export class IsValidSchoolYearConstraint
     return 'schoolYear must be in format YYYY-YYYY+1 (e.g., 2026-2027) with start year >= 2020';
   }
 }
-

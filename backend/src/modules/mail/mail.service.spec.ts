@@ -15,7 +15,11 @@ const mockNodemailer = nodemailer as jest.Mocked<typeof nodemailer>;
 function makeMockTransporter(sendMailImpl?: () => Promise<any>) {
   return {
     verify: jest.fn().mockResolvedValue(true),
-    sendMail: jest.fn().mockImplementation(sendMailImpl ?? (() => Promise.resolve({ messageId: 'test-id' }))),
+    sendMail: jest
+      .fn()
+      .mockImplementation(
+        sendMailImpl ?? (() => Promise.resolve({ messageId: 'test-id' })),
+      ),
   };
 }
 
@@ -112,7 +116,11 @@ describe('MailService', () => {
     });
 
     it('returns { success: true, mode: "development" } for email_verification', async () => {
-      const result = await service.sendOtpEmail(EMAIL, OTP, 'email_verification');
+      const result = await service.sendOtpEmail(
+        EMAIL,
+        OTP,
+        'email_verification',
+      );
       expect(result).toEqual({ success: true, mode: 'development' });
     });
 
@@ -150,7 +158,11 @@ describe('MailService', () => {
     });
 
     it('returns { success: true, mode: "production" } for email_verification', async () => {
-      const result = await service.sendOtpEmail(EMAIL, OTP, 'email_verification');
+      const result = await service.sendOtpEmail(
+        EMAIL,
+        OTP,
+        'email_verification',
+      );
       expect(result).toEqual({ success: true, mode: 'production' });
     });
 
@@ -226,7 +238,9 @@ describe('MailService', () => {
     });
 
     it('throws a generic error when sendMail rejects', async () => {
-      mockTransporter.sendMail.mockRejectedValue(new Error('Connection refused'));
+      mockTransporter.sendMail.mockRejectedValue(
+        new Error('Connection refused'),
+      );
 
       await expect(
         service.sendOtpEmail(EMAIL, OTP, 'email_verification'),
@@ -328,9 +342,9 @@ describe('MailService', () => {
     it('throws a generic error when sendMail rejects', async () => {
       mockTransporter.sendMail.mockRejectedValue(new Error('Auth failed'));
 
-      await expect(
-        service.sendPasswordEmail(EMAIL, PASSWORD),
-      ).rejects.toThrow('Email delivery failed');
+      await expect(service.sendPasswordEmail(EMAIL, PASSWORD)).rejects.toThrow(
+        'Email delivery failed',
+      );
     });
 
     it('calls sendMail exactly once per invocation', async () => {

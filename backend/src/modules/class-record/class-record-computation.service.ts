@@ -54,7 +54,7 @@ export class ClassRecordComputationService {
     classRecordId: string,
     tx?: typeof this.db,
   ): Promise<void> {
-    const conn = (tx ?? this.db) as typeof this.db;
+    const conn = tx ?? this.db;
 
     const result = await conn
       .select({
@@ -95,7 +95,7 @@ export class ClassRecordComputationService {
     classRecordId: string,
     tx?: typeof this.db,
   ): Promise<Map<string, StudentGradeResult>> {
-    const conn = (tx ?? this.db) as typeof this.db;
+    const conn = tx ?? this.db;
 
     // 1. Load class record to get classId
     const record = await conn.query.classRecords.findFirst({
@@ -193,8 +193,7 @@ export class ClassRecordComputationService {
         }
 
         // PS = (totalRaw / totalHPS) × 100
-        const percentageScore =
-          totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
+        const percentageScore = totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
 
         // WS = PS × (weight / 100)
         const weightedScore = percentageScore * (weight / 100);

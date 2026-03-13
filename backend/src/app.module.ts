@@ -29,6 +29,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { AiMentorModule } from './modules/ai-mentor/ai-mentor.module';
 import { PerformanceModule } from './modules/performance/performance.module';
 import { LxpModule } from './modules/lxp/lxp.module';
+import { TeacherProfilesModule } from './modules/teacher-profiles/teacher-profiles.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
@@ -50,8 +51,8 @@ import ollamaConfig from './config/ollama.config';
     }),
     ThrottlerModule.forRoot([
       {
-        ttl: 60000,  // 60 seconds
-        limit: 30,  // global fallback: 30 req / 60 s per IP
+        ttl: 60000, // 60 seconds
+        limit: 30, // global fallback: 30 req / 60 s per IP
       },
     ]),
     ScheduleModule.forRoot(),
@@ -78,6 +79,7 @@ import ollamaConfig from './config/ollama.config';
     AiMentorModule,
     PerformanceModule,
     LxpModule,
+    TeacherProfilesModule,
   ],
   providers: [
     {

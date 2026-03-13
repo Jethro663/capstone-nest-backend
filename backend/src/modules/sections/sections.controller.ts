@@ -69,8 +69,12 @@ export class SectionsController {
    */
   @Get('my')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async getMySections(@CurrentUser() user: { userId: string; roles: string[] }) {
-    const result = await this.sectionsService.findAll({ adviserId: user.userId });
+  async getMySections(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const result = await this.sectionsService.findAll({
+      adviserId: user.userId,
+    });
 
     return { success: true, ...result };
   }
@@ -99,7 +103,11 @@ export class SectionsController {
   async createSection(@Body() createSectionDto: CreateSectionDto) {
     const section = await this.sectionsService.createSection(createSectionDto);
 
-    return { success: true, message: 'Section created successfully', data: section };
+    return {
+      success: true,
+      message: 'Section created successfully',
+      data: section,
+    };
   }
 
   /**
@@ -112,9 +120,16 @@ export class SectionsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSectionDto: UpdateSectionDto,
   ) {
-    const updatedSection = await this.sectionsService.updateSection(id, updateSectionDto);
+    const updatedSection = await this.sectionsService.updateSection(
+      id,
+      updateSectionDto,
+    );
 
-    return { success: true, message: 'Section updated successfully', data: updatedSection };
+    return {
+      success: true,
+      message: 'Section updated successfully',
+      data: updatedSection,
+    };
   }
 
   /**
@@ -126,7 +141,10 @@ export class SectionsController {
   async deleteSection(@Param('id', ParseUUIDPipe) id: string) {
     await this.sectionsService.deleteSection(id);
 
-    return { success: true, message: 'Section deleted successfully (set to inactive)' };
+    return {
+      success: true,
+      message: 'Section deleted successfully (set to inactive)',
+    };
   }
 
   /**
@@ -195,7 +213,10 @@ export class SectionsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
   ) {
-    const result = await this.sectionsService.removeStudentFromSection(id, studentId);
+    const result = await this.sectionsService.removeStudentFromSection(
+      id,
+      studentId,
+    );
 
     return { success: true, data: result };
   }

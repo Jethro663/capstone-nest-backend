@@ -73,7 +73,10 @@ export class ProfilesController {
   // Get profile by userId — admin or owner only
   @Get(':userId')
   @Roles(RoleName.Admin, RoleName.Student, RoleName.Teacher)
-  async getProfileByUserId(@Param('userId') userId: string, @CurrentUser() user: any) {
+  async getProfileByUserId(
+    @Param('userId') userId: string,
+    @CurrentUser() user: any,
+  ) {
     const primaryRole = user.roles?.[0];
     // Allow admins or the owner to view the profile
     if (primaryRole !== 'admin' && user.userId !== userId) {

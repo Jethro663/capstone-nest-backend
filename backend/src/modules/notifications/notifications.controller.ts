@@ -32,7 +32,9 @@ export class NotificationsController {
 
   @Get()
   @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
-  @ApiOperation({ summary: 'Get paginated notification inbox for the current user' })
+  @ApiOperation({
+    summary: 'Get paginated notification inbox for the current user',
+  })
   async findAll(
     @CurrentUser() user: { userId: string },
     @Query() query: QueryNotificationsDto,
@@ -43,19 +45,31 @@ export class NotificationsController {
 
   @Get('unread-count')
   @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
-  @ApiOperation({ summary: 'Get unread notification count for the current user' })
+  @ApiOperation({
+    summary: 'Get unread notification count for the current user',
+  })
   async getUnreadCount(@CurrentUser() user: { userId: string }) {
     const count = await this.notificationsService.getUnreadCount(user.userId);
-    return { success: true, message: 'Unread count retrieved.', data: { count } };
+    return {
+      success: true,
+      message: 'Unread count retrieved.',
+      data: { count },
+    };
   }
 
   @Patch('read-all')
   @Roles(RoleName.Teacher, RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Mark all notifications as read for the current user' })
+  @ApiOperation({
+    summary: 'Mark all notifications as read for the current user',
+  })
   async markAllRead(@CurrentUser() user: { userId: string }) {
     const data = await this.notificationsService.markAllRead(user.userId);
-    return { success: true, message: 'All notifications marked as read.', data };
+    return {
+      success: true,
+      message: 'All notifications marked as read.',
+      data,
+    };
   }
 
   @Patch(':id/read')

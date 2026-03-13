@@ -8,17 +8,19 @@ import { ParsedNameDto } from '../dto/roster-import.dto';
 // ─── Section-header detection ─────────────────────────────────────────────────
 
 export interface SectionHeaderInfo {
-  gradeLevel: string;   // e.g. "7"
-  sectionName: string;  // e.g. "HUMSS-A"
-  rawHeader: string;    // full original cell text
-  rowIndex: number;     // 0-based index into the parsed rows array
+  gradeLevel: string; // e.g. "7"
+  sectionName: string; // e.g. "HUMSS-A"
+  rawHeader: string; // full original cell text
+  rowIndex: number; // 0-based index into the parsed rows array
 }
 
 /**
  * Scans all rows for one that matches the SECTION_HEADER_REGEX pattern
  * (e.g. "GRADE_7 HUMSS-A").  Returns metadata about the first match found.
  */
-export function findSectionHeaderRow(rows: string[][]): SectionHeaderInfo | null {
+export function findSectionHeaderRow(
+  rows: string[][],
+): SectionHeaderInfo | null {
   for (let i = 0; i < rows.length; i++) {
     for (const cell of rows[i]) {
       const trimmed = cell.trim();
@@ -66,10 +68,11 @@ export function findColumnHeaderRow(
   return null;
 }
 
-function findKeywordIndex(rowLower: string[], keywords: readonly string[]): number {
-  return rowLower.findIndex((cell) =>
-    keywords.some((kw) => cell.includes(kw)),
-  );
+function findKeywordIndex(
+  rowLower: string[],
+  keywords: readonly string[],
+): number {
+  return rowLower.findIndex((cell) => keywords.some((kw) => cell.includes(kw)));
 }
 
 // ─── Name parsing ─────────────────────────────────────────────────────────────

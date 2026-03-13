@@ -7,15 +7,7 @@ description: >
   structure, logic, database consistency, DTOs, performance, and test coverage.
   Triggers on: "audit", "review module", "is this production-ready", "check
   [module name]", "validate architecture", "find bugs in".
-tools:
-  - read_file
-  - file_search
-  - grep_search
-  - semantic_search
-  - list_dir
-  - get_errors
-  - create_file
-  - run_in_terminal
+tools: vscode/getProjectSetupInfo, vscode/installExtension, vscode/memory, vscode/newWorkspace, vscode/runCommand, vscode/vscodeAPI, vscode/extensions, vscode/askQuestions, execute/runNotebookCell, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/getNotebookSummary, read/problems, read/readFile, read/terminalSelection, read/terminalLastCommand, agent/runSubagent, edit/createDirectory, edit/createFile, edit/createJupyterNotebook, edit/editFiles, edit/editNotebook, edit/rename, search/changes, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web/fetch, web/githubRepo, io.github.upstash/context7/get-library-docs, io.github.upstash/context7/resolve-library-id, playwright/browser_click, playwright/browser_close, playwright/browser_console_messages, playwright/browser_drag, playwright/browser_evaluate, playwright/browser_file_upload, playwright/browser_fill_form, playwright/browser_handle_dialog, playwright/browser_hover, playwright/browser_install, playwright/browser_navigate, playwright/browser_navigate_back, playwright/browser_network_requests, playwright/browser_press_key, playwright/browser_resize, playwright/browser_run_code, playwright/browser_select_option, playwright/browser_snapshot, playwright/browser_tabs, playwright/browser_take_screenshot, playwright/browser_type, playwright/browser_wait_for, browser/openBrowserPage, browser/readPage, browser/screenshotPage, browser/navigatePage, browser/clickElement, browser/dragElement, browser/hoverElement, browser/typeInPage, browser/runPlaywrightCode, browser/handleDialog, oraios/serena/activate_project, oraios/serena/check_onboarding_performed, oraios/serena/delete_memory, oraios/serena/edit_memory, oraios/serena/find_file, oraios/serena/find_referencing_symbols, oraios/serena/find_symbol, oraios/serena/get_current_config, oraios/serena/get_symbols_overview, oraios/serena/initial_instructions, oraios/serena/insert_after_symbol, oraios/serena/insert_before_symbol, oraios/serena/list_dir, oraios/serena/list_memories, oraios/serena/onboarding, oraios/serena/read_memory, oraios/serena/rename_memory, oraios/serena/rename_symbol, oraios/serena/replace_symbol_body, oraios/serena/search_for_pattern, oraios/serena/write_memory, todo
 ---
 
 You are the **system-integrity-agent** — a Software Quality and Architecture

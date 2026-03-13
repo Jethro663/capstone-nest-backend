@@ -9,10 +9,16 @@ export class ChangePasswordDto {
   oldPassword: string;
 
   @IsNotEmpty({ message: 'New password is required' })
-  @IsStrongPassword('NewP@ss1!', 'New password (min 8 chars, uppercase, lowercase, digit, special character)')
+  @IsStrongPassword(
+    'NewP@ss1!',
+    'New password (min 8 chars, uppercase, lowercase, digit, special character)',
+  )
   newPassword: string;
 
   @IsNotEmpty({ message: 'Confirm password is required' })
-  @IsStrongPassword('NewP@ss1!', 'Confirm password (min 8 chars, uppercase, lowercase, digit, special character)')
+  @IsStrongPassword(
+    'NewP@ss1!',
+    'Confirm password (min 8 chars, uppercase, lowercase, digit, special character)',
+  )
   confirmPassword: string;
 }

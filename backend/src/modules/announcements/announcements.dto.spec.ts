@@ -7,7 +7,7 @@ import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function errorsFor(DtoClass: any, plain: object): Promise<string[]> {
-  const instance = plainToInstance(DtoClass, plain) as object;
+  const instance = plainToInstance(DtoClass, plain);
   const errors = await validate(instance);
   return errors.flatMap((e) => Object.values(e.constraints ?? {}));
 }
@@ -111,7 +111,9 @@ describe('UpdateAnnouncementDto', () => {
   });
 
   it('passes for updating only title', async () => {
-    const errors = await errorsFor(UpdateAnnouncementDto, { title: 'New title' });
+    const errors = await errorsFor(UpdateAnnouncementDto, {
+      title: 'New title',
+    });
     expect(errors).toHaveLength(0);
   });
 
@@ -121,12 +123,16 @@ describe('UpdateAnnouncementDto', () => {
   });
 
   it('fails when provided title exceeds 255 characters', async () => {
-    const errors = await errorsFor(UpdateAnnouncementDto, { title: 'X'.repeat(256) });
+    const errors = await errorsFor(UpdateAnnouncementDto, {
+      title: 'X'.repeat(256),
+    });
     expect(errors.length).toBeGreaterThan(0);
   });
 
   it('fails when provided scheduledAt is not ISO-8601', async () => {
-    const errors = await errorsFor(UpdateAnnouncementDto, { scheduledAt: 'invalid' });
+    const errors = await errorsFor(UpdateAnnouncementDto, {
+      scheduledAt: 'invalid',
+    });
     expect(errors.length).toBeGreaterThan(0);
   });
 
@@ -146,7 +152,10 @@ describe('UpdateAnnouncementDto', () => {
 
 describe('QueryAnnouncementsDto', () => {
   it('passes with valid page and limit', async () => {
-    const errors = await errorsFor(QueryAnnouncementsDto, { page: 2, limit: 50 });
+    const errors = await errorsFor(QueryAnnouncementsDto, {
+      page: 2,
+      limit: 50,
+    });
     expect(errors).toHaveLength(0);
   });
 
@@ -171,7 +180,10 @@ describe('QueryAnnouncementsDto', () => {
   });
 
   it('coerces string "5" to number 5 via @Type(() => Number)', async () => {
-    const instance = plainToInstance(QueryAnnouncementsDto, { page: '5', limit: '10' });
+    const instance = plainToInstance(QueryAnnouncementsDto, {
+      page: '5',
+      limit: '10',
+    });
     const errors = await validate(instance);
 
     expect(errors).toHaveLength(0);

@@ -5,11 +5,37 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { and, count, eq, ilike, isNull, ne, inArray, notInArray, or, sql, SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  eq,
+  ilike,
+  isNull,
+  ne,
+  inArray,
+  notInArray,
+  or,
+  sql,
+  SQL,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { assessments, classSchedules, classes, sections, users, userRoles, roles, enrollments, studentProfiles, lessons } from '../../drizzle/schema';
+import {
+  assessments,
+  classSchedules,
+  classes,
+  sections,
+  users,
+  userRoles,
+  roles,
+  enrollments,
+  studentProfiles,
+  lessons,
+} from '../../drizzle/schema';
 import { normalizeGradeLevel } from '../../common/utils/grade-level.util';
-import { toCalendarSlot, timeToMinutes } from '../../common/utils/schedule.util';
+import {
+  toCalendarSlot,
+  timeToMinutes,
+} from '../../common/utils/schedule.util';
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { ScheduleSlotDto } from './DTO/schedule-slot.dto';
@@ -29,7 +55,7 @@ export class ClassesService {
     subjectId?: string;
     subjectCode?: string;
     subjectName?: string;
-    subjectGradeLevel?: '7'|'8'|'9'|'10';
+    subjectGradeLevel?: '7' | '8' | '9' | '10';
     sectionId?: string;
     teacherId?: string;
     schoolYear?: string;
@@ -49,7 +75,9 @@ export class ClassesService {
       whereConditions.push(eq(classes.subjectCode, filters.subjectCode));
     }
     if (filters?.subjectName) {
-      whereConditions.push(ilike(classes.subjectName, `%${filters.subjectName}%`));
+      whereConditions.push(
+        ilike(classes.subjectName, `%${filters.subjectName}%`),
+      );
     }
 
     if (filters?.sectionId) {
@@ -80,7 +108,8 @@ export class ClassesService {
       }
     }
 
-    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    const whereClause =
+      whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
     const [totalRow] = await this.db
       .select({ total: count() })
@@ -110,7 +139,7 @@ export class ClassesService {
     });
 
     return {
-      data: classList.map(c => ({
+      data: classList.map((c) => ({
         ...c,
         schedules: (c.schedules ?? []).map(toCalendarSlot),
       })),
@@ -182,8 +211,12 @@ export class ClassesService {
       );
     }
 
-    const teacherRoleNames = (teacher as any).userRoles?.map((ur: any) => ur.role?.name) ?? [];
-    if (!teacherRoleNames.includes('teacher') && !teacherRoleNames.includes('admin')) {
+    const teacherRoleNames =
+      (teacher as any).userRoles?.map((ur: any) => ur.role?.name) ?? [];
+    if (
+      !teacherRoleNames.includes('teacher') &&
+      !teacherRoleNames.includes('admin')
+    ) {
       throw new BadRequestException(
         `The specified user does not have a teacher role`,
       );
@@ -231,7 +264,7 @@ export class ClassesService {
       });
 
       await this.db.insert(classSchedules).values(
-        createClassDto.schedules.map(slot => ({
+        createClassDto.schedules.map((slot) => ({
           classId: newClass.id,
           days: slot.days,
           startTime: slot.startTime,
@@ -288,7 +321,9 @@ export class ClassesService {
     };
 
     if (updatePayload.subjectGradeLevel) {
-      updatePayload.subjectGradeLevel = normalizeGradeLevel(String(updatePayload.subjectGradeLevel));
+      updatePayload.subjectGradeLevel = normalizeGradeLevel(
+        String(updatePayload.subjectGradeLevel),
+      );
     }
 
     // Ensure subjectCode is always stored uppercase (mirrors create() behaviour)
@@ -296,10 +331,7 @@ export class ClassesService {
       updatePayload.subjectCode = updatePayload.subjectCode.toUpperCase();
     }
 
-    await this.db
-      .update(classes)
-      .set(updatePayload)
-      .where(eq(classes.id, id));
+    await this.db.update(classes).set(updatePayload).where(eq(classes.id, id));
 
     // Full-replacement of schedule slots when provided (even empty array clears all)
     if (schedules !== undefined) {
@@ -319,11 +351,13 @@ export class ClassesService {
       }
 
       // Delete current slots then re-insert
-      await this.db.delete(classSchedules).where(eq(classSchedules.classId, id));
+      await this.db
+        .delete(classSchedules)
+        .where(eq(classSchedules.classId, id));
 
       if (schedules.length > 0) {
         await this.db.insert(classSchedules).values(
-          schedules.map(slot => ({
+          schedules.map((slot) => ({
             classId: id,
             days: slot.days,
             startTime: slot.startTime,
@@ -345,7 +379,10 @@ export class ClassesService {
     const classRecord = await this.findById(id);
 
     const activeEnrollments = await this.db.query.enrollments.findMany({
-      where: and(eq(enrollments.classId, id), eq(enrollments.status, 'enrolled')),
+      where: and(
+        eq(enrollments.classId, id),
+        eq(enrollments.status, 'enrolled'),
+      ),
       columns: { id: true },
     });
     if (activeEnrollments.length > 0) {
@@ -411,7 +448,7 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList.map(c => ({
+    return classList.map((c) => ({
       ...c,
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
@@ -437,7 +474,7 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList.map(c => ({
+    return classList.map((c) => ({
       ...c,
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
@@ -481,7 +518,9 @@ export class ClassesService {
       requesterRoles.includes('student') &&
       requesterId !== studentId
     ) {
-      throw new ForbiddenException('You can only view your own enrolled classes');
+      throw new ForbiddenException(
+        'You can only view your own enrolled classes',
+      );
     }
 
     // First, get all enrollments for this student
@@ -495,7 +534,13 @@ export class ClassesService {
     }
 
     // Extract unique class IDs
-    const classIds = [...new Set(studentEnrollments.map(e => e.classId).filter((id): id is string => Boolean(id)))];
+    const classIds = [
+      ...new Set(
+        studentEnrollments
+          .map((e) => e.classId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
 
     // Fetch all classes with those IDs, including enrollments and student count
     const classList = await this.db.query.classes.findMany({
@@ -521,7 +566,7 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList.map(c => ({
+    return classList.map((c) => ({
       ...c,
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
@@ -596,7 +641,7 @@ export class ClassesService {
       ),
       columns: { studentId: true },
     });
-    const enrolledStudentIds = classEnrollments.map(e => e.studentId);
+    const enrolledStudentIds = classEnrollments.map((e) => e.studentId);
 
     // Single query: section students with classId=NULL not yet in this class
     const candidateWhere =
@@ -652,7 +697,9 @@ export class ClassesService {
         ),
       });
       if (existingEnrollment) {
-        throw new ConflictException(`Student is already enrolled in this class`);
+        throw new ConflictException(
+          `Student is already enrolled in this class`,
+        );
       }
 
       const sectionEnrollment = await tx.query.enrollments.findFirst({
@@ -729,7 +776,9 @@ export class ClassesService {
 
     if (existingSectionRow) {
       // Additional class-enrollment row — safe to delete
-      await this.db.delete(enrollments).where(eq(enrollments.id, enrollment.id));
+      await this.db
+        .delete(enrollments)
+        .where(eq(enrollments.id, enrollment.id));
     } else {
       // Promoted section row — revert to section-only instead of deleting
       await this.db
@@ -765,13 +814,21 @@ export class ClassesService {
       // Validate end > start
       if (timeToMinutes(slot.endTime) <= timeToMinutes(slot.startTime)) {
         throw new BadRequestException(
-          `endTime "${slot.endTime}" must be after startTime "${slot.startTime}" for days ${slot.days.join(',')}`
+          `endTime "${slot.endTime}" must be after startTime "${slot.startTime}" for days ${slot.days.join(',')}`,
         );
       }
 
+      // Build a proper ARRAY[...]::text[] expression for the days overlap check.
+      // Drizzle cannot cast a bound parameter with ::text[], so we construct
+      // the array literal explicitly using sql.join.
+      const daysArray = sql`ARRAY[${sql.join(
+        slot.days.map((d) => sql`${d}`),
+        sql`, `,
+      )}]::text[]`;
+
       const conditions: SQL[] = [
         // Day overlap: stored days array has at least one day in common with incoming days
-        sql`${classSchedules.days} && ${slot.days}::text[]`,
+        sql`${classSchedules.days} && ${daysArray}`,
         // Time overlap: existing.start < new.end AND existing.end > new.start
         sql`${classSchedules.startTime} < ${slot.endTime}`,
         sql`${classSchedules.endTime} > ${slot.startTime}`,
@@ -787,10 +844,7 @@ export class ClassesService {
       ];
       if (room) {
         scopeParts.push(
-          and(
-            sql`${classes.room} IS NOT NULL`,
-            eq(classes.room, room),
-          ) as SQL
+          and(sql`${classes.room} IS NOT NULL`, eq(classes.room, room)) as SQL,
         );
       }
 

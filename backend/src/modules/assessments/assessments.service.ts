@@ -140,7 +140,9 @@ export class AssessmentsService {
         description: createAssessmentDto.description,
         classId: createAssessmentDto.classId,
         type: createAssessmentDto.type,
-        dueDate: createAssessmentDto.dueDate ? new Date(createAssessmentDto.dueDate) : undefined,
+        dueDate: createAssessmentDto.dueDate
+          ? new Date(createAssessmentDto.dueDate)
+          : undefined,
         totalPoints: 0,
         passingScore: createAssessmentDto.passingScore,
         maxAttempts: createAssessmentDto.maxAttempts ?? 1,
@@ -172,7 +174,10 @@ export class AssessmentsService {
     if (!assessment.questions || assessment.questions.length === 0) {
       errors.push('At least one question is required');
     }
-    if (assessment.passingScore === null || assessment.passingScore === undefined) {
+    if (
+      assessment.passingScore === null ||
+      assessment.passingScore === undefined
+    ) {
       errors.push('Passing score is required');
     }
 
@@ -192,11 +197,15 @@ export class AssessmentsService {
         }
         if (optionTypes.includes(q.type as QuestionType)) {
           if (!q.options || q.options.length < 2) {
-            errors.push(`Question ${i + 1}: Choice questions need at least 2 options`);
+            errors.push(
+              `Question ${i + 1}: Choice questions need at least 2 options`,
+            );
           } else {
             const hasCorrect = q.options.some((o) => o.isCorrect);
             if (!hasCorrect) {
-              errors.push(`Question ${i + 1}: At least one option must be marked correct`);
+              errors.push(
+                `Question ${i + 1}: At least one option must be marked correct`,
+              );
             }
           }
         }
@@ -216,7 +225,9 @@ export class AssessmentsService {
    */
   private async recalculateTotalPoints(assessmentId: string) {
     const result = await this.db
-      .select({ total: sql<number>`COALESCE(SUM(${assessmentQuestions.points}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${assessmentQuestions.points}), 0)`,
+      })
       .from(assessmentQuestions)
       .where(eq(assessmentQuestions.assessmentId, assessmentId));
 
@@ -247,18 +258,32 @@ export class AssessmentsService {
 
     // Build update object with only provided fields
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (updateAssessmentDto.title !== undefined) updateData.title = updateAssessmentDto.title;
-    if (updateAssessmentDto.description !== undefined) updateData.description = updateAssessmentDto.description;
-    if (updateAssessmentDto.type !== undefined) updateData.type = updateAssessmentDto.type;
-    if (updateAssessmentDto.dueDate !== undefined) updateData.dueDate = updateAssessmentDto.dueDate ? new Date(updateAssessmentDto.dueDate) : null;
-    if (updateAssessmentDto.passingScore !== undefined) updateData.passingScore = updateAssessmentDto.passingScore;
-    if (updateAssessmentDto.maxAttempts !== undefined) updateData.maxAttempts = updateAssessmentDto.maxAttempts;
-    if (updateAssessmentDto.timeLimitMinutes !== undefined) updateData.timeLimitMinutes = updateAssessmentDto.timeLimitMinutes;
-    if (updateAssessmentDto.isPublished !== undefined) updateData.isPublished = updateAssessmentDto.isPublished;
-    if (updateAssessmentDto.feedbackLevel !== undefined) updateData.feedbackLevel = updateAssessmentDto.feedbackLevel;
-    if (updateAssessmentDto.feedbackDelayHours !== undefined) updateData.feedbackDelayHours = updateAssessmentDto.feedbackDelayHours;
-    if (updateAssessmentDto.classRecordCategory !== undefined) updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
-    if (updateAssessmentDto.quarter !== undefined) updateData.quarter = updateAssessmentDto.quarter;
+    if (updateAssessmentDto.title !== undefined)
+      updateData.title = updateAssessmentDto.title;
+    if (updateAssessmentDto.description !== undefined)
+      updateData.description = updateAssessmentDto.description;
+    if (updateAssessmentDto.type !== undefined)
+      updateData.type = updateAssessmentDto.type;
+    if (updateAssessmentDto.dueDate !== undefined)
+      updateData.dueDate = updateAssessmentDto.dueDate
+        ? new Date(updateAssessmentDto.dueDate)
+        : null;
+    if (updateAssessmentDto.passingScore !== undefined)
+      updateData.passingScore = updateAssessmentDto.passingScore;
+    if (updateAssessmentDto.maxAttempts !== undefined)
+      updateData.maxAttempts = updateAssessmentDto.maxAttempts;
+    if (updateAssessmentDto.timeLimitMinutes !== undefined)
+      updateData.timeLimitMinutes = updateAssessmentDto.timeLimitMinutes;
+    if (updateAssessmentDto.isPublished !== undefined)
+      updateData.isPublished = updateAssessmentDto.isPublished;
+    if (updateAssessmentDto.feedbackLevel !== undefined)
+      updateData.feedbackLevel = updateAssessmentDto.feedbackLevel;
+    if (updateAssessmentDto.feedbackDelayHours !== undefined)
+      updateData.feedbackDelayHours = updateAssessmentDto.feedbackDelayHours;
+    if (updateAssessmentDto.classRecordCategory !== undefined)
+      updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
+    if (updateAssessmentDto.quarter !== undefined)
+      updateData.quarter = updateAssessmentDto.quarter;
 
     const [updated] = await this.db
       .update(assessments)
@@ -302,10 +327,7 @@ export class AssessmentsService {
       .returning();
 
     // Add options if provided
-    if (
-      createQuestionDto.options &&
-      createQuestionDto.options.length > 0
-    ) {
+    if (createQuestionDto.options && createQuestionDto.options.length > 0) {
       await this.db.insert(assessmentQuestionOptions).values(
         createQuestionDto.options.map((opt) => ({
           questionId: newQuestion.id,
@@ -336,9 +358,7 @@ export class AssessmentsService {
     });
 
     if (!question) {
-      throw new NotFoundException(
-        `Question with ID "${questionId}" not found`,
-      );
+      throw new NotFoundException(`Question with ID "${questionId}" not found`);
     }
 
     return question;
@@ -363,12 +383,18 @@ export class AssessmentsService {
       updateQuestionDto.imageUrl !== undefined
     ) {
       const setData: Record<string, any> = { updatedAt: new Date() };
-      if (updateQuestionDto.content !== undefined) setData.content = updateQuestionDto.content;
-      if (updateQuestionDto.points !== undefined) setData.points = updateQuestionDto.points;
-      if (updateQuestionDto.order !== undefined) setData.order = updateQuestionDto.order;
-      if (updateQuestionDto.isRequired !== undefined) setData.isRequired = updateQuestionDto.isRequired;
-      if (updateQuestionDto.explanation !== undefined) setData.explanation = updateQuestionDto.explanation;
-      if (updateQuestionDto.imageUrl !== undefined) setData.imageUrl = updateQuestionDto.imageUrl;
+      if (updateQuestionDto.content !== undefined)
+        setData.content = updateQuestionDto.content;
+      if (updateQuestionDto.points !== undefined)
+        setData.points = updateQuestionDto.points;
+      if (updateQuestionDto.order !== undefined)
+        setData.order = updateQuestionDto.order;
+      if (updateQuestionDto.isRequired !== undefined)
+        setData.isRequired = updateQuestionDto.isRequired;
+      if (updateQuestionDto.explanation !== undefined)
+        setData.explanation = updateQuestionDto.explanation;
+      if (updateQuestionDto.imageUrl !== undefined)
+        setData.imageUrl = updateQuestionDto.imageUrl;
 
       await this.db
         .update(assessmentQuestions)
@@ -451,13 +477,14 @@ export class AssessmentsService {
     }
 
     // Check for existing unsubmitted attempt (resume)
-    const existingUnsubmitted = await this.db.query.assessmentAttempts.findFirst({
-      where: and(
-        eq(assessmentAttempts.studentId, studentId),
-        eq(assessmentAttempts.assessmentId, assessmentId),
-        eq(assessmentAttempts.isSubmitted, false),
-      ),
-    });
+    const existingUnsubmitted =
+      await this.db.query.assessmentAttempts.findFirst({
+        where: and(
+          eq(assessmentAttempts.studentId, studentId),
+          eq(assessmentAttempts.assessmentId, assessmentId),
+          eq(assessmentAttempts.isSubmitted, false),
+        ),
+      });
 
     if (existingUnsubmitted) {
       // Check if time limit exceeded for existing attempt
@@ -477,7 +504,10 @@ export class AssessmentsService {
             .where(eq(assessmentAttempts.id, existingUnsubmitted.id));
           // Fall through to create a new attempt
         } else {
-          return { attempt: existingUnsubmitted, timeLimitMinutes: assessment.timeLimitMinutes };
+          return {
+            attempt: existingUnsubmitted,
+            timeLimitMinutes: assessment.timeLimitMinutes,
+          };
         }
       } else {
         return { attempt: existingUnsubmitted, timeLimitMinutes: null };
@@ -512,7 +542,10 @@ export class AssessmentsService {
       })
       .returning();
 
-    return { attempt: newAttempt, timeLimitMinutes: assessment.timeLimitMinutes ?? null };
+    return {
+      attempt: newAttempt,
+      timeLimitMinutes: assessment.timeLimitMinutes ?? null,
+    };
   }
 
   /**
@@ -572,9 +605,7 @@ export class AssessmentsService {
 
     // Calculate score as percentage using actual totalPoints from questions
     const assessmentTotal = assessment.totalPoints || 1;
-    const score = Math.round(
-      (totalPoints / assessmentTotal) * 100,
-    );
+    const score = Math.round((totalPoints / assessmentTotal) * 100);
     const passed = score >= (assessment.passingScore || 60);
 
     // Update attempt with final score
@@ -658,7 +689,8 @@ export class AssessmentsService {
         feedbackStatus: {
           level: 'awaiting_return',
           unlocked: false,
-          message: 'Your teacher hasn\'t returned your grade yet. Please wait for your teacher to review and return your work.',
+          message:
+            "Your teacher hasn't returned your grade yet. Please wait for your teacher to review and return your work.",
         },
         assessment: {
           id: attempt.assessment.id,
@@ -723,7 +755,10 @@ export class AssessmentsService {
           selectedOptionId = response.selectedOptionId;
         }
       } else if (question.type === QuestionType.MULTIPLE_SELECT) {
-        if (response.selectedOptionIds && response.selectedOptionIds.length > 0) {
+        if (
+          response.selectedOptionIds &&
+          response.selectedOptionIds.length > 0
+        ) {
           selectedOptionIds = response.selectedOptionIds;
           const correctOptions = question.options.filter((o) => o.isCorrect);
           const selectedCorrectly =
@@ -875,12 +910,18 @@ export class AssessmentsService {
       .filter((t): t is number => t != null && t > 0);
     const averageTimeSeconds =
       timesWithValues.length > 0
-        ? Math.round(timesWithValues.reduce((a, b) => a + b, 0) / timesWithValues.length)
+        ? Math.round(
+            timesWithValues.reduce((a, b) => a + b, 0) / timesWithValues.length,
+          )
         : 0;
 
     // Unique students who submitted
-    const uniqueSubmitters = new Set(submittedAttempts.map((a) => a.studentId)).size;
-    const completionRate = totalEnrolled > 0 ? Math.round((uniqueSubmitters / totalEnrolled) * 100) : 0;
+    const uniqueSubmitters = new Set(submittedAttempts.map((a) => a.studentId))
+      .size;
+    const completionRate =
+      totalEnrolled > 0
+        ? Math.round((uniqueSubmitters / totalEnrolled) * 100)
+        : 0;
 
     return {
       totalAttempts: attempts.length,
@@ -939,7 +980,8 @@ export class AssessmentsService {
       );
 
       // Determine status
-      let status: 'not_started' | 'in_progress' | 'turned_in' | 'returned' = 'not_started';
+      let status: 'not_started' | 'in_progress' | 'turned_in' | 'returned' =
+        'not_started';
       let latestAttempt: (typeof attempts)[number] | null = null;
 
       if (studentAttempts.length > 0) {
@@ -993,8 +1035,10 @@ export class AssessmentsService {
       submissions,
       summary: {
         total: submissions.length,
-        notStarted: submissions.filter((s) => s.status === 'not_started').length,
-        inProgress: submissions.filter((s) => s.status === 'in_progress').length,
+        notStarted: submissions.filter((s) => s.status === 'not_started')
+          .length,
+        inProgress: submissions.filter((s) => s.status === 'in_progress')
+          .length,
         turnedIn: submissions.filter((s) => s.status === 'turned_in').length,
         returned: submissions.filter((s) => s.status === 'returned').length,
       },
@@ -1014,11 +1058,15 @@ export class AssessmentsService {
     }
 
     if (!attempt.isSubmitted) {
-      throw new BadRequestException('Cannot return grade for an unsubmitted attempt');
+      throw new BadRequestException(
+        'Cannot return grade for an unsubmitted attempt',
+      );
     }
 
     if (attempt.isReturned) {
-      throw new BadRequestException('Grade has already been returned for this attempt');
+      throw new BadRequestException(
+        'Grade has already been returned for this attempt',
+      );
     }
 
     const [updated] = await this.db
@@ -1067,12 +1115,13 @@ export class AssessmentsService {
     const assessment = await this.getAssessmentById(assessmentId);
 
     // Get all submitted attempts
-    const submittedAttemptsList = await this.db.query.assessmentAttempts.findMany({
-      where: and(
-        eq(assessmentAttempts.assessmentId, assessmentId),
-        eq(assessmentAttempts.isSubmitted, true),
-      ),
-    });
+    const submittedAttemptsList =
+      await this.db.query.assessmentAttempts.findMany({
+        where: and(
+          eq(assessmentAttempts.assessmentId, assessmentId),
+          eq(assessmentAttempts.isSubmitted, true),
+        ),
+      });
 
     const attemptIds = submittedAttemptsList.map((a) => a.id);
 
@@ -1109,13 +1158,20 @@ export class AssessmentsService {
     const questionAnalytics = (assessment.questions || []).map((q) => {
       const qResponses = allResponses.filter((r) => r.questionId === q.id);
       const totalResponses = qResponses.length;
-      const correctCount = qResponses.filter((r) => r.isCorrect === true).length;
-      const totalPointsEarned = qResponses.reduce((sum, r) => sum + (r.pointsEarned || 0), 0);
+      const correctCount = qResponses.filter(
+        (r) => r.isCorrect === true,
+      ).length;
+      const totalPointsEarned = qResponses.reduce(
+        (sum, r) => sum + (r.pointsEarned || 0),
+        0,
+      );
 
       // Per-option stats
       const optionStats = (q.options || []).map((o) => {
         // Count single-select
-        const singleSelections = qResponses.filter((r) => r.selectedOptionId === o.id).length;
+        const singleSelections = qResponses.filter(
+          (r) => r.selectedOptionId === o.id,
+        ).length;
         // Count multi-select
         const multiSelections = qResponses.filter(
           (r) => r.selectedOptionIds && r.selectedOptionIds.includes(o.id),
@@ -1126,7 +1182,10 @@ export class AssessmentsService {
           text: o.text,
           isCorrect: o.isCorrect,
           selectionCount,
-          selectionPercent: totalResponses > 0 ? Math.round((selectionCount / totalResponses) * 100) : 0,
+          selectionPercent:
+            totalResponses > 0
+              ? Math.round((selectionCount / totalResponses) * 100)
+              : 0,
         };
       });
 
@@ -1142,8 +1201,14 @@ export class AssessmentsService {
         points: q.points,
         totalResponses,
         correctCount,
-        correctPercent: totalResponses > 0 ? Math.round((correctCount / totalResponses) * 100) : 0,
-        averagePoints: totalResponses > 0 ? Math.round((totalPointsEarned / totalResponses) * 100) / 100 : 0,
+        correctPercent:
+          totalResponses > 0
+            ? Math.round((correctCount / totalResponses) * 100)
+            : 0,
+        averagePoints:
+          totalResponses > 0
+            ? Math.round((totalPointsEarned / totalResponses) * 100) / 100
+            : 0,
         options: optionStats,
         textAnswers,
       };

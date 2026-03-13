@@ -90,7 +90,11 @@ export class AuthController {
     const userAgent = request.headers['user-agent'];
     const result = await this.authService.login(loginDto, ip, userAgent);
 
-    response.cookie('refreshToken', result.refreshToken, this.refreshCookieOptions());
+    response.cookie(
+      'refreshToken',
+      result.refreshToken,
+      this.refreshCookieOptions(),
+    );
 
     return {
       success: true,
@@ -125,10 +129,18 @@ export class AuthController {
 
     const ip = request.ip;
     const userAgent = request.headers['user-agent'];
-    const result = await this.authService.refreshToken(refreshToken, ip, userAgent);
+    const result = await this.authService.refreshToken(
+      refreshToken,
+      ip,
+      userAgent,
+    );
 
     // Rotation: replace cookie with newly issued opaque token
-    response.cookie('refreshToken', result.refreshToken, this.refreshCookieOptions());
+    response.cookie(
+      'refreshToken',
+      result.refreshToken,
+      this.refreshCookieOptions(),
+    );
 
     return {
       success: true,
@@ -172,7 +184,9 @@ export class AuthController {
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   @SkipThrottle()
-  @ApiOperation({ summary: 'Revoke all refresh tokens for the current user (all devices)' })
+  @ApiOperation({
+    summary: 'Revoke all refresh tokens for the current user (all devices)',
+  })
   @ApiResponse({ status: 200, description: 'All sessions revoked' })
   async logoutAll(
     @CurrentUser() user: any,
@@ -207,7 +221,8 @@ export class AuthController {
     await this.authService.requestPasswordReset(dto.email);
     return {
       success: true,
-      message: 'If an account with that email exists, a reset code has been sent.',
+      message:
+        'If an account with that email exists, a reset code has been sent.',
     };
   }
 
@@ -299,7 +314,11 @@ export class AuthController {
   @ApiBody({ type: SetInitialPasswordDto })
   @ApiResponse({ status: 200, description: 'Password set successfully' })
   async setInitialPassword(@Body() dto: SetInitialPasswordDto) {
-    await this.authService.setInitialPassword(dto.email, dto.code, dto.newPassword);
+    await this.authService.setInitialPassword(
+      dto.email,
+      dto.code,
+      dto.newPassword,
+    );
 
     return {
       success: true,
@@ -342,13 +361,13 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Profile updated' })
   async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
     if (!user || !user.userId) {
-      this.logger.warn('[AUTH] updateProfile called without authenticated user');
+      this.logger.warn(
+        '[AUTH] updateProfile called without authenticated user',
+      );
       throw new UnauthorizedException('Not authenticated');
     }
 
-    this.logger.debug(
-      `[AUTH] PATCH /auth/profile for user ${user.userId}`,
-    );
+    this.logger.debug(`[AUTH] PATCH /auth/profile for user ${user.userId}`);
 
     try {
       const updated = await this.authService.updateProfile(user.userId, dto);

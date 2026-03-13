@@ -19,7 +19,10 @@ export class MailService {
       });
       // Verify SMTP connectivity at startup so misconfigurations surface early
       this.transporter.verify().catch((err) => {
-        this.logger.error('[MAIL] SMTP transporter verification failed', err.message);
+        this.logger.error(
+          '[MAIL] SMTP transporter verification failed',
+          err.message,
+        );
       });
     }
   }
@@ -64,7 +67,9 @@ export class MailService {
     password: string,
   ): Promise<{ success: boolean; mode: 'development' | 'production' }> {
     if (!this.transporter) {
-      this.logger.debug(`[DEV MODE] Password email skipped for ${email} (no transporter)`);
+      this.logger.debug(
+        `[DEV MODE] Password email skipped for ${email} (no transporter)`,
+      );
       return { success: true, mode: 'development' };
     }
 
@@ -78,12 +83,18 @@ export class MailService {
       });
       return { success: true, mode: 'production' };
     } catch (error) {
-      this.logger.error(`Failed to send password email to ${email}`, error.stack);
+      this.logger.error(
+        `Failed to send password email to ${email}`,
+        error.stack,
+      );
       throw new Error('Email delivery failed');
     }
   }
 
-  private getOtpTemplate(otp: string, purpose: 'email_verification' | 'password_reset') {
+  private getOtpTemplate(
+    otp: string,
+    purpose: 'email_verification' | 'password_reset',
+  ) {
     const isVerification = purpose === 'email_verification';
     const color = isVerification ? '#4CAF50' : '#2196F3';
     const title = isVerification

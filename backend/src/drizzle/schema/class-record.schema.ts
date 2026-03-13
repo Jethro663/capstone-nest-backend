@@ -78,11 +78,16 @@ export const classRecordCategories = pgTable(
       .notNull()
       .references(() => classRecords.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    weightPercentage: numeric('weight_percentage', { precision: 5, scale: 2 }).notNull(),
+    weightPercentage: numeric('weight_percentage', {
+      precision: 5,
+      scale: 2,
+    }).notNull(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
-    classRecordIdx: index('class_record_categories_class_record_idx').on(table.classRecordId),
+    classRecordIdx: index('class_record_categories_class_record_idx').on(
+      table.classRecordId,
+    ),
     classRecordNameUnique: unique('class_record_categories_name_unique').on(
       table.classRecordId,
       table.name,
@@ -116,9 +121,13 @@ export const classRecordItems = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
-    classRecordIdx: index('class_record_items_class_record_idx').on(table.classRecordId),
+    classRecordIdx: index('class_record_items_class_record_idx').on(
+      table.classRecordId,
+    ),
     categoryIdx: index('class_record_items_category_idx').on(table.categoryId),
-    assessmentIdx: index('class_record_items_assessment_idx').on(table.assessmentId),
+    assessmentIdx: index('class_record_items_assessment_idx').on(
+      table.assessmentId,
+    ),
     orderIdx: index('class_record_items_order_idx').on(table.itemOrder),
   }),
 );
@@ -168,18 +177,26 @@ export const classRecordFinalGrades = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    finalPercentage: numeric('final_percentage', { precision: 6, scale: 3 }).notNull(),
+    finalPercentage: numeric('final_percentage', {
+      precision: 6,
+      scale: 3,
+    }).notNull(),
     remarks: classRecordRemarksEnum('remarks').notNull(),
     computedAt: timestamp('computed_at').notNull().defaultNow(),
   },
   (table) => ({
-    classRecordStudentUnique: unique('class_record_final_grades_record_student_unique').on(
+    classRecordStudentUnique: unique(
+      'class_record_final_grades_record_student_unique',
+    ).on(table.classRecordId, table.studentId),
+    classRecordIdx: index('class_record_final_grades_record_idx').on(
       table.classRecordId,
+    ),
+    studentIdx: index('class_record_final_grades_student_idx').on(
       table.studentId,
     ),
-    classRecordIdx: index('class_record_final_grades_record_idx').on(table.classRecordId),
-    studentIdx: index('class_record_final_grades_student_idx').on(table.studentId),
-    remarksIdx: index('class_record_final_grades_remarks_idx').on(table.remarks),
+    remarksIdx: index('class_record_final_grades_remarks_idx').on(
+      table.remarks,
+    ),
   }),
 );
 
@@ -187,19 +204,22 @@ export const classRecordFinalGrades = pgTable(
 // RELATIONS
 // ==========================================
 
-export const classRecordsRelations = relations(classRecords, ({ one, many }) => ({
-  class: one(classes, {
-    fields: [classRecords.classId],
-    references: [classes.id],
+export const classRecordsRelations = relations(
+  classRecords,
+  ({ one, many }) => ({
+    class: one(classes, {
+      fields: [classRecords.classId],
+      references: [classes.id],
+    }),
+    teacher: one(users, {
+      fields: [classRecords.teacherId],
+      references: [users.id],
+    }),
+    categories: many(classRecordCategories),
+    items: many(classRecordItems),
+    finalGrades: many(classRecordFinalGrades),
   }),
-  teacher: one(users, {
-    fields: [classRecords.teacherId],
-    references: [users.id],
-  }),
-  categories: many(classRecordCategories),
-  items: many(classRecordItems),
-  finalGrades: many(classRecordFinalGrades),
-}));
+);
 
 export const classRecordCategoriesRelations = relations(
   classRecordCategories,
@@ -231,16 +251,19 @@ export const classRecordItemsRelations = relations(
   }),
 );
 
-export const classRecordScoresRelations = relations(classRecordScores, ({ one }) => ({
-  item: one(classRecordItems, {
-    fields: [classRecordScores.classRecordItemId],
-    references: [classRecordItems.id],
+export const classRecordScoresRelations = relations(
+  classRecordScores,
+  ({ one }) => ({
+    item: one(classRecordItems, {
+      fields: [classRecordScores.classRecordItemId],
+      references: [classRecordItems.id],
+    }),
+    student: one(users, {
+      fields: [classRecordScores.studentId],
+      references: [users.id],
+    }),
   }),
-  student: one(users, {
-    fields: [classRecordScores.studentId],
-    references: [users.id],
-  }),
-}));
+);
 
 export const classRecordFinalGradesRelations = relations(
   classRecordFinalGrades,

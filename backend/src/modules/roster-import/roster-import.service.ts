@@ -6,12 +6,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import {
-  and,
-  countDistinct,
-  eq,
-  inArray,
-} from 'drizzle-orm';
+import { and, countDistinct, eq, inArray } from 'drizzle-orm';
 
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -83,7 +78,9 @@ export class RosterImportService {
 
     if (!section.isActive) {
       await this.cleanupFile(file.path);
-      throw new BadRequestException(`Section "${section.name}" is inactive and cannot receive new enrollments`);
+      throw new BadRequestException(
+        `Section "${section.name}" is inactive and cannot receive new enrollments`,
+      );
     }
 
     // ── 2. Access control: teachers can only import into their own sections ─
@@ -93,7 +90,9 @@ export class RosterImportService {
 
     if (isTeacherOnly && section.adviserId !== requestingUser.id) {
       await this.cleanupFile(file.path);
-      throw new ForbiddenException('You can only import rosters into sections you advise');
+      throw new ForbiddenException(
+        'You can only import rosters into sections you advise',
+      );
     }
 
     // ── 3. Parse the file ──────────────────────────────────────────────────
@@ -115,7 +114,9 @@ export class RosterImportService {
     }
 
     if (rows.length === 0) {
-      throw new BadRequestException('The uploaded file is empty or contains no readable rows');
+      throw new BadRequestException(
+        'The uploaded file is empty or contains no readable rows',
+      );
     }
 
     // ── 4. Find section-header row ─────────────────────────────────────────
@@ -123,23 +124,24 @@ export class RosterImportService {
     if (!headerInfo) {
       throw new BadRequestException(
         'Could not find a section-header row in the file. ' +
-        'Expected a row like "GRADE_7 HUMSS-A" or "GRADE 10 Science 1".',
+          'Expected a row like "GRADE_7 HUMSS-A" or "GRADE 10 Science 1".',
       );
     }
 
     // ── 5. Validate section header matches route param ─────────────────────
-    const fileGradeLevel = headerInfo.gradeLevel;        // e.g. "7"
-    const fileSectionName = headerInfo.sectionName;      // e.g. "HUMSS-A"
+    const fileGradeLevel = headerInfo.gradeLevel; // e.g. "7"
+    const fileSectionName = headerInfo.sectionName; // e.g. "HUMSS-A"
 
     const gradeMatch = fileGradeLevel === String(section.gradeLevel);
     const nameMatch =
-      fileSectionName.trim().toLowerCase() === section.name.trim().toLowerCase();
+      fileSectionName.trim().toLowerCase() ===
+      section.name.trim().toLowerCase();
 
     if (!gradeMatch || !nameMatch) {
       throw new BadRequestException(
         `File header "${headerInfo.rawHeader}" does not match the target section ` +
-        `(Grade ${section.gradeLevel} – ${section.name}). ` +
-        `Please verify you are uploading the correct file.`,
+          `(Grade ${section.gradeLevel} – ${section.name}). ` +
+          `Please verify you are uploading the correct file.`,
       );
     }
 
@@ -173,7 +175,7 @@ export class RosterImportService {
       const issues: string[] = [];
 
       const nameRaw = (row[colHeader.nameCol] ?? '').trim();
-      const lrnRaw  = (row[colHeader.lrnCol]  ?? '').trim();
+      const lrnRaw = (row[colHeader.lrnCol] ?? '').trim();
       const emailRaw = (row[colHeader.emailCol] ?? '').trim();
 
       // Skip completely empty rows
@@ -264,7 +266,9 @@ export class RosterImportService {
       }
     }
 
-    const alreadyEnrolledCount = registeredRows.filter((r) => r.alreadyEnrolled).length;
+    const alreadyEnrolledCount = registeredRows.filter(
+      (r) => r.alreadyEnrolled,
+    ).length;
 
     return {
       sectionMatch: {
@@ -306,7 +310,8 @@ export class RosterImportService {
       where: eq(sections.id, sectionId),
     });
 
-    if (!section) throw new NotFoundException(`Section with ID "${sectionId}" not found`);
+    if (!section)
+      throw new NotFoundException(`Section with ID "${sectionId}" not found`);
     if (!section.isActive) {
       throw new BadRequestException(`Section "${section.name}" is inactive`);
     }
@@ -316,7 +321,9 @@ export class RosterImportService {
       !requestingUser.roles.includes('admin');
 
     if (isTeacherOnly && section.adviserId !== requestingUser.id) {
-      throw new ForbiddenException('You can only commit rosters into sections you advise');
+      throw new ForbiddenException(
+        'You can only commit rosters into sections you advise',
+      );
     }
 
     // ── 2. Validate dto.sectionId matches route param ──────────────────────
@@ -360,7 +367,9 @@ export class RosterImportService {
             ),
           );
 
-        const alreadyEnrolledSet = new Set(alreadyEnrolled.map((e) => e.studentId));
+        const alreadyEnrolledSet = new Set(
+          alreadyEnrolled.map((e) => e.studentId),
+        );
         const newIds = toEnrollIds.filter((id) => !alreadyEnrolledSet.has(id));
         alreadyEnrolledSkipped = alreadyEnrolledSet.size;
 
@@ -368,7 +377,7 @@ export class RosterImportService {
           if (currentCount + newIds.length > section.capacity) {
             throw new BadRequestException(
               `Adding ${newIds.length} student(s) would exceed the section capacity of ${section.capacity} ` +
-              `(currently ${currentCount} enrolled)`,
+                `(currently ${currentCount} enrolled)`,
             );
           }
 
@@ -378,14 +387,15 @@ export class RosterImportService {
             .from(userRoles)
             .innerJoin(roles, eq(roles.id, userRoles.roleId))
             .where(
-              and(
-                inArray(userRoles.userId, newIds),
-                eq(roles.name, 'student'),
-              ),
+              and(inArray(userRoles.userId, newIds), eq(roles.name, 'student')),
             );
 
-          const confirmedStudentIds = new Set(studentRoleRows.map((r) => r.userId));
-          const nonStudentIds = newIds.filter((id) => !confirmedStudentIds.has(id));
+          const confirmedStudentIds = new Set(
+            studentRoleRows.map((r) => r.userId),
+          );
+          const nonStudentIds = newIds.filter(
+            (id) => !confirmedStudentIds.has(id),
+          );
           if (nonStudentIds.length > 0) {
             throw new BadRequestException(
               `The following users do not have the student role: ${nonStudentIds.join(', ')}`,
@@ -405,7 +415,7 @@ export class RosterImportService {
             )
             .returning({ studentId: enrollments.studentId });
 
-          enrolledUserIds.push(...inserted.map((r) => r.studentId!));
+          enrolledUserIds.push(...inserted.map((r) => r.studentId));
         }
       }
 
@@ -456,7 +466,8 @@ export class RosterImportService {
       where: eq(sections.id, sectionId),
     });
 
-    if (!section) throw new NotFoundException(`Section with ID "${sectionId}" not found`);
+    if (!section)
+      throw new NotFoundException(`Section with ID "${sectionId}" not found`);
 
     const isTeacherOnly =
       requestingUser.roles.includes('teacher') &&
@@ -502,7 +513,10 @@ export class RosterImportService {
       where: eq(pendingRoster.id, pendingRowId),
     });
 
-    if (!row) throw new NotFoundException(`Pending roster row "${pendingRowId}" not found`);
+    if (!row)
+      throw new NotFoundException(
+        `Pending roster row "${pendingRowId}" not found`,
+      );
 
     // Access check — load section
     const section = await this.db.query.sections.findFirst({
@@ -522,7 +536,9 @@ export class RosterImportService {
         where: eq(users.id, resolvedUserId),
       });
       if (!user) {
-        throw new BadRequestException(`User with ID "${resolvedUserId}" not found`);
+        throw new BadRequestException(
+          `User with ID "${resolvedUserId}" not found`,
+        );
       }
     }
 

@@ -13,10 +13,7 @@ const TEST_PEPPER = 'test-pepper-for-unit-tests-do-not-use-in-prod';
 
 /** Mirror of the private hashCode() logic in OtpService */
 function hashCode(code: string): string {
-  return crypto
-    .createHmac('sha256', TEST_PEPPER)
-    .update(code)
-    .digest('hex');
+  return crypto.createHmac('sha256', TEST_PEPPER).update(code).digest('hex');
 }
 
 // ---------------------------------------------------------------------------
@@ -250,9 +247,7 @@ describe('OtpService', () => {
         makeUpdateChain([makeOtpRow({ attemptCount: 1 })]),
       );
 
-      await expect(
-        service.verifyOTP(EMAIL, WRONG_CODE),
-      ).rejects.toThrow(
+      await expect(service.verifyOTP(EMAIL, WRONG_CODE)).rejects.toThrow(
         new BadRequestException('Invalid or expired verification code'),
       );
 
@@ -344,7 +339,9 @@ describe('OtpService', () => {
     it('returns silently when user does not exist (no 404 leak)', async () => {
       mockUsersService.findByEmail.mockResolvedValue(null);
 
-      await expect(service.resendOTP('nonexistent@test.com')).resolves.toBeUndefined();
+      await expect(
+        service.resendOTP('nonexistent@test.com'),
+      ).resolves.toBeUndefined();
       expect(mockDb.delete).not.toHaveBeenCalled();
       expect(mockDb.insert).not.toHaveBeenCalled();
       expect(mockMailService.sendOtpEmail).not.toHaveBeenCalled();
@@ -373,7 +370,9 @@ describe('OtpService', () => {
       );
 
       const error = await service.resendOTP(EMAIL).catch((e) => e);
-      expect(error.message).toMatch(/Please wait \d+ seconds? before requesting a new code/);
+      expect(error.message).toMatch(
+        /Please wait \d+ seconds? before requesting a new code/,
+      );
       expect(mockMailService.sendOtpEmail).not.toHaveBeenCalled();
     });
 

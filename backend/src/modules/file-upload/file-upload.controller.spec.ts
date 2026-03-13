@@ -1,7 +1,4 @@
-import {
-  NotFoundException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FileUploadController } from './file-upload.controller';
 import { FileUploadService } from './file-upload.service';
@@ -11,52 +8,63 @@ import { FileUploadService } from './file-upload.service';
 // ---------------------------------------------------------------------------
 
 const mockExistsSync = jest.fn().mockReturnValue(true);
-const mockMkdirSync  = jest.fn();
+const mockMkdirSync = jest.fn();
 
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
-  mkdirSync:  (...args: unknown[]) => mockMkdirSync(...args),
+  mkdirSync: (...args: unknown[]) => mockMkdirSync(...args),
 }));
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const FILE_ID  = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const FILE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const CLASS_ID = 'cccccccc-dddd-eeee-ffff-000000000000';
 
-const TEACHER_USER  = { id: 'teacher-1', email: 't@school.edu', roles: ['teacher'] };
-const ADMIN_USER    = { id: 'admin-1',   email: 'a@school.edu', roles: ['admin'] };
+const TEACHER_USER = {
+  id: 'teacher-1',
+  email: 't@school.edu',
+  roles: ['teacher'],
+};
+const ADMIN_USER = { id: 'admin-1', email: 'a@school.edu', roles: ['admin'] };
 
-const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.File =>
+const makeFile = (
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File =>
   ({
-    fieldname:    'file',
+    fieldname: 'file',
     originalname: 'lecture.pdf',
-    encoding:     '7bit',
-    mimetype:     'application/pdf',
-    path:         './uploads/pdfs/uuid_1700000000.pdf',
-    filename:     'uuid_1700000000.pdf',
-    size:         1_048_576,
-    destination:  './uploads/pdfs',
-    buffer:       Buffer.alloc(0),
-    stream:       null as any,
+    encoding: '7bit',
+    mimetype: 'application/pdf',
+    path: './uploads/pdfs/uuid_1700000000.pdf',
+    filename: 'uuid_1700000000.pdf',
+    size: 1_048_576,
+    destination: './uploads/pdfs',
+    buffer: Buffer.alloc(0),
+    stream: null as any,
     ...overrides,
   }) as Express.Multer.File;
 
 const makeRecord = (overrides: Partial<any> = {}) => ({
-  id:           FILE_ID,
-  teacherId:    TEACHER_USER.id,
-  classId:      CLASS_ID,
+  id: FILE_ID,
+  teacherId: TEACHER_USER.id,
+  classId: CLASS_ID,
   originalName: 'lecture.pdf',
-  storedName:   'uuid_1700000000.pdf',
-  mimeType:     'application/pdf',
-  sizeBytes:    1_048_576,
-  filePath:     './uploads/pdfs/uuid_1700000000.pdf',
-  uploadedAt:   new Date('2026-02-23T00:00:00Z'),
-  deletedAt:    null,
-  teacher: { id: TEACHER_USER.id, firstName: 'Ana', lastName: 'Cruz', email: 't@school.edu' },
-  class:   { id: CLASS_ID, subjectName: 'Math', subjectCode: 'MATH101' },
+  storedName: 'uuid_1700000000.pdf',
+  mimeType: 'application/pdf',
+  sizeBytes: 1_048_576,
+  filePath: './uploads/pdfs/uuid_1700000000.pdf',
+  uploadedAt: new Date('2026-02-23T00:00:00Z'),
+  deletedAt: null,
+  teacher: {
+    id: TEACHER_USER.id,
+    firstName: 'Ana',
+    lastName: 'Cruz',
+    email: 't@school.edu',
+  },
+  class: { id: CLASS_ID, subjectName: 'Math', subjectCode: 'MATH101' },
   ...overrides,
 });
 
@@ -65,20 +73,20 @@ const makeRecord = (overrides: Partial<any> = {}) => ({
 // ---------------------------------------------------------------------------
 
 const mockFileUploadService = {
-  saveFileRecord:  jest.fn(),
-  findAll:         jest.fn(),
-  findOne:         jest.fn(),
-  softDelete:      jest.fn(),
-  getFilePath:     jest.fn(),
+  saveFileRecord: jest.fn(),
+  findAll: jest.fn(),
+  findOne: jest.fn(),
+  softDelete: jest.fn(),
+  getFilePath: jest.fn(),
   getStorageSummary: jest.fn(),
 };
 
 // Minimal Express response mock used in download tests
 const makeMockRes = () => ({
-  status:   jest.fn().mockReturnThis() as jest.Mock,
-  json:     jest.fn().mockReturnThis() as jest.Mock,
-  setHeader: jest.fn() as jest.Mock,
-  sendFile:  jest.fn() as jest.Mock,
+  status: jest.fn().mockReturnThis(),
+  json: jest.fn().mockReturnThis(),
+  setHeader: jest.fn(),
+  sendFile: jest.fn(),
 });
 
 // ---------------------------------------------------------------------------
@@ -124,27 +132,32 @@ describe('FileUploadController', () => {
     });
 
     it('calls saveFileRecord with all mapped fields from file + body + user', async () => {
-      const file   = makeFile({ originalname: 'chapter2.pdf', size: 2_097_152 });
+      const file = makeFile({ originalname: 'chapter2.pdf', size: 2_097_152 });
       const record = makeRecord();
       mockFileUploadService.saveFileRecord.mockResolvedValue(record);
 
       await controller.uploadFile(file, { classId: CLASS_ID }, TEACHER_USER);
 
-      expect(mockFileUploadService.saveFileRecord).toHaveBeenCalledWith({
-        teacherId:    TEACHER_USER.id,
-        classId:      CLASS_ID,
-        originalName: 'chapter2.pdf',
-        storedName:   file.filename,
-        mimeType:     file.mimetype,
-        sizeBytes:    2_097_152,
-        filePath:     'uploads/pdfs/uuid_1700000000.pdf',
-        folderId:     undefined,
-        scope:        'private',
-      }, TEACHER_USER);
+      expect(mockFileUploadService.saveFileRecord).toHaveBeenCalledWith(
+        {
+          teacherId: TEACHER_USER.id,
+          classId: CLASS_ID,
+          originalName: 'chapter2.pdf',
+          storedName: file.filename,
+          mimeType: file.mimetype,
+          sizeBytes: 2_097_152,
+          filePath: 'uploads/pdfs/uuid_1700000000.pdf',
+          folderId: undefined,
+          scope: 'private',
+        },
+        TEACHER_USER,
+      );
     });
 
     it('propagates service errors (e.g. DB failure)', async () => {
-      mockFileUploadService.saveFileRecord.mockRejectedValue(new Error('DB error'));
+      mockFileUploadService.saveFileRecord.mockRejectedValue(
+        new Error('DB error'),
+      );
 
       await expect(
         controller.uploadFile(makeFile(), { classId: CLASS_ID }, TEACHER_USER),
@@ -185,7 +198,10 @@ describe('FileUploadController', () => {
 
       await controller.listFiles(ADMIN_USER, {} as any);
 
-      expect(mockFileUploadService.findAll).toHaveBeenCalledWith(ADMIN_USER, {});
+      expect(mockFileUploadService.findAll).toHaveBeenCalledWith(
+        ADMIN_USER,
+        {},
+      );
     });
   });
 
@@ -195,7 +211,12 @@ describe('FileUploadController', () => {
 
   describe('getStorageSummary', () => {
     it('returns success:true and the storage summary', async () => {
-      const summary = { totalFiles: 5, totalBytes: 10_000_000, totalMB: 9.54, totalGB: 0.0093 };
+      const summary = {
+        totalFiles: 5,
+        totalBytes: 10_000_000,
+        totalMB: 9.54,
+        totalGB: 0.0093,
+      };
       mockFileUploadService.getStorageSummary.mockResolvedValue(summary);
 
       const result = await controller.getStorageSummary();
@@ -231,7 +252,10 @@ describe('FileUploadController', () => {
 
       await controller.getFile(FILE_ID, ADMIN_USER);
 
-      expect(mockFileUploadService.findOne).toHaveBeenCalledWith(FILE_ID, ADMIN_USER);
+      expect(mockFileUploadService.findOne).toHaveBeenCalledWith(
+        FILE_ID,
+        ADMIN_USER,
+      );
     });
 
     it('propagates NotFoundException from service', async () => {
@@ -271,13 +295,18 @@ describe('FileUploadController', () => {
       const res = makeMockRes();
       await controller.downloadFile(FILE_ID, TEACHER_USER, res as any);
 
-      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/pdf',
+      );
       expect(res.sendFile).toHaveBeenCalled();
     });
 
     it('returns 404 JSON when the file does not exist on disk', async () => {
       mockExistsSync.mockReturnValue(false);
-      mockFileUploadService.getFilePath.mockResolvedValue('./uploads/pdfs/missing.pdf');
+      mockFileUploadService.getFilePath.mockResolvedValue(
+        './uploads/pdfs/missing.pdf',
+      );
 
       const res = makeMockRes();
       await controller.downloadFile(FILE_ID, TEACHER_USER, res as any);
@@ -313,7 +342,10 @@ describe('FileUploadController', () => {
 
       const result = await controller.deleteFile(FILE_ID, TEACHER_USER);
 
-      expect(result).toEqual({ success: true, message: 'File deleted successfully' });
+      expect(result).toEqual({
+        success: true,
+        message: 'File deleted successfully',
+      });
     });
 
     it('calls softDelete with id and user', async () => {
@@ -321,7 +353,10 @@ describe('FileUploadController', () => {
 
       await controller.deleteFile(FILE_ID, ADMIN_USER);
 
-      expect(mockFileUploadService.softDelete).toHaveBeenCalledWith(FILE_ID, ADMIN_USER);
+      expect(mockFileUploadService.softDelete).toHaveBeenCalledWith(
+        FILE_ID,
+        ADMIN_USER,
+      );
     });
 
     it('propagates NotFoundException from service', async () => {
@@ -329,19 +364,19 @@ describe('FileUploadController', () => {
         new NotFoundException(`File with ID "${FILE_ID}" not found`),
       );
 
-      await expect(controller.deleteFile(FILE_ID, TEACHER_USER)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        controller.deleteFile(FILE_ID, TEACHER_USER),
+      ).rejects.toThrow(NotFoundException);
     });
 
-    it('propagates ForbiddenException when teacher tries to delete another\'s file', async () => {
+    it("propagates ForbiddenException when teacher tries to delete another's file", async () => {
       mockFileUploadService.softDelete.mockRejectedValue(
         new ForbiddenException('You do not have access to this file'),
       );
 
-      await expect(controller.deleteFile(FILE_ID, TEACHER_USER)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(
+        controller.deleteFile(FILE_ID, TEACHER_USER),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

@@ -20,7 +20,11 @@ import {
   users,
 } from '../../drizzle/schema';
 import { PerformanceStatusChangedEvent } from '../../common/events';
-import { AssignInterventionDto, ResolveInterventionDto, SubmitSystemEvaluationDto } from './dto/lxp.dto';
+import {
+  AssignInterventionDto,
+  ResolveInterventionDto,
+  SubmitSystemEvaluationDto,
+} from './dto/lxp.dto';
 
 const INTERVENTION_THRESHOLD = 74;
 const LESSON_XP = 20;
@@ -80,7 +84,10 @@ export class LxpService {
 
   private async getOrCreateProgress(studentId: string, classId: string) {
     const existing = await this.db.query.lxpProgress.findFirst({
-      where: and(eq(lxpProgress.studentId, studentId), eq(lxpProgress.classId, classId)),
+      where: and(
+        eq(lxpProgress.studentId, studentId),
+        eq(lxpProgress.classId, classId),
+      ),
     });
 
     if (existing) return existing;
@@ -127,7 +134,8 @@ export class LxpService {
         triggerSource,
         triggerScore: snapshot?.blendedScore ?? null,
         thresholdApplied:
-          snapshot?.thresholdApplied?.toString() ?? INTERVENTION_THRESHOLD.toString(),
+          snapshot?.thresholdApplied?.toString() ??
+          INTERVENTION_THRESHOLD.toString(),
       })
       .returning();
 
@@ -135,11 +143,12 @@ export class LxpService {
   }
 
   private async ensureDefaultAssignments(caseId: string, classId: string) {
-    const existingAssignments = await this.db.query.interventionAssignments.findMany({
-      where: eq(interventionAssignments.caseId, caseId),
-      columns: { id: true },
-      limit: 1,
-    });
+    const existingAssignments =
+      await this.db.query.interventionAssignments.findMany({
+        where: eq(interventionAssignments.caseId, caseId),
+        columns: { id: true },
+        limit: 1,
+      });
     if (existingAssignments.length > 0) return;
 
     const latestLessons = await this.db.query.lessons.findMany({
@@ -150,7 +159,10 @@ export class LxpService {
     });
 
     const latestAssessments = await this.db.query.assessments.findMany({
-      where: and(eq(assessments.classId, classId), eq(assessments.isPublished, true)),
+      where: and(
+        eq(assessments.classId, classId),
+        eq(assessments.isPublished, true),
+      ),
       columns: { id: true, title: true, createdAt: true },
       orderBy: [desc(assessments.createdAt)],
       limit: 2,
@@ -241,7 +253,10 @@ export class LxpService {
 
   async getStudentEligibility(userId: string) {
     const studentEnrollments = await this.db.query.enrollments.findMany({
-      where: and(eq(enrollments.studentId, userId), eq(enrollments.status, 'enrolled')),
+      where: and(
+        eq(enrollments.studentId, userId),
+        eq(enrollments.status, 'enrolled'),
+      ),
       columns: { classId: true },
       with: {
         class: {
@@ -366,7 +381,12 @@ export class LxpService {
           columns: { id: true, title: true, description: true, order: true },
         },
         assessment: {
-          columns: { id: true, title: true, description: true, passingScore: true },
+          columns: {
+            id: true,
+            title: true,
+            description: true,
+            passingScore: true,
+          },
         },
       },
       orderBy: [asc(interventionAssignments.orderIndex)],
@@ -381,14 +401,16 @@ export class LxpService {
         status: interventionCase.status,
         openedAt: interventionCase.openedAt,
         thresholdApplied:
-          this.toNumber(interventionCase.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+          this.toNumber(interventionCase.thresholdApplied) ??
+          INTERVENTION_THRESHOLD,
         triggerScore: this.toNumber(interventionCase.triggerScore),
       },
       progress: {
         xpTotal: progress.xpTotal,
         streakDays: progress.streakDays,
         checkpointsCompleted: progress.checkpointsCompleted,
-        completionPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
+        completionPercent:
+          total > 0 ? Math.round((completed / total) * 100) : 0,
       },
       checkpoints: assignments.map((item) => ({
         id: item.id,
@@ -404,7 +426,11 @@ export class LxpService {
     };
   }
 
-  async completeCheckpoint(studentId: string, classId: string, assignmentId: string) {
+  async completeCheckpoint(
+    studentId: string,
+    classId: string,
+    assignmentId: string,
+  ) {
     await this.assertStudentEnrollment(studentId, classId);
 
     const assignment = await this.db.query.interventionAssignments.findFirst({
@@ -419,7 +445,9 @@ export class LxpService {
       throw new NotFoundException('Checkpoint not found');
     }
     if (assignment.interventionCase.studentId !== studentId) {
-      throw new ForbiddenException('Checkpoint does not belong to current student');
+      throw new ForbiddenException(
+        'Checkpoint does not belong to current student',
+      );
     }
     if (assignment.interventionCase.classId !== classId) {
       throw new BadRequestException('Checkpoint does not belong to this class');
@@ -441,31 +469,51 @@ export class LxpService {
 
     const progress = await this.getOrCreateProgress(studentId, classId);
     const now = new Date();
-    const lastDate = progress.lastActivityAt ? new Date(progress.lastActivityAt) : null;
+    const lastDate = progress.lastActivityAt
+      ? new Date(progress.lastActivityAt)
+      : null;
     const dayDiff = lastDate
       ? Math.floor((now.getTime() - lastDate.getTime()) / 86_400_000)
       : null;
     const streakDays =
-      dayDiff === null ? 1 : dayDiff === 0 ? progress.streakDays : dayDiff === 1 ? progress.streakDays + 1 : 1;
+      dayDiff === null
+        ? 1
+        : dayDiff === 0
+          ? progress.streakDays
+          : dayDiff === 1
+            ? progress.streakDays + 1
+            : 1;
 
     await this.db
       .update(lxpProgress)
       .set({
         xpTotal: progress.xpTotal + assignment.xpAwarded,
         streakDays,
-        checkpointsCompleted: progress.checkpointsCompleted + (assignment.isCompleted ? 0 : 1),
+        checkpointsCompleted:
+          progress.checkpointsCompleted + (assignment.isCompleted ? 0 : 1),
         lastActivityAt: now,
         updatedAt: now,
       })
       .where(
-        and(eq(lxpProgress.studentId, studentId), eq(lxpProgress.classId, classId)),
+        and(
+          eq(lxpProgress.studentId, studentId),
+          eq(lxpProgress.classId, classId),
+        ),
       );
 
-    const allAssignments = await this.db.query.interventionAssignments.findMany({
-      where: eq(interventionAssignments.caseId, assignment.interventionCase.id),
-      columns: { id: true, isCompleted: true },
-    });
-    if (allAssignments.length > 0 && allAssignments.every((row) => row.isCompleted)) {
+    const allAssignments = await this.db.query.interventionAssignments.findMany(
+      {
+        where: eq(
+          interventionAssignments.caseId,
+          assignment.interventionCase.id,
+        ),
+        columns: { id: true, isCompleted: true },
+      },
+    );
+    if (
+      allAssignments.length > 0 &&
+      allAssignments.every((row) => row.isCompleted)
+    ) {
       await this.db
         .update(interventionCases)
         .set({
@@ -484,7 +532,10 @@ export class LxpService {
     await this.assertTeacherClassAccess(classId, user);
 
     const cases = await this.db.query.interventionCases.findMany({
-      where: and(eq(interventionCases.classId, classId), eq(interventionCases.status, 'active')),
+      where: and(
+        eq(interventionCases.classId, classId),
+        eq(interventionCases.status, 'active'),
+      ),
       with: {
         student: {
           columns: {
@@ -500,10 +551,11 @@ export class LxpService {
 
     const queue = await Promise.all(
       cases.map(async (row) => {
-        const assignments = await this.db.query.interventionAssignments.findMany({
-          where: eq(interventionAssignments.caseId, row.id),
-          columns: { id: true, isCompleted: true },
-        });
+        const assignments =
+          await this.db.query.interventionAssignments.findMany({
+            where: eq(interventionAssignments.caseId, row.id),
+            columns: { id: true, isCompleted: true },
+          });
 
         const progress = await this.db.query.lxpProgress.findFirst({
           where: and(
@@ -532,7 +584,9 @@ export class LxpService {
           totalCheckpoints,
           completedCheckpoints: completed,
           completionPercent:
-            totalCheckpoints > 0 ? Math.round((completed / totalCheckpoints) * 100) : 0,
+            totalCheckpoints > 0
+              ? Math.round((completed / totalCheckpoints) * 100)
+              : 0,
           progress: progress ?? {
             xpTotal: 0,
             streakDays: 0,
@@ -551,7 +605,11 @@ export class LxpService {
     };
   }
 
-  async assignIntervention(caseId: string, dto: AssignInterventionDto, user: UserContext) {
+  async assignIntervention(
+    caseId: string,
+    dto: AssignInterventionDto,
+    user: UserContext,
+  ) {
     const interventionCase = await this.db.query.interventionCases.findFirst({
       where: eq(interventionCases.id, caseId),
       columns: {
@@ -561,26 +619,36 @@ export class LxpService {
         status: true,
       },
     });
-    if (!interventionCase) throw new NotFoundException('Intervention case not found');
+    if (!interventionCase)
+      throw new NotFoundException('Intervention case not found');
     await this.assertTeacherClassAccess(interventionCase.classId, user);
     if (interventionCase.status !== 'active') {
-      throw new BadRequestException('Only active intervention cases can be assigned.');
+      throw new BadRequestException(
+        'Only active intervention cases can be assigned.',
+      );
     }
 
     const lessonIds = [...new Set(dto.lessonIds ?? [])];
     const assessmentIds = [...new Set(dto.assessmentIds ?? [])];
 
     if (lessonIds.length === 0 && assessmentIds.length === 0) {
-      throw new BadRequestException('Provide at least one lesson or assessment.');
+      throw new BadRequestException(
+        'Provide at least one lesson or assessment.',
+      );
     }
 
     if (lessonIds.length > 0) {
       const lessonRows = await this.db.query.lessons.findMany({
-        where: and(eq(lessons.classId, interventionCase.classId), inArray(lessons.id, lessonIds)),
+        where: and(
+          eq(lessons.classId, interventionCase.classId),
+          inArray(lessons.id, lessonIds),
+        ),
         columns: { id: true },
       });
       if (lessonRows.length !== lessonIds.length) {
-        throw new BadRequestException('Some lessons do not belong to this class.');
+        throw new BadRequestException(
+          'Some lessons do not belong to this class.',
+        );
       }
     }
 
@@ -593,7 +661,9 @@ export class LxpService {
         columns: { id: true },
       });
       if (assessmentRows.length !== assessmentIds.length) {
-        throw new BadRequestException('Some assessments do not belong to this class.');
+        throw new BadRequestException(
+          'Some assessments do not belong to this class.',
+        );
       }
     }
 
@@ -601,7 +671,8 @@ export class LxpService {
       .delete(interventionAssignments)
       .where(eq(interventionAssignments.caseId, interventionCase.id));
 
-    const assignmentPayload: (typeof interventionAssignments.$inferInsert)[] = [];
+    const assignmentPayload: (typeof interventionAssignments.$inferInsert)[] =
+      [];
     let order = 1;
     lessonIds.forEach((lessonId) => {
       assignmentPayload.push({
@@ -645,12 +716,17 @@ export class LxpService {
     return this.getTeacherQueue(interventionCase.classId, user);
   }
 
-  async resolveIntervention(caseId: string, dto: ResolveInterventionDto, user: UserContext) {
+  async resolveIntervention(
+    caseId: string,
+    dto: ResolveInterventionDto,
+    user: UserContext,
+  ) {
     const interventionCase = await this.db.query.interventionCases.findFirst({
       where: eq(interventionCases.id, caseId),
       columns: { id: true, classId: true, studentId: true, status: true },
     });
-    if (!interventionCase) throw new NotFoundException('Intervention case not found');
+    if (!interventionCase)
+      throw new NotFoundException('Intervention case not found');
     await this.assertTeacherClassAccess(interventionCase.classId, user);
     if (interventionCase.status !== 'active') {
       throw new BadRequestException('Intervention case is already closed.');
@@ -722,9 +798,14 @@ export class LxpService {
       };
     });
 
-    const distinctStudents = new Set(withDelta.map((entry) => entry.studentId)).size;
-    const completed = withDelta.filter((entry) => entry.status === 'completed').length;
-    const active = withDelta.filter((entry) => entry.status === 'active').length;
+    const distinctStudents = new Set(withDelta.map((entry) => entry.studentId))
+      .size;
+    const completed = withDelta.filter(
+      (entry) => entry.status === 'completed',
+    ).length;
+    const active = withDelta.filter(
+      (entry) => entry.status === 'active',
+    ).length;
     const deltas = withDelta
       .map((entry) => entry.improvementDelta)
       .filter((value): value is number => value !== null);
@@ -739,15 +820,20 @@ export class LxpService {
         interventionParticipation: distinctStudents,
         averageDelta:
           deltas.length > 0
-            ? Math.round((deltas.reduce((sum, item) => sum + item, 0) / deltas.length) * 100) /
-              100
+            ? Math.round(
+                (deltas.reduce((sum, item) => sum + item, 0) / deltas.length) *
+                  100,
+              ) / 100
             : null,
       },
       rows: withDelta,
     };
   }
 
-  async submitSystemEvaluation(user: UserContext, dto: SubmitSystemEvaluationDto) {
+  async submitSystemEvaluation(
+    user: UserContext,
+    dto: SubmitSystemEvaluationDto,
+  ) {
     const [created] = await this.db
       .insert(systemEvaluations)
       .values({
@@ -766,7 +852,9 @@ export class LxpService {
 
   async listSystemEvaluations(user: UserContext, targetModule?: string) {
     if (!this.isAdmin(user.roles) && !user.roles.includes('teacher')) {
-      throw new ForbiddenException('Only teachers and admins can view evaluation results.');
+      throw new ForbiddenException(
+        'Only teachers and admins can view evaluation results.',
+      );
     }
 
     const rows = await this.db.query.systemEvaluations.findMany({

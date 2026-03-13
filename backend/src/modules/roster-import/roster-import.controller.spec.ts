@@ -5,15 +5,18 @@ import { RosterImportService } from './roster-import.service';
 
 // simple user fixtures
 const TEACHER = { id: 't1', email: 't@school.edu', roles: ['teacher'] };
-const ADMIN   = { id: 'a1', email: 'a@school.edu', roles: ['admin'] };
+const ADMIN = { id: 'a1', email: 'a@school.edu', roles: ['admin'] };
 
 // stubbed file object
-const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.File =>
+const makeFile = (
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File =>
   ({
     fieldname: 'file',
     originalname: 'roster.xlsx',
     encoding: '7bit',
-    mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    mimetype:
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     path: '/tmp/roster/fake.xlsx',
     filename: 'fake.xlsx',
     size: 1024,
@@ -21,7 +24,7 @@ const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.
     buffer: Buffer.alloc(0),
     stream: null as any,
     ...overrides,
-  } as any);
+  }) as any;
 
 const mockService = {
   parseAndPreview: jest.fn(),
@@ -52,28 +55,49 @@ describe('RosterImportController', () => {
       const result = await controller.preview('sec-123', file, TEACHER);
 
       expect(result).toBe(resp);
-      expect(mockService.parseAndPreview).toHaveBeenCalledWith('sec-123', file, TEACHER);
+      expect(mockService.parseAndPreview).toHaveBeenCalledWith(
+        'sec-123',
+        file,
+        TEACHER,
+      );
     });
 
     it('propagates exceptions from service', async () => {
-      mockService.parseAndPreview.mockRejectedValue(new NotFoundException('no section'));
-      await expect(controller.preview('sec-123', makeFile(), TEACHER)).rejects.toThrow(NotFoundException);
+      mockService.parseAndPreview.mockRejectedValue(
+        new NotFoundException('no section'),
+      );
+      await expect(
+        controller.preview('sec-123', makeFile(), TEACHER),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('commit', () => {
     const dto = { sectionId: 'sec-1', enrolledRows: [], pendingRows: [] };
     it('passes through payload and returns service result', async () => {
-      const resp = { enrolledUserIds: [], pendingRosterIds: [], alreadyEnrolledSkipped: 0, summary: {} };
+      const resp = {
+        enrolledUserIds: [],
+        pendingRosterIds: [],
+        alreadyEnrolledSkipped: 0,
+        summary: {},
+      };
       mockService.commitRoster.mockResolvedValue(resp);
 
       expect(await controller.commit('sec-1', dto as any, ADMIN)).toBe(resp);
-      expect(mockService.commitRoster).toHaveBeenCalledWith('sec-1', dto, ADMIN);
+      expect(mockService.commitRoster).toHaveBeenCalledWith(
+        'sec-1',
+        dto,
+        ADMIN,
+      );
     });
 
     it('bubbles up BadRequestExceptions', async () => {
-      mockService.commitRoster.mockRejectedValue(new BadRequestException('bad')); 
-      await expect(controller.commit('sec-1', dto as any, ADMIN)).rejects.toThrow(BadRequestException);
+      mockService.commitRoster.mockRejectedValue(
+        new BadRequestException('bad'),
+      );
+      await expect(
+        controller.commit('sec-1', dto as any, ADMIN),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -91,8 +115,14 @@ describe('RosterImportController', () => {
       const row = { id: 'p1' };
       mockService.resolvePendingRow.mockResolvedValue(row);
       const dto = { resolvedUserId: null };
-      expect(await controller.resolvePending('p1', dto as any, ADMIN)).toBe(row);
-      expect(mockService.resolvePendingRow).toHaveBeenCalledWith('p1', null, ADMIN);
+      expect(await controller.resolvePending('p1', dto as any, ADMIN)).toBe(
+        row,
+      );
+      expect(mockService.resolvePendingRow).toHaveBeenCalledWith(
+        'p1',
+        null,
+        ADMIN,
+      );
     });
   });
 });

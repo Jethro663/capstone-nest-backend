@@ -194,11 +194,7 @@ export class LessonsService {
   /**
    * Delete a lesson and all its content blocks (cascade).
    */
-  async deleteLesson(
-    lessonId: string,
-    userId: string,
-    userRoles: string[],
-  ) {
+  async deleteLesson(lessonId: string, userId: string, userRoles: string[]) {
     const lesson = await this.getLessonById(lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
@@ -210,11 +206,7 @@ export class LessonsService {
   /**
    * Publish a lesson (sets isDraft = false).
    */
-  async publishLesson(
-    lessonId: string,
-    userId: string,
-    userRoles: string[],
-  ) {
+  async publishLesson(lessonId: string, userId: string, userRoles: string[]) {
     const lesson = await this.getLessonById(lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
@@ -291,10 +283,14 @@ export class LessonsService {
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
-    if (updateBlockDto.type !== undefined) updateData.type = updateBlockDto.type as any;
-    if (updateBlockDto.order !== undefined) updateData.order = updateBlockDto.order;
-    if (updateBlockDto.content !== undefined) updateData.content = updateBlockDto.content;
-    if (updateBlockDto.metadata !== undefined) updateData.metadata = updateBlockDto.metadata;
+    if (updateBlockDto.type !== undefined)
+      updateData.type = updateBlockDto.type as any;
+    if (updateBlockDto.order !== undefined)
+      updateData.order = updateBlockDto.order;
+    if (updateBlockDto.content !== undefined)
+      updateData.content = updateBlockDto.content;
+    if (updateBlockDto.metadata !== undefined)
+      updateData.metadata = updateBlockDto.metadata;
 
     await this.db
       .update(lessonContentBlocks)
@@ -488,4 +484,3 @@ export class LessonsService {
     return rows;
   }
 }
-

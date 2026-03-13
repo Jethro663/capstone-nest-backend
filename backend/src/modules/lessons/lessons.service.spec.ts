@@ -49,7 +49,10 @@ const MOCK_DRAFT_LESSON = { ...MOCK_LESSON, isDraft: true };
 
 const TEACHER_USER = { userId: TEACHER_ID, roles: [RoleName.Teacher] };
 const ADMIN_USER = { userId: ADMIN_ID, roles: [RoleName.Admin] };
-const OTHER_TEACHER_USER = { userId: OTHER_TEACHER_ID, roles: [RoleName.Teacher] };
+const OTHER_TEACHER_USER = {
+  userId: OTHER_TEACHER_ID,
+  roles: [RoleName.Teacher],
+};
 
 // ─── DB mock builder ─────────────────────────────────────────────────────────
 
@@ -144,7 +147,10 @@ describe('LessonsService', () => {
   // ───────────────────────────────────────────────────────────────────────────
   describe('getLessonsByClass', () => {
     it('returns all lessons including drafts when filterDrafts=false', async () => {
-      db.query.lessons.findMany.mockResolvedValue([MOCK_LESSON, MOCK_DRAFT_LESSON]);
+      db.query.lessons.findMany.mockResolvedValue([
+        MOCK_LESSON,
+        MOCK_DRAFT_LESSON,
+      ]);
 
       const result = await service.getLessonsByClass(CLASS_ID, false);
 
@@ -207,11 +213,9 @@ describe('LessonsService', () => {
 
       mockInsert(db, [{ id: LESSON_ID }]);
 
-      const result = await service.createLesson(
-        dto,
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      const result = await service.createLesson(dto, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       expect(db.transaction).toHaveBeenCalledTimes(1);
       // values() should have been called with order = 4 (3 + 1)
@@ -246,11 +250,9 @@ describe('LessonsService', () => {
 
       mockInsert(db, [{ id: LESSON_ID }]);
 
-      await service.createLesson(
-        { ...dto, order: 99 },
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      await service.createLesson({ ...dto, order: 99 }, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       const valuesFn = db.insert.mock.results[0]?.value?.values;
       expect(valuesFn).toHaveBeenCalledWith(
@@ -305,7 +307,9 @@ describe('LessonsService', () => {
       db.query.lessons.findFirst.mockResolvedValue(undefined);
 
       await expect(
-        service.updateLesson(LESSON_ID, { title: 'X' }, TEACHER_ID, [RoleName.Teacher]),
+        service.updateLesson(LESSON_ID, { title: 'X' }, TEACHER_ID, [
+          RoleName.Teacher,
+        ]),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -314,12 +318,9 @@ describe('LessonsService', () => {
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
 
       await expect(
-        service.updateLesson(
-          LESSON_ID,
-          { title: 'X' },
-          OTHER_TEACHER_ID,
-          [RoleName.Teacher],
-        ),
+        service.updateLesson(LESSON_ID, { title: 'X' }, OTHER_TEACHER_ID, [
+          RoleName.Teacher,
+        ]),
       ).rejects.toThrow(ForbiddenException);
     });
   });
@@ -333,11 +334,9 @@ describe('LessonsService', () => {
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
       mockDelete(db);
 
-      const result = await service.deleteLesson(
-        LESSON_ID,
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      const result = await service.deleteLesson(LESSON_ID, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       expect(db.delete).toHaveBeenCalledTimes(1);
       expect(result).toEqual(MOCK_LESSON);
@@ -366,11 +365,9 @@ describe('LessonsService', () => {
         isDraft: false,
       });
 
-      const result = await service.publishLesson(
-        LESSON_ID,
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      const result = await service.publishLesson(LESSON_ID, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       const setFn = db.update.mock.results[0]?.value?.set;
       expect(setFn).toHaveBeenCalledWith(
@@ -407,11 +404,9 @@ describe('LessonsService', () => {
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
       mockInsert(db, [MOCK_BLOCK]);
 
-      const result = await service.addContentBlock(
-        blockDto,
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      const result = await service.addContentBlock(blockDto, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       expect(result).toEqual(MOCK_BLOCK);
     });
@@ -462,23 +457,18 @@ describe('LessonsService', () => {
   describe('updateContentBlock', () => {
     it('selectively patches only provided fields', async () => {
       db.query.lessonContentBlocks.findFirst
-        .mockResolvedValueOnce(MOCK_BLOCK)  // initial fetch
-        .mockResolvedValue(MOCK_BLOCK);      // refetch after update
+        .mockResolvedValueOnce(MOCK_BLOCK) // initial fetch
+        .mockResolvedValue(MOCK_BLOCK); // refetch after update
       db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
       mockUpdate(db);
 
-      await service.updateContentBlock(
-        BLOCK_ID,
-        { order: 5 },
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      await service.updateContentBlock(BLOCK_ID, { order: 5 }, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       const setFn = db.update.mock.results[0]?.value?.set;
-      expect(setFn).toHaveBeenCalledWith(
-        expect.objectContaining({ order: 5 }),
-      );
+      expect(setFn).toHaveBeenCalledWith(expect.objectContaining({ order: 5 }));
       // type was not provided, should NOT be in the update payload
       const callArg = setFn.mock.calls[0][0];
       expect(callArg).not.toHaveProperty('type');
@@ -488,12 +478,9 @@ describe('LessonsService', () => {
       db.query.lessonContentBlocks.findFirst.mockResolvedValue(undefined);
 
       await expect(
-        service.updateContentBlock(
-          BLOCK_ID,
-          { order: 1 },
-          TEACHER_ID,
-          [RoleName.Teacher],
-        ),
+        service.updateContentBlock(BLOCK_ID, { order: 1 }, TEACHER_ID, [
+          RoleName.Teacher,
+        ]),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -508,11 +495,9 @@ describe('LessonsService', () => {
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
       mockDelete(db);
 
-      const result = await service.deleteContentBlock(
-        BLOCK_ID,
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      const result = await service.deleteContentBlock(BLOCK_ID, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       expect(result).toEqual(MOCK_BLOCK);
       expect(db.delete).toHaveBeenCalledTimes(1);
@@ -547,12 +532,9 @@ describe('LessonsService', () => {
       // getLessonById after reorder
       db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
 
-      await service.reorderBlocks(
-        LESSON_ID,
-        reorderDto,
-        TEACHER_ID,
-        [RoleName.Teacher],
-      );
+      await service.reorderBlocks(LESSON_ID, reorderDto, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       expect(db.transaction).toHaveBeenCalledTimes(1);
       expect(db.update).toHaveBeenCalledTimes(2);

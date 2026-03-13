@@ -11,41 +11,54 @@ import { DatabaseService } from '../../database/database.service';
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const FILE_ID   = 'file-uuid-1';
+const FILE_ID = 'file-uuid-1';
 const FILE_ID_2 = 'file-uuid-2';
-const TEACHER_ID  = 'teacher-uuid-1';
+const TEACHER_ID = 'teacher-uuid-1';
 const TEACHER_ID_2 = 'teacher-uuid-2';
-const ADMIN_ID  = 'admin-uuid-1';
-const CLASS_ID  = 'class-uuid-1';
+const ADMIN_ID = 'admin-uuid-1';
+const CLASS_ID = 'class-uuid-1';
 
-const TEACHER_USER  = { id: TEACHER_ID,  email: 't@school.edu', roles: ['teacher'] };
-const ADMIN_USER    = { id: ADMIN_ID,    email: 'a@school.edu', roles: ['admin'] };
-const OTHER_TEACHER = { id: TEACHER_ID_2, email: 't2@school.edu', roles: ['teacher'] };
+const TEACHER_USER = {
+  id: TEACHER_ID,
+  email: 't@school.edu',
+  roles: ['teacher'],
+};
+const ADMIN_USER = { id: ADMIN_ID, email: 'a@school.edu', roles: ['admin'] };
+const OTHER_TEACHER = {
+  id: TEACHER_ID_2,
+  email: 't2@school.edu',
+  roles: ['teacher'],
+};
 
 const makeSaveDto = (overrides: Partial<any> = {}) => ({
-  teacherId:    TEACHER_ID,
-  classId:      CLASS_ID,
+  teacherId: TEACHER_ID,
+  classId: CLASS_ID,
   originalName: 'lecture.pdf',
-  storedName:   'abc123_1700000000.pdf',
-  mimeType:     'application/pdf',
-  sizeBytes:    1_048_576, // 1 MB
-  filePath:     './uploads/pdfs/abc123_1700000000.pdf',
+  storedName: 'abc123_1700000000.pdf',
+  mimeType: 'application/pdf',
+  sizeBytes: 1_048_576, // 1 MB
+  filePath: './uploads/pdfs/abc123_1700000000.pdf',
   ...overrides,
 });
 
 const makeFileRecord = (overrides: Partial<any> = {}) => ({
-  id:           FILE_ID,
-  teacherId:    TEACHER_ID,
-  classId:      CLASS_ID,
+  id: FILE_ID,
+  teacherId: TEACHER_ID,
+  classId: CLASS_ID,
   originalName: 'lecture.pdf',
-  storedName:   'abc123_1700000000.pdf',
-  mimeType:     'application/pdf',
-  sizeBytes:    1_048_576,
-  filePath:     './uploads/pdfs/abc123_1700000000.pdf',
-  uploadedAt:   new Date('2026-02-23T00:00:00Z'),
-  deletedAt:    null,
-  teacher: { id: TEACHER_ID, firstName: 'Ana', lastName: 'Cruz', email: 't@school.edu' },
-  class:   { id: CLASS_ID, subjectName: 'Math', subjectCode: 'MATH101' },
+  storedName: 'abc123_1700000000.pdf',
+  mimeType: 'application/pdf',
+  sizeBytes: 1_048_576,
+  filePath: './uploads/pdfs/abc123_1700000000.pdf',
+  uploadedAt: new Date('2026-02-23T00:00:00Z'),
+  deletedAt: null,
+  teacher: {
+    id: TEACHER_ID,
+    firstName: 'Ana',
+    lastName: 'Cruz',
+    email: 't@school.edu',
+  },
+  class: { id: CLASS_ID, subjectName: 'Math', subjectCode: 'MATH101' },
   ...overrides,
 });
 
@@ -54,12 +67,12 @@ const makeFileRecord = (overrides: Partial<any> = {}) => ({
 // ---------------------------------------------------------------------------
 
 const makeInsertChain = (rows: any[] = [makeFileRecord()]) => ({
-  values:    jest.fn().mockReturnThis(),
+  values: jest.fn().mockReturnThis(),
   returning: jest.fn().mockResolvedValue(rows),
 });
 
 const makeUpdateChain = () => ({
-  set:   jest.fn().mockReturnThis(),
+  set: jest.fn().mockReturnThis(),
   where: jest.fn().mockResolvedValue(undefined),
 });
 
@@ -77,7 +90,7 @@ describe('FileUploadService', () => {
       },
       uploadedFiles: {
         findFirst: jest.fn(),
-        findMany:  jest.fn(),
+        findMany: jest.fn(),
       },
     },
     insert: jest.fn(),
@@ -119,8 +132,14 @@ describe('FileUploadService', () => {
     });
 
     it('passes all dto fields to the insert', async () => {
-      const dto = makeSaveDto({ originalName: 'chapter1.pdf', sizeBytes: 2_097_152 });
-      const returnedRecord = makeFileRecord({ originalName: 'chapter1.pdf', sizeBytes: 2_097_152 });
+      const dto = makeSaveDto({
+        originalName: 'chapter1.pdf',
+        sizeBytes: 2_097_152,
+      });
+      const returnedRecord = makeFileRecord({
+        originalName: 'chapter1.pdf',
+        sizeBytes: 2_097_152,
+      });
       const chain = makeInsertChain([returnedRecord]);
       mockDb.insert.mockReturnValue(chain);
 
@@ -128,11 +147,11 @@ describe('FileUploadService', () => {
 
       expect(chain.values).toHaveBeenCalledWith(
         expect.objectContaining({
-          teacherId:    dto.teacherId,
-          classId:      dto.classId,
+          teacherId: dto.teacherId,
+          classId: dto.classId,
           originalName: 'chapter1.pdf',
-          sizeBytes:    2_097_152,
-          mimeType:     'application/pdf',
+          sizeBytes: 2_097_152,
+          mimeType: 'application/pdf',
         }),
       );
     });
@@ -202,7 +221,7 @@ describe('FileUploadService', () => {
       );
     });
 
-    it('throws ForbiddenException when a teacher tries to access another teacher\'s file', async () => {
+    it("throws ForbiddenException when a teacher tries to access another teacher's file", async () => {
       const record = makeFileRecord({ teacherId: TEACHER_ID }); // owned by TEACHER_ID
       mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
 
@@ -239,7 +258,7 @@ describe('FileUploadService', () => {
       );
     });
 
-    it('throws ForbiddenException when teacher tries to delete another teacher\'s file', async () => {
+    it("throws ForbiddenException when teacher tries to delete another teacher's file", async () => {
       const record = makeFileRecord({ teacherId: TEACHER_ID });
       mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
 
@@ -298,9 +317,9 @@ describe('FileUploadService', () => {
   describe('getStorageSummary', () => {
     it('returns correct totals when there are multiple files', async () => {
       mockDb.query.uploadedFiles.findMany.mockResolvedValue([
-        { sizeBytes: 1_048_576 },  // 1 MB
-        { sizeBytes: 2_097_152 },  // 2 MB
-        { sizeBytes: 3_145_728 },  // 3 MB
+        { sizeBytes: 1_048_576 }, // 1 MB
+        { sizeBytes: 2_097_152 }, // 2 MB
+        { sizeBytes: 3_145_728 }, // 3 MB
       ]);
 
       const result = await service.getStorageSummary();

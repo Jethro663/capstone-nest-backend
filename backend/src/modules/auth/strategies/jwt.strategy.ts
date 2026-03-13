@@ -29,13 +29,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: any) {
-    this.logger.debug(`[JWT-STRAT] Validating token for userId: ${payload?.userId}`);
+    this.logger.debug(
+      `[JWT-STRAT] Validating token for userId: ${payload?.userId}`,
+    );
     if (payload.type !== 'access') {
       throw new UnauthorizedException('Invalid token type');
     }
 
     const user = await this.usersService.findById(payload.userId);
-    this.logger.debug(`[JWT-STRAT] User lookup for ${payload.userId}: found=${!!user}`);
+    this.logger.debug(
+      `[JWT-STRAT] User lookup for ${payload.userId}: found=${!!user}`,
+    );
 
     if (!user) {
       throw new UnauthorizedException('User not found');

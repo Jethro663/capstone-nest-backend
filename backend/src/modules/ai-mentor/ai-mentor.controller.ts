@@ -22,7 +22,11 @@ import {
 
 import { AiProxyService } from './ai-proxy.service';
 import { ChatRequestDto } from './DTO/chat.dto';
-import { ExtractModuleDto, ApplyExtractionDto, UpdateExtractionDto } from './DTO/extract-module.dto';
+import {
+  ExtractModuleDto,
+  ApplyExtractionDto,
+  UpdateExtractionDto,
+} from './DTO/extract-module.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -50,7 +54,7 @@ export class AiMentorController {
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Chat with Ja (JAKIPIR AI Mentor)' })
-  @ApiResponse({ status: 200, description: 'Ja\'s reply + session ID' })
+  @ApiResponse({ status: 200, description: "Ja's reply + session ID" })
   async chat(
     @Body() dto: ChatRequestDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -69,7 +73,11 @@ export class AiMentorController {
   @Public()
   @ApiOperation({ summary: 'Check Ollama availability' })
   async health() {
-    return this.proxy.forward('GET', '/health', { id: '', email: '', roles: [] });
+    return this.proxy.forward('GET', '/health', {
+      id: '',
+      email: '',
+      roles: [],
+    });
   }
 
   // ─── Module Extraction ─────────────────────────────────────────────────
@@ -82,8 +90,13 @@ export class AiMentorController {
   @Post('extract-module')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Queue extraction of structured lessons from an uploaded PDF' })
-  @ApiResponse({ status: 202, description: 'Extraction queued — poll for status' })
+  @ApiOperation({
+    summary: 'Queue extraction of structured lessons from an uploaded PDF',
+  })
+  @ApiResponse({
+    status: 202,
+    description: 'Extraction queued — poll for status',
+  })
   async extractModule(
     @Body() dto: ExtractModuleDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -149,7 +162,9 @@ export class AiMentorController {
    */
   @Patch('extractions/:id')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Edit extraction structured content before applying' })
+  @ApiOperation({
+    summary: 'Edit extraction structured content before applying',
+  })
   @ApiResponse({ status: 200, description: 'Extraction updated' })
   async updateExtraction(
     @Param('id', ParseUUIDPipe) id: string,
@@ -169,7 +184,9 @@ export class AiMentorController {
   @Post('extractions/:id/apply')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Apply extraction → create lessons (optionally selective)' })
+  @ApiOperation({
+    summary: 'Apply extraction → create lessons (optionally selective)',
+  })
   @ApiResponse({ status: 201, description: 'Lessons created from extraction' })
   async applyExtraction(
     @Param('id', ParseUUIDPipe) id: string,

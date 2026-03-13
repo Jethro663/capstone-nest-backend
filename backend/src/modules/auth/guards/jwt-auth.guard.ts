@@ -35,7 +35,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   handleRequest(err: any, user: any, info: any) {
     if (err || !user) {
-      this.logger.debug(`[AUTH-GUARD] Auth failed: ${info?.message ?? err?.message}`);
+      this.logger.debug(
+        `[AUTH-GUARD] Auth failed: ${info?.message ?? err?.message}`,
+      );
       throw err || new UnauthorizedException('Invalid or expired token');
     }
     return user;

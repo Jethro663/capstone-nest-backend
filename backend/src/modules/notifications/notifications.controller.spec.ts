@@ -51,17 +51,20 @@ describe('NotificationsController', () => {
       const rows = [makeNotification()];
       mockService.findByUser.mockResolvedValue(rows);
 
-      const result = await controller.findAll(CURRENT_USER, { page: 1, limit: 20 } as any);
+      const result = await controller.findAll(CURRENT_USER, {
+        page: 1,
+        limit: 20,
+      } as any);
 
       expect(result).toEqual({
         success: true,
         message: 'Notifications retrieved.',
         data: rows,
       });
-      expect(mockService.findByUser).toHaveBeenCalledWith(
-        CURRENT_USER.userId,
-        { page: 1, limit: 20 },
-      );
+      expect(mockService.findByUser).toHaveBeenCalledWith(CURRENT_USER.userId, {
+        page: 1,
+        limit: 20,
+      });
     });
 
     it('passes userId from CurrentUser to service, not a param', async () => {
@@ -141,7 +144,9 @@ describe('NotificationsController', () => {
     });
 
     it('passes userId from CurrentUser to prevent cross-user marking', async () => {
-      mockService.markRead.mockResolvedValue(makeNotification({ isRead: true }));
+      mockService.markRead.mockResolvedValue(
+        makeNotification({ isRead: true }),
+      );
 
       await controller.markRead(NOTIF_ID, CURRENT_USER);
 

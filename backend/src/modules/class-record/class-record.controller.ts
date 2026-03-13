@@ -46,7 +46,11 @@ export class ClassRecordController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const data = await this.classRecordService.getClassRecord(id, user.userId, user.roles);
+    const data = await this.classRecordService.getClassRecord(
+      id,
+      user.userId,
+      user.roles,
+    );
     return { success: true, data };
   }
 
@@ -136,7 +140,11 @@ export class ClassRecordController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const data = await this.classRecordService.previewGrades(id, user.userId, user.roles);
+    const data = await this.classRecordService.previewGrades(
+      id,
+      user.userId,
+      user.roles,
+    );
     return { success: true, data };
   }
 

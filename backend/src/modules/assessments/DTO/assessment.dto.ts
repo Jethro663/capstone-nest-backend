@@ -1,4 +1,17 @@
-import { IsString, IsOptional, IsBoolean, IsInt, IsUUID, IsEnum, IsArray, Min, ValidateNested, ArrayNotEmpty, IsDateString, ValidateIf } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsInt,
+  IsUUID,
+  IsEnum,
+  IsArray,
+  Min,
+  ValidateNested,
+  ArrayNotEmpty,
+  IsDateString,
+  ValidateIf,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum QuestionType {
@@ -17,9 +30,9 @@ export enum AssessmentType {
 }
 
 export enum FeedbackLevel {
-  IMMEDIATE = 'immediate',       // Score only, no answers
-  STANDARD = 'standard',         // Answers + explanations (delayed)
-  DETAILED = 'detailed',         // Full feedback with hints (delayed longer)
+  IMMEDIATE = 'immediate', // Score only, no answers
+  STANDARD = 'standard', // Answers + explanations (delayed)
+  DETAILED = 'detailed', // Full feedback with hints (delayed longer)
 }
 
 export enum ClassRecordCategory {

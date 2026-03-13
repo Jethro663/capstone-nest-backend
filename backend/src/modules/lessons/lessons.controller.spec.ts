@@ -76,9 +76,7 @@ describe('LessonsController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [LessonsController],
-      providers: [
-        { provide: LessonsService, useValue: mockLessonsService },
-      ],
+      providers: [{ provide: LessonsService, useValue: mockLessonsService }],
     }).compile();
 
     controller = module.get<LessonsController>(LessonsController);
@@ -318,7 +316,11 @@ describe('LessonsController', () => {
     it('returns block in success envelope with 201', async () => {
       mockLessonsService.addContentBlock.mockResolvedValue(MOCK_BLOCK);
 
-      const res = await controller.addContentBlock(LESSON_ID, dto, TEACHER_USER);
+      const res = await controller.addContentBlock(
+        LESSON_ID,
+        dto,
+        TEACHER_USER,
+      );
 
       expect(res.success).toBe(true);
       expect(res.data).toEqual(MOCK_BLOCK);
@@ -358,7 +360,11 @@ describe('LessonsController', () => {
     it('returns updated block', async () => {
       mockLessonsService.updateContentBlock.mockResolvedValue(MOCK_BLOCK);
 
-      const res = await controller.updateContentBlock(BLOCK_ID, dto, TEACHER_USER);
+      const res = await controller.updateContentBlock(
+        BLOCK_ID,
+        dto,
+        TEACHER_USER,
+      );
 
       expect(res.data).toEqual(MOCK_BLOCK);
     });
@@ -482,10 +488,9 @@ describe('LessonsController', () => {
 
       await controller.getCompletedLessons(CLASS_ID, STUDENT_USER);
 
-      expect(mockLessonsService.getCompletedLessonsForClass).toHaveBeenCalledWith(
-        STUDENT_USER.userId,
-        CLASS_ID,
-      );
+      expect(
+        mockLessonsService.getCompletedLessonsForClass,
+      ).toHaveBeenCalledWith(STUDENT_USER.userId, CLASS_ID);
     });
 
     it('returns { success, data, count }', async () => {

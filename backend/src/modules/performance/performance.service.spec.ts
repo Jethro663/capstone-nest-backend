@@ -115,7 +115,11 @@ describe('PerformanceService', () => {
     ]);
     mockInsertNoReturning(db);
 
-    const result = await service.recomputeStudent('class-1', 'student-1', 'manual_recompute');
+    const result = await service.recomputeStudent(
+      'class-1',
+      'student-1',
+      'manual_recompute',
+    );
 
     expect(result.assessmentAverage).toBe(75);
     expect(result.classRecordAverage).toBe(25);
@@ -156,7 +160,11 @@ describe('PerformanceService', () => {
     ]);
     mockInsertNoReturning(db);
 
-    await service.recomputeStudent('class-1', 'student-1', 'assessment_submitted');
+    await service.recomputeStudent(
+      'class-1',
+      'student-1',
+      'assessment_submitted',
+    );
 
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       PerformanceStatusChangedEvent.eventName,
@@ -177,7 +185,11 @@ describe('PerformanceService', () => {
     db.query.enrollments.findMany.mockResolvedValue([
       {
         studentId: 'student-1',
-        student: { firstName: 'Alice', lastName: 'Lee', email: 'alice@test.com' },
+        student: {
+          firstName: 'Alice',
+          lastName: 'Lee',
+          email: 'alice@test.com',
+        },
       },
       {
         studentId: 'student-2',
@@ -211,7 +223,9 @@ describe('PerformanceService', () => {
       },
     ]);
 
-    const summary = await service.getClassSummary('class-1', 'teacher-1', ['teacher']);
+    const summary = await service.getClassSummary('class-1', 'teacher-1', [
+      'teacher',
+    ]);
 
     expect(summary.totalStudents).toBe(2);
     expect(summary.atRiskCount).toBe(1);

@@ -16,6 +16,16 @@ export interface StudentProfile {
   updatedAt?: string;
 }
 
+export interface TeacherProfile {
+  userId: string;
+  department?: string;
+  specialization?: string;
+  profilePicture?: string;
+  contactNumber?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UpdateProfileDto {
   lrn?: string;
   dob?: string;

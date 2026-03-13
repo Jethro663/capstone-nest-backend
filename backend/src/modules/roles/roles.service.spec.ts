@@ -8,8 +8,14 @@ const mockEq = jest.fn();
 const mockInArray = jest.fn();
 jest.mock('drizzle-orm', () => ({
   ...jest.requireActual('drizzle-orm'),
-  eq: (...args: unknown[]) => { mockEq(...args); return {}; },
-  inArray: (...args: unknown[]) => { mockInArray(...args); return {}; },
+  eq: (...args: unknown[]) => {
+    mockEq(...args);
+    return {};
+  },
+  inArray: (...args: unknown[]) => {
+    mockInArray(...args);
+    return {};
+  },
 }));
 
 const makeRole = (overrides: Partial<Role> = {}): Role => ({
@@ -152,10 +158,10 @@ describe('RolesService', () => {
       await service.findManyByNames(['  Admin ', 'TEACHER']);
 
       // The second argument to inArray() is the normalised names array.
-      expect(mockInArray).toHaveBeenCalledWith(
-        expect.anything(),
-        ['admin', 'teacher'],
-      );
+      expect(mockInArray).toHaveBeenCalledWith(expect.anything(), [
+        'admin',
+        'teacher',
+      ]);
     });
   });
 });

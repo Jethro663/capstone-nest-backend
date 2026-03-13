@@ -4,7 +4,10 @@ import { Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
 import { enrollments } from '../../../drizzle/schema';
-import { NotificationsService, CreateNotificationInput } from '../notifications.service';
+import {
+  NotificationsService,
+  CreateNotificationInput,
+} from '../notifications.service';
 import { NotificationsGateway } from '../notifications.gateway';
 
 interface FanOutJobData {

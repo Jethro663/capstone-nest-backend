@@ -28,17 +28,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { ScheduleCalendarCreator, type ScheduleSlot } from '@/components/admin/ScheduleCalendarCreator';
 import type { ClassItem, ClassSchedule } from '@/types/class';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
-import { SCHEDULE_DAYS, type ScheduleDay } from '@/utils/constants';
-
-type EditableSchedule = {
-  id: string;
-  days: ScheduleDay[];
-  startTime: string;
-  endTime: string;
-};
 
 type ClassFormState = {
   subjectName: string;
@@ -48,14 +41,7 @@ type ClassFormState = {
   teacherId: string;
   schoolYear: string;
   room: string;
-  schedules: EditableSchedule[];
-};
-
-const EMPTY_SCHEDULE: EditableSchedule = {
-  id: 'slot-1',
-  days: [],
-  startTime: '',
-  endTime: '',
+  schedules: ScheduleSlot[];
 };
 
 function createEmptyForm(defaultSchoolYear: string): ClassFormState {
@@ -67,22 +53,17 @@ function createEmptyForm(defaultSchoolYear: string): ClassFormState {
     teacherId: '',
     schoolYear: defaultSchoolYear,
     room: '',
-    schedules: [{ ...EMPTY_SCHEDULE }],
+    schedules: [],
   };
 }
 
-function mapSchedules(
-  schedules?: ClassSchedule[],
-): EditableSchedule[] {
-  if (!schedules || schedules.length === 0) {
-    return [{ ...EMPTY_SCHEDULE }];
-  }
-
-  return schedules.map((schedule, index) => ({
-    id: schedule.id || `slot-${index + 1}`,
-    days: [...schedule.days],
-    startTime: schedule.startTime,
-    endTime: schedule.endTime,
+/** Convert backend ClassSchedule (has id, daysExpanded, etc.) to clean ScheduleSlot */
+function mapSchedules(schedules?: ClassSchedule[]): ScheduleSlot[] {
+  if (!schedules || schedules.length === 0) return [];
+  return schedules.map((s) => ({
+    days: [...s.days],
+    startTime: s.startTime,
+    endTime: s.endTime,
   }));
 }
 
@@ -200,87 +181,14 @@ export default function ClassManagementPage() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const setScheduleField = (
-    index: number,
-    field: keyof EditableSchedule,
-    value: EditableSchedule[keyof EditableSchedule],
-  ) => {
-    setForm((current) => ({
-      ...current,
-      schedules: current.schedules.map((schedule, scheduleIndex) =>
-        scheduleIndex === index
-          ? { ...schedule, [field]: value }
-          : schedule,
-      ),
-    }));
-  };
-
-  const toggleScheduleDay = (index: number, day: ScheduleDay) => {
-    const currentDays = form.schedules[index]?.days || [];
-    const nextDays = currentDays.includes(day)
-      ? currentDays.filter((value) => value !== day)
-      : [...currentDays, day];
-    setScheduleField(index, 'days', nextDays);
-  };
-
-  const addScheduleRow = () => {
-    setForm((current) => ({
-      ...current,
-      schedules: [
-        ...current.schedules,
-        { ...EMPTY_SCHEDULE, id: `slot-${current.schedules.length + 1}` },
-      ],
-    }));
-  };
-
-  const removeScheduleRow = (index: number) => {
-    setForm((current) => {
-      if (current.schedules.length === 1) {
-        return {
-          ...current,
-          schedules: [{ ...EMPTY_SCHEDULE }],
-        };
-      }
-
-      return {
-        ...current,
-        schedules: current.schedules.filter(
-          (_, scheduleIndex) => scheduleIndex !== index,
-        ),
-      };
-    });
-  };
-
-  const normalizedSchedules = () => {
-    const completed = form.schedules.filter(
-      (schedule) =>
-        schedule.days.length > 0 &&
-        schedule.startTime &&
-        schedule.endTime,
-    );
-    const hasPartial = form.schedules.some(
-      (schedule) =>
-        schedule.days.length > 0 ||
-        Boolean(schedule.startTime) ||
-        Boolean(schedule.endTime),
-    );
-
-    if (hasPartial && completed.length !== form.schedules.filter(
-      (schedule) =>
-        schedule.days.length > 0 ||
-        Boolean(schedule.startTime) ||
-        Boolean(schedule.endTime),
-    ).length) {
-      toast.error(
-        'Each schedule slot needs at least one day, a start time, and an end time',
-      );
-      return null;
-    }
-
-    return completed.map((schedule) => ({
-      days: schedule.days,
-      startTime: schedule.startTime,
-      endTime: schedule.endTime,
+  /** The ScheduleCalendarCreator guarantees valid output, so normalization is trivial */
+  const normalizedSchedules = (): ScheduleSlot[] => {
+    return form.schedules.filter(
+      (s) => s.days.length > 0 && s.startTime && s.endTime,
+    ).map((s) => ({
+      days: s.days,
+      startTime: s.startTime,
+      endTime: s.endTime,
     }));
   };
 
@@ -292,9 +200,6 @@ export default function ClassManagementPage() {
     }
 
     const schedules = normalizedSchedules();
-    if (schedules === null) {
-      return;
-    }
 
     try {
       setSaving(true);
@@ -592,80 +497,12 @@ export default function ClassManagementPage() {
               />
             </Field>
 
-            <div className="space-y-4 rounded-2xl border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">Weekly Schedule</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Add one or more schedule slots for lecture, lab, or split
-                    meetings.
-                  </p>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={addScheduleRow}>
-                  + Add Slot
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {form.schedules.map((schedule, index) => (
-                  <div
-                    key={schedule.id}
-                    className="space-y-4 rounded-xl border border-dashed p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Schedule Slot {index + 1}</p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600"
-                        onClick={() => removeScheduleRow(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {SCHEDULE_DAYS.map((day) => {
-                        const selected = schedule.days.includes(day);
-                        return (
-                          <Button
-                            key={`${schedule.id}-${day}`}
-                            type="button"
-                            size="sm"
-                            variant={selected ? 'default' : 'outline'}
-                            onClick={() => toggleScheduleDay(index, day)}
-                          >
-                            {day}
-                          </Button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Start Time">
-                        <Input
-                          type="time"
-                          value={schedule.startTime}
-                          onChange={(event) =>
-                            setScheduleField(index, 'startTime', event.target.value)
-                          }
-                        />
-                      </Field>
-                      <Field label="End Time">
-                        <Input
-                          type="time"
-                          value={schedule.endTime}
-                          onChange={(event) =>
-                            setScheduleField(index, 'endTime', event.target.value)
-                          }
-                        />
-                      </Field>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ScheduleCalendarCreator
+              value={form.schedules}
+              onChange={(schedules) =>
+                setForm((current) => ({ ...current, schedules }))
+              }
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>

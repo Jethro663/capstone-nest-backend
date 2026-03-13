@@ -19,17 +19,17 @@ import { parseCsv } from './parsers/csv.parser';
 
 // helpers --------------------------------------------------------------
 const TEACHER_USER = { id: 't1', email: 't@school.edu', roles: ['teacher'] };
-const ADMIN_USER   = { id: 'a1', email: 'a@school.edu', roles: ['admin'] };
+const ADMIN_USER = { id: 'a1', email: 'a@school.edu', roles: ['admin'] };
 const SECTION_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_SECTION_ID = '22222222-2222-4222-8222-222222222222';
 const STUDENT_USER_ID = '33333333-3333-4333-8333-333333333333';
 
 function makeFileObj(originalname: string, mimetype: string) {
-  return ({
+  return {
     originalname,
     mimetype,
     path: '/tmp/file',
-  } as any) as Express.Multer.File;
+  } as any as Express.Multer.File;
 }
 
 // create a fake section row + header
@@ -80,7 +80,11 @@ describe('parseAndPreview', () => {
   it('throws NotFoundException when section is missing', async () => {
     dbStub.query.sections.findFirst.mockResolvedValue(null);
     await expect(
-      service.parseAndPreview('sec1', makeFileObj('roster.csv', 'text/csv'), ADMIN_USER),
+      service.parseAndPreview(
+        'sec1',
+        makeFileObj('roster.csv', 'text/csv'),
+        ADMIN_USER,
+      ),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -93,7 +97,11 @@ describe('parseAndPreview', () => {
     });
     (parseCsv as jest.Mock).mockReturnValue([['GRADE_7 HUMSS-A'], HEADER_ROW]);
     await expect(
-      service.parseAndPreview(SECTION_ID, makeFileObj('roster.csv', 'text/csv'), ADMIN_USER),
+      service.parseAndPreview(
+        SECTION_ID,
+        makeFileObj('roster.csv', 'text/csv'),
+        ADMIN_USER,
+      ),
     ).rejects.toThrow(/does not match the target section/i);
   });
 
@@ -104,12 +112,18 @@ describe('parseAndPreview', () => {
       name: 'HUMSS-A',
       isActive: true,
     });
-    (parseCsv as jest.Mock).mockReturnValue([SECTION_HEADER, HEADER_ROW, ...SAMPLE_DATA]);
+    (parseCsv as jest.Mock).mockReturnValue([
+      SECTION_HEADER,
+      HEADER_ROW,
+      ...SAMPLE_DATA,
+    ]);
 
     // simulate one existing user by email
     dbStub.select.mockReturnValueOnce({
       from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockResolvedValue([{ id: 'u1', email: 'juan@example.com' }]),
+      where: jest
+        .fn()
+        .mockResolvedValue([{ id: 'u1', email: 'juan@example.com' }]),
     });
 
     // simulate enrollments query
@@ -139,10 +153,14 @@ describe('commitRoster', () => {
       name: 'HUMSS',
       isActive: true,
     });
-    const dto = { sectionId: OTHER_SECTION_ID, enrolledRows: [], pendingRows: [] };
-    await expect(service.commitRoster(SECTION_ID, dto as any, ADMIN_USER)).rejects.toThrow(
-      /does not match route parameter/i,
-    );
+    const dto = {
+      sectionId: OTHER_SECTION_ID,
+      enrolledRows: [],
+      pendingRows: [],
+    };
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
+    ).rejects.toThrow(/does not match route parameter/i);
   });
 
   it('rejects if section is inactive', async () => {
@@ -153,9 +171,9 @@ describe('commitRoster', () => {
       name: 'HUMSS',
     });
     const dto = { sectionId: SECTION_ID, enrolledRows: [], pendingRows: [] };
-    await expect(service.commitRoster(SECTION_ID, dto as any, ADMIN_USER)).rejects.toThrow(
-      /inactive/i,
-    );
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
+    ).rejects.toThrow(/inactive/i);
   });
 
   it('rejects when teacher not adviser', async () => {
@@ -167,9 +185,9 @@ describe('commitRoster', () => {
       name: 'HUMSS',
     });
     const dto = { sectionId: SECTION_ID, enrolledRows: [], pendingRows: [] };
-    await expect(service.commitRoster(SECTION_ID, dto as any, TEACHER_USER)).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, TEACHER_USER),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('throws capacity error when over limit', async () => {
@@ -197,16 +215,20 @@ describe('commitRoster', () => {
       enrolledRows: [
         {
           userId: STUDENT_USER_ID,
-          name: { lastName: 'Dela Cruz', firstName: 'Juan', middleInitial: 'A' },
+          name: {
+            lastName: 'Dela Cruz',
+            firstName: 'Juan',
+            middleInitial: 'A',
+          },
           lrn: '123456780001',
           email: 'a@b.com',
         },
       ],
       pendingRows: [],
     };
-    await expect(service.commitRoster(SECTION_ID, dto as any, ADMIN_USER)).rejects.toThrow(
-      /exceed the section capacity/i,
-    );
+    await expect(
+      service.commitRoster(SECTION_ID, dto as any, ADMIN_USER),
+    ).rejects.toThrow(/exceed the section capacity/i);
   });
 
   it('successfully enrolls and inserts pending rows', async () => {
@@ -239,7 +261,9 @@ describe('commitRoster', () => {
     });
     // student role verification: return a chain with innerJoin and custom where
     const chainForRole = freshChain();
-    chainForRole.where = jest.fn().mockResolvedValue([{ userId: STUDENT_USER_ID }]);
+    chainForRole.where = jest
+      .fn()
+      .mockResolvedValue([{ userId: STUDENT_USER_ID }]);
     dbStub.select.mockReturnValueOnce(chainForRole);
     // override transaction to simulate inserts for enrollments then pending rows
     const enrollResult = [{ studentId: STUDENT_USER_ID }];
@@ -266,7 +290,11 @@ describe('commitRoster', () => {
       enrolledRows: [
         {
           userId: STUDENT_USER_ID,
-          name: { lastName: 'Dela Cruz', firstName: 'Juan', middleInitial: 'A' },
+          name: {
+            lastName: 'Dela Cruz',
+            firstName: 'Juan',
+            middleInitial: 'A',
+          },
           lrn: '123456780001',
           email: 'a@b.com',
         },

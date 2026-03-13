@@ -63,7 +63,7 @@ export class SectionsService {
       .innerJoin(roles, eq(roles.id, userRoles.roleId))
       .where(eq(userRoles.userId, adviserId));
 
-    if (!adviserRoles.some(r => r.roleName === 'teacher')) {
+    if (!adviserRoles.some((r) => r.roleName === 'teacher')) {
       throw new BadRequestException(
         `User "${adviserId}" does not have the teacher role and cannot be assigned as adviser`,
       );
@@ -87,10 +87,14 @@ export class SectionsService {
 
     const whereConditions: SQL<unknown>[] = [];
 
-    if (filters?.gradeLevel) whereConditions.push(eq(sections.gradeLevel, filters.gradeLevel));
-    if (filters?.schoolYear) whereConditions.push(eq(sections.schoolYear, filters.schoolYear));
-    if (filters?.isActive !== undefined) whereConditions.push(eq(sections.isActive, filters.isActive));
-    if (filters?.adviserId) whereConditions.push(eq(sections.adviserId, filters.adviserId));
+    if (filters?.gradeLevel)
+      whereConditions.push(eq(sections.gradeLevel, filters.gradeLevel));
+    if (filters?.schoolYear)
+      whereConditions.push(eq(sections.schoolYear, filters.schoolYear));
+    if (filters?.isActive !== undefined)
+      whereConditions.push(eq(sections.isActive, filters.isActive));
+    if (filters?.adviserId)
+      whereConditions.push(eq(sections.adviserId, filters.adviserId));
     if (filters?.search) {
       const searchPattern = `%${filters.search}%`;
       const searchCondition = or(
@@ -100,15 +104,21 @@ export class SectionsService {
       if (searchCondition) whereConditions.push(searchCondition);
     }
 
-    const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
+    const whereClause =
+      whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
     const [sectionsList, totalResult] = await Promise.all([
       this.db.query.sections.findMany({
         where: whereClause,
         with: {
-          adviser: { columns: { id: true, firstName: true, lastName: true, email: true } },
+          adviser: {
+            columns: { id: true, firstName: true, lastName: true, email: true },
+          },
         },
-        orderBy: (sections, { asc }) => [asc(sections.gradeLevel), asc(sections.name)],
+        orderBy: (sections, { asc }) => [
+          asc(sections.gradeLevel),
+          asc(sections.name),
+        ],
         limit,
         offset,
       }),
@@ -123,7 +133,9 @@ export class SectionsService {
         .select({
           sectionId: enrollments.sectionId,
           studentCount:
-            sql<number>`count(distinct ${enrollments.studentId})`.mapWith(Number),
+            sql<number>`count(distinct ${enrollments.studentId})`.mapWith(
+              Number,
+            ),
         })
         .from(enrollments)
         .where(
@@ -161,11 +173,14 @@ export class SectionsService {
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, id),
       with: {
-        adviser: { columns: { id: true, firstName: true, lastName: true, email: true } },
+        adviser: {
+          columns: { id: true, firstName: true, lastName: true, email: true },
+        },
       },
     });
 
-    if (!section) throw new NotFoundException(`Section with ID "${id}" not found`);
+    if (!section)
+      throw new NotFoundException(`Section with ID "${id}" not found`);
 
     // Teachers (non-admin) can only access sections they advise
     if (requestingUser && this.isTeacherOnly(requestingUser)) {
@@ -201,7 +216,7 @@ export class SectionsService {
       orderBy: (enrollments, { asc }) => [asc(enrollments.enrolledAt)],
     });
 
-    return roster.map(r => ({
+    return roster.map((r) => ({
       id: r.student.id,
       enrollmentId: r.id,
       studentId: r.studentId,
@@ -217,7 +232,10 @@ export class SectionsService {
 
   // ─── getCandidates ────────────────────────────────────────────────────────
 
-  async getCandidates(sectionId: string, filters?: { gradeLevel?: string; search?: string }) {
+  async getCandidates(
+    sectionId: string,
+    filters?: { gradeLevel?: string; search?: string },
+  ) {
     await this.findById(sectionId);
 
     // Build a subquery for actively-enrolled students in this section.
@@ -238,7 +256,9 @@ export class SectionsService {
     // Collect only defined extra conditions — avoids unsafe and(...undefined[]) spread.
     const extraConditions: SQL<unknown>[] = [];
     if (filters?.gradeLevel) {
-      extraConditions.push(eq(studentProfiles.gradeLevel, filters.gradeLevel as any));
+      extraConditions.push(
+        eq(studentProfiles.gradeLevel, filters.gradeLevel as any),
+      );
     }
     if (filters?.search) {
       const searchCond = or(
@@ -261,7 +281,10 @@ export class SectionsService {
       .from(users)
       .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
       .innerJoin(userRoles, eq(userRoles.userId, users.id))
-      .innerJoin(roles, and(eq(roles.id, userRoles.roleId), eq(roles.name, 'student')))
+      .innerJoin(
+        roles,
+        and(eq(roles.id, userRoles.roleId), eq(roles.name, 'student')),
+      )
       .where(and(notInArray(users.id, enrolledSubquery), ...extraConditions))
       .orderBy(users.lastName, users.firstName)
       .limit(200);
@@ -301,10 +324,12 @@ export class SectionsService {
         .from(users)
         .where(inArray(users.id, dto.studentIds));
 
-      const validIds = new Set(validStudents.map(s => s.id));
-      const invalidIds = dto.studentIds.filter(id => !validIds.has(id));
+      const validIds = new Set(validStudents.map((s) => s.id));
+      const invalidIds = dto.studentIds.filter((id) => !validIds.has(id));
       if (invalidIds.length > 0) {
-        throw new BadRequestException(`Student IDs not found: ${invalidIds.join(', ')}`);
+        throw new BadRequestException(
+          `Student IDs not found: ${invalidIds.join(', ')}`,
+        );
       }
 
       // 2b. Verify every provided ID actually holds the 'student' role.
@@ -320,8 +345,10 @@ export class SectionsService {
           ),
         );
 
-      const confirmedStudentIds = new Set(studentRoleRows.map(r => r.userId));
-      const nonStudentIds = dto.studentIds.filter(id => !confirmedStudentIds.has(id));
+      const confirmedStudentIds = new Set(studentRoleRows.map((r) => r.userId));
+      const nonStudentIds = dto.studentIds.filter(
+        (id) => !confirmedStudentIds.has(id),
+      );
       if (nonStudentIds.length > 0) {
         throw new BadRequestException(
           `The following user(s) do not have the student role: ${nonStudentIds.join(', ')}`,
@@ -340,15 +367,19 @@ export class SectionsService {
           ),
         );
 
-      const alreadyEnrolledIds = new Set(alreadyEnrolledRows.map(e => e.studentId));
-      const newStudentIds = dto.studentIds.filter(id => !alreadyEnrolledIds.has(id));
+      const alreadyEnrolledIds = new Set(
+        alreadyEnrolledRows.map((e) => e.studentId),
+      );
+      const newStudentIds = dto.studentIds.filter(
+        (id) => !alreadyEnrolledIds.has(id),
+      );
 
       if (newStudentIds.length === 0) {
         return { createdCount: 0, created: [], skipped: dto.studentIds.length };
       }
 
       // 4. Bulk insert all new enrollments in a single statement
-      const values = newStudentIds.map(studentId => ({
+      const values = newStudentIds.map((studentId) => ({
         studentId,
         classId: null as string | null,
         sectionId,
@@ -412,10 +443,14 @@ export class SectionsService {
         .limit(1);
 
       if (!sectionEnrollment) {
-        throw new BadRequestException('Student is not actively enrolled in this section');
+        throw new BadRequestException(
+          'Student is not actively enrolled in this section',
+        );
       }
 
-      await tx.delete(enrollments).where(eq(enrollments.id, sectionEnrollment.id));
+      await tx
+        .delete(enrollments)
+        .where(eq(enrollments.id, sectionEnrollment.id));
 
       return { removed: true };
     });
@@ -444,7 +479,9 @@ export class SectionsService {
       });
 
       if (!adviser) {
-        throw new NotFoundException(`Adviser with ID "${createSectionDto.adviserId}" not found`);
+        throw new NotFoundException(
+          `Adviser with ID "${createSectionDto.adviserId}" not found`,
+        );
       }
 
       // Ensure the assigned adviser actually holds the teacher role
@@ -484,10 +521,16 @@ export class SectionsService {
   async updateSection(id: string, updateSectionDto: UpdateSectionDto) {
     const existingSection = await this.findById(id);
 
-    if (updateSectionDto.name || updateSectionDto.gradeLevel || updateSectionDto.schoolYear) {
+    if (
+      updateSectionDto.name ||
+      updateSectionDto.gradeLevel ||
+      updateSectionDto.schoolYear
+    ) {
       const nameToCheck = updateSectionDto.name || existingSection.name;
-      const gradeToCheck = updateSectionDto.gradeLevel || existingSection.gradeLevel;
-      const yearToCheck = updateSectionDto.schoolYear || existingSection.schoolYear;
+      const gradeToCheck =
+        updateSectionDto.gradeLevel || existingSection.gradeLevel;
+      const yearToCheck =
+        updateSectionDto.schoolYear || existingSection.schoolYear;
 
       const duplicateSection = await this.db.query.sections.findFirst({
         where: and(
@@ -524,13 +567,18 @@ export class SectionsService {
     }
 
     // Allow null to explicitly clear the adviser; skip role check when clearing.
-    if (updateSectionDto.adviserId !== undefined && updateSectionDto.adviserId !== null) {
+    if (
+      updateSectionDto.adviserId !== undefined &&
+      updateSectionDto.adviserId !== null
+    ) {
       const adviser = await this.db.query.users.findFirst({
         where: eq(users.id, updateSectionDto.adviserId),
       });
 
       if (!adviser) {
-        throw new NotFoundException(`Adviser with ID "${updateSectionDto.adviserId}" not found`);
+        throw new NotFoundException(
+          `Adviser with ID "${updateSectionDto.adviserId}" not found`,
+        );
       }
 
       // Ensure the new adviser holds the teacher role
@@ -548,13 +596,20 @@ export class SectionsService {
       updatedAt: Date;
     }> = { updatedAt: new Date() };
 
-    if (updateSectionDto.name !== undefined) updateData.name = updateSectionDto.name;
-    if (updateSectionDto.gradeLevel !== undefined) updateData.gradeLevel = updateSectionDto.gradeLevel;
-    if (updateSectionDto.schoolYear !== undefined) updateData.schoolYear = updateSectionDto.schoolYear;
-    if (updateSectionDto.capacity !== undefined) updateData.capacity = updateSectionDto.capacity;
-    if (updateSectionDto.roomNumber !== undefined) updateData.roomNumber = updateSectionDto.roomNumber;
-    if (updateSectionDto.adviserId !== undefined) updateData.adviserId = updateSectionDto.adviserId;
-    if (updateSectionDto.isActive !== undefined) updateData.isActive = updateSectionDto.isActive;
+    if (updateSectionDto.name !== undefined)
+      updateData.name = updateSectionDto.name;
+    if (updateSectionDto.gradeLevel !== undefined)
+      updateData.gradeLevel = updateSectionDto.gradeLevel;
+    if (updateSectionDto.schoolYear !== undefined)
+      updateData.schoolYear = updateSectionDto.schoolYear;
+    if (updateSectionDto.capacity !== undefined)
+      updateData.capacity = updateSectionDto.capacity;
+    if (updateSectionDto.roomNumber !== undefined)
+      updateData.roomNumber = updateSectionDto.roomNumber;
+    if (updateSectionDto.adviserId !== undefined)
+      updateData.adviserId = updateSectionDto.adviserId;
+    if (updateSectionDto.isActive !== undefined)
+      updateData.isActive = updateSectionDto.isActive;
 
     try {
       await this.db.update(sections).set(updateData).where(eq(sections.id, id));
@@ -562,8 +617,10 @@ export class SectionsService {
     } catch (err: any) {
       if (err?.code === '23505') {
         const nameToCheck = updateSectionDto.name || existingSection.name;
-        const gradeToCheck = updateSectionDto.gradeLevel || existingSection.gradeLevel;
-        const yearToCheck = updateSectionDto.schoolYear || existingSection.schoolYear;
+        const gradeToCheck =
+          updateSectionDto.gradeLevel || existingSection.gradeLevel;
+        const yearToCheck =
+          updateSectionDto.schoolYear || existingSection.schoolYear;
         throw new ConflictException(
           `Section "${nameToCheck}" already exists for grade ${gradeToCheck} in ${yearToCheck}`,
         );
@@ -601,7 +658,12 @@ export class SectionsService {
         tx
           .select({ count: count() })
           .from(enrollments)
-          .where(and(eq(enrollments.sectionId, id), eq(enrollments.status, 'enrolled'))),
+          .where(
+            and(
+              eq(enrollments.sectionId, id),
+              eq(enrollments.status, 'enrolled'),
+            ),
+          ),
       ]);
 
       const activeClasses = Number(activeClassesResult[0]?.count ?? 0);
@@ -668,7 +730,7 @@ export class SectionsService {
         schoolYear: section.schoolYear,
         roomNumber: section.roomNumber ?? null,
       },
-      classes: classList.map(cls => ({
+      classes: classList.map((cls) => ({
         classId: cls.id,
         subjectName: cls.subjectName,
         subjectCode: cls.subjectCode,
@@ -680,13 +742,14 @@ export class SectionsService {
         // so a direct DB edit or migration edge case could produce duplicate rows that
         // would silently render as overlapping calendar blocks on the frontend.
         schedules: (cls.schedules ?? [])
-          .filter((s, i, arr) =>
-            arr.findIndex(
-              x =>
-                x.startTime === s.startTime &&
-                x.endTime === s.endTime &&
-                [...x.days].sort().join(',') === [...s.days].sort().join(','),
-            ) === i,
+          .filter(
+            (s, i, arr) =>
+              arr.findIndex(
+                (x) =>
+                  x.startTime === s.startTime &&
+                  x.endTime === s.endTime &&
+                  [...x.days].sort().join(',') === [...s.days].sort().join(','),
+              ) === i,
           )
           .map(toCalendarSlot),
       })),

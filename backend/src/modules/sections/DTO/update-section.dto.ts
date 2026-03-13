@@ -26,7 +26,9 @@ export class UpdateSectionDto {
 
   @IsString()
   @IsOptional()
-  @IsIn(VALID_GRADE_LEVELS, { message: 'gradeLevel must be one of: 7, 8, 9, 10' })
+  @IsIn(VALID_GRADE_LEVELS, {
+    message: 'gradeLevel must be one of: 7, 8, 9, 10',
+  })
   @Transform(({ value }) => value?.trim())
   gradeLevel?: string;
 

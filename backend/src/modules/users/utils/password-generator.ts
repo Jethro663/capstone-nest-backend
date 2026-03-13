@@ -35,7 +35,8 @@ export class PasswordGenerator {
     ];
 
     // Fill remaining characters with random characters from all sets
-    const allChars = this.UPPERCASE + this.LOWERCASE + this.NUMBERS + this.SPECIAL;
+    const allChars =
+      this.UPPERCASE + this.LOWERCASE + this.NUMBERS + this.SPECIAL;
     for (let i = requiredChars.length; i < length; i++) {
       requiredChars.push(this.getRandomChar(allChars));
     }

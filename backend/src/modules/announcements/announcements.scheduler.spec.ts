@@ -36,6 +36,8 @@ describe('AnnouncementsScheduler', () => {
     );
 
     // Should resolve without re-throwing (error is caught and logged)
-    await expect(scheduler.handleScheduledAnnouncements()).resolves.toBeUndefined();
+    await expect(
+      scheduler.handleScheduledAnnouncements(),
+    ).resolves.toBeUndefined();
   });
 });

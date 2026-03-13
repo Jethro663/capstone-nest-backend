@@ -1,4 +1,10 @@
-import { IsOptional, IsString, IsDateString, IsIn, Matches } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsIn,
+  Matches,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -76,7 +82,10 @@ export class UpdateProfileDto {
   @IsString()
   familyContact?: string;
 
-  @ApiProperty({ example: '/api/profiles/images/student-avatar.png', required: false })
+  @ApiProperty({
+    example: '/api/profiles/images/student-avatar.png',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   profilePicture?: string;

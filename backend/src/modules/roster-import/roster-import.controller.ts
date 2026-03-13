@@ -20,7 +20,10 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { RosterImportService } from './roster-import.service';
 import { RosterFileValidationPipe } from './pipes/roster-file-validation.pipe';
-import { RosterImportCommitDto, ResolvePendingRowDto } from './dto/roster-import.dto';
+import {
+  RosterImportCommitDto,
+  ResolvePendingRowDto,
+} from './dto/roster-import.dto';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
@@ -137,6 +140,10 @@ export class RosterImportController {
     @Body() dto: ResolvePendingRowDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.rosterImportService.resolvePendingRow(id, dto.resolvedUserId, user);
+    return this.rosterImportService.resolvePendingRow(
+      id,
+      dto.resolvedUserId,
+      user,
+    );
   }
 }

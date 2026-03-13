@@ -213,8 +213,7 @@ export class ClassRecordSyncService {
       };
 
       const categoryName =
-        categoryNameMap[event.classRecordCategory] ??
-        event.classRecordCategory;
+        categoryNameMap[event.classRecordCategory] ?? event.classRecordCategory;
 
       // 4. Find the matching category in this class record
       const category = await this.db.query.classRecordCategories.findFirst({

@@ -1,4 +1,4 @@
-import './tracing'
+import './tracing';
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
@@ -67,7 +67,8 @@ async function bootstrap() {
         'token',
       )
       .build();
-    const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
+    const documentFactory = () =>
+      SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('api', app, documentFactory);
     logger.log('Swagger UI available at http://localhost:3000/api');
   }
@@ -77,7 +78,11 @@ async function bootstrap() {
 
   // CORS — allow configured origins; localhost only outside production
   const devOrigins = !isProd
-    ? ['http://localhost:5173', 'http://localhost:8081', 'http://localhost:3001']
+    ? [
+        'http://localhost:5173',
+        'http://localhost:8081',
+        'http://localhost:3001',
+      ]
     : [];
 
   app.enableCors({
@@ -94,7 +99,9 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   await app.listen(3000, '0.0.0.0');
-  logger.log(`Application running on http://localhost:3000 [${isProd ? 'production' : 'development'}]`);
+  logger.log(
+    `Application running on http://localhost:3000 [${isProd ? 'production' : 'development'}]`,
+  );
 }
 
 bootstrap();

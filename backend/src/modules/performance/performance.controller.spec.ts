@@ -32,10 +32,10 @@ describe('PerformanceController', () => {
       totalStudents: 10,
     } as any);
 
-    const result = await controller.recomputeClass(
-      'class-1',
-      { userId: 'teacher-1', roles: ['teacher'] },
-    );
+    const result = await controller.recomputeClass('class-1', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
 
     expect(result.success).toBe(true);
     expect(result.data.recomputed).toBe(10);

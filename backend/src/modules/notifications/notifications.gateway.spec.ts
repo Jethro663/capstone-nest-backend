@@ -64,7 +64,10 @@ describe('NotificationsGateway', () => {
 
   describe('handleConnection()', () => {
     it('joins the user room and stores userId on socket.data when token is valid', async () => {
-      mockJwtService.verify.mockReturnValue({ userId: USER_ID, type: 'access' });
+      mockJwtService.verify.mockReturnValue({
+        userId: USER_ID,
+        type: 'access',
+      });
       const client = makeSocket();
 
       await gateway.handleConnection(client);
@@ -81,7 +84,9 @@ describe('NotificationsGateway', () => {
 
       expect(client.emit).toHaveBeenCalledWith(
         'error',
-        expect.objectContaining({ message: expect.stringContaining('no token') }),
+        expect.objectContaining({
+          message: expect.stringContaining('no token'),
+        }),
       );
       expect(client.disconnect).toHaveBeenCalledWith(true);
     });
@@ -99,7 +104,10 @@ describe('NotificationsGateway', () => {
     });
 
     it('disconnects when token type is not "access"', async () => {
-      mockJwtService.verify.mockReturnValue({ userId: USER_ID, type: 'refresh' });
+      mockJwtService.verify.mockReturnValue({
+        userId: USER_ID,
+        type: 'refresh',
+      });
       const client = makeSocket();
 
       await gateway.handleConnection(client);
@@ -108,7 +116,10 @@ describe('NotificationsGateway', () => {
     });
 
     it('strips "Bearer " prefix from token before verifying', async () => {
-      mockJwtService.verify.mockReturnValue({ userId: USER_ID, type: 'access' });
+      mockJwtService.verify.mockReturnValue({
+        userId: USER_ID,
+        type: 'access',
+      });
       const client = makeSocket({
         handshake: { auth: { token: 'Bearer actual.token.here' }, headers: {} },
       });
@@ -128,7 +139,9 @@ describe('NotificationsGateway', () => {
   describe('emitToUser()', () => {
     it('emits notification.new to the correct user room', () => {
       const roomEmitSpy = jest.fn();
-      (gateway as any).server.to = jest.fn().mockReturnValue({ emit: roomEmitSpy });
+      (gateway as any).server.to = jest
+        .fn()
+        .mockReturnValue({ emit: roomEmitSpy });
 
       const payload = {
         id: 'ann-1',
@@ -141,14 +154,18 @@ describe('NotificationsGateway', () => {
 
       gateway.emitToUser(USER_ID, payload);
 
-      expect((gateway as any).server.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+      expect((gateway as any).server.to).toHaveBeenCalledWith(
+        `user:${USER_ID}`,
+      );
       expect(roomEmitSpy).toHaveBeenCalledWith('notification.new', payload);
     });
 
     it('does not throw if the user room is empty (no connected sockets)', () => {
       // to() returns a room object; even if no sockets are in it, emit is a no-op
       const roomEmitSpy = jest.fn();
-      (gateway as any).server.to = jest.fn().mockReturnValue({ emit: roomEmitSpy });
+      (gateway as any).server.to = jest
+        .fn()
+        .mockReturnValue({ emit: roomEmitSpy });
 
       expect(() =>
         gateway.emitToUser('offline-user-id', {

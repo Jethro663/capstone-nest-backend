@@ -3,9 +3,7 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { RosterFileValidationPipe } from './roster-file-validation.pipe';
-import {
-  MAX_ROSTER_FILE_SIZE_BYTES,
-} from '../constants/roster-import.constants';
+import { MAX_ROSTER_FILE_SIZE_BYTES } from '../constants/roster-import.constants';
 
 // -----------------------------------------------------------------------------
 // Mocks for filesystem operations
@@ -32,12 +30,15 @@ jest.mock('fs', () => ({
 const XLSX_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // PK.. zip signature
 const TXT_SAMPLE = Buffer.from('name,lrn,email\n');
 
-const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.File =>
+const makeFile = (
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File =>
   ({
     fieldname: 'file',
     originalname: 'roster.xlsx',
     encoding: '7bit',
-    mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    mimetype:
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     path: '/tmp/roster/fake.xlsx',
     filename: 'fake.xlsx',
     size: 1024,
@@ -45,7 +46,7 @@ const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.
     buffer: Buffer.alloc(0),
     stream: null as any,
     ...overrides,
-  } as any);
+  }) as any;
 
 // -----------------------------------------------------------------------------
 // Test suite
@@ -73,13 +74,20 @@ describe('RosterFileValidationPipe', () => {
 
   it('rejects files larger than the configured maximum', async () => {
     const file = makeFile({ size: MAX_ROSTER_FILE_SIZE_BYTES + 1 });
-    await expect(pipe.transform(file)).rejects.toThrow(PayloadTooLargeException);
+    await expect(pipe.transform(file)).rejects.toThrow(
+      PayloadTooLargeException,
+    );
     expect(mockUnlink).toHaveBeenCalledWith(file.path);
   });
 
   it('rejects unsupported extensions', async () => {
-    const file = makeFile({ originalname: 'evil.exe', mimetype: 'application/vnd.microsoft.portable-executable' });
-    await expect(pipe.transform(file)).rejects.toThrow(UnsupportedMediaTypeException);
+    const file = makeFile({
+      originalname: 'evil.exe',
+      mimetype: 'application/vnd.microsoft.portable-executable',
+    });
+    await expect(pipe.transform(file)).rejects.toThrow(
+      UnsupportedMediaTypeException,
+    );
     expect(mockUnlink).toHaveBeenCalledWith(file.path);
   });
 
@@ -89,7 +97,9 @@ describe('RosterFileValidationPipe', () => {
       return TXT_SAMPLE.length;
     });
     const file = makeFile();
-    await expect(pipe.transform(file)).rejects.toThrow(UnsupportedMediaTypeException);
+    await expect(pipe.transform(file)).rejects.toThrow(
+      UnsupportedMediaTypeException,
+    );
     expect(mockUnlink).toHaveBeenCalledWith(file.path);
   });
 
@@ -108,7 +118,9 @@ describe('RosterFileValidationPipe', () => {
   });
 
   it('throws when file is undefined', async () => {
-    await expect(pipe.transform(undefined as any)).rejects.toThrow(UnsupportedMediaTypeException);
+    await expect(pipe.transform(undefined as any)).rejects.toThrow(
+      UnsupportedMediaTypeException,
+    );
   });
 
   it('throws BadRequestException when file cannot be read', async () => {
@@ -117,7 +129,9 @@ describe('RosterFileValidationPipe', () => {
     });
 
     const file = makeFile();
-    await expect(pipe.transform(file)).rejects.toThrow('Could not read uploaded file for validation.');
+    await expect(pipe.transform(file)).rejects.toThrow(
+      'Could not read uploaded file for validation.',
+    );
     expect(mockUnlink).toHaveBeenCalledWith(file.path);
   });
 });

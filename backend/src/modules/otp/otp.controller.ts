@@ -40,13 +40,18 @@ export class OtpController {
   // 3 requests per 5 min per IP — matches /auth/forgot-password
   @Throttle({ default: { limit: 3, ttl: 300000 } })
   @ApiOperation({ summary: 'Resend verification OTP' })
-  @ApiResponse({ status: 200, description: 'If the address is registered and unverified, a new code has been sent.' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'If the address is registered and unverified, a new code has been sent.',
+  })
   async resendOtp(@Body() resendOtpDto: ResendOtpDto) {
     await this.otpService.resendOTP(resendOtpDto.email);
 
     return {
       success: true,
-      message: 'If the address is registered and unverified, a new code has been sent.',
+      message:
+        'If the address is registered and unverified, a new code has been sent.',
     };
   }
 }

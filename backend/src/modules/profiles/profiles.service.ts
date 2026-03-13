@@ -28,8 +28,10 @@ export class ProfilesService {
     if (dto.familyRelationship !== undefined) {
       payload.familyRelationship = dto.familyRelationship;
     }
-    if (dto.familyContact !== undefined) payload.familyContact = dto.familyContact;
-    if (dto.profilePicture !== undefined) payload.profilePicture = dto.profilePicture;
+    if (dto.familyContact !== undefined)
+      payload.familyContact = dto.familyContact;
+    if (dto.profilePicture !== undefined)
+      payload.profilePicture = dto.profilePicture;
 
     return payload;
   }

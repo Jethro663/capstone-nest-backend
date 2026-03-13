@@ -27,6 +27,10 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'U';
+  const avatarSrc =
+    user?.profile?.profilePicture ??
+    user?.teacherProfile?.profilePicture ??
+    user?.profilePicture;
   const profileHref = getProfileRoute(role);
 
   return (
@@ -69,7 +73,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
           className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-[var(--student-accent-soft)]' : 'hover:bg-slate-100'}`}
         >
           <Avatar className="h-8 w-8">
-            {user?.profilePicture ? <AvatarImage src={user.profilePicture} alt={displayName} /> : null}
+            {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
             <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]' : 'bg-primary/10 text-primary'}`}>
               {initials}
             </AvatarFallback>

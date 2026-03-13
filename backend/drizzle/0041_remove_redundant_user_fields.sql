@@ -1,0 +1,11 @@
+ALTER TABLE "users" DROP COLUMN IF EXISTS "date_of_birth";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "gender";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "civil_status";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "course";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "phone";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "city";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "country";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "family_name";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "family_relationship";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "family_contact";
+ALTER TABLE "users" DROP COLUMN IF EXISTS "profile_picture";

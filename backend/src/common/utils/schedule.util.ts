@@ -1,10 +1,10 @@
 /** Full English names keyed by the abbreviated day codes used in the DB */
 const DAY_FULL_NAMES: Record<string, string> = {
-  M:  'Monday',
-  T:  'Tuesday',
-  W:  'Wednesday',
+  M: 'Monday',
+  T: 'Tuesday',
+  W: 'Wednesday',
   Th: 'Thursday',
-  F:  'Friday',
+  F: 'Friday',
   Sa: 'Saturday',
   Su: 'Sunday',
 };
@@ -45,7 +45,7 @@ export function toCalendarSlot(slot: {
     days: slot.days,
     startTime: slot.startTime,
     endTime: slot.endTime,
-    daysExpanded: slot.days.map(d => DAY_FULL_NAMES[d] ?? d),
+    daysExpanded: slot.days.map((d) => DAY_FULL_NAMES[d] ?? d),
     startHour: sh,
     startMinute: sm,
     endHour: eh,

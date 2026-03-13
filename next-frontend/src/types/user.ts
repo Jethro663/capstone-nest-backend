@@ -1,3 +1,5 @@
+import type { StudentProfile, TeacherProfile } from './profile';
+
 export interface User {
   id: string;
   userId?: string;
@@ -23,6 +25,8 @@ export interface User {
   familyName?: string;
   familyRelationship?: string;
   familyContact?: string;
+  profile?: StudentProfile | null;
+  teacherProfile?: TeacherProfile | null;
   [key: string]: unknown;
 }
 

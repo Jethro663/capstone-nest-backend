@@ -173,7 +173,11 @@ describe('AuthService', () => {
       });
       mockUsersService.findById.mockResolvedValue(user);
 
-      const result = await service.refreshToken('old-raw-token', '127.0.0.1', 'agent');
+      const result = await service.refreshToken(
+        'old-raw-token',
+        '127.0.0.1',
+        'agent',
+      );
 
       expect(result.accessToken).toBe('signed-jwt');
       expect(result.refreshToken).toBe('new-raw-token');
@@ -184,9 +188,9 @@ describe('AuthService', () => {
         new UnauthorizedException('Invalid refresh token'),
       );
 
-      await expect(
-        service.refreshToken('bad-token'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshToken('bad-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException when user is no longer active', async () => {
@@ -194,7 +198,9 @@ describe('AuthService', () => {
         newRawToken: 'new-token',
         userId: 'user-uuid-1',
       });
-      mockUsersService.findById.mockResolvedValue(makeUser({ status: 'SUSPENDED' }));
+      mockUsersService.findById.mockResolvedValue(
+        makeUser({ status: 'SUSPENDED' }),
+      );
 
       await expect(service.refreshToken('token')).rejects.toThrow(
         'not found or inactive',
@@ -209,7 +215,9 @@ describe('AuthService', () => {
   describe('logout()', () => {
     it('should call revokeByToken with the provided token', async () => {
       await service.logout('raw-token-to-revoke');
-      expect(mockTokenService.revokeByToken).toHaveBeenCalledWith('raw-token-to-revoke');
+      expect(mockTokenService.revokeByToken).toHaveBeenCalledWith(
+        'raw-token-to-revoke',
+      );
     });
 
     it('should not throw if revokeByToken fails (non-critical)', async () => {
@@ -257,7 +265,10 @@ describe('AuthService', () => {
       mockUsersService.findByEmail.mockResolvedValue(makeUser());
       bcrypt.compare.mockResolvedValue(true);
 
-      const result = await service.validateCredentials('test@example.com', 'correct');
+      const result = await service.validateCredentials(
+        'test@example.com',
+        'correct',
+      );
       expect(result).toBe(true);
     });
 

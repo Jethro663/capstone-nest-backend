@@ -227,7 +227,7 @@ export const classSchedules = pgTable(
     // Array of day abbreviations: M T W Th F Sa Su
     days: text('days').array().notNull(),
     startTime: text('start_time').notNull(), // HH:MM 24-hour
-    endTime: text('end_time').notNull(),     // HH:MM 24-hour
+    endTime: text('end_time').notNull(), // HH:MM 24-hour
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -259,8 +259,31 @@ export const studentProfiles = pgTable(
   },
   (table) => ({
     userIdx: index('student_profiles_user_id_idx').on(table.userId),
-    gradeLevelIdx: index('student_profiles_grade_level_idx').on(table.gradeLevel),
+    gradeLevelIdx: index('student_profiles_grade_level_idx').on(
+      table.gradeLevel,
+    ),
     lrnIdx: unique('student_profiles_lrn_unique').on(table.lrn),
+  }),
+);
+
+export const teacherProfiles = pgTable(
+  'teacher_profiles',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    department: text('department'),
+    specialization: text('specialization'),
+    profilePicture: text('profile_picture'),
+    contactNumber: text('contact_number'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('teacher_profiles_user_id_idx').on(table.userId),
+    departmentIdx: index('teacher_profiles_department_idx').on(
+      table.department,
+    ),
   }),
 );
 
@@ -271,8 +294,9 @@ export const enrollments = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    classId: uuid('class_id')
-      .references(() => classes.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id').references(() => classes.id, {
+      onDelete: 'cascade',
+    }),
     sectionId: uuid('section_id')
       .notNull()
       .references(() => sections.id, { onDelete: 'cascade' }),
@@ -314,8 +338,13 @@ export const lessons = pgTable(
   },
   (table) => ({
     classIdIdx: index('lessons_class_id_idx').on(table.classId),
-    classOrderIdx: index('lessons_class_order_idx').on(table.classId, table.order),
-    sourceExtractionIdx: index('lessons_source_extraction_idx').on(table.sourceExtractionId),
+    classOrderIdx: index('lessons_class_order_idx').on(
+      table.classId,
+      table.order,
+    ),
+    sourceExtractionIdx: index('lessons_source_extraction_idx').on(
+      table.sourceExtractionId,
+    ),
   }),
 );
 
@@ -334,7 +363,9 @@ export const lessonContentBlocks = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    lessonIdIdx: index('lesson_content_blocks_lesson_id_idx').on(table.lessonId),
+    lessonIdIdx: index('lesson_content_blocks_lesson_id_idx').on(
+      table.lessonId,
+    ),
     lessonOrderIdx: index('lesson_content_blocks_lesson_order_idx').on(
       table.lessonId,
       table.order,
@@ -356,7 +387,9 @@ export const lessonCompletions = pgTable(
     progressPercentage: integer('progress_percentage').notNull().default(0),
   },
   (table) => ({
-    studentIdIdx: index('lesson_completions_student_id_idx').on(table.studentId),
+    studentIdIdx: index('lesson_completions_student_id_idx').on(
+      table.studentId,
+    ),
     lessonIdIdx: index('lesson_completions_lesson_id_idx').on(table.lessonId),
     uniqueCompletion: unique('lesson_completions_student_lesson_unique').on(
       table.studentId,
@@ -455,16 +488,18 @@ export const assessmentAttempts = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    studentIdIdx: index('assessment_attempts_student_id_idx').on(table.studentId),
+    studentIdIdx: index('assessment_attempts_student_id_idx').on(
+      table.studentId,
+    ),
     assessmentIdIdx: index('assessment_attempts_assessment_id_idx').on(
       table.assessmentId,
     ),
-    submittedIdx: index('assessment_attempts_submitted_idx').on(table.isSubmitted),
-    uniqueAttemptNumber: unique('assessment_attempts_student_assessment_attempt_unique').on(
-      table.studentId,
-      table.assessmentId,
-      table.attemptNumber,
+    submittedIdx: index('assessment_attempts_submitted_idx').on(
+      table.isSubmitted,
     ),
+    uniqueAttemptNumber: unique(
+      'assessment_attempts_student_assessment_attempt_unique',
+    ).on(table.studentId, table.assessmentId, table.attemptNumber),
   }),
 );
 
@@ -489,7 +524,9 @@ export const assessmentResponses = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
-    attemptIdIdx: index('assessment_responses_attempt_id_idx').on(table.attemptId),
+    attemptIdIdx: index('assessment_responses_attempt_id_idx').on(
+      table.attemptId,
+    ),
     questionIdIdx: index('assessment_responses_question_id_idx').on(
       table.questionId,
     ),
@@ -514,7 +551,9 @@ export const archivedUsers = pgTable(
     purgedAt: timestamp('purged_at'), // Set when permanently purged
   },
   (table) => ({
-    originalUserIdIdx: index('archived_users_original_user_id_idx').on(table.originalUserId),
+    originalUserIdIdx: index('archived_users_original_user_id_idx').on(
+      table.originalUserId,
+    ),
     emailIdx: index('archived_users_email_idx').on(table.email),
     archivedAtIdx: index('archived_users_archived_at_idx').on(table.archivedAt),
   }),
@@ -536,7 +575,31 @@ export const usersRelations = relations(users, ({ many, one }) => ({
     fields: [users.id],
     references: [studentProfiles.userId],
   }),
+  teacherProfile: one(teacherProfiles, {
+    fields: [users.id],
+    references: [teacherProfiles.userId],
+  }),
 }));
+
+export const studentProfilesRelations = relations(
+  studentProfiles,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [studentProfiles.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const teacherProfilesRelations = relations(
+  teacherProfiles,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [teacherProfiles.userId],
+      references: [users.id],
+    }),
+  }),
+);
 
 export const rolesRelations = relations(roles, ({ many }) => ({
   userRoles: many(userRoles),
@@ -552,8 +615,6 @@ export const userRolesRelations = relations(userRoles, ({ one }) => ({
     references: [roles.id],
   }),
 }));
-
-
 
 export const sectionsRelations = relations(sections, ({ many, one }) => ({
   classes: many(classes),
@@ -635,17 +696,14 @@ export const lessonCompletionsRelations = relations(
   }),
 );
 
-export const assessmentsRelations = relations(
-  assessments,
-  ({ one, many }) => ({
-    class: one(classes, {
-      fields: [assessments.classId],
-      references: [classes.id],
-    }),
-    questions: many(assessmentQuestions),
-    attempts: many(assessmentAttempts),
+export const assessmentsRelations = relations(assessments, ({ one, many }) => ({
+  class: one(classes, {
+    fields: [assessments.classId],
+    references: [classes.id],
   }),
-);
+  questions: many(assessmentQuestions),
+  attempts: many(assessmentAttempts),
+}));
 
 export const assessmentQuestionsRelations = relations(
   assessmentQuestions,
@@ -714,7 +772,9 @@ export const uploadedFiles = pgTable(
     teacherId: uuid('teacher_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    classId: uuid('class_id').references(() => classes.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id').references(() => classes.id, {
+      onDelete: 'cascade',
+    }),
     scope: fileScopeEnum('scope').notNull().default('private'),
     originalName: varchar('original_name', { length: 255 }).notNull(),
     storedName: varchar('stored_name', { length: 255 }).notNull(),
@@ -754,23 +814,20 @@ export const libraryFolders = pgTable(
   }),
 );
 
-export const uploadedFilesRelations = relations(
-  uploadedFiles,
-  ({ one }) => ({
-    teacher: one(users, {
-      fields: [uploadedFiles.teacherId],
-      references: [users.id],
-    }),
-    class: one(classes, {
-      fields: [uploadedFiles.classId],
-      references: [classes.id],
-    }),
-    folder: one(libraryFolders, {
-      fields: [uploadedFiles.folderId],
-      references: [libraryFolders.id],
-    }),
+export const uploadedFilesRelations = relations(uploadedFiles, ({ one }) => ({
+  teacher: one(users, {
+    fields: [uploadedFiles.teacherId],
+    references: [users.id],
   }),
-);
+  class: one(classes, {
+    fields: [uploadedFiles.classId],
+    references: [classes.id],
+  }),
+  folder: one(libraryFolders, {
+    fields: [uploadedFiles.folderId],
+    references: [libraryFolders.id],
+  }),
+}));
 
 export const libraryFoldersRelations = relations(
   libraryFolders,

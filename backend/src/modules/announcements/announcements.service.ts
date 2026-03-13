@@ -9,12 +9,12 @@ import { Queue } from 'bullmq';
 import { and, eq, isNull, desc, sql } from 'drizzle-orm';
 import type { IOptions as SanitizeOptions } from 'sanitize-html';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const sanitizeHtml = require('sanitize-html') as (dirty: string, options?: SanitizeOptions) => string;
+const sanitizeHtml = require('sanitize-html') as (
+  dirty: string,
+  options?: SanitizeOptions,
+) => string;
 import { DatabaseService } from '../../database/database.service';
-import {
-  announcements,
-  classes,
-} from '../../drizzle/schema';
+import { announcements, classes } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
 import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
@@ -134,10 +134,7 @@ export class AnnouncementsService {
           ? undefined
           : sql`${announcements.publishedAt} IS NOT NULL`,
       ),
-      orderBy: [
-        desc(announcements.isPinned),
-        desc(announcements.createdAt),
-      ],
+      orderBy: [desc(announcements.isPinned), desc(announcements.createdAt)],
       limit,
       offset,
       with: {
@@ -150,7 +147,11 @@ export class AnnouncementsService {
     return rows;
   }
 
-  async findOne(classId: string, announcementId: string, viewerIsTeacher: boolean) {
+  async findOne(
+    classId: string,
+    announcementId: string,
+    viewerIsTeacher: boolean,
+  ) {
     const row = await this.db.query.announcements.findFirst({
       where: and(
         eq(announcements.id, announcementId),

@@ -60,7 +60,11 @@ describe('AnnouncementsController', () => {
       mockService.create.mockResolvedValue(ann);
 
       const dto = { title: 'Hello', content: '<p>Test</p>' };
-      const result = await controller.create(CLASS_ID, dto as any, TEACHER_USER);
+      const result = await controller.create(
+        CLASS_ID,
+        dto as any,
+        TEACHER_USER,
+      );
 
       expect(result).toEqual({
         success: true,
@@ -78,7 +82,11 @@ describe('AnnouncementsController', () => {
     it('passes teacherId from CurrentUser, not from params', async () => {
       mockService.create.mockResolvedValue(makeAnnouncement());
 
-      await controller.create(CLASS_ID, { title: 'x', content: '<p>y</p>' } as any, TEACHER_USER);
+      await controller.create(
+        CLASS_ID,
+        { title: 'x', content: '<p>y</p>' } as any,
+        TEACHER_USER,
+      );
 
       const [, calledTeacherId] = mockService.create.mock.calls[0];
       expect(calledTeacherId).toBe(TEACHER_USER.userId);
@@ -121,7 +129,11 @@ describe('AnnouncementsController', () => {
       const rows = [makeAnnouncement()];
       mockService.findAllByClass.mockResolvedValue(rows);
 
-      const result = await controller.findAll(CLASS_ID, {} as any, TEACHER_USER);
+      const result = await controller.findAll(
+        CLASS_ID,
+        {} as any,
+        TEACHER_USER,
+      );
 
       expect(result).toEqual({
         success: true,
@@ -167,7 +179,12 @@ describe('AnnouncementsController', () => {
       mockService.update.mockResolvedValue(updated);
 
       const dto = { title: 'New Title' };
-      const result = await controller.update(CLASS_ID, ANN_ID, dto as any, TEACHER_USER);
+      const result = await controller.update(
+        CLASS_ID,
+        ANN_ID,
+        dto as any,
+        TEACHER_USER,
+      );
 
       expect(result.success).toBe(true);
       expect(result.data.title).toBe('New Title');
@@ -187,7 +204,9 @@ describe('AnnouncementsController', () => {
 
   describe('remove()', () => {
     it('returns success:true when service soft-deletes', async () => {
-      mockService.remove.mockResolvedValue({ message: 'Announcement archived successfully.' });
+      mockService.remove.mockResolvedValue({
+        message: 'Announcement archived successfully.',
+      });
 
       const result = await controller.remove(CLASS_ID, ANN_ID, TEACHER_USER);
 

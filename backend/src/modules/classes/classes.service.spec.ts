@@ -33,7 +33,12 @@ const makeClass = (overrides: Partial<any> = {}) => ({
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
   section: { id: SECTION_ID, name: 'Sampaguita', gradeLevel: '7' },
-  teacher: { id: TEACHER_ID, firstName: 'Jane', lastName: 'Smith', email: 'jane@school.edu' },
+  teacher: {
+    id: TEACHER_ID,
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane@school.edu',
+  },
   ...overrides,
 });
 
@@ -224,7 +229,8 @@ describe('ClassesService', () => {
 
       await service.create(dto as any);
 
-      const insertValues = mockDb.insert.mock.results[0].value.values.mock.calls[0][0];
+      const insertValues =
+        mockDb.insert.mock.results[0].value.values.mock.calls[0][0];
       expect(insertValues.subjectCode).toBe('MATH-7');
     });
 
@@ -292,15 +298,17 @@ describe('ClassesService', () => {
       teacherId: TEACHER_ID,
       schoolYear: SCHOOL_YEAR,
       room: 'Room 101',
-      schedules: [{ days: ['M', 'W', 'F'], startTime: '09:00', endTime: '10:00' }],
+      schedules: [
+        { days: ['M', 'W', 'F'], startTime: '09:00', endTime: '10:00' },
+      ],
     };
 
     it('inserts schedule slots into class_schedules when schedules are provided', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)           // duplicate check
-        .mockResolvedValueOnce(makeClass());   // findById after insert
+        .mockResolvedValueOnce(null) // duplicate check
+        .mockResolvedValueOnce(makeClass()); // findById after insert
       // First insert: classes table; second: class_schedules
       mockDb.insert
         .mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]))
@@ -324,20 +332,24 @@ describe('ClassesService', () => {
       mockDb.select.mockReturnValue({
         from: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([{
-          slotId: 'existing-slot',
-          classId: 'other-class-uuid',
-          days: ['M', 'W', 'F'],
-          startTime: '09:00',
-          endTime: '10:00',
-          subjectName: 'English',
-          classSectionId: SECTION_ID,
-          classTeacherId: 'other-teacher',
-          classRoom: null,
-        }]),
+        where: jest.fn().mockResolvedValue([
+          {
+            slotId: 'existing-slot',
+            classId: 'other-class-uuid',
+            days: ['M', 'W', 'F'],
+            startTime: '09:00',
+            endTime: '10:00',
+            subjectName: 'English',
+            classSectionId: SECTION_ID,
+            classTeacherId: 'other-teacher',
+            classRoom: null,
+          },
+        ]),
       });
 
-      await expect(service.create(dtoWithSlots as any)).rejects.toThrow(ConflictException);
+      await expect(service.create(dtoWithSlots as any)).rejects.toThrow(
+        ConflictException,
+      );
       // class row was inserted but class_schedules insert was blocked
       expect(mockDb.insert).toHaveBeenCalledTimes(1);
     });
@@ -351,25 +363,34 @@ describe('ClassesService', () => {
       mockDb.select.mockReturnValue({
         from: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([{
-          slotId: 's2',
-          classId: 'another-class',
-          days: ['M'],
-          startTime: '08:30',
-          endTime: '09:30',
-          subjectName: 'Science',
-          classSectionId: 'other-section-uuid',
-          classTeacherId: TEACHER_ID,   // same teacher
-          classRoom: null,
-        }]),
+        where: jest.fn().mockResolvedValue([
+          {
+            slotId: 's2',
+            classId: 'another-class',
+            days: ['M'],
+            startTime: '08:30',
+            endTime: '09:30',
+            subjectName: 'Science',
+            classSectionId: 'other-section-uuid',
+            classTeacherId: TEACHER_ID, // same teacher
+            classRoom: null,
+          },
+        ]),
       });
 
-      await expect(service.create(dtoWithSlots as any)).rejects.toThrow(ConflictException);
+      await expect(service.create(dtoWithSlots as any)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('does not run collision check or second insert when schedules is absent from the DTO', async () => {
-      const dtoNoSlots = { subjectName: 'Science', subjectCode: 'SCI-7',
-        sectionId: SECTION_ID, teacherId: TEACHER_ID, schoolYear: SCHOOL_YEAR };
+      const dtoNoSlots = {
+        subjectName: 'Science',
+        subjectCode: 'SCI-7',
+        sectionId: SECTION_ID,
+        teacherId: TEACHER_ID,
+        schoolYear: SCHOOL_YEAR,
+      };
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findFirst
@@ -397,7 +418,8 @@ describe('ClassesService', () => {
 
       await service.update(CLASS_ID, { subjectCode: 'science-7' } as any);
 
-      const updateSet = mockDb.update.mock.results[0].value.set.mock.calls[0][0];
+      const updateSet =
+        mockDb.update.mock.results[0].value.set.mock.calls[0][0];
       expect(updateSet.subjectCode).toBe('SCIENCE-7');
     });
 
@@ -427,7 +449,7 @@ describe('ClassesService', () => {
   describe('update (with schedules)', () => {
     it('replaces schedule slots: deletes old then inserts new when schedules is provided', async () => {
       mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(makeClass())  // findById (initial)
+        .mockResolvedValueOnce(makeClass()) // findById (initial)
         .mockResolvedValueOnce(makeClass()); // findById (after update)
       mockDb.update.mockReturnValue(makeUpdateChain());
       // Collision check returns no conflicts
@@ -436,11 +458,13 @@ describe('ClassesService', () => {
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: 'new-slot' }]));
 
       await service.update(CLASS_ID, {
-        schedules: [{ days: ['T', 'Th'], startTime: '10:00', endTime: '11:00' }],
+        schedules: [
+          { days: ['T', 'Th'], startTime: '10:00', endTime: '11:00' },
+        ],
       } as any);
 
-      expect(mockDb.delete).toHaveBeenCalledTimes(1);  // old slots cleared
-      expect(mockDb.insert).toHaveBeenCalledTimes(1);  // new slots inserted
+      expect(mockDb.delete).toHaveBeenCalledTimes(1); // old slots cleared
+      expect(mockDb.insert).toHaveBeenCalledTimes(1); // new slots inserted
     });
 
     it('clears all schedule slots when dto.schedules is an empty array', async () => {
@@ -452,9 +476,9 @@ describe('ClassesService', () => {
 
       await service.update(CLASS_ID, { schedules: [] } as any);
 
-      expect(mockDb.delete).toHaveBeenCalledTimes(1);   // existing slots deleted
-      expect(mockDb.insert).not.toHaveBeenCalled();     // nothing to insert
-      expect(mockDb.select).not.toHaveBeenCalled();     // no collision check for empty array
+      expect(mockDb.delete).toHaveBeenCalledTimes(1); // existing slots deleted
+      expect(mockDb.insert).not.toHaveBeenCalled(); // nothing to insert
+      expect(mockDb.select).not.toHaveBeenCalled(); // no collision check for empty array
     });
 
     it('does not touch class_schedules when schedules is not in the update payload', async () => {
@@ -476,22 +500,26 @@ describe('ClassesService', () => {
       mockDb.select.mockReturnValue({
         from: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([{
-          slotId: 'conflict-slot',
-          classId: 'other-class',
-          days: ['T', 'Th'],
-          startTime: '10:00',
-          endTime: '11:00',
-          subjectName: 'English',
-          classSectionId: SECTION_ID,
-          classTeacherId: 'other-teacher',
-          classRoom: null,
-        }]),
+        where: jest.fn().mockResolvedValue([
+          {
+            slotId: 'conflict-slot',
+            classId: 'other-class',
+            days: ['T', 'Th'],
+            startTime: '10:00',
+            endTime: '11:00',
+            subjectName: 'English',
+            classSectionId: SECTION_ID,
+            classTeacherId: 'other-teacher',
+            classRoom: null,
+          },
+        ]),
       });
 
       await expect(
         service.update(CLASS_ID, {
-          schedules: [{ days: ['T', 'Th'], startTime: '10:00', endTime: '11:00' }],
+          schedules: [
+            { days: ['T', 'Th'], startTime: '10:00', endTime: '11:00' },
+          ],
         } as any),
       ).rejects.toThrow(ConflictException);
 
@@ -561,11 +589,9 @@ describe('ClassesService', () => {
       const classList = [makeClass()];
       mockDb.query.classes.findMany.mockResolvedValue(classList);
 
-      const result = await service.getClassesByTeacher(
-        TEACHER_ID,
-        TEACHER_ID,
-        ['teacher'],
-      );
+      const result = await service.getClassesByTeacher(TEACHER_ID, TEACHER_ID, [
+        'teacher',
+      ]);
 
       expect(result).toEqual(classList);
     });
@@ -585,7 +611,9 @@ describe('ClassesService', () => {
 
     it("throws ForbiddenException when a teacher requests another teacher's classes", async () => {
       await expect(
-        service.getClassesByTeacher(TEACHER_ID, 'other-teacher-uuid', ['teacher']),
+        service.getClassesByTeacher(TEACHER_ID, 'other-teacher-uuid', [
+          'teacher',
+        ]),
       ).rejects.toThrow(ForbiddenException);
 
       expect(mockDb.query.classes.findMany).not.toHaveBeenCalled();
@@ -594,7 +622,9 @@ describe('ClassesService', () => {
     it('skips the ownership check when requesterId is not provided (internal calls)', async () => {
       mockDb.query.classes.findMany.mockResolvedValue([]);
 
-      await expect(service.getClassesByTeacher(TEACHER_ID)).resolves.not.toThrow();
+      await expect(
+        service.getClassesByTeacher(TEACHER_ID),
+      ).resolves.not.toThrow();
     });
   });
 
@@ -605,12 +635,16 @@ describe('ClassesService', () => {
   describe('getClassesByStudent', () => {
     it("throws ForbiddenException when a student requests another student's classes", async () => {
       await expect(
-        service.getClassesByStudent(STUDENT_ID, 'other-student-uuid', ['student']),
+        service.getClassesByStudent(STUDENT_ID, 'other-student-uuid', [
+          'student',
+        ]),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('allows a student to view their own classes', async () => {
-      mockDb.query.enrollments.findMany.mockResolvedValue([{ classId: CLASS_ID }]);
+      mockDb.query.enrollments.findMany.mockResolvedValue([
+        { classId: CLASS_ID },
+      ]);
       mockDb.query.classes.findMany.mockResolvedValue([makeClass()]);
 
       await expect(
@@ -619,7 +653,9 @@ describe('ClassesService', () => {
     });
 
     it("allows a teacher to view any student's classes", async () => {
-      mockDb.query.enrollments.findMany.mockResolvedValue([{ classId: CLASS_ID }]);
+      mockDb.query.enrollments.findMany.mockResolvedValue([
+        { classId: CLASS_ID },
+      ]);
       mockDb.query.classes.findMany.mockResolvedValue([makeClass()]);
 
       await expect(
@@ -630,11 +666,9 @@ describe('ClassesService', () => {
     it('returns an empty array when the student has no enrollments', async () => {
       mockDb.query.enrollments.findMany.mockResolvedValue([]);
 
-      const result = await service.getClassesByStudent(
-        STUDENT_ID,
-        STUDENT_ID,
-        ['student'],
-      );
+      const result = await service.getClassesByStudent(STUDENT_ID, STUDENT_ID, [
+        'student',
+      ]);
 
       expect(result).toEqual([]);
       expect(mockDb.query.classes.findMany).not.toHaveBeenCalled();
@@ -662,7 +696,9 @@ describe('ClassesService', () => {
       txMock.update.mockReturnValue(makeUpdateChain());
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
-      mockDb.query.enrollments.findFirst.mockResolvedValueOnce(makeEnrollment());
+      mockDb.query.enrollments.findFirst.mockResolvedValueOnce(
+        makeEnrollment(),
+      );
 
       await service.enrollStudent(CLASS_ID, STUDENT_ID);
 
@@ -686,7 +722,9 @@ describe('ClassesService', () => {
       txMock.insert.mockReturnValue(makeInsertChain([{ id: 'new-enroll-id' }]));
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
-      mockDb.query.enrollments.findFirst.mockResolvedValueOnce(makeEnrollment());
+      mockDb.query.enrollments.findFirst.mockResolvedValueOnce(
+        makeEnrollment(),
+      );
 
       await service.enrollStudent(CLASS_ID, STUDENT_ID);
 
@@ -714,13 +752,15 @@ describe('ClassesService', () => {
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
-      txMock.query.enrollments.findFirst.mockResolvedValueOnce(makeEnrollment());
+      txMock.query.enrollments.findFirst.mockResolvedValueOnce(
+        makeEnrollment(),
+      );
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
 
-      await expect(
-        service.enrollStudent(CLASS_ID, STUDENT_ID),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.enrollStudent(CLASS_ID, STUDENT_ID)).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('throws BadRequestException when the student is not in the section', async () => {
@@ -738,9 +778,9 @@ describe('ClassesService', () => {
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
 
-      await expect(
-        service.enrollStudent(CLASS_ID, STUDENT_ID),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.enrollStudent(CLASS_ID, STUDENT_ID)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
@@ -769,7 +809,9 @@ describe('ClassesService', () => {
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.query.enrollments.findFirst
         .mockResolvedValueOnce(makeEnrollment({ classId: CLASS_ID }))
-        .mockResolvedValueOnce(makeEnrollment({ id: 'section-only-row', classId: null }));
+        .mockResolvedValueOnce(
+          makeEnrollment({ id: 'section-only-row', classId: null }),
+        );
 
       const deleteChain = makeDeleteChain();
       mockDb.delete.mockReturnValue(deleteChain);
@@ -784,9 +826,9 @@ describe('ClassesService', () => {
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.query.enrollments.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.removeStudent(CLASS_ID, STUDENT_ID),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.removeStudent(CLASS_ID, STUDENT_ID)).rejects.toThrow(
+        NotFoundException,
+      );
 
       expect(mockDb.update).not.toHaveBeenCalled();
       expect(mockDb.delete).not.toHaveBeenCalled();
@@ -812,7 +854,7 @@ describe('ClassesService', () => {
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.query.enrollments.findMany
-        .mockResolvedValueOnce([])               // no enrolled students in this class
+        .mockResolvedValueOnce([]) // no enrolled students in this class
         .mockResolvedValueOnce([sectionStudent]); // candidates from DB
 
       const result = await service.getCandidates(CLASS_ID);
@@ -846,7 +888,9 @@ describe('ClassesService', () => {
       const result = await service.toggleActive(CLASS_ID);
 
       expect(result.isActive).toBe(false);
-      expect(mockDb.update.mock.results[0].value.set.mock.calls[0][0].isActive).toBe(false);
+      expect(
+        mockDb.update.mock.results[0].value.set.mock.calls[0][0].isActive,
+      ).toBe(false);
     });
 
     it('toggles isActive from false to true', async () => {

@@ -1,26 +1,26 @@
-import { LoggerService, Inject } from '@nestjs/common'
-import { Logger } from 'winston'
+import { LoggerService, Inject } from '@nestjs/common';
+import { Logger } from 'winston';
 
 export class WinstonLoggerService implements LoggerService {
   constructor(private readonly logger: Logger) {}
 
   log(message: string, context?: string) {
-    this.logger.info(message, { context })
+    this.logger.info(message, { context });
   }
 
   error(message: string, trace?: string, context?: string) {
-    this.logger.error(message, { context, trace })
+    this.logger.error(message, { context, trace });
   }
 
   warn(message: string, context?: string) {
-    this.logger.warn(message, { context })
+    this.logger.warn(message, { context });
   }
 
   debug(message: string, context?: string) {
-    this.logger.debug(message, { context })
+    this.logger.debug(message, { context });
   }
 
   verbose(message: string, context?: string) {
-    this.logger.silly(message, { context })
+    this.logger.silly(message, { context });
   }
 }

@@ -27,11 +27,7 @@ export class AuthService {
     private tokenService: TokenService,
   ) {}
 
-  async login(
-    loginDto: LoginDto,
-    ip?: string,
-    userAgent?: string,
-  ) {
+  async login(loginDto: LoginDto, ip?: string, userAgent?: string) {
     const { email, password } = loginDto;
 
     // 1. Find user by email
@@ -66,7 +62,12 @@ export class AuthService {
     // 6. Generate access token + opaque refresh token
     const accessToken = await this.generateAccessToken(user);
     const rawRefreshToken = this.tokenService.generateRawRefreshToken();
-    await this.tokenService.storeRefreshToken(user.id, rawRefreshToken, ip, userAgent);
+    await this.tokenService.storeRefreshToken(
+      user.id,
+      rawRefreshToken,
+      ip,
+      userAgent,
+    );
 
     // 7. Return sanitized user + tokens
     return {
@@ -88,7 +89,8 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) throw new UnauthorizedException('Invalid credentials');
+    if (!isPasswordValid)
+      throw new UnauthorizedException('Invalid credentials');
 
     // If we reach here, credentials are valid
     return true;
@@ -139,7 +141,11 @@ export class AuthService {
     await this.usersService.updatePassword(userId, newPassword);
   }
 
-  async setInitialPassword(email: string, otpCode: string, newPassword: string): Promise<void> {
+  async setInitialPassword(
+    email: string,
+    otpCode: string,
+    newPassword: string,
+  ): Promise<void> {
     // 1. Verify the OTP (this also marks email as verified and activates account)
     await this.otpService.verifyOTP(email, otpCode, 'email_verification');
 
@@ -158,7 +164,10 @@ export class AuthService {
    * Called from POST /auth/set-activation-password (the optional step after /verify-email).
    * Uses account status as the gate — no OTP required here.
    */
-  async setActivationPassword(email: string, newPassword: string): Promise<void> {
+  async setActivationPassword(
+    email: string,
+    newPassword: string,
+  ): Promise<void> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -175,8 +184,11 @@ export class AuthService {
     userAgent?: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     // 1. Validate the opaque token in DB, revoke it, issue a new one (rotation)
-    const { newRawToken, userId } =
-      await this.tokenService.validateAndRotate(rawToken, ip, userAgent);
+    const { newRawToken, userId } = await this.tokenService.validateAndRotate(
+      rawToken,
+      ip,
+      userAgent,
+    );
 
     // 2. Ensure user is still active
     const user = await this.usersService.findById(userId);

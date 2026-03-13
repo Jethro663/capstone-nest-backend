@@ -11,7 +11,11 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { AssignInterventionDto, ResolveInterventionDto, SubmitSystemEvaluationDto } from './dto/lxp.dto';
+import {
+  AssignInterventionDto,
+  ResolveInterventionDto,
+  SubmitSystemEvaluationDto,
+} from './dto/lxp.dto';
 import { LxpService } from './lxp.service';
 
 @Controller('lxp')
@@ -21,7 +25,9 @@ export class LxpController {
 
   @Get('me/eligibility')
   @Roles(RoleName.Student)
-  async getEligibility(@CurrentUser() user: { userId: string; roles: string[] }) {
+  async getEligibility(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
     const data = await this.lxpService.getStudentEligibility(user.userId);
     return { success: true, data };
   }
@@ -109,7 +115,10 @@ export class LxpController {
     @CurrentUser() user: { userId: string; roles: string[] },
     @Query('targetModule') targetModule?: string,
   ) {
-    const data = await this.lxpService.listSystemEvaluations(user, targetModule);
+    const data = await this.lxpService.listSystemEvaluations(
+      user,
+      targetModule,
+    );
     return { success: true, data };
   }
 }

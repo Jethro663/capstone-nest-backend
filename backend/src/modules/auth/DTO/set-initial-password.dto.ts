@@ -14,6 +14,9 @@ export class SetInitialPasswordDto {
   @IsNotEmpty({ message: 'Code is required' })
   code: string;
 
-  @IsStrongPassword('MyP@ss1!', 'Initial password (min 8 chars, uppercase, lowercase, digit, special character)')
+  @IsStrongPassword(
+    'MyP@ss1!',
+    'Initial password (min 8 chars, uppercase, lowercase, digit, special character)',
+  )
   newPassword: string;
 }

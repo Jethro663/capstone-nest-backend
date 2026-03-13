@@ -31,8 +31,12 @@ export const performanceSnapshots = pgTable(
       scale: 3,
     }),
     blendedScore: numeric('blended_score', { precision: 6, scale: 3 }),
-    assessmentSampleSize: integer('assessment_sample_size').notNull().default(0),
-    classRecordSampleSize: integer('class_record_sample_size').notNull().default(0),
+    assessmentSampleSize: integer('assessment_sample_size')
+      .notNull()
+      .default(0),
+    classRecordSampleSize: integer('class_record_sample_size')
+      .notNull()
+      .default(0),
     hasData: boolean('has_data').notNull().default(false),
     isAtRisk: boolean('is_at_risk').notNull().default(false),
     thresholdApplied: numeric('threshold_applied', {
@@ -121,13 +125,16 @@ export const performanceSnapshotsRelations = relations(
   }),
 );
 
-export const performanceLogsRelations = relations(performanceLogs, ({ one }) => ({
-  class: one(classes, {
-    fields: [performanceLogs.classId],
-    references: [classes.id],
+export const performanceLogsRelations = relations(
+  performanceLogs,
+  ({ one }) => ({
+    class: one(classes, {
+      fields: [performanceLogs.classId],
+      references: [classes.id],
+    }),
+    student: one(users, {
+      fields: [performanceLogs.studentId],
+      references: [users.id],
+    }),
   }),
-  student: one(users, {
-    fields: [performanceLogs.studentId],
-    references: [users.id],
-  }),
-}));
+);

@@ -11,15 +11,15 @@ import { MAX_FILE_SIZE_BYTES } from '../constants/file-upload.constants';
 // Mock 'fs' with a factory so all properties are writable jest.fn() instances
 // ---------------------------------------------------------------------------
 
-const mockOpenSync  = jest.fn().mockReturnValue(3);
-const mockReadSync  = jest.fn();
+const mockOpenSync = jest.fn().mockReturnValue(3);
+const mockReadSync = jest.fn();
 const mockCloseSync = jest.fn();
-const mockUnlink    = jest.fn().mockResolvedValue(undefined);
+const mockUnlink = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
-  openSync:  (...args: unknown[]) => mockOpenSync(...args),
-  readSync:  (...args: unknown[]) => mockReadSync(...args),
+  openSync: (...args: unknown[]) => mockOpenSync(...args),
+  readSync: (...args: unknown[]) => mockReadSync(...args),
   closeSync: (...args: unknown[]) => mockCloseSync(...args),
   promises: {
     ...jest.requireActual<typeof import('fs')>('fs').promises,
@@ -31,7 +31,9 @@ jest.mock('fs', () => ({
 // Mock file-type (CJS require inside the pipe)
 // ---------------------------------------------------------------------------
 
-let mockFileTypeResult: { mime: string } | undefined = { mime: 'application/pdf' };
+let mockFileTypeResult: { mime: string } | undefined = {
+  mime: 'application/pdf',
+};
 
 jest.mock('file-type', () => ({
   fileTypeFromBuffer: jest.fn(async () => mockFileTypeResult),
@@ -46,23 +48,31 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d]); // PNG header
 const EMPTY_BUF = Buffer.alloc(10);
 
 // Default readSync: copy PDF magic bytes into the caller's buffer
-const defaultReadSync = (_fd: number, buf: Buffer, _off: number, _len: number, _pos: number) => {
+const defaultReadSync = (
+  _fd: number,
+  buf: Buffer,
+  _off: number,
+  _len: number,
+  _pos: number,
+) => {
   PDF_MAGIC.copy(buf);
   return PDF_MAGIC.length;
 };
 
-const makeFile = (overrides: Partial<Express.Multer.File> = {}): Express.Multer.File =>
+const makeFile = (
+  overrides: Partial<Express.Multer.File> = {},
+): Express.Multer.File =>
   ({
-    fieldname:    'file',
+    fieldname: 'file',
     originalname: 'lecture.pdf',
-    encoding:     '7bit',
-    mimetype:     'application/pdf',
-    path:         '/tmp/uploads/pdfs/test-uuid.pdf',
-    filename:     'test-uuid.pdf',
-    size:         1_048_576,
-    destination:  '/tmp/uploads/pdfs',
-    buffer:       Buffer.alloc(0),
-    stream:       null as any,
+    encoding: '7bit',
+    mimetype: 'application/pdf',
+    path: '/tmp/uploads/pdfs/test-uuid.pdf',
+    filename: 'test-uuid.pdf',
+    size: 1_048_576,
+    destination: '/tmp/uploads/pdfs',
+    buffer: Buffer.alloc(0),
+    stream: null as any,
     ...overrides,
   }) as Express.Multer.File;
 
@@ -152,7 +162,9 @@ describe('PdfValidationPipe', () => {
     it('cleans up the temp file when size exceeds limit', async () => {
       const file = makeFile({ size: MAX_FILE_SIZE_BYTES + 1 });
 
-      await expect(pipe.transform(file)).rejects.toThrow(PayloadTooLargeException);
+      await expect(pipe.transform(file)).rejects.toThrow(
+        PayloadTooLargeException,
+      );
 
       expect(mockUnlink).toHaveBeenCalledWith(file.path);
     });
@@ -165,7 +177,7 @@ describe('PdfValidationPipe', () => {
 
     it('error message includes the actual received size in MB', async () => {
       const size = MAX_FILE_SIZE_BYTES + 1_048_576; // 101 MB
-      const file  = makeFile({ size });
+      const file = makeFile({ size });
 
       await expect(pipe.transform(file)).rejects.toThrow(/101\.00 MB/);
     });
@@ -178,10 +190,18 @@ describe('PdfValidationPipe', () => {
   describe('non-PDF magic bytes', () => {
     it('throws UnsupportedMediaTypeException when file-type detects a non-PDF MIME', async () => {
       mockFileTypeResult = { mime: 'image/png' };
-      mockReadSync.mockImplementation((_fd: number, buf: Buffer, _off: number, _len: number, _pos: number) => {
-        PNG_MAGIC.copy(buf);
-        return PNG_MAGIC.length;
-      });
+      mockReadSync.mockImplementation(
+        (
+          _fd: number,
+          buf: Buffer,
+          _off: number,
+          _len: number,
+          _pos: number,
+        ) => {
+          PNG_MAGIC.copy(buf);
+          return PNG_MAGIC.length;
+        },
+      );
 
       const file = makeFile({ mimetype: 'application/pdf' }); // MIME header spoofed as PDF
 
@@ -197,17 +217,27 @@ describe('PdfValidationPipe', () => {
       });
       const file = makeFile();
 
-      await expect(pipe.transform(file)).rejects.toThrow(UnsupportedMediaTypeException);
+      await expect(pipe.transform(file)).rejects.toThrow(
+        UnsupportedMediaTypeException,
+      );
 
       expect(mockUnlink).toHaveBeenCalledWith(path.resolve(file.path));
     });
 
     it('throws UnsupportedMediaTypeException when file-type returns undefined (unrecognised bytes)', async () => {
       mockFileTypeResult = undefined;
-      mockReadSync.mockImplementation((_fd: number, buf: Buffer, _off: number, _len: number, _pos: number) => {
-        EMPTY_BUF.copy(buf);
-        return EMPTY_BUF.length;
-      });
+      mockReadSync.mockImplementation(
+        (
+          _fd: number,
+          buf: Buffer,
+          _off: number,
+          _len: number,
+          _pos: number,
+        ) => {
+          EMPTY_BUF.copy(buf);
+          return EMPTY_BUF.length;
+        },
+      );
 
       await expect(pipe.transform(makeFile())).rejects.toThrow(
         UnsupportedMediaTypeException,
@@ -244,7 +274,9 @@ describe('PdfValidationPipe', () => {
         throw new Error('ENOENT: no such file');
       });
 
-      await expect(pipe.transform(makeFile())).rejects.toThrow(BadRequestException);
+      await expect(pipe.transform(makeFile())).rejects.toThrow(
+        BadRequestException,
+      );
 
       expect(mockUnlink).toHaveBeenCalled();
     });
@@ -270,7 +302,9 @@ describe('PdfValidationPipe', () => {
       const file = makeFile({ size: MAX_FILE_SIZE_BYTES + 1 });
 
       // Should still throw PayloadTooLargeException, not the unlink error
-      await expect(pipe.transform(file)).rejects.toThrow(PayloadTooLargeException);
+      await expect(pipe.transform(file)).rejects.toThrow(
+        PayloadTooLargeException,
+      );
     });
 
     it('does not throw a secondary error when unlink fails during MIME rejection', async () => {

@@ -10,7 +10,11 @@ import { QueryNotificationsDto } from './DTO/query-notifications.dto';
 
 export interface CreateNotificationInput {
   userId: string;
-  type: 'announcement_posted' | 'grade_updated' | 'assessment_due' | 'assessment_graded';
+  type:
+    | 'announcement_posted'
+    | 'grade_updated'
+    | 'assessment_due'
+    | 'assessment_graded';
   referenceId?: string;
   title: string;
   body: string;
@@ -66,10 +70,7 @@ export class NotificationsService {
       .select({ value: count() })
       .from(notifications)
       .where(
-        and(
-          eq(notifications.userId, userId),
-          eq(notifications.isRead, false),
-        ),
+        and(eq(notifications.userId, userId), eq(notifications.isRead, false)),
       );
 
     return result?.value ?? 0;
@@ -110,10 +111,7 @@ export class NotificationsService {
       .update(notifications)
       .set({ isRead: true, readAt: new Date() })
       .where(
-        and(
-          eq(notifications.userId, userId),
-          eq(notifications.isRead, false),
-        ),
+        and(eq(notifications.userId, userId), eq(notifications.isRead, false)),
       )
       .returning({ id: notifications.id });
 

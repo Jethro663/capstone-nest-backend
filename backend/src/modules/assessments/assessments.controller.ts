@@ -39,7 +39,12 @@ import {
 } from './DTO/assessment.dto';
 
 const IMAGE_UPLOAD_DEST = './uploads/question-images';
-const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @ApiTags('Assessments')
@@ -147,9 +152,8 @@ export class AssessmentsController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
   async createQuestion(@Body() createQuestionDto: CreateQuestionDto) {
-    const question = await this.assessmentsService.createQuestion(
-      createQuestionDto,
-    );
+    const question =
+      await this.assessmentsService.createQuestion(createQuestionDto);
 
     return {
       success: true,
@@ -220,7 +224,12 @@ export class AssessmentsController {
         if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
           cb(null, true);
         } else {
-          cb(new BadRequestException('Only JPEG, PNG, GIF and WebP images are allowed'), false);
+          cb(
+            new BadRequestException(
+              'Only JPEG, PNG, GIF and WebP images are allowed',
+            ),
+            false,
+          );
         }
       },
     }),
@@ -362,9 +371,8 @@ export class AssessmentsController {
   @Get(':assessmentId/all-attempts')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getAssessmentAttempts(@Param('assessmentId') assessmentId: string) {
-    const attempts = await this.assessmentsService.getAssessmentAttempts(
-      assessmentId,
-    );
+    const attempts =
+      await this.assessmentsService.getAssessmentAttempts(assessmentId);
 
     return {
       success: true,
@@ -381,9 +389,8 @@ export class AssessmentsController {
   @Get(':assessmentId/stats')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getAssessmentStats(@Param('assessmentId') assessmentId: string) {
-    const stats = await this.assessmentsService.getAssessmentStats(
-      assessmentId,
-    );
+    const stats =
+      await this.assessmentsService.getAssessmentStats(assessmentId);
 
     return {
       success: true,

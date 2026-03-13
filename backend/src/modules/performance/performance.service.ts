@@ -131,7 +131,8 @@ export class PerformanceService {
     }
 
     const values = [...latestPerAssessment.values()];
-    const average = values.reduce((sum, score) => sum + score, 0) / values.length;
+    const average =
+      values.reduce((sum, score) => sum + score, 0) / values.length;
     return { average: this.round(average), sampleSize: values.length };
   }
 
@@ -156,7 +157,9 @@ export class PerformanceService {
         if (!maxScore || maxScore <= 0) continue;
         sampleSize++;
 
-        const scoreRow = item.scores.find((score) => score.studentId === studentId);
+        const scoreRow = item.scores.find(
+          (score) => score.studentId === studentId,
+        );
         const rawScore = this.toNumber(scoreRow?.score) ?? 0;
         normalizedSum += (rawScore / maxScore) * 100;
       }
@@ -241,9 +244,13 @@ export class PerformanceService {
         .update(performanceSnapshots)
         .set({
           assessmentAverage:
-            data.assessmentAverage !== null ? data.assessmentAverage.toString() : null,
+            data.assessmentAverage !== null
+              ? data.assessmentAverage.toString()
+              : null,
           classRecordAverage:
-            data.classRecordAverage !== null ? data.classRecordAverage.toString() : null,
+            data.classRecordAverage !== null
+              ? data.classRecordAverage.toString()
+              : null,
           blendedScore:
             data.blendedScore !== null ? data.blendedScore.toString() : null,
           assessmentSampleSize: data.assessmentSampleSize,
@@ -274,9 +281,13 @@ export class PerformanceService {
           classId,
           studentId,
           assessmentAverage:
-            data.assessmentAverage !== null ? data.assessmentAverage.toString() : null,
+            data.assessmentAverage !== null
+              ? data.assessmentAverage.toString()
+              : null,
           classRecordAverage:
-            data.classRecordAverage !== null ? data.classRecordAverage.toString() : null,
+            data.classRecordAverage !== null
+              ? data.classRecordAverage.toString()
+              : null,
           blendedScore:
             data.blendedScore !== null ? data.blendedScore.toString() : null,
           assessmentSampleSize: data.assessmentSampleSize,
@@ -314,9 +325,13 @@ export class PerformanceService {
         previousIsAtRisk,
         currentIsAtRisk: data.isAtRisk,
         assessmentAverage:
-          data.assessmentAverage !== null ? data.assessmentAverage.toString() : null,
+          data.assessmentAverage !== null
+            ? data.assessmentAverage.toString()
+            : null,
         classRecordAverage:
-          data.classRecordAverage !== null ? data.classRecordAverage.toString() : null,
+          data.classRecordAverage !== null
+            ? data.classRecordAverage.toString()
+            : null,
         blendedScore:
           data.blendedScore !== null ? data.blendedScore.toString() : null,
         thresholdApplied: data.thresholdApplied.toString(),
@@ -349,7 +364,8 @@ export class PerformanceService {
       classRecordSampleSize: stored?.classRecordSampleSize ?? 0,
       hasData: stored?.hasData ?? false,
       isAtRisk: stored?.isAtRisk ?? false,
-      thresholdApplied: this.toNumber(stored?.thresholdApplied) ?? PERFORMANCE_RISK_THRESHOLD,
+      thresholdApplied:
+        this.toNumber(stored?.thresholdApplied) ?? PERFORMANCE_RISK_THRESHOLD,
       lastComputedAt: stored?.lastComputedAt ?? data.lastComputedAt,
     };
   }
@@ -359,8 +375,14 @@ export class PerformanceService {
     studentId: string,
     triggerSource = 'manual_recompute',
   ) {
-    const assessmentComponent = await this.getAssessmentComponent(classId, studentId);
-    const classRecordComponent = await this.getClassRecordComponent(classId, studentId);
+    const assessmentComponent = await this.getAssessmentComponent(
+      classId,
+      studentId,
+    );
+    const classRecordComponent = await this.getClassRecordComponent(
+      classId,
+      studentId,
+    );
     const snapshotData = this.buildSnapshotData(
       assessmentComponent.average,
       classRecordComponent.average,
@@ -388,14 +410,21 @@ export class PerformanceService {
     return { recomputed: uniqueStudentIds.length };
   }
 
-  async recomputeFromAssessmentSubmission(assessmentId: string, studentId: string) {
+  async recomputeFromAssessmentSubmission(
+    assessmentId: string,
+    studentId: string,
+  ) {
     const assessment = await this.db.query.assessments.findFirst({
       where: eq(assessments.id, assessmentId),
       columns: { classId: true },
     });
 
     if (!assessment) return { recomputed: 0 };
-    await this.recomputeStudent(assessment.classId, studentId, 'assessment_submitted');
+    await this.recomputeStudent(
+      assessment.classId,
+      studentId,
+      'assessment_submitted',
+    );
     return { recomputed: 1, classId: assessment.classId };
   }
 
@@ -420,18 +449,22 @@ export class PerformanceService {
     });
   }
 
-  private async buildClassRows(classId: string): Promise<ClassPerformanceRow[]> {
+  private async buildClassRows(
+    classId: string,
+  ): Promise<ClassPerformanceRow[]> {
     const enrolledStudents = await this.loadEnrolledStudents(classId);
     if (enrolledStudents.length === 0) return [];
 
     const studentIds = enrolledStudents.map((entry) => entry.studentId);
 
-    const existingSnapshots = await this.db.query.performanceSnapshots.findMany({
-      where: and(
-        eq(performanceSnapshots.classId, classId),
-        inArray(performanceSnapshots.studentId, studentIds),
-      ),
-    });
+    const existingSnapshots = await this.db.query.performanceSnapshots.findMany(
+      {
+        where: and(
+          eq(performanceSnapshots.classId, classId),
+          inArray(performanceSnapshots.studentId, studentIds),
+        ),
+      },
+    );
 
     const snapshotByStudent = new Map(
       existingSnapshots.map((snapshot) => [snapshot.studentId, snapshot]),
@@ -439,9 +472,13 @@ export class PerformanceService {
 
     for (const studentId of studentIds) {
       if (snapshotByStudent.has(studentId)) continue;
-      const recomputed = await this.recomputeStudent(classId, studentId, 'view_refresh');
+      const recomputed = await this.recomputeStudent(
+        classId,
+        studentId,
+        'view_refresh',
+      );
       snapshotByStudent.set(studentId, {
-        id: recomputed.id!,
+        id: recomputed.id,
         classId,
         studentId,
         assessmentAverage:
@@ -453,7 +490,9 @@ export class PerformanceService {
             ? recomputed.classRecordAverage.toString()
             : null,
         blendedScore:
-          recomputed.blendedScore !== null ? recomputed.blendedScore.toString() : null,
+          recomputed.blendedScore !== null
+            ? recomputed.blendedScore.toString()
+            : null,
         assessmentSampleSize: recomputed.assessmentSampleSize,
         classRecordSampleSize: recomputed.classRecordSampleSize,
         hasData: recomputed.hasData,
@@ -480,7 +519,8 @@ export class PerformanceService {
         hasData: snapshot?.hasData ?? false,
         isAtRisk: snapshot?.isAtRisk ?? false,
         thresholdApplied:
-          this.toNumber(snapshot?.thresholdApplied) ?? PERFORMANCE_RISK_THRESHOLD,
+          this.toNumber(snapshot?.thresholdApplied) ??
+          PERFORMANCE_RISK_THRESHOLD,
         lastComputedAt: snapshot?.lastComputedAt ?? new Date(0),
       };
     });
@@ -496,7 +536,11 @@ export class PerformanceService {
     await this.assertClassAccess(classId, userId, roles);
     const enrolledStudents = await this.loadEnrolledStudents(classId);
     const studentIds = enrolledStudents.map((entry) => entry.studentId);
-    await this.recomputeStudentsForClass(classId, studentIds, 'manual_recompute');
+    await this.recomputeStudentsForClass(
+      classId,
+      studentIds,
+      'manual_recompute',
+    );
     const summary = await this.getClassSummary(classId, userId, roles);
     return {
       classId,
@@ -509,7 +553,9 @@ export class PerformanceService {
   async getClassSummary(classId: string, userId: string, roles: string[]) {
     await this.assertClassAccess(classId, userId, roles);
     const students = await this.buildClassRows(classId);
-    const withData = students.filter((row) => row.hasData && row.blendedScore !== null);
+    const withData = students.filter(
+      (row) => row.hasData && row.blendedScore !== null,
+    );
     const withAssessmentData = students.filter(
       (row) => row.assessmentAverage !== null,
     );
@@ -664,9 +710,7 @@ export class PerformanceService {
     });
 
     const activeClassEnrollments = studentEnrollments.filter(
-      (
-        enrollment,
-      ): enrollment is typeof enrollment & { classId: string } =>
+      (enrollment): enrollment is typeof enrollment & { classId: string } =>
         enrollment.classId !== null,
     );
 
@@ -704,7 +748,9 @@ export class PerformanceService {
     const classesWithData = classSummaries.filter(
       (entry) => entry.hasData && entry.blendedScore !== null,
     );
-    const atRiskClasses = classSummaries.filter((entry) => entry.isAtRisk).length;
+    const atRiskClasses = classSummaries.filter(
+      (entry) => entry.isAtRisk,
+    ).length;
 
     return {
       student,

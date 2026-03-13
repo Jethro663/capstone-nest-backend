@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { DatabaseService } from '../../database/database.service';

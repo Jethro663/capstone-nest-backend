@@ -4,15 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import {
-  and,
-  desc,
-  eq,
-  ilike,
-  isNull,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { classes, libraryFolders, uploadedFiles } from '../../drizzle/schema';
 import {
@@ -62,7 +54,10 @@ export class FileUploadService {
     return user.roles.includes('teacher');
   }
 
-  private ensureCanWriteScope(scope: FileScopeDto | undefined, user: RequestUser) {
+  private ensureCanWriteScope(
+    scope: FileScopeDto | undefined,
+    user: RequestUser,
+  ) {
     if (scope === FileScopeDto.General && !this.isAdmin(user)) {
       throw new ForbiddenException(
         'Only admins can publish files or folders to General Modules',
@@ -235,7 +230,9 @@ export class FileUploadService {
 
     if (query.ownerId) {
       if (!isAdmin && query.ownerId !== user.id) {
-        throw new ForbiddenException('You can only filter by your own ownership');
+        throw new ForbiddenException(
+          'You can only filter by your own ownership',
+        );
       }
       filters.push(eq(uploadedFiles.teacherId, query.ownerId));
     }
@@ -249,7 +246,9 @@ export class FileUploadService {
     }
 
     if (query.search?.trim()) {
-      filters.push(ilike(uploadedFiles.originalName, `%${query.search.trim()}%`));
+      filters.push(
+        ilike(uploadedFiles.originalName, `%${query.search.trim()}%`),
+      );
     }
 
     return this.db.query.uploadedFiles.findMany({
@@ -316,7 +315,8 @@ export class FileUploadService {
         originalName: dto.originalName ?? record.originalName,
         folderId:
           dto.folderId === undefined ? record.folderId : (dto.folderId ?? null),
-        classId: dto.classId === undefined ? record.classId : (dto.classId ?? null),
+        classId:
+          dto.classId === undefined ? record.classId : (dto.classId ?? null),
         scope: dto.scope ?? record.scope,
       })
       .where(eq(uploadedFiles.id, id));
@@ -359,7 +359,9 @@ export class FileUploadService {
 
     if (query.ownerId) {
       if (!isAdmin && query.ownerId !== user.id) {
-        throw new ForbiddenException('You can only filter by your own ownership');
+        throw new ForbiddenException(
+          'You can only filter by your own ownership',
+        );
       }
       filters.push(eq(libraryFolders.ownerId, query.ownerId));
     }
@@ -416,7 +418,11 @@ export class FileUploadService {
     return folder;
   }
 
-  async updateFolder(id: string, dto: UpdateLibraryFolderDto, user: RequestUser) {
+  async updateFolder(
+    id: string,
+    dto: UpdateLibraryFolderDto,
+    user: RequestUser,
+  ) {
     const folder = await this.ensureFolderWritable(id, user);
     const nextScope = (dto.scope ?? folder.scope) as FileScopeDto;
     this.ensureCanWriteScope(nextScope, user);
@@ -455,10 +461,7 @@ export class FileUploadService {
       .select({ count: sql<number>`count(*)` })
       .from(libraryFolders)
       .where(
-        and(
-          eq(libraryFolders.parentId, id),
-          isNull(libraryFolders.deletedAt),
-        ),
+        and(eq(libraryFolders.parentId, id), isNull(libraryFolders.deletedAt)),
       );
 
     if (Number(childCount[0]?.count ?? 0) > 0) {

@@ -114,7 +114,10 @@ export class UsersController {
   @Patch(':id/suspend')
   @Roles(RoleName.Admin)
   async suspendUser(@Param('id') id: string, @CurrentUser() admin: any) {
-    const result = await this.usersService.suspendUser(id, admin.sub || admin.id);
+    const result = await this.usersService.suspendUser(
+      id,
+      admin.sub || admin.id,
+    );
     return { success: true, ...result };
   }
 
@@ -124,7 +127,10 @@ export class UsersController {
   @Patch(':id/reactivate')
   @Roles(RoleName.Admin)
   async reactivateUser(@Param('id') id: string, @CurrentUser() admin: any) {
-    const result = await this.usersService.reactivateUser(id, admin.sub || admin.id);
+    const result = await this.usersService.reactivateUser(
+      id,
+      admin.sub || admin.id,
+    );
     return { success: true, ...result };
   }
 
@@ -135,7 +141,10 @@ export class UsersController {
   @Delete(':id/soft-delete')
   @Roles(RoleName.Admin)
   async softDeleteUser(@Param('id') id: string, @CurrentUser() admin: any) {
-    const result = await this.usersService.softDeleteUser(id, admin.sub || admin.id);
+    const result = await this.usersService.softDeleteUser(
+      id,
+      admin.sub || admin.id,
+    );
     return { success: true, ...result };
   }
 

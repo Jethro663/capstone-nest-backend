@@ -1,4 +1,10 @@
-import { IsOptional, IsString, IsDateString, IsIn, Matches } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsDateString,
+  IsIn,
+  Matches,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export class UpdateProfileDto {
@@ -50,7 +56,8 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsIn(['Father', 'Mother', 'Guardian', 'Sibling', 'Other'], {
-    message: 'Relationship must be one of: Father, Mother, Guardian, Sibling, Other',
+    message:
+      'Relationship must be one of: Father, Mother, Guardian, Sibling, Other',
   })
   familyRelationship?: string;
 
@@ -59,7 +66,7 @@ export class UpdateProfileDto {
   familyContact?: string;
 
   @IsOptional()
-  @IsIn(['7','8','9','10'], {
+  @IsIn(['7', '8', '9', '10'], {
     message: 'Grade level must be one of: 7, 8, 9, 10',
   })
   gradeLevel?: '7' | '8' | '9' | '10';

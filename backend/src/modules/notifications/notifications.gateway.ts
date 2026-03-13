@@ -13,7 +13,10 @@ import { ConfigService } from '@nestjs/config';
 @WebSocketGateway({
   namespace: '/notifications',
   cors: {
-    origin: (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
       // Allow all origins in development; tighten in prod via env var
       callback(null, true);
     },
@@ -41,7 +44,9 @@ export class NotificationsGateway
     try {
       // Client must pass token in handshake: { auth: { token: 'Bearer eyJ...' } }
       const rawToken: string =
-        client.handshake?.auth?.token || client.handshake?.headers?.authorization || '';
+        client.handshake?.auth?.token ||
+        client.handshake?.headers?.authorization ||
+        '';
 
       const token = rawToken.startsWith('Bearer ')
         ? rawToken.slice(7)
@@ -68,9 +73,7 @@ export class NotificationsGateway
       client.join(`user:${payload.userId}`);
       client.data.userId = payload.userId;
 
-      this.logger.log(
-        `[WS] Connected: ${client.id} → user:${payload.userId}`,
-      );
+      this.logger.log(`[WS] Connected: ${client.id} → user:${payload.userId}`);
     } catch (err) {
       this.logger.warn(`[WS] Auth failed for ${client.id}: ${err.message}`);
       client.emit('error', { message: 'Unauthorized: invalid token.' });

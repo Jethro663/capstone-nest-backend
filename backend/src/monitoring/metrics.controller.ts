@@ -1,9 +1,9 @@
-import { Controller, Get, Res, Inject } from '@nestjs/common'
-import type { Response } from 'express'
-import type { Registry } from 'prom-client'
-import { Public } from 'src/modules/auth/decorators/public.decorator'
+import { Controller, Get, Res, Inject } from '@nestjs/common';
+import type { Response } from 'express';
+import type { Registry } from 'prom-client';
+import { Public } from 'src/modules/auth/decorators/public.decorator';
 
-const PROM_CLIENT_REGISTRY = 'PROM_CLIENT_REGISTRY'
+const PROM_CLIENT_REGISTRY = 'PROM_CLIENT_REGISTRY';
 
 @Public()
 @Controller()
@@ -14,8 +14,7 @@ export class MetricsController {
 
   @Get('/metrics')
   async metrics(@Res() res: Response) {
-    res.set('Content-Type', this.register.contentType)
-    res.end(await this.register.metrics())
+    res.set('Content-Type', this.register.contentType);
+    res.end(await this.register.metrics());
   }
-
 }

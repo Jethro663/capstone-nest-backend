@@ -139,10 +139,7 @@ export class LessonsController {
    */
   @Put(':id/publish')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async publishLesson(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async publishLesson(@Param('id') id: string, @CurrentUser() user: any) {
     const lesson = await this.lessonsService.publishLesson(
       id,
       user.userId,
@@ -162,10 +159,7 @@ export class LessonsController {
    */
   @Delete(':id')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async deleteLesson(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async deleteLesson(@Param('id') id: string, @CurrentUser() user: any) {
     await this.lessonsService.deleteLesson(id, user.userId, user.roles);
 
     return {
