@@ -11,6 +11,7 @@ import { and, count, desc, eq, inArray, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
+import { MailService } from '../mail/mail.service';
 import {
   users,
   roles,
@@ -38,6 +39,7 @@ export class UsersService {
     private databaseService: DatabaseService,
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
+    private mailService: MailService,
   ) {
     const configuredRounds = Number(
       this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
@@ -596,6 +598,37 @@ export class UsersService {
     return {
       message: 'Password successfully updated',
       userId: id,
+    };
+  }
+
+  async adminResetPassword(id: string, adminId: string) {
+    const existingUser = await this.findById(id);
+
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!['ACTIVE', 'PENDING'].includes(existingUser.status)) {
+      throw new BadRequestException(
+        'Password reset is only allowed for ACTIVE or PENDING users',
+      );
+    }
+
+    const generatedPassword = PasswordGenerator.generate();
+    await this.updatePassword(id, generatedPassword);
+    await this.mailService.sendPasswordEmail(
+      existingUser.email,
+      generatedPassword,
+    );
+
+    this.logger.log(
+      `[USER:PASSWORD_RESET] actor=${adminId} target=${id} status=${existingUser.status}`,
+    );
+
+    return {
+      message: 'Password reset successfully',
+      userId: id,
+      generatedPassword,
     };
   }
 

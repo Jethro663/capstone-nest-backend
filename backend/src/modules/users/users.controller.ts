@@ -92,6 +92,20 @@ export class UsersController {
     };
   }
 
+  @Post(':id/reset-password')
+  @Roles(RoleName.Admin)
+  async resetUserPassword(@Param('id') id: string, @CurrentUser() admin: any) {
+    const result = await this.usersService.adminResetPassword(
+      id,
+      admin.sub || admin.id,
+    );
+
+    return {
+      success: true,
+      ...result,
+    };
+  }
+
   // Legacy soft-delete endpoint (kept for backward compatibility)
   @Delete('delete/:id')
   @Roles(RoleName.Admin)

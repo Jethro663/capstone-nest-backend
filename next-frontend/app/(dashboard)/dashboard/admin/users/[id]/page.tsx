@@ -7,11 +7,20 @@ import { userService } from '@/services/user-service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { getRoleName, formatDate } from '@/utils/helpers';
+import { Copy } from 'lucide-react';
 import type { UpdateUserDto, User } from '@/types/user';
 
 type UserFormState = {
@@ -78,6 +87,10 @@ export default function AdminUserDetailPage() {
   const [form, setForm] = useState<UserFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [showResetResult, setShowResetResult] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState('');
 
   const role = useMemo(() => form.role, [form.role]);
   const isStudent = role === 'student';
@@ -111,6 +124,34 @@ export default function AdminUserDetailPage() {
 
   const setField = (field: keyof UserFormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      setResetting(true);
+      const response = await userService.resetPassword(userId);
+      setGeneratedPassword(response.generatedPassword);
+      setShowResetConfirm(false);
+      setShowResetResult(true);
+      toast.success('Password reset successfully');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reset password'));
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleCopyPassword = async () => {
+    if (!generatedPassword) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(generatedPassword);
+      toast.success('Password copied to clipboard');
+    } catch {
+      toast.error('Failed to copy password');
+    }
   };
 
   const handleSave = async () => {
@@ -179,7 +220,7 @@ export default function AdminUserDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <Button variant="ghost" size="sm" onClick={() => router.back()}>
@@ -196,6 +237,14 @@ export default function AdminUserDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowResetConfirm(true)}
+            disabled={resetting}
+          >
+            {resetting ? 'Resetting...' : 'Reset Password'}
+          </Button>
           <Badge variant={user.status === 'ACTIVE' ? 'default' : 'secondary'}>
             {user.status}
           </Badge>
@@ -204,7 +253,7 @@ export default function AdminUserDetailPage() {
       </div>
 
       <Card>
-        <CardContent className="grid gap-4 p-6 md:grid-cols-3">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               User ID
@@ -231,7 +280,7 @@ export default function AdminUserDetailPage() {
       </Card>
 
       <Card>
-        <CardContent className="space-y-6 p-6">
+        <CardContent className="space-y-5 p-5">
           <div>
             <h2 className="text-lg font-semibold">Account details</h2>
             <p className="text-sm text-muted-foreground">
@@ -244,18 +293,21 @@ export default function AdminUserDetailPage() {
               <Input
                 value={form.firstName}
                 onChange={(event) => setField('firstName', event.target.value)}
+                className="bg-background"
               />
             </Field>
             <Field label="Middle Name">
               <Input
                 value={form.middleName}
                 onChange={(event) => setField('middleName', event.target.value)}
+                className="bg-background"
               />
             </Field>
             <Field label="Last Name">
               <Input
                 value={form.lastName}
                 onChange={(event) => setField('lastName', event.target.value)}
+                className="bg-background"
               />
             </Field>
           </div>
@@ -266,6 +318,7 @@ export default function AdminUserDetailPage() {
                 type="email"
                 value={form.email}
                 onChange={(event) => setField('email', event.target.value)}
+                className="bg-background"
               />
             </Field>
             <Field label="Role">
@@ -277,7 +330,7 @@ export default function AdminUserDetailPage() {
                     event.target.value as 'student' | 'teacher' | 'admin',
                   )
                 }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="student">Student</option>
                 <option value="teacher">Teacher</option>
@@ -290,7 +343,7 @@ export default function AdminUserDetailPage() {
 
       {isStudent ? (
         <Card>
-          <CardContent className="space-y-6 p-6">
+          <CardContent className="space-y-5 p-5">
             <div>
               <h2 className="text-lg font-semibold">Student profile</h2>
               <p className="text-sm text-muted-foreground">
@@ -304,13 +357,14 @@ export default function AdminUserDetailPage() {
                   value={form.lrn}
                   onChange={(event) => setField('lrn', event.target.value)}
                   placeholder="12-digit LRN"
+                  className="bg-background"
                 />
               </Field>
               <Field label="Grade Level">
                 <select
                   value={form.gradeLevel}
                   onChange={(event) => setField('gradeLevel', event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Select grade</option>
                   <option value="7">Grade 7</option>
@@ -326,6 +380,7 @@ export default function AdminUserDetailPage() {
                   onChange={(event) =>
                     setField('dateOfBirth', event.target.value)
                   }
+                  className="bg-background"
                 />
               </Field>
             </div>
@@ -335,7 +390,7 @@ export default function AdminUserDetailPage() {
                 <select
                   value={form.gender}
                   onChange={(event) => setField('gender', event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Select gender</option>
                   <option value="Male">Male</option>
@@ -346,6 +401,7 @@ export default function AdminUserDetailPage() {
                 <Input
                   value={form.phone}
                   onChange={(event) => setField('phone', event.target.value)}
+                  className="bg-background"
                 />
               </Field>
             </div>
@@ -354,6 +410,7 @@ export default function AdminUserDetailPage() {
               <Input
                 value={form.address}
                 onChange={(event) => setField('address', event.target.value)}
+                className="bg-background"
               />
             </Field>
 
@@ -362,6 +419,7 @@ export default function AdminUserDetailPage() {
                 <Input
                   value={form.familyName}
                   onChange={(event) => setField('familyName', event.target.value)}
+                  className="bg-background"
                 />
               </Field>
               <Field label="Relationship">
@@ -370,7 +428,7 @@ export default function AdminUserDetailPage() {
                   onChange={(event) =>
                     setField('familyRelationship', event.target.value)
                   }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Select relationship</option>
                   <option value="Father">Father</option>
@@ -386,6 +444,7 @@ export default function AdminUserDetailPage() {
                   onChange={(event) =>
                     setField('familyContact', event.target.value)
                   }
+                  className="bg-background"
                 />
               </Field>
             </div>
@@ -398,6 +457,59 @@ export default function AdminUserDetailPage() {
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
+
+      <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset User Password</DialogTitle>
+            <DialogDescription>
+              This will generate a new temporary password for {form.firstName}{' '}
+              {form.lastName}. The password will be emailed to the user.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowResetConfirm(false)}
+              disabled={resetting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleResetPassword} disabled={resetting}>
+              {resetting ? 'Resetting...' : 'Confirm Reset'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showResetResult}
+        onOpenChange={(open) => {
+          setShowResetResult(open);
+          if (!open) {
+            setGeneratedPassword('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Temporary Password</DialogTitle>
+            <DialogDescription>
+              Share this securely. This value is shown once in this admin view.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border bg-muted/40 p-3">
+            <p className="break-all font-mono text-sm">{generatedPassword}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCopyPassword}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy Password
+            </Button>
+            <Button onClick={() => setShowResetResult(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -17,6 +17,13 @@ export interface UsersListResponse {
   totalPages: number;
 }
 
+export interface ResetUserPasswordResponse {
+  success: boolean;
+  message: string;
+  userId: string;
+  generatedPassword: string;
+}
+
 export const userService = {
   /** GET /users/all — Admin only */
   async getAll(query?: UsersQuery): Promise<UsersListResponse> {
@@ -75,6 +82,12 @@ export const userService = {
   /** DELETE /users/:id/purge — Admin only */
   async purge(id: string): Promise<{ success: boolean; message?: string }> {
     const { data } = await api.delete(`/users/${id}/purge`);
+    return data;
+  },
+
+  /** POST /users/:id/reset-password — Admin only */
+  async resetPassword(id: string): Promise<ResetUserPasswordResponse> {
+    const { data } = await api.post(`/users/${id}/reset-password`);
     return data;
   },
 };

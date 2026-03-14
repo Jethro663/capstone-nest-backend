@@ -142,6 +142,7 @@ export default function EditClassPage() {
             submitLabel="Update"
             onSubmit={handleSubmit}
             onCancel={() => router.push('/dashboard/admin/classes')}
+            editingClassId={classId}
           />
         </CardContent>
       </Card>

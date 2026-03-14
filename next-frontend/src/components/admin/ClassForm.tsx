@@ -1,11 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { ScheduleCalendarCreator, type ScheduleSlot } from '@/components/admin/ScheduleCalendarCreator';
+import { classService } from '@/services/class-service';
+import {
+  ScheduleCalendarCreator,
+  type ScheduleSlot,
+  type ExistingScheduleSlot,
+} from '@/components/admin/ScheduleCalendarCreator';
+import type { ClassItem } from '@/types/class';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
 
@@ -56,6 +62,8 @@ type ClassFormProps = {
   onSubmit: (values: ClassFormValues) => Promise<void>;
   onCancel: () => void;
   submitLabel: string;
+  /** When editing, pass the class ID so we exclude it from existing section slots */
+  editingClassId?: string;
 };
 
 export default function ClassForm({
@@ -67,8 +75,11 @@ export default function ClassForm({
   onSubmit,
   onCancel,
   submitLabel,
+  editingClassId,
 }: ClassFormProps) {
   const [form, setForm] = useState<ClassFormValues>(initialValues);
+  const [existingSlots, setExistingSlots] = useState<ExistingScheduleSlot[]>([]);
+  const [loadingSection, setLoadingSection] = useState(false);
 
   useEffect(() => {
     setForm(initialValues);
@@ -86,12 +97,83 @@ export default function ClassForm({
         sections.find((s) => s.id === current.sectionId)?.gradeLevel === value
           ? current.sectionId
           : '',
+      // Clear schedules when grade level changes (section will clear)
+      schedules: [],
     }));
+    setExistingSlots([]);
+  };
+
+  const handleSectionChange = (sectionId: string) => {
+    setForm((current) => ({
+      ...current,
+      sectionId,
+      // Clear user schedules when section changes
+      schedules: [],
+    }));
+    // Existing slots will be fetched by the effect below
   };
 
   const filteredSections = form.subjectGradeLevel
     ? sections.filter((s) => s.gradeLevel === form.subjectGradeLevel)
     : [];
+
+  // ─── Schedule readiness ─────────────────────────────────────────────────────
+  const isScheduleReady = Boolean(
+    form.subjectName &&
+    form.subjectCode.trim() &&
+    form.subjectGradeLevel &&
+    form.sectionId &&
+    form.schoolYear,
+  );
+
+  // ─── Fetch existing section schedules when prerequisites are met ────────────
+  const fetchSectionSchedules = useCallback(
+    async (sectionId: string) => {
+      try {
+        setLoadingSection(true);
+        const res = await classService.getBySection(sectionId);
+        const sectionClasses: ClassItem[] = res.data || [];
+
+        // Flatten all class schedules into ExistingScheduleSlots,
+        // excluding the class being edited (if applicable)
+        const slots: ExistingScheduleSlot[] = [];
+        for (const cls of sectionClasses) {
+          if (editingClassId && cls.id === editingClassId) continue;
+          if (!cls.schedules?.length) continue;
+          for (const sched of cls.schedules) {
+            slots.push({
+              days: [...sched.days],
+              startTime: sched.startTime,
+              endTime: sched.endTime,
+              subjectName: cls.subjectName,
+              subjectCode: cls.subjectCode,
+              teacherName: cls.teacher
+                ? `${cls.teacher.firstName || ''} ${cls.teacher.lastName || ''}`.trim()
+                : undefined,
+              room: cls.room || undefined,
+            });
+          }
+        }
+        setExistingSlots(slots);
+      } catch {
+        // Non-fatal: schedule creator still works, just without existing blocks
+        setExistingSlots([]);
+      } finally {
+        setLoadingSection(false);
+      }
+    },
+    [editingClassId],
+  );
+
+  useEffect(() => {
+    if (isScheduleReady && form.sectionId) {
+      fetchSectionSchedules(form.sectionId);
+    } else {
+      setExistingSlots([]);
+    }
+  }, [isScheduleReady, form.sectionId, fetchSectionSchedules]);
+
+  // ─── Submission ─────────────────────────────────────────────────────────────
 
   const normalizedSchedules = (): ScheduleSlot[] => {
     return form.schedules
@@ -186,7 +268,7 @@ export default function ClassForm({
         <Field label="Section">
           <select
             value={form.sectionId}
-            onChange={(event) => setField('sectionId', event.target.value)}
+            onChange={(event) => handleSectionChange(event.target.value)}
             disabled={!form.subjectGradeLevel}
             className={SELECT_CLS}
           >
@@ -233,6 +315,8 @@ export default function ClassForm({
         onChange={(schedules) =>
           setForm((current) => ({ ...current, schedules }))
         }
+        existingSlots={existingSlots}
+        disabled={!isScheduleReady || loadingSection}
       />
 
       <div className="flex items-center justify-end gap-2 border-t pt-4">

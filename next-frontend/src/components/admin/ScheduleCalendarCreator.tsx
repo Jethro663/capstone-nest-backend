@@ -8,6 +8,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { SCHEDULE_DAYS, type ScheduleDay } from '@/utils/constants';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,9 +24,21 @@ export interface ScheduleSlot {
   endTime: string;   // HH:MM
 }
 
+/** A read-only slot from an existing class in the same section */
+export interface ExistingScheduleSlot extends ScheduleSlot {
+  subjectName: string;
+  subjectCode: string;
+  teacherName?: string;
+  room?: string;
+}
+
 interface ScheduleCalendarCreatorProps {
   value: ScheduleSlot[];
   onChange: (slots: ScheduleSlot[]) => void;
+  /** Read-only occupied blocks from other classes in the section */
+  existingSlots?: ExistingScheduleSlot[];
+  /** Lock the calendar — greyed out with helper message */
+  disabled?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -101,20 +119,46 @@ const SLOT_COLORS = [
   { bg: 'bg-cyan-500/20', border: 'border-cyan-500/40', text: 'text-cyan-700 dark:text-cyan-300', dot: 'bg-cyan-500' },
 ];
 
+// ─── Helper: slot style computation ───────────────────────────────────────────
+
+function getSlotStyle(slot: ScheduleSlot): React.CSSProperties {
+  const gridStartMin = GRID_START_HOUR * 60;
+  const totalGridMinutes = (GRID_END_HOUR - GRID_START_HOUR) * 60;
+  const startMin = timeToMinutes(slot.startTime) - gridStartMin;
+  const endMin = timeToMinutes(slot.endTime) - gridStartMin;
+  const top = (startMin / totalGridMinutes) * 100;
+  const height = ((endMin - startMin) / totalGridMinutes) * 100;
+  return { top: `${top}%`, height: `${height}%` };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCreatorProps) {
-  // State for the popover when creating a new slot
+export function ScheduleCalendarCreator({
+  value,
+  onChange,
+  existingSlots = [],
+  disabled = false,
+}: ScheduleCalendarCreatorProps) {
   const [activeCell, setActiveCell] = useState<{ day: ScheduleDay; time: string } | null>(null);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  // Map of day -> array of slot indices for efficient lookup
+  // ─── Existing slots: flatten to per-day entries for fast lookup ────────────
+  const existingDayMap = useMemo(() => {
+    const map: Record<string, { idx: number; slot: ExistingScheduleSlot }[]> = {};
+    for (const day of SCHEDULE_DAYS) map[day] = [];
+    existingSlots.forEach((slot, idx) => {
+      for (const day of slot.days) {
+        map[day]?.push({ idx, slot });
+      }
+    });
+    return map;
+  }, [existingSlots]);
+
+  // ─── User slots: same pattern ─────────────────────────────────────────────
   const daySlotMap = useMemo(() => {
     const map: Record<string, { slotIndex: number; slot: ScheduleSlot }[]> = {};
-    for (const day of SCHEDULE_DAYS) {
-      map[day] = [];
-    }
+    for (const day of SCHEDULE_DAYS) map[day] = [];
     value.forEach((slot, slotIndex) => {
       for (const day of slot.days) {
         map[day]?.push({ slotIndex, slot });
@@ -123,118 +167,110 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
     return map;
   }, [value]);
 
-  /** Get the slot occupying a given cell (day + time) */
-  const getSlotAtCell = useCallback(
-    (day: ScheduleDay, time: string): { slotIndex: number; slot: ScheduleSlot } | null => {
+  /** Is a cell occupied by a USER slot? */
+  const getUserSlotAtCell = useCallback(
+    (day: ScheduleDay, time: string) => {
       const cellMin = timeToMinutes(time);
-      const entries = daySlotMap[day] || [];
-      for (const entry of entries) {
-        const start = timeToMinutes(entry.slot.startTime);
-        const end = timeToMinutes(entry.slot.endTime);
-        if (cellMin >= start && cellMin < end) {
-          return entry;
-        }
+      for (const entry of (daySlotMap[day] || [])) {
+        const s = timeToMinutes(entry.slot.startTime);
+        const e = timeToMinutes(entry.slot.endTime);
+        if (cellMin >= s && cellMin < e) return entry;
       }
       return null;
     },
     [daySlotMap],
   );
 
-  /** Add a slot with a preset duration */
+  /** Is a cell occupied by an EXISTING (read-only) slot? */
+  const getExistingAtCell = useCallback(
+    (day: ScheduleDay, time: string) => {
+      const cellMin = timeToMinutes(time);
+      for (const entry of (existingDayMap[day] || [])) {
+        const s = timeToMinutes(entry.slot.startTime);
+        const e = timeToMinutes(entry.slot.endTime);
+        if (cellMin >= s && cellMin < e) return entry;
+      }
+      return null;
+    },
+    [existingDayMap],
+  );
+
+  /** Does a new range overlap any existing or user slot on a day? */
+  const hasAnyOverlap = useCallback(
+    (day: ScheduleDay, startMin: number, endMin: number) => {
+      const allEntries = [
+        ...(daySlotMap[day] || []).map((e) => e.slot),
+        ...(existingDayMap[day] || []).map((e) => e.slot),
+      ];
+      return allEntries.some((s) =>
+        rangesOverlap(startMin, endMin, timeToMinutes(s.startTime), timeToMinutes(s.endTime)),
+      );
+    },
+    [daySlotMap, existingDayMap],
+  );
+
+  // ─── Actions ──────────────────────────────────────────────────────────────
+
   const handlePresetClick = useCallback(
     (day: ScheduleDay, startTime: string, durationMinutes: number) => {
       const startMin = timeToMinutes(startTime);
       const endMin = Math.min(startMin + durationMinutes, GRID_END_HOUR * 60);
-      const endTime = minutesToTime(endMin);
-
-      // Check for overlap with existing slots on this day
-      const dayEntries = daySlotMap[day] || [];
-      const hasOverlap = dayEntries.some((entry) =>
-        rangesOverlap(startMin, endMin, timeToMinutes(entry.slot.startTime), timeToMinutes(entry.slot.endTime)),
-      );
-      if (hasOverlap) return; // silently reject
-
-      onChange([...value, { days: [day], startTime, endTime }]);
+      if (hasAnyOverlap(day, startMin, endMin)) return;
+      onChange([...value, { days: [day], startTime, endTime: minutesToTime(endMin) }]);
       setActiveCell(null);
     },
-    [daySlotMap, onChange, value],
+    [hasAnyOverlap, onChange, value],
   );
 
-  /** Add a slot with custom start/end */
   const handleCustomAdd = useCallback(() => {
     if (!activeCell || !customStart || !customEnd) return;
     const startMin = timeToMinutes(customStart);
     const endMin = timeToMinutes(customEnd);
-    if (endMin <= startMin) return; // invalid range
-
-    const dayEntries = daySlotMap[activeCell.day] || [];
-    const hasOverlap = dayEntries.some((entry) =>
-      rangesOverlap(startMin, endMin, timeToMinutes(entry.slot.startTime), timeToMinutes(entry.slot.endTime)),
-    );
-    if (hasOverlap) return;
-
+    if (endMin <= startMin) return;
+    if (hasAnyOverlap(activeCell.day, startMin, endMin)) return;
     onChange([...value, { days: [activeCell.day], startTime: customStart, endTime: customEnd }]);
     setActiveCell(null);
     setCustomStart('');
     setCustomEnd('');
-  }, [activeCell, customEnd, customStart, daySlotMap, onChange, value]);
+  }, [activeCell, customEnd, customStart, hasAnyOverlap, onChange, value]);
 
-  /** Remove a slot */
   const handleRemoveSlot = useCallback(
     (slotIndex: number, day: ScheduleDay) => {
       const slot = value[slotIndex];
       if (!slot) return;
-
       if (slot.days.length === 1) {
-        // Only this day — remove the whole slot
         onChange(value.filter((_, i) => i !== slotIndex));
       } else {
-        // Multiple days — just remove this day from the slot
         const updated = [...value];
-        updated[slotIndex] = {
-          ...slot,
-          days: slot.days.filter((d) => d !== day),
-        };
+        updated[slotIndex] = { ...slot, days: slot.days.filter((d) => d !== day) };
         onChange(updated);
       }
     },
     [onChange, value],
   );
 
-  /** Compute the visual position and height of a slot block for a given cell */
-  const getSlotStyle = useCallback(
-    (slot: ScheduleSlot): React.CSSProperties => {
-      const gridStartMin = GRID_START_HOUR * 60;
-      const totalGridMinutes = (GRID_END_HOUR - GRID_START_HOUR) * 60;
-      const startMin = timeToMinutes(slot.startTime) - gridStartMin;
-      const endMin = timeToMinutes(slot.endTime) - gridStartMin;
-      const top = (startMin / totalGridMinutes) * 100;
-      const height = ((endMin - startMin) / totalGridMinutes) * 100;
-      return { top: `${top}%`, height: `${height}%` };
-    },
-    [],
-  );
+  // ─── Day Column Renderer ──────────────────────────────────────────────────
 
-  // Render the column for a single day showing all slot blocks
   const renderDayColumn = (day: ScheduleDay) => {
-    const entries = daySlotMap[day] || [];
-    // Deduplicate: only render each slot once per day
-    const seen = new Set<number>();
+    const userEntries = daySlotMap[day] || [];
+    const existEntries = existingDayMap[day] || [];
+    const seenUser = new Set<number>();
+    const seenExist = new Set<number>();
 
     return (
       <div key={day} className="relative flex-1 min-w-0">
-        {/* Grid lines */}
+        {/* Grid cells */}
         {HALF_HOUR_SLOTS.map((time) => {
           const isHour = time.endsWith(':00');
-          const cellSlot = getSlotAtCell(day, time);
-          const isCellOccupied = !!cellSlot;
+          const isOccupied = !!getUserSlotAtCell(day, time) || !!getExistingAtCell(day, time);
+          const canClick = !disabled && !isOccupied;
           return (
             <div
               key={time}
               className={`h-6 border-b border-r ${isHour ? 'border-border/60' : 'border-border/20'}
-                ${!isCellOccupied ? 'cursor-pointer hover:bg-primary/5' : ''}`}
+                ${canClick ? 'cursor-pointer hover:bg-primary/5' : ''}`}
             >
-              {!isCellOccupied && (
+              {canClick && (
                 <Popover
                   open={activeCell?.day === day && activeCell?.time === time}
                   onOpenChange={(open) => {
@@ -254,33 +290,23 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
                       aria-label={`Add schedule on ${DAY_LABELS[day]} at ${formatTime12h(time)}`}
                     />
                   </PopoverTrigger>
-                  <PopoverContent
-                    className="w-64 p-3 space-y-3"
-                    side="right"
-                    align="start"
-                    sideOffset={4}
-                  >
+                  <PopoverContent className="w-64 p-3 space-y-3" side="right" align="start" sideOffset={4}>
                     <div className="space-y-1">
-                      <p className="text-sm font-semibold">
-                        {DAY_LABELS[day]} — {formatTime12h(time)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Choose a duration or set custom times
-                      </p>
+                      <p className="text-sm font-semibold">{DAY_LABELS[day]} — {formatTime12h(time)}</p>
+                      <p className="text-xs text-muted-foreground">Choose a duration or set custom times</p>
                     </div>
-
-                    {/* Preset durations */}
                     <div className="grid grid-cols-2 gap-1.5">
                       {DURATION_PRESETS.map((preset) => {
                         const endMin = timeToMinutes(time) + preset.minutes;
                         const wouldOverflow = endMin > GRID_END_HOUR * 60;
+                        const wouldOverlap = hasAnyOverlap(day, timeToMinutes(time), endMin);
                         return (
                           <Button
                             key={preset.label}
                             type="button"
                             variant="outline"
                             size="sm"
-                            disabled={wouldOverflow}
+                            disabled={wouldOverflow || wouldOverlap}
                             className="text-xs h-8"
                             onClick={() => handlePresetClick(day, time, preset.minutes)}
                           >
@@ -289,8 +315,6 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
                         );
                       })}
                     </div>
-
-                    {/* Custom time range */}
                     <div className="space-y-2 border-t pt-2">
                       <p className="text-xs font-medium text-muted-foreground">Custom Range</p>
                       <div className="flex items-center gap-2">
@@ -300,9 +324,7 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
                           className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-xs"
                         >
                           {TIME_OPTIONS.map((t) => (
-                            <option key={`s-${t}`} value={t}>
-                              {formatTime12h(t)}
-                            </option>
+                            <option key={`s-${t}`} value={t}>{formatTime12h(t)}</option>
                           ))}
                         </select>
                         <span className="text-xs text-muted-foreground">to</span>
@@ -312,9 +334,7 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
                           className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-xs"
                         >
                           {TIME_OPTIONS.filter((t) => timeToMinutes(t) > timeToMinutes(customStart)).map((t) => (
-                            <option key={`e-${t}`} value={t}>
-                              {formatTime12h(t)}
-                            </option>
+                            <option key={`e-${t}`} value={t}>{formatTime12h(t)}</option>
                           ))}
                         </select>
                       </div>
@@ -335,10 +355,54 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
           );
         })}
 
-        {/* Rendered slot blocks (absolutely positioned) */}
-        {entries.map(({ slotIndex, slot }) => {
-          if (seen.has(slotIndex)) return null;
-          seen.add(slotIndex);
+        {/* ── Existing (read-only) slot blocks ─────────────────────────────── */}
+        {existEntries.map(({ idx, slot }) => {
+          if (seenExist.has(idx)) return null;
+          seenExist.add(idx);
+          return (
+            <TooltipProvider key={`exist-${idx}`} delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="absolute inset-x-0.5 z-[5] rounded-md border px-1
+                      flex flex-col justify-center items-center
+                      bg-zinc-500/15 border-zinc-400/30 dark:bg-zinc-600/20 dark:border-zinc-500/30
+                      pointer-events-auto"
+                    style={{
+                      ...getSlotStyle(slot),
+                      backgroundImage:
+                        'repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(161,161,170,0.13) 3px, rgba(161,161,170,0.13) 5px)',
+                    }}
+                  >
+                    <span className="text-[10px] font-semibold leading-tight truncate w-full text-center text-zinc-600 dark:text-zinc-400">
+                      {slot.subjectCode}
+                    </span>
+                    <span className="text-[9px] leading-tight truncate w-full text-center text-zinc-500 dark:text-zinc-500">
+                      {formatTime12h(slot.startTime)}–{formatTime12h(slot.endTime)}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-52">
+                  <p className="font-semibold text-xs">{slot.subjectName} ({slot.subjectCode})</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatTime12h(slot.startTime)} – {formatTime12h(slot.endTime)}
+                  </p>
+                  {slot.teacherName && (
+                    <p className="text-[11px] text-muted-foreground">Teacher: {slot.teacherName}</p>
+                  )}
+                  {slot.room && (
+                    <p className="text-[11px] text-muted-foreground">Room: {slot.room}</p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        })}
+
+        {/* ── User slot blocks ─────────────────────────────────────────────── */}
+        {userEntries.map(({ slotIndex, slot }) => {
+          if (seenUser.has(slotIndex)) return null;
+          seenUser.add(slotIndex);
           const color = SLOT_COLORS[slotIndex % SLOT_COLORS.length];
           return (
             <button
@@ -365,6 +429,8 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
     );
   };
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -372,10 +438,12 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
         <div>
           <h3 className="font-semibold text-sm">Class Schedule</h3>
           <p className="text-xs text-muted-foreground">
-            Click on a time slot to add a schedule. Click an existing block to remove it.
+            {disabled
+              ? 'Fill in subject, code, grade level, school year, and section to enable scheduling.'
+              : 'Click on a time slot to add a schedule. Click an existing block to remove it.'}
           </p>
         </div>
-        {value.length > 0 && (
+        {!disabled && value.length > 0 && (
           <Button
             type="button"
             variant="ghost"
@@ -389,7 +457,18 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
       </div>
 
       {/* Calendar Grid */}
-      <div className="rounded-xl border bg-card overflow-hidden">
+      <div className={`rounded-xl border bg-card overflow-hidden relative ${disabled ? 'opacity-40 pointer-events-none select-none' : ''}`}>
+        {/* Disabled overlay */}
+        {disabled && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60 backdrop-blur-[1px] rounded-xl">
+            <div className="text-center px-6">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-2 text-muted-foreground/60"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <p className="text-sm font-medium text-muted-foreground">Schedule Locked</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5">Complete the class details above first</p>
+            </div>
+          </div>
+        )}
+
         {/* Day headers */}
         <div className="flex border-b bg-muted/40">
           <div className="w-14 shrink-0" />
@@ -405,15 +484,11 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
 
         {/* Time grid body */}
         <div className="flex max-h-[380px] overflow-y-auto">
-          {/* Time labels column */}
           <div className="w-14 shrink-0">
             {HALF_HOUR_SLOTS.map((time) => {
               const isHour = time.endsWith(':00');
               return (
-                <div
-                  key={time}
-                  className="h-6 flex items-center justify-end pr-2 border-b border-border/20"
-                >
+                <div key={time} className="h-6 flex items-center justify-end pr-2 border-b border-border/20">
                   {isHour && (
                     <span className="text-[10px] text-muted-foreground font-medium">
                       {formatTime12h(time).replace(':00 ', ' ')}
@@ -423,15 +498,24 @@ export function ScheduleCalendarCreator({ value, onChange }: ScheduleCalendarCre
               );
             })}
           </div>
-
-          {/* Day columns */}
           <div className="flex flex-1 min-w-0">
             {SCHEDULE_DAYS.map((day) => renderDayColumn(day))}
           </div>
         </div>
       </div>
 
-      {/* Summary chips */}
+      {/* Existing slots legend */}
+      {!disabled && existingSlots.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span
+            className="inline-block w-4 h-3 rounded border border-zinc-400/30 bg-zinc-500/15"
+            style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent, transparent 3px, rgba(161,161,170,0.13) 3px, rgba(161,161,170,0.13) 5px)' }}
+          />
+          <span>= Existing section classes (hover for details)</span>
+        </div>
+      )}
+
+      {/* Summary chips for user slots */}
       {value.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {value.map((slot, index) => {

@@ -18,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import type { Section } from '@/types/section';
 
 interface Candidate {
@@ -149,6 +150,8 @@ export default function AdminSectionRosterPage() {
           + Add Students
         </Button>
       </div>
+
+      <SectionScheduleViewer sectionId={sectionId} />
 
       {roster.length === 0 ? (
         <Card>

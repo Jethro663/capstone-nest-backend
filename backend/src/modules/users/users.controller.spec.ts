@@ -10,6 +10,7 @@ describe('UsersController', () => {
     findPublicById: jest.fn(),
     createUser: jest.fn(),
     updateUser: jest.fn(),
+    adminResetPassword: jest.fn(),
     deleteUser: jest.fn(),
     suspendUser: jest.fn(),
     reactivateUser: jest.fn(),
@@ -61,5 +62,26 @@ describe('UsersController', () => {
     expect(mockUsersService.findPublicById).toHaveBeenCalledWith('u1');
     expect(result.success).toBe(true);
     expect(result.data.user.password).toBeUndefined();
+  });
+
+  it('resetUserPassword returns generated password payload', async () => {
+    mockUsersService.adminResetPassword.mockResolvedValue({
+      message: 'Password reset successfully',
+      userId: 'u1',
+      generatedPassword: 'Temp@12345A',
+    });
+
+    const result = await controller.resetUserPassword('u1', { sub: 'admin-1' });
+
+    expect(mockUsersService.adminResetPassword).toHaveBeenCalledWith(
+      'u1',
+      'admin-1',
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'Password reset successfully',
+      userId: 'u1',
+      generatedPassword: 'Temp@12345A',
+    });
   });
 });

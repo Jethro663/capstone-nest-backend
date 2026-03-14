@@ -203,6 +203,8 @@ describe('UsersService', () => {
         middleName: '',
         lastName: 'Er',
         role: 'teacher',
+        employeeId: 'EMP-001',
+        contactNumber: '09171234567',
       });
 
       expect(result.password).toBeUndefined();
@@ -364,6 +366,62 @@ describe('UsersService', () => {
       );
       expect(result.profilePicture).toBe('/api/profiles/images/test.png');
       expect(result.dateOfBirth).toBe('2005-08-15T00:00:00.000Z');
+    });
+  });
+
+  describe('adminResetPassword', () => {
+    it('resets password for ACTIVE/PENDING users and sends email', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(
+        makeUser({
+          id: 'user-1',
+          email: 'user@example.com',
+          status: 'ACTIVE',
+        }),
+      );
+
+      const updatePasswordSpy = jest
+        .spyOn(service, 'updatePassword')
+        .mockResolvedValue({
+          message: 'Password successfully updated',
+          userId: 'user-1',
+        });
+
+      const result = await service.adminResetPassword('user-1', 'admin-1');
+
+      expect(updatePasswordSpy).toHaveBeenCalledWith(
+        'user-1',
+        expect.any(String),
+      );
+      expect(mockMailService.sendPasswordEmail).toHaveBeenCalledWith(
+        'user@example.com',
+        expect.any(String),
+      );
+      expect(result).toEqual(
+        expect.objectContaining({
+          message: 'Password reset successfully',
+          userId: 'user-1',
+          generatedPassword: expect.any(String),
+        }),
+      );
+    });
+
+    it('throws NotFoundException if user does not exist', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(null);
+
+      await expect(
+        service.adminResetPassword('missing-id', 'admin-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException for non-resettable statuses', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'SUSPENDED' }));
+
+      await expect(
+        service.adminResetPassword('user-1', 'admin-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockMailService.sendPasswordEmail).not.toHaveBeenCalled();
     });
   });
 
