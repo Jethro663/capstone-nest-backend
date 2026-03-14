@@ -72,6 +72,14 @@ export class CreateAssessmentDto {
   dueDate?: string;
 
   @IsOptional()
+  @IsBoolean()
+  closeWhenDue?: boolean = true;
+
+  @IsOptional()
+  @IsBoolean()
+  randomizeQuestions?: boolean = false;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   passingScore?: number = 60;
@@ -120,6 +128,14 @@ export class UpdateAssessmentDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  closeWhenDue?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  randomizeQuestions?: boolean;
 
   @IsOptional()
   @IsInt()

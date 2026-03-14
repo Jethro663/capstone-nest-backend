@@ -411,6 +411,8 @@ export const assessments = pgTable('assessments', {
     .references(() => classes.id, { onDelete: 'cascade' }),
   type: assessmentTypeEnum('type').notNull().default('quiz'),
   dueDate: timestamp('due_date'),
+  closeWhenDue: boolean('close_when_due').notNull().default(true),
+  randomizeQuestions: boolean('randomize_questions').notNull().default(false),
   totalPoints: integer('total_points').notNull().default(0),
   passingScore: integer('passing_score').default(60),
   maxAttempts: integer('max_attempts').notNull().default(1),

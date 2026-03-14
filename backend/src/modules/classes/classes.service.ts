@@ -8,6 +8,7 @@ import {
 import {
   and,
   count,
+  desc,
   eq,
   ilike,
   isNull,
@@ -46,6 +47,21 @@ export class ClassesService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private ensureTeacherCanAccessClass(
+    classRecord: { teacherId: string },
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    if (
+      requesterId &&
+      requesterRoles &&
+      !requesterRoles.includes('admin') &&
+      requesterId !== classRecord.teacherId
+    ) {
+      throw new ForbiddenException('You can only access your own classes');
+    }
   }
 
   /**
@@ -632,6 +648,8 @@ export class ClassesService {
             profile: {
               columns: {
                 gradeLevel: true,
+                lrn: true,
+                profilePicture: true,
               },
             },
           },
@@ -641,6 +659,300 @@ export class ClassesService {
     });
 
     return classEnrollments;
+  }
+
+  async getStudentProfileForClass(
+    classId: string,
+    studentId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    const classRecord = await this.findById(classId);
+    this.ensureTeacherCanAccessClass(classRecord, requesterId, requesterRoles);
+
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Student is not enrolled in this class');
+    }
+
+    const student = await this.db.query.users.findFirst({
+      where: eq(users.id, studentId),
+      columns: {
+        id: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        email: true,
+        status: true,
+      },
+      with: {
+        profile: {
+          columns: {
+            lrn: true,
+            dateOfBirth: true,
+            gender: true,
+            phone: true,
+            address: true,
+            gradeLevel: true,
+            familyName: true,
+            familyRelationship: true,
+            familyContact: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const sectionRecord = await this.db.query.sections.findFirst({
+      where: eq(sections.id, classRecord.sectionId),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+        roomNumber: true,
+      },
+      with: {
+        adviser: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return {
+      classInfo: {
+        id: classRecord.id,
+        subjectName: classRecord.subjectName,
+        subjectCode: classRecord.subjectCode,
+      },
+      student: {
+        ...student,
+        profile: student.profile ?? null,
+      },
+      section: sectionRecord
+        ? {
+            ...sectionRecord,
+            adviser: sectionRecord.adviser ?? null,
+          }
+        : null,
+    };
+  }
+
+  async getStudentsMasterlistForClass(
+    classId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+    filters?: {
+      gradeLevel?: string;
+      sectionId?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    const classRecord = await this.findById(classId);
+    this.ensureTeacherCanAccessClass(classRecord, requesterId, requesterRoles);
+
+    const classGradeLevel = classRecord.section?.gradeLevel;
+    const effectiveGradeLevel =
+      (filters?.gradeLevel as '7' | '8' | '9' | '10' | undefined) ??
+      classGradeLevel;
+    const page = Math.max(1, Number(filters?.page ?? 1) || 1);
+    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20) || 20, 100));
+    const offset = (page - 1) * limit;
+
+    const whereConditions: SQL<unknown>[] = [];
+
+    const studentRoleSubquery = this.db
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      .where(eq(roles.name, 'student'));
+
+    whereConditions.push(inArray(users.id, studentRoleSubquery));
+    whereConditions.push(ne(users.status, 'DELETED'));
+
+    if (effectiveGradeLevel) {
+      whereConditions.push(
+        eq(studentProfiles.gradeLevel, effectiveGradeLevel as any),
+      );
+    }
+
+    if (filters?.search) {
+      const searchPattern = `%${filters.search}%`;
+      const searchCondition = or(
+        ilike(users.firstName, searchPattern),
+        ilike(users.lastName, searchPattern),
+        ilike(users.email, searchPattern),
+        ilike(studentProfiles.lrn, searchPattern),
+      );
+      if (searchCondition) whereConditions.push(searchCondition);
+    }
+
+    if (filters?.sectionId) {
+      const sectionStudentSubquery = this.db
+        .select({ studentId: enrollments.studentId })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.sectionId, filters.sectionId),
+            eq(enrollments.status, 'enrolled'),
+          ),
+        );
+      whereConditions.push(inArray(users.id, sectionStudentSubquery));
+    }
+
+    const whereClause = and(...whereConditions);
+
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(users)
+      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
+      .where(whereClause);
+
+    const students = await this.db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        middleName: users.middleName,
+        lastName: users.lastName,
+        email: users.email,
+        status: users.status,
+        profilePicture: studentProfiles.profilePicture,
+        lrn: studentProfiles.lrn,
+        gradeLevel: studentProfiles.gradeLevel,
+      })
+      .from(users)
+      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
+      .where(whereClause)
+      .orderBy(users.lastName, users.firstName)
+      .limit(limit)
+      .offset(offset);
+
+    const studentIds = students.map((student) => student.id);
+
+    const enrolledRows =
+      studentIds.length > 0
+        ? await this.db.query.enrollments.findMany({
+            where: and(
+              inArray(enrollments.studentId, studentIds),
+              eq(enrollments.status, 'enrolled'),
+            ),
+            columns: {
+              studentId: true,
+              sectionId: true,
+              classId: true,
+              enrolledAt: true,
+            },
+            with: {
+              section: {
+                columns: {
+                  id: true,
+                  name: true,
+                  gradeLevel: true,
+                  schoolYear: true,
+                },
+              },
+            },
+            orderBy: [desc(enrollments.enrolledAt)],
+          })
+        : [];
+
+    const classEnrollments =
+      studentIds.length > 0
+        ? await this.db.query.enrollments.findMany({
+            where: and(
+              eq(enrollments.classId, classId),
+              inArray(enrollments.studentId, studentIds),
+              eq(enrollments.status, 'enrolled'),
+            ),
+            columns: {
+              studentId: true,
+            },
+          })
+        : [];
+
+    const alreadyEnrolledIds = new Set(classEnrollments.map((e) => e.studentId));
+
+    const studentSectionMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        gradeLevel: string;
+        schoolYear: string;
+      } | null
+    >();
+
+    for (const row of enrolledRows) {
+      if (!row.sectionId || !row.section) continue;
+      if (studentSectionMap.has(row.studentId)) continue;
+
+      studentSectionMap.set(row.studentId, {
+        id: row.section.id,
+        name: row.section.name,
+        gradeLevel: row.section.gradeLevel,
+        schoolYear: row.section.schoolYear,
+      });
+    }
+
+    const data = students.map((student) => {
+      const studentSection = studentSectionMap.get(student.id) ?? null;
+      const hasGradeMismatch =
+        !!classGradeLevel && student.gradeLevel !== classGradeLevel;
+      const hasSectionMismatch =
+        !!studentSection && studentSection.id !== classRecord.sectionId;
+      const isAlreadyEnrolled = alreadyEnrolledIds.has(student.id);
+
+      let disabledReason: string | null = null;
+
+      if (isAlreadyEnrolled) {
+        disabledReason = 'Already enrolled in this class';
+      } else if (hasGradeMismatch) {
+        disabledReason = `Different grade level (Class grade ${classGradeLevel})`;
+      } else if (!studentSection) {
+        disabledReason = 'No section assignment';
+      } else if (hasSectionMismatch) {
+        disabledReason = `Different section (${studentSection.name})`;
+      }
+
+      return {
+        ...student,
+        section: studentSection,
+        isEligible: !disabledReason,
+        disabledReason,
+      };
+    });
+
+    return {
+      classContext: {
+        classId: classRecord.id,
+        sectionId: classRecord.sectionId,
+        classGradeLevel,
+      },
+      data,
+      total: Number(totalRow?.total ?? 0),
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(Number(totalRow?.total ?? 0) / limit)),
+    };
   }
 
   /**
@@ -681,7 +993,7 @@ export class ClassesService {
       with: {
         student: {
           columns: { id: true, firstName: true, lastName: true, email: true },
-          with: { profile: { columns: { gradeLevel: true } } },
+          with: { profile: { columns: { gradeLevel: true, lrn: true, profilePicture: true } } },
         },
       },
     });

@@ -38,7 +38,11 @@ function formatTime(seconds: number): string {
 
 export function ResponsesTab({ assessment, stats, analytics, submissions }: ResponsesTabProps) {
   const totalStudents = submissions?.summary?.total ?? 0;
-  const totalResponses = analytics?.totalResponses ?? 0;
+  const submittedStudents = (submissions?.summary?.turnedIn ?? 0) + (submissions?.summary?.returned ?? 0);
+  const completionRate = totalStudents > 0
+    ? Math.round((submittedStudents / totalStudents) * 100)
+    : 0;
+  const totalAttempts = analytics?.totalAttempts ?? analytics?.totalResponses ?? stats?.submittedAttempts ?? 0;
 
   return (
     <div className="space-y-6">
@@ -46,9 +50,11 @@ export function ResponsesTab({ assessment, stats, analytics, submissions }: Resp
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           {
-            label: 'Responses',
-            value: `${totalResponses} / ${totalStudents}`,
-            sub: totalStudents > 0 ? `${Math.round((totalResponses / totalStudents) * 100)}% responded` : 'No students',
+            label: 'Completion',
+            value: `${completionRate}%`,
+            sub: totalStudents > 0
+              ? `${submittedStudents} of ${totalStudents} students submitted · ${totalAttempts} attempt${totalAttempts !== 1 ? 's' : ''}`
+              : 'No students',
             gradient: 'from-blue-500 to-blue-600',
           },
           {
@@ -99,7 +105,7 @@ export function ResponsesTab({ assessment, stats, analytics, submissions }: Resp
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.15 + qi * 0.04, duration: 0.3 }}
             >
-              <QuestionCard question={q} index={qi} totalResponseCount={totalResponses} />
+              <QuestionCard question={q} index={qi} />
             </motion.div>
           ))}
         </div>
@@ -117,11 +123,9 @@ export function ResponsesTab({ assessment, stats, analytics, submissions }: Resp
 function QuestionCard({
   question: q,
   index,
-  totalResponseCount,
 }: {
   question: QuestionAnalytics;
   index: number;
-  totalResponseCount: number;
 }) {
   const isOptionType = q.options.length > 0;
   const isTextType = ['short_answer', 'fill_blank'].includes(q.type);

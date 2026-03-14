@@ -39,8 +39,10 @@ export default function StudentAssessmentTakePage() {
       setLoading(true);
       const res = await assessmentService.getById(assessmentId);
       setAssessment(res.data);
-      const sorted = (res.data.questions || []).sort((a, b) => a.order - b.order);
-      setQuestions(sorted);
+      const questionList = res.data.randomizeQuestions
+        ? (res.data.questions || [])
+        : [...(res.data.questions || [])].sort((a, b) => a.order - b.order);
+      setQuestions(questionList);
       const limitParam = searchParams.get('timeLimit');
       if (limitParam) {
         setTimeLimit(Number(limitParam));
@@ -272,7 +274,7 @@ function AnswerInput({
   value: string | string[] | undefined;
   onChange: (val: string | string[]) => void;
 }) {
-  const options = question.options?.sort((a, b) => a.order - b.order) || [];
+  const options = question.options || [];
 
   switch (question.type) {
     case 'multiple_choice':

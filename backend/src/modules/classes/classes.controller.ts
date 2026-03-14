@@ -259,6 +259,67 @@ export class ClassesController {
   }
 
   /**
+   * Get a student profile in class context.
+   * Teacher (owner of class) and Admin can access.
+   */
+  @Get(':classId/students/:studentId/profile')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getStudentProfileForClass(
+    @Param('classId') classId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.classesService.getStudentProfileForClass(
+      classId,
+      studentId,
+      user?.userId,
+      user?.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Student profile retrieved successfully',
+      data,
+    };
+  }
+
+  /**
+   * Get paginated student masterlist for class enrollment.
+   * Teacher (owner of class) and Admin can access.
+   */
+  @Get(':classId/students/masterlist')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getStudentsMasterlistForClass(
+    @Param('classId') classId: string,
+    @CurrentUser() user: any,
+    @Query('gradeLevel') gradeLevel?: string,
+    @Query('sectionId') sectionId?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.classesService.getStudentsMasterlistForClass(
+      classId,
+      user?.userId,
+      user?.roles,
+      {
+        gradeLevel,
+        sectionId,
+        search,
+        page: page ? parseInt(page, 10) : undefined,
+        limit: limit ? parseInt(limit, 10) : undefined,
+      },
+    );
+
+    return {
+      success: true,
+      message: 'Student masterlist retrieved successfully',
+      ...result,
+      count: result.data.length,
+    };
+  }
+
+  /**
    * Get candidate students for enrollment in a class
    * Returns students from the section who are not yet enrolled in this class
    * Teacher (of the class) and Admin can access

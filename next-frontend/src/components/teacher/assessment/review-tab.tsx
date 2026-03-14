@@ -10,12 +10,52 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/cn';
-import type { SubmissionsResponse, StudentSubmission, SubmissionStatus } from '@/types/assessment';
+import type {
+  SubmissionsResponse,
+  StudentSubmission,
+  SubmissionStatus,
+  StudentAttemptSummary,
+} from '@/types/assessment';
 
 interface ReviewTabProps {
   assessmentId: string;
   submissions: SubmissionsResponse | null;
   onGradeReturned: () => void;
+}
+
+interface AttemptOption {
+  id: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+interface AttemptQuestion {
+  type?: string;
+  content?: string;
+  points?: number;
+  explanation?: string;
+  options?: AttemptOption[];
+}
+
+interface AttemptResponse {
+  id?: string;
+  questionId?: string;
+  studentAnswer?: string;
+  selectedOptionId?: string;
+  selectedOptionIds?: string[];
+  isCorrect?: boolean | null;
+  pointsEarned?: number;
+  question?: AttemptQuestion;
+}
+
+interface AttemptResultData {
+  score?: number;
+  isReturned?: boolean;
+  teacherFeedback?: string;
+  assessment?: {
+    totalPoints?: number;
+  };
+  responses?: AttemptResponse[];
 }
 
 const STATUS_COLORS: Record<SubmissionStatus, string> = {
@@ -33,14 +73,17 @@ const STATUS_LABELS: Record<SubmissionStatus, string> = {
 };
 
 export function ReviewTab({ assessmentId, submissions, onGradeReturned }: ReviewTabProps) {
+  const hasAssessmentId = Boolean(assessmentId);
+
   const studentsWithAttempts = (submissions?.submissions ?? []).filter(
-    (s) => s.attempt?.isSubmitted,
+    (s) => (s.attempts?.some((a) => a.isSubmitted) ?? false) || s.attempt?.isSubmitted,
   );
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(
     studentsWithAttempts[0]?.studentId ?? null,
   );
-  const [attemptData, setAttemptData] = useState<any>(null);
+  const [selectedAttemptId, setSelectedAttemptId] = useState<string | null>(null);
+  const [attemptData, setAttemptData] = useState<AttemptResultData | null>(null);
   const [loadingAttempt, setLoadingAttempt] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [returning, setReturning] = useState(false);
@@ -48,19 +91,47 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
 
   const selectedStudent = studentsWithAttempts.find((s) => s.studentId === selectedStudentId);
 
+  const selectedStudentAttempts = (selectedStudent?.attempts ?? [])
+    .filter((attempt) => attempt.isSubmitted)
+    .sort((a, b) => {
+      const aTime = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+  const fallbackLatestAttempt = selectedStudent?.attempt?.isSubmitted
+    ? selectedStudent.attempt
+    : null;
+  const reviewableAttempts = selectedStudentAttempts.length > 0
+    ? selectedStudentAttempts
+    : (fallbackLatestAttempt ? [fallbackLatestAttempt] : []);
+  const selectedAttempt = reviewableAttempts.find((attempt) => attempt.id === selectedAttemptId)
+    ?? reviewableAttempts[0]
+    ?? null;
+
+  const firstReviewableAttemptId = reviewableAttempts[0]?.id ?? null;
+
   useEffect(() => {
-    if (!selectedStudent?.attempt?.id) {
+    setSelectedAttemptId(firstReviewableAttemptId);
+  }, [selectedStudentId, firstReviewableAttemptId]);
+
+  useEffect(() => {
+    if (!selectedAttempt?.id) {
       setAttemptData(null);
+      setFeedback('');
       return;
     }
+
     let cancelled = false;
+
     const load = async () => {
       setLoadingAttempt(true);
       try {
-        const res = await assessmentService.getAttemptResults(selectedStudent.attempt!.id);
+        const res = await assessmentService.getAttemptResults(selectedAttempt.id);
         if (!cancelled) {
-          setAttemptData(res.data);
-          setFeedback((res.data as any)?.teacherFeedback ?? '');
+          const payload = res.data as unknown as AttemptResultData;
+          setAttemptData(payload);
+          setFeedback(payload.teacherFeedback ?? '');
         }
       } catch {
         if (!cancelled) toast.error('Failed to load student attempt');
@@ -68,19 +139,29 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
         if (!cancelled) setLoadingAttempt(false);
       }
     };
+
     load();
     return () => { cancelled = true; };
-  }, [selectedStudent?.attempt?.id]);
+  }, [selectedAttempt?.id]);
 
   const handleReturnGrade = async () => {
-    if (!selectedStudent?.attempt?.id) return;
+    if (!selectedStudent || !selectedAttempt?.id) return;
     try {
       setReturning(true);
-      await assessmentService.returnGrade(selectedStudent.attempt.id, feedback || undefined);
-      toast.success(`Grade returned to ${selectedStudent.firstName} ${selectedStudent.lastName}`);
+      await assessmentService.returnGrade(selectedAttempt.id, feedback || undefined);
+      toast.success(
+        `Grade returned to ${selectedStudent.firstName} ${selectedStudent.lastName} (Attempt ${selectedAttempt.attemptNumber ?? '?'})`,
+      );
       onGradeReturned();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to return grade');
+    } catch (err: unknown) {
+      const errorMessage =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === 'string'
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : 'Failed to return grade';
+      toast.error(errorMessage);
     } finally {
       setReturning(false);
     }
@@ -92,7 +173,7 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
     return name.includes(search.toLowerCase());
   });
 
-  if (studentsWithAttempts.length === 0) {
+  if (!hasAssessmentId || studentsWithAttempts.length === 0) {
     return (
       <Card>
         <CardContent className="py-16 text-center text-muted-foreground">
@@ -136,9 +217,14 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
                 <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium', STATUS_COLORS[student.status])}>
                   {STATUS_LABELS[student.status]}
                 </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">
+                    {student.totalAttempts ?? student.attempts?.length ?? (student.attempt ? 1 : 0)} att.
+                  </span>
                 {student.attempt?.score != null && (
                   <span className="text-xs font-semibold">{student.attempt.score}%</span>
                 )}
+                </div>
               </div>
             </motion.button>
           ))}
@@ -158,6 +244,9 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
             <motion.div key={selectedStudent.studentId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <AttemptDetailPanel
                 student={selectedStudent}
+                selectedAttempt={selectedAttempt}
+                attempts={reviewableAttempts}
+                onSelectAttempt={setSelectedAttemptId}
                 data={attemptData}
                 feedback={feedback}
                 setFeedback={setFeedback}
@@ -182,6 +271,9 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
 
 function AttemptDetailPanel({
   student,
+  selectedAttempt,
+  attempts,
+  onSelectAttempt,
   data,
   feedback,
   setFeedback,
@@ -189,31 +281,103 @@ function AttemptDetailPanel({
   returning,
 }: {
   student: StudentSubmission;
-  data: any;
+  selectedAttempt: StudentAttemptSummary | null;
+  attempts: StudentAttemptSummary[];
+  onSelectAttempt: (attemptId: string) => void;
+  data: AttemptResultData;
   feedback: string;
   setFeedback: (v: string) => void;
   onReturn: () => void;
   returning: boolean;
 }) {
-  const score = data.score ?? student.attempt?.score ?? 0;
+  const score = data.score ?? selectedAttempt?.score ?? student.attempt?.score ?? 0;
   const totalPoints = data.assessment?.totalPoints ?? 0;
   const responses = data.responses ?? [];
-  const timeSpent = student.attempt?.timeSpentSeconds;
-  const isReturned = student.status === 'returned';
+  const timeSpent = selectedAttempt?.timeSpentSeconds ?? student.attempt?.timeSpentSeconds;
+  const submittedAt = selectedAttempt?.submittedAt;
+  const isReturned = Boolean(selectedAttempt?.isReturned ?? data?.isReturned ?? student.status === 'returned');
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? '—'
+      : date.toLocaleString([], {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+  };
 
   return (
     <div className="space-y-4">
+      {/* Attempt Selector */}
+      {attempts.length > 1 && (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Attempts</p>
+            <div className="flex flex-wrap gap-2">
+              {attempts.map((attempt) => (
+                <button
+                  key={attempt.id}
+                  type="button"
+                  onClick={() => onSelectAttempt(attempt.id)}
+                  className={cn(
+                    'rounded-md border px-3 py-1.5 text-left transition-colors',
+                    selectedAttempt?.id === attempt.id
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border hover:bg-muted',
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">Attempt {attempt.attemptNumber ?? '?'}</span>
+                    {attempt.isReturned ? (
+                      <Badge className="h-5 px-1.5 text-[10px]" variant="default">Posted</Badge>
+                    ) : (
+                      <Badge className="h-5 px-1.5 text-[10px]" variant="secondary">Pending</Badge>
+                    )}
+                    {attempt.isLate && (
+                      <Badge className="h-5 px-1.5 text-[10px]" variant="destructive">Late</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {formatDateTime(attempt.submittedAt)}
+                    {attempt.score != null ? ` · ${attempt.score}%` : ''}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Student Info Header */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="font-semibold text-lg">
                 {student.firstName} {student.lastName}
               </h3>
-              <p className="text-sm text-muted-foreground">
-                {student.email ?? ''}
-                {timeSpent ? ` · ${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s` : ''}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {student.email && <p className="text-sm text-muted-foreground">{student.email}</p>}
+                {submittedAt && (
+                  <Badge variant="outline" className="text-[11px]">
+                    Submitted: {formatDateTime(submittedAt)}
+                  </Badge>
+                )}
+                {selectedAttempt?.isLate ? (
+                  <Badge variant="destructive" className="text-[11px]">
+                    Late{selectedAttempt.lateByMinutes ? ` (${selectedAttempt.lateByMinutes} min)` : ''}
+                  </Badge>
+                ) : submittedAt ? (
+                  <Badge variant="secondary" className="text-[11px]">On Time</Badge>
+                ) : null}
+              </div>
+              <p className="text-base font-semibold mt-2">
+                Time done: {timeSpent ? `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s` : '—'}
               </p>
             </div>
             <div className="text-right">
@@ -232,9 +396,17 @@ function AttemptDetailPanel({
 
       {/* Responses */}
       <div className="space-y-3">
-        {responses.map((r: any, i: number) => (
-          <ResponseCard key={r.id || r.questionId || i} response={r} index={i} />
-        ))}
+        {responses.length > 0 ? (
+          responses.map((r: AttemptResponse, i: number) => (
+            <ResponseCard key={r.id || r.questionId || i} response={r} index={i} />
+          ))
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              No answer data was recorded for this attempt.
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Feedback + Return */}
@@ -248,7 +420,9 @@ function AttemptDetailPanel({
               rows={3}
             />
             <Button onClick={onReturn} disabled={returning} className="w-full">
-              {returning ? 'Returning…' : 'Return Grade'}
+              {returning
+                ? 'Returning…'
+                : `Return Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
             </Button>
           </CardContent>
         </Card>
@@ -263,9 +437,27 @@ function AttemptDetailPanel({
   );
 }
 
-function ResponseCard({ response: r, index }: { response: any; index: number }) {
+function ResponseCard({ response: r, index }: { response: AttemptResponse; index: number }) {
   const question = r.question;
-  if (!question) return null;
+  const hasQuestion = Boolean(question);
+
+  if (!hasQuestion) {
+    return (
+      <Card className="border-l-4 border-l-gray-300">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-muted-foreground">Q{index + 1}</span>
+            <span className="text-xs text-muted-foreground">Question data unavailable</span>
+          </div>
+          {r.studentAnswer ? (
+            <p className="text-sm bg-muted/50 rounded px-3 py-1.5">{r.studentAnswer}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">No captured answer text.</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   const isCorrect = r.isCorrect === true;
   const isWrong = r.isCorrect === false;
@@ -299,7 +491,7 @@ function ResponseCard({ response: r, index }: { response: any; index: number }) 
         {/* Show options with student's selection */}
         {question.options && question.options.length > 0 && (
           <div className="space-y-1 ml-1">
-            {question.options.map((opt: any) => {
+            {question.options.map((opt: AttemptOption) => {
               const isSelected = opt.id === r.selectedOptionId || (r.selectedOptionIds ?? []).includes(opt.id);
               return (
                 <div
@@ -321,6 +513,13 @@ function ResponseCard({ response: r, index }: { response: any; index: number }) 
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {!r.studentAnswer && (!question.options || question.options.length === 0) && (
+          <div className="mt-1">
+            <p className="text-xs text-muted-foreground mb-0.5">Student answer:</p>
+            <p className="text-sm text-muted-foreground bg-muted/30 rounded px-3 py-1.5">No answer submitted.</p>
           </div>
         )}
 

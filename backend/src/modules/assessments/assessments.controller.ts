@@ -78,8 +78,14 @@ export class AssessmentsController {
    */
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getAssessmentById(@Param('id') id: string) {
-    const assessment = await this.assessmentsService.getAssessmentById(id);
+  async getAssessmentById(@Param('id') id: string, @CurrentUser() user: any) {
+    const viewerRole = Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
+      ? 'student'
+      : undefined;
+    const assessment = await this.assessmentsService.getAssessmentById(
+      id,
+      viewerRole,
+    );
 
     return {
       success: true,
@@ -329,9 +335,12 @@ export class AssessmentsController {
     @Param('attemptId') attemptId: string,
     @CurrentUser() user: any,
   ) {
+    const viewerRole = Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
+      ? 'student'
+      : undefined;
     const results = await this.assessmentsService.getAttemptResults(
       attemptId,
-      user.role,
+      viewerRole,
     );
 
     return {

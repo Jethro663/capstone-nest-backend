@@ -1,5 +1,14 @@
 import { api } from '@/lib/api-client';
-import type { ClassItem, CreateClassDto, UpdateClassDto, Enrollment, EnrollStudentDto } from '@/types/class';
+import type {
+  ClassItem,
+  CreateClassDto,
+  UpdateClassDto,
+  Enrollment,
+  EnrollStudentDto,
+  StudentMasterlistItem,
+  StudentMasterlistQuery,
+  TeacherClassStudentProfile,
+} from '@/types/class';
 import type { User } from '@/types/user';
 
 export interface ClassesQuery {
@@ -88,6 +97,42 @@ export const classService = {
   /** GET /classes/:classId/candidates — Admin, Teacher */
   async getCandidates(classId: string): Promise<{ success: boolean; message: string; data: User[]; count: number }> {
     const { data } = await api.get(`/classes/${classId}/candidates`);
+    return data;
+  },
+
+  /** GET /classes/:classId/students/masterlist — Admin, Teacher */
+  async getStudentsMasterlist(
+    classId: string,
+    query?: StudentMasterlistQuery,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: StudentMasterlistItem[];
+    count: number;
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    classContext: {
+      classId: string;
+      sectionId: string;
+      classGradeLevel?: string;
+    };
+  }> {
+    const { data } = await api.get(`/classes/${classId}/students/masterlist`, {
+      params: query,
+    });
+    return data;
+  },
+
+  /** GET /classes/:classId/students/:studentId/profile — Admin, Teacher */
+  async getStudentProfileForClass(
+    classId: string,
+    studentId: string,
+  ): Promise<{ success: boolean; message: string; data: TeacherClassStudentProfile }> {
+    const { data } = await api.get(
+      `/classes/${classId}/students/${studentId}/profile`,
+    );
     return data;
   },
 

@@ -16,6 +16,31 @@ function getClassColor(code: string) {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
+function formatTime(time?: string) {
+  if (!time) return '';
+  const [hourRaw, minuteRaw] = time.split(':');
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return time;
+
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const normalizedHour = hour % 12 || 12;
+  return `${normalizedHour}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+function formatDays(days?: string[]) {
+  if (!days?.length) return 'TBA';
+  return days.join('/');
+}
+
+function formatScheduleLine(schedule?: { days?: string[]; startTime?: string; endTime?: string }) {
+  if (!schedule) return 'TBA';
+  const days = formatDays(schedule.days);
+  const start = formatTime(schedule.startTime);
+  const end = formatTime(schedule.endTime);
+  return start && end ? `${days} • ${start}–${end}` : days;
+}
+
 export default function TeacherClassesPage() {
   const { user } = useAuth();
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -75,8 +100,24 @@ export default function TeacherClassesPage() {
                     {cls.section?.name} • Grade {cls.section?.gradeLevel || cls.subjectGradeLevel}
                   </p>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>👤 {cls.enrollmentCount ?? 0} students</span>
+                    <span>👤 {cls.enrollments?.length ?? 0} students</span>
                     {cls.room && <span>🏫 {cls.room}</span>}
+                  </div>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {(cls.schedules?.length ?? 0) === 0 ? (
+                      <p className="font-medium">Schedule: TBA</p>
+                    ) : (
+                      <>
+                        {(cls.schedules ?? []).slice(0, 2).map((schedule) => (
+                          <p key={schedule.id} className="font-medium truncate">
+                            {formatScheduleLine(schedule)}
+                          </p>
+                        ))}
+                        {(cls.schedules?.length ?? 0) > 2 && (
+                          <p className="text-[11px] text-muted-foreground">+{(cls.schedules?.length ?? 0) - 2} more schedule(s)</p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>

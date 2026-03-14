@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
+import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { classService } from '@/services/class-service';
@@ -27,14 +27,15 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion } from 'framer-motion';
+import { LayoutGrid, List, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { getDescription } from '@/utils/helpers';
 import type { ClassItem, Enrollment } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
-import type { User } from '@/types/user';
 import type { Announcement } from '@/types/announcement';
 import type { Extraction } from '@/types/extraction';
 import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
@@ -42,6 +43,15 @@ import type { GradingPeriod } from '@/utils/constants';
 import type { UploadedFile } from '@/types/file';
 
 const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
+const ASSESSMENT_CATEGORIES: Array<{
+  value: 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts';
+  label: string;
+}> = [
+  { value: 'written_work', label: 'Written Works' },
+  { value: 'performance_task', label: 'Performance Tasks' },
+  { value: 'quarterly_assessment', label: 'Quarterly Assessment' },
+  { value: 'drafts', label: 'Drafts' },
+];
 
 export default function TeacherClassDetailPage() {
   const params = useParams();
@@ -53,15 +63,12 @@ export default function TeacherClassDetailPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [candidates, setCandidates] = useState<User[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
   const [showCreateLesson, setShowCreateLesson] = useState(false);
-  const [showAddStudents, setShowAddStudents] = useState(false);
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
 
   // Extract module states
   const [extractFile, setExtractFile] = useState<File | null>(null);
@@ -85,6 +92,44 @@ export default function TeacherClassDetailPage() {
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
   const [activeTab, setActiveTab] = useState('lessons');
+  const [assessmentCategoryTab, setAssessmentCategoryTab] = useState<'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts'>('written_work');
+  const [assessmentViewMode, setAssessmentViewMode] = useState<'list' | 'grid'>('list');
+  const [assessmentSortOrder, setAssessmentSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const categorizedAssessments = useMemo(() => {
+    const filtered = assessments.filter((assessment) => {
+      if (assessmentCategoryTab === 'drafts') {
+        return !assessment.classRecordCategory || !assessment.isPublished;
+      }
+      return assessment.classRecordCategory === assessmentCategoryTab;
+    });
+
+    const withDate = filtered
+      .map((assessment) => ({
+        assessment,
+        dueTs: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
+      }))
+      .sort((a, b) => {
+        if (a.dueTs === b.dueTs) {
+          return new Date(b.assessment.createdAt ?? 0).getTime() - new Date(a.assessment.createdAt ?? 0).getTime();
+        }
+        return assessmentSortOrder === 'asc' ? a.dueTs - b.dueTs : b.dueTs - a.dueTs;
+      })
+      .map((entry) => entry.assessment);
+
+    return withDate.reduce<Record<string, Assessment[]>>((groups, assessment) => {
+      const key = assessment.dueDate
+        ? new Date(assessment.dueDate).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })
+        : 'No due date';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(assessment);
+      return groups;
+    }, {});
+  }, [assessments, assessmentCategoryTab, assessmentSortOrder]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -99,6 +144,7 @@ export default function TeacherClassDetailPage() {
       setLessons(lessonsRes.data || []);
       setAssessments(assessmentsRes.data || []);
       setEnrollments(enrollmentsRes.data || []);
+     
     } catch {
       toast.error('Failed to load class details');
     } finally {
@@ -190,31 +236,6 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  const handleOpenAddStudents = async () => {
-    try {
-      const res = await classService.getCandidates(classId);
-      setCandidates(res.data || []);
-      setSelectedStudents([]);
-      setShowAddStudents(true);
-    } catch {
-      toast.error('Failed to load candidates');
-    }
-  };
-
-  const handleAddStudents = async () => {
-    try {
-      for (const studentId of selectedStudents) {
-        await classService.enrollStudent(classId, { studentId });
-      }
-      toast.success(`Added ${selectedStudents.length} student(s)`);
-      setShowAddStudents(false);
-      const res = await classService.getEnrollments(classId);
-      setEnrollments(res.data || []);
-    } catch {
-      toast.error('Failed to add students');
-    }
-  };
-
   const handleRemoveStudent = async (studentId: string) => {
     if (!confirm('Remove this student?')) return;
     try {
@@ -280,11 +301,12 @@ export default function TeacherClassDetailPage() {
       setGeneratingQuarter(true);
       await classRecordService.generate({ classId, gradingPeriod: quarter });
       toast.success(`Class record for ${quarter} generated`);
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number; data?: { message?: string } } };
+      if (axiosErr?.response?.status === 409) {
         toast.info(`${quarter} record already exists — loading it now`);
       } else {
-        toast.error(err?.response?.data?.message || 'Failed to generate class record');
+        toast.error(axiosErr?.response?.data?.message || 'Failed to generate class record');
         return;
       }
     } finally {
@@ -339,8 +361,9 @@ export default function TeacherClassDetailPage() {
       });
       setEditingCell(null);
       fetchSpreadsheet();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save score');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast.error(axiosErr?.response?.data?.message || 'Failed to save score');
     }
   };
 
@@ -353,7 +376,10 @@ export default function TeacherClassDetailPage() {
     try {
       setSyncingItemId(itemId);
       const res = await classRecordService.syncScores(itemId);
-      const synced = (res.data as any)?.synced ?? 0;
+      const synced =
+        typeof res.data === 'object' && res.data !== null && 'synced' in res.data
+          ? Number((res.data as { synced?: number }).synced ?? 0)
+          : 0;
       toast.success(`Synced ${synced} score(s) from assessment`);
       fetchSpreadsheet();
     } catch {
@@ -595,69 +621,134 @@ export default function TeacherClassDetailPage() {
 
         {/* Assessments Tab */}
         <TabsContent value="assessments" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
-            <Button size="sm" onClick={handleCreateAssessment}>+ New Assessment</Button>
-          </div>
-          {assessments.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No assessments yet.</CardContent></Card>
-          ) : (
-            <div className="space-y-3">
-              {assessments.map((a, i) => {
-                const typeColor = a.type === 'exam'
-                  ? 'border-l-red-500 bg-red-50 dark:bg-red-950/20'
-                  : a.type === 'assignment'
-                    ? 'border-l-amber-500 bg-amber-50 dark:bg-amber-950/20'
-                    : 'border-l-blue-500 bg-blue-50 dark:bg-blue-950/20';
-                const typeIcon = a.type === 'exam' ? '📝' : a.type === 'assignment' ? '📋' : '❓';
-                const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
-
-                return (
-                  <motion.div
-                    key={a.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.06, duration: 0.3 }}
+          <Card className="border-muted">
+            <CardContent className="p-4 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex rounded-md border p-0.5">
+                    <Button
+                      size="sm"
+                      variant={assessmentViewMode === 'list' ? 'default' : 'ghost'}
+                      className="h-8"
+                      onClick={() => setAssessmentViewMode('list')}
+                    >
+                      <List className="mr-1 h-4 w-4" /> List
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={assessmentViewMode === 'grid' ? 'default' : 'ghost'}
+                      className="h-8"
+                      onClick={() => setAssessmentViewMode('grid')}
+                    >
+                      <LayoutGrid className="mr-1 h-4 w-4" /> Grid
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAssessmentSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                    className="h-8"
                   >
-                    <Card className={`border-l-4 ${typeColor} hover:shadow-lg transition-all duration-200 group`}>
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-lg">{typeIcon}</span>
-                              <h4 className="font-semibold truncate">{a.title}</h4>
-                              <Badge variant={a.isPublished ? 'default' : 'secondary'} className="shrink-0">
-                                {a.isPublished ? 'Published' : 'Draft'}
+                    <ArrowUpDown className="mr-1 h-4 w-4" />
+                    {assessmentSortOrder === 'asc' ? 'Date: Nearest' : 'Date: Latest'}
+                  </Button>
+                  <Button size="sm" onClick={handleCreateAssessment}>+ New Assessment</Button>
+                </div>
+              </div>
+
+              <Tabs value={assessmentCategoryTab} onValueChange={(value) => setAssessmentCategoryTab(value as 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts')}>
+                <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4">
+                  {ASSESSMENT_CATEGORIES.map((category) => (
+                    <TabsTrigger key={category.value} value={category.value}>
+                      {category.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          {Object.keys(categorizedAssessments).length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-muted-foreground">
+                No assessments in this category yet.
+              </CardContent>
+            </Card>
+          ) : (
+            Object.entries(categorizedAssessments).map(([dateHeader, groupedAssessments]) => (
+              <section key={dateHeader} className="space-y-3">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <h3 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">{dateHeader}</h3>
+                  <span className="text-xs text-muted-foreground">{groupedAssessments.length} item(s)</span>
+                </div>
+
+                <div className={assessmentViewMode === 'grid' ? 'grid gap-3 md:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>
+                  {groupedAssessments.map((assessment, index) => {
+                    const isPastDue = assessment.dueDate && new Date(assessment.dueDate) < new Date();
+                    const categoryStyle = assessment.classRecordCategory === 'written_work'
+                      ? 'border-l-4 border-l-blue-500'
+                      : assessment.classRecordCategory === 'performance_task'
+                        ? 'border-l-4 border-l-emerald-500'
+                        : 'border-l-4 border-l-violet-500';
+
+                    return (
+                      <motion.div
+                        key={assessment.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.04, duration: 0.2 }}
+                      >
+                        <Card className={`group ${categoryStyle} transition-shadow hover:shadow-md`}>
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-semibold leading-tight truncate">{assessment.title}</p>
+                                <p className="text-xs capitalize text-muted-foreground mt-1">{assessment.type.replace(/_/g, ' ')}</p>
+                              </div>
+                              <Badge variant={assessment.isPublished ? 'default' : 'secondary'}>
+                                {assessment.isPublished ? 'Published' : 'Draft'}
                               </Badge>
                             </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1.5">
-                              <span className="capitalize font-medium">{a.type}</span>
-                              <span>{a.totalPoints} pts</span>
-                              <span>Passing: {a.passingScore}%</span>
-                              <span>{a.questions?.length ?? 0} questions</span>
-                              {a.dueDate && (
-                                <span className={isPastDue ? 'text-red-500 font-medium' : ''}>
-                                  {isPastDue ? 'Past due' : 'Due'}: {new Date(a.dueDate).toLocaleDateString()}
+
+                            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                              <p>Points: <span className="font-medium text-foreground">{assessment.totalPoints ?? 0}</span></p>
+                              <p>Questions: <span className="font-medium text-foreground">{assessment.questions?.length ?? 0}</span></p>
+                              <p>Passing: <span className="font-medium text-foreground">{assessment.passingScore ?? 60}%</span></p>
+                              
+                              <p className="col-span-2">
+                                Due Date:{' '}
+                                <span className="font-medium text-foreground">
+                                  {assessment.dueDate
+                                    ? new Date(assessment.dueDate).toLocaleDateString(undefined, {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                      })
+                                    : '—'}
                                 </span>
-                              )}
+                              </p>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <Link href={`/dashboard/teacher/assessments/${a.id}`}>
-                              <Button variant="outline" size="sm">View</Button>
-                            </Link>
-                            <Link href={`/dashboard/teacher/assessments/${a.id}/edit`}>
-                              <Button variant="outline" size="sm">Edit</Button>
-                            </Link>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeleteAssessment(a.id)}>Delete</Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>
+                                <Button variant="outline" size="sm">View</Button>
+                              </Link>
+                              <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`}>
+                                <Button variant="outline" size="sm">Edit</Button>
+                              </Link>
+                              <Button variant="destructive" size="sm" onClick={() => handleDeleteAssessment(assessment.id)}>
+                                Delete
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))
           )}
         </TabsContent>
 
@@ -947,7 +1038,7 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="students" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{enrollments.length} students</p>
-            <Button size="sm" onClick={handleOpenAddStudents}>+ Add Student</Button>
+            <Button size="sm" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/add`)}>+ Add Student</Button>
           </div>
           {enrollments.length === 0 ? (
             <Card><CardContent className="p-6 text-center text-muted-foreground">No students enrolled.</CardContent></Card>
@@ -956,6 +1047,7 @@ export default function TeacherClassDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Student</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>LRN</TableHead>
@@ -965,11 +1057,36 @@ export default function TeacherClassDetailPage() {
                 <TableBody>
                   {enrollments.map((e) => (
                     <TableRow key={e.id}>
-                      <TableCell>{e.student?.firstName} {e.student?.lastName}</TableCell>
+                      <TableCell>
+                        <Avatar className="h-8 w-8">
+                          {e.student?.profile?.profilePicture ? (
+                            <AvatarImage
+                              src={e.student.profile.profilePicture}
+                              alt={`${e.student?.firstName || ''} ${e.student?.lastName || ''}`.trim()}
+                            />
+                          ) : null}
+                          <AvatarFallback>
+                            {`${e.student?.firstName?.[0] || ''}${e.student?.lastName?.[0] || ''}`.toUpperCase() || 'S'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${e.studentId}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {e.student?.firstName} {e.student?.lastName}
+                        </Link>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{e.student?.email}</TableCell>
-                      <TableCell className="text-muted-foreground">{e.student?.lrn || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{e.student?.profile?.lrn || '—'}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="destructive" size="sm" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
+                        <div className="inline-flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/${e.studentId}`)}>
+                            View Profile
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1001,44 +1118,6 @@ export default function TeacherClassDetailPage() {
       </Dialog>
 
       {/* Create Assessment Modal removed — create-and-redirect flow instead */}
-
-      {/* Add Students Modal */}
-      <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Students</DialogTitle>
-            <DialogDescription>
-              Enroll students who already belong to this class section.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-64 overflow-y-auto space-y-2">
-            {candidates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No candidates available.</p>
-            ) : (
-              candidates.map((s) => (
-                <label key={s.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.includes(s.id)}
-                    onChange={() => {
-                      setSelectedStudents((prev) =>
-                        prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                      );
-                    }}
-                  />
-                  <span className="text-sm">{s.firstName} {s.lastName} — {s.email}</span>
-                </label>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddStudents(false)}>Cancel</Button>
-            <Button onClick={handleAddStudents} disabled={selectedStudents.length === 0}>
-              Add {selectedStudents.length} Student(s)
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Create Announcement Modal */}
       <Dialog open={showCreateAnnouncement} onOpenChange={setShowCreateAnnouncement}>

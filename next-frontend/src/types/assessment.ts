@@ -13,6 +13,8 @@ export interface Assessment {
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
   dueDate?: string;
+  closeWhenDue?: boolean;
+  randomizeQuestions?: boolean;
   isPublished: boolean;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
@@ -49,6 +51,8 @@ export interface CreateAssessmentDto {
   classId: string;
   type?: AssessmentType;
   dueDate?: string;
+  closeWhenDue?: boolean;
+  randomizeQuestions?: boolean;
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number;
@@ -63,6 +67,8 @@ export interface UpdateAssessmentDto {
   description?: string;
   type?: AssessmentType;
   dueDate?: string | null;
+  closeWhenDue?: boolean;
+  randomizeQuestions?: boolean;
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
@@ -162,13 +168,29 @@ export interface AssessmentStats {
 
 export type SubmissionStatus = 'not_started' | 'in_progress' | 'turned_in' | 'returned';
 
+export interface StudentAttemptSummary {
+  id: string;
+  attemptNumber?: number;
+  score?: number;
+  passed?: boolean;
+  isSubmitted?: boolean;
+  isReturned?: boolean;
+  submittedAt?: string;
+  returnedAt?: string;
+  teacherFeedback?: string;
+  timeSpentSeconds?: number;
+  isLate?: boolean;
+  lateByMinutes?: number;
+}
+
 export interface StudentSubmission {
   studentId: string;
   firstName: string;
   lastName: string;
   email?: string;
   status: SubmissionStatus;
-  attempt?: AssessmentAttempt;
+  attempt?: StudentAttemptSummary | null;
+  attempts?: StudentAttemptSummary[];
   totalAttempts?: number;
 }
 
@@ -217,5 +239,7 @@ export interface QuestionAnalytics {
 
 export interface QuestionAnalyticsResponse {
   totalResponses: number;
+  totalAttempts?: number;
+  uniqueSubmitterCount?: number;
   questions: QuestionAnalytics[];
 }

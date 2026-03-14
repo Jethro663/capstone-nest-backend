@@ -11,11 +11,34 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import type { Assessment, AssessmentQuestion, CreateQuestionDto, UpdateQuestionDto } from '@/types/assessment';
+import type { Assessment, AssessmentQuestion, CreateQuestionDto } from '@/types/assessment';
 import type { ClassRecordCategory } from '@/types/assessment';
+
+type LocalQuestion = AssessmentQuestion & { isNew?: boolean };
+
+function normalizeQuestions(questions: LocalQuestion[]) {
+  return questions
+    .map((question, index) => ({
+      id: question.id,
+      type: question.type,
+      content: question.content,
+      points: question.points,
+      order: index + 1,
+      isRequired: question.isRequired ?? true,
+      explanation: question.explanation || '',
+      imageUrl: question.imageUrl || '',
+      options: (question.options || [])
+        .map((option, optionIndex) => ({
+          text: option.text,
+          isCorrect: option.isCorrect,
+          order: optionIndex + 1,
+        }))
+        .sort((a, b) => a.order - b.order),
+    }))
+    .sort((a, b) => a.order - b.order);
+}
 
 /* ── Question type metadata ─────────────────────────── */
 const QUESTION_TYPES = [
@@ -37,7 +60,8 @@ export default function AssessmentEditorPage() {
 
   /* ---------- state ---------- */
   const [assessment, setAssessment] = useState<Assessment | null>(null);
-  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  const [questions, setQuestions] = useState<LocalQuestion[]>([]);
+  const [savedQuestions, setSavedQuestions] = useState<LocalQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -53,9 +77,26 @@ export default function AssessmentEditorPage() {
   const [dueDate, setDueDate] = useState('');
   const [feedbackLevel, setFeedbackLevel] = useState<string>('immediate');
   const [feedbackDelayHours, setFeedbackDelayHours] = useState<number>(0);
-  const [showSettings, setShowSettings] = useState(false);
+  const [editorTab, setEditorTab] = useState<'questions' | 'settings'>('questions');
   const [classRecordCategory, setClassRecordCategory] = useState<string>('');
   const [quarter, setQuarter] = useState<string>('');
+  const [closeWhenDue, setCloseWhenDue] = useState(true);
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [savedMeta, setSavedMeta] = useState<{
+    title: string;
+    description: string;
+    type: string;
+    passingScore: number;
+    maxAttempts: number;
+    timeLimitMinutes: number | '';
+    dueDate: string;
+    feedbackLevel: string;
+    feedbackDelayHours: number;
+    classRecordCategory: string;
+    quarter: string;
+    closeWhenDue: boolean;
+    randomizeQuestions: boolean;
+  } | null>(null);
 
   // Inline editing for questions
   const [editingQId, setEditingQId] = useState<string | null>(null);
@@ -87,7 +128,31 @@ export default function AssessmentEditorPage() {
       setFeedbackDelayHours(a.feedbackDelayHours ?? 0);
       setClassRecordCategory(a.classRecordCategory || '');
       setQuarter(a.quarter || '');
-      setQuestions((a.questions || []).sort((x, y) => x.order - y.order));
+      setCloseWhenDue(a.closeWhenDue ?? true);
+      setRandomizeQuestions(a.randomizeQuestions ?? false);
+      const normalizedQuestions = (a.questions || [])
+        .map((question) => ({
+          ...question,
+          options: [...(question.options || [])].sort((x, y) => x.order - y.order),
+        }))
+        .sort((x, y) => x.order - y.order);
+      setQuestions(normalizedQuestions);
+      setSavedQuestions(normalizedQuestions);
+      setSavedMeta({
+        title: a.title,
+        description: a.description || '',
+        type: a.type || 'quiz',
+        passingScore: a.passingScore ?? 60,
+        maxAttempts: a.maxAttempts ?? 1,
+        timeLimitMinutes: a.timeLimitMinutes ?? '',
+        dueDate: a.dueDate ? a.dueDate.slice(0, 16) : '',
+        feedbackLevel: a.feedbackLevel || 'immediate',
+        feedbackDelayHours: a.feedbackDelayHours ?? 0,
+        classRecordCategory: a.classRecordCategory || '',
+        quarter: a.quarter || '',
+        closeWhenDue: a.closeWhenDue ?? true,
+        randomizeQuestions: a.randomizeQuestions ?? false,
+      });
     } catch {
       toast.error('Failed to load assessment');
     } finally {
@@ -100,11 +165,30 @@ export default function AssessmentEditorPage() {
   /* ---------- computed ---------- */
   const totalPoints = questions.reduce((s, q) => s + q.points, 0);
 
-  /* ---------- save assessment metadata ---------- */
-  const handleSaveSettings = async () => {
+  const currentMeta = {
+    title,
+    description,
+    type: assessmentType,
+    passingScore,
+    maxAttempts,
+    timeLimitMinutes,
+    dueDate,
+    feedbackLevel,
+    feedbackDelayHours,
+    classRecordCategory,
+    quarter,
+    closeWhenDue,
+    randomizeQuestions,
+  };
+
+  const hasPendingChanges =
+    (savedMeta ? JSON.stringify(currentMeta) !== JSON.stringify(savedMeta) : false) ||
+    JSON.stringify(normalizeQuestions(questions)) !== JSON.stringify(normalizeQuestions(savedQuestions));
+
+  const handleUpdateAssessment = async () => {
     setSaving(true);
     try {
-      const res = await assessmentService.update(assessmentId, {
+      const assessmentRes = await assessmentService.update(assessmentId, {
         title,
         description: description || undefined,
         type: assessmentType as Assessment['type'],
@@ -112,15 +196,62 @@ export default function AssessmentEditorPage() {
         maxAttempts,
         timeLimitMinutes: timeLimitMinutes === '' ? null : Number(timeLimitMinutes),
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        closeWhenDue,
+        randomizeQuestions,
         feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
         feedbackDelayHours,
         classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
         quarter: (quarter || undefined) as Assessment['quarter'],
       });
-      setAssessment(res.data);
-      toast.success('Settings saved');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save settings');
+
+      const deletedQuestions = savedQuestions.filter(
+        (savedQuestion) => !questions.some((currentQuestion) => currentQuestion.id === savedQuestion.id),
+      );
+      for (const question of deletedQuestions) {
+        if (!question.id.startsWith('temp-')) {
+          await assessmentService.deleteQuestion(question.id);
+        }
+      }
+
+      for (let index = 0; index < questions.length; index += 1) {
+        const question = questions[index];
+        const options = OPTION_QUESTION_TYPES.includes(question.type)
+          ? (question.options || []).map((option, optionIndex) => ({
+              text: option.text,
+              isCorrect: option.isCorrect,
+              order: optionIndex + 1,
+            }))
+          : undefined;
+
+        if (question.id.startsWith('temp-') || question.isNew) {
+          await assessmentService.createQuestion({
+            assessmentId,
+            type: question.type as CreateQuestionDto['type'],
+            content: question.content,
+            points: question.points,
+            order: index + 1,
+            explanation: question.explanation || undefined,
+            imageUrl: question.imageUrl || undefined,
+            options,
+          });
+        } else {
+          await assessmentService.updateQuestion(question.id, {
+            content: question.content,
+            points: question.points,
+            order: index + 1,
+            explanation: question.explanation || undefined,
+            imageUrl: question.imageUrl || undefined,
+            options,
+          });
+        }
+      }
+
+      setAssessment(assessmentRes.data);
+      await fetchData();
+      toast.success('Assessment updated');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast.error(axiosErr?.response?.data?.message || 'Failed to update assessment');
     } finally {
       setSaving(false);
     }
@@ -129,12 +260,17 @@ export default function AssessmentEditorPage() {
   /* ---------- publish / unpublish ---------- */
   const handleTogglePublish = async () => {
     if (!assessment) return;
+    if (hasPendingChanges) {
+      toast.info('Click Update Assessment first to apply pending changes.');
+      return;
+    }
     try {
       const res = await assessmentService.update(assessmentId, { isPublished: !assessment.isPublished });
       setAssessment(res.data);
       toast.success(assessment.isPublished ? 'Assessment unpublished' : 'Assessment published');
-    } catch (err: any) {
-      const data = err?.response?.data;
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { errors?: string[]; message?: string } } };
+      const data = axiosErr?.response?.data;
       const errors = data?.errors;
       if (Array.isArray(errors) && errors.length > 0) {
         toast.error(errors.join('. '));
@@ -185,60 +321,71 @@ export default function AssessmentEditorPage() {
   const handleSaveQuestion = async () => {
     if (!draftQuestion || !draftQuestion.content.trim()) { toast.error('Question text is required'); return; }
     const d = draftQuestion;
-    try {
-      if (editingQId) {
-        const dto: UpdateQuestionDto = {
+    if (editingQId) {
+      setQuestions((prev) => prev.map((question) => {
+        if (question.id !== editingQId) return question;
+        return {
+          ...question,
           content: d.content,
           points: d.points,
           explanation: d.explanation || undefined,
-          options: OPTION_QUESTION_TYPES.includes(d.type) ? d.options : undefined,
+          imageUrl: d.imageUrl || undefined,
+          options: OPTION_QUESTION_TYPES.includes(d.type)
+            ? d.options.map((option, optionIndex) => ({
+                id: `${question.id}-opt-${optionIndex}`,
+                text: option.text,
+                isCorrect: option.isCorrect,
+                order: optionIndex + 1,
+              }))
+            : [],
         };
-        const res = await assessmentService.updateQuestion(editingQId, dto);
-        setQuestions((prev) => prev.map((q) => (q.id === editingQId ? res.data : q)));
-        toast.success('Question updated');
-      } else {
-        const dto: CreateQuestionDto = {
-          assessmentId,
-          type: d.type as CreateQuestionDto['type'],
-          content: d.content,
-          points: d.points,
-          order: questions.length + 1,
-          explanation: d.explanation || undefined,
-          options: OPTION_QUESTION_TYPES.includes(d.type) ? d.options : undefined,
-        };
-        const res = await assessmentService.createQuestion(dto);
-        setQuestions((prev) => [...prev, res.data]);
-        toast.success('Question added');
-      }
-      cancelDraft();
-      // Re-fetch to get updated totalPoints from backend
-      const fresh = await assessmentService.getById(assessmentId);
-      setAssessment(fresh.data);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save question');
+      }));
+      toast.success('Question staged');
+    } else {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const stagedQuestion: LocalQuestion = {
+        id: tempId,
+        assessmentId,
+        type: d.type as AssessmentQuestion['type'],
+        content: d.content,
+        points: d.points,
+        order: questions.length + 1,
+        isRequired: true,
+        explanation: d.explanation || undefined,
+        imageUrl: d.imageUrl || undefined,
+        options: OPTION_QUESTION_TYPES.includes(d.type)
+          ? d.options.map((option, optionIndex) => ({
+              id: `${tempId}-opt-${optionIndex}`,
+              text: option.text,
+              isCorrect: option.isCorrect,
+              order: optionIndex + 1,
+            }))
+          : [],
+        isNew: true,
+      };
+      setQuestions((prev) => [...prev, stagedQuestion]);
+      toast.success('Question staged');
     }
+    cancelDraft();
   };
 
   const handleDeleteQuestion = async (id: string) => {
     if (!confirm('Delete this question?')) return;
-    try {
-      await assessmentService.deleteQuestion(id);
-      setQuestions((prev) => prev.filter((q) => q.id !== id));
-      if (editingQId === id) cancelDraft();
-      const fresh = await assessmentService.getById(assessmentId);
-      setAssessment(fresh.data);
-      toast.success('Question deleted');
-    } catch {
-      toast.error('Failed to delete question');
-    }
+    setQuestions((prev) => prev.filter((q) => q.id !== id));
+    if (editingQId === id) cancelDraft();
+    toast.success('Question staged for removal');
   };
 
   const handleImageUpload = async (questionId: string, file: File) => {
+    if (questionId.startsWith('temp-')) {
+      toast.info('Please click Update Assessment first before uploading an image for a new question.');
+      return;
+    }
     try {
       const res = await assessmentService.uploadQuestionImage(questionId, file);
       setDraftQuestion((prev) => prev ? { ...prev, imageUrl: res.data.imageUrl } : prev);
       setQuestions((prev) => prev.map((q) => q.id === questionId ? { ...q, imageUrl: res.data.imageUrl } : q));
-      toast.success('Image uploaded');
+      toast.success('Image uploaded (click Update Assessment to keep other staged changes)');
     } catch {
       toast.error('Failed to upload image');
     }
@@ -295,18 +442,26 @@ export default function AssessmentEditorPage() {
       <div className="flex items-center justify-between gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>← Back</Button>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowSettings((s) => !s)}>
-            ⚙ Settings
+          <Button size="sm" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
+            {saving ? 'Updating…' : 'Update Assessment'}
           </Button>
           <Button
             variant={assessment.isPublished ? 'secondary' : 'default'}
             size="sm"
             onClick={handleTogglePublish}
+            disabled={saving}
           >
             {assessment.isPublished ? 'Unpublish' : 'Publish'}
           </Button>
         </div>
       </div>
+
+      <Tabs value={editorTab} onValueChange={(value) => setEditorTab(value as 'questions' | 'settings')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="questions">Questions</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* ════ Title & Description (Forms-like header card) ════ */}
       <Card className="border-t-4 border-t-primary">
@@ -314,14 +469,12 @@ export default function AssessmentEditorPage() {
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleSaveSettings}
             placeholder="Untitled assessment"
             className="text-2xl font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
           />
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            onBlur={handleSaveSettings}
             placeholder="Assessment description (optional)"
             className="text-sm text-muted-foreground border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
           />
@@ -336,162 +489,143 @@ export default function AssessmentEditorPage() {
         </CardContent>
       </Card>
 
-      {/* ════ Tabbed Settings Panel ════ */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                <Tabs defaultValue="general" className="w-full">
-                  <TabsList className="w-full grid grid-cols-3">
-                    <TabsTrigger value="general">General</TabsTrigger>
-                    <TabsTrigger value="timing">Timing &amp; Attempts</TabsTrigger>
-                    <TabsTrigger value="grading">Grading &amp; Feedback</TabsTrigger>
-                  </TabsList>
-
-                  {/* ── General Tab ── */}
-                  <TabsContent value="general" className="mt-4">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                    >
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Type</Label>
-                        <select
-                          value={assessmentType}
-                          onChange={(e) => setAssessmentType(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="quiz">Quiz</option>
-                          <option value="exam">Exam</option>
-                          <option value="assignment">Assignment</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Class Record Category</Label>
-                        <select
-                          value={classRecordCategory}
-                          onChange={(e) => setClassRecordCategory(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="">None</option>
-                          <option value="written_work">Written Work</option>
-                          <option value="performance_task">Performance Task</option>
-                          <option value="quarterly_assessment">Quarterly Assessment</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Quarter</Label>
-                        <select
-                          value={quarter}
-                          onChange={(e) => setQuarter(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="">None</option>
-                          <option value="Q1">Q1</option>
-                          <option value="Q2">Q2</option>
-                          <option value="Q3">Q3</option>
-                          <option value="Q4">Q4</option>
-                        </select>
-                      </div>
-                    </motion.div>
-                  </TabsContent>
-
-                  {/* ── Timing & Attempts Tab ── */}
-                  <TabsContent value="timing" className="mt-4">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                    >
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Due Date</Label>
-                        <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Time Limit (minutes)</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={timeLimitMinutes}
-                          onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
-                          placeholder="No limit"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Max Attempts</Label>
-                        <Input type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
-                      </div>
-                    </motion.div>
-                  </TabsContent>
-
-                  {/* ── Grading & Feedback Tab ── */}
-                  <TabsContent value="grading" className="mt-4">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                    >
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Passing Score (%)</Label>
-                        <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Feedback Level</Label>
-                        <select
-                          value={feedbackLevel}
-                          onChange={(e) => setFeedbackLevel(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="immediate">Immediate</option>
-                          <option value="standard">Standard</option>
-                          <option value="detailed">Detailed</option>
-                        </select>
-                      </div>
-
-                      {feedbackLevel !== 'immediate' && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="space-y-1.5"
-                        >
-                          <Label className="text-xs">Feedback Delay (hours)</Label>
-                          <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  </TabsContent>
-                </Tabs>
-
-                <div className="flex justify-end pt-2">
-                  <Button size="sm" onClick={handleSaveSettings} disabled={saving}>
-                    {saving ? 'Saving…' : 'Save Settings'}
-                  </Button>
+      {editorTab === 'settings' && (
+        <Card>
+          <CardContent className="p-5 space-y-6">
+            <div className="rounded-lg border p-4 space-y-3">
+              <p className="text-sm font-semibold">Deadline (required first)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Due Date &amp; Time</Label>
+                  <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Close assessment automatically at due date</Label>
+                  <label className="flex items-center gap-2 h-10 rounded-md border px-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={closeWhenDue}
+                      onChange={(e) => setCloseWhenDue(e.target.checked)}
+                    />
+                    Block new attempts after due date
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-semibold">Delivery &amp; Anti-cheat</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Randomize questions and options per student</Label>
+                <label className="flex items-center gap-2 h-10 rounded-md border px-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={randomizeQuestions}
+                    onChange={(e) => setRandomizeQuestions(e.target.checked)}
+                  />
+                  Enable randomized order for each student attempt
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-semibold">General</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Type</Label>
+                  <select
+                    value={assessmentType}
+                    onChange={(e) => setAssessmentType(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="quiz">Quiz</option>
+                    <option value="exam">Exam</option>
+                    <option value="assignment">Assignment</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Class Record Category</Label>
+                  <select
+                    value={classRecordCategory}
+                    onChange={(e) => setClassRecordCategory(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">None</option>
+                    <option value="written_work">Written Work</option>
+                    <option value="performance_task">Performance Task</option>
+                    <option value="quarterly_assessment">Quarterly Assessment</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Quarter</Label>
+                  <select
+                    value={quarter}
+                    onChange={(e) => setQuarter(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="">None</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-semibold">Attempts &amp; Feedback</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Time Limit (minutes)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={timeLimitMinutes}
+                    onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="No limit"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Max Attempts</Label>
+                  <Input type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Passing Score (%)</Label>
+                  <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Feedback Level</Label>
+                  <select
+                    value={feedbackLevel}
+                    onChange={(e) => setFeedbackLevel(e.target.value)}
+                    className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                  >
+                    <option value="immediate">Immediate</option>
+                    <option value="standard">Standard</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </div>
+                {feedbackLevel !== 'immediate' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Feedback Delay (hours)</Label>
+                    <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
+                {saving ? 'Updating…' : 'Update Assessment'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ════ Question Cards (inline, Forms-style) ════ */}
-      {questions.map((q, i) => {
+      {editorTab === 'questions' && questions.map((q, i) => {
         const isEditing = editingQId === q.id;
 
         if (isEditing && draftQuestion) {
@@ -539,7 +673,7 @@ export default function AssessmentEditorPage() {
               )}
               {q.options && q.options.length > 0 && (
                 <ul className="mt-2 space-y-0.5 text-sm">
-                  {q.options.sort((a, b) => a.order - b.order).map((opt) => (
+                  {[...q.options].sort((a, b) => a.order - b.order).map((opt) => (
                     <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
                       <span className="w-3">{opt.isCorrect ? '✓' : '○'}</span>{opt.text}
                     </li>
@@ -552,7 +686,7 @@ export default function AssessmentEditorPage() {
       })}
 
       {/* ════ New question being added (inline card at bottom) ════ */}
-      {addingType && draftQuestion && (
+      {editorTab === 'questions' && addingType && draftQuestion && (
         <QuestionEditCard
           index={questions.length}
           draft={draftQuestion}
@@ -566,7 +700,7 @@ export default function AssessmentEditorPage() {
       )}
 
       {/* ════ Add Question Bar ════ */}
-      {!addingType && (
+      {editorTab === 'questions' && !addingType && (
         <Card className="border-dashed">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-2 font-medium">Add question</p>

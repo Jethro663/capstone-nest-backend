@@ -93,7 +93,7 @@ export class AssessmentsService {
   /**
    * Get a single assessment by ID with all questions
    */
-  async getAssessmentById(assessmentId: string) {
+  async getAssessmentById(assessmentId: string, viewerRole?: string) {
     const assessment = await this.db.query.assessments.findFirst({
       where: eq(assessments.id, assessmentId),
       with: {
@@ -113,6 +113,10 @@ export class AssessmentsService {
       throw new NotFoundException(
         `Assessment with ID "${assessmentId}" not found`,
       );
+    }
+
+    if (viewerRole === 'student' && assessment.randomizeQuestions) {
+      return this.randomizeAssessmentForStudent(assessment);
     }
 
     return assessment;
@@ -143,6 +147,8 @@ export class AssessmentsService {
         dueDate: createAssessmentDto.dueDate
           ? new Date(createAssessmentDto.dueDate)
           : undefined,
+        closeWhenDue: createAssessmentDto.closeWhenDue ?? true,
+        randomizeQuestions: createAssessmentDto.randomizeQuestions ?? false,
         totalPoints: 0,
         passingScore: createAssessmentDto.passingScore,
         maxAttempts: createAssessmentDto.maxAttempts ?? 1,
@@ -268,6 +274,10 @@ export class AssessmentsService {
       updateData.dueDate = updateAssessmentDto.dueDate
         ? new Date(updateAssessmentDto.dueDate)
         : null;
+    if (updateAssessmentDto.closeWhenDue !== undefined)
+      updateData.closeWhenDue = updateAssessmentDto.closeWhenDue;
+    if (updateAssessmentDto.randomizeQuestions !== undefined)
+      updateData.randomizeQuestions = updateAssessmentDto.randomizeQuestions;
     if (updateAssessmentDto.passingScore !== undefined)
       updateData.passingScore = updateAssessmentDto.passingScore;
     if (updateAssessmentDto.maxAttempts !== undefined)
@@ -471,11 +481,6 @@ export class AssessmentsService {
       throw new ForbiddenException('This assessment is not published yet');
     }
 
-    // Check due date
-    if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
-      throw new ForbiddenException('This assessment is past its due date');
-    }
-
     // Check for existing unsubmitted attempt (resume)
     const existingUnsubmitted =
       await this.db.query.assessmentAttempts.findFirst({
@@ -512,6 +517,16 @@ export class AssessmentsService {
       } else {
         return { attempt: existingUnsubmitted, timeLimitMinutes: null };
       }
+    }
+
+    // Check due date only for new attempts.
+    // Existing in-progress attempts are allowed to continue/submit.
+    if (
+      assessment.closeWhenDue &&
+      assessment.dueDate &&
+      new Date(assessment.dueDate) < new Date()
+    ) {
+      throw new ForbiddenException('This assessment is closed (due date passed)');
     }
 
     // Count submitted attempts
@@ -826,6 +841,28 @@ export class AssessmentsService {
     );
   }
 
+  private randomizeAssessmentForStudent(assessment: any) {
+    const shuffledQuestions = this.shuffle([...assessment.questions]).map(
+      (question) => ({
+        ...question,
+        options: question.options ? this.shuffle([...question.options]) : [],
+      }),
+    );
+
+    return {
+      ...assessment,
+      questions: shuffledQuestions,
+    };
+  }
+
+  private shuffle<T>(items: T[]): T[] {
+    for (let i = items.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    return items;
+  }
+
   /**
    * Get all attempts for a student in an assessment
    * Hides score if grade hasn't been returned
@@ -948,6 +985,35 @@ export class AssessmentsService {
    */
   async getAssessmentSubmissions(assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
+    const dueDate = assessment.dueDate ? new Date(assessment.dueDate) : null;
+
+    const mapAttemptSummary = (attempt: typeof assessmentAttempts.$inferSelect) => {
+      const submittedAt = attempt.submittedAt ? new Date(attempt.submittedAt) : null;
+      const isLate = Boolean(
+        dueDate &&
+          submittedAt &&
+          attempt.isSubmitted &&
+          submittedAt.getTime() > dueDate.getTime(),
+      );
+      const lateByMinutes = isLate && submittedAt && dueDate
+        ? Math.ceil((submittedAt.getTime() - dueDate.getTime()) / (1000 * 60))
+        : 0;
+
+      return {
+        id: attempt.id,
+        attemptNumber: attempt.attemptNumber,
+        score: attempt.score,
+        passed: attempt.passed,
+        isSubmitted: attempt.isSubmitted,
+        isReturned: attempt.isReturned,
+        submittedAt: attempt.submittedAt,
+        returnedAt: attempt.returnedAt,
+        teacherFeedback: attempt.teacherFeedback,
+        timeSpentSeconds: attempt.timeSpentSeconds,
+        isLate,
+        lateByMinutes,
+      };
+    };
 
     // Get all enrolled students in this class
     const enrolledStudents = await this.db
@@ -1003,20 +1069,8 @@ export class AssessmentsService {
         lastName: student.lastName,
         email: student.email,
         status,
-        attempt: latestAttempt
-          ? {
-              id: latestAttempt.id,
-              attemptNumber: latestAttempt.attemptNumber,
-              score: latestAttempt.score,
-              passed: latestAttempt.passed,
-              isSubmitted: latestAttempt.isSubmitted,
-              isReturned: latestAttempt.isReturned,
-              submittedAt: latestAttempt.submittedAt,
-              returnedAt: latestAttempt.returnedAt,
-              teacherFeedback: latestAttempt.teacherFeedback,
-              timeSpentSeconds: latestAttempt.timeSpentSeconds,
-            }
-          : null,
+        attempt: latestAttempt ? mapAttemptSummary(latestAttempt) : null,
+        attempts: studentAttempts.map(mapAttemptSummary),
         totalAttempts: studentAttempts.length,
       };
     });
@@ -1214,8 +1268,14 @@ export class AssessmentsService {
       };
     });
 
+    const uniqueSubmitterCount = new Set(
+      submittedAttemptsList.map((attempt) => attempt.studentId),
+    ).size;
+
     return {
       totalResponses: submittedAttemptsList.length,
+      totalAttempts: submittedAttemptsList.length,
+      uniqueSubmitterCount,
       questions: questionAnalytics,
     };
   }

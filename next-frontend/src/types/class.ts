@@ -20,7 +20,7 @@ export interface ClassItem {
   room?: string;
   isActive: boolean;
   schedules?: ClassSchedule[];
-  enrollmentCount?: number;
+  enrollments?: Enrollment[];
   createdAt?: string;
   updatedAt?: string;
   // Computed/joined
@@ -60,5 +60,76 @@ export interface Enrollment {
   studentId: string;
   classId: string;
   sectionId?: string;
-  student?: { id: string; firstName?: string; lastName?: string; email?: string; lrn?: string };
+  student?: { id: string; firstName?: string; lastName?: string; email?: string; lrn?: string; profile?: { lrn?: string; profilePicture?: string } };
+}
+
+export interface StudentMasterlistSection {
+  id: string;
+  name: string;
+  gradeLevel: string;
+  schoolYear: string;
+}
+
+export interface StudentMasterlistItem {
+  id: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  status: string;
+  profilePicture?: string | null;
+  lrn?: string | null;
+  gradeLevel?: string | null;
+  section: StudentMasterlistSection | null;
+  isEligible: boolean;
+  disabledReason: string | null;
+}
+
+export interface StudentMasterlistQuery {
+  gradeLevel?: string;
+  sectionId?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface TeacherClassStudentProfile {
+  classInfo: {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+  };
+  student: {
+    id: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    email: string;
+    status: string;
+    profile: {
+      lrn?: string | null;
+      dateOfBirth?: string | null;
+      gender?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      gradeLevel?: string | null;
+      familyName?: string | null;
+      familyRelationship?: string | null;
+      familyContact?: string | null;
+      profilePicture?: string | null;
+    } | null;
+  };
+  section: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+    schoolYear: string;
+    roomNumber?: string | null;
+    adviser: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    } | null;
+  } | null;
 }
