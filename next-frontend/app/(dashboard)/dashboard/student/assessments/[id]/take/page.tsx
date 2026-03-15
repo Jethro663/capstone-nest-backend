@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { CheckCircle2, Clock3, Flag, ListChecks } from 'lucide-react';
+import { CheckCircle2, Clock3, Flag, ListChecks, Download, UploadCloud, FileText } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,18 @@ export default function StudentAssessmentTakePage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showMissingFilePrompt, setShowMissingFilePrompt] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadedSubmission, setUploadedSubmission] = useState<{
+    attemptId: string;
+    file: {
+      id: string;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: string;
+    };
+  } | null>(null);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [timeLimit, setTimeLimit] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
@@ -125,6 +137,64 @@ export default function StudentAssessmentTakePage() {
     }
   }, [assessment, questions, responses, assessmentId, timeElapsed, router]);
 
+  const handleUploadSubmissionFile = useCallback(async (file: File) => {
+    if (!assessment) return;
+
+    const allowedExtensions =
+      assessment.allowedUploadExtensions && assessment.allowedUploadExtensions.length > 0
+        ? assessment.allowedUploadExtensions.map((ext) => ext.toLowerCase())
+        : [];
+    const maxUploadSize = assessment.maxUploadSizeBytes ?? 100 * 1024 * 1024;
+    const extension = file.name.includes('.')
+      ? file.name.split('.').pop()?.toLowerCase() || ''
+      : '';
+
+    if (!extension || (allowedExtensions.length > 0 && !allowedExtensions.includes(extension))) {
+      toast.error(`.${extension || 'unknown'} is not allowed for this assessment`);
+      return;
+    }
+
+    if (file.size > maxUploadSize) {
+      toast.error('File is too large. Maximum allowed size is 100 MB.');
+      return;
+    }
+
+    try {
+      setUploadingFile(true);
+      const res = await assessmentService.uploadSubmissionFile(assessmentId, file);
+      setUploadedSubmission(res.data);
+      toast.success('File uploaded. You can submit when ready.');
+    } catch {
+      toast.error('Failed to upload file');
+    } finally {
+      setUploadingFile(false);
+    }
+  }, [assessment, assessmentId]);
+
+  const handleSubmitFileUpload = useCallback(async () => {
+    if (!uploadedSubmission?.file?.id) {
+      setShowMissingFilePrompt(true);
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await assessmentService.submit({
+        assessmentId,
+        responses: [],
+        timeSpentSeconds: timeElapsed,
+      });
+      toast.success('File upload assessment submitted!');
+      setTimeout(() => {
+        router.replace(`/dashboard/student/assessments/${assessmentId}?view=submitted`);
+      }, 900);
+    } catch {
+      toast.error('Failed to submit assessment');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [uploadedSubmission, assessmentId, timeElapsed, router]);
+
   useEffect(() => {
     if (!timeLimit || remainingSeconds === null || didAutoSubmitRef.current) return;
     if (remainingSeconds <= 0) {
@@ -143,8 +213,133 @@ export default function StudentAssessmentTakePage() {
     );
   }
 
-  if (!assessment || questions.length === 0) {
+  const isFileUploadAssessment = assessment?.type === 'file_upload';
+
+  if (!assessment || (!isFileUploadAssessment && questions.length === 0)) {
     return <p className="text-muted-foreground">No questions available.</p>;
+  }
+
+  if (isFileUploadAssessment && assessment) {
+    const allowedExtensions = assessment.allowedUploadExtensions || [];
+    const maxUploadSize = assessment.maxUploadSizeBytes ?? 100 * 1024 * 1024;
+
+    return (
+      <div className="student-page rounded-3xl p-1">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="max-w-4xl mx-auto space-y-4"
+        >
+          <Card className="student-card overflow-hidden border-red-200">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-lg font-semibold text-slate-900">{assessment.title}</p>
+                  <p className="text-sm student-muted-text">File Upload Assessment</p>
+                </div>
+                <StudentStatusChip tone="warning">
+                  <Clock3 className="mr-1 h-3.5 w-3.5" />
+                  {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeElapsed)}
+                </StudentStatusChip>
+              </div>
+
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Instruction</p>
+                <p className="text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
+                  {assessment.fileUploadInstructions || 'No additional instruction provided.'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border p-4 space-y-2">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Allowed Formats</p>
+                <div className="flex flex-wrap gap-2">
+                  {allowedExtensions.length > 0 ? allowedExtensions.map((ext) => (
+                    <Badge key={ext} variant="secondary" className="text-xs uppercase">.{ext}</Badge>
+                  )) : <span className="text-xs text-muted-foreground">No format restrictions configured</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Maximum upload size: {(maxUploadSize / (1024 * 1024)).toFixed(0)} MB
+                </p>
+              </div>
+
+              {assessment.teacherAttachmentFile && (
+                <div className="rounded-xl border p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">{assessment.teacherAttachmentFile.originalName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(assessment.teacherAttachmentFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {assessment.teacherAttachmentFile.mimeType}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(assessmentService.getTeacherAttachmentDownloadUrl(assessmentId), '_blank')}
+                  >
+                    <Download className="h-4 w-4 mr-1" /> Download
+                  </Button>
+                </div>
+              )}
+
+              <div className="rounded-xl border p-4 space-y-3">
+                <p className="text-sm font-medium text-slate-900">Your Submission</p>
+                <label className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors">
+                  <UploadCloud className="h-4 w-4" />
+                  {uploadingFile ? 'Uploading...' : 'Upload file'}
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) void handleUploadSubmissionFile(file);
+                      e.target.value = '';
+                    }}
+                    disabled={uploadingFile}
+                  />
+                </label>
+
+                {uploadedSubmission?.file && (
+                  <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{uploadedSubmission.file.originalName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(uploadedSubmission.file.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {uploadedSubmission.file.mimeType}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(assessmentService.getAttemptSubmissionDownloadUrl(uploadedSubmission.attemptId), '_blank')}
+                    >
+                      <FileText className="h-4 w-4 mr-1" /> View
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button className="bg-red-600 hover:bg-red-700" onClick={handleSubmitFileUpload} disabled={submitting || uploadingFile}>
+                  {submitting ? 'Submitting...' : 'Submit'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <Dialog open={showMissingFilePrompt} onOpenChange={setShowMissingFilePrompt}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload required</DialogTitle>
+              <DialogDescription>
+                Please upload your file before submitting this assessment.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button onClick={() => setShowMissingFilePrompt(false)}>Okay</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
   }
 
   const current = questions[currentIdx];

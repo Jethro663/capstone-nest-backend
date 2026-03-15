@@ -56,6 +56,13 @@ interface AttemptResultData {
     totalPoints?: number;
   };
   responses?: AttemptResponse[];
+  submittedFile?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  } | null;
 }
 
 const STATUS_COLORS: Record<SubmissionStatus, string> = {
@@ -293,6 +300,7 @@ function AttemptDetailPanel({
   const score = data.score ?? selectedAttempt?.score ?? student.attempt?.score ?? 0;
   const totalPoints = data.assessment?.totalPoints ?? 0;
   const responses = data.responses ?? [];
+  const submittedFile = data.submittedFile;
   const timeSpent = selectedAttempt?.timeSpentSeconds ?? student.attempt?.timeSpentSeconds;
   const submittedAt = selectedAttempt?.submittedAt;
   const isReturned = Boolean(selectedAttempt?.isReturned ?? data?.isReturned ?? student.status === 'returned');
@@ -394,6 +402,26 @@ function AttemptDetailPanel({
         </CardContent>
       </Card>
 
+      {submittedFile && selectedAttempt?.id && (
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{submittedFile.originalName}</p>
+              <p className="text-xs text-muted-foreground">
+                {(submittedFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {submittedFile.mimeType}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(assessmentService.getAttemptSubmissionDownloadUrl(selectedAttempt.id), '_blank')}
+            >
+              View File
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Responses */}
       <div className="space-y-3">
         {responses.length > 0 ? (
@@ -439,9 +467,7 @@ function AttemptDetailPanel({
 
 function ResponseCard({ response: r, index }: { response: AttemptResponse; index: number }) {
   const question = r.question;
-  const hasQuestion = Boolean(question);
-
-  if (!hasQuestion) {
+  if (!question) {
     return (
       <Card className="border-l-4 border-l-gray-300">
         <CardContent className="p-4 space-y-2">

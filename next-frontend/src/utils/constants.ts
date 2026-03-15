@@ -12,7 +12,7 @@ export type GradeLevel = (typeof GRADE_LEVELS)[number];
 export const GRADING_PERIODS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
 export type GradingPeriod = (typeof GRADING_PERIODS)[number];
 
-export const ASSESSMENT_TYPES = ['quiz', 'exam', 'assignment'] as const;
+export const ASSESSMENT_TYPES = ['quiz', 'exam', 'assignment', 'file_upload'] as const;
 export type AssessmentType = (typeof ASSESSMENT_TYPES)[number];
 
 export const QUESTION_TYPES = [

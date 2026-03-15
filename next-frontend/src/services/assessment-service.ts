@@ -75,6 +75,71 @@ export const assessmentService = {
     return data;
   },
 
+  /** POST /assessments/:assessmentId/teacher-attachment — Upload teacher reference file */
+  async uploadTeacherAttachment(
+    assessmentId: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      id: string;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt: string;
+    };
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post(
+      `/assessments/${assessmentId}/teacher-attachment`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
+    return data;
+  },
+
+  /** POST /assessments/:assessmentId/submission-file — Upload student submission file */
+  async uploadSubmissionFile(
+    assessmentId: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      attemptId: string;
+      file: {
+        id: string;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+        uploadedAt: string;
+      };
+    };
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post(
+      `/assessments/${assessmentId}/submission-file`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
+    return data;
+  },
+
+  getTeacherAttachmentDownloadUrl(assessmentId: string) {
+    return `/api/assessments/${assessmentId}/teacher-attachment/download`;
+  },
+
+  getAttemptSubmissionDownloadUrl(attemptId: string) {
+    return `/api/assessments/attempts/${attemptId}/submission-file/download`;
+  },
+
   // --- Attempts ---
 
   /** POST /assessments/:assessmentId/start — Admin, Student */

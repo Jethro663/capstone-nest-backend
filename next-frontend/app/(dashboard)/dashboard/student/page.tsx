@@ -216,7 +216,7 @@ export default function StudentDashboardPage() {
                     </span>
                   </div>
                   <p className="mb-4 truncate text-base font-black text-[var(--student-text-strong)]">{assessment.title}</p>
-                  <Link href={`/dashboard/student/assessments/${assessment.id}`}>
+                  <Link href={assessment.type === 'file_upload' ? `/dashboard/student/assessments/${assessment.id}/take` : `/dashboard/student/assessments/${assessment.id}`}>
                     <Button className="student-button-solid h-9 w-full rounded-xl text-xs font-black">
                       START
                     </Button>

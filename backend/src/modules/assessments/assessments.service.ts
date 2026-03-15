@@ -17,6 +17,7 @@ import {
   classes,
   users,
   enrollments,
+  uploadedFiles,
 } from '../../drizzle/schema';
 import {
   CreateAssessmentDto,
@@ -24,11 +25,51 @@ import {
   CreateQuestionDto,
   UpdateQuestionDto,
   SubmitAssessmentDto,
+  AssessmentType,
   QuestionType,
   ReturnGradeDto,
   BulkReturnGradesDto,
 } from './DTO/assessment.dto';
 import { FeedbackService } from './feedback.service';
+
+const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
+const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
+  'pdf',
+  'doc',
+  'docx',
+  'txt',
+  'rtf',
+  'odt',
+  'ppt',
+  'pptx',
+  'odp',
+  'xls',
+  'xlsx',
+  'csv',
+  'ods',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+];
+const DEFAULT_FILE_UPLOAD_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/rtf',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+];
 
 @Injectable()
 export class AssessmentsService {
@@ -40,6 +81,106 @@ export class AssessmentsService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private normalizeExtensions(extensions?: string[]) {
+    const source =
+      Array.isArray(extensions) && extensions.length > 0
+        ? extensions
+        : DEFAULT_FILE_UPLOAD_EXTENSIONS;
+
+    return Array.from(
+      new Set(
+        source
+          .map((item) => item.trim().toLowerCase().replace(/^\./, ''))
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  private normalizeMimeTypes(mimeTypes?: string[]) {
+    const source =
+      Array.isArray(mimeTypes) && mimeTypes.length > 0
+        ? mimeTypes
+        : DEFAULT_FILE_UPLOAD_MIME_TYPES;
+
+    return Array.from(
+      new Set(
+        source
+          .map((item) => item.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  private ensureValidFileUploadSettings(input: {
+    type?: string;
+    fileUploadInstructions?: string;
+    allowedUploadMimeTypes?: string[];
+    allowedUploadExtensions?: string[];
+    maxUploadSizeBytes?: number | null;
+  }) {
+    if (input.type !== AssessmentType.FILE_UPLOAD) return;
+
+    if (!input.fileUploadInstructions?.trim()) {
+      throw new BadRequestException(
+        'File upload instructions are required for file upload assessments',
+      );
+    }
+
+    const extensions = this.normalizeExtensions(input.allowedUploadExtensions);
+    const mimeTypes = this.normalizeMimeTypes(input.allowedUploadMimeTypes);
+
+    if (extensions.length === 0 || mimeTypes.length === 0) {
+      throw new BadRequestException(
+        'At least one allowed file extension and mime type is required',
+      );
+    }
+
+    const maxBytes =
+      input.maxUploadSizeBytes ?? MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
+
+    if (maxBytes < 1 || maxBytes > MAX_ASSESSMENT_UPLOAD_SIZE_BYTES) {
+      throw new BadRequestException(
+        `Max upload size must be between 1 and ${MAX_ASSESSMENT_UPLOAD_SIZE_BYTES} bytes`,
+      );
+    }
+  }
+
+  private getUserId(currentUser: any) {
+    return currentUser?.userId ?? currentUser?.id;
+  }
+
+  private getUserRole(currentUser: any): 'admin' | 'teacher' | 'student' {
+    const roles: string[] = Array.isArray(currentUser?.roles)
+      ? currentUser.roles
+      : [];
+
+    if (roles.includes('admin')) return 'admin';
+    if (roles.includes('teacher')) return 'teacher';
+    return 'student';
+  }
+
+  private async ensureStudentEnrolled(classId: string, studentId: string) {
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.studentId, studentId),
+      ),
+      columns: { classId: true, studentId: true },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException(
+        'You are not enrolled in this class for this assessment',
+      );
+    }
+  }
+
+  private fileExtensionFromName(fileName: string) {
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex < 0) return '';
+    return fileName.slice(dotIndex + 1).toLowerCase();
   }
 
   /**
@@ -115,11 +256,34 @@ export class AssessmentsService {
       );
     }
 
-    if (viewerRole === 'student' && assessment.randomizeQuestions) {
-      return this.randomizeAssessmentForStudent(assessment);
+    let teacherAttachmentFile: any = null;
+    if (assessment.teacherAttachmentFileId) {
+      teacherAttachmentFile = await this.db.query.uploadedFiles.findFirst({
+        where: eq(uploadedFiles.id, assessment.teacherAttachmentFileId),
+        columns: {
+          id: true,
+          originalName: true,
+          mimeType: true,
+          sizeBytes: true,
+          uploadedAt: true,
+        },
+      });
     }
 
-    return assessment;
+    const assessmentWithAttachment = {
+      ...assessment,
+      teacherAttachmentFile,
+    };
+
+    if (
+      viewerRole === 'student' &&
+      assessmentWithAttachment.randomizeQuestions &&
+      assessmentWithAttachment.type !== AssessmentType.FILE_UPLOAD
+    ) {
+      return this.randomizeAssessmentForStudent(assessmentWithAttachment);
+    }
+
+    return assessmentWithAttachment;
   }
 
   /**
@@ -137,6 +301,16 @@ export class AssessmentsService {
       );
     }
 
+    this.ensureValidFileUploadSettings({
+      type: createAssessmentDto.type,
+      fileUploadInstructions: createAssessmentDto.fileUploadInstructions,
+      allowedUploadMimeTypes: createAssessmentDto.allowedUploadMimeTypes,
+      allowedUploadExtensions: createAssessmentDto.allowedUploadExtensions,
+      maxUploadSizeBytes: createAssessmentDto.maxUploadSizeBytes,
+    });
+
+    const isFileUpload = createAssessmentDto.type === AssessmentType.FILE_UPLOAD;
+
     const [newAssessment] = await this.db
       .insert(assessments)
       .values({
@@ -149,6 +323,22 @@ export class AssessmentsService {
           : undefined,
         closeWhenDue: createAssessmentDto.closeWhenDue ?? true,
         randomizeQuestions: createAssessmentDto.randomizeQuestions ?? false,
+        fileUploadInstructions: isFileUpload
+          ? createAssessmentDto.fileUploadInstructions?.trim()
+          : null,
+        teacherAttachmentFileId: isFileUpload
+          ? createAssessmentDto.teacherAttachmentFileId
+          : null,
+        allowedUploadMimeTypes: isFileUpload
+          ? this.normalizeMimeTypes(createAssessmentDto.allowedUploadMimeTypes)
+          : null,
+        allowedUploadExtensions: isFileUpload
+          ? this.normalizeExtensions(createAssessmentDto.allowedUploadExtensions)
+          : null,
+        maxUploadSizeBytes: isFileUpload
+          ? createAssessmentDto.maxUploadSizeBytes ??
+            MAX_ASSESSMENT_UPLOAD_SIZE_BYTES
+          : null,
         totalPoints: 0,
         passingScore: createAssessmentDto.passingScore,
         maxAttempts: createAssessmentDto.maxAttempts ?? 1,
@@ -170,6 +360,7 @@ export class AssessmentsService {
   private async validateForPublish(assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
     const errors: string[] = [];
+    const isFileUpload = assessment.type === AssessmentType.FILE_UPLOAD;
 
     if (!assessment.title || !assessment.title.trim()) {
       errors.push('Title is required');
@@ -177,14 +368,49 @@ export class AssessmentsService {
     if (!assessment.type) {
       errors.push('Assessment type is required');
     }
-    if (!assessment.questions || assessment.questions.length === 0) {
+
+    if (
+      !isFileUpload &&
+      (!assessment.questions || assessment.questions.length === 0)
+    ) {
       errors.push('At least one question is required');
     }
+
     if (
       assessment.passingScore === null ||
       assessment.passingScore === undefined
     ) {
       errors.push('Passing score is required');
+    }
+
+    if (isFileUpload) {
+      if (!assessment.fileUploadInstructions?.trim()) {
+        errors.push('File upload instructions are required');
+      }
+
+      if (
+        !Array.isArray(assessment.allowedUploadExtensions) ||
+        assessment.allowedUploadExtensions.length === 0
+      ) {
+        errors.push('At least one allowed file extension is required');
+      }
+
+      if (
+        !Array.isArray(assessment.allowedUploadMimeTypes) ||
+        assessment.allowedUploadMimeTypes.length === 0
+      ) {
+        errors.push('At least one allowed mime type is required');
+      }
+
+      if (
+        !assessment.maxUploadSizeBytes ||
+        assessment.maxUploadSizeBytes < 1 ||
+        assessment.maxUploadSizeBytes > MAX_ASSESSMENT_UPLOAD_SIZE_BYTES
+      ) {
+        errors.push(
+          `Max upload size must be between 1 and ${MAX_ASSESSMENT_UPLOAD_SIZE_BYTES} bytes`,
+        );
+      }
     }
 
     // Validate each question
@@ -195,7 +421,7 @@ export class AssessmentsService {
       QuestionType.DROPDOWN,
     ];
 
-    if (assessment.questions) {
+    if (!isFileUpload && assessment.questions) {
       for (let i = 0; i < assessment.questions.length; i++) {
         const q = assessment.questions[i];
         if (!q.content || !q.content.trim()) {
@@ -255,7 +481,30 @@ export class AssessmentsService {
     updateAssessmentDto: UpdateAssessmentDto,
   ) {
     // Verify assessment exists
-    await this.getAssessmentById(assessmentId);
+    const existingAssessment = await this.getAssessmentById(assessmentId);
+
+    const nextType = updateAssessmentDto.type ?? existingAssessment.type;
+    const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
+
+    this.ensureValidFileUploadSettings({
+      type: nextType,
+      fileUploadInstructions:
+        updateAssessmentDto.fileUploadInstructions ??
+        existingAssessment.fileUploadInstructions ??
+        undefined,
+      allowedUploadMimeTypes:
+        updateAssessmentDto.allowedUploadMimeTypes ??
+        existingAssessment.allowedUploadMimeTypes ??
+        undefined,
+      allowedUploadExtensions:
+        updateAssessmentDto.allowedUploadExtensions ??
+        existingAssessment.allowedUploadExtensions ??
+        undefined,
+      maxUploadSizeBytes:
+        updateAssessmentDto.maxUploadSizeBytes ??
+        existingAssessment.maxUploadSizeBytes ??
+        undefined,
+    });
 
     // Validate before publishing
     if (updateAssessmentDto.isPublished === true) {
@@ -278,6 +527,22 @@ export class AssessmentsService {
       updateData.closeWhenDue = updateAssessmentDto.closeWhenDue;
     if (updateAssessmentDto.randomizeQuestions !== undefined)
       updateData.randomizeQuestions = updateAssessmentDto.randomizeQuestions;
+    if (updateAssessmentDto.fileUploadInstructions !== undefined)
+      updateData.fileUploadInstructions =
+        updateAssessmentDto.fileUploadInstructions?.trim() || null;
+    if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
+      updateData.teacherAttachmentFileId =
+        updateAssessmentDto.teacherAttachmentFileId;
+    if (updateAssessmentDto.allowedUploadMimeTypes !== undefined)
+      updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
+        updateAssessmentDto.allowedUploadMimeTypes,
+      );
+    if (updateAssessmentDto.allowedUploadExtensions !== undefined)
+      updateData.allowedUploadExtensions = this.normalizeExtensions(
+        updateAssessmentDto.allowedUploadExtensions,
+      );
+    if (updateAssessmentDto.maxUploadSizeBytes !== undefined)
+      updateData.maxUploadSizeBytes = updateAssessmentDto.maxUploadSizeBytes;
     if (updateAssessmentDto.passingScore !== undefined)
       updateData.passingScore = updateAssessmentDto.passingScore;
     if (updateAssessmentDto.maxAttempts !== undefined)
@@ -294,6 +559,30 @@ export class AssessmentsService {
       updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
     if (updateAssessmentDto.quarter !== undefined)
       updateData.quarter = updateAssessmentDto.quarter;
+
+    if (!nextIsFileUpload) {
+      updateData.fileUploadInstructions = null;
+      updateData.teacherAttachmentFileId = null;
+      updateData.allowedUploadMimeTypes = null;
+      updateData.allowedUploadExtensions = null;
+      updateData.maxUploadSizeBytes = null;
+    } else {
+      if (updateData.allowedUploadMimeTypes === undefined) {
+        updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
+          existingAssessment.allowedUploadMimeTypes ?? undefined,
+        );
+      }
+      if (updateData.allowedUploadExtensions === undefined) {
+        updateData.allowedUploadExtensions = this.normalizeExtensions(
+          existingAssessment.allowedUploadExtensions ?? undefined,
+        );
+      }
+      if (updateData.maxUploadSizeBytes === undefined) {
+        updateData.maxUploadSizeBytes =
+          existingAssessment.maxUploadSizeBytes ??
+          MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
+      }
+    }
 
     const [updated] = await this.db
       .update(assessments)
@@ -522,7 +811,7 @@ export class AssessmentsService {
     // Check due date only for new attempts.
     // Existing in-progress attempts are allowed to continue/submit.
     if (
-      assessment.closeWhenDue &&
+      (assessment.closeWhenDue ?? true) &&
       assessment.dueDate &&
       new Date(assessment.dueDate) < new Date()
     ) {
@@ -599,6 +888,15 @@ export class AssessmentsService {
       }
     }
 
+    if (
+      assessment.type === AssessmentType.FILE_UPLOAD &&
+      !attempt.submittedFileId
+    ) {
+      throw new BadRequestException(
+        'Please upload a file before submitting this assessment',
+      );
+    }
+
     // Mark attempt as submitted
     const [updatedAttempt] = await this.db
       .update(assessmentAttempts)
@@ -610,6 +908,16 @@ export class AssessmentsService {
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
     attempt = updatedAttempt;
+
+    if (assessment.type === AssessmentType.FILE_UPLOAD) {
+      return {
+        attempt,
+        responses: [],
+        totalPoints: 0,
+        score: null,
+        passed: null,
+      };
+    }
 
     // Process responses and auto-grade
     const { totalPoints, responses } = await this.autoGradeResponses(
@@ -652,6 +960,232 @@ export class AssessmentsService {
     };
   }
 
+  async uploadTeacherAttachment(
+    assessmentId: string,
+    currentUser: any,
+    file: Express.Multer.File,
+  ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    if (
+      role === 'teacher' &&
+      assessment.class?.teacherId &&
+      assessment.class.teacherId !== userId
+    ) {
+      throw new ForbiddenException(
+        'You can only manage attachments for your own class assessments',
+      );
+    }
+
+    const [record] = await this.db
+      .insert(uploadedFiles)
+      .values({
+        teacherId: userId,
+        classId: assessment.classId,
+        scope: 'private',
+        originalName: file.originalname,
+        storedName: file.filename,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        filePath: file.path.replace(/\\/g, '/'),
+      })
+      .returning();
+
+    await this.db
+      .update(assessments)
+      .set({
+        teacherAttachmentFileId: record.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessments.id, assessmentId));
+
+    return record;
+  }
+
+  async uploadStudentSubmissionFile(
+    assessmentId: string,
+    currentUser: any,
+    file: Express.Multer.File,
+  ) {
+    const studentId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!studentId || role !== 'student') {
+      throw new ForbiddenException('Only students can upload submission files');
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+    if (assessment.type !== AssessmentType.FILE_UPLOAD) {
+      throw new BadRequestException(
+        'This assessment does not accept file uploads',
+      );
+    }
+
+    await this.ensureStudentEnrolled(assessment.classId, studentId);
+
+    const allowedExtensions = this.normalizeExtensions(
+      assessment.allowedUploadExtensions ?? undefined,
+    );
+    const allowedMimeTypes = this.normalizeMimeTypes(
+      assessment.allowedUploadMimeTypes ?? undefined,
+    );
+    const maxUploadSizeBytes =
+      assessment.maxUploadSizeBytes ?? MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
+
+    const extension = this.fileExtensionFromName(file.originalname);
+    const mimeType = file.mimetype.toLowerCase();
+
+    if (!allowedExtensions.includes(extension)) {
+      throw new BadRequestException(
+        `.${extension || 'unknown'} is not an allowed file type`,
+      );
+    }
+
+    if (
+      mimeType !== 'application/octet-stream' &&
+      !allowedMimeTypes.includes(mimeType)
+    ) {
+      throw new BadRequestException('This file format is not allowed');
+    }
+
+    if (file.size > maxUploadSizeBytes) {
+      throw new BadRequestException(
+        `File size exceeds the allowed limit of ${maxUploadSizeBytes} bytes`,
+      );
+    }
+
+    const { attempt } = await this.startAttempt(studentId, assessmentId);
+
+    const teacherId = assessment.class?.teacherId;
+    if (!teacherId) {
+      throw new BadRequestException('Class teacher not found for assessment');
+    }
+
+    const [record] = await this.db
+      .insert(uploadedFiles)
+      .values({
+        teacherId,
+        classId: assessment.classId,
+        scope: 'private',
+        originalName: file.originalname,
+        storedName: file.filename,
+        mimeType,
+        sizeBytes: file.size,
+        filePath: file.path.replace(/\\/g, '/'),
+      })
+      .returning();
+
+    await this.db
+      .update(assessmentAttempts)
+      .set({
+        submittedFileId: record.id,
+        submittedFileOriginalName: record.originalName,
+        submittedFileMimeType: record.mimeType,
+        submittedFileSizeBytes: record.sizeBytes,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessmentAttempts.id, attempt.id));
+
+    return {
+      attemptId: attempt.id,
+      file: record,
+    };
+  }
+
+  async getTeacherAttachmentDownload(assessmentId: string, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    if (!assessment.teacherAttachmentFileId) {
+      throw new NotFoundException('No teacher attachment found for assessment');
+    }
+
+    if (role === 'student') {
+      await this.ensureStudentEnrolled(assessment.classId, userId);
+    }
+
+    if (
+      role === 'teacher' &&
+      assessment.class?.teacherId &&
+      assessment.class.teacherId !== userId
+    ) {
+      throw new ForbiddenException('You do not have access to this file');
+    }
+
+    const file = await this.db.query.uploadedFiles.findFirst({
+      where: eq(uploadedFiles.id, assessment.teacherAttachmentFileId),
+    });
+
+    if (!file) {
+      throw new NotFoundException('Attached file not found');
+    }
+
+    return file;
+  }
+
+  async getAttemptSubmissionDownload(attemptId: string, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: eq(assessmentAttempts.id, attemptId),
+      with: {
+        assessment: {
+          with: {
+            class: true,
+          },
+        },
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Attempt not found');
+    }
+
+    if (!attempt.submittedFileId) {
+      throw new NotFoundException('No submitted file found for this attempt');
+    }
+
+    if (role === 'student' && attempt.studentId !== userId) {
+      throw new ForbiddenException('You do not have access to this file');
+    }
+
+    if (
+      role === 'teacher' &&
+      attempt.assessment?.class?.teacherId &&
+      attempt.assessment.class.teacherId !== userId
+    ) {
+      throw new ForbiddenException('You do not have access to this file');
+    }
+
+    const file = await this.db.query.uploadedFiles.findFirst({
+      where: eq(uploadedFiles.id, attempt.submittedFileId),
+    });
+
+    if (!file) {
+      throw new NotFoundException('Submitted file no longer exists');
+    }
+
+    return file;
+  }
+
   /**
    * Get student's attempt results
    * For students: only show score/details if grade has been returned
@@ -688,6 +1222,20 @@ export class AssessmentsService {
       throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
     }
 
+    let submittedFile: any = null;
+    if (attempt.submittedFileId) {
+      submittedFile = await this.db.query.uploadedFiles.findFirst({
+        where: eq(uploadedFiles.id, attempt.submittedFileId),
+        columns: {
+          id: true,
+          originalName: true,
+          mimeType: true,
+          sizeBytes: true,
+          uploadedAt: true,
+        },
+      });
+    }
+
     // If student role and grade not returned yet, hide score details
     if (userRole === 'student' && !attempt.isReturned) {
       return {
@@ -713,6 +1261,7 @@ export class AssessmentsService {
           type: attempt.assessment.type,
           totalPoints: attempt.assessment.totalPoints,
         },
+        submittedFile,
       };
     }
 
@@ -722,6 +1271,7 @@ export class AssessmentsService {
     filtered.isReturned = attempt.isReturned;
     filtered.returnedAt = attempt.returnedAt;
     filtered.teacherFeedback = attempt.teacherFeedback;
+    filtered.submittedFile = submittedFile;
     return filtered;
   }
 

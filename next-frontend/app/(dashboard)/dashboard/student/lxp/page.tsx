@@ -238,7 +238,7 @@ export default function StudentLxpPage() {
                         </Link>
                       )}
                       {checkpoint.assessment && (
-                        <Link href={`/dashboard/student/assessments/${checkpoint.assessment.id}`}>
+                        <Link href={checkpoint.assessment.type === 'file_upload' ? `/dashboard/student/assessments/${checkpoint.assessment.id}/take` : `/dashboard/student/assessments/${checkpoint.assessment.id}`}>
                           <Button variant="outline" size="sm">
                             Open Assessment
                           </Button>

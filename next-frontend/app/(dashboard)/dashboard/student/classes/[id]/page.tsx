@@ -162,7 +162,7 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
                     : null;
                   return (
                     <motion.div key={assessment.id} {...motionProps.item}>
-                      <Link href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
+                      <Link href={assessment.type === 'file_upload' ? `/dashboard/student/assessments/${assessment.id}/take?classId=${classId}` : `/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
                         <StudentActionCard>
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>

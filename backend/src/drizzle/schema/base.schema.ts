@@ -36,6 +36,7 @@ export const assessmentTypeEnum = pgEnum('assessment_type', [
   'quiz',
   'exam',
   'assignment',
+  'file_upload',
 ]);
 
 export const classRecordCategoryEnum = pgEnum('class_record_category', [
@@ -413,6 +414,11 @@ export const assessments = pgTable('assessments', {
   dueDate: timestamp('due_date'),
   closeWhenDue: boolean('close_when_due').notNull().default(true),
   randomizeQuestions: boolean('randomize_questions').notNull().default(false),
+  fileUploadInstructions: text('file_upload_instructions'),
+  teacherAttachmentFileId: uuid('teacher_attachment_file_id'),
+  allowedUploadMimeTypes: text('allowed_upload_mime_types').array(),
+  allowedUploadExtensions: text('allowed_upload_extensions').array(),
+  maxUploadSizeBytes: integer('max_upload_size_bytes').default(104857600),
   totalPoints: integer('total_points').notNull().default(0),
   passingScore: integer('passing_score').default(60),
   maxAttempts: integer('max_attempts').notNull().default(1),
@@ -490,6 +496,14 @@ export const assessmentAttempts = pgTable(
     isReturned: boolean('is_returned').default(false),
     returnedAt: timestamp('returned_at'),
     teacherFeedback: text('teacher_feedback'),
+    submittedFileId: uuid('submitted_file_id'),
+    submittedFileOriginalName: text('submitted_file_original_name'),
+    submittedFileMimeType: varchar('submitted_file_mime_type', {
+      length: 100,
+    }),
+    submittedFileSizeBytes: bigint('submitted_file_size_bytes', {
+      mode: 'number',
+    }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

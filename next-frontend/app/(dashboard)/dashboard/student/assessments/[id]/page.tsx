@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, Clock3, Medal, Target } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
@@ -21,6 +21,7 @@ import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 export default function StudentAssessmentPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const assessmentId = params.id as string;
   const reduceMotion = useReducedMotion();
   const motionProps = getMotionProps(!!reduceMotion);
@@ -49,6 +50,13 @@ export default function StudentAssessmentPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    const viewMode = searchParams.get('view');
+    if (!loading && assessment?.type === 'file_upload' && viewMode !== 'submitted') {
+      router.replace(`/dashboard/student/assessments/${assessmentId}/take`);
+    }
+  }, [assessment, assessmentId, loading, router, searchParams]);
 
   const submittedAttempts = attempts.filter((a) => a.isSubmitted !== false);
   const maxAttempts = assessment?.maxAttempts ?? 1;

@@ -11,6 +11,7 @@ import {
   ArrayNotEmpty,
   IsDateString,
   ValidateIf,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -27,6 +28,7 @@ export enum AssessmentType {
   QUIZ = 'quiz',
   EXAM = 'exam',
   ASSIGNMENT = 'assignment',
+  FILE_UPLOAD = 'file_upload',
 }
 
 export enum FeedbackLevel {
@@ -78,6 +80,30 @@ export class CreateAssessmentDto {
   @IsOptional()
   @IsBoolean()
   randomizeQuestions?: boolean = false;
+
+  @IsOptional()
+  @IsString()
+  fileUploadInstructions?: string;
+
+  @IsOptional()
+  @IsUUID()
+  teacherAttachmentFileId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedUploadMimeTypes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedUploadExtensions?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(104857600)
+  maxUploadSizeBytes?: number;
 
   @IsOptional()
   @IsInt()
@@ -136,6 +162,31 @@ export class UpdateAssessmentDto {
   @IsOptional()
   @IsBoolean()
   randomizeQuestions?: boolean;
+
+  @IsOptional()
+  @IsString()
+  fileUploadInstructions?: string;
+
+  @IsOptional()
+  @ValidateIf((o) => o.teacherAttachmentFileId !== null)
+  @IsUUID()
+  teacherAttachmentFileId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedUploadMimeTypes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  allowedUploadExtensions?: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(104857600)
+  maxUploadSizeBytes?: number;
 
   @IsOptional()
   @IsInt()

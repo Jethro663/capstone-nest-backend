@@ -52,6 +52,51 @@ const QUESTION_TYPES = [
 
 const OPTION_QUESTION_TYPES = ['multiple_choice', 'multiple_select', 'true_false', 'dropdown'];
 
+const FILE_UPLOAD_TYPE_GROUPS = [
+  {
+    key: 'documents',
+    label: 'Documents',
+    extensions: ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'],
+    mimeTypes: [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'application/rtf',
+      'application/vnd.oasis.opendocument.text',
+    ],
+  },
+  {
+    key: 'slides',
+    label: 'Slides',
+    extensions: ['ppt', 'pptx', 'odp'],
+    mimeTypes: [
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.oasis.opendocument.presentation',
+    ],
+  },
+  {
+    key: 'spreadsheets',
+    label: 'Spreadsheets',
+    extensions: ['xls', 'xlsx', 'csv', 'ods'],
+    mimeTypes: [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/vnd.oasis.opendocument.spreadsheet',
+    ],
+  },
+  {
+    key: 'images',
+    label: 'Images',
+    extensions: ['png', 'jpg', 'jpeg', 'webp'],
+    mimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+  },
+] as const;
+
+const FILE_UPLOAD_LIMIT_BYTES = 100 * 1024 * 1024;
+
 /* ── Main page component ────────────────────────────── */
 export default function AssessmentEditorPage() {
   const params = useParams();
@@ -77,11 +122,23 @@ export default function AssessmentEditorPage() {
   const [dueDate, setDueDate] = useState('');
   const [feedbackLevel, setFeedbackLevel] = useState<string>('immediate');
   const [feedbackDelayHours, setFeedbackDelayHours] = useState<number>(0);
-  const [editorTab, setEditorTab] = useState<'questions' | 'settings'>('questions');
+  const [editorTab, setEditorTab] = useState<'questions' | 'fileUpload' | 'settings'>('questions');
+  const [lastAssessmentType, setLastAssessmentType] = useState<string>('quiz');
   const [classRecordCategory, setClassRecordCategory] = useState<string>('');
   const [quarter, setQuarter] = useState<string>('');
   const [closeWhenDue, setCloseWhenDue] = useState(true);
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [fileUploadInstructions, setFileUploadInstructions] = useState('');
+  const [allowedUploadExtensions, setAllowedUploadExtensions] = useState<string[]>([]);
+  const [allowedUploadMimeTypes, setAllowedUploadMimeTypes] = useState<string[]>([]);
+  const [maxUploadSizeBytes, setMaxUploadSizeBytes] = useState<number>(FILE_UPLOAD_LIMIT_BYTES);
+  const [teacherAttachmentFile, setTeacherAttachmentFile] = useState<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  } | null>(null);
   const [savedMeta, setSavedMeta] = useState<{
     title: string;
     description: string;
@@ -96,6 +153,11 @@ export default function AssessmentEditorPage() {
     quarter: string;
     closeWhenDue: boolean;
     randomizeQuestions: boolean;
+    fileUploadInstructions: string;
+    allowedUploadExtensions: string[];
+    allowedUploadMimeTypes: string[];
+    maxUploadSizeBytes: number;
+    teacherAttachmentFileId: string;
   } | null>(null);
 
   // Inline editing for questions
@@ -130,6 +192,19 @@ export default function AssessmentEditorPage() {
       setQuarter(a.quarter || '');
       setCloseWhenDue(a.closeWhenDue ?? true);
       setRandomizeQuestions(a.randomizeQuestions ?? false);
+      setFileUploadInstructions(a.fileUploadInstructions || '');
+      setAllowedUploadExtensions(
+        a.allowedUploadExtensions && a.allowedUploadExtensions.length > 0
+          ? a.allowedUploadExtensions
+          : FILE_UPLOAD_TYPE_GROUPS.flatMap((group) => [...group.extensions]),
+      );
+      setAllowedUploadMimeTypes(
+        a.allowedUploadMimeTypes && a.allowedUploadMimeTypes.length > 0
+          ? a.allowedUploadMimeTypes
+          : FILE_UPLOAD_TYPE_GROUPS.flatMap((group) => [...group.mimeTypes]),
+      );
+      setMaxUploadSizeBytes(a.maxUploadSizeBytes ?? FILE_UPLOAD_LIMIT_BYTES);
+      setTeacherAttachmentFile(a.teacherAttachmentFile || null);
       const normalizedQuestions = (a.questions || [])
         .map((question) => ({
           ...question,
@@ -152,6 +227,17 @@ export default function AssessmentEditorPage() {
         quarter: a.quarter || '',
         closeWhenDue: a.closeWhenDue ?? true,
         randomizeQuestions: a.randomizeQuestions ?? false,
+        fileUploadInstructions: a.fileUploadInstructions || '',
+        allowedUploadExtensions:
+          a.allowedUploadExtensions && a.allowedUploadExtensions.length > 0
+            ? [...a.allowedUploadExtensions].sort()
+            : FILE_UPLOAD_TYPE_GROUPS.flatMap((group) => [...group.extensions]).sort(),
+        allowedUploadMimeTypes:
+          a.allowedUploadMimeTypes && a.allowedUploadMimeTypes.length > 0
+            ? [...a.allowedUploadMimeTypes].sort()
+            : FILE_UPLOAD_TYPE_GROUPS.flatMap((group) => [...group.mimeTypes]).sort(),
+        maxUploadSizeBytes: a.maxUploadSizeBytes ?? FILE_UPLOAD_LIMIT_BYTES,
+        teacherAttachmentFileId: a.teacherAttachmentFileId || '',
       });
     } catch {
       toast.error('Failed to load assessment');
@@ -161,6 +247,18 @@ export default function AssessmentEditorPage() {
   }, [assessmentId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (assessmentType !== 'file_upload') {
+      setLastAssessmentType(assessmentType);
+    }
+    if (assessmentType === 'file_upload' && editorTab === 'questions') {
+      setEditorTab('fileUpload');
+    }
+    if (assessmentType !== 'file_upload' && editorTab === 'fileUpload') {
+      setEditorTab('questions');
+    }
+  }, [assessmentType, editorTab]);
 
   /* ---------- computed ---------- */
   const totalPoints = questions.reduce((s, q) => s + q.points, 0);
@@ -179,13 +277,71 @@ export default function AssessmentEditorPage() {
     quarter,
     closeWhenDue,
     randomizeQuestions,
+    fileUploadInstructions,
+    allowedUploadExtensions: [...allowedUploadExtensions].sort(),
+    allowedUploadMimeTypes: [...allowedUploadMimeTypes].sort(),
+    maxUploadSizeBytes,
+    teacherAttachmentFileId: teacherAttachmentFile?.id || '',
   };
 
   const hasPendingChanges =
     (savedMeta ? JSON.stringify(currentMeta) !== JSON.stringify(savedMeta) : false) ||
     JSON.stringify(normalizeQuestions(questions)) !== JSON.stringify(normalizeQuestions(savedQuestions));
 
+  const isGroupSelected = (groupKey: string) => {
+    const group = FILE_UPLOAD_TYPE_GROUPS.find((entry) => entry.key === groupKey);
+    if (!group) return false;
+    return group.extensions.every((ext) => allowedUploadExtensions.includes(ext));
+  };
+
+  const toggleFileGroup = (groupKey: string, checked: boolean) => {
+    const group = FILE_UPLOAD_TYPE_GROUPS.find((entry) => entry.key === groupKey);
+    if (!group) return;
+
+    if (checked) {
+      setAllowedUploadExtensions((prev) => Array.from(new Set([...prev, ...group.extensions])));
+      setAllowedUploadMimeTypes((prev) => Array.from(new Set([...prev, ...group.mimeTypes])));
+      return;
+    }
+
+    setAllowedUploadExtensions((prev) => prev.filter((ext) => !(group.extensions as readonly string[]).includes(ext)));
+    setAllowedUploadMimeTypes((prev) => prev.filter((mime) => !(group.mimeTypes as readonly string[]).includes(mime)));
+  };
+
+  const handleTeacherAttachmentUpload = async (file: File) => {
+    try {
+      const res = await assessmentService.uploadTeacherAttachment(assessmentId, file);
+      setTeacherAttachmentFile(res.data);
+      toast.success('Reference file uploaded');
+    } catch {
+      toast.error('Failed to upload reference file');
+    }
+  };
+
+  const switchToFileUploadMode = () => {
+    setAssessmentType('file_upload');
+    setEditorTab('fileUpload');
+    toast.success('Switched to File Upload mode');
+  };
+
+  const switchToAssessmentMode = () => {
+    setAssessmentType(lastAssessmentType === 'file_upload' ? 'quiz' : lastAssessmentType);
+    setEditorTab('questions');
+    toast.success('Switched to Assessment mode');
+  };
+
   const handleUpdateAssessment = async () => {
+    if (assessmentType === 'file_upload') {
+      if (!fileUploadInstructions.trim()) {
+        toast.error('Instruction is required for file upload assessments');
+        return;
+      }
+      if (allowedUploadExtensions.length === 0 || allowedUploadMimeTypes.length === 0) {
+        toast.error('Please select at least one allowed file type group');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const assessmentRes = await assessmentService.update(assessmentId, {
@@ -202,47 +358,54 @@ export default function AssessmentEditorPage() {
         feedbackDelayHours,
         classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
         quarter: (quarter || undefined) as Assessment['quarter'],
+        fileUploadInstructions: assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
+        teacherAttachmentFileId: assessmentType === 'file_upload' ? teacherAttachmentFile?.id ?? null : null,
+        allowedUploadExtensions: assessmentType === 'file_upload' ? allowedUploadExtensions : undefined,
+        allowedUploadMimeTypes: assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
+        maxUploadSizeBytes: assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
       });
 
-      const deletedQuestions = savedQuestions.filter(
-        (savedQuestion) => !questions.some((currentQuestion) => currentQuestion.id === savedQuestion.id),
-      );
-      for (const question of deletedQuestions) {
-        if (!question.id.startsWith('temp-')) {
-          await assessmentService.deleteQuestion(question.id);
+      if (assessmentType !== 'file_upload') {
+        const deletedQuestions = savedQuestions.filter(
+          (savedQuestion) => !questions.some((currentQuestion) => currentQuestion.id === savedQuestion.id),
+        );
+        for (const question of deletedQuestions) {
+          if (!question.id.startsWith('temp-')) {
+            await assessmentService.deleteQuestion(question.id);
+          }
         }
-      }
 
-      for (let index = 0; index < questions.length; index += 1) {
-        const question = questions[index];
-        const options = OPTION_QUESTION_TYPES.includes(question.type)
-          ? (question.options || []).map((option, optionIndex) => ({
-              text: option.text,
-              isCorrect: option.isCorrect,
-              order: optionIndex + 1,
-            }))
-          : undefined;
+        for (let index = 0; index < questions.length; index += 1) {
+          const question = questions[index];
+          const options = OPTION_QUESTION_TYPES.includes(question.type)
+            ? (question.options || []).map((option, optionIndex) => ({
+                text: option.text,
+                isCorrect: option.isCorrect,
+                order: optionIndex + 1,
+              }))
+            : undefined;
 
-        if (question.id.startsWith('temp-') || question.isNew) {
-          await assessmentService.createQuestion({
-            assessmentId,
-            type: question.type as CreateQuestionDto['type'],
-            content: question.content,
-            points: question.points,
-            order: index + 1,
-            explanation: question.explanation || undefined,
-            imageUrl: question.imageUrl || undefined,
-            options,
-          });
-        } else {
-          await assessmentService.updateQuestion(question.id, {
-            content: question.content,
-            points: question.points,
-            order: index + 1,
-            explanation: question.explanation || undefined,
-            imageUrl: question.imageUrl || undefined,
-            options,
-          });
+          if (question.id.startsWith('temp-') || question.isNew) {
+            await assessmentService.createQuestion({
+              assessmentId,
+              type: question.type as CreateQuestionDto['type'],
+              content: question.content,
+              points: question.points,
+              order: index + 1,
+              explanation: question.explanation || undefined,
+              imageUrl: question.imageUrl || undefined,
+              options,
+            });
+          } else {
+            await assessmentService.updateQuestion(question.id, {
+              content: question.content,
+              points: question.points,
+              order: index + 1,
+              explanation: question.explanation || undefined,
+              imageUrl: question.imageUrl || undefined,
+              options,
+            });
+          }
         }
       }
 
@@ -442,6 +605,26 @@ export default function AssessmentEditorPage() {
       <div className="flex items-center justify-between gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.back()}>← Back</Button>
         <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border p-0.5 bg-background">
+            <Button
+              type="button"
+              size="sm"
+              variant={assessmentType === 'file_upload' ? 'outline' : 'default'}
+              className="h-8 rounded-sm"
+              onClick={switchToAssessmentMode}
+            >
+              Assessment Mode
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={assessmentType === 'file_upload' ? 'default' : 'outline'}
+              className="h-8 rounded-sm"
+              onClick={switchToFileUploadMode}
+            >
+              File Upload Mode
+            </Button>
+          </div>
           <Button size="sm" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
             {saving ? 'Updating…' : 'Update Assessment'}
           </Button>
@@ -456,9 +639,11 @@ export default function AssessmentEditorPage() {
         </div>
       </div>
 
-      <Tabs value={editorTab} onValueChange={(value) => setEditorTab(value as 'questions' | 'settings')}>
+      <Tabs value={editorTab} onValueChange={(value) => setEditorTab(value as 'questions' | 'fileUpload' | 'settings')}>
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="questions">Questions</TabsTrigger>
+          <TabsTrigger value={assessmentType === 'file_upload' ? 'fileUpload' : 'questions'}>
+            {assessmentType === 'file_upload' ? 'File Upload' : 'Questions'}
+          </TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -481,7 +666,7 @@ export default function AssessmentEditorPage() {
           <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
             <span>Total: <strong className="text-foreground">{totalPoints} pts</strong></span>
             <span>Questions: <strong className="text-foreground">{questions.length}</strong></span>
-            <span>Passing: <strong className="text-foreground">{assessment.passingScore ?? 60}%</strong></span>
+            <span>Passing: <strong className="text-foreground">{passingScore}%</strong></span>
             <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className="ml-auto">
               {assessment.isPublished ? 'Published' : 'Draft'}
             </Badge>
@@ -531,18 +716,20 @@ export default function AssessmentEditorPage() {
             <div className="rounded-lg border p-4 space-y-4">
               <p className="text-sm font-semibold">General</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Type</Label>
-                  <select
-                    value={assessmentType}
-                    onChange={(e) => setAssessmentType(e.target.value)}
-                    className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                  >
-                    <option value="quiz">Quiz</option>
-                    <option value="exam">Exam</option>
-                    <option value="assignment">Assignment</option>
-                  </select>
-                </div>
+                {assessmentType !== 'file_upload' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Type</Label>
+                    <select
+                      value={assessmentType}
+                      onChange={(e) => setAssessmentType(e.target.value)}
+                      className="w-full rounded-md border px-3 py-2 text-sm bg-background"
+                    >
+                      <option value="quiz">Quiz</option>
+                      <option value="exam">Exam</option>
+                      <option value="assignment">Assignment</option>
+                    </select>
+                  </div>
+                )}
                 <div className="space-y-1.5">
                   <Label className="text-xs">Class Record Category</Label>
                   <select
@@ -624,8 +811,105 @@ export default function AssessmentEditorPage() {
         </Card>
       )}
 
+      {editorTab === 'fileUpload' && assessmentType === 'file_upload' && (
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <div className="rounded-lg border p-4 space-y-4">
+              <p className="text-sm font-semibold">File Upload Assessment</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Instruction for students</Label>
+                <Textarea
+                  value={fileUploadInstructions}
+                  onChange={(e) => setFileUploadInstructions(e.target.value)}
+                  rows={4}
+                  placeholder="Add clear instructions for student file submission"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Allowed file type groups</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {FILE_UPLOAD_TYPE_GROUPS.map((group) => (
+                    <label key={group.key} className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isGroupSelected(group.key)}
+                        onChange={(e) => toggleFileGroup(group.key, e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{group.label}</span>
+                        <span className="block text-xs text-muted-foreground">.{group.extensions.join(', .')}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Student file size limit</Label>
+                <div className="h-10 rounded-md border px-3 text-sm flex items-center">
+                  {(maxUploadSizeBytes / (1024 * 1024)).toFixed(0)} MB maximum per upload
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Optional reference file for students</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center justify-center rounded-md border px-3 h-9 text-sm cursor-pointer hover:bg-muted transition-colors">
+                    Upload reference file
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleTeacherAttachmentUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {teacherAttachmentFile && (
+                    <a
+                      href={assessmentService.getTeacherAttachmentDownloadUrl(assessmentId)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm underline underline-offset-2"
+                    >
+                      {teacherAttachmentFile.originalName}
+                    </a>
+                  )}
+                </div>
+                {teacherAttachmentFile && (
+                  <p className="text-xs text-muted-foreground">
+                    {(teacherAttachmentFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {teacherAttachmentFile.mimeType}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
+                {saving ? 'Updating…' : 'Update Assessment'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ════ Question Cards (inline, Forms-style) ════ */}
-      {editorTab === 'questions' && questions.map((q, i) => {
+      {editorTab === 'questions' && assessmentType === 'file_upload' && (
+        <Card>
+          <CardContent className="p-5 space-y-2 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">File upload mode enabled</p>
+            <p>
+              This assessment uses instruction + file submission instead of question cards.
+              Configure all file-upload settings under the <strong>Settings</strong> tab.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {editorTab === 'questions' && assessmentType !== 'file_upload' && questions.map((q, i) => {
         const isEditing = editingQId === q.id;
 
         if (isEditing && draftQuestion) {
@@ -686,7 +970,7 @@ export default function AssessmentEditorPage() {
       })}
 
       {/* ════ New question being added (inline card at bottom) ════ */}
-      {editorTab === 'questions' && addingType && draftQuestion && (
+      {editorTab === 'questions' && assessmentType !== 'file_upload' && addingType && draftQuestion && (
         <QuestionEditCard
           index={questions.length}
           draft={draftQuestion}
@@ -700,7 +984,7 @@ export default function AssessmentEditorPage() {
       )}
 
       {/* ════ Add Question Bar ════ */}
-      {editorTab === 'questions' && !addingType && (
+      {editorTab === 'questions' && assessmentType !== 'file_upload' && !addingType && (
         <Card className="border-dashed">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-2 font-medium">Add question</p>

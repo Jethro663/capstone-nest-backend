@@ -4,7 +4,7 @@ export const createAssessmentSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   classId: z.string().min(1, 'Class is required'),
-  type: z.enum(['quiz', 'exam', 'assignment']).optional(),
+  type: z.enum(['quiz', 'exam', 'assignment', 'file_upload']).optional(),
   dueDate: z.string().optional(),
   passingScore: z.coerce.number().positive().optional(),
   maxAttempts: z.coerce.number().int().min(1).optional(),

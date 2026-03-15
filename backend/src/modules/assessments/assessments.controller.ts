@@ -39,13 +39,34 @@ import {
 } from './DTO/assessment.dto';
 
 const IMAGE_UPLOAD_DEST = './uploads/question-images';
+const FILE_UPLOAD_DEST = './uploads/assessment-files';
 const ALLOWED_IMAGE_MIMES = [
   'image/jpeg',
   'image/png',
   'image/gif',
   'image/webp',
 ];
+const ALLOWED_ASSESSMENT_FILE_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'application/rtf',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/octet-stream',
+];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 @ApiTags('Assessments')
 @ApiBearerAuth('token')
@@ -262,7 +283,7 @@ export class AssessmentsController {
    * Serve a question image (public — used by img tags)
    */
   @Public()
-  @Get('questions/images/:filename')
+  @Get('questions/images-private/:filename')
   async serveQuestionImage(
     @Param('filename') filename: string,
     @Res() res: Response,
@@ -274,6 +295,162 @@ export class AssessmentsController {
       throw new BadRequestException('Image not found');
     }
     return res.sendFile(path.resolve(filePath));
+  }
+
+  /**
+   * Upload optional teacher reference attachment for a file-upload assessment
+   */
+  @Post(':assessmentId/teacher-attachment')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(FILE_UPLOAD_DEST, { recursive: true });
+          cb(null, FILE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_FILE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_ASSESSMENT_FILE_MIMES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Unsupported file format'), false);
+        }
+      },
+    }),
+  )
+  async uploadTeacherAttachment(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Attachment file is required');
+    }
+
+    const uploaded = await this.assessmentsService.uploadTeacherAttachment(
+      assessmentId,
+      user,
+      file,
+    );
+
+    return {
+      success: true,
+      message: 'Teacher attachment uploaded successfully',
+      data: uploaded,
+    };
+  }
+
+  /**
+   * Upload student submission file for file-upload assessments
+   */
+  @Post(':assessmentId/submission-file')
+  @Roles(RoleName.Student)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(FILE_UPLOAD_DEST, { recursive: true });
+          cb(null, FILE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_FILE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_ASSESSMENT_FILE_MIMES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Unsupported file format'), false);
+        }
+      },
+    }),
+  )
+  async uploadSubmissionFile(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Submission file is required');
+    }
+
+    const uploaded = await this.assessmentsService.uploadStudentSubmissionFile(
+      assessmentId,
+      user,
+      file,
+    );
+
+    return {
+      success: true,
+      message: 'Submission file uploaded successfully',
+      data: uploaded,
+    };
+  }
+
+  /**
+   * Download the teacher reference attachment for an assessment
+   */
+  @Get(':assessmentId/teacher-attachment/download')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async downloadTeacherAttachment(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const file = await this.assessmentsService.getTeacherAttachmentDownload(
+      assessmentId,
+      user,
+    );
+
+    const absolutePath = path.resolve(file.filePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new BadRequestException('File not found on disk');
+    }
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.originalName}"`,
+    );
+    return res.sendFile(absolutePath);
+  }
+
+  /**
+   * Download a student's submitted file for a specific attempt
+   */
+  @Get('attempts/:attemptId/submission-file/download')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async downloadAttemptSubmissionFile(
+    @Param('attemptId') attemptId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const file = await this.assessmentsService.getAttemptSubmissionDownload(
+      attemptId,
+      user,
+    );
+
+    const absolutePath = path.resolve(file.filePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new BadRequestException('File not found on disk');
+    }
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.originalName}"`,
+    );
+    return res.sendFile(absolutePath);
   }
 
   /**

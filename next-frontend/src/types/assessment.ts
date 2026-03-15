@@ -15,6 +15,18 @@ export interface Assessment {
   dueDate?: string;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
+  fileUploadInstructions?: string;
+  teacherAttachmentFileId?: string | null;
+  teacherAttachmentFile?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  } | null;
+  allowedUploadMimeTypes?: string[];
+  allowedUploadExtensions?: string[];
+  maxUploadSizeBytes?: number;
   isPublished: boolean;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
@@ -53,6 +65,11 @@ export interface CreateAssessmentDto {
   dueDate?: string;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
+  fileUploadInstructions?: string;
+  teacherAttachmentFileId?: string;
+  allowedUploadMimeTypes?: string[];
+  allowedUploadExtensions?: string[];
+  maxUploadSizeBytes?: number;
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number;
@@ -69,6 +86,11 @@ export interface UpdateAssessmentDto {
   dueDate?: string | null;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
+  fileUploadInstructions?: string;
+  teacherAttachmentFileId?: string | null;
+  allowedUploadMimeTypes?: string[];
+  allowedUploadExtensions?: string[];
+  maxUploadSizeBytes?: number;
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
@@ -118,6 +140,10 @@ export interface AssessmentAttempt {
   isReturned?: boolean;
   returnedAt?: string;
   teacherFeedback?: string;
+  submittedFileId?: string | null;
+  submittedFileOriginalName?: string | null;
+  submittedFileMimeType?: string | null;
+  submittedFileSizeBytes?: number | null;
 }
 
 export interface SubmitAssessmentDto {
@@ -147,6 +173,13 @@ export interface AttemptResult {
     pointsEarned?: number;
     question?: AssessmentQuestion;
   }[];
+  submittedFile?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  } | null;
 }
 
 export interface StartAttemptResult {

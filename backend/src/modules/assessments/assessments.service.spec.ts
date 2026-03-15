@@ -7,6 +7,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentsService } from './assessments.service';
 import { DatabaseService } from '../../database/database.service';
+import { FeedbackService } from './feedback.service';
 
 // ─── Fixture IDs ─────────────────────────────────────────────────────────────
 
@@ -61,6 +62,16 @@ const MOCK_PUBLISHED_ASSESSMENT = {
   isPublished: true,
   totalPoints: 5,
   questions: [MOCK_QUESTION],
+};
+
+const MOCK_FILE_UPLOAD_ASSESSMENT = {
+  ...MOCK_PUBLISHED_ASSESSMENT,
+  type: 'file_upload',
+  questions: [],
+  fileUploadInstructions: 'Upload your output file',
+  allowedUploadMimeTypes: ['application/pdf'],
+  allowedUploadExtensions: ['pdf'],
+  maxUploadSizeBytes: 104857600,
 };
 
 const MOCK_ATTEMPT = {
@@ -143,6 +154,12 @@ describe('AssessmentsService', () => {
         AssessmentsService,
         { provide: DatabaseService, useValue: { db } },
         { provide: EventEmitter2, useValue: eventEmitter },
+        {
+          provide: FeedbackService,
+          useValue: {
+            applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
+          },
+        },
       ],
     }).compile();
 
@@ -165,7 +182,7 @@ describe('AssessmentsService', () => {
         classId: CLASS_ID,
       } as any);
 
-      expect(result).toEqual(created);
+      expect(result).toEqual({ ...created, teacherAttachmentFile: null });
       expect(db.insert).toHaveBeenCalled();
     });
 
@@ -266,6 +283,18 @@ describe('AssessmentsService', () => {
       } as any);
 
       expect(result.isPublished).toBe(true);
+    });
+
+    it('should reject publish for file upload assessment without instructions', async () => {
+      const invalidFileUpload = {
+        ...MOCK_FILE_UPLOAD_ASSESSMENT,
+        fileUploadInstructions: null,
+      };
+      db.query.assessments.findFirst.mockResolvedValue(invalidFileUpload);
+
+      await expect(
+        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -469,6 +498,54 @@ describe('AssessmentsService', () => {
           timeSpentSeconds: 10,
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should block file-upload submission when no file is uploaded', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_FILE_UPLOAD_ASSESSMENT,
+      );
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        submittedFileId: null,
+      });
+
+      await expect(
+        service.submitAssessment(STUDENT_ID, {
+          assessmentId: ASSESSMENT_ID,
+          responses: [],
+          timeSpentSeconds: 30,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should submit file-upload assessment when a file is already attached to attempt', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_FILE_UPLOAD_ASSESSMENT,
+      );
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        submittedFileId: '00000000-0000-0000-0000-000000000099',
+      });
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          submittedFileId: '00000000-0000-0000-0000-000000000099',
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [],
+        timeSpentSeconds: 45,
+      });
+
+      expect(result.score).toBeNull();
+      expect(result.passed).toBeNull();
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+        'assessment.submitted',
+        expect.anything(),
+      );
     });
   });
 
