@@ -1,5 +1,5 @@
 import { api } from '@/lib/api-client';
-import type { StudentProfile } from '@/types/profile';
+import type { AcademicSummary, StudentProfile } from '@/types/profile';
 
 export type GradeLevel = '7' | '8' | '9' | '10';
 
@@ -26,6 +26,14 @@ export interface UpdateProfileResponse {
 export const profileService = {
   async getMine(): Promise<{ success: boolean; data: StudentProfile | null }> {
     const { data } = await api.get('/profiles/me');
+    return data;
+  },
+
+  async getAcademicSummary(): Promise<{
+    success: boolean;
+    data: AcademicSummary;
+  }> {
+    const { data } = await api.get('/profiles/me/academic-summary');
     return data;
   },
 

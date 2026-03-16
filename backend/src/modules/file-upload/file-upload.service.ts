@@ -7,6 +7,7 @@ import {
 import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { classes, libraryFolders, uploadedFiles } from '../../drizzle/schema';
+import { AuditService } from '../audit/audit.service';
 import {
   FileQueryDto,
   FileScopeDto,
@@ -40,7 +41,10 @@ interface RequestUser {
 
 @Injectable()
 export class FileUploadService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -206,6 +210,21 @@ export class FileUploadService {
         filePath: dto.filePath,
       })
       .returning();
+
+    await this.auditService.log({
+      actorId: actingUser.id,
+      action: 'file.uploaded',
+      targetType: 'uploaded_file',
+      targetId: record.id,
+      metadata: {
+        classId: record.classId,
+        folderId: record.folderId,
+        scope: record.scope,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+      },
+    });
+
     return record;
   }
 
@@ -325,12 +344,24 @@ export class FileUploadService {
   }
 
   async softDelete(id: string, user: RequestUser) {
-    await this.ensureFileWritable(id, user);
+    const record = await this.ensureFileWritable(id, user);
 
     await this.db
       .update(uploadedFiles)
       .set({ deletedAt: new Date() })
       .where(eq(uploadedFiles.id, id));
+
+    await this.auditService.log({
+      actorId: user.id,
+      action: 'file.deleted',
+      targetType: 'uploaded_file',
+      targetId: id,
+      metadata: {
+        classId: record.classId,
+        folderId: record.folderId,
+        scope: record.scope,
+      },
+    });
   }
 
   async getFilePath(id: string, user: RequestUser): Promise<string> {

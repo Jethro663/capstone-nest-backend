@@ -125,9 +125,14 @@ export class AssessmentsController {
   @Post()
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
-  async createAssessment(@Body() createAssessmentDto: CreateAssessmentDto) {
-    const assessment =
-      await this.assessmentsService.createAssessment(createAssessmentDto);
+  async createAssessment(
+    @Body() createAssessmentDto: CreateAssessmentDto,
+    @CurrentUser() user: any,
+  ) {
+    const assessment = await this.assessmentsService.createAssessment(
+      createAssessmentDto,
+      user.userId,
+    );
 
     return {
       success: true,
@@ -145,10 +150,12 @@ export class AssessmentsController {
   async updateAssessment(
     @Param('id') id: string,
     @Body() updateAssessmentDto: UpdateAssessmentDto,
+    @CurrentUser() user: any,
   ) {
     const assessment = await this.assessmentsService.updateAssessment(
       id,
       updateAssessmentDto,
+      user.userId,
     );
 
     return {
@@ -165,8 +172,11 @@ export class AssessmentsController {
   @Delete(':id')
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
-  async deleteAssessment(@Param('id') id: string) {
-    const result = await this.assessmentsService.deleteAssessment(id);
+  async deleteAssessment(@Param('id') id: string, @CurrentUser() user: any) {
+    const result = await this.assessmentsService.deleteAssessment(
+      id,
+      user.userId,
+    );
 
     return {
       success: result.success,

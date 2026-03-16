@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { updateProfile } from '@/lib/auth-service';
 import { profileService } from '@/services/profile-service';
-import type { StudentProfile } from '@/types/profile';
+import type { AcademicSummary, StudentProfile } from '@/types/profile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -56,6 +56,7 @@ export default function StudentProfilePage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { user, setUser, refreshAuth } = useAuth();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [academicSummary, setAcademicSummary] = useState<AcademicSummary | null>(null);
   const [form, setForm] = useState<StudentProfileForm>(() => toFormState(user));
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
@@ -73,10 +74,12 @@ export default function StudentProfilePage() {
         setLoadingProfile(true);
         const response = await profileService.getMine();
         const normalizedProfile = normalizeStudentProfile(response.data);
+        const academicSummaryResponse = await profileService.getAcademicSummary();
 
         if (!mounted) return;
 
         setProfile(normalizedProfile);
+        setAcademicSummary(academicSummaryResponse.data);
         const mergedUser = mergeUserWithStudentProfile(user, normalizedProfile);
         setForm(toFormState(mergedUser));
         setIsLocked(isStudentProfileLocked(mergedUser));
@@ -224,8 +227,10 @@ export default function StudentProfilePage() {
 
       await refreshAuth();
       const latestProfile = await profileService.getMine();
+      const latestAcademicSummary = await profileService.getAcademicSummary();
       const normalizedProfile = normalizeStudentProfile(latestProfile.data);
       setProfile(normalizedProfile);
+      setAcademicSummary(latestAcademicSummary.data);
       const finalUser = mergeUserWithStudentProfile(mergedUser, normalizedProfile);
       setForm(toFormState(finalUser));
       setIsLocked(isStudentProfileLocked(finalUser));
@@ -293,158 +298,167 @@ export default function StudentProfilePage() {
           </div>
         }
         left={
-          <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
-            <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
-              <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
-                <ShieldCheck className="h-4 w-4 text-[var(--student-accent)]" /> Student Information
-              </h3>
-            </div>
-            <CardContent className="p-6 space-y-6">
-              <div
-                className={`rounded-2xl border px-4 py-3 text-sm ${
-                  isLocked ? 'student-note-success' : 'student-note-danger'
-                }`}
-              >
-                {isLocked
-                  ? 'Your required student details are complete and locked.'
-                  : 'Finish all required details before saving. Once confirmed, these details cannot be changed.'}
+          <div className="space-y-6">
+            <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
+              <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
+                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
+                  <ShieldCheck className="h-4 w-4 text-[var(--student-accent)]" /> Student Information
+                </h3>
               </div>
+              <CardContent className="p-6 space-y-6">
+                <div
+                  className={`rounded-2xl border px-4 py-3 text-sm ${
+                    isLocked ? 'student-note-success' : 'student-note-danger'
+                  }`}
+                >
+                  {isLocked
+                    ? 'Your required student details are complete and locked.'
+                    : 'Finish all required details before saving. Once confirmed, these details cannot be changed.'}
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">First Name</Label>
-                  <Input className="student-input rounded-xl" value={user?.firstName ?? ''} disabled />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Middle Name</Label>
-                  <Input className="student-input rounded-xl" value={user?.middleName ?? ''} disabled />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Last Name</Label>
-                  <Input className="student-input rounded-xl" value={user?.lastName ?? ''} disabled />
-                </div>
-              </div>
-
-              <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Student Identity</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">LRN</Label>
-                    <Input className="student-input rounded-xl" value={form.lrn} disabled />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Date of Birth</Label>
-                    <Input
-                      type="date"
-                      className="student-input rounded-xl"
-                      value={form.dateOfBirth}
-                      onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
-                      disabled={isLocked}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Gender</Label>
-                    <select
-                      value={form.gender}
-                      onChange={(e) => handleFieldChange('gender', e.target.value)}
-                      disabled={isLocked}
-                      className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="">Select</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
-                    <Input
-                      className="student-input rounded-xl"
-                      value={form.phone}
-                      onChange={(e) => handleFieldChange('phone', e.target.value)}
-                      disabled={isLocked}
-                      placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Home Address</Label>
-                  <Input
-                    className="student-input rounded-xl"
-                    value={form.address}
-                    onChange={(e) => handleFieldChange('address', e.target.value)}
-                    disabled={isLocked}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Grade Level</Label>
-                  <Input className="student-input rounded-xl" value={form.gradeLevel} disabled />
-                </div>
-              </div>
-
-              <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Emergency Contact</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Guardian Name</Label>
-                    <Input
-                      className="student-input rounded-xl"
-                      value={form.familyName}
-                      onChange={(e) => handleFieldChange('familyName', e.target.value)}
-                      disabled={isLocked}
-                    />
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">First Name</Label>
+                    <Input className="student-input rounded-xl" value={user?.firstName ?? ''} disabled />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Relationship</Label>
-                    <select
-                      value={form.familyRelationship}
-                      onChange={(e) => handleFieldChange('familyRelationship', e.target.value)}
-                      disabled={isLocked}
-                      className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="">Select</option>
-                      <option value="Father">Father</option>
-                      <option value="Mother">Mother</option>
-                      <option value="Guardian">Guardian</option>
-                      <option value="Sibling">Sibling</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Middle Name</Label>
+                    <Input className="student-input rounded-xl" value={user?.middleName ?? ''} disabled />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
-                    <Input
-                      className="student-input rounded-xl"
-                      value={form.familyContact}
-                      onChange={(e) => handleFieldChange('familyContact', e.target.value)}
-                      disabled={isLocked}
-                      placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-                    />
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Last Name</Label>
+                    <Input className="student-input rounded-xl" value={user?.lastName ?? ''} disabled />
                   </div>
                 </div>
-              </div>
 
-              <Button
-                onClick={handleSaveAttempt}
-                disabled={isLocked || saving}
-                className="student-button-solid w-full rounded-xl font-black transition-all gap-2 md:w-auto"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Saving...
-                  </>
-                ) : isLocked ? (
-                  'Profile Locked'
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" /> Save Profile Changes
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+                <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Student Identity</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">LRN</Label>
+                      <Input className="student-input rounded-xl" value={form.lrn} disabled />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Date of Birth</Label>
+                      <Input
+                        type="date"
+                        className="student-input rounded-xl"
+                        value={form.dateOfBirth}
+                        onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
+                        disabled={isLocked}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Gender</Label>
+                      <select
+                        value={form.gender}
+                        onChange={(e) => handleFieldChange('gender', e.target.value)}
+                        disabled={isLocked}
+                        className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Select</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
+                      <Input
+                        className="student-input rounded-xl"
+                        value={form.phone}
+                        onChange={(e) => handleFieldChange('phone', e.target.value)}
+                        disabled={isLocked}
+                        placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Home Address</Label>
+                    <Input
+                      className="student-input rounded-xl"
+                      value={form.address}
+                      onChange={(e) => handleFieldChange('address', e.target.value)}
+                      disabled={isLocked}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Grade Level</Label>
+                    <Input className="student-input rounded-xl" value={form.gradeLevel} disabled />
+                  </div>
+                </div>
+
+                <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Emergency Contact</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Guardian Name</Label>
+                      <Input
+                        className="student-input rounded-xl"
+                        value={form.familyName}
+                        onChange={(e) => handleFieldChange('familyName', e.target.value)}
+                        disabled={isLocked}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Relationship</Label>
+                      <select
+                        value={form.familyRelationship}
+                        onChange={(e) => handleFieldChange('familyRelationship', e.target.value)}
+                        disabled={isLocked}
+                        className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="">Select</option>
+                        <option value="Father">Father</option>
+                        <option value="Mother">Mother</option>
+                        <option value="Guardian">Guardian</option>
+                        <option value="Sibling">Sibling</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
+                      <Input
+                        className="student-input rounded-xl"
+                        value={form.familyContact}
+                        onChange={(e) => handleFieldChange('familyContact', e.target.value)}
+                        disabled={isLocked}
+                        placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSaveAttempt}
+                  disabled={isLocked || saving}
+                  className="student-button-solid w-full rounded-xl font-black transition-all gap-2 md:w-auto"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                    </>
+                  ) : isLocked ? (
+                    'Profile Locked'
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" /> Save Profile Changes
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <AcademicSummaryPanel academicSummary={academicSummary} />
+          </div>
         }
-        right={<ProfileSecurityCard />}
+        right={
+          <div className="space-y-6">
+            <ProfileSecurityCard />
+            <AcademicHighlights academicSummary={academicSummary} />
+          </div>
+        }
       />
 
       <Dialog open={missingDialogOpen} onOpenChange={setMissingDialogOpen}>
@@ -485,5 +499,162 @@ export default function StudentProfilePage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function AcademicHighlights({ academicSummary }: { academicSummary: AcademicSummary | null }) {
+  const atRiskCount =
+    academicSummary?.performanceSummary.filter((item) => item.isAtRisk).length ?? 0;
+  const activeInterventions =
+    academicSummary?.interventionSummary.filter((item) => item.status === 'active')
+      .length ?? 0;
+
+  return (
+    <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
+      <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
+        <h3 className="text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
+          Academic Snapshot
+        </h3>
+      </div>
+      <CardContent className="space-y-4 p-6">
+        <div className="grid grid-cols-2 gap-3">
+          <SnapshotStat label="Current Classes" value={academicSummary?.currentEnrollments.length ?? 0} />
+          <SnapshotStat label="At-Risk Subjects" value={atRiskCount} />
+          <SnapshotStat label="Active Interventions" value={activeInterventions} />
+          <SnapshotStat label="LXP Tracks" value={academicSummary?.lxpProgress.length ?? 0} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SnapshotStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--student-text-muted)]">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-black text-[var(--student-text-strong)]">{value}</p>
+    </div>
+  );
+}
+
+function AcademicSummaryPanel({ academicSummary }: { academicSummary: AcademicSummary | null }) {
+  return (
+    <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
+      <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
+        <h3 className="text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
+          Academic Profile
+        </h3>
+      </div>
+      <CardContent className="space-y-6 p-6">
+        <section className="space-y-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
+            Enrollment History
+          </h4>
+          {(academicSummary?.enrollmentHistory.length ?? 0) === 0 ? (
+            <p className="text-sm text-[var(--student-text-muted)]">No enrollment history available.</p>
+          ) : (
+            <div className="space-y-2">
+              {academicSummary?.enrollmentHistory.slice(0, 5).map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
+                >
+                  <p className="font-semibold text-[var(--student-text-strong)]">
+                    {row.class?.subjectName} ({row.class?.subjectCode})
+                  </p>
+                  <p className="text-[var(--student-text-muted)]">
+                    {row.section?.name ?? row.class?.section?.name ?? 'No section'} | {row.status}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
+            Performance Snapshot
+          </h4>
+          {(academicSummary?.performanceSummary.length ?? 0) === 0 ? (
+            <p className="text-sm text-[var(--student-text-muted)]">No performance analytics available yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {academicSummary?.performanceSummary.map((row) => (
+                <div
+                  key={`${row.classId}-${row.lastComputedAt}`}
+                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-[var(--student-text-strong)]">
+                      {row.class?.subjectCode ?? 'Class'}
+                    </p>
+                    <span className={row.isAtRisk ? 'text-red-500 font-bold' : 'text-emerald-600 font-bold'}>
+                      {row.isAtRisk ? 'At Risk' : 'On Track'}
+                    </span>
+                  </div>
+                  <p className="text-[var(--student-text-muted)]">
+                    Blended Score: {row.blendedScore ?? '--'} | Threshold: {row.thresholdApplied}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
+            Intervention & LXP
+          </h4>
+          {(academicSummary?.interventionSummary.length ?? 0) === 0 ? (
+            <p className="text-sm text-[var(--student-text-muted)]">
+              No intervention records available.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {academicSummary?.interventionSummary.map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
+                >
+                  <p className="font-semibold text-[var(--student-text-strong)]">
+                    {row.class?.subjectName} ({row.class?.subjectCode})
+                  </p>
+                  <p className="text-[var(--student-text-muted)]">
+                    {row.status} | {row.completedAssignments}/{row.assignmentCount} tasks completed
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
+            Assessment History
+          </h4>
+          {(academicSummary?.assessmentHistory.length ?? 0) === 0 ? (
+            <p className="text-sm text-[var(--student-text-muted)]">No assessment attempts recorded yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {academicSummary?.assessmentHistory.slice(0, 5).map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
+                >
+                  <p className="font-semibold text-[var(--student-text-strong)]">
+                    {row.assessment?.title}
+                  </p>
+                  <p className="text-[var(--student-text-muted)]">
+                    Attempt #{row.attemptNumber} | Score: {row.score ?? '--'} | {row.assessment?.class?.subjectCode ?? '--'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </CardContent>
+    </Card>
   );
 }

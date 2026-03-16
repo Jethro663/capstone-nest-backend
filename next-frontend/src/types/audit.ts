@@ -23,3 +23,17 @@ export interface AuditLogsResponse {
   total: number;
   totalPages: number;
 }
+
+export interface UsageSummary {
+  activeTeachers: number;
+  activeStudents: number;
+  assessmentSubmissions: number;
+  lessonCompletions: number;
+  interventionOpens: number;
+  interventionClosures: number;
+  topActions: {
+    action: string;
+    total: number;
+  }[];
+  generatedAt: string;
+}

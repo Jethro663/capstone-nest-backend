@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { dashboardService, type AdminDashboardStats } from '@/services/dashboard-service';
+import { adminService } from '@/services/admin-service';
+import { analyticsService } from '@/services/analytics-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +11,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const [overviewAction, setOverviewAction] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState<{
+    activeTeachers: number;
+    activeStudents: number;
+    assessmentSubmissions: number;
+    lessonCompletions: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -18,8 +27,20 @@ export default function AdminDashboardPage() {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const res = await dashboardService.getAdminStats();
+      const [statsRes, overviewRes, usageRes] = await Promise.all([
+        dashboardService.getAdminStats(),
+        analyticsService.getAdminOverview(),
+        adminService.getUsageSummary(),
+      ]);
+      const res = statsRes;
       setStats(res.data);
+      setOverviewAction(overviewRes.data.action);
+      setUsageSummary({
+        activeTeachers: usageRes.data.activeTeachers,
+        activeStudents: usageRes.data.activeStudents,
+        assessmentSubmissions: usageRes.data.assessmentSubmissions,
+        lessonCompletions: usageRes.data.lessonCompletions,
+      });
       setLastUpdated(new Date());
     } catch {
       setError('Failed to load dashboard stats');
@@ -122,6 +143,20 @@ export default function AdminDashboardPage() {
             <p className="text-xs text-muted-foreground mt-1">All sections</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Assessment Submissions</p>
+            <p className="text-3xl font-bold text-sky-600">{usageSummary?.assessmentSubmissions ?? 0}</p>
+            <p className="text-xs text-muted-foreground mt-1">Recent usage signal</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Lesson Completions</p>
+            <p className="text-3xl font-bold text-emerald-600">{usageSummary?.lessonCompletions ?? 0}</p>
+            <p className="text-xs text-muted-foreground mt-1">Recent usage signal</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* System Health */}
@@ -149,6 +184,17 @@ export default function AdminDashboardPage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Operational Focus</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            {overviewAction ?? 'No admin overview analytics available yet.'}
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -54,6 +54,16 @@ export class ProfilesController {
     };
   }
 
+  @Get('me/academic-summary')
+  @Roles(RoleName.Student)
+  async getMyAcademicSummary(@CurrentUser() user: any) {
+    const data = await this.profilesService.getAcademicSummary(user.userId);
+    return {
+      success: true,
+      data,
+    };
+  }
+
   @Public()
   @Get('images/:filename')
   async serveProfileImage(

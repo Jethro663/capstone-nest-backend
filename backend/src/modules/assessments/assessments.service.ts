@@ -32,6 +32,7 @@ import {
   BulkReturnGradesDto,
 } from './DTO/assessment.dto';
 import { FeedbackService } from './feedback.service';
+import { AuditService } from '../audit/audit.service';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -78,6 +79,7 @@ export class AssessmentsService {
     private databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
     private readonly feedbackService: FeedbackService,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
@@ -480,7 +482,7 @@ export class AssessmentsService {
   /**
    * Create a new assessment
    */
-  async createAssessment(createAssessmentDto: CreateAssessmentDto) {
+  async createAssessment(createAssessmentDto: CreateAssessmentDto, actorId: string) {
     // Verify class exists
     const classRecord = await this.db.query.classes.findFirst({
       where: eq(classes.id, createAssessmentDto.classId),
@@ -549,7 +551,21 @@ export class AssessmentsService {
       })
       .returning();
 
-    return this.getAssessmentById(newAssessment.id);
+    const assessment = await this.getAssessmentById(newAssessment.id);
+
+    await this.auditService.log({
+      actorId,
+      action: 'assessment.created',
+      targetType: 'assessment',
+      targetId: assessment.id,
+      metadata: {
+        classId: assessment.classId,
+        type: assessment.type,
+        isPublished: assessment.isPublished,
+      },
+    });
+
+    return assessment;
   }
 
   /**
@@ -677,6 +693,7 @@ export class AssessmentsService {
   async updateAssessment(
     assessmentId: string,
     updateAssessmentDto: UpdateAssessmentDto,
+    actorId: string,
   ) {
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
@@ -796,16 +813,41 @@ export class AssessmentsService {
       .where(eq(assessments.id, assessmentId))
       .returning();
 
-    return this.getAssessmentById(updated.id);
+    const assessment = await this.getAssessmentById(updated.id);
+
+    await this.auditService.log({
+      actorId,
+      action: 'assessment.updated',
+      targetType: 'assessment',
+      targetId: assessment.id,
+      metadata: {
+        classId: assessment.classId,
+        type: assessment.type,
+        isPublished: assessment.isPublished,
+      },
+    });
+
+    return assessment;
   }
 
   /**
    * Delete an assessment
    */
-  async deleteAssessment(assessmentId: string) {
-    await this.getAssessmentById(assessmentId);
+  async deleteAssessment(assessmentId: string, actorId: string) {
+    const assessment = await this.getAssessmentById(assessmentId);
 
     await this.db.delete(assessments).where(eq(assessments.id, assessmentId));
+
+    await this.auditService.log({
+      actorId,
+      action: 'assessment.deleted',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: assessment.classId,
+        title: assessment.title,
+      },
+    });
 
     return { success: true, message: 'Assessment deleted successfully' };
   }

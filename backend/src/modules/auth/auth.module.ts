@@ -10,12 +10,14 @@ import { UsersModule } from '../users/users.module';
 import { OtpModule } from '../otp/otp.module';
 import { DatabaseModule } from '../../database/database.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
     UsersModule,
     OtpModule,
     DatabaseModule,
+    AuditModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

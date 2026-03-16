@@ -13,6 +13,7 @@ import {
   lessonCompletions,
   users,
 } from '../../drizzle/schema';
+import { AuditService } from '../audit/audit.service';
 import {
   CreateLessonDto,
   UpdateLessonDto,
@@ -24,7 +25,10 @@ import { RoleName } from '../auth/decorators/roles.decorator';
 
 @Injectable()
 export class LessonsService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -168,7 +172,20 @@ export class LessonsService {
       return newLesson.id;
     });
 
-    return this.getLessonById(newLessonId);
+    const lesson = await this.getLessonById(newLessonId);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.created',
+      targetType: 'lesson',
+      targetId: lesson.id,
+      metadata: {
+        classId: lesson.classId,
+        isDraft: lesson.isDraft,
+      },
+    });
+
+    return lesson;
   }
 
   /**
@@ -188,7 +205,20 @@ export class LessonsService {
       .set({ ...updateLessonDto, updatedAt: new Date() })
       .where(eq(lessons.id, lessonId));
 
-    return this.getLessonById(lessonId);
+    const updated = await this.getLessonById(lessonId);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.updated',
+      targetType: 'lesson',
+      targetId: lessonId,
+      metadata: {
+        classId: updated.classId,
+        isDraft: updated.isDraft,
+      },
+    });
+
+    return updated;
   }
 
   /**
@@ -199,6 +229,17 @@ export class LessonsService {
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
 
     await this.db.delete(lessons).where(eq(lessons.id, lessonId));
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.deleted',
+      targetType: 'lesson',
+      targetId: lessonId,
+      metadata: {
+        classId: lesson.classId,
+        title: lesson.title,
+      },
+    });
 
     return lesson;
   }
@@ -215,7 +256,20 @@ export class LessonsService {
       .set({ isDraft: false, updatedAt: new Date() })
       .where(eq(lessons.id, lessonId));
 
-    return this.getLessonById(lessonId);
+    const published = await this.getLessonById(lessonId);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.published',
+      targetType: 'lesson',
+      targetId: lessonId,
+      metadata: {
+        classId: published.classId,
+        title: published.title,
+      },
+    });
+
+    return published;
   }
 
   // ---------------------------------------------------------------------------

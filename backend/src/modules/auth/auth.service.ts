@@ -14,6 +14,7 @@ import { UpdateProfileDto } from './DTO/update-profile.dto';
 import { ResetPasswordDto } from './DTO/reset-password.dto';
 import { OtpService } from '../otp/otp.service';
 import { TokenService } from './token.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +26,7 @@ export class AuthService {
     private configService: ConfigService,
     private otpService: OtpService,
     private tokenService: TokenService,
+    private auditService: AuditService,
   ) {}
 
   async login(loginDto: LoginDto, ip?: string, userAgent?: string) {
@@ -236,6 +238,15 @@ export class AuthService {
   // Update profile fields for a user
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const updated = await this.usersService.updateUser(userId, dto);
+    await this.auditService.log({
+      actorId: userId,
+      action: 'profile.updated',
+      targetType: 'student_profile',
+      targetId: userId,
+      metadata: {
+        fields: Object.keys(dto),
+      },
+    });
     return this.sanitizeUser(updated);
   }
 }

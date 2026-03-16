@@ -1,14 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { eq, count, and } from 'drizzle-orm';
+import { eq, count, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { users, userRoles, roles, classes } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
+import { ReportsService } from '../reports/reports.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly reportsService: ReportsService,
   ) {}
 
   private get db() {
@@ -16,15 +18,12 @@ export class AdminService {
   }
 
   async getDashboardStats() {
-    // Get total active users count
     const totalUsersResult = await this.db
       .select({ count: count() })
       .from(users)
       .where(eq(users.status, 'ACTIVE'));
+    const totalUsers = Number(totalUsersResult[0]?.count ?? 0);
 
-    const totalUsers = totalUsersResult[0]?.count || 0;
-
-    // Get teachers count (users with teacher role)
     const teachersResult = await this.db
       .select({ count: count(users.id) })
       .from(users)
@@ -32,9 +31,8 @@ export class AdminService {
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(and(eq(users.status, 'ACTIVE'), eq(roles.name, 'teacher')));
 
-    const teachers = teachersResult[0]?.count || 0;
+    const totalTeachers = Number(teachersResult[0]?.count ?? 0);
 
-    // Get students count (users with student role)
     const studentsResult = await this.db
       .select({ count: count(users.id) })
       .from(users)
@@ -42,30 +40,42 @@ export class AdminService {
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(and(eq(users.status, 'ACTIVE'), eq(roles.name, 'student')));
 
-    const students = studentsResult[0]?.count || 0;
+    const totalStudents = Number(studentsResult[0]?.count ?? 0);
 
-    // Get active subjects count (distinct subject names in classes)
-    const activeSubjectsResult = await this.db
-      .selectDistinct({ subjectName: classes.subjectName })
-      .from(classes)
-      .where(eq(classes.isActive, true));
+    const adminsResult = await this.db
+      .select({ count: count(users.id) })
+      .from(users)
+      .innerJoin(userRoles, eq(users.id, userRoles.userId))
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      .where(and(eq(users.status, 'ACTIVE'), eq(roles.name, 'admin')));
 
-    const activeSubjects = activeSubjectsResult.length || 0;
+    const totalAdmins = Number(adminsResult[0]?.count ?? 0);
 
-    // Get active classes count
     const activeClassesResult = await this.db
       .select({ count: count() })
       .from(classes)
       .where(eq(classes.isActive, true));
-
-    const activeClasses = activeClassesResult[0]?.count || 0;
+    const totalClassesResult = await this.db.select({ count: count() }).from(classes);
+    const totalSectionsResult = await this.db
+      .select({ count: count() })
+      .from(sql`sections`);
+    const totalEnrollmentsResult = await this.db
+      .select({ count: count() })
+      .from(sql`enrollments`);
+    const activeClasses = Number(activeClassesResult[0]?.count ?? 0);
+    const totalClasses = Number(totalClassesResult[0]?.count ?? 0);
+    const totalSections = Number(totalSectionsResult[0]?.count ?? 0);
+    const totalEnrollments = Number(totalEnrollmentsResult[0]?.count ?? 0);
 
     return {
       totalUsers,
-      teachers,
-      students,
-      activeSubjects,
+      totalStudents,
+      totalTeachers,
+      totalAdmins,
+      totalClasses,
+      totalSections,
       activeClasses,
+      totalEnrollments,
       fetchedAt: new Date().toISOString(),
     };
   }
@@ -75,7 +85,42 @@ export class AdminService {
     limit?: number;
     action?: string;
     actorId?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
   }) {
     return this.auditService.list(filters);
+  }
+
+  async getUsageSummary(filters: {
+    dateFrom?: Date;
+    dateTo?: Date;
+  }) {
+    const [activeTeachers] = await this.db
+      .select({ total: count(users.id) })
+      .from(users)
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(and(eq(roles.name, 'teacher'), eq(users.status, 'ACTIVE')));
+
+    const [activeStudents] = await this.db
+      .select({ total: count(users.id) })
+      .from(users)
+      .innerJoin(userRoles, eq(userRoles.userId, users.id))
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .where(and(eq(roles.name, 'student'), eq(users.status, 'ACTIVE')));
+
+    const systemUsage = await this.reportsService.getSystemUsage(filters);
+
+    return {
+      activeTeachers: Number(activeTeachers?.total ?? 0),
+      activeStudents: Number(activeStudents?.total ?? 0),
+      assessmentSubmissions: systemUsage.data.assessmentSubmissions,
+      lessonCompletions: systemUsage.data.lessonCompletions,
+      interventionOpens: systemUsage.data.interventionOpens,
+      interventionClosures: systemUsage.data.interventionClosures,
+      topActions: systemUsage.data.topActions,
+      generatedAt: systemUsage.generatedAt,
+      csv: systemUsage.csv,
+    };
   }
 }

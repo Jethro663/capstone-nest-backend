@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { dashboardService } from '@/services/dashboard-service';
+import { analyticsService } from '@/services/analytics-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
+import { useAuth } from '@/providers/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,9 +16,14 @@ import type { ClassItem } from '@/types/class';
 import type { Assessment } from '@/types/assessment';
 
 export default function TeacherDashboardPage() {
+  const { user } = useAuth();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [workloadAction, setWorkloadAction] = useState<string | null>(null);
+  const [improvementAction, setImprovementAction] = useState<string | null>(null);
+  const [pendingClassRecords, setPendingClassRecords] = useState(0);
+  const [activeInterventions, setActiveInterventions] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -29,16 +36,33 @@ export default function TeacherDashboardPage() {
         dashboardService.getTeacherClasses(),
         dashboardService.getTeacherAssessments(),
       ]);
-      setLessons(lessonsRes.data || []);
-      setClasses(classesRes.data || []);
-      setAssessments(assessmentsRes.data || []);
+      const nextLessons = lessonsRes.data || [];
+      const nextClasses = classesRes.data || [];
+      const nextAssessments = assessmentsRes.data || [];
+      setLessons(nextLessons);
+      setClasses(nextClasses);
+      setAssessments(nextAssessments);
+      if (user?.id) {
+        const workloadRes = await analyticsService.getTeacherWorkload(user.id);
+        setWorkloadAction(workloadRes.data.action);
+        setPendingClassRecords(workloadRes.data.pendingClassRecords);
+        setActiveInterventions(workloadRes.data.activeInterventions);
+      }
+      if (nextClasses[0]?.id) {
+        const interventionRes = await analyticsService.getInterventionOutcomes(
+          nextClasses[0].id,
+        );
+        setImprovementAction(interventionRes.data.summary.action);
+      } else {
+        setImprovementAction(null);
+      }
       setLastUpdated(new Date());
     } catch {
       // fail silently
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchData();
@@ -94,7 +118,7 @@ export default function TeacherDashboardPage() {
       )}
 
       {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-5">
         <Link href="/dashboard/teacher/lessons">
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <CardContent className="p-4">
@@ -117,6 +141,41 @@ export default function TeacherDashboardPage() {
             </CardContent>
           </Card>
         </Link>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Active Interventions</p>
+            <p className="text-3xl font-bold text-rose-600">{activeInterventions}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Pending Class Records</p>
+            <p className="text-3xl font-bold text-amber-600">{pendingClassRecords}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Workload Insight</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {workloadAction ?? 'No workload analytics available yet.'}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Intervention Outcome</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {improvementAction ?? 'Select a class with intervention history to view outcomes.'}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Recent Lessons */}

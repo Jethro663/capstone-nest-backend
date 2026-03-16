@@ -18,6 +18,7 @@ import { announcements, classes } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
 import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
+import { AuditService } from '../audit/audit.service';
 
 const ALLOWED_TAGS: SanitizeOptions = {
   allowedTags: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li', 'a'],
@@ -32,6 +33,7 @@ export class AnnouncementsService {
   constructor(
     private readonly databaseService: DatabaseService,
     @InjectQueue('announcements') private readonly announcementsQueue: Queue,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
@@ -111,6 +113,18 @@ export class AnnouncementsService {
         },
       );
     }
+
+    await this.auditService.log({
+      actorId,
+      action: 'announcement.created',
+      targetType: 'announcement',
+      targetId: announcement.id,
+      metadata: {
+        classId,
+        isPinned: announcement.isPinned,
+        publishedAt: announcement.publishedAt,
+      },
+    });
 
     return announcement;
   }
@@ -250,6 +264,17 @@ export class AnnouncementsService {
       .update(announcements)
       .set({ archivedAt: new Date(), updatedAt: new Date() })
       .where(eq(announcements.id, announcementId));
+
+    await this.auditService.log({
+      actorId,
+      action: 'announcement.deleted',
+      targetType: 'announcement',
+      targetId: announcementId,
+      metadata: {
+        classId,
+        title: existing.title,
+      },
+    });
 
     return { message: 'Announcement archived successfully.' };
   }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, gte, lte } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { auditLogs } from '../../drizzle/schema';
 
@@ -39,6 +39,8 @@ export class AuditService {
     limit?: number;
     action?: string;
     actorId?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
   }) {
     const page = params.page ?? 1;
     const limit = Math.min(params.limit ?? 20, 100);
@@ -47,6 +49,8 @@ export class AuditService {
     const whereClause = and(
       params.action ? eq(auditLogs.action, params.action) : undefined,
       params.actorId ? eq(auditLogs.actorId, params.actorId) : undefined,
+      params.dateFrom ? gte(auditLogs.createdAt, params.dateFrom) : undefined,
+      params.dateTo ? lte(auditLogs.createdAt, params.dateTo) : undefined,
     );
 
     const [totalRow] = await this.db
