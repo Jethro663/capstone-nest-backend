@@ -61,6 +61,9 @@ const MOCK_PUBLISHED_ASSESSMENT = {
   ...MOCK_ASSESSMENT,
   isPublished: true,
   totalPoints: 5,
+  strictMode: false,
+  timedQuestionsEnabled: false,
+  questionTimeLimitSeconds: null,
   questions: [MOCK_QUESTION],
 };
 
@@ -84,6 +87,13 @@ const MOCK_ATTEMPT = {
   passed: null,
   timeSpentSeconds: null,
   startedAt: new Date(),
+  expiresAt: null,
+  lastQuestionIndex: 0,
+  currentQuestionStartedAt: null,
+  currentQuestionDeadlineAt: null,
+  violationCount: 0,
+  questionOrder: null,
+  draftResponses: [],
   submittedAt: null,
   isReturned: false,
   returnedAt: null,
@@ -380,6 +390,144 @@ describe('AssessmentsService', () => {
 
       const result = await service.startAttempt(STUDENT_ID, ASSESSMENT_ID);
       expect(result.timeLimitMinutes).toBe(30);
+    });
+
+    it('should initialize question timer state for timed-question assessments', async () => {
+      const timedQuestionAssessment = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        timedQuestionsEnabled: true,
+        questionTimeLimitSeconds: 30,
+      };
+      db.query.assessments.findFirst.mockResolvedValue(timedQuestionAssessment);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(null);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+      mockInsert(db, [
+        {
+          ...MOCK_ATTEMPT,
+          currentQuestionStartedAt: new Date('2026-03-16T00:00:00.000Z'),
+          currentQuestionDeadlineAt: new Date('2026-03-16T00:00:30.000Z'),
+          violationCount: 0,
+        },
+      ]);
+
+      const result = await service.startAttempt(STUDENT_ID, ASSESSMENT_ID);
+      const insertedValues = db.insert.mock.results[0].value.values.mock.calls[0][0];
+
+      expect(insertedValues.currentQuestionStartedAt).toBeInstanceOf(Date);
+      expect(insertedValues.currentQuestionDeadlineAt).toBeInstanceOf(Date);
+      expect(insertedValues.violationCount).toBe(0);
+      expect(result.attempt.currentQuestionDeadlineAt).toBeTruthy();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // getOngoingAttempt / updateAttemptProgress — timed state + anti-cheat
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('getOngoingAttempt', () => {
+    it('should advance to the next question when the current question timer has expired', async () => {
+      const timedQuestionAssessment = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        timedQuestionsEnabled: true,
+        questionTimeLimitSeconds: 30,
+        questions: [
+          MOCK_QUESTION,
+          { ...MOCK_QUESTION, id: '00000000-0000-0000-0000-000000000021', order: 2 },
+        ],
+      };
+      const expiredAttempt = {
+        ...MOCK_ATTEMPT,
+        lastQuestionIndex: 0,
+        currentQuestionStartedAt: new Date(Date.now() - 31_000),
+        currentQuestionDeadlineAt: new Date(Date.now() - 1_000),
+      };
+      const advancedAttempt = {
+        ...expiredAttempt,
+        lastQuestionIndex: 1,
+        currentQuestionStartedAt: new Date(),
+        currentQuestionDeadlineAt: new Date(Date.now() + 30_000),
+      };
+
+      db.query.assessments.findFirst.mockResolvedValue(timedQuestionAssessment);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(expiredAttempt);
+      mockUpdateReturning(db, [advancedAttempt]);
+
+      const result = await service.getOngoingAttempt(STUDENT_ID, ASSESSMENT_ID);
+
+      expect(result?.attempt.lastQuestionIndex).toBe(1);
+      expect(result?.attempt.currentQuestionDeadlineAt).toBeTruthy();
+    });
+  });
+
+  describe('updateAttemptProgress', () => {
+    it('should reset the server deadline when a student moves to the next question', async () => {
+      const timedQuestionAssessment = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        timedQuestionsEnabled: true,
+        questionTimeLimitSeconds: 30,
+        questions: [
+          MOCK_QUESTION,
+          { ...MOCK_QUESTION, id: '00000000-0000-0000-0000-000000000021', order: 2 },
+        ],
+      };
+      const activeAttempt = {
+        ...MOCK_ATTEMPT,
+        lastQuestionIndex: 0,
+        currentQuestionStartedAt: new Date(),
+        currentQuestionDeadlineAt: new Date(Date.now() + 30_000),
+      };
+      const updatedAttempt = {
+        ...activeAttempt,
+        lastQuestionIndex: 1,
+        currentQuestionStartedAt: new Date(Date.now() + 500),
+        currentQuestionDeadlineAt: new Date(Date.now() + 30_500),
+      };
+
+      db.query.assessments.findFirst.mockResolvedValue(timedQuestionAssessment);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(activeAttempt);
+      mockUpdateReturning(db, [updatedAttempt]);
+
+      const result = await service.updateAttemptProgress(STUDENT_ID, ATTEMPT_ID, {
+        currentQuestionIndex: 1,
+      });
+
+      const setArgs = db.update.mock.results[0].value.set.mock.calls[0][0];
+      expect(setArgs.currentQuestionStartedAt).toBeInstanceOf(Date);
+      expect(setArgs.currentQuestionDeadlineAt).toBeInstanceOf(Date);
+      expect(result.lastQuestionIndex).toBe(1);
+    });
+
+    it('should auto-submit on the third anti-cheat violation', async () => {
+      const fileUploadAssessment = {
+        ...MOCK_FILE_UPLOAD_ASSESSMENT,
+        id: ASSESSMENT_ID,
+      };
+      const violatingAttempt = {
+        ...MOCK_ATTEMPT,
+        violationCount: 2,
+      };
+      const updatedForViolation = {
+        ...violatingAttempt,
+        violationCount: 3,
+      };
+      const submittedAttempt = {
+        ...updatedForViolation,
+        isSubmitted: true,
+        submittedAt: new Date(),
+      };
+
+      db.query.assessments.findFirst.mockResolvedValue(fileUploadAssessment);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(violatingAttempt);
+      mockUpdateReturning(db, [updatedForViolation]);
+      mockUpdateReturning(db, [submittedAttempt]);
+
+      await expect(
+        service.updateAttemptProgress(STUDENT_ID, ATTEMPT_ID, {
+          registerViolation: true,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(db.update).toHaveBeenCalledTimes(2);
     });
   });
 

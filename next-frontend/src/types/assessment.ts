@@ -146,6 +146,9 @@ export interface AssessmentAttempt {
   startedAt?: string;
   expiresAt?: string | null;
   lastQuestionIndex?: number;
+  currentQuestionStartedAt?: string | null;
+  currentQuestionDeadlineAt?: string | null;
+  violationCount?: number;
   questionOrder?: string[] | null;
   draftResponses?: {
     questionId: string;
@@ -232,10 +235,12 @@ export interface UpdateAttemptProgressDto {
   currentQuestionIndex?: number;
   responses?: {
     questionId: string;
+    questionIndex?: number;
     studentAnswer?: string;
     selectedOptionId?: string;
     selectedOptionIds?: string[];
   }[];
+  registerViolation?: boolean;
 }
 
 export interface AssessmentStats {

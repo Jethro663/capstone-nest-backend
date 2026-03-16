@@ -225,6 +225,155 @@ export class AssessmentsService {
     return new Date(Date.now() + timeLimitMinutes * 60 * 1000);
   }
 
+  private isTimedQuestionMode(assessment: {
+    timedQuestionsEnabled?: boolean | null;
+    questionTimeLimitSeconds?: number | null;
+    type?: AssessmentType | string | null;
+    questions?: Array<{ id: string }> | null;
+  }) {
+    return Boolean(
+      assessment.timedQuestionsEnabled &&
+        assessment.type !== AssessmentType.FILE_UPLOAD &&
+        (assessment.questionTimeLimitSeconds ?? 0) > 0 &&
+        Array.isArray(assessment.questions) &&
+        assessment.questions.length > 0,
+    );
+  }
+
+  private clampQuestionIndex(questionCount: number, questionIndex?: number | null) {
+    if (questionCount <= 0) return 0;
+    const safeQuestionIndex = questionIndex ?? 0;
+    return Math.min(Math.max(safeQuestionIndex, 0), questionCount - 1);
+  }
+
+  private computeQuestionDeadline(
+    startedAt: Date | string | null,
+    questionTimeLimitSeconds?: number | null,
+  ) {
+    if (!startedAt || !questionTimeLimitSeconds || questionTimeLimitSeconds < 1) {
+      return null;
+    }
+
+    return new Date(
+      new Date(startedAt).getTime() + questionTimeLimitSeconds * 1000,
+    );
+  }
+
+  private getFreshQuestionTiming(questionTimeLimitSeconds?: number | null) {
+    const currentQuestionStartedAt = new Date();
+    return {
+      currentQuestionStartedAt,
+      currentQuestionDeadlineAt: this.computeQuestionDeadline(
+        currentQuestionStartedAt,
+        questionTimeLimitSeconds,
+      ),
+    };
+  }
+
+  private async syncTimedAttemptState(
+    assessment: {
+      id: string;
+      type?: AssessmentType | string | null;
+      totalPoints?: number | null;
+      passingScore?: number | null;
+      classRecordCategory?: string | null;
+      quarter?: string | null;
+      timedQuestionsEnabled?: boolean | null;
+      questionTimeLimitSeconds?: number | null;
+      questions?: Array<{ id: string }> | null;
+    },
+    attempt: typeof assessmentAttempts.$inferSelect,
+  ) {
+    if (!this.isTimedQuestionMode(assessment)) {
+      return attempt;
+    }
+
+    const questionCount = assessment.questions?.length ?? 0;
+    if (questionCount < 1) {
+      return attempt;
+    }
+
+    const questionTimeLimitSeconds = assessment.questionTimeLimitSeconds ?? null;
+    const questionDurationMs = (questionTimeLimitSeconds ?? 0) * 1000;
+    const normalizedQuestionIndex = this.clampQuestionIndex(
+      questionCount,
+      attempt.lastQuestionIndex,
+    );
+    const currentQuestionStartedAt = attempt.currentQuestionStartedAt
+      ? new Date(attempt.currentQuestionStartedAt)
+      : new Date(attempt.startedAt);
+    const currentQuestionDeadlineAt = attempt.currentQuestionDeadlineAt
+      ? new Date(attempt.currentQuestionDeadlineAt)
+      : this.computeQuestionDeadline(
+          currentQuestionStartedAt,
+          questionTimeLimitSeconds,
+        );
+
+    if (!currentQuestionDeadlineAt || questionDurationMs < 1) {
+      return attempt;
+    }
+
+    const now = Date.now();
+
+    if (currentQuestionDeadlineAt.getTime() > now) {
+      if (
+        !attempt.currentQuestionStartedAt ||
+        !attempt.currentQuestionDeadlineAt ||
+        normalizedQuestionIndex !== attempt.lastQuestionIndex
+      ) {
+        const [updatedAttempt] = await this.db
+          .update(assessmentAttempts)
+          .set({
+            lastQuestionIndex: normalizedQuestionIndex,
+            currentQuestionStartedAt,
+            currentQuestionDeadlineAt,
+            updatedAt: new Date(),
+          })
+          .where(eq(assessmentAttempts.id, attempt.id))
+          .returning();
+
+        return updatedAttempt;
+      }
+
+      return {
+        ...attempt,
+        lastQuestionIndex: normalizedQuestionIndex,
+        currentQuestionStartedAt,
+        currentQuestionDeadlineAt,
+      };
+    }
+
+    const elapsedQuestionCount =
+      Math.floor((now - currentQuestionDeadlineAt.getTime()) / questionDurationMs) + 1;
+    const nextQuestionIndex = normalizedQuestionIndex + elapsedQuestionCount;
+
+    if (nextQuestionIndex >= questionCount) {
+      await this.autoSubmitExpiredAttempt(assessment, attempt);
+      return null;
+    }
+
+    const nextQuestionStartedAt = new Date(
+      currentQuestionDeadlineAt.getTime() +
+        Math.max(0, elapsedQuestionCount - 1) * questionDurationMs,
+    );
+    const nextQuestionDeadlineAt = new Date(
+      currentQuestionDeadlineAt.getTime() + elapsedQuestionCount * questionDurationMs,
+    );
+
+    const [updatedAttempt] = await this.db
+      .update(assessmentAttempts)
+      .set({
+        lastQuestionIndex: nextQuestionIndex,
+        currentQuestionStartedAt: nextQuestionStartedAt,
+        currentQuestionDeadlineAt: nextQuestionDeadlineAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessmentAttempts.id, attempt.id))
+      .returning();
+
+    return updatedAttempt;
+  }
+
   /**
    * Get all assessments for a class
    */
@@ -854,25 +1003,41 @@ export class AssessmentsService {
           await this.autoSubmitExpiredAttempt(assessment, existingUnsubmitted);
           // Fall through to create a new attempt
         } else {
+          const syncedAttempt = await this.syncTimedAttemptState(
+            assessment,
+            existingUnsubmitted,
+          );
+
+          if (!syncedAttempt) {
+            // Timed question state exhausted the attempt and auto-submitted it.
+          } else {
           return {
-            attempt: existingUnsubmitted,
+            attempt: syncedAttempt,
             timeLimitMinutes: assessment.timeLimitMinutes,
-            expiresAt: existingUnsubmitted.expiresAt,
+            expiresAt: syncedAttempt.expiresAt,
             strictMode: assessment.strictMode ?? false,
             timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
             questionTimeLimitSeconds:
               assessment.questionTimeLimitSeconds ?? null,
           };
+          }
         }
       } else {
+        const syncedAttempt = await this.syncTimedAttemptState(
+          assessment,
+          existingUnsubmitted,
+        );
+
+        if (syncedAttempt) {
         return {
-          attempt: existingUnsubmitted,
+          attempt: syncedAttempt,
           timeLimitMinutes: null,
-          expiresAt: existingUnsubmitted.expiresAt,
+          expiresAt: syncedAttempt.expiresAt,
           strictMode: assessment.strictMode ?? false,
           timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
           questionTimeLimitSeconds: assessment.questionTimeLimitSeconds ?? null,
         };
+        }
       }
     }
 
@@ -916,6 +1081,12 @@ export class AssessmentsService {
         : null;
 
     const expiresAt = this.computeExpiry(assessment.timeLimitMinutes);
+    const freshQuestionTiming = this.isTimedQuestionMode(assessment)
+      ? this.getFreshQuestionTiming(assessment.questionTimeLimitSeconds)
+      : {
+          currentQuestionStartedAt: null,
+          currentQuestionDeadlineAt: null,
+        };
 
     const [newAttempt] = await this.db
       .insert(assessmentAttempts)
@@ -926,6 +1097,9 @@ export class AssessmentsService {
         isSubmitted: false,
         expiresAt,
         lastQuestionIndex: 0,
+        currentQuestionStartedAt: freshQuestionTiming.currentQuestionStartedAt,
+        currentQuestionDeadlineAt: freshQuestionTiming.currentQuestionDeadlineAt,
+        violationCount: 0,
         questionOrder,
         draftResponses: [],
       })
@@ -944,7 +1118,7 @@ export class AssessmentsService {
   async getOngoingAttempt(studentId: string, assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
 
-    const attempt = await this.db.query.assessmentAttempts.findFirst({
+    let attempt = await this.db.query.assessmentAttempts.findFirst({
       where: and(
         eq(assessmentAttempts.studentId, studentId),
         eq(assessmentAttempts.assessmentId, assessmentId),
@@ -961,6 +1135,13 @@ export class AssessmentsService {
       await this.autoSubmitExpiredAttempt(assessment, attempt);
       return null;
     }
+
+    const syncedAttempt = await this.syncTimedAttemptState(assessment, attempt);
+    if (!syncedAttempt) {
+      return null;
+    }
+
+    attempt = syncedAttempt;
 
     return {
       attempt,
@@ -1011,7 +1192,7 @@ export class AssessmentsService {
     attemptId: string,
     updateAttemptProgressDto: UpdateAttemptProgressDto,
   ) {
-    const attempt = await this.db.query.assessmentAttempts.findFirst({
+    let attempt = await this.db.query.assessmentAttempts.findFirst({
       where: and(
         eq(assessmentAttempts.id, attemptId),
         eq(assessmentAttempts.studentId, studentId),
@@ -1033,13 +1214,45 @@ export class AssessmentsService {
       throw new BadRequestException('Attempt already expired and was auto-submitted');
     }
 
+    const syncedAttempt = await this.syncTimedAttemptState(assessment, attempt);
+    if (!syncedAttempt) {
+      throw new BadRequestException(
+        'Question timer expired and the attempt was auto-submitted',
+      );
+    }
+
+    attempt = syncedAttempt;
+
+    if (updateAttemptProgressDto.registerViolation) {
+      const nextViolationCount = (attempt.violationCount ?? 0) + 1;
+      const [updatedForViolation] = await this.db
+        .update(assessmentAttempts)
+        .set({
+          violationCount: nextViolationCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(assessmentAttempts.id, attempt.id))
+        .returning();
+
+      if (nextViolationCount >= 3) {
+        await this.autoSubmitExpiredAttempt(assessment, updatedForViolation);
+        throw new ForbiddenException(
+          'Attempt auto-submitted after repeated anti-cheat violations',
+        );
+      }
+
+      attempt = updatedForViolation;
+    }
+
+    const questionCount = assessment.questions?.length ?? 0;
+
     if (
-      (assessment.strictMode ?? false) &&
+      ((assessment.strictMode ?? false) || this.isTimedQuestionMode(assessment)) &&
       typeof updateAttemptProgressDto.currentQuestionIndex === 'number' &&
       updateAttemptProgressDto.currentQuestionIndex < attempt.lastQuestionIndex
     ) {
       throw new BadRequestException(
-        'Strict mode does not allow moving to a previous question',
+        'This attempt does not allow moving to a previous question',
       );
     }
 
@@ -1048,10 +1261,25 @@ export class AssessmentsService {
     };
 
     if (typeof updateAttemptProgressDto.currentQuestionIndex === 'number') {
-      progressUpdates.lastQuestionIndex = Math.max(
-        0,
+      const nextQuestionIndex = this.clampQuestionIndex(
+        questionCount,
         updateAttemptProgressDto.currentQuestionIndex,
       );
+
+      progressUpdates.lastQuestionIndex = nextQuestionIndex;
+
+      if (
+        this.isTimedQuestionMode(assessment) &&
+        nextQuestionIndex > attempt.lastQuestionIndex
+      ) {
+        const freshQuestionTiming = this.getFreshQuestionTiming(
+          assessment.questionTimeLimitSeconds,
+        );
+        progressUpdates.currentQuestionStartedAt =
+          freshQuestionTiming.currentQuestionStartedAt;
+        progressUpdates.currentQuestionDeadlineAt =
+          freshQuestionTiming.currentQuestionDeadlineAt;
+      }
     }
 
     if (updateAttemptProgressDto.responses !== undefined) {

@@ -439,9 +439,8 @@ function AttemptDetailPanel({
 
 function ResponseCard({ response: r, index }: { response: AttemptResponse; index: number }) {
   const question = r.question;
-  const hasQuestion = Boolean(question);
 
-  if (!hasQuestion) {
+  if (!question) {
     return (
       <Card className="border-l-4 border-l-gray-300">
         <CardContent className="p-4 space-y-2">

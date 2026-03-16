@@ -356,6 +356,13 @@ export class ResponseAnswerDto {
   selectedOptionIds?: string[]; // For multiple select
 }
 
+export class ProgressResponseAnswerDto extends ResponseAnswerDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  questionIndex?: number;
+}
+
 export class SubmitAssessmentDto {
   @IsUUID()
   assessmentId: string;
@@ -381,8 +388,12 @@ export class UpdateAttemptProgressDto {
 
   @IsOptional()
   @IsArray()
-  @Type(() => ResponseAnswerDto)
-  responses?: ResponseAnswerDto[];
+  @Type(() => ProgressResponseAnswerDto)
+  responses?: ProgressResponseAnswerDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  registerViolation?: boolean;
 }
 
 // ==========================================

@@ -31,7 +31,13 @@ export interface LxpCheckpoint {
   completedAt: string | null;
   xpAwarded: number;
   lesson?: { id: string; title: string; description?: string | null; order?: number } | null;
-  assessment?: { id: string; title: string; description?: string | null; passingScore?: number | null } | null;
+  assessment?: {
+    id: string;
+    title: string;
+    type?: 'quiz' | 'exam' | 'assignment' | 'file_upload';
+    description?: string | null;
+    passingScore?: number | null;
+  } | null;
 }
 
 export interface PlaylistResponse {
