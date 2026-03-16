@@ -48,6 +48,7 @@ export default function TeacherInterventionsPage() {
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
+  const thresholdLabel = queue?.threshold ?? report?.threshold ?? null;
 
   const fetchClassList = useCallback(async () => {
     if (!user?.id) return;
@@ -125,7 +126,9 @@ export default function TeacherInterventionsPage() {
         <div>
           <h1 className="text-2xl font-bold">Intervention Management</h1>
           <p className="text-sm text-muted-foreground">
-            Threshold is fixed at 74% (LXP intervention trigger).
+            {thresholdLabel !== null
+              ? `Current intervention threshold: ${thresholdLabel}%`
+              : 'Current intervention threshold will appear after class data loads.'}
           </p>
         </div>
         <select

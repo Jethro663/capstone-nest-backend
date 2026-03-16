@@ -21,6 +21,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { parsePositiveIntQuery } from '../../common/utils/parse-positive-int-query.util';
 
 @ApiTags('Classes')
 @ApiBearerAuth('token')
@@ -56,8 +57,8 @@ export class ClassesController {
     if (schoolYear) filters.schoolYear = schoolYear;
     if (isActive !== undefined) filters.isActive = isActive === 'true';
     if (search) filters.search = search;
-    if (page) filters.page = parseInt(page, 10);
-    if (limit) filters.limit = parseInt(limit, 10);
+    filters.page = parsePositiveIntQuery(page, 'page');
+    filters.limit = parsePositiveIntQuery(limit, 'limit');
 
     const classes = await this.classesService.findAll(filters);
 
@@ -306,8 +307,8 @@ export class ClassesController {
         gradeLevel,
         sectionId,
         search,
-        page: page ? parseInt(page, 10) : undefined,
-        limit: limit ? parseInt(limit, 10) : undefined,
+        page: parsePositiveIntQuery(page, 'page'),
+        limit: parsePositiveIntQuery(limit, 'limit'),
       },
     );
 
@@ -349,10 +350,12 @@ export class ClassesController {
   async enrollStudent(
     @Param('classId') classId: string,
     @Body() dto: EnrollStudentDto,
+    @CurrentUser() user: any,
   ) {
     const enrollment = await this.classesService.enrollStudent(
       classId,
       dto.studentId,
+      user?.userId,
     );
 
     return {
@@ -372,8 +375,9 @@ export class ClassesController {
   async removeStudent(
     @Param('classId') classId: string,
     @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
   ) {
-    await this.classesService.removeStudent(classId, studentId);
+    await this.classesService.removeStudent(classId, studentId, user?.userId);
 
     return {
       success: true,

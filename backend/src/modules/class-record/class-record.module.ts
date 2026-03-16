@@ -6,9 +6,10 @@ import { ClassRecordService } from './class-record.service';
 import { ClassRecordComputationService } from './class-record-computation.service';
 import { ClassRecordSyncService } from './class-record-sync.service';
 import { AdviserSectionGuard } from './guards/adviser-section.guard';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [DatabaseModule, EventEmitterModule],
+  imports: [DatabaseModule, EventEmitterModule, AuditModule],
   controllers: [ClassRecordController],
   providers: [
     ClassRecordService,

@@ -114,3 +114,33 @@ export interface LxpClassReport {
     } | null;
   }>;
 }
+
+export type SystemEvaluationTargetModule =
+  | 'lms'
+  | 'lxp'
+  | 'ai_mentor'
+  | 'intervention'
+  | 'overall';
+
+export interface SystemEvaluationRow {
+  id: string;
+  submittedBy: string;
+  targetModule: SystemEvaluationTargetModule;
+  usabilityScore: number | string;
+  functionalityScore: number | string;
+  performanceScore: number | string;
+  satisfactionScore: number | string;
+  feedback: string | null;
+  createdAt: string;
+  submitter?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+}
+
+export interface SystemEvaluationListResponse {
+  count: number;
+  rows: SystemEvaluationRow[];
+}

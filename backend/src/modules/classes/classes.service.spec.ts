@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ClassesService } from './classes.service';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -109,14 +110,17 @@ describe('ClassesService', () => {
   };
 
   const mockDatabaseService = { db: mockDb };
+  const mockAuditService = { log: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockAuditService.log.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ClassesService,
         { provide: DatabaseService, useValue: mockDatabaseService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -734,7 +738,7 @@ describe('ClassesService', () => {
         makeEnrollment(),
       );
 
-      await service.enrollStudent(CLASS_ID, STUDENT_ID);
+      await service.enrollStudent(CLASS_ID, STUDENT_ID, TEACHER_ID);
 
       expect(txMock.update).toHaveBeenCalledTimes(1);
       expect(txMock.insert).not.toHaveBeenCalled();
@@ -760,7 +764,7 @@ describe('ClassesService', () => {
         makeEnrollment(),
       );
 
-      await service.enrollStudent(CLASS_ID, STUDENT_ID);
+      await service.enrollStudent(CLASS_ID, STUDENT_ID, TEACHER_ID);
 
       expect(txMock.insert).toHaveBeenCalledTimes(1);
       expect(txMock.update).not.toHaveBeenCalled();
@@ -771,7 +775,7 @@ describe('ClassesService', () => {
       mockDb.query.users.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.enrollStudent(CLASS_ID, 'nonexistent-student'),
+        service.enrollStudent(CLASS_ID, 'nonexistent-student', TEACHER_ID),
       ).rejects.toThrow(BadRequestException);
 
       expect(mockDb.transaction).not.toHaveBeenCalled();
@@ -792,9 +796,9 @@ describe('ClassesService', () => {
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
 
-      await expect(service.enrollStudent(CLASS_ID, STUDENT_ID)).rejects.toThrow(
-        ConflictException,
-      );
+      await expect(
+        service.enrollStudent(CLASS_ID, STUDENT_ID, TEACHER_ID),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('throws BadRequestException when the student is not in the section', async () => {
@@ -812,9 +816,9 @@ describe('ClassesService', () => {
 
       mockDb.transaction.mockImplementation((cb: Function) => cb(txMock));
 
-      await expect(service.enrollStudent(CLASS_ID, STUDENT_ID)).rejects.toThrow(
-        BadRequestException,
-      );
+      await expect(
+        service.enrollStudent(CLASS_ID, STUDENT_ID, TEACHER_ID),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -832,7 +836,7 @@ describe('ClassesService', () => {
       const updateChain = makeUpdateChain();
       mockDb.update.mockReturnValue(updateChain);
 
-      await service.removeStudent(CLASS_ID, STUDENT_ID);
+      await service.removeStudent(CLASS_ID, STUDENT_ID, TEACHER_ID);
 
       expect(mockDb.update).toHaveBeenCalledTimes(1);
       expect(mockDb.delete).not.toHaveBeenCalled();
@@ -850,7 +854,7 @@ describe('ClassesService', () => {
       const deleteChain = makeDeleteChain();
       mockDb.delete.mockReturnValue(deleteChain);
 
-      await service.removeStudent(CLASS_ID, STUDENT_ID);
+      await service.removeStudent(CLASS_ID, STUDENT_ID, TEACHER_ID);
 
       expect(mockDb.delete).toHaveBeenCalledTimes(1);
       expect(mockDb.update).not.toHaveBeenCalled();
@@ -860,9 +864,9 @@ describe('ClassesService', () => {
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.query.enrollments.findFirst.mockResolvedValue(null);
 
-      await expect(service.removeStudent(CLASS_ID, STUDENT_ID)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.removeStudent(CLASS_ID, STUDENT_ID, TEACHER_ID),
+      ).rejects.toThrow(NotFoundException);
 
       expect(mockDb.update).not.toHaveBeenCalled();
       expect(mockDb.delete).not.toHaveBeenCalled();

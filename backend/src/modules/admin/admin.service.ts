@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { eq, count, and, sql } from 'drizzle-orm';
+import { eq, count, and } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { users, userRoles, roles, classes } from '../../drizzle/schema';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -64,5 +68,14 @@ export class AdminService {
       activeClasses,
       fetchedAt: new Date().toISOString(),
     };
+  }
+
+  async getAuditLogs(filters: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    actorId?: string;
+  }) {
+    return this.auditService.list(filters);
   }
 }

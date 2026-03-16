@@ -75,6 +75,7 @@ export default function TeacherPerformancePage() {
     () => classes.find((item) => item.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
+  const threshold = summary?.threshold ?? atRisk?.threshold ?? null;
 
   const fetchClassList = useCallback(async () => {
     if (!user?.id) return;
@@ -159,7 +160,9 @@ export default function TeacherPerformancePage() {
         <div>
           <h1 className="text-2xl font-bold">Performance Tracking</h1>
           <p className="text-sm text-muted-foreground">
-            At-risk threshold is fixed at 74%.
+            {threshold !== null
+              ? `Current at-risk threshold: ${threshold}%`
+              : 'Select a class to load the active at-risk threshold.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +251,9 @@ export default function TeacherPerformancePage() {
                 <p className="text-2xl font-bold">
                   {toPercent(summary?.averages.blended ?? null)}
                 </p>
-                <p className="text-xs text-muted-foreground">Threshold 74%</p>
+                <p className="text-xs text-muted-foreground">
+                  {threshold !== null ? `Threshold ${threshold}%` : 'Threshold --'}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -335,7 +340,8 @@ export default function TeacherPerformancePage() {
                                 classRecordSampleSize: 0,
                                 hasData: false,
                                 isAtRisk: false,
-                                thresholdApplied: 74,
+                                thresholdApplied:
+                                  entry.thresholdApplied ?? atRisk?.threshold ?? 0,
                                 lastComputedAt: entry.createdAt,
                               })
                             : entry.studentId}

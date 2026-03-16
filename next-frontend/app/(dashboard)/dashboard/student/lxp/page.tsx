@@ -18,7 +18,7 @@ function classLabel(item: EligibleClass): string {
 export default function StudentLxpPage() {
   const [loading, setLoading] = useState(true);
   const [eligibleClasses, setEligibleClasses] = useState<EligibleClass[]>([]);
-  const [threshold, setThreshold] = useState(74);
+  const [threshold, setThreshold] = useState<number | null>(null);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [playlist, setPlaylist] = useState<PlaylistResponse | null>(null);
   const [loadingPlaylist, setLoadingPlaylist] = useState(false);
@@ -35,7 +35,7 @@ export default function StudentLxpPage() {
     try {
       setLoading(true);
       const res = await lxpService.getEligibility();
-      setThreshold(res.data.threshold);
+      setThreshold(res.data.threshold ?? null);
       const rows = res.data.eligibleClasses ?? [];
       setEligibleClasses(rows);
       setSelectedClassId((prev) => prev || rows[0]?.classId || '');
@@ -126,7 +126,8 @@ export default function StudentLxpPage() {
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>You currently have no active intervention classes.</p>
           <p>
-            LXP access is enabled when your blended score is below {threshold}% in a class.
+            LXP access is enabled when your blended score is below{' '}
+            {threshold !== null ? `${threshold}%` : 'the active threshold'} in a class.
           </p>
         </CardContent>
       </Card>
@@ -139,7 +140,9 @@ export default function StudentLxpPage() {
         <div>
           <h1 className="text-2xl font-bold">LXP Intervention</h1>
           <p className="text-sm text-muted-foreground">
-            Threshold: {threshold}% | Complete checkpoints to gain XP and recover faster.
+            {threshold !== null
+              ? `Threshold: ${threshold}% | Complete checkpoints to gain XP and recover faster.`
+              : 'Complete checkpoints to gain XP and recover faster.'}
           </p>
         </div>
         <select

@@ -40,10 +40,14 @@ import {
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { ScheduleSlotDto } from './DTO/schedule-slot.dto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ClassesService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -1015,7 +1019,7 @@ export class ClassesService {
    * All reads and the final write are wrapped in a single database transaction
    * to prevent duplicate enrollments under concurrent requests.
    */
-  async enrollStudent(classId: string, studentId: string) {
+  async enrollStudent(classId: string, studentId: string, actorId: string) {
     // Pre-flight checks outside the transaction (cheap, read-only)
     const classRecord = await this.findById(classId);
 
@@ -1076,7 +1080,24 @@ export class ClassesService {
     });
 
     // Read the fully populated enrollment after the transaction is committed
-    return this.getEnrollmentById(enrollmentId);
+    const enrollment = await this.getEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      throw new NotFoundException(
+        `Enrollment "${enrollmentId}" not found after creation`,
+      );
+    }
+    await this.auditService.log({
+      actorId,
+      action: 'class.enrollment.added',
+      targetType: 'class_enrollment',
+      targetId: enrollment.id,
+      metadata: {
+        classId,
+        studentId,
+      },
+    });
+
+    return enrollment;
   }
 
   /**
@@ -1090,7 +1111,7 @@ export class ClassesService {
    *     an additional class-enrollment row; delete it.
    *   – Otherwise → this IS the (promoted) section row; revert classId to NULL.
    */
-  async removeStudent(classId: string, studentId: string) {
+  async removeStudent(classId: string, studentId: string, actorId: string) {
     const classRecord = await this.findById(classId);
 
     const enrollment = await this.db.query.enrollments.findFirst({
@@ -1125,6 +1146,17 @@ export class ClassesService {
         .set({ classId: null })
         .where(eq(enrollments.id, enrollment.id));
     }
+
+    await this.auditService.log({
+      actorId,
+      action: 'class.enrollment.removed',
+      targetType: 'class_enrollment',
+      targetId: enrollment.id,
+      metadata: {
+        classId,
+        studentId,
+      },
+    });
 
     return { id: enrollment.id };
   }

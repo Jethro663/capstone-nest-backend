@@ -3,6 +3,8 @@ import type {
   EligibilityResponse,
   LxpClassReport,
   PlaylistResponse,
+  SystemEvaluationListResponse,
+  SystemEvaluationTargetModule,
   TeacherInterventionQueueResponse,
 } from '@/types/lxp';
 
@@ -70,7 +72,7 @@ export const lxpService = {
   },
 
   async submitEvaluation(payload: {
-    targetModule: 'lms' | 'lxp' | 'ai_mentor' | 'intervention' | 'overall';
+    targetModule: SystemEvaluationTargetModule;
     usabilityScore: number;
     functionalityScore: number;
     performanceScore: number;
@@ -79,5 +81,14 @@ export const lxpService = {
   }) {
     const { data } = await api.post('/lxp/evaluations', payload);
     return normalizeEnvelope(data);
+  },
+
+  async getEvaluations(
+    targetModule?: SystemEvaluationTargetModule,
+  ): Promise<Envelope<SystemEvaluationListResponse>> {
+    const { data } = await api.get('/lxp/evaluations', {
+      params: targetModule ? { targetModule } : undefined,
+    });
+    return normalizeEnvelope<SystemEvaluationListResponse>(data);
   },
 };

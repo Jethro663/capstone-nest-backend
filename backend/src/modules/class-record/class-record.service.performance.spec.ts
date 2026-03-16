@@ -5,6 +5,7 @@ import { ClassRecordComputationService } from './class-record-computation.servic
 import { ClassRecordSyncService } from './class-record-sync.service';
 import { DatabaseService } from '../../database/database.service';
 import { ClassRecordScoresUpdatedEvent } from '../../common/events';
+import { AuditService } from '../audit/audit.service';
 
 function buildMockDb() {
   return {
@@ -38,6 +39,7 @@ describe('ClassRecordService performance events', () => {
         { provide: ClassRecordComputationService, useValue: {} },
         { provide: ClassRecordSyncService, useValue: {} },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();
 

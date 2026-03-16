@@ -26,6 +26,7 @@ import { ClassRecordScoresUpdatedEvent } from '../../common/events';
 import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
+import { AuditService } from '../audit/audit.service';
 
 /** DepEd default category configuration */
 const DEPED_CATEGORIES = [
@@ -43,6 +44,7 @@ export class ClassRecordService {
     private readonly computationService: ClassRecordComputationService,
     private readonly syncService: ClassRecordSyncService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
@@ -427,6 +429,19 @@ export class ClassRecordService {
       }),
     );
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.score.recorded',
+      targetType: 'class_record_item',
+      targetId: itemId,
+      metadata: {
+        studentId: dto.studentId,
+        classRecordId: item.classRecord.id,
+        classId: item.classRecord.classId,
+        score: dto.score,
+      },
+    });
+
     return score;
   }
 
@@ -493,6 +508,19 @@ export class ClassRecordService {
         triggerSource: 'manual_bulk',
       }),
     );
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.scores.bulk_recorded',
+      targetType: 'class_record_item',
+      targetId: itemId,
+      metadata: {
+        classRecordId: item.classRecord.id,
+        classId: item.classRecord.classId,
+        studentIds: [...new Set(dto.scores.map((entry) => entry.studentId))],
+        saved: results.length,
+      },
+    });
 
     return { saved: results.length, scores: results };
   }
@@ -583,6 +611,16 @@ export class ClassRecordService {
     this.logger.log(
       `Class record "${classRecordId}" finalized. ${result.gradeCount} grades computed.`,
     );
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.finalized',
+      targetType: 'class_record',
+      targetId: classRecordId,
+      metadata: {
+        gradeCount: result.gradeCount,
+      },
+    });
 
     return result;
   }

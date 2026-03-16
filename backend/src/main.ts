@@ -49,7 +49,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new MetricsInterceptor());
 
   // Swagger — only exposed outside production to avoid leaking API shapes
-  if (isProd) {
+  if (!isProd) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Nexora LMS + LXP API')
       .setDescription('LMS + LXP API documentation')

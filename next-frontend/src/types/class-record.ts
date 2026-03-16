@@ -105,3 +105,32 @@ export interface SpreadsheetData {
   categories: SpreadsheetCategory[];
   students: SpreadsheetStudentRow[];
 }
+
+export interface ClassAverageReport {
+  classRecordId: string;
+  average: number;
+  count: number;
+  interventionCount: number;
+}
+
+export interface GradeDistributionReport {
+  classRecordId: string;
+  distribution: Record<string, number>;
+  total: number;
+}
+
+export interface InterventionReportRow {
+  id: string;
+  classRecordId: string;
+  studentId: string;
+  finalPercentage: string;
+  remarks: 'Passed' | 'For Intervention';
+  computedAt: string;
+  student?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    middleName: string | null;
+    email: string | null;
+  } | null;
+}

@@ -123,6 +123,29 @@ describe('SectionsController', () => {
       const [filtersArg] = mockSectionsService.findAll.mock.calls[0];
       expect(filtersArg).not.toHaveProperty('isActive');
     });
+
+    it('throws BadRequestException for invalid page or limit values', async () => {
+      await expect(
+        controller.getAllSections(
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          '0',
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        controller.getAllSections(
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'not-a-number',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   // =========================================================================
@@ -338,7 +361,12 @@ describe('SectionsController', () => {
     it('returns candidate data with count', async () => {
       mockSectionsService.getCandidates.mockResolvedValue(candidateRows);
 
-      const result = await controller.getCandidates(SECTION_ID, ADMIN_USER, '7', 'juan');
+      const result = await controller.getCandidates(
+        SECTION_ID,
+        ADMIN_USER,
+        '7',
+        'juan',
+      );
 
       expect(result).toEqual({ success: true, data: candidateRows, count: 1 });
     });
@@ -382,7 +410,11 @@ describe('SectionsController', () => {
       const serviceResult = { createdCount: 1, created: [{}], skipped: 0 };
       mockSectionsService.addStudentsToSection.mockResolvedValue(serviceResult);
 
-      const result = await controller.addStudentsToSection(SECTION_ID, undefined, dto);
+      const result = await controller.addStudentsToSection(
+        SECTION_ID,
+        undefined,
+        dto,
+      );
 
       expect(result).toEqual({
         success: true,

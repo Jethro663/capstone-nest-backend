@@ -25,6 +25,7 @@ import {
   ResolveInterventionDto,
   SubmitSystemEvaluationDto,
 } from './dto/lxp.dto';
+import { AuditService } from '../audit/audit.service';
 
 const INTERVENTION_THRESHOLD = 74;
 const LESSON_XP = 20;
@@ -40,6 +41,7 @@ export class LxpService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
@@ -82,8 +84,12 @@ export class LxpService {
     }
   }
 
-  private async getOrCreateProgress(studentId: string, classId: string) {
-    const existing = await this.db.query.lxpProgress.findFirst({
+  private async getOrCreateProgress(
+    studentId: string,
+    classId: string,
+    conn: any = this.db,
+  ) {
+    const existing = await conn.query.lxpProgress.findFirst({
       where: and(
         eq(lxpProgress.studentId, studentId),
         eq(lxpProgress.classId, classId),
@@ -92,7 +98,7 @@ export class LxpService {
 
     if (existing) return existing;
 
-    const [created] = await this.db
+    const [created] = await conn
       .insert(lxpProgress)
       .values({ studentId, classId })
       .returning();
@@ -456,74 +462,85 @@ export class LxpService {
       throw new BadRequestException('Intervention case is no longer active');
     }
 
-    if (!assignment.isCompleted) {
-      await this.db
-        .update(interventionAssignments)
+    await this.db.transaction(async (tx) => {
+      if (!assignment.isCompleted) {
+        await tx
+          .update(interventionAssignments)
+          .set({
+            isCompleted: true,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(interventionAssignments.id, assignmentId));
+      }
+
+      const progress = await this.getOrCreateProgress(studentId, classId, tx);
+      const now = new Date();
+      const lastDate = progress.lastActivityAt
+        ? new Date(progress.lastActivityAt)
+        : null;
+      const dayDiff = lastDate
+        ? Math.floor((now.getTime() - lastDate.getTime()) / 86_400_000)
+        : null;
+      const streakDays =
+        dayDiff === null
+          ? 1
+          : dayDiff === 0
+            ? progress.streakDays
+            : dayDiff === 1
+              ? progress.streakDays + 1
+              : 1;
+
+      await tx
+        .update(lxpProgress)
         .set({
-          isCompleted: true,
-          completedAt: new Date(),
-          updatedAt: new Date(),
+          xpTotal: progress.xpTotal + assignment.xpAwarded,
+          streakDays,
+          checkpointsCompleted:
+            progress.checkpointsCompleted + (assignment.isCompleted ? 0 : 1),
+          lastActivityAt: now,
+          updatedAt: now,
         })
-        .where(eq(interventionAssignments.id, assignmentId));
-    }
+        .where(
+          and(
+            eq(lxpProgress.studentId, studentId),
+            eq(lxpProgress.classId, classId),
+          ),
+        );
 
-    const progress = await this.getOrCreateProgress(studentId, classId);
-    const now = new Date();
-    const lastDate = progress.lastActivityAt
-      ? new Date(progress.lastActivityAt)
-      : null;
-    const dayDiff = lastDate
-      ? Math.floor((now.getTime() - lastDate.getTime()) / 86_400_000)
-      : null;
-    const streakDays =
-      dayDiff === null
-        ? 1
-        : dayDiff === 0
-          ? progress.streakDays
-          : dayDiff === 1
-            ? progress.streakDays + 1
-            : 1;
-
-    await this.db
-      .update(lxpProgress)
-      .set({
-        xpTotal: progress.xpTotal + assignment.xpAwarded,
-        streakDays,
-        checkpointsCompleted:
-          progress.checkpointsCompleted + (assignment.isCompleted ? 0 : 1),
-        lastActivityAt: now,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(lxpProgress.studentId, studentId),
-          eq(lxpProgress.classId, classId),
-        ),
-      );
-
-    const allAssignments = await this.db.query.interventionAssignments.findMany(
-      {
+      const allAssignments = await tx.query.interventionAssignments.findMany({
         where: eq(
           interventionAssignments.caseId,
           assignment.interventionCase.id,
         ),
         columns: { id: true, isCompleted: true },
+      });
+      if (
+        allAssignments.length > 0 &&
+        allAssignments.every((row) => row.isCompleted)
+      ) {
+        await tx
+          .update(interventionCases)
+          .set({
+            status: 'completed',
+            closedAt: now,
+            updatedAt: now,
+            note: 'Auto-completed after finishing all LXP checkpoints.',
+          })
+          .where(eq(interventionCases.id, assignment.interventionCase.id));
+      }
+    });
+
+    await this.auditService.log({
+      actorId: studentId,
+      action: 'lxp.checkpoint.completed',
+      targetType: 'intervention_assignment',
+      targetId: assignmentId,
+      metadata: {
+        caseId: assignment.interventionCase.id,
+        classId,
       },
-    );
-    if (
-      allAssignments.length > 0 &&
-      allAssignments.every((row) => row.isCompleted)
-    ) {
-      await this.db
-        .update(interventionCases)
-        .set({
-          status: 'completed',
-          closedAt: now,
-          updatedAt: now,
-          note: 'Auto-completed after finishing all LXP checkpoints.',
-        })
-        .where(eq(interventionCases.id, assignment.interventionCase.id));
-    }
+    });
 
     return this.getStudentPlaylist(studentId, classId);
   }
@@ -549,53 +566,73 @@ export class LxpService {
       orderBy: [desc(interventionCases.openedAt)],
     });
 
-    const queue = await Promise.all(
-      cases.map(async (row) => {
-        const assignments =
-          await this.db.query.interventionAssignments.findMany({
-            where: eq(interventionAssignments.caseId, row.id),
-            columns: { id: true, isCompleted: true },
-          });
+    const caseIds = cases.map((row) => row.id);
+    const studentIds = [...new Set(cases.map((row) => row.studentId))];
 
-        const progress = await this.db.query.lxpProgress.findFirst({
-          where: and(
-            eq(lxpProgress.studentId, row.studentId),
-            eq(lxpProgress.classId, row.classId),
-          ),
-          columns: {
-            xpTotal: true,
-            streakDays: true,
-            checkpointsCompleted: true,
-            lastActivityAt: true,
-          },
-        });
+    const [assignmentRows, progressRows] = await Promise.all([
+      caseIds.length > 0
+        ? this.db.query.interventionAssignments.findMany({
+            where: inArray(interventionAssignments.caseId, caseIds),
+            columns: { id: true, caseId: true, isCompleted: true },
+          })
+        : Promise.resolve([]),
+      studentIds.length > 0
+        ? this.db.query.lxpProgress.findMany({
+            where: and(
+              eq(lxpProgress.classId, classId),
+              inArray(lxpProgress.studentId, studentIds),
+            ),
+            columns: {
+              studentId: true,
+              xpTotal: true,
+              streakDays: true,
+              checkpointsCompleted: true,
+              lastActivityAt: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
-        const totalCheckpoints = assignments.length;
-        const completed = assignments.filter((item) => item.isCompleted).length;
+    const assignmentsByCaseId = new Map<string, typeof assignmentRows>();
+    for (const row of assignmentRows) {
+      const items = assignmentsByCaseId.get(row.caseId) ?? [];
+      items.push(row);
+      assignmentsByCaseId.set(row.caseId, items);
+    }
 
-        return {
-          id: row.id,
-          studentId: row.studentId,
-          student: row.student,
-          openedAt: row.openedAt,
-          triggerScore: this.toNumber(row.triggerScore),
-          thresholdApplied:
-            this.toNumber(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
-          totalCheckpoints,
-          completedCheckpoints: completed,
-          completionPercent:
-            totalCheckpoints > 0
-              ? Math.round((completed / totalCheckpoints) * 100)
-              : 0,
-          progress: progress ?? {
-            xpTotal: 0,
-            streakDays: 0,
-            checkpointsCompleted: 0,
-            lastActivityAt: null,
-          },
-        };
-      }),
+    const progressByStudentId = new Map<string, (typeof progressRows)[number]>(
+      progressRows.map((row) => [row.studentId, row] as const),
     );
+
+    const queue = cases.map((row) => {
+      const assignments = assignmentsByCaseId.get(row.id) ?? [];
+      const progress = progressByStudentId.get(row.studentId);
+
+      const totalCheckpoints = assignments.length;
+      const completed = assignments.filter((item) => item.isCompleted).length;
+
+      return {
+        id: row.id,
+        studentId: row.studentId,
+        student: row.student,
+        openedAt: row.openedAt,
+        triggerScore: this.toNumber(row.triggerScore),
+        thresholdApplied:
+          this.toNumber(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+        totalCheckpoints,
+        completedCheckpoints: completed,
+        completionPercent:
+          totalCheckpoints > 0
+            ? Math.round((completed / totalCheckpoints) * 100)
+            : 0,
+        progress: progress ?? {
+          xpTotal: 0,
+          streakDays: 0,
+          checkpointsCompleted: 0,
+          lastActivityAt: null,
+        },
+      };
+    });
 
     return {
       classId,
@@ -667,42 +704,44 @@ export class LxpService {
       }
     }
 
-    await this.db
-      .delete(interventionAssignments)
-      .where(eq(interventionAssignments.caseId, interventionCase.id));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .delete(interventionAssignments)
+        .where(eq(interventionAssignments.caseId, interventionCase.id));
 
-    const assignmentPayload: (typeof interventionAssignments.$inferInsert)[] =
-      [];
-    let order = 1;
-    lessonIds.forEach((lessonId) => {
-      assignmentPayload.push({
-        caseId: interventionCase.id,
-        assignmentType: 'lesson_review',
-        lessonId,
-        checkpointLabel: 'Teacher-assigned lesson review',
-        orderIndex: order++,
-        xpAwarded: LESSON_XP,
+      const assignmentPayload: (typeof interventionAssignments.$inferInsert)[] =
+        [];
+      let order = 1;
+      lessonIds.forEach((lessonId) => {
+        assignmentPayload.push({
+          caseId: interventionCase.id,
+          assignmentType: 'lesson_review',
+          lessonId,
+          checkpointLabel: 'Teacher-assigned lesson review',
+          orderIndex: order++,
+          xpAwarded: LESSON_XP,
+        });
       });
-    });
-    assessmentIds.forEach((assessmentId) => {
-      assignmentPayload.push({
-        caseId: interventionCase.id,
-        assignmentType: 'assessment_retry',
-        assessmentId,
-        checkpointLabel: 'Teacher-assigned assessment retry',
-        orderIndex: order++,
-        xpAwarded: ASSESSMENT_XP,
+      assessmentIds.forEach((assessmentId) => {
+        assignmentPayload.push({
+          caseId: interventionCase.id,
+          assignmentType: 'assessment_retry',
+          assessmentId,
+          checkpointLabel: 'Teacher-assigned assessment retry',
+          orderIndex: order++,
+          xpAwarded: ASSESSMENT_XP,
+        });
       });
+
+      if (assignmentPayload.length > 0) {
+        await tx.insert(interventionAssignments).values(assignmentPayload);
+      }
+
+      await tx
+        .update(interventionCases)
+        .set({ note: dto.note ?? null, updatedAt: new Date() })
+        .where(eq(interventionCases.id, interventionCase.id));
     });
-
-    if (assignmentPayload.length > 0) {
-      await this.db.insert(interventionAssignments).values(assignmentPayload);
-    }
-
-    await this.db
-      .update(interventionCases)
-      .set({ note: dto.note ?? null, updatedAt: new Date() })
-      .where(eq(interventionCases.id, interventionCase.id));
 
     await this.notificationsService.createBulk([
       {
@@ -712,6 +751,19 @@ export class LxpService {
         body: 'Your teacher updated your LXP intervention tasks. Open LXP to continue.',
       },
     ]);
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.intervention.assigned',
+      targetType: 'intervention_case',
+      targetId: interventionCase.id,
+      metadata: {
+        classId: interventionCase.classId,
+        studentId: interventionCase.studentId,
+        lessonIds,
+        assessmentIds,
+      },
+    });
 
     return this.getTeacherQueue(interventionCase.classId, user);
   }
@@ -750,6 +802,18 @@ export class LxpService {
         body: 'Your teacher marked your current intervention cycle as resolved.',
       },
     ]);
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.intervention.resolved',
+      targetType: 'intervention_case',
+      targetId: interventionCase.id,
+      metadata: {
+        classId: interventionCase.classId,
+        studentId: interventionCase.studentId,
+        note: dto.note ?? 'Resolved by teacher.',
+      },
+    });
 
     return this.getTeacherQueue(interventionCase.classId, user);
   }

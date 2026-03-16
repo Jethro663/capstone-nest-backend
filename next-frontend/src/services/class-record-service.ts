@@ -7,6 +7,9 @@ import type {
   BulkRecordScoresDto,
   SpreadsheetData,
   ClassRecordScore,
+  ClassAverageReport,
+  GradeDistributionReport,
+  InterventionReportRow,
 } from '@/types/class-record';
 
 export const classRecordService = {
@@ -92,19 +95,19 @@ export const classRecordService = {
   // --- Reports ---
 
   /** GET /class-record/:id/reports/class-average — Teacher, Admin */
-  async getClassAverageReport(id: string): Promise<{ success: boolean; data: unknown }> {
+  async getClassAverageReport(id: string): Promise<{ success: boolean; data: ClassAverageReport }> {
     const { data } = await api.get(`/class-record/${id}/reports/class-average`);
     return data;
   },
 
   /** GET /class-record/:id/reports/distribution — Teacher, Admin */
-  async getDistributionReport(id: string): Promise<{ success: boolean; data: unknown }> {
+  async getDistributionReport(id: string): Promise<{ success: boolean; data: GradeDistributionReport }> {
     const { data } = await api.get(`/class-record/${id}/reports/distribution`);
     return data;
   },
 
   /** GET /class-record/:id/reports/intervention — Teacher, Admin */
-  async getInterventionReport(id: string): Promise<{ success: boolean; data: unknown }> {
+  async getInterventionReport(id: string): Promise<{ success: boolean; data: InterventionReportRow[] }> {
     const { data } = await api.get(`/class-record/${id}/reports/intervention`);
     return data;
   },

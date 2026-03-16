@@ -10,7 +10,7 @@ import {
   StudentStatCard,
   StudentStatusChip,
 } from '@/components/student/student-primitives';
-import type { StudentOwnClassPerformance, StudentOwnPerformanceSummary } from '@/types/performance';
+import type { StudentOwnPerformanceSummary } from '@/types/performance';
 
 // --- Framer Motion Configs ---
 const fContainer: Variants = {
@@ -101,7 +101,7 @@ export default function StudentPerformancePage() {
   }
 
   const classes = summary?.classes ?? [];
-  const threshold = summary?.threshold ?? 74;
+  const threshold = summary?.threshold ?? null;
 
   return (
     <motion.div 
@@ -124,7 +124,11 @@ export default function StudentPerformancePage() {
             </div>
             <h1 className="text-3xl font-black tracking-tight text-slate-900">Academic Standing</h1>
             <p className="text-slate-500 text-sm font-medium">
-              Maintain a score above <span className="text-red-500 font-bold">{threshold}%</span> to stay on track.
+              Maintain a score above{' '}
+              <span className="text-red-500 font-bold">
+                {threshold !== null ? `${threshold}%` : 'the active threshold'}
+              </span>{' '}
+              to stay on track.
             </p>
           </div>
 
@@ -180,7 +184,7 @@ export default function StudentPerformancePage() {
         <div className="flex items-center justify-between border-b-[1.5px] border-slate-200 pb-3">
           <h2 className="text-xl font-black text-slate-900 tracking-tight">Subject Breakdown</h2>
           <Badge variant="outline" className="border-slate-200 text-[10px] font-black uppercase text-slate-400">
-            Threshold: {threshold}%
+            {threshold !== null ? `Threshold: ${threshold}%` : 'Threshold: --'}
           </Badge>
         </div>
 

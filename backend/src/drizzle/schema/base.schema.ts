@@ -144,6 +144,26 @@ export const userRoles = pgTable(
   }),
 );
 
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    action: text('action').notNull(),
+    targetType: text('target_type').notNull(),
+    targetId: uuid('target_id').notNull(),
+    metadata: json('metadata'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    actorIdIdx: index('audit_logs_actor_id_idx').on(table.actorId),
+    actionIdx: index('audit_logs_action_idx').on(table.action),
+    createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
+  }),
+);
+
 // ==========================================
 // 2. ACADEMIC STRUCTURE
 // ==========================================
@@ -603,6 +623,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   classesTaught: many(classes, { relationName: 'teacherClasses' }),
   advisedSections: many(sections),
   enrollments: many(enrollments),
+  auditLogs: many(auditLogs),
   lessonCompletions: many(lessonCompletions),
   assessmentAttempts: many(assessmentAttempts),
   // Keep the property name `profile` for compatibility but point to student_profiles
@@ -695,6 +716,13 @@ export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
   section: one(sections, {
     fields: [enrollments.sectionId],
     references: [sections.id],
+  }),
+}));
+
+export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
+  actor: one(users, {
+    fields: [auditLogs.actorId],
+    references: [users.id],
   }),
 }));
 

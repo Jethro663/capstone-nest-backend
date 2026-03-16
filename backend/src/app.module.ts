@@ -30,6 +30,7 @@ import { AiMentorModule } from './modules/ai-mentor/ai-mentor.module';
 import { PerformanceModule } from './modules/performance/performance.module';
 import { LxpModule } from './modules/lxp/lxp.module';
 import { TeacherProfilesModule } from './modules/teacher-profiles/teacher-profiles.module';
+import { AuditModule } from './modules/audit/audit.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
@@ -80,6 +81,7 @@ import ollamaConfig from './config/ollama.config';
     PerformanceModule,
     LxpModule,
     TeacherProfilesModule,
+    AuditModule,
   ],
   providers: [
     {

@@ -118,13 +118,12 @@ export const sectionService = {
     return data;
   },
 
-  /** DELETE /sections/delete/:id — Admin only (soft) */
+  /** DELETE /sections/delete/:id — Admin only (soft, deprecated alias) */
   async delete(id: string): Promise<{ success: boolean; message: string }> {
-    const { data } = await api.delete(`/sections/delete/${id}`);
-    return data;
+    return this.archive(id);
   },
 
-  /** DELETE /sections/delete/:id — Admin only (archive alias) */
+  /** DELETE /sections/delete/:id — Admin only (canonical soft-delete/archive method) */
   async archive(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/sections/delete/${id}`);
     return data;

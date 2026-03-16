@@ -19,6 +19,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { parsePositiveIntQuery } from '../../common/utils/parse-positive-int-query.util';
 
 // JwtAuthGuard is already registered globally in AppModule via APP_GUARD.
 // Only RolesGuard is applied at controller level to avoid double JWT verification.
@@ -55,8 +56,8 @@ export class SectionsController {
     if (schoolYear) filters.schoolYear = schoolYear;
     if (isActive !== undefined) filters.isActive = isActive === 'true';
     if (search) filters.search = search;
-    if (page) filters.page = parseInt(page, 10);
-    if (limit) filters.limit = parseInt(limit, 10);
+    filters.page = parsePositiveIntQuery(page, 'page');
+    filters.limit = parsePositiveIntQuery(limit, 'limit');
 
     const result = await this.sectionsService.findAll(filters);
 
@@ -214,7 +215,11 @@ export class SectionsController {
     @CurrentUser() user: { userId: string; roles: string[] },
     @Body() dto: BulkStudentsDto,
   ) {
-    const result = await this.sectionsService.addStudentsToSection(id, dto, user);
+    const result = await this.sectionsService.addStudentsToSection(
+      id,
+      dto,
+      user,
+    );
 
     return {
       success: true,
