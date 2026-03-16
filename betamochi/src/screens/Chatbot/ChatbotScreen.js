@@ -20,7 +20,7 @@ const ChatbotScreen = () => {
   const { enabled } = useSfx();
 
   useEffect(() => {
-    // scroll to bottom when new message arrives
+
     if (flatRef.current) {
       flatRef.current.scrollToEnd({ animated: true });
     }
@@ -32,14 +32,12 @@ const ChatbotScreen = () => {
     setMessages((m) => [...m, userMsg]);
     setText('');
 
-    // play click SFX (non-blocking)
     try {
       if (enabled) playClick();
     } catch (e) {
-      // ignore
+
     }
 
-    // mock AI response after a short delay
     setTimeout(() => {
       const botReply = {
         id: String(Date.now() + 1),

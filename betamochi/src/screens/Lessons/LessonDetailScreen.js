@@ -57,7 +57,7 @@ const LessonDetailScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header Card */}
+
         <View style={styles.headerCard}>
           <View style={styles.thumbnailContainer}>
             <Text style={styles.thumbnail}>{lesson.thumbnail}</Text>
@@ -96,7 +96,6 @@ const LessonDetailScreen = ({ route, navigation }) => {
           <Text style={styles.lessonDescription}>{lesson.description}</Text>
         </View>
 
-        {/* Progress Section */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Your Progress</Text>
 
@@ -152,7 +151,6 @@ const LessonDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Content Overview */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>What You'll Learn</Text>
 
@@ -205,7 +203,6 @@ const LessonDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Key Topics */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Topics in This Lesson</Text>
 
@@ -239,7 +236,6 @@ const LessonDetailScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Recommendations */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Study Tips</Text>
 
@@ -273,7 +269,6 @@ const LessonDetailScreen = ({ route, navigation }) => {
           </View>
         </View>
 
-        {/* Action Buttons */}
         <View style={styles.buttonContainer}>
           {!lesson.isCompleted ? (
             <>
