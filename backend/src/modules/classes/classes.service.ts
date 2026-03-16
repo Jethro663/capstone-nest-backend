@@ -775,7 +775,10 @@ export class ClassesService {
       (filters?.gradeLevel as '7' | '8' | '9' | '10' | undefined) ??
       classGradeLevel;
     const page = Math.max(1, Number(filters?.page ?? 1) || 1);
-    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20) || 20, 100));
+    const limit = Math.max(
+      1,
+      Math.min(Number(filters?.limit ?? 20) || 20, 100),
+    );
     const offset = (page - 1) * limit;
 
     const whereConditions: SQL<unknown>[] = [];
@@ -889,7 +892,9 @@ export class ClassesService {
           })
         : [];
 
-    const alreadyEnrolledIds = new Set(classEnrollments.map((e) => e.studentId));
+    const alreadyEnrolledIds = new Set(
+      classEnrollments.map((e) => e.studentId),
+    );
 
     const studentSectionMap = new Map<
       string,
@@ -993,7 +998,11 @@ export class ClassesService {
       with: {
         student: {
           columns: { id: true, firstName: true, lastName: true, email: true },
-          with: { profile: { columns: { gradeLevel: true, lrn: true, profilePicture: true } } },
+          with: {
+            profile: {
+              columns: { gradeLevel: true, lrn: true, profilePicture: true },
+            },
+          },
         },
       },
     });

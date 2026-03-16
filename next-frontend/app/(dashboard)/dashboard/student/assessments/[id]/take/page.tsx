@@ -13,7 +13,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStatusChip } from '@/components/student/student-primitives';
 import { toast } from 'sonner';
-import type { Assessment, AssessmentQuestion } from '@/types/assessment';
+import type { Assessment, AssessmentQuestion, UpdateAttemptProgressDto } from '@/types/assessment';
 
 export default function StudentAssessmentTakePage() {
   const params = useParams();
@@ -41,6 +41,13 @@ export default function StudentAssessmentTakePage() {
       uploadedAt: string;
     };
   } | null>(null);
+  const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
+  const [attemptStartedAt, setAttemptStartedAt] = useState<string | null>(null);
+  const [attemptExpiresAt, setAttemptExpiresAt] = useState<string | null>(null);
+  const [strictMode, setStrictMode] = useState(false);
+  const [timedQuestionsEnabled, setTimedQuestionsEnabled] = useState(false);
+  const [questionTimeLimitSeconds, setQuestionTimeLimitSeconds] = useState<number | null>(null);
+  const [questionTimerRemaining, setQuestionTimerRemaining] = useState<number | null>(null);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const [timeLimit, setTimeLimit] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
@@ -49,24 +56,85 @@ export default function StudentAssessmentTakePage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await assessmentService.getById(assessmentId);
-      setAssessment(res.data);
-      const questionList = res.data.randomizeQuestions
-        ? (res.data.questions || [])
-        : [...(res.data.questions || [])].sort((a, b) => a.order - b.order);
+      const [assessmentRes, ongoingRes] = await Promise.all([
+        assessmentService.getById(assessmentId),
+        assessmentService.getOngoingAttempt(assessmentId),
+      ]);
+
+      const assessmentData = assessmentRes.data;
+      const ongoing = ongoingRes.data;
+
+      if (!ongoing) {
+        toast.info('No active attempt found. Start a new attempt first.');
+        router.replace(`/dashboard/student/assessments/${assessmentId}`);
+        return;
+      }
+
+      const orderMap = new Map(
+        (ongoing.attempt.questionOrder || []).map((id, index) => [id, index]),
+      );
+
+      const questionList = [...(assessmentData.questions || [])]
+        .sort((a, b) => {
+          if (orderMap.size > 0) {
+            const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+            const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+            return aIdx - bIdx;
+          }
+
+          if (assessmentData.randomizeQuestions) {
+            return 0;
+          }
+
+          return a.order - b.order;
+        });
+
+      const restoredResponses: Record<string, string | string[]> = {};
+      for (const response of ongoing.attempt.draftResponses || []) {
+        if (response.selectedOptionIds && response.selectedOptionIds.length > 0) {
+          restoredResponses[response.questionId] = response.selectedOptionIds;
+        } else if (response.selectedOptionId) {
+          restoredResponses[response.questionId] = response.selectedOptionId;
+        } else if (typeof response.studentAnswer === 'string') {
+          restoredResponses[response.questionId] = response.studentAnswer;
+        }
+      }
+
+      setAssessment(assessmentData);
       setQuestions(questionList);
+      setResponses(restoredResponses);
+      setCurrentIdx(Math.min(ongoing.attempt.lastQuestionIndex ?? 0, Math.max(questionList.length - 1, 0)));
+      setActiveAttemptId(ongoing.attempt.id);
+      setAttemptStartedAt(ongoing.attempt.startedAt || null);
+      setAttemptExpiresAt(ongoing.expiresAt || null);
+      setStrictMode(Boolean(ongoing.strictMode));
+      setTimedQuestionsEnabled(Boolean(ongoing.timedQuestionsEnabled));
+      setQuestionTimeLimitSeconds(ongoing.questionTimeLimitSeconds ?? null);
+
       const limitParam = searchParams.get('timeLimit');
       if (limitParam) {
         setTimeLimit(Number(limitParam));
-      } else if (res.data.timeLimitMinutes) {
-        setTimeLimit(res.data.timeLimitMinutes);
+      } else if (ongoing.timeLimitMinutes) {
+        setTimeLimit(ongoing.timeLimitMinutes);
+      } else if (assessmentData.timeLimitMinutes) {
+        setTimeLimit(assessmentData.timeLimitMinutes);
+      } else {
+        setTimeLimit(null);
+      }
+
+      if (ongoing.attempt.startedAt) {
+        const elapsed = Math.max(
+          0,
+          Math.floor((Date.now() - new Date(ongoing.attempt.startedAt).getTime()) / 1000),
+        );
+        setTimeElapsed(elapsed);
       }
     } catch {
       toast.error('Failed to load assessment');
     } finally {
       setLoading(false);
     }
-  }, [assessmentId, searchParams]);
+  }, [assessmentId, router, searchParams]);
 
   useEffect(() => {
     fetchData();
@@ -87,41 +155,103 @@ export default function StudentAssessmentTakePage() {
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const remainingSeconds = timeLimit ? Math.max(0, timeLimit * 60 - timeElapsed) : null;
+  const remainingSeconds = attemptExpiresAt
+    ? Math.max(0, Math.floor((new Date(attemptExpiresAt).getTime() - Date.now()) / 1000))
+    : timeLimit
+      ? Math.max(0, timeLimit * 60 - timeElapsed)
+      : null;
   const isTimeLow = remainingSeconds !== null && remainingSeconds <= 60;
 
+  const isQuestionAnswered = useCallback(
+    (question: AssessmentQuestion, answer: string | string[] | undefined) => {
+      if (answer === undefined || answer === null) return false;
+      if (question.type === 'multiple_select') {
+        return Array.isArray(answer) && answer.length > 0;
+      }
+      if (question.type === 'short_answer' || question.type === 'fill_blank') {
+        return typeof answer === 'string' && answer.trim().length > 0;
+      }
+      return !Array.isArray(answer) && answer !== '';
+    },
+    [],
+  );
+
+  const buildSubmissionResponses = useCallback(() => {
+    return questions.map((q) => {
+      const answer = responses[q.id];
+      const r: { questionId: string; studentAnswer?: string; selectedOptionId?: string; selectedOptionIds?: string[] } = { questionId: q.id };
+      if (q.type === 'multiple_choice' || q.type === 'true_false' || q.type === 'dropdown') {
+        r.selectedOptionId = answer as string;
+      } else if (q.type === 'multiple_select') {
+        r.selectedOptionIds = (answer as string[]) || [];
+      } else {
+        r.studentAnswer = answer as string;
+      }
+      return r;
+    });
+  }, [questions, responses]);
+
+  const persistProgress = useCallback(
+    async (payload: UpdateAttemptProgressDto) => {
+      if (!activeAttemptId) return;
+      try {
+        await assessmentService.updateAttemptProgress(activeAttemptId, payload);
+      } catch {
+        // non-blocking progress sync
+      }
+    },
+    [activeAttemptId],
+  );
+
   const setResponse = (questionId: string, value: string | string[]) => {
-    setResponses((prev) => ({ ...prev, [questionId]: value }));
+    setResponses((prev) => {
+      const next = { ...prev, [questionId]: value };
+      const serialized = questions.map((question) => {
+        const answer = next[question.id];
+        const response: {
+          questionId: string;
+          studentAnswer?: string;
+          selectedOptionId?: string;
+          selectedOptionIds?: string[];
+        } = { questionId: question.id };
+
+        if (question.type === 'multiple_choice' || question.type === 'true_false' || question.type === 'dropdown') {
+          response.selectedOptionId = answer as string;
+        } else if (question.type === 'multiple_select') {
+          response.selectedOptionIds = (answer as string[]) || [];
+        } else {
+          response.studentAnswer = answer as string;
+        }
+
+        return response;
+      });
+
+      void persistProgress({
+        currentQuestionIndex: currentIdx,
+        responses: serialized,
+      });
+
+      return next;
+    });
   };
 
   const answeredCount = useMemo(
-    () => questions.filter((q) => {
-      const a = responses[q.id];
-      return a !== undefined && a !== '' && (!Array.isArray(a) || a.length > 0);
-    }).length,
-    [questions, responses],
+    () =>
+      questions.filter((q) => {
+        const answer = responses[q.id];
+        return isQuestionAnswered(q, answer);
+      }).length,
+    [questions, responses, isQuestionAnswered],
   );
 
   const handleSubmit = useCallback(async () => {
     if (!assessment) return;
     try {
       setSubmitting(true);
-      const submissionResponses = questions.map((q) => {
-        const answer = responses[q.id];
-        const r: { questionId: string; studentAnswer?: string; selectedOptionId?: string; selectedOptionIds?: string[] } = { questionId: q.id };
-        if (q.type === 'multiple_choice' || q.type === 'true_false' || q.type === 'dropdown') {
-          r.selectedOptionId = answer as string;
-        } else if (q.type === 'multiple_select') {
-          r.selectedOptionIds = (answer as string[]) || [];
-        } else {
-          r.studentAnswer = answer as string;
-        }
-        return r;
-      });
 
       await assessmentService.submit({
         assessmentId,
-        responses: submissionResponses,
+        responses: buildSubmissionResponses(),
         timeSpentSeconds: timeElapsed,
       });
 
@@ -135,7 +265,7 @@ export default function StudentAssessmentTakePage() {
       setSubmitting(false);
       setShowConfirm(false);
     }
-  }, [assessment, questions, responses, assessmentId, timeElapsed, router]);
+  }, [assessment, buildSubmissionResponses, assessmentId, timeElapsed, router]);
 
   const handleUploadSubmissionFile = useCallback(async (file: File) => {
     if (!assessment) return;
@@ -194,6 +324,96 @@ export default function StudentAssessmentTakePage() {
       setSubmitting(false);
     }
   }, [uploadedSubmission, assessmentId, timeElapsed, router]);
+
+  useEffect(() => {
+    if (!activeAttemptId || questions.length === 0) return;
+
+    const interval = setInterval(() => {
+      void persistProgress({
+        currentQuestionIndex: currentIdx,
+        responses: buildSubmissionResponses(),
+      });
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [activeAttemptId, currentIdx, questions.length, persistProgress, buildSubmissionResponses]);
+
+  useEffect(() => {
+    if (!timedQuestionsEnabled || !questionTimeLimitSeconds || questionTimeLimitSeconds < 1) {
+      setQuestionTimerRemaining(null);
+      return;
+    }
+
+    setQuestionTimerRemaining(questionTimeLimitSeconds);
+  }, [currentIdx, timedQuestionsEnabled, questionTimeLimitSeconds]);
+
+  useEffect(() => {
+    if (!timedQuestionsEnabled || questionTimerRemaining === null || didAutoSubmitRef.current) return;
+
+    if (questionTimerRemaining <= 0) {
+      const isLastQuestion = currentIdx >= questions.length - 1;
+
+      if (isLastQuestion) {
+        didAutoSubmitRef.current = true;
+        toast.warning('Question time ended. Submitting now.');
+        void handleSubmit();
+      } else {
+        setCurrentIdx((idx) => idx + 1);
+      }
+      return;
+    }
+
+    const tick = setInterval(() => {
+      setQuestionTimerRemaining((prev) => (prev === null ? prev : prev - 1));
+    }, 1000);
+
+    return () => clearInterval(tick);
+  }, [timedQuestionsEnabled, questionTimerRemaining, currentIdx, questions.length, handleSubmit]);
+
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      void persistProgress({
+        currentQuestionIndex: currentIdx,
+        responses: buildSubmissionResponses(),
+      });
+    };
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [currentIdx, buildSubmissionResponses, persistProgress]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        toast.warning('Assessment is active. Stay on this tab to avoid missing time.');
+      }
+    };
+
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        toast.warning('Please stay in fullscreen while taking the assessment. Timer is still running.');
+      }
+    };
+
+    if (document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => {
+        // ignore permissions/gesture errors
+      });
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {
+          // ignore cleanup errors
+        });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!timeLimit || remainingSeconds === null || didAutoSubmitRef.current) return;
@@ -343,6 +563,9 @@ export default function StudentAssessmentTakePage() {
   }
 
   const current = questions[currentIdx];
+  const currentAnswer = current ? responses[current.id] : undefined;
+  const isCurrentAnswered = current ? isQuestionAnswered(current, currentAnswer) : false;
+  const canAdvanceInStrictMode = !strictMode || isCurrentAnswered;
   const progressValue = Math.round((answeredCount / questions.length) * 100);
 
   return (
@@ -358,6 +581,12 @@ export default function StudentAssessmentTakePage() {
               <ListChecks className="mr-1 h-3.5 w-3.5" />
               {answeredCount}/{questions.length} answered
             </StudentStatusChip>
+            {timedQuestionsEnabled && questionTimerRemaining !== null && (
+              <StudentStatusChip tone={questionTimerRemaining <= 10 ? 'danger' : 'warning'}>
+                <Clock3 className="mr-1 h-3.5 w-3.5" />
+                Q: {formatTime(questionTimerRemaining)}
+              </StudentStatusChip>
+            )}
             <StudentStatusChip tone={isTimeLow ? 'danger' : 'warning'}>
               <Clock3 className="mr-1 h-3.5 w-3.5" />
               {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeElapsed)}
@@ -391,11 +620,35 @@ export default function StudentAssessmentTakePage() {
             </AnimatePresence>
 
             <div className="flex items-center justify-between border-t pt-4">
-              <Button variant="outline" disabled={currentIdx === 0} onClick={() => setCurrentIdx((i) => i - 1)}>
+              <Button
+                variant="outline"
+                disabled={currentIdx === 0 || strictMode}
+                onClick={() => {
+                  void persistProgress({
+                    currentQuestionIndex: Math.max(0, currentIdx - 1),
+                    responses: buildSubmissionResponses(),
+                  });
+                  setCurrentIdx((i) => i - 1);
+                }}
+              >
                 Previous
               </Button>
               {currentIdx < questions.length - 1 ? (
-                <Button className="bg-red-600 hover:bg-red-700" onClick={() => setCurrentIdx((i) => i + 1)}>
+                <Button
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={!canAdvanceInStrictMode}
+                  onClick={() => {
+                    if (!canAdvanceInStrictMode) {
+                      toast.info('Strict mode requires answering this question before moving forward.');
+                      return;
+                    }
+                    void persistProgress({
+                      currentQuestionIndex: currentIdx + 1,
+                      responses: buildSubmissionResponses(),
+                    });
+                    setCurrentIdx((i) => i + 1);
+                  }}
+                >
                   Next
                 </Button>
               ) : (
@@ -418,7 +671,15 @@ export default function StudentAssessmentTakePage() {
                     key={q.id}
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentIdx(i)}
+                    disabled={strictMode && i !== currentIdx}
+                    onClick={() => {
+                      if (strictMode && i !== currentIdx) return;
+                      void persistProgress({
+                        currentQuestionIndex: i,
+                        responses: buildSubmissionResponses(),
+                      });
+                      setCurrentIdx(i);
+                    }}
                     className={
                       i === currentIdx
                         ? 'border-red-600 bg-red-600 text-white hover:bg-red-700'

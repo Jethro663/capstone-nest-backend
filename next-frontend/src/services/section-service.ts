@@ -1,6 +1,5 @@
 import { api } from '@/lib/api-client';
 import type { Section, CreateSectionDto, UpdateSectionDto } from '@/types/section';
-import type { User } from '@/types/user';
 
 export interface SectionsQuery {
   gradeLevel?: string;
@@ -31,6 +30,61 @@ export interface RosterStudent {
   email?: string;
   lrn?: string;
   gradeLevel?: string;
+  profilePicture?: string;
+}
+
+export interface TeacherSectionStudentProfile {
+  sectionInfo: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+    schoolYear: string;
+  };
+  student: {
+    id: string;
+    firstName?: string;
+    middleName?: string;
+    lastName?: string;
+    email: string;
+    status: string;
+    profile: {
+      lrn?: string | null;
+      dateOfBirth?: string | null;
+      gender?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      gradeLevel?: string | null;
+      familyName?: string | null;
+      familyRelationship?: string | null;
+      familyContact?: string | null;
+      profilePicture?: string | null;
+    } | null;
+  };
+  section: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+    schoolYear: string;
+    roomNumber?: string | null;
+    adviser: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    } | null;
+  } | null;
+}
+
+export interface SectionCandidate {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  gradeLevel?: string;
+  profilePicture?: string;
+  hasActiveSectionEnrollment?: boolean;
+  enrolledSectionId?: string | null;
+  enrolledSectionName?: string | null;
 }
 
 export const sectionService = {
@@ -70,6 +124,18 @@ export const sectionService = {
     return data;
   },
 
+  /** DELETE /sections/delete/:id — Admin only (archive alias) */
+  async archive(id: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.delete(`/sections/delete/${id}`);
+    return data;
+  },
+
+  /** PUT /sections/:id/restore — Admin only */
+  async restore(id: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.put(`/sections/${id}/restore`);
+    return data;
+  },
+
   /** DELETE /sections/permanent/:id — Admin only (hard) */
   async permanentDelete(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/sections/permanent/${id}`);
@@ -82,21 +148,30 @@ export const sectionService = {
     return data;
   },
 
-  /** GET /sections/:id/candidates — Admin */
-  async getCandidates(id: string, query?: { gradeLevel?: string; search?: string }): Promise<{ success: boolean; data: User[]; count: number }> {
+  /** GET /sections/:id/candidates — Admin, Teacher */
+  async getCandidates(id: string, query?: { gradeLevel?: string; search?: string }): Promise<{ success: boolean; data: SectionCandidate[]; count: number }> {
     const { data } = await api.get(`/sections/${id}/candidates`, { params: query });
     return data;
   },
 
-  /** POST /sections/:id/roster — Admin (bulk add students) */
+  /** POST /sections/:id/roster — Admin, Teacher (bulk add students) */
   async addStudents(id: string, studentIds: string[]): Promise<{ success: boolean; message: string; data: { createdCount: number } }> {
     const { data } = await api.post(`/sections/${id}/roster`, { studentIds });
     return data;
   },
 
-  /** DELETE /sections/:id/roster/:studentId — Admin */
+  /** DELETE /sections/:id/roster/:studentId — Admin, Teacher */
   async removeStudent(sectionId: string, studentId: string): Promise<{ success: boolean; data: unknown }> {
     const { data } = await api.delete(`/sections/${sectionId}/roster/${studentId}`);
+    return data;
+  },
+
+  /** GET /sections/:id/students/:studentId/profile — Admin, Teacher */
+  async getStudentProfileForSection(
+    sectionId: string,
+    studentId: string,
+  ): Promise<{ success: boolean; message: string; data: TeacherSectionStudentProfile }> {
+    const { data } = await api.get(`/sections/${sectionId}/students/${studentId}/profile`);
     return data;
   },
 

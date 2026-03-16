@@ -139,11 +139,26 @@ export class SectionsController {
   @Delete('delete/:id')
   @Roles(RoleName.Admin)
   async deleteSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.deleteSection(id);
+    await this.sectionsService.archiveSection(id);
 
     return {
       success: true,
-      message: 'Section deleted successfully (set to inactive)',
+      message: 'Section archived successfully',
+    };
+  }
+
+  /**
+   * Restore an archived section (sets isActive to true).
+   * Admin only.
+   */
+  @Put(':id/restore')
+  @Roles(RoleName.Admin)
+  async restoreSection(@Param('id', ParseUUIDPipe) id: string) {
+    await this.sectionsService.restoreSection(id);
+
+    return {
+      success: true,
+      message: 'Section restored successfully',
     };
   }
 
@@ -167,9 +182,10 @@ export class SectionsController {
    * Admin only.
    */
   @Get(':id/candidates')
-  @Roles(RoleName.Admin)
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getCandidates(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
     @Query('gradeLevel') gradeLevel?: string,
     @Query('search') search?: string,
   ) {
@@ -177,7 +193,11 @@ export class SectionsController {
     if (gradeLevel) filters.gradeLevel = gradeLevel;
     if (search) filters.search = search;
 
-    const candidates = await this.sectionsService.getCandidates(id, filters);
+    const candidates = await this.sectionsService.getCandidates(
+      id,
+      filters,
+      user,
+    );
 
     return { success: true, data: candidates, count: candidates.length };
   }
@@ -187,13 +207,14 @@ export class SectionsController {
    * Admin only.
    */
   @Post(':id/roster')
-  @Roles(RoleName.Admin)
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   async addStudentsToSection(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
     @Body() dto: BulkStudentsDto,
   ) {
-    const result = await this.sectionsService.addStudentsToSection(id, dto);
+    const result = await this.sectionsService.addStudentsToSection(id, dto, user);
 
     return {
       success: true,
@@ -207,15 +228,17 @@ export class SectionsController {
    * Admin only.
    */
   @Delete(':id/roster/:studentId')
-  @Roles(RoleName.Admin)
+  @Roles(RoleName.Admin, RoleName.Teacher)
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   async removeStudentFromSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('studentId', ParseUUIDPipe) studentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const result = await this.sectionsService.removeStudentFromSection(
       id,
       studentId,
+      user,
     );
 
     return { success: true, data: result };
@@ -231,6 +254,30 @@ export class SectionsController {
     await this.sectionsService.permanentlyDeleteSection(id);
 
     return { success: true, message: 'Section permanently deleted' };
+  }
+
+  /**
+   * Get a student profile in section context.
+   * Teacher (owner of section) and Admin can access.
+   */
+  @Get(':id/students/:studentId/profile')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getStudentProfileForSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.sectionsService.getStudentProfileForSection(
+      id,
+      studentId,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Student profile retrieved successfully',
+      data,
+    };
   }
 
   /**

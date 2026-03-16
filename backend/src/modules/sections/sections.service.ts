@@ -208,7 +208,7 @@ export class SectionsService {
           columns: { id: true, firstName: true, lastName: true, email: true },
           with: {
             profile: {
-              columns: { gradeLevel: true, lrn: true },
+              columns: { gradeLevel: true, lrn: true, profilePicture: true },
             },
           },
         },
@@ -216,18 +216,42 @@ export class SectionsService {
       orderBy: (enrollments, { asc }) => [asc(enrollments.enrolledAt)],
     });
 
-    return roster.map((r) => ({
-      id: r.student.id,
-      enrollmentId: r.id,
-      studentId: r.studentId,
-      status: r.status,
-      enrolledAt: r.enrolledAt,
-      firstName: r.student.firstName,
-      lastName: r.student.lastName,
-      email: r.student.email,
-      lrn: r.student.profile?.lrn ?? null,
-      gradeLevel: r.student.profile?.gradeLevel ?? null,
-    }));
+    const uniqueByStudentId = new Map<
+      string,
+      {
+        id: string;
+        enrollmentId: string;
+        studentId: string;
+        status: (typeof enrollments.$inferSelect)['status'];
+        enrolledAt: Date;
+        firstName: string | null;
+        lastName: string | null;
+        email: string;
+        lrn: string | null;
+        gradeLevel: string | null;
+        profilePicture: string | null;
+      }
+    >();
+
+    for (const row of roster) {
+      if (uniqueByStudentId.has(row.student.id)) continue;
+
+      uniqueByStudentId.set(row.student.id, {
+        id: row.student.id,
+        enrollmentId: row.id,
+        studentId: row.studentId,
+        status: row.status,
+        enrolledAt: row.enrolledAt,
+        firstName: row.student.firstName,
+        lastName: row.student.lastName,
+        email: row.student.email,
+        lrn: row.student.profile?.lrn ?? null,
+        gradeLevel: row.student.profile?.gradeLevel ?? null,
+        profilePicture: row.student.profile?.profilePicture ?? null,
+      });
+    }
+
+    return Array.from(uniqueByStudentId.values());
   }
 
   // ─── getCandidates ────────────────────────────────────────────────────────
@@ -235,8 +259,9 @@ export class SectionsService {
   async getCandidates(
     sectionId: string,
     filters?: { gradeLevel?: string; search?: string },
+    requestingUser?: RequestingUser,
   ) {
-    await this.findById(sectionId);
+    await this.findById(sectionId, requestingUser);
 
     // Build a subquery for actively-enrolled students in this section.
     // Using a subquery instead of loading all student IDs into Node.js memory:
@@ -277,6 +302,7 @@ export class SectionsService {
         lastName: users.lastName,
         email: users.email,
         gradeLevel: studentProfiles.gradeLevel,
+        profilePicture: studentProfiles.profilePicture,
       })
       .from(users)
       .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
@@ -289,13 +315,67 @@ export class SectionsService {
       .orderBy(users.lastName, users.firstName)
       .limit(200);
 
-    return results;
+    if (results.length === 0) {
+      return [];
+    }
+
+    const studentIds = results.map((student) => student.id);
+    const activeSectionMemberships = await this.db
+      .select({
+        studentId: enrollments.studentId,
+        sectionId: enrollments.sectionId,
+        sectionName: sections.name,
+      })
+      .from(enrollments)
+      .innerJoin(sections, eq(sections.id, enrollments.sectionId))
+      .where(
+        and(
+          inArray(enrollments.studentId, studentIds),
+          eq(enrollments.status, 'enrolled'),
+          isNull(enrollments.classId),
+          eq(sections.isActive, true),
+        ),
+      );
+
+    const membershipByStudentId = new Map<
+      string,
+      { sectionId: string; sectionName: string }
+    >();
+
+    for (const membership of activeSectionMemberships) {
+      membershipByStudentId.set(membership.studentId, {
+        sectionId: membership.sectionId,
+        sectionName: membership.sectionName,
+      });
+    }
+
+    return results.map((candidate) => {
+      const membership = membershipByStudentId.get(candidate.id);
+      const hasActiveSectionEnrollment = Boolean(
+        membership && membership.sectionId !== sectionId,
+      );
+
+      return {
+        ...candidate,
+        hasActiveSectionEnrollment,
+        enrolledSectionId: hasActiveSectionEnrollment
+          ? membership?.sectionId ?? null
+          : null,
+        enrolledSectionName: hasActiveSectionEnrollment
+          ? membership?.sectionName ?? null
+          : null,
+      };
+    });
   }
 
   // ─── addStudentsToSection ─────────────────────────────────────────────────
 
-  async addStudentsToSection(sectionId: string, dto: BulkStudentsDto) {
-    const section = await this.findById(sectionId);
+  async addStudentsToSection(
+    sectionId: string,
+    dto: BulkStudentsDto,
+    requestingUser?: RequestingUser,
+  ) {
+    const section = await this.findById(sectionId, requestingUser);
 
     return await this.db.transaction(async (tx) => {
       // 1. Capacity check — count DISTINCT enrolled students regardless of classId.
@@ -399,8 +479,12 @@ export class SectionsService {
 
   // ─── removeStudentFromSection ─────────────────────────────────────────────
 
-  async removeStudentFromSection(sectionId: string, studentId: string) {
-    await this.findById(sectionId);
+  async removeStudentFromSection(
+    sectionId: string,
+    studentId: string,
+    requestingUser?: RequestingUser,
+  ) {
+    await this.findById(sectionId, requestingUser);
 
     // Wrap the guard check and the delete in a transaction to prevent a TOCTOU race
     // where a concurrent class-enrollment insert lands between the guard read and the
@@ -629,15 +713,114 @@ export class SectionsService {
     }
   }
 
-  // ─── deleteSection ────────────────────────────────────────────────────────
+  // ─── archiveSection / restoreSection ─────────────────────────────────────
 
-  async deleteSection(id: string) {
+  async archiveSection(id: string) {
+    await this.findById(id);
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(enrollments)
+        .set({ status: 'dropped' })
+        .where(
+          and(
+            eq(enrollments.sectionId, id),
+            eq(enrollments.status, 'enrolled'),
+          ),
+        );
+
+      await tx
+        .update(sections)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(sections.id, id));
+    });
+  }
+
+  async restoreSection(id: string) {
     await this.findById(id);
 
     await this.db
       .update(sections)
-      .set({ isActive: false, updatedAt: new Date() })
+      .set({ isActive: true, updatedAt: new Date() })
       .where(eq(sections.id, id));
+  }
+
+  async deleteSection(id: string) {
+    await this.archiveSection(id);
+  }
+
+  async getStudentProfileForSection(
+    sectionId: string,
+    studentId: string,
+    requestingUser?: RequestingUser,
+  ) {
+    const section = await this.findById(sectionId, requestingUser);
+
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.sectionId, sectionId),
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+
+    if (!enrollment) {
+      throw new NotFoundException('Student is not enrolled in this section');
+    }
+
+    const student = await this.db.query.users.findFirst({
+      where: eq(users.id, studentId),
+      columns: {
+        id: true,
+        firstName: true,
+        middleName: true,
+        lastName: true,
+        email: true,
+        status: true,
+      },
+      with: {
+        profile: {
+          columns: {
+            lrn: true,
+            dateOfBirth: true,
+            gender: true,
+            phone: true,
+            address: true,
+            gradeLevel: true,
+            familyName: true,
+            familyRelationship: true,
+            familyContact: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    return {
+      sectionInfo: {
+        id: section.id,
+        name: section.name,
+        gradeLevel: section.gradeLevel,
+        schoolYear: section.schoolYear,
+      },
+      student: {
+        ...student,
+        profile: student.profile ?? null,
+      },
+      section: {
+        id: section.id,
+        name: section.name,
+        gradeLevel: section.gradeLevel,
+        schoolYear: section.schoolYear,
+        roomNumber: section.roomNumber,
+        adviser: section.adviser ?? null,
+      },
+    };
   }
 
   // ─── permanentlyDeleteSection ─────────────────────────────────────────────

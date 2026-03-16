@@ -15,6 +15,9 @@ export interface Assessment {
   dueDate?: string;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+  strictMode?: boolean;
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string | null;
   teacherAttachmentFile?: {
@@ -65,6 +68,9 @@ export interface CreateAssessmentDto {
   dueDate?: string;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+  strictMode?: boolean;
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string;
   allowedUploadMimeTypes?: string[];
@@ -86,6 +92,9 @@ export interface UpdateAssessmentDto {
   dueDate?: string | null;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+  strictMode?: boolean;
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string | null;
   allowedUploadMimeTypes?: string[];
@@ -135,6 +144,15 @@ export interface AssessmentAttempt {
   isSubmitted?: boolean;
   timeSpentSeconds?: number;
   startedAt?: string;
+  expiresAt?: string | null;
+  lastQuestionIndex?: number;
+  questionOrder?: string[] | null;
+  draftResponses?: {
+    questionId: string;
+    studentAnswer?: string;
+    selectedOptionId?: string;
+    selectedOptionIds?: string[];
+  }[];
   submittedAt?: string;
   createdAt?: string;
   isReturned?: boolean;
@@ -185,6 +203,39 @@ export interface AttemptResult {
 export interface StartAttemptResult {
   attempt: AssessmentAttempt;
   timeLimitMinutes: number | null;
+  expiresAt?: string | null;
+  strictMode?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+}
+
+export interface OngoingAttemptResult {
+  attempt: AssessmentAttempt;
+  timeLimitMinutes: number | null;
+  expiresAt?: string | null;
+  strictMode?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+}
+
+export interface OngoingAttemptSummary {
+  id: string;
+  assessmentId: string;
+  assessmentTitle?: string;
+  startedAt?: string;
+  expiresAt?: string | null;
+  lastQuestionIndex?: number;
+  timeLimitMinutes?: number | null;
+}
+
+export interface UpdateAttemptProgressDto {
+  currentQuestionIndex?: number;
+  responses?: {
+    questionId: string;
+    studentAnswer?: string;
+    selectedOptionId?: string;
+    selectedOptionIds?: string[];
+  }[];
 }
 
 export interface AssessmentStats {

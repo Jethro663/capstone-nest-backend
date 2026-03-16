@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
+import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemptNotifier';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -45,6 +46,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>
+
+      <UnfinishedAttemptNotifier />
     </div>
   );
 }

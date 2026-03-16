@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Put,
   Delete,
   Body,
@@ -34,6 +35,7 @@ import {
   UpdateQuestionDto,
   SubmitAssessmentDto,
   StartAssessmentDto,
+  UpdateAttemptProgressDto,
   ReturnGradeDto,
   BulkReturnGradesDto,
 } from './DTO/assessment.dto';
@@ -100,9 +102,10 @@ export class AssessmentsController {
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getAssessmentById(@Param('id') id: string, @CurrentUser() user: any) {
-    const viewerRole = Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
-      ? 'student'
-      : undefined;
+    const viewerRole =
+      Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
+        ? 'student'
+        : undefined;
     const assessment = await this.assessmentsService.getAssessmentById(
       id,
       viewerRole,
@@ -472,10 +475,62 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Assessment attempt started',
-      data: {
-        attempt: result.attempt,
-        timeLimitMinutes: result.timeLimitMinutes,
-      },
+      data: result,
+    };
+  }
+
+  @Get(':assessmentId/ongoing-attempt')
+  @Roles(RoleName.Admin, RoleName.Student)
+  async getOngoingAttempt(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const ongoing = await this.assessmentsService.getOngoingAttempt(
+      user.userId,
+      assessmentId,
+    );
+
+    return {
+      success: true,
+      message: ongoing
+        ? 'Ongoing attempt retrieved successfully'
+        : 'No ongoing attempt found',
+      data: ongoing,
+    };
+  }
+
+  @Get('attempts/ongoing')
+  @Roles(RoleName.Admin, RoleName.Student)
+  async getOngoingAttempts(@CurrentUser() user: any) {
+    const ongoing = await this.assessmentsService.getOngoingAttempts(
+      user.userId,
+    );
+
+    return {
+      success: true,
+      message: 'Ongoing attempts retrieved successfully',
+      data: ongoing,
+      count: ongoing.length,
+    };
+  }
+
+  @Patch('attempts/:attemptId/progress')
+  @Roles(RoleName.Admin, RoleName.Student)
+  async updateAttemptProgress(
+    @Param('attemptId') attemptId: string,
+    @Body() updateAttemptProgressDto: UpdateAttemptProgressDto,
+    @CurrentUser() user: any,
+  ) {
+    const updated = await this.assessmentsService.updateAttemptProgress(
+      user.userId,
+      attemptId,
+      updateAttemptProgressDto,
+    );
+
+    return {
+      success: true,
+      message: 'Attempt progress updated successfully',
+      data: updated,
     };
   }
 
@@ -512,9 +567,10 @@ export class AssessmentsController {
     @Param('attemptId') attemptId: string,
     @CurrentUser() user: any,
   ) {
-    const viewerRole = Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
-      ? 'student'
-      : undefined;
+    const viewerRole =
+      Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
+        ? 'student'
+        : undefined;
     const results = await this.assessmentsService.getAttemptResults(
       attemptId,
       viewerRole,

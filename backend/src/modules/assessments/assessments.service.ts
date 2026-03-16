@@ -25,6 +25,7 @@ import {
   CreateQuestionDto,
   UpdateQuestionDto,
   SubmitAssessmentDto,
+  UpdateAttemptProgressDto,
   AssessmentType,
   QuestionType,
   ReturnGradeDto,
@@ -105,11 +106,7 @@ export class AssessmentsService {
         : DEFAULT_FILE_UPLOAD_MIME_TYPES;
 
     return Array.from(
-      new Set(
-        source
-          .map((item) => item.trim().toLowerCase())
-          .filter(Boolean),
-      ),
+      new Set(source.map((item) => item.trim().toLowerCase()).filter(Boolean)),
     );
   }
 
@@ -181,6 +178,51 @@ export class AssessmentsService {
     const dotIndex = fileName.lastIndexOf('.');
     if (dotIndex < 0) return '';
     return fileName.slice(dotIndex + 1).toLowerCase();
+  }
+
+  private normalizeProgressResponses(raw: unknown): Array<{
+    questionId: string;
+    studentAnswer?: string;
+    selectedOptionId?: string;
+    selectedOptionIds?: string[];
+  }> {
+    if (!Array.isArray(raw)) return [];
+
+    return raw
+      .filter(
+        (entry) =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as { questionId?: unknown }).questionId === 'string',
+      )
+      .map((entry) => {
+        const typed = entry as {
+          questionId: string;
+          studentAnswer?: string;
+          selectedOptionId?: string;
+          selectedOptionIds?: string[];
+        };
+
+        return {
+          questionId: typed.questionId,
+          studentAnswer: typed.studentAnswer,
+          selectedOptionId: typed.selectedOptionId,
+          selectedOptionIds: Array.isArray(typed.selectedOptionIds)
+            ? typed.selectedOptionIds
+            : undefined,
+        };
+      });
+  }
+
+  private calculateAttemptTimeSpentSeconds(startedAt: Date | string | null) {
+    if (!startedAt) return 0;
+    const started = new Date(startedAt).getTime();
+    return Math.max(0, Math.floor((Date.now() - started) / 1000));
+  }
+
+  private computeExpiry(timeLimitMinutes?: number | null) {
+    if (!timeLimitMinutes || timeLimitMinutes < 1) return null;
+    return new Date(Date.now() + timeLimitMinutes * 60 * 1000);
   }
 
   /**
@@ -309,7 +351,8 @@ export class AssessmentsService {
       maxUploadSizeBytes: createAssessmentDto.maxUploadSizeBytes,
     });
 
-    const isFileUpload = createAssessmentDto.type === AssessmentType.FILE_UPLOAD;
+    const isFileUpload =
+      createAssessmentDto.type === AssessmentType.FILE_UPLOAD;
 
     const [newAssessment] = await this.db
       .insert(assessments)
@@ -323,6 +366,10 @@ export class AssessmentsService {
           : undefined,
         closeWhenDue: createAssessmentDto.closeWhenDue ?? true,
         randomizeQuestions: createAssessmentDto.randomizeQuestions ?? false,
+        timedQuestionsEnabled: createAssessmentDto.timedQuestionsEnabled ?? false,
+        questionTimeLimitSeconds:
+          createAssessmentDto.questionTimeLimitSeconds ?? null,
+        strictMode: createAssessmentDto.strictMode ?? false,
         fileUploadInstructions: isFileUpload
           ? createAssessmentDto.fileUploadInstructions?.trim()
           : null,
@@ -333,11 +380,13 @@ export class AssessmentsService {
           ? this.normalizeMimeTypes(createAssessmentDto.allowedUploadMimeTypes)
           : null,
         allowedUploadExtensions: isFileUpload
-          ? this.normalizeExtensions(createAssessmentDto.allowedUploadExtensions)
+          ? this.normalizeExtensions(
+              createAssessmentDto.allowedUploadExtensions,
+            )
           : null,
         maxUploadSizeBytes: isFileUpload
-          ? createAssessmentDto.maxUploadSizeBytes ??
-            MAX_ASSESSMENT_UPLOAD_SIZE_BYTES
+          ? (createAssessmentDto.maxUploadSizeBytes ??
+            MAX_ASSESSMENT_UPLOAD_SIZE_BYTES)
           : null,
         totalPoints: 0,
         passingScore: createAssessmentDto.passingScore,
@@ -527,6 +576,14 @@ export class AssessmentsService {
       updateData.closeWhenDue = updateAssessmentDto.closeWhenDue;
     if (updateAssessmentDto.randomizeQuestions !== undefined)
       updateData.randomizeQuestions = updateAssessmentDto.randomizeQuestions;
+    if (updateAssessmentDto.timedQuestionsEnabled !== undefined)
+      updateData.timedQuestionsEnabled =
+        updateAssessmentDto.timedQuestionsEnabled;
+    if (updateAssessmentDto.questionTimeLimitSeconds !== undefined)
+      updateData.questionTimeLimitSeconds =
+        updateAssessmentDto.questionTimeLimitSeconds;
+    if (updateAssessmentDto.strictMode !== undefined)
+      updateData.strictMode = updateAssessmentDto.strictMode;
     if (updateAssessmentDto.fileUploadInstructions !== undefined)
       updateData.fileUploadInstructions =
         updateAssessmentDto.fileUploadInstructions?.trim() || null;
@@ -783,28 +840,39 @@ export class AssessmentsService {
     if (existingUnsubmitted) {
       // Check if time limit exceeded for existing attempt
       if (assessment.timeLimitMinutes) {
+        const expiresAt = existingUnsubmitted.expiresAt
+          ? new Date(existingUnsubmitted.expiresAt)
+          : null;
         const startedAt = new Date(existingUnsubmitted.startedAt);
         const elapsed = (Date.now() - startedAt.getTime()) / (1000 * 60);
-        if (elapsed > assessment.timeLimitMinutes + 1) {
-          // Auto-submit the expired attempt with 0 score
-          await this.db
-            .update(assessmentAttempts)
-            .set({
-              isSubmitted: true,
-              submittedAt: new Date(),
-              score: 0,
-              passed: false,
-            })
-            .where(eq(assessmentAttempts.id, existingUnsubmitted.id));
+        const isExpiredByTimeLimit = elapsed > assessment.timeLimitMinutes + 1;
+        const isExpiredByExpiryAt = Boolean(
+          expiresAt && expiresAt.getTime() <= Date.now(),
+        );
+
+        if (isExpiredByTimeLimit || isExpiredByExpiryAt) {
+          await this.autoSubmitExpiredAttempt(assessment, existingUnsubmitted);
           // Fall through to create a new attempt
         } else {
           return {
             attempt: existingUnsubmitted,
             timeLimitMinutes: assessment.timeLimitMinutes,
+            expiresAt: existingUnsubmitted.expiresAt,
+            strictMode: assessment.strictMode ?? false,
+            timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
+            questionTimeLimitSeconds:
+              assessment.questionTimeLimitSeconds ?? null,
           };
         }
       } else {
-        return { attempt: existingUnsubmitted, timeLimitMinutes: null };
+        return {
+          attempt: existingUnsubmitted,
+          timeLimitMinutes: null,
+          expiresAt: existingUnsubmitted.expiresAt,
+          strictMode: assessment.strictMode ?? false,
+          timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
+          questionTimeLimitSeconds: assessment.questionTimeLimitSeconds ?? null,
+        };
       }
     }
 
@@ -815,7 +883,9 @@ export class AssessmentsService {
       assessment.dueDate &&
       new Date(assessment.dueDate) < new Date()
     ) {
-      throw new ForbiddenException('This assessment is closed (due date passed)');
+      throw new ForbiddenException(
+        'This assessment is closed (due date passed)',
+      );
     }
 
     // Count submitted attempts
@@ -836,6 +906,17 @@ export class AssessmentsService {
 
     // Create new attempt
     const attemptNumber = submittedAttempts.length + 1;
+    const questionOrder: string[] | null =
+      assessment.randomizeQuestions &&
+      assessment.type !== AssessmentType.FILE_UPLOAD &&
+      Array.isArray(assessment.questions)
+        ? this.shuffle(
+            assessment.questions.map((question: { id: string }) => question.id),
+          )
+        : null;
+
+    const expiresAt = this.computeExpiry(assessment.timeLimitMinutes);
+
     const [newAttempt] = await this.db
       .insert(assessmentAttempts)
       .values({
@@ -843,13 +924,149 @@ export class AssessmentsService {
         assessmentId,
         attemptNumber,
         isSubmitted: false,
+        expiresAt,
+        lastQuestionIndex: 0,
+        questionOrder,
+        draftResponses: [],
       })
       .returning();
 
     return {
       attempt: newAttempt,
       timeLimitMinutes: assessment.timeLimitMinutes ?? null,
+      expiresAt,
+      strictMode: assessment.strictMode ?? false,
+      timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
+      questionTimeLimitSeconds: assessment.questionTimeLimitSeconds ?? null,
     };
+  }
+
+  async getOngoingAttempt(studentId: string, assessmentId: string) {
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: and(
+        eq(assessmentAttempts.studentId, studentId),
+        eq(assessmentAttempts.assessmentId, assessmentId),
+        eq(assessmentAttempts.isSubmitted, false),
+      ),
+      orderBy: (a, { desc: d }) => [d(a.startedAt)],
+    });
+
+    if (!attempt) {
+      return null;
+    }
+
+    if (attempt.expiresAt && new Date(attempt.expiresAt).getTime() <= Date.now()) {
+      await this.autoSubmitExpiredAttempt(assessment, attempt);
+      return null;
+    }
+
+    return {
+      attempt,
+      timeLimitMinutes: assessment.timeLimitMinutes ?? null,
+      expiresAt: attempt.expiresAt,
+      strictMode: assessment.strictMode ?? false,
+      timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
+      questionTimeLimitSeconds: assessment.questionTimeLimitSeconds ?? null,
+    };
+  }
+
+  async getOngoingAttempts(studentId: string) {
+    const ongoing = await this.db.query.assessmentAttempts.findMany({
+      where: and(
+        eq(assessmentAttempts.studentId, studentId),
+        eq(assessmentAttempts.isSubmitted, false),
+      ),
+      with: {
+        assessment: {
+          columns: {
+            id: true,
+            title: true,
+            timeLimitMinutes: true,
+          },
+        },
+      },
+      orderBy: (a, { desc: d }) => [d(a.updatedAt)],
+    });
+
+    const now = Date.now();
+    const active = ongoing.filter(
+      (attempt) => !attempt.expiresAt || new Date(attempt.expiresAt).getTime() > now,
+    );
+
+    return active.map((attempt) => ({
+      id: attempt.id,
+      assessmentId: attempt.assessmentId,
+      assessmentTitle: attempt.assessment?.title,
+      startedAt: attempt.startedAt,
+      expiresAt: attempt.expiresAt,
+      lastQuestionIndex: attempt.lastQuestionIndex,
+      timeLimitMinutes: attempt.assessment?.timeLimitMinutes ?? null,
+    }));
+  }
+
+  async updateAttemptProgress(
+    studentId: string,
+    attemptId: string,
+    updateAttemptProgressDto: UpdateAttemptProgressDto,
+  ) {
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: and(
+        eq(assessmentAttempts.id, attemptId),
+        eq(assessmentAttempts.studentId, studentId),
+      ),
+    });
+
+    if (!attempt) {
+      throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
+    }
+
+    if (attempt.isSubmitted) {
+      throw new BadRequestException('Attempt is already submitted');
+    }
+
+    const assessment = await this.getAssessmentById(attempt.assessmentId);
+
+    if (attempt.expiresAt && new Date(attempt.expiresAt).getTime() <= Date.now()) {
+      await this.autoSubmitExpiredAttempt(assessment, attempt);
+      throw new BadRequestException('Attempt already expired and was auto-submitted');
+    }
+
+    if (
+      (assessment.strictMode ?? false) &&
+      typeof updateAttemptProgressDto.currentQuestionIndex === 'number' &&
+      updateAttemptProgressDto.currentQuestionIndex < attempt.lastQuestionIndex
+    ) {
+      throw new BadRequestException(
+        'Strict mode does not allow moving to a previous question',
+      );
+    }
+
+    const progressUpdates: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (typeof updateAttemptProgressDto.currentQuestionIndex === 'number') {
+      progressUpdates.lastQuestionIndex = Math.max(
+        0,
+        updateAttemptProgressDto.currentQuestionIndex,
+      );
+    }
+
+    if (updateAttemptProgressDto.responses !== undefined) {
+      progressUpdates.draftResponses = this.normalizeProgressResponses(
+        updateAttemptProgressDto.responses,
+      );
+    }
+
+    const [updatedAttempt] = await this.db
+      .update(assessmentAttempts)
+      .set(progressUpdates)
+      .where(eq(assessmentAttempts.id, attempt.id))
+      .returning();
+
+    return updatedAttempt;
   }
 
   /**
@@ -897,13 +1114,27 @@ export class AssessmentsService {
       );
     }
 
+    const submissionResponses =
+      Array.isArray(submitAssessmentDto.responses) &&
+      submitAssessmentDto.responses.length > 0
+        ? submitAssessmentDto.responses
+        : this.normalizeProgressResponses(attempt.draftResponses);
+
+    const computedTimeSpent = this.calculateAttemptTimeSpentSeconds(
+      attempt.startedAt,
+    );
+
     // Mark attempt as submitted
     const [updatedAttempt] = await this.db
       .update(assessmentAttempts)
       .set({
         isSubmitted: true,
         submittedAt: new Date(),
-        timeSpentSeconds: submitAssessmentDto.timeSpentSeconds,
+        timeSpentSeconds:
+          submitAssessmentDto.timeSpentSeconds > 0
+            ? submitAssessmentDto.timeSpentSeconds
+            : computedTimeSpent,
+        draftResponses: submissionResponses,
       })
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
@@ -921,7 +1152,7 @@ export class AssessmentsService {
 
     // Process responses and auto-grade
     const { totalPoints, responses } = await this.autoGradeResponses(
-      submitAssessmentDto.responses,
+      submissionResponses,
       assessment.questions,
       attempt.id,
     );
@@ -1275,8 +1506,58 @@ export class AssessmentsService {
     return filtered;
   }
 
-  /**
   // ─── Private helpers (extracted from submitAssessment) ──────────────
+
+  private async autoSubmitExpiredAttempt(
+    assessment: any,
+    attempt: typeof assessmentAttempts.$inferSelect,
+  ) {
+    const submissionResponses = this.normalizeProgressResponses(
+      attempt.draftResponses,
+    );
+
+    const [updatedAttempt] = await this.db
+      .update(assessmentAttempts)
+      .set({
+        isSubmitted: true,
+        submittedAt: new Date(),
+        timeSpentSeconds: this.calculateAttemptTimeSpentSeconds(attempt.startedAt),
+        draftResponses: submissionResponses,
+      })
+      .where(eq(assessmentAttempts.id, attempt.id))
+      .returning();
+
+    if (assessment.type === AssessmentType.FILE_UPLOAD) {
+      return updatedAttempt;
+    }
+
+    const { totalPoints } = await this.autoGradeResponses(
+      submissionResponses,
+      assessment.questions,
+      attempt.id,
+    );
+
+    const assessmentTotal = assessment.totalPoints || 1;
+    const score = Math.round((totalPoints / assessmentTotal) * 100);
+    const passed = score >= (assessment.passingScore || 60);
+
+    const [finalAttempt] = await this.db
+      .update(assessmentAttempts)
+      .set({ score, passed })
+      .where(eq(assessmentAttempts.id, attempt.id))
+      .returning();
+
+    this.emitSubmissionEvent(
+      assessment.id,
+      attempt.studentId,
+      totalPoints,
+      assessmentTotal,
+      assessment.classRecordCategory ?? undefined,
+      assessment.quarter ?? undefined,
+    );
+
+    return finalAttempt;
+  }
 
   /**
    * Auto-grade objective questions and store responses.
@@ -1537,17 +1818,22 @@ export class AssessmentsService {
     const assessment = await this.getAssessmentById(assessmentId);
     const dueDate = assessment.dueDate ? new Date(assessment.dueDate) : null;
 
-    const mapAttemptSummary = (attempt: typeof assessmentAttempts.$inferSelect) => {
-      const submittedAt = attempt.submittedAt ? new Date(attempt.submittedAt) : null;
+    const mapAttemptSummary = (
+      attempt: typeof assessmentAttempts.$inferSelect,
+    ) => {
+      const submittedAt = attempt.submittedAt
+        ? new Date(attempt.submittedAt)
+        : null;
       const isLate = Boolean(
         dueDate &&
-          submittedAt &&
-          attempt.isSubmitted &&
-          submittedAt.getTime() > dueDate.getTime(),
+        submittedAt &&
+        attempt.isSubmitted &&
+        submittedAt.getTime() > dueDate.getTime(),
       );
-      const lateByMinutes = isLate && submittedAt && dueDate
-        ? Math.ceil((submittedAt.getTime() - dueDate.getTime()) / (1000 * 60))
-        : 0;
+      const lateByMinutes =
+        isLate && submittedAt && dueDate
+          ? Math.ceil((submittedAt.getTime() - dueDate.getTime()) / (1000 * 60))
+          : 0;
 
       return {
         id: attempt.id,

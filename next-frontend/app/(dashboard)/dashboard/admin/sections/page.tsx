@@ -1,55 +1,56 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sectionService } from '@/services/section-service';
-import { userService } from '@/services/user-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api-error';
 import type { Section } from '@/types/section';
-import type { User } from '@/types/user';
+
+type StatusTab = 'active' | 'archived';
 
 export default function SectionManagementPage() {
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
-  const [teachers, setTeachers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<StatusTab>('active');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  // Modal state
-  const [showCreate, setShowCreate] = useState(false);
-  const [editSection, setEditSection] = useState<Section | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Section | null>(null);
-
-  // Form state
-  const [form, setForm] = useState({
-    name: '',
-    gradeLevel: '7',
-    schoolYear: '',
-    capacity: 40,
-    roomNumber: '',
-    adviserId: '',
-  });
+  const [archiveTarget, setArchiveTarget] = useState<Section | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<Section | null>(null);
+  const [archiveConfirmText, setArchiveConfirmText] = useState('');
+  const [purgeConfirmText, setPurgeConfirmText] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [sectionsRes, teachersRes] = await Promise.all([
-        sectionService.getAll(),
-        userService.getAll({ role: 'teacher', limit: 200 }),
-      ]);
+      const sectionsRes = await sectionService.getAll();
       setSections(sectionsRes.data || []);
-      setTeachers(teachersRes.users || []);
-    } catch {
-      toast.error('Failed to load data');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load sections'));
     } finally {
       setLoading(false);
     }
@@ -59,84 +60,74 @@ export default function SectionManagementPage() {
     fetchData();
   }, [fetchData]);
 
-  const currentYear = new Date().getFullYear();
-  const schoolYears = Array.from({ length: 5 }, (_, i) => `${currentYear - 2 + i}-${currentYear - 1 + i}`);
+  const filtered = useMemo(() => {
+    return sections.filter((section) => {
+      if (tab === 'active' && !section.isActive) return false;
+      if (tab === 'archived' && section.isActive) return false;
+      if (gradeFilter !== 'all' && section.gradeLevel !== gradeFilter) return false;
 
-  const resetForm = () => setForm({ name: '', gradeLevel: '7', schoolYear: schoolYears[2] || '', capacity: 40, roomNumber: '', adviserId: '' });
-
-  const filtered = sections.filter((s) => {
-    if (gradeFilter !== 'all' && s.gradeLevel !== gradeFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        s.name?.toLowerCase().includes(q) ||
-        s.gradeLevel?.toString().includes(q) ||
-        s.adviser?.firstName?.toLowerCase().includes(q) ||
-        s.adviser?.lastName?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  const handleOpenCreate = () => {
-    resetForm();
-    setEditSection(null);
-    setShowCreate(true);
-  };
-
-  const handleOpenEdit = (s: Section) => {
-    setEditSection(s);
-    setForm({
-      name: s.name,
-      gradeLevel: s.gradeLevel || '7',
-      schoolYear: s.schoolYear || '',
-      capacity: s.capacity || 40,
-      roomNumber: s.roomNumber || '',
-      adviserId: s.adviserId || '',
-    });
-    setShowCreate(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.name.trim()) return;
-    try {
-      if (editSection) {
-        await sectionService.update(editSection.id, {
-          name: form.name,
-          gradeLevel: form.gradeLevel,
-          schoolYear: form.schoolYear,
-          capacity: form.capacity,
-          roomNumber: form.roomNumber || undefined,
-          adviserId: form.adviserId || undefined,
-        });
-        toast.success('Section updated');
-      } else {
-        await sectionService.create({
-          name: form.name,
-          gradeLevel: form.gradeLevel as '7' | '8' | '9' | '10',
-          schoolYear: form.schoolYear,
-          capacity: form.capacity,
-          roomNumber: form.roomNumber || undefined,
-          adviserId: form.adviserId || undefined,
-        });
-        toast.success('Section created');
+      if (search) {
+        const query = search.toLowerCase();
+        return (
+          section.name?.toLowerCase().includes(query) ||
+          section.gradeLevel?.toString().includes(query) ||
+          section.adviser?.firstName?.toLowerCase().includes(query) ||
+          section.adviser?.lastName?.toLowerCase().includes(query)
+        );
       }
-      setShowCreate(false);
+
+      return true;
+    });
+  }, [gradeFilter, search, sections, tab]);
+
+  const activeCount = sections.filter((section) => section.isActive).length;
+  const archivedCount = sections.filter((section) => !section.isActive).length;
+
+  const handleArchive = async () => {
+    if (!archiveTarget) return;
+
+    if (archiveConfirmText.trim() !== archiveTarget.name) {
+      toast.error('Type the exact section name to archive');
+      return;
+    }
+
+    try {
+      await sectionService.archive(archiveTarget.id);
+      toast.success('Section archived and roster cleared');
+      setArchiveTarget(null);
+      setArchiveConfirmText('');
       fetchData();
-    } catch {
-      toast.error('Failed to save section');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to archive section'));
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
+  const handleRestore = async (section: Section) => {
     try {
-      await sectionService.delete(deleteTarget.id);
-      toast.success('Section deleted');
-      setDeleteTarget(null);
+      await sectionService.restore(section.id);
+      toast.success('Section restored');
       fetchData();
-    } catch {
-      toast.error('Failed to delete section');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to restore section'));
+    }
+  };
+
+  const handlePurge = async () => {
+    if (!purgeTarget) return;
+
+    if (purgeConfirmText.trim() !== purgeTarget.name) {
+      toast.error('Type the exact section name to purge');
+      return;
+    }
+
+    try {
+      await sectionService.permanentDelete(purgeTarget.id);
+      toast.success('Section purged from database');
+      setPurgeTarget(null);
+      setPurgeConfirmText('');
+      fetchData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to purge section'));
     }
   };
 
@@ -156,16 +147,40 @@ export default function SectionManagementPage() {
           <h1 className="text-2xl font-bold">Section Management</h1>
           <p className="text-muted-foreground">{sections.length} sections total</p>
         </div>
-        <Button onClick={handleOpenCreate}>+ Add Section</Button>
+        <Button onClick={() => router.push('/dashboard/admin/sections/new')}>+ Add Section</Button>
       </div>
 
-      {/* Filters */}
+      <Tabs value={tab} onValueChange={(value) => setTab(value as StatusTab)}>
+        <TabsList>
+          <TabsTrigger value="active">Active ({activeCount})</TabsTrigger>
+          <TabsTrigger value="archived">Archived ({archivedCount})</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {tab === 'archived' ? (
+        <Card className="border-red-200 bg-red-50/60">
+          <CardContent className="p-3 text-sm text-red-700">
+            Archived sections are inactive but restorable. Purge permanently removes the section from the database.
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="flex items-center gap-4">
-        <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
+        <Input
+          placeholder="Search..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="max-w-sm"
+        />
         <div className="flex gap-2">
-          {['all', '7', '8', '9', '10'].map((g) => (
-            <Button key={g} variant={gradeFilter === g ? 'default' : 'outline'} size="sm" onClick={() => setGradeFilter(g)}>
-              {g === 'all' ? 'All' : `Grade ${g}`}
+          {['all', '7', '8', '9', '10'].map((grade) => (
+            <Button
+              key={grade}
+              variant={gradeFilter === grade ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setGradeFilter(grade)}
+            >
+              {grade === 'all' ? 'All' : `Grade ${grade}`}
             </Button>
           ))}
         </div>
@@ -177,6 +192,7 @@ export default function SectionManagementPage() {
             <TableRow>
               <TableHead>Section Name</TableHead>
               <TableHead>Grade</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Adviser</TableHead>
               <TableHead>Students</TableHead>
               <TableHead>Room</TableHead>
@@ -186,83 +202,151 @@ export default function SectionManagementPage() {
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No sections found.</TableCell></TableRow>
-            ) : filtered.map((s) => (
-              <TableRow
-                key={s.id}
-                className="cursor-pointer hover:bg-gray-50"
-                onClick={() => router.push(`/dashboard/admin/sections/${s.id}/roster`)}
-              >
-                <TableCell className="font-medium">{s.name}</TableCell>
-                <TableCell>Grade {s.gradeLevel}</TableCell>
-                <TableCell>{s.adviser ? `${s.adviser.firstName} ${s.adviser.lastName}` : '—'}</TableCell>
-                <TableCell>{s.studentCount ?? '—'} / {s.capacity || '—'}</TableCell>
-                <TableCell>{s.roomNumber || '—'}</TableCell>
-                <TableCell className="text-muted-foreground">{s.schoolYear}</TableCell>
-                <TableCell className="text-right space-x-1" onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(s)}>Edit</Button>
-                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => setDeleteTarget(s)}>Delete</Button>
+              <TableRow>
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                  No sections found.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              filtered.map((section) => (
+                <TableRow
+                  key={section.id}
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => router.push(`/dashboard/admin/sections/${section.id}/roster`)}
+                >
+                  <TableCell className="font-medium">{section.name}</TableCell>
+                  <TableCell>Grade {section.gradeLevel}</TableCell>
+                  <TableCell>
+                    <Badge variant={section.isActive ? 'default' : 'secondary'}>
+                      {section.isActive ? 'Active' : 'Archived'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {section.adviser
+                      ? `${section.adviser.firstName} ${section.adviser.lastName}`
+                      : '—'}
+                  </TableCell>
+                  <TableCell>
+                    {section.studentCount ?? '—'} / {section.capacity || '—'}
+                  </TableCell>
+                  <TableCell>{section.roomNumber || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{section.schoolYear}</TableCell>
+                  <TableCell className="space-x-1 text-right" onClick={(event) => event.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => router.push(`/dashboard/admin/sections/${section.id}/edit`)}
+                    >
+                      Edit
+                    </Button>
+                    {section.isActive ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-amber-700"
+                        onClick={() => {
+                          setArchiveTarget(section);
+                          setArchiveConfirmText('');
+                        }}
+                      >
+                        Archive
+                      </Button>
+                    ) : (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => handleRestore(section)}>
+                          Restore
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => {
+                            setPurgeTarget(section);
+                            setPurgeConfirmText('');
+                          }}
+                        >
+                          Purge
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
 
-      {/* Create/Edit Modal */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog
+        open={!!archiveTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setArchiveTarget(null);
+            setArchiveConfirmText('');
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editSection ? 'Edit Section' : 'Create Section'}</DialogTitle>
+            <DialogTitle className="text-amber-700">Archive Section</DialogTitle>
+            <DialogDescription>
+              Archiving will clear active enrollments from this section and mark the section as inactive.
+              Type <strong>{archiveTarget?.name}</strong> to continue.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Section Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Kamia" /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Grade Level</Label>
-                <select value={form.gradeLevel} onChange={(e) => setForm({ ...form, gradeLevel: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                  {['7', '8', '9', '10'].map((g) => <option key={g} value={g}>Grade {g}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label>School Year</Label>
-                <select value={form.schoolYear} onChange={(e) => setForm({ ...form, schoolYear: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                  <option value="">Select year</option>
-                  {schoolYears.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Capacity</Label><Input type="number" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: Number(e.target.value) })} /></div>
-              <div><Label>Room</Label><Input value={form.roomNumber} onChange={(e) => setForm({ ...form, roomNumber: e.target.value })} placeholder="e.g. 201" /></div>
-            </div>
-            <div>
-              <Label>Adviser (optional)</Label>
-              <select value={form.adviserId} onChange={(e) => setForm({ ...form, adviserId: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                <option value="">No adviser</option>
-                {teachers.map((t) => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
-              </select>
-            </div>
-          </div>
+          <Input
+            value={archiveConfirmText}
+            onChange={(event) => setArchiveConfirmText(event.target.value)}
+            placeholder="Type section name to confirm"
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!form.name.trim()}>{editSection ? 'Update' : 'Create'}</Button>
+            <Button variant="outline" onClick={() => setArchiveTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={archiveConfirmText.trim() !== (archiveTarget?.name || '')}
+              onClick={handleArchive}
+            >
+              Archive
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+      <Dialog
+        open={!!purgeTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPurgeTarget(null);
+            setPurgeConfirmText('');
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-600">Delete Section</DialogTitle>
+            <DialogTitle className="text-red-600">Purge Section</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This cannot be undone.
+              This permanently deletes <strong>{purgeTarget?.name}</strong> from the database.
+              Type the section name exactly to proceed.
             </DialogDescription>
           </DialogHeader>
+          <Input
+            value={purgeConfirmText}
+            onChange={(event) => setPurgeConfirmText(event.target.value)}
+            placeholder="Type section name to confirm purge"
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setPurgeTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={purgeConfirmText.trim() !== (purgeTarget?.name || '')}
+              onClick={handlePurge}
+            >
+              Purge
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

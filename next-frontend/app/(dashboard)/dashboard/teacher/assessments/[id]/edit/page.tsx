@@ -128,6 +128,9 @@ export default function AssessmentEditorPage() {
   const [quarter, setQuarter] = useState<string>('');
   const [closeWhenDue, setCloseWhenDue] = useState(true);
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [timedQuestionsEnabled, setTimedQuestionsEnabled] = useState(false);
+  const [questionTimeLimitSeconds, setQuestionTimeLimitSeconds] = useState<number | ''>('');
+  const [strictMode, setStrictMode] = useState(false);
   const [fileUploadInstructions, setFileUploadInstructions] = useState('');
   const [allowedUploadExtensions, setAllowedUploadExtensions] = useState<string[]>([]);
   const [allowedUploadMimeTypes, setAllowedUploadMimeTypes] = useState<string[]>([]);
@@ -153,6 +156,9 @@ export default function AssessmentEditorPage() {
     quarter: string;
     closeWhenDue: boolean;
     randomizeQuestions: boolean;
+    timedQuestionsEnabled: boolean;
+    questionTimeLimitSeconds: number | '';
+    strictMode: boolean;
     fileUploadInstructions: string;
     allowedUploadExtensions: string[];
     allowedUploadMimeTypes: string[];
@@ -192,6 +198,9 @@ export default function AssessmentEditorPage() {
       setQuarter(a.quarter || '');
       setCloseWhenDue(a.closeWhenDue ?? true);
       setRandomizeQuestions(a.randomizeQuestions ?? false);
+      setTimedQuestionsEnabled(a.timedQuestionsEnabled ?? false);
+      setQuestionTimeLimitSeconds(a.questionTimeLimitSeconds ?? '');
+      setStrictMode(a.strictMode ?? false);
       setFileUploadInstructions(a.fileUploadInstructions || '');
       setAllowedUploadExtensions(
         a.allowedUploadExtensions && a.allowedUploadExtensions.length > 0
@@ -227,6 +236,9 @@ export default function AssessmentEditorPage() {
         quarter: a.quarter || '',
         closeWhenDue: a.closeWhenDue ?? true,
         randomizeQuestions: a.randomizeQuestions ?? false,
+        timedQuestionsEnabled: a.timedQuestionsEnabled ?? false,
+        questionTimeLimitSeconds: a.questionTimeLimitSeconds ?? '',
+        strictMode: a.strictMode ?? false,
         fileUploadInstructions: a.fileUploadInstructions || '',
         allowedUploadExtensions:
           a.allowedUploadExtensions && a.allowedUploadExtensions.length > 0
@@ -277,6 +289,9 @@ export default function AssessmentEditorPage() {
     quarter,
     closeWhenDue,
     randomizeQuestions,
+    timedQuestionsEnabled,
+    questionTimeLimitSeconds,
+    strictMode,
     fileUploadInstructions,
     allowedUploadExtensions: [...allowedUploadExtensions].sort(),
     allowedUploadMimeTypes: [...allowedUploadMimeTypes].sort(),
@@ -354,6 +369,12 @@ export default function AssessmentEditorPage() {
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         closeWhenDue,
         randomizeQuestions,
+        timedQuestionsEnabled,
+        questionTimeLimitSeconds:
+          timedQuestionsEnabled && questionTimeLimitSeconds !== ''
+            ? Number(questionTimeLimitSeconds)
+            : null,
+        strictMode,
         feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
         feedbackDelayHours,
         classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
@@ -709,6 +730,47 @@ export default function AssessmentEditorPage() {
                     onChange={(e) => setRandomizeQuestions(e.target.checked)}
                   />
                   Enable randomized order for each student attempt
+                </label>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Timed questions</Label>
+                <label className="flex items-center gap-2 h-10 rounded-md border px-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={timedQuestionsEnabled}
+                    onChange={(e) => {
+                      setTimedQuestionsEnabled(e.target.checked);
+                      if (!e.target.checked) setQuestionTimeLimitSeconds('');
+                    }}
+                  />
+                  Enable timer per question
+                </label>
+              </div>
+              {timedQuestionsEnabled && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Seconds per question</Label>
+                  <Input
+                    type="number"
+                    min={5}
+                    value={questionTimeLimitSeconds}
+                    onChange={(e) =>
+                      setQuestionTimeLimitSeconds(
+                        e.target.value === '' ? '' : Number(e.target.value),
+                      )
+                    }
+                    placeholder="e.g. 30"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Strict mode</Label>
+                <label className="flex items-center gap-2 h-10 rounded-md border px-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={strictMode}
+                    onChange={(e) => setStrictMode(e.target.checked)}
+                  />
+                  Students must answer current question before moving next and cannot go back
                 </label>
               </div>
             </div>

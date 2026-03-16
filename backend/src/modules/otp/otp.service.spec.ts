@@ -83,6 +83,9 @@ describe('OtpService', () => {
       otpVerifications: {
         findFirst: jest.fn(),
       },
+      users: {
+        findFirst: jest.fn(),
+      },
     },
     delete: jest.fn(),
     insert: jest.fn(),
@@ -191,31 +194,36 @@ describe('OtpService', () => {
     // --- success paths -------------------------------------------------------
 
     it('marks OTP as used and calls verifyEmail on success (email_verification)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(makeOtpRow());
 
-      // Two separate chains so we can inspect each update independently
+      // Three separate chains: attempt increment, mark-used, user email verification
       const attemptChain = makeUpdateChain([makeOtpRow({ attemptCount: 1 })]);
       const markUsedChain = makeUpdateChain([makeOtpRow({ isUsed: true })]);
+      const verifyEmailChain = makeUpdateChain([]);
       mockDb.update
         .mockReturnValueOnce(attemptChain)
-        .mockReturnValueOnce(markUsedChain);
+        .mockReturnValueOnce(markUsedChain)
+        .mockReturnValueOnce(verifyEmailChain);
 
       await service.verifyOTP(EMAIL, VALID_CODE, 'email_verification');
 
-      // Both updates were triggered
-      expect(mockDb.update).toHaveBeenCalledTimes(2);
+      // All three updates were triggered
+      expect(mockDb.update).toHaveBeenCalledTimes(3);
 
       // Second update must set isUsed=true and usedAt
       const setArgs = markUsedChain.set.mock.calls[0][0];
       expect(setArgs.isUsed).toBe(true);
       expect(setArgs.usedAt).toBeInstanceOf(Date);
 
-      expect(mockUsersService.verifyEmail).toHaveBeenCalledWith(USER_ID);
+      // Third update must mark user's email as verified in the users table
+      const userUpdateArgs = verifyEmailChain.set.mock.calls[0][0];
+      expect(userUpdateArgs.isEmailVerified).toBe(true);
+      expect(userUpdateArgs.status).toBe('ACTIVE');
     });
 
     it('does NOT call verifyEmail for password_reset purpose', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ purpose: 'password_reset' }),
       );
@@ -225,13 +233,14 @@ describe('OtpService', () => {
 
       await service.verifyOTP(EMAIL, VALID_CODE, 'password_reset');
 
-      expect(mockUsersService.verifyEmail).not.toHaveBeenCalled();
+      // For password_reset: only attempt increment + mark-used (no user email update)
+      expect(mockDb.update).toHaveBeenCalledTimes(2);
     });
 
     // --- enumeration protection ----------------------------------------------
 
     it('returns the same generic error when user does not exist (no enumeration)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockDb.query.users.findFirst.mockResolvedValue(null);
 
       await expect(
         service.verifyOTP('unknown@test.com', VALID_CODE),
@@ -241,7 +250,7 @@ describe('OtpService', () => {
     });
 
     it('returns the same generic error when code is wrong (no enumeration)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(makeOtpRow());
       mockDb.update.mockReturnValue(
         makeUpdateChain([makeOtpRow({ attemptCount: 1 })]),
@@ -256,7 +265,7 @@ describe('OtpService', () => {
     });
 
     it('returns the same generic error when no OTP row exists (no enumeration)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(null);
 
       await expect(service.verifyOTP(EMAIL, VALID_CODE)).rejects.toThrow(
@@ -267,7 +276,7 @@ describe('OtpService', () => {
     // --- already verified ---------------------------------------------------
 
     it('throws BadRequestException when email is already verified', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(
+      mockDb.query.users.findFirst.mockResolvedValue(
         makeUser({ isEmailVerified: true }),
       );
 
@@ -282,7 +291,7 @@ describe('OtpService', () => {
     // --- expiration ---------------------------------------------------------
 
     it('deletes expired OTP and throws generic error (no "expired" leak)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ expiresAt: new Date(Date.now() - 1000) }), // expired 1s ago
       );
@@ -301,7 +310,7 @@ describe('OtpService', () => {
     // --- too many attempts --------------------------------------------------
 
     it('throws Too many attempts when attemptCount is already at cap', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ attemptCount: 5 }),
       );
@@ -317,7 +326,7 @@ describe('OtpService', () => {
 
     it('accepts a code whose hash matches the stored hash', async () => {
       const code = '987654';
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ codeHash: hashCode(code) }),
       );
@@ -337,7 +346,7 @@ describe('OtpService', () => {
     // --- silent returns (enumeration protection) ----------------------------
 
     it('returns silently when user does not exist (no 404 leak)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(null);
+      mockDb.query.users.findFirst.mockResolvedValue(null);
 
       await expect(
         service.resendOTP('nonexistent@test.com'),
@@ -348,7 +357,7 @@ describe('OtpService', () => {
     });
 
     it('returns silently when user is already verified', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(
+      mockDb.query.users.findFirst.mockResolvedValue(
         makeUser({ isEmailVerified: true }),
       );
 
@@ -359,7 +368,7 @@ describe('OtpService', () => {
     // --- cooldown -----------------------------------------------------------
 
     it('throws BadRequestException during the 60-second cooldown window', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       // OTP was created 10 seconds ago — still within the 60-second window
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ createdAt: new Date(Date.now() - 10 * 1000) }),
@@ -377,7 +386,7 @@ describe('OtpService', () => {
     });
 
     it('error message shows exact seconds remaining', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       // Created 45 seconds ago: 15 seconds remain
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ createdAt: new Date(Date.now() - 45 * 1000) }),
@@ -391,7 +400,7 @@ describe('OtpService', () => {
     // --- after cooldown expires ---------------------------------------------
 
     it('sends a new OTP when cooldown has elapsed', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       // OTP was created 90 seconds ago — outside the 60-second window
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(
         makeOtpRow({ createdAt: new Date(Date.now() - 90 * 1000) }),
@@ -409,7 +418,7 @@ describe('OtpService', () => {
     });
 
     it('sends a new OTP when no prior OTP row exists (first resend)', async () => {
-      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      mockDb.query.users.findFirst.mockResolvedValue(makeUser());
       mockDb.query.otpVerifications.findFirst.mockResolvedValue(null);
       mockDb.delete.mockReturnValue(makeDeleteChain());
       mockDb.insert.mockReturnValue(makeInsertChain());

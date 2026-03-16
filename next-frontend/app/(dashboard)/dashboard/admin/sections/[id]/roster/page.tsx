@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sectionService, type RosterStudent } from '@/services/section-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Dialog,
@@ -19,14 +18,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Section } from '@/types/section';
 
-interface Candidate {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  gradeLevel?: string;
+function getInitials(firstName?: string, lastName?: string) {
+  const firstInitial = firstName?.trim()?.charAt(0) || '';
+  const lastInitial = lastName?.trim()?.charAt(0) || '';
+  return `${firstInitial}${lastInitial}`.toUpperCase() || 'ST';
 }
 
 export default function AdminSectionRosterPage() {
@@ -36,14 +34,10 @@ export default function AdminSectionRosterPage() {
 
   const [section, setSection] = useState<Section | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddStudents, setShowAddStudents] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<RosterStudent | null>(
     null,
   );
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [candidateSearch, setCandidateSearch] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -65,30 +59,6 @@ export default function AdminSectionRosterPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleOpenAddStudents = async () => {
-    try {
-      const res = await sectionService.getCandidates(sectionId);
-      setCandidates(res.data || []);
-      setSelectedIds([]);
-      setCandidateSearch('');
-      setShowAddStudents(true);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load candidates'));
-    }
-  };
-
-  const handleAddStudents = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      await sectionService.addStudents(sectionId, selectedIds);
-      toast.success(`Added ${selectedIds.length} student(s)`);
-      setShowAddStudents(false);
-      fetchData();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to add students'));
-    }
-  };
-
   const handleRemoveStudent = async (studentId: string) => {
     if (!confirm('Remove this student from the section?')) return;
     try {
@@ -108,15 +78,17 @@ export default function AdminSectionRosterPage() {
     }
   };
 
-  const filteredCandidates = candidates.filter((candidate) => {
-    if (!candidateSearch) return true;
-    const query = candidateSearch.toLowerCase();
-    return (
-      candidate.firstName?.toLowerCase().includes(query) ||
-      candidate.lastName?.toLowerCase().includes(query) ||
-      candidate.email?.toLowerCase().includes(query)
-    );
-  });
+  const dedupedRoster = useMemo(() => {
+    const unique = new Map<string, RosterStudent>();
+
+    for (const student of roster) {
+      if (!unique.has(student.id)) {
+        unique.set(student.id, student);
+      }
+    }
+
+    return Array.from(unique.values());
+  }, [roster]);
 
   if (loading) {
     return (
@@ -140,20 +112,32 @@ export default function AdminSectionRosterPage() {
         </Button>
         <h1 className="text-2xl font-bold">{section?.name} - Roster</h1>
         <p className="text-muted-foreground">
-          Grade {section?.gradeLevel} - {section?.schoolYear} - {roster.length}{' '}
+          Grade {section?.gradeLevel} - {section?.schoolYear} - {dedupedRoster.length}{' '}
           students
         </p>
       </div>
 
-      <div className="flex items-center justify-end">
-        <Button size="sm" onClick={handleOpenAddStudents}>
+      <div className="flex items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push(`/dashboard/admin/sections/${sectionId}/edit`)}
+        >
+          Edit Section
+        </Button>
+        <Button
+          size="sm"
+          onClick={() =>
+            router.push(`/dashboard/admin/sections/${sectionId}/students/add`)
+          }
+        >
           + Add Students
         </Button>
       </div>
 
       <SectionScheduleViewer sectionId={sectionId} />
 
-      {roster.length === 0 ? (
+      {dedupedRoster.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-muted-foreground">
             No students in this section yet.
@@ -173,11 +157,26 @@ export default function AdminSectionRosterPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {roster.map((student, index) => (
+              {dedupedRoster.map((student, index) => (
                 <TableRow key={student.id}>
                   <TableCell>{index + 1}</TableCell>
                   <TableCell>
-                    {student.firstName} {student.lastName}
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8 border">
+                        {student.profilePicture ? (
+                          <AvatarImage
+                            src={student.profilePicture}
+                            alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()}
+                          />
+                        ) : null}
+                        <AvatarFallback>
+                          {getInitials(student.firstName, student.lastName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span>
+                        {student.firstName} {student.lastName}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {student.email || 'N/A'}
@@ -211,63 +210,6 @@ export default function AdminSectionRosterPage() {
           </Table>
         </Card>
       )}
-
-      <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Students to {section?.name}</DialogTitle>
-            <DialogDescription>
-              Select students who are not yet enrolled in this section.
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            placeholder="Search students..."
-            value={candidateSearch}
-            onChange={(event) => setCandidateSearch(event.target.value)}
-          />
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {filteredCandidates.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                No candidates available.
-              </p>
-            ) : (
-              filteredCandidates.map((candidate) => (
-                <label
-                  key={candidate.id}
-                  className="flex cursor-pointer items-center gap-3 rounded p-2 hover:bg-gray-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(candidate.id)}
-                    onChange={() =>
-                      setSelectedIds((prev) =>
-                        prev.includes(candidate.id)
-                          ? prev.filter((id) => id !== candidate.id)
-                          : [...prev, candidate.id],
-                      )
-                    }
-                  />
-                  <span className="text-sm">
-                    {candidate.firstName} {candidate.lastName} -{' '}
-                    {candidate.email}
-                  </span>
-                </label>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddStudents(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddStudents}
-              disabled={selectedIds.length === 0}
-            >
-              Add {selectedIds.length} Student(s)
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={!!selectedStudent}

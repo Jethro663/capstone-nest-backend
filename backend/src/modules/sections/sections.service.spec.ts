@@ -346,14 +346,22 @@ describe('SectionsService', () => {
         gradeLevel: '7',
       };
 
-      // Two select() calls: enrolled subquery + main candidates query
+      // Three select() calls: enrolled subquery + main candidates query + active section memberships
       mockDb.select
         .mockReturnValueOnce(makeSelectChain([])) // enrolled subquery
-        .mockReturnValueOnce(makeSelectChain([candidateRow])); // main candidates query
+        .mockReturnValueOnce(makeSelectChain([candidateRow])) // main candidates query
+        .mockReturnValueOnce(makeSelectChain([])); // active section memberships
 
       const result = await service.getCandidates(SECTION_ID);
 
-      expect(result).toEqual([candidateRow]);
+      expect(result).toEqual([
+        {
+          ...candidateRow,
+          hasActiveSectionEnrollment: false,
+          enrolledSectionId: null,
+          enrolledSectionName: null,
+        },
+      ]);
     });
 
     it('throws NotFoundException when the section does not exist', async () => {
@@ -713,13 +721,19 @@ describe('SectionsService', () => {
   describe('deleteSection', () => {
     it('soft-deletes the section by setting isActive to false', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.update.mockReturnValue(makeUpdateChain());
+      const txUpdateChain = makeUpdateChain();
+      const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await service.deleteSection(SECTION_ID);
 
-      const setCall = mockDb.update.mock.results[0].value.set.mock.calls[0][0];
-      expect(setCall.isActive).toBe(false);
-      expect(setCall).toHaveProperty('updatedAt');
+      // archiveSection calls tx.update twice: enrollments drop + section archive
+      expect(tx.update).toHaveBeenCalledTimes(2);
+
+      // Second update (sections table) sets isActive to false
+      const sectionSetArgs = txUpdateChain.set.mock.calls[1][0];
+      expect(sectionSetArgs.isActive).toBe(false);
+      expect(sectionSetArgs).toHaveProperty('updatedAt');
     });
 
     it('throws NotFoundException when the section does not exist', async () => {
@@ -732,7 +746,9 @@ describe('SectionsService', () => {
 
     it('does not perform a second DB fetch after the soft-delete', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
-      mockDb.update.mockReturnValue(makeUpdateChain());
+      const txUpdateChain = makeUpdateChain();
+      const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await service.deleteSection(SECTION_ID);
 

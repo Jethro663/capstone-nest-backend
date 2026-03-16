@@ -56,6 +56,7 @@ const mockSectionsService = {
   removeStudentFromSection: jest.fn(),
   createSection: jest.fn(),
   updateSection: jest.fn(),
+  archiveSection: jest.fn(),
   deleteSection: jest.fn(),
   permanentlyDeleteSection: jest.fn(),
 };
@@ -261,15 +262,15 @@ describe('SectionsController', () => {
 
   describe('deleteSection', () => {
     it('returns success message on soft delete', async () => {
-      mockSectionsService.deleteSection.mockResolvedValue(undefined);
+      mockSectionsService.archiveSection.mockResolvedValue(undefined);
 
       const result = await controller.deleteSection(SECTION_ID);
 
       expect(result).toEqual({
         success: true,
-        message: 'Section deleted successfully (set to inactive)',
+        message: 'Section archived successfully',
       });
-      expect(mockSectionsService.deleteSection).toHaveBeenCalledWith(
+      expect(mockSectionsService.archiveSection).toHaveBeenCalledWith(
         SECTION_ID,
       );
     });
@@ -337,7 +338,7 @@ describe('SectionsController', () => {
     it('returns candidate data with count', async () => {
       mockSectionsService.getCandidates.mockResolvedValue(candidateRows);
 
-      const result = await controller.getCandidates(SECTION_ID, '7', 'juan');
+      const result = await controller.getCandidates(SECTION_ID, ADMIN_USER, '7', 'juan');
 
       expect(result).toEqual({ success: true, data: candidateRows, count: 1 });
     });
@@ -345,7 +346,7 @@ describe('SectionsController', () => {
     it('passes filters to the service', async () => {
       mockSectionsService.getCandidates.mockResolvedValue([]);
 
-      await controller.getCandidates(SECTION_ID, '8', 'dela');
+      await controller.getCandidates(SECTION_ID, ADMIN_USER, '8', 'dela');
 
       expect(mockSectionsService.getCandidates).toHaveBeenCalledWith(
         SECTION_ID,
@@ -353,17 +354,19 @@ describe('SectionsController', () => {
           gradeLevel: '8',
           search: 'dela',
         },
+        ADMIN_USER,
       );
     });
 
     it('passes an empty object when no filters are given', async () => {
       mockSectionsService.getCandidates.mockResolvedValue([]);
 
-      await controller.getCandidates(SECTION_ID);
+      await controller.getCandidates(SECTION_ID, ADMIN_USER);
 
       expect(mockSectionsService.getCandidates).toHaveBeenCalledWith(
         SECTION_ID,
         {},
+        ADMIN_USER,
       );
     });
   });
@@ -379,7 +382,7 @@ describe('SectionsController', () => {
       const serviceResult = { createdCount: 1, created: [{}], skipped: 0 };
       mockSectionsService.addStudentsToSection.mockResolvedValue(serviceResult);
 
-      const result = await controller.addStudentsToSection(SECTION_ID, dto);
+      const result = await controller.addStudentsToSection(SECTION_ID, undefined, dto);
 
       expect(result).toEqual({
         success: true,
@@ -395,11 +398,12 @@ describe('SectionsController', () => {
         skipped: 0,
       });
 
-      await controller.addStudentsToSection(SECTION_ID, dto);
+      await controller.addStudentsToSection(SECTION_ID, undefined, dto);
 
       expect(mockSectionsService.addStudentsToSection).toHaveBeenCalledWith(
         SECTION_ID,
         dto,
+        undefined,
       );
     });
 
@@ -409,7 +413,7 @@ describe('SectionsController', () => {
       );
 
       await expect(
-        controller.addStudentsToSection(SECTION_ID, dto),
+        controller.addStudentsToSection(SECTION_ID, undefined, dto),
       ).rejects.toThrow(BadRequestException);
     });
   });

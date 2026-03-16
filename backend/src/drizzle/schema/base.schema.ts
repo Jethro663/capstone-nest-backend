@@ -414,6 +414,11 @@ export const assessments = pgTable('assessments', {
   dueDate: timestamp('due_date'),
   closeWhenDue: boolean('close_when_due').notNull().default(true),
   randomizeQuestions: boolean('randomize_questions').notNull().default(false),
+  timedQuestionsEnabled: boolean('timed_questions_enabled')
+    .notNull()
+    .default(false),
+  questionTimeLimitSeconds: integer('question_time_limit_seconds'),
+  strictMode: boolean('strict_mode').notNull().default(false),
   fileUploadInstructions: text('file_upload_instructions'),
   teacherAttachmentFileId: uuid('teacher_attachment_file_id'),
   allowedUploadMimeTypes: text('allowed_upload_mime_types').array(),
@@ -488,6 +493,10 @@ export const assessmentAttempts = pgTable(
       .references(() => assessments.id, { onDelete: 'cascade' }),
     attemptNumber: integer('attempt_number').notNull().default(1),
     startedAt: timestamp('started_at').notNull().defaultNow(),
+    expiresAt: timestamp('expires_at'),
+    lastQuestionIndex: integer('last_question_index').notNull().default(0),
+    questionOrder: text('question_order').array(),
+    draftResponses: json('draft_responses'),
     submittedAt: timestamp('submitted_at'),
     score: integer('score'),
     passed: boolean('passed'),
@@ -513,6 +522,9 @@ export const assessmentAttempts = pgTable(
     ),
     assessmentIdIdx: index('assessment_attempts_assessment_id_idx').on(
       table.assessmentId,
+    ),
+    expiresAtIdx: index('assessment_attempts_expires_at_idx').on(
+      table.expiresAt,
     ),
     submittedIdx: index('assessment_attempts_submitted_idx').on(
       table.isSubmitted,

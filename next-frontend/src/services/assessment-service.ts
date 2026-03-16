@@ -12,6 +12,9 @@ import type {
   AssessmentStats,
   SubmissionsResponse,
   QuestionAnalyticsResponse,
+  OngoingAttemptResult,
+  OngoingAttemptSummary,
+  UpdateAttemptProgressDto,
 } from '@/types/assessment';
 
 export const assessmentService = {
@@ -143,8 +146,26 @@ export const assessmentService = {
   // --- Attempts ---
 
   /** POST /assessments/:assessmentId/start — Admin, Student */
-  async startAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: { attempt: AssessmentAttempt; timeLimitMinutes: number | null } }> {
+  async startAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: OngoingAttemptResult }> {
     const { data } = await api.post(`/assessments/${assessmentId}/start`);
+    return data;
+  },
+
+  /** GET /assessments/:assessmentId/ongoing-attempt — Admin, Student */
+  async getOngoingAttempt(assessmentId: string): Promise<{ success: boolean; message: string; data: OngoingAttemptResult | null }> {
+    const { data } = await api.get(`/assessments/${assessmentId}/ongoing-attempt`);
+    return data;
+  },
+
+  /** GET /assessments/attempts/ongoing — Admin, Student */
+  async getOngoingAttempts(): Promise<{ success: boolean; message: string; data: OngoingAttemptSummary[]; count: number }> {
+    const { data } = await api.get('/assessments/attempts/ongoing');
+    return data;
+  },
+
+  /** PATCH /assessments/attempts/:attemptId/progress — Admin, Student */
+  async updateAttemptProgress(attemptId: string, dto: UpdateAttemptProgressDto): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
+    const { data } = await api.patch(`/assessments/attempts/${attemptId}/progress`, dto);
     return data;
   },
 

@@ -82,6 +82,20 @@ export class CreateAssessmentDto {
   randomizeQuestions?: boolean = false;
 
   @IsOptional()
+  @IsBoolean()
+  timedQuestionsEnabled?: boolean = false;
+
+  @IsOptional()
+  @ValidateIf((o) => o.questionTimeLimitSeconds !== null)
+  @IsInt()
+  @Min(5)
+  questionTimeLimitSeconds?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  strictMode?: boolean = false;
+
+  @IsOptional()
   @IsString()
   fileUploadInstructions?: string;
 
@@ -162,6 +176,20 @@ export class UpdateAssessmentDto {
   @IsOptional()
   @IsBoolean()
   randomizeQuestions?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  timedQuestionsEnabled?: boolean;
+
+  @IsOptional()
+  @ValidateIf((o) => o.questionTimeLimitSeconds !== null)
+  @IsInt()
+  @Min(5)
+  questionTimeLimitSeconds?: number | null;
+
+  @IsOptional()
+  @IsBoolean()
+  strictMode?: boolean;
 
   @IsOptional()
   @IsString()
@@ -343,6 +371,18 @@ export class SubmitAssessmentDto {
 export class StartAssessmentDto {
   @IsUUID()
   assessmentId: string;
+}
+
+export class UpdateAttemptProgressDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  currentQuestionIndex?: number;
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => ResponseAnswerDto)
+  responses?: ResponseAnswerDto[];
 }
 
 // ==========================================
