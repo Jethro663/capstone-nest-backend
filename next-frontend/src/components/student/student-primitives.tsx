@@ -86,13 +86,13 @@ export function StudentStatusChip({
 }) {
   const toneClass =
     tone === 'success'
-      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+      ? 'bg-[var(--student-success-bg)] text-[var(--student-success-text)] border-[var(--student-success-border)]'
       : tone === 'warning'
-        ? 'bg-amber-100 text-amber-900 border-amber-300'
+        ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)] border-[var(--student-accent-soft-strong)]'
       : tone === 'danger'
-          ? 'bg-rose-100 text-rose-800 border-rose-300'
+          ? 'bg-[var(--student-danger-bg)] text-[var(--student-danger-text)] border-[var(--student-danger-border)]'
           : tone === 'info'
-            ? 'bg-blue-100 text-blue-800 border-blue-300'
+            ? 'bg-[var(--student-surface-soft)] text-[var(--student-text-strong)] border-[var(--student-outline-strong)]'
             : 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]';
 
   return (

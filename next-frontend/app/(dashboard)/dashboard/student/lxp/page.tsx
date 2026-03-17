@@ -119,11 +119,11 @@ export default function StudentLxpPage() {
 
   if (eligibleClasses.length === 0) {
     return (
-      <Card>
+      <Card className="student-panel rounded-[1.5rem]">
         <CardHeader>
-          <CardTitle>LXP Intervention</CardTitle>
+          <CardTitle className="text-[var(--student-text-strong)]">LXP Intervention</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-2 text-sm text-[var(--student-text-muted)]">
           <p>You currently have no active intervention classes.</p>
           <p>
             LXP access is enabled when your blended score is below{' '}
@@ -138,8 +138,8 @@ export default function StudentLxpPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">LXP Intervention</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold text-[var(--student-text-strong)]">LXP Intervention</h1>
+          <p className="text-sm text-[var(--student-text-muted)]">
             {threshold !== null
               ? `Threshold: ${threshold}% | Complete checkpoints to gain XP and recover faster.`
               : 'Complete checkpoints to gain XP and recover faster.'}
@@ -148,7 +148,7 @@ export default function StudentLxpPage() {
         <select
           value={selectedClassId}
           onChange={(e) => setSelectedClassId(e.target.value)}
-          className="rounded-md border px-3 py-2 text-sm min-w-[260px]"
+          className="student-input rounded-xl border border-[var(--student-outline)] px-3 py-2 text-sm min-w-[260px]"
         >
           {eligibleClasses.map((entry) => (
             <option key={entry.classId} value={entry.classId}>
@@ -159,33 +159,33 @@ export default function StudentLxpPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card className="student-panel rounded-[1.5rem]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Class</CardTitle>
+            <CardTitle className="text-sm text-[var(--student-text-muted)]">Class</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="font-semibold">{selectedClass ? classLabel(selectedClass) : '--'}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="font-semibold text-[var(--student-text-strong)]">{selectedClass ? classLabel(selectedClass) : '--'}</p>
+            <p className="text-xs text-[var(--student-text-muted)]">
               {selectedClass?.class.section?.name ?? 'Section unavailable'}
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="student-panel rounded-[1.5rem]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">XP</CardTitle>
+            <CardTitle className="text-sm text-[var(--student-text-muted)]">XP</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{playlist?.progress.xpTotal ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Current intervention XP</p>
+            <p className="text-2xl font-bold text-[var(--student-text-strong)]">{playlist?.progress.xpTotal ?? 0}</p>
+            <p className="text-xs text-[var(--student-text-muted)]">Current intervention XP</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="student-panel rounded-[1.5rem]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Streak</CardTitle>
+            <CardTitle className="text-sm text-[var(--student-text-muted)]">Streak</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{playlist?.progress.streakDays ?? 0} day(s)</p>
-            <p className="text-xs text-muted-foreground">Daily intervention streak</p>
+            <p className="text-2xl font-bold text-[var(--student-text-strong)]">{playlist?.progress.streakDays ?? 0} day(s)</p>
+            <p className="text-xs text-[var(--student-text-muted)]">Daily intervention streak</p>
           </CardContent>
         </Card>
       </div>
@@ -193,11 +193,11 @@ export default function StudentLxpPage() {
       {loadingPlaylist ? (
         <Skeleton className="h-96 rounded-lg" />
       ) : (
-        <Card>
+        <Card className="student-panel rounded-[1.5rem]">
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="flex items-center justify-between text-[var(--student-text-strong)]">
               <span>Remedial Checkpoints</span>
-              <Badge variant="secondary">
+              <Badge className="student-badge">
                 {playlist?.progress.completionPercent ?? 0}% complete
               </Badge>
             </CardTitle>
@@ -205,7 +205,7 @@ export default function StudentLxpPage() {
           <CardContent className="space-y-4">
             <Progress value={playlist?.progress.completionPercent ?? 0} />
             {(playlist?.checkpoints ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-[var(--student-text-muted)]">
                 No checkpoints assigned yet. Ask your teacher to assign intervention tasks.
               </p>
             ) : (
@@ -213,36 +213,36 @@ export default function StudentLxpPage() {
                 {playlist?.checkpoints.map((checkpoint) => (
                   <div
                     key={checkpoint.id}
-                    className="rounded-lg border bg-background p-4"
+                    className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-elevated)] p-4"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="font-medium">{checkpoint.label}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="font-medium text-[var(--student-text-strong)]">{checkpoint.label}</p>
+                        <p className="text-xs text-[var(--student-text-muted)]">
                           {checkpoint.type === 'lesson_review'
                             ? 'Review lesson checkpoint'
                             : 'Retry assessment checkpoint'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={checkpoint.isCompleted ? 'default' : 'outline'}>
+                        <Badge variant={checkpoint.isCompleted ? 'default' : 'outline'} className={checkpoint.isCompleted ? 'bg-[var(--student-success-bg)] text-[var(--student-success-text)] border-[var(--student-success-border)]' : 'student-badge'}>
                           {checkpoint.isCompleted ? 'Completed' : 'Pending'}
                         </Badge>
-                        <Badge variant="secondary">+{checkpoint.xpAwarded} XP</Badge>
+                        <Badge className="student-badge">+{checkpoint.xpAwarded} XP</Badge>
                       </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       {checkpoint.lesson && (
                         <Link href={`/dashboard/student/lessons/${checkpoint.lesson.id}`}>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" className="student-button-outline">
                             Open Lesson
                           </Button>
                         </Link>
                       )}
                       {checkpoint.assessment && (
                         <Link href={checkpoint.assessment.type === 'file_upload' ? `/dashboard/student/assessments/${checkpoint.assessment.id}/take` : `/dashboard/student/assessments/${checkpoint.assessment.id}`}>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" className="student-button-outline">
                             Open Assessment
                           </Button>
                         </Link>
@@ -251,6 +251,7 @@ export default function StudentLxpPage() {
                         size="sm"
                         onClick={() => handleComplete(checkpoint.id)}
                         disabled={checkpoint.isCompleted || completingId === checkpoint.id}
+                        className="student-button-solid"
                       >
                         {checkpoint.isCompleted
                           ? 'Done'
@@ -267,18 +268,18 @@ export default function StudentLxpPage() {
         </Card>
       )}
 
-      <Card>
+      <Card className="student-panel rounded-[1.5rem]">
         <CardHeader>
-          <CardTitle className="text-base">Quick LXP Feedback</CardTitle>
+          <CardTitle className="text-base text-[var(--student-text-strong)]">Quick LXP Feedback</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <textarea
-            className="min-h-24 w-full rounded-md border p-2 text-sm"
+            className="student-input min-h-24 w-full rounded-xl border border-[var(--student-outline)] p-2 text-sm"
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             placeholder="Share what helped you most (optional)"
           />
-          <Button size="sm" onClick={submitEvaluation} disabled={submittingEval}>
+          <Button size="sm" onClick={submitEvaluation} disabled={submittingEval} className="student-button-solid">
             {submittingEval ? 'Submitting...' : 'Submit Feedback'}
           </Button>
         </CardContent>

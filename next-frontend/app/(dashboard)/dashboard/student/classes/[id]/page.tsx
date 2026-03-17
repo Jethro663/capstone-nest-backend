@@ -95,20 +95,20 @@ export default function StudentClassDetailPage() {
   }
 
   if (!classItem) {
-    return <p className="text-muted-foreground">Class not found.</p>;
+    return <p className="text-[var(--student-text-muted)]">Class not found.</p>;
   }
 
   return (
     <div className="student-page space-y-6 rounded-3xl p-1">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="w-fit text-red-700 hover:bg-red-50">
+      <Button variant="ghost" size="sm" onClick={() => router.back()} className="w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]">
         <ArrowLeft className="mr-1 h-4 w-4" />
         Back
       </Button>
 
-      <StudentActionCard className="border-0 bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-white">
+      <StudentActionCard className="border-0 bg-[var(--student-accent)] text-[var(--student-accent-contrast)]">
         <StudentSectionHeader
-title={classItem.subjectName || classItem.className || "Class"}          subtitle={`${classItem.section?.name} • Grade ${classItem.section?.gradeLevel}`}
-          className="[&_h2]:text-white [&_p]:text-red-100"
+title={classItem.subjectName || classItem.className || "Class"}          subtitle={`${classItem.section?.name} \u2022 Grade ${classItem.section?.gradeLevel}`}
+          className="[&_h2]:text-[var(--student-accent-contrast)] [&_p]:text-[var(--student-accent-contrast)]/70"
         />
       </StudentActionCard>
 
@@ -134,7 +134,7 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
                       <StudentActionCard>
                         <div className="flex items-center justify-between gap-2">
                           <div>
-                            <p className="font-semibold text-slate-900">{lesson.title}</p>
+                            <p className="font-semibold text-[var(--student-text-strong)]">{lesson.title}</p>
                             <p className="line-clamp-1 text-sm student-muted-text">{getDescription(lesson.description)}</p>
                           </div>
                           {completions[lesson.id] && <StudentStatusChip tone="success">Completed</StudentStatusChip>}
@@ -166,12 +166,12 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
                         <StudentActionCard>
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <p className="font-semibold text-slate-900">{assessment.title}</p>
+                              <p className="font-semibold text-[var(--student-text-strong)]">{assessment.title}</p>
                               <p className="line-clamp-1 text-sm student-muted-text">{getDescription(assessment.description)}</p>
                             </div>
                             {bestAttempt ? (
                               <StudentStatusChip tone={bestAttempt.passed ? 'success' : 'danger'}>
-                                {bestAttempt.passed ? 'Passed' : 'Needs Improvement'} • {bestAttempt.score}/{bestAttempt.totalPoints}
+                                {bestAttempt.passed ? 'Passed' : 'Needs Improvement'} \u2022 {bestAttempt.score}/{bestAttempt.totalPoints}
                               </StudentStatusChip>
                             ) : (
                               <StudentStatusChip tone="warning">Not Started</StudentStatusChip>
@@ -196,12 +196,12 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
                 <motion.div key={ann.id} {...motionProps.item}>
                   <StudentActionCard>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{ann.title}</p>
+                      <p className="font-semibold text-[var(--student-text-strong)]">{ann.title}</p>
                       {ann.isPinned && <StudentStatusChip tone="warning">Pinned</StudentStatusChip>}
                     </div>
                     <p className="mt-2 text-sm student-muted-text">{ann.content}</p>
                     <p className="mt-2 text-xs student-muted-text">
-                      {ann.author?.firstName} {ann.author?.lastName} • {new Date(ann.createdAt!).toLocaleDateString()}
+                      {ann.author?.firstName} {ann.author?.lastName} \u2022 {new Date(ann.createdAt!).toLocaleDateString()}
                     </p>
                   </StudentActionCard>
                 </motion.div>

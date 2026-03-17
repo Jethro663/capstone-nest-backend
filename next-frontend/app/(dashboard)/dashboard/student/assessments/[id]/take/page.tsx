@@ -649,7 +649,7 @@ export default function StudentAssessmentTakePage() {
   }
 
   if (!assessment || (!isFileUploadAssessment && questions.length === 0)) {
-    return <p className="text-muted-foreground">No questions available.</p>;
+    return <p className="text-[var(--student-text-muted)]">No questions available.</p>;
   }
 
   if (isFileUploadAssessment && assessment) {
@@ -664,11 +664,11 @@ export default function StudentAssessmentTakePage() {
           transition={{ duration: 0.25 }}
           className="max-w-4xl mx-auto space-y-4"
         >
-          <Card className="student-card overflow-hidden border-red-200">
+          <Card className="student-card overflow-hidden border-[var(--student-outline)]">
             <CardContent className="p-6 space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-lg font-semibold text-slate-900">{assessment.title}</p>
+                  <p className="text-lg font-semibold text-[var(--student-text-strong)]">{assessment.title}</p>
                   <p className="text-sm student-muted-text">File Upload Assessment</p>
                 </div>
                 <StudentStatusChip tone="warning">
@@ -677,30 +677,30 @@ export default function StudentAssessmentTakePage() {
                 </StudentStatusChip>
               </div>
 
-              <div className="rounded-xl border bg-muted/30 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Instruction</p>
-                <p className="text-sm leading-relaxed text-slate-900 whitespace-pre-wrap">
+              <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+                <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)] mb-2">Instruction</p>
+                <p className="text-sm leading-relaxed text-[var(--student-text-strong)] whitespace-pre-wrap">
                   {assessment.fileUploadInstructions || 'No additional instruction provided.'}
                 </p>
               </div>
 
-              <div className="rounded-xl border p-4 space-y-2">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Allowed Formats</p>
+              <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-2">
+                <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Allowed Formats</p>
                 <div className="flex flex-wrap gap-2">
                   {allowedExtensions.length > 0 ? allowedExtensions.map((ext) => (
-                    <Badge key={ext} variant="secondary" className="text-xs uppercase">.{ext}</Badge>
-                  )) : <span className="text-xs text-muted-foreground">No format restrictions configured</span>}
+                    <Badge key={ext} className="student-badge text-xs uppercase">.{ext}</Badge>
+                  )) : <span className="text-xs text-[var(--student-text-muted)]">No format restrictions configured</span>}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[var(--student-text-muted)]">
                   Maximum upload size: {(maxUploadSize / (1024 * 1024)).toFixed(0)} MB
                 </p>
               </div>
 
               {assessment.teacherAttachmentFile && (
-                <div className="rounded-xl border p-4 flex items-center justify-between gap-3">
+                <div className="rounded-xl border border-[var(--student-outline)] p-4 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{assessment.teacherAttachmentFile.originalName}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm font-medium text-[var(--student-text-strong)] truncate">{assessment.teacherAttachmentFile.originalName}</p>
+                    <p className="text-xs text-[var(--student-text-muted)]">
                       {(assessment.teacherAttachmentFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {assessment.teacherAttachmentFile.mimeType}
                     </p>
                   </div>
@@ -713,9 +713,9 @@ export default function StudentAssessmentTakePage() {
                 </div>
               )}
 
-              <div className="rounded-xl border p-4 space-y-3">
-                <p className="text-sm font-medium text-slate-900">Your Submission</p>
-                <label className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer hover:bg-muted transition-colors">
+              <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-3">
+                <p className="text-sm font-medium text-[var(--student-text-strong)]">Your Submission</p>
+                <label className="inline-flex items-center gap-2 rounded-md border border-[var(--student-outline)] px-3 py-2 text-sm cursor-pointer hover:bg-[var(--student-surface-soft)] transition-colors text-[var(--student-text-strong)]">
                   <UploadCloud className="h-4 w-4" />
                   {uploadingFile ? 'Uploading...' : 'Upload file'}
                   <input
@@ -731,10 +731,10 @@ export default function StudentAssessmentTakePage() {
                 </label>
 
                 {uploadedSubmission?.file && (
-                  <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between gap-3">
+                  <div className="rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{uploadedSubmission.file.originalName}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-medium truncate text-[var(--student-text-strong)]">{uploadedSubmission.file.originalName}</p>
+                      <p className="text-xs text-[var(--student-text-muted)]">
                         {(uploadedSubmission.file.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {uploadedSubmission.file.mimeType}
                       </p>
                     </div>
@@ -750,7 +750,7 @@ export default function StudentAssessmentTakePage() {
               </div>
 
               <div className="flex justify-end">
-                <Button className="bg-red-600 hover:bg-red-700" onClick={handleSubmitFileUpload} disabled={submitting || uploadingFile}>
+                <Button className="student-button-solid" onClick={handleSubmitFileUpload} disabled={submitting || uploadingFile}>
                   {submitting ? 'Submitting...' : 'Submit'}
                 </Button>
               </div>
@@ -784,10 +784,10 @@ export default function StudentAssessmentTakePage() {
 
   return (
     <div className="student-page rounded-3xl p-1">
-      <div className="sticky top-0 z-30 rounded-2xl border border-red-200 bg-white/90 p-3 backdrop-blur">
+      <div className="sticky top-0 z-30 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-glass)] p-3 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-slate-900">{assessment.title}</p>
+            <p className="text-sm font-semibold text-[var(--student-text-strong)]">{assessment.title}</p>
             <p className="text-xs student-muted-text">Question {currentIdx + 1} of {questions.length}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -826,7 +826,7 @@ export default function StudentAssessmentTakePage() {
                 exit={reduceMotion ? {} : { opacity: 0, y: -6 }}
                 transition={{ duration: 0.2 }}
               >
-                <h2 className="text-lg font-semibold leading-relaxed text-slate-900">{current.content}</h2>
+                <h2 className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]">{current.content}</h2>
                 <div className="mt-4">
                   <AnswerInput question={current} value={responses[current.id]} onChange={(val) => setResponse(current.id, val)} />
                 </div>
@@ -845,7 +845,7 @@ export default function StudentAssessmentTakePage() {
               </Button>
               {currentIdx < questions.length - 1 ? (
                 <Button
-                  className="bg-red-600 hover:bg-red-700"
+                  className="student-button-solid"
                   disabled={!canAdvanceInStrictMode}
                   onClick={() => {
                     if (!canAdvanceInStrictMode) {
@@ -858,7 +858,7 @@ export default function StudentAssessmentTakePage() {
                   Next
                 </Button>
               ) : (
-                <Button className="bg-red-600 hover:bg-red-700" onClick={() => setShowConfirm(true)}>
+                <Button className="student-button-solid" onClick={() => setShowConfirm(true)}>
                   Submit Assessment
                 </Button>
               )}
@@ -868,7 +868,7 @@ export default function StudentAssessmentTakePage() {
 
         <Card className="student-card h-fit">
           <CardContent className="p-4">
-            <p className="mb-3 text-sm font-semibold text-slate-900">Question Navigator</p>
+            <p className="mb-3 text-sm font-semibold text-[var(--student-text-strong)]">Question Navigator</p>
             <div className="grid grid-cols-4 gap-2">
               {questions.map((q, i) => {
                 const answered = isQuestionAnswered(q, responses[q.id]);
@@ -884,9 +884,9 @@ export default function StudentAssessmentTakePage() {
                     }}
                     className={
                       i === currentIdx
-                        ? 'border-red-600 bg-red-600 text-white hover:bg-red-700'
+                        ? 'border-[var(--student-accent)] bg-[var(--student-accent)] text-[var(--student-accent-contrast)] hover:opacity-90'
                         : answered
-                          ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                          ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
                           : ''
                     }
                   >
@@ -896,8 +896,8 @@ export default function StudentAssessmentTakePage() {
               })}
             </div>
             <div className="mt-3 space-y-1 text-xs student-muted-text">
-              <p className="flex items-center gap-1"><Flag className="h-3.5 w-3.5 text-red-600" /> Current</p>
-              <p className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Answered</p>
+              <p className="flex items-center gap-1"><Flag className="h-3.5 w-3.5 text-[var(--student-accent)]" /> Current</p>
+              <p className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-[var(--student-success-text)]" /> Answered</p>
             </div>
           </CardContent>
         </Card>
@@ -913,7 +913,7 @@ export default function StudentAssessmentTakePage() {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowConfirm(false)}>Keep Working</Button>
-            <Button className="bg-red-600 hover:bg-red-700" onClick={handleSubmit} disabled={submitting}>
+            <Button className="student-button-solid" onClick={handleSubmit} disabled={submitting}>
               {submitting ? 'Submitting...' : 'Submit'}
             </Button>
           </DialogFooter>
@@ -930,7 +930,7 @@ export default function StudentAssessmentTakePage() {
           </DialogHeader>
           <DialogFooter>
             <Button
-              className="bg-red-600 hover:bg-red-700"
+              className="student-button-solid"
               onClick={() => router.replace(`/dashboard/student/assessments/${assessmentId}?view=submitted`)}
             >
               Return to Assessment Page
@@ -961,7 +961,7 @@ function AnswerInput({
             <label
               key={opt.id}
               className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${
-                value === opt.id ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
+                value === opt.id ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]' : 'border-[var(--student-outline)] hover:bg-[var(--student-surface-soft)]'
               }`}
             >
               <input
@@ -969,7 +969,7 @@ function AnswerInput({
                 name={question.id}
                 checked={value === opt.id}
                 onChange={() => onChange(opt.id)}
-                className="accent-red-600"
+                className="accent-[var(--student-accent)]"
               />
               <span>{opt.text}</span>
             </label>
@@ -986,7 +986,7 @@ function AnswerInput({
               <label
                 key={opt.id}
                 className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${
-                  selected ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
+                  selected ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]' : 'border-[var(--student-outline)] hover:bg-[var(--student-surface-soft)]'
                 }`}
               >
                 <input
@@ -996,7 +996,7 @@ function AnswerInput({
                     const current = Array.isArray(value) ? value : [];
                     onChange(selected ? current.filter((id) => id !== opt.id) : [...current, opt.id]);
                   }}
-                  className="accent-red-600"
+                  className="accent-[var(--student-accent)]"
                 />
                 <span>{opt.text}</span>
               </label>
@@ -1015,7 +1015,7 @@ function AnswerInput({
               <Button
                 key={label}
                 variant={value === optId ? 'default' : 'outline'}
-                className={value === optId ? 'bg-red-600 hover:bg-red-700' : ''}
+                className={value === optId ? 'student-button-solid' : ''}
                 onClick={() => onChange(optId)}
               >
                 {label}
@@ -1032,7 +1032,7 @@ function AnswerInput({
           value={(value as string) || ''}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Type your answer..."
-          className="min-h-[120px] w-full resize-y rounded-xl border p-3 focus:border-red-300 focus:outline-none"
+          className="min-h-[120px] w-full resize-y rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)] p-3 focus:border-[var(--student-accent)] focus:outline-none"
         />
       );
 
@@ -1041,7 +1041,7 @@ function AnswerInput({
         <select
           value={(value as string) || ''}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-xl border p-3 focus:border-red-300 focus:outline-none"
+          className="w-full rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)] p-3 focus:border-[var(--student-accent)] focus:outline-none"
         >
           <option value="">Select an answer...</option>
           {options.map((opt) => (
@@ -1051,6 +1051,6 @@ function AnswerInput({
       );
 
     default:
-      return <p className="text-muted-foreground">Unsupported question type</p>;
+      return <p className="text-[var(--student-text-muted)]">Unsupported question type</p>;
   }
 }

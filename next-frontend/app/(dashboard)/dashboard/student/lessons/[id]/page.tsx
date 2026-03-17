@@ -102,25 +102,25 @@ export default function StudentLessonViewPage() {
   }
 
   if (!lesson) {
-    return <p className="text-muted-foreground">Lesson not found.</p>;
+    return <p className="text-[var(--student-text-muted)]">Lesson not found.</p>;
   }
 
   return (
     <div className="relative">
       {/* Reading progress bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-gray-200 z-50">
-        <div className="h-full bg-red-500 transition-all" style={{ width: `${scrollProgress}%` }} />
+      <div className="fixed top-0 left-0 right-0 h-1 bg-[var(--student-progress-track)] z-50">
+        <div className="h-full student-progress-fill transition-all" style={{ width: `${scrollProgress}%` }} />
       </div>
 
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div>
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">
+          <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2 text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]">
             ← Back
           </Button>
-          <h1 className="text-2xl font-bold">{lesson.title}</h1>
+          <h1 className="text-2xl font-bold text-[var(--student-text-strong)]">{lesson.title}</h1>
           {lesson.description && (
-            <p className="mt-1 text-muted-foreground">{lesson.description}</p>
+            <p className="mt-1 text-[var(--student-text-muted)]">{lesson.description}</p>
           )}
         </div>
 
@@ -132,24 +132,23 @@ export default function StudentLessonViewPage() {
         </div>
 
         {blocks.length === 0 && (
-          <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
+          <Card className="student-card">
+            <CardContent className="p-6 text-center text-[var(--student-text-muted)]">
               No content available for this lesson.
             </CardContent>
           </Card>
         )}
 
         {/* Completion & Navigation */}
-        <div className="sticky bottom-0 bg-white border-t py-4 flex items-center justify-between">
+        <div className="sticky bottom-0 bg-[var(--student-elevated)] border-t border-[var(--student-outline)] py-4 flex items-center justify-between">
           <Button
             onClick={handleComplete}
             disabled={isCompleted || completing}
-            variant={isCompleted ? 'secondary' : 'default'}
-            className={isCompleted ? 'bg-green-100 text-green-700' : ''}
+            className={isCompleted ? 'bg-[var(--student-success-bg)] text-[var(--student-success-text)] border border-[var(--student-success-border)]' : 'student-button-solid'}
           >
             {isCompleted ? '✓ Completed' : completing ? 'Marking...' : 'Mark Complete'}
           </Button>
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button variant="outline" onClick={() => router.back()} className="student-button-outline">
             Back to Class
           </Button>
         </div>
@@ -162,7 +161,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
       return (
-        <div className="prose max-w-none leading-relaxed" dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }} />
+        <div className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]" dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }} />
       );
     case 'image': {
       const src = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
@@ -170,7 +169,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       return (
         <figure>
           {src && <img src={src} alt={caption || 'Lesson image'} className="rounded-lg w-full" />}
-          {caption && <figcaption className="text-center text-sm text-muted-foreground mt-2">{caption}</figcaption>}
+          {caption && <figcaption className="text-center text-sm text-[var(--student-text-muted)] mt-2">{caption}</figcaption>}
         </figure>
       );
     }
@@ -189,10 +188,10 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
     }
     case 'question':
       return (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="student-card border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]">
           <CardContent className="p-4">
-            <Badge variant="secondary" className="mb-2">Quiz Question</Badge>
-            <p className="font-medium whitespace-pre-wrap">{getBlockTextValue(block.content)}</p>
+            <Badge className="student-badge mb-2">Quiz Question</Badge>
+            <p className="font-medium text-[var(--student-text-strong)] whitespace-pre-wrap">{getBlockTextValue(block.content)}</p>
           </CardContent>
         </Card>
       );
@@ -200,13 +199,13 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       const fileName = (block.metadata as Record<string, string>)?.fileName || getBlockTextValue(block.content) || 'File';
       const fileUrl = (block.metadata as Record<string, string>)?.url;
       return (
-        <Card>
+        <Card className="student-card">
           <CardContent className="p-4 flex items-center gap-3">
             <span className="text-2xl">📎</span>
             <div>
-              <p className="font-medium">{fileName}</p>
+              <p className="font-medium text-[var(--student-text-strong)]">{fileName}</p>
               {fileUrl && (
-                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+                <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-[var(--student-accent)] hover:underline">
                   Download
                 </a>
               )}
@@ -216,11 +215,11 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       );
     }
     case 'divider':
-      return <hr className="my-6 border-gray-200" />;
+      return <hr className="my-6 border-[var(--student-outline)]" />;
     default:
       return (
-        <Card>
-          <CardContent className="p-4 text-muted-foreground">
+        <Card className="student-card">
+          <CardContent className="p-4 text-[var(--student-text-muted)]">
             Unsupported content type: {block.type}
           </CardContent>
         </Card>

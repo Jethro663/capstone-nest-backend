@@ -63,16 +63,16 @@ export function UnfinishedAttemptNotifier() {
       {visible.map((attempt) => (
         <div
           key={attempt.id}
-          className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 shadow-lg"
+          className="flex items-center gap-3 rounded-xl border border-[var(--student-outline-strong)] bg-[var(--student-elevated)] p-3 shadow-lg"
         >
-          <Clock className="h-5 w-5 shrink-0 text-amber-600" />
+          <Clock className="h-5 w-5 shrink-0 text-[var(--student-accent)]" />
 
           <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-semibold text-amber-900">
+            <p className="truncate text-sm font-semibold text-[var(--student-text-strong)]">
               {attempt.assessmentTitle ?? 'Assessment in progress'}
             </p>
             {attempt.expiresAt && (
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-[var(--student-text-muted)]">
                 {/* rerender driven by tick */}
                 {tick >= 0 ? formatCountdown(attempt.expiresAt) : ''} remaining
               </p>
@@ -82,7 +82,7 @@ export function UnfinishedAttemptNotifier() {
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-amber-800 hover:bg-amber-100"
+            className="h-7 px-2 text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
             onClick={() =>
               router.push(`/dashboard/student/assessments/${attempt.assessmentId}/take`)
             }
@@ -93,7 +93,7 @@ export function UnfinishedAttemptNotifier() {
 
           <button
             aria-label="Dismiss"
-            className="text-amber-500 hover:text-amber-800"
+            className="text-[var(--student-text-muted)] hover:text-[var(--student-text-strong)]"
             onClick={() => setDismissed((prev) => new Set(prev).add(attempt.id))}
           >
             <X className="h-4 w-4" />
