@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .media_utils import normalize_attachment_images
 from .retrieval_service import similarity_search
 from .schemas import RequestUser, TutorRecommendationDto
 
@@ -28,6 +29,74 @@ Rules:
 - When asked for lesson content, return grounded explanations only.
 - When asked for JSON, return valid JSON only with no markdown fence.
 """
+
+TUTOR_PACKET_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "lessonPlan": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 3,
+            "maxItems": 3,
+        },
+        "lessonBody": {"type": "string"},
+        "questions": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "question": {"type": "string"},
+                    "expectedAnswer": {"type": "string"},
+                    "hint": {"type": "string"},
+                },
+                "required": ["id", "question", "expectedAnswer", "hint"],
+            },
+        },
+    },
+    "required": ["lessonPlan", "lessonBody", "questions"],
+}
+
+TUTOR_EVALUATION_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "overallVerdict": {"type": "string", "enum": ["pass", "retry"]},
+        "encouragement": {"type": "string"},
+        "retryLesson": {"type": "string"},
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "questionId": {"type": "string"},
+                    "decision": {
+                        "type": "string",
+                        "enum": ["correct_enough", "partially_correct", "unsupported"],
+                    },
+                    "isCorrectEnough": {"type": "boolean"},
+                    "feedback": {"type": "string"},
+                },
+                "required": ["questionId", "decision", "isCorrectEnough", "feedback"],
+            },
+        },
+        "nextQuestions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "question": {"type": "string"},
+                    "expectedAnswer": {"type": "string"},
+                    "hint": {"type": "string"},
+                },
+                "required": ["id", "question", "expectedAnswer", "hint"],
+            },
+        },
+    },
+    "required": ["overallVerdict", "encouragement", "retryLesson", "results", "nextQuestions"],
+}
 
 
 def _safe_json_loads(raw: str) -> dict[str, Any]:
@@ -166,8 +235,10 @@ async def continue_student_tutor_session(
     *,
     session_id: str,
     message: str,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     state, history = await _load_tutor_state(db, user.id, session_id)
+    prepared_images = normalize_attachment_images(attachments)
     context_bundle = await _build_context_bundle(
         db,
         class_id=state["classId"],
@@ -195,13 +266,21 @@ Student message:
 Respond as Ja with a concise tutoring reply. If the student asks for the direct answer, refuse politely and guide them instead.
 """
     start = time.time()
-    reply = await ollama_client.generate(prompt, TUTOR_SYSTEM_PROMPT)
+    task_name = "vision_explanation" if prepared_images else "chat"
+    reply = await ollama_client.generate(
+        prompt,
+        TUTOR_SYSTEM_PROMPT,
+        task=task_name,
+        images=prepared_images,
+    )
     response_time_ms = int((time.time() - start) * 1000)
     next_state = {
         **state,
         "citations": context_bundle["citations"],
         "messageType": "follow_up",
+        "attachmentCount": len(prepared_images),
     }
+    model_used = ollama_client.get_task_model_name(task_name, images=prepared_images)
     await _log_tutor_turn(
         db,
         user_id=user.id,
@@ -210,6 +289,7 @@ Respond as Ja with a concise tutoring reply. If the student asks for the direct 
         output_text=reply,
         context_metadata=next_state,
         response_time_ms=response_time_ms,
+        model_used=model_used,
     )
     return {
         "sessionId": session_id,
@@ -227,11 +307,13 @@ async def submit_student_tutor_answers(
     *,
     session_id: str,
     answers: list[str],
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     state, _history = await _load_tutor_state(db, user.id, session_id)
     questions = state.get("questions") or []
     if not questions:
         raise HTTPException(400, "This tutor session has no active practice questions")
+    prepared_images = normalize_attachment_images(attachments)
 
     evaluation = await _evaluate_answers(
         class_label=state["classLabel"],
@@ -239,6 +321,7 @@ async def submit_student_tutor_answers(
         lesson_body=state.get("lessonBody") or "",
         questions=questions,
         answers=answers,
+        attachments=prepared_images,
     )
 
     completed = evaluation.get("overallVerdict") == "pass"
@@ -248,6 +331,7 @@ async def submit_student_tutor_answers(
         "stage": "completed" if completed else "practice",
         "round": int(state.get("round") or 1) + 1,
         "messageType": "answer_evaluation",
+        "attachmentCount": len(prepared_images),
     }
     if completed:
         next_state["questions"] = []
@@ -255,6 +339,10 @@ async def submit_student_tutor_answers(
         next_state["questions"] = evaluation.get("nextQuestions") or questions
 
     message = _build_evaluation_message(evaluation)
+    model_used = ollama_client.get_task_model_name(
+        "vision_explanation" if prepared_images else "grading",
+        images=prepared_images,
+    )
     await _log_tutor_turn(
         db,
         user_id=user.id,
@@ -264,6 +352,7 @@ async def submit_student_tutor_answers(
         ),
         output_text=message,
         context_metadata=next_state,
+        model_used=model_used,
     )
 
     return {
@@ -703,7 +792,12 @@ Constraints:
 - Questions must be easier than a normal graded assessment.
 - expectedAnswer must be short and should not include long answer-key wording.
 """
-    raw = await ollama_client.generate(prompt, TUTOR_SYSTEM_PROMPT)
+    raw = await ollama_client.generate(
+        prompt,
+        TUTOR_SYSTEM_PROMPT,
+        task="chat",
+        response_format=TUTOR_PACKET_FORMAT,
+    )
     parsed = _safe_json_loads(raw)
     questions = parsed.get("questions") or []
     if len(questions) != 3:
@@ -722,6 +816,7 @@ async def _evaluate_answers(
     lesson_body: str,
     questions: list[dict[str, Any]],
     answers: list[str],
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     prompt = f"""
 Evaluate a student's tutoring answers.
@@ -760,11 +855,23 @@ Return valid JSON:
 }}
 
 Rules:
+- Accept paraphrases, short equivalent wording, and mathematically/scientifically equivalent answers.
+- Use `decision = "correct_enough"` when the student's meaning matches the expected answer even if wording differs.
+- Use `decision = "partially_correct"` when the student shows partial understanding and the answer is close but incomplete.
+- Use `decision = "unsupported"` only when the answer clearly conflicts with the lesson or lacks the needed idea.
+- If the lesson summary or question wording is insufficient to judge confidently, prefer `partially_correct` with feedback that asks for clarification.
 - Mark pass only if at least 2 answers are meaningfully correct and the student shows understanding.
 - If retry, generate exactly 3 replacement questions.
 - Keep encouragement brief.
 """
-    raw = await ollama_client.generate(prompt, TUTOR_SYSTEM_PROMPT)
+    task_name = "vision_explanation" if attachments else "grading"
+    raw = await ollama_client.generate(
+        prompt,
+        TUTOR_SYSTEM_PROMPT,
+        task=task_name,
+        response_format=TUTOR_EVALUATION_FORMAT,
+        images=attachments,
+    )
     parsed = _safe_json_loads(raw)
     if parsed.get("overallVerdict") not in {"pass", "retry"}:
         raise HTTPException(502, "Tutor evaluation returned an invalid verdict")
@@ -837,6 +944,7 @@ async def _log_tutor_turn(
     output_text: str,
     context_metadata: dict[str, Any],
     response_time_ms: int | None = None,
+    model_used: str | None = None,
 ) -> None:
     await db.execute(
         sa_text(
@@ -867,7 +975,7 @@ async def _log_tutor_turn(
             "userId": user_id,
             "inputText": input_text[:2000],
             "outputText": output_text[:5000],
-            "modelUsed": ollama_client.get_model_name(),
+            "modelUsed": model_used or ollama_client.get_task_model_name("chat"),
             "responseTimeMs": response_time_ms,
             "sessionId": session_id,
             "contextMetadata": context_metadata,
@@ -901,7 +1009,13 @@ def _build_evaluation_message(payload: dict[str, Any]) -> str:
     if results:
         lines.append("")
         for idx, item in enumerate(results):
-            status = "Good" if item.get("isCorrectEnough") else "Review"
+            decision = item.get("decision")
+            if decision == "correct_enough":
+                status = "Good"
+            elif decision == "partially_correct":
+                status = "Almost"
+            else:
+                status = "Review"
             lines.append(f"{idx + 1}. {status}: {item.get('feedback')}")
     if payload.get("overallVerdict") == "pass":
         lines.append("")

@@ -1,11 +1,15 @@
 import {
+  IsArray,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { ImageAttachmentDto } from './image-attachment.dto';
 
 export class MentorExplainDto {
   @ApiProperty({
@@ -31,4 +35,14 @@ export class MentorExplainDto {
   @IsNotEmpty()
   @MaxLength(1000)
   message?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional image attachments for image-based explanations',
+    type: [ImageAttachmentDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImageAttachmentDto)
+  attachments?: ImageAttachmentDto[];
 }

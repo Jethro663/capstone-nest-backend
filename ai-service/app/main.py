@@ -23,6 +23,7 @@ from .database import get_db
 from . import ollama_client
 from .extraction_pipeline import run_extraction
 from .indexing_pipeline import reindex_class_content
+from .media_utils import normalize_attachment_images
 from .mentor_service import explain_mistake
 from .quiz_generation_service import generate_quiz_draft
 from .remedial_service import recommend_intervention_case
@@ -51,6 +52,18 @@ logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
+
+
+@app.on_event("startup")
+async def preload_ollama_models() -> None:
+    try:
+        await ollama_client.preload_model("chat")
+    except Exception as err:
+        logger.warning("Failed to preload text model: %s", err)
+    try:
+        await ollama_client.preload_model("vision_extraction")
+    except Exception as err:
+        logger.warning("Failed to preload vision model: %s", err)
 
 # ---------------------------------------------------------------------------
 # JAKIPIR System Prompt
@@ -106,6 +119,9 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ):
     chat_session_id = body.session_id or str(uuid.uuid4())
+    attachments = normalize_attachment_images(
+        [item.model_dump(by_alias=True) for item in (body.attachments or [])]
+    )
 
     ollama_messages: list[dict[str, str]] = [
         {"role": "system", "content": JAKIPIR_SYSTEM_PROMPT},
@@ -128,7 +144,10 @@ async def chat(
             ollama_messages.append({"role": "user", "content": entry["input_text"]})
             ollama_messages.append({"role": "assistant", "content": entry["output_text"]})
 
-    ollama_messages.append({"role": "user", "content": body.message})
+    user_message: dict[str, object] = {"role": "user", "content": body.message}
+    if attachments:
+        user_message["images"] = [item["base64Data"] for item in attachments]
+    ollama_messages.append(user_message)
 
     health = await ollama_client.is_available()
     import time
@@ -137,8 +156,11 @@ async def chat(
 
     if health["available"]:
         try:
-            reply = await ollama_client.chat(ollama_messages)
-            model_used = ollama_client.get_model_name()
+            reply = await ollama_client.chat(ollama_messages, task="chat")
+            model_used = ollama_client.get_task_model_name(
+                "chat",
+                images=attachments,
+            )
         except Exception as err:
             logger.warning("Ollama chat failed: %s", str(err))
             reply = (
@@ -178,7 +200,10 @@ async def chat(
             "modelUsed": model_used,
             "responseTimeMs": response_time_ms,
             "sessionId": chat_session_id,
-            "ctx": {"sessionId": chat_session_id},
+            "ctx": {
+                "sessionId": chat_session_id,
+                "attachmentCount": len(attachments),
+            },
         },
     )
     await db.commit()
@@ -211,6 +236,7 @@ async def mentor_explain(
         attempt_id=body.attempt_id,
         question_id=body.question_id,
         message=body.message,
+        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
     )
     return {
         "success": True,
@@ -285,6 +311,7 @@ async def student_tutor_message(
         user,
         session_id=session_id,
         message=body.message,
+        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
     )
     return {
         "success": True,
@@ -307,6 +334,7 @@ async def student_tutor_answers(
         user,
         session_id=session_id,
         answers=body.answers,
+        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
     )
     return {
         "success": True,
@@ -329,7 +357,9 @@ async def health():
         "message": "AI health status",
         "data": {
             "ollamaAvailable": status["available"],
-            "configuredModel": ollama_client.get_model_name(),
+            "configuredModel": ollama_client.get_text_model_name(),
+            "configuredTextModel": ollama_client.get_text_model_name(),
+            "configuredVisionModel": ollama_client.get_vision_model_name(),
             "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
             "embeddingModelAvailable": ollama_client.get_embedding_model_name()
             in available_models,

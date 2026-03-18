@@ -10,11 +10,32 @@ import { ConfigService } from '@nestjs/config';
 export class AiProxyService {
   private readonly logger = new Logger(AiProxyService.name);
   private readonly baseUrl: string;
+  private readonly chatTimeoutMs: number;
+  private readonly extractionTimeoutMs: number;
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl =
       this.config.get<string>('AI_SERVICE_URL') || 'http://localhost:8000';
-    this.logger.log(`AI proxy configured → ${this.baseUrl}`);
+    this.chatTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '70000',
+      10,
+    );
+    this.extractionTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_EXTRACTION_MS') || '300000',
+      10,
+    );
+    this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
+  }
+
+  private resolveTimeoutMs(path: string): number {
+    if (
+      path === '/chat' ||
+      path.startsWith('/mentor/') ||
+      path.startsWith('/student/tutor')
+    ) {
+      return this.chatTimeoutMs;
+    }
+    return this.extractionTimeoutMs;
   }
 
   async forward(
@@ -33,7 +54,10 @@ export class AiProxyService {
     };
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120_000);
+    const timer = setTimeout(
+      () => controller.abort(),
+      this.resolveTimeoutMs(path),
+    );
 
     try {
       const res = await fetch(url, {

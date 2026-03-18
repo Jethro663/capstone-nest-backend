@@ -42,6 +42,41 @@ JSON FORMAT:
 }
 """
 
+QUIZ_GENERATION_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string"},
+                    "content": {"type": "string"},
+                    "points": {"type": "integer"},
+                    "explanation": {"type": "string"},
+                    "conceptTags": {"type": "array", "items": {"type": "string"}},
+                    "options": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "text": {"type": "string"},
+                                "isCorrect": {"type": "boolean"},
+                                "order": {"type": "integer"},
+                            },
+                            "required": ["text", "isCorrect", "order"],
+                        },
+                    },
+                },
+                "required": ["type", "content", "points", "explanation", "conceptTags", "options"],
+            },
+        },
+    },
+    "required": ["title", "description", "questions"],
+}
+
 
 def _normalize_question_text(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", (value or "").lower()))
@@ -168,7 +203,12 @@ Source material:
 {source_material}
 """
 
-    raw = await ollama_client.generate(prompt, QUIZ_GENERATION_SYSTEM_PROMPT)
+    raw = await ollama_client.generate(
+        prompt,
+        QUIZ_GENERATION_SYSTEM_PROMPT,
+        task="quiz_generation",
+        response_format=QUIZ_GENERATION_FORMAT,
+    )
     parsed = _parse_generation_output(raw)
     questions = _dedupe_generated_questions(parsed.get("questions", []), existing_question_texts)
 

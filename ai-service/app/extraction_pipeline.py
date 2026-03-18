@@ -7,6 +7,7 @@ Runs as a background asyncio task (replaces the NestJS BullMQ processor).
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -30,6 +31,39 @@ from .pdf_chunker import TextChunk, chunk_text, merge_chunk_results
 from .rule_based_extractor import extract_with_rules
 
 logger = logging.getLogger(__name__)
+
+EXTRACTION_OUTPUT_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "lessons": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "blocks": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {"type": "string"},
+                                "order": {"type": "integer"},
+                                "content": {"type": "object"},
+                                "metadata": {"type": "object"},
+                            },
+                            "required": ["type", "order", "content", "metadata"],
+                        },
+                    },
+                },
+                "required": ["title", "description", "blocks"],
+            },
+        },
+    },
+    "required": ["title", "description", "lessons"],
+}
 
 def resolve_uploaded_file_path(raw_path: str) -> str:
     """Resolve backend-stored upload paths against ai-service UPLOAD_DIR robustly."""
@@ -119,6 +153,32 @@ def _build_extraction_prompt(chunk: TextChunk) -> str:
     )
 
 
+def _build_vision_extraction_prompt(original_name: str) -> str:
+    return (
+        f"These images are pages from the learning module '{original_name}'.\n\n"
+        "Convert the visible educational content into structured lessons.\n"
+        "Preserve the original meaning faithfully. If the pages are partially unreadable, "
+        "extract only what is legible and do not invent missing text.\n\n"
+        "Return a single JSON object with keys title, description, and lessons. "
+        "Each lesson must contain title, description, and blocks. "
+        "Blocks must use type, order, content, and metadata."
+    )
+
+
+def _render_pdf_pages_to_images(doc: fitz.Document, max_pages: int = 4) -> list[dict[str, str]]:
+    rendered: list[dict[str, str]] = []
+    for page_index in range(min(len(doc), max_pages)):
+        page = doc.load_page(page_index)
+        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
+        rendered.append(
+            {
+                "base64Data": base64.b64encode(pix.tobytes("png")).decode("utf-8"),
+                "mimeType": "image/png",
+            }
+        )
+    return rendered
+
+
 # ---------------------------------------------------------------------------
 # DB helper
 # ---------------------------------------------------------------------------
@@ -177,10 +237,10 @@ async def run_extraction(
         raw_text = ""
         for page in doc:
             raw_text += page.get_text()
+        vision_images = _render_pdf_pages_to_images(doc)
         doc.close()
 
-        if not raw_text or len(raw_text.strip()) < 20:
-            raise ValueError("PDF contains too little extractable text. It may be scanned/image-based.")
+        uses_vision_extraction = not raw_text or len(raw_text.strip()) < 20
 
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
@@ -189,6 +249,77 @@ async def run_extraction(
             "raw_text": raw_text,
             "progress_percent": 15,
         })
+
+        if uses_vision_extraction:
+            health = await ollama_client.is_available()
+            start_time = time.time()
+            if not health["available"]:
+                raise ValueError("PDF contains too little extractable text and Ollama vision is unavailable.")
+
+            await _update_extraction(db, extraction_id, {"progress_percent": 35})
+            raw = await ollama_client.generate(
+                _build_vision_extraction_prompt(original_name),
+                EXTRACTION_SYSTEM_PROMPT,
+                task="vision_extraction",
+                response_format=EXTRACTION_OUTPUT_FORMAT,
+                images=vision_images,
+            )
+            parsed = _parse_ollama_response(raw)
+            validation = validate_extraction_output(parsed)
+            final_result = validation.sanitized_output or parsed
+            response_time_ms = int((time.time() - start_time) * 1000)
+            model_used = ollama_client.get_task_model_name(
+                "vision_extraction",
+                images=vision_images,
+            )
+
+            await _update_extraction(db, extraction_id, {
+                "extraction_status": "completed",
+                "model_used": model_used,
+                "progress_percent": 100,
+                "total_chunks": 1,
+                "processed_chunks": 1,
+            })
+            await db.execute(
+                sa_text(
+                    "UPDATE extracted_modules "
+                    "SET structured_content = :sc, updated_at = NOW() "
+                    "WHERE id = :id"
+                ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+                {"sc": final_result, "id": extraction_id},
+            )
+            await db.commit()
+            await db.execute(
+                sa_text(
+                    "INSERT INTO ai_interaction_logs "
+                    "(user_id, session_type, input_text, output_text, model_used, "
+                    "response_time_ms, context_metadata) "
+                    "VALUES (:userId, 'module_extraction', :inputText, :outputText, "
+                    ":modelUsed, :responseTimeMs, :ctx)"
+                ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
+                {
+                    "userId": user_id,
+                    "inputText": f"[vision extraction] {original_name}",
+                    "outputText": json.dumps(final_result)[:5000],
+                    "modelUsed": model_used,
+                    "responseTimeMs": response_time_ms,
+                    "ctx": {
+                        "fileId": str(file_id),
+                        "extractionId": str(extraction_id),
+                        "originalFileName": original_name,
+                        "visionPages": len(vision_images),
+                        "scannedPdf": True,
+                        "validationErrors": validation.errors,
+                    },
+                },
+            )
+            await db.commit()
+            logger.info(
+                "[extraction] Vision extraction completed for %s in %dms",
+                extraction_id,
+                response_time_ms,
+            )
+            return
 
         # Layer 1: Sanitize text
         sanitization = sanitize_extracted_text(raw_text)
@@ -244,7 +375,12 @@ async def run_extraction(
             for i, chunk in enumerate(chunks):
                 try:
                     prompt = _build_extraction_prompt(chunk)
-                    raw = await ollama_client.generate(prompt, EXTRACTION_SYSTEM_PROMPT)
+                    raw = await ollama_client.generate(
+                        prompt,
+                        EXTRACTION_SYSTEM_PROMPT,
+                        task="text_extraction",
+                        response_format=EXTRACTION_OUTPUT_FORMAT,
+                    )
                     parsed = _parse_ollama_response(raw)
                     chunk_results.append(parsed)
                 except Exception as err:
@@ -263,7 +399,7 @@ async def run_extraction(
 
             # Merge chunk results
             merged_result = merge_chunk_results(chunk_results)
-            model_used = ollama_client.get_model_name()
+            model_used = ollama_client.get_task_model_name("text_extraction")
 
             # Layer 3: Validate output
             await _update_extraction(db, extraction_id, {"progress_percent": 90})
@@ -400,7 +536,11 @@ async def _classify_content(text: str):
 
     try:
         prompts = build_classification_prompt(text)
-        raw = await ollama_client.generate(prompts["prompt"], prompts["system"])
+        raw = await ollama_client.generate(
+            prompts["prompt"],
+            prompts["system"],
+            task="classification",
+        )
         return parse_classification_response(raw)
     except Exception as err:
         logger.warning(

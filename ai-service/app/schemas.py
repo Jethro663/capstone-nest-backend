@@ -4,6 +4,14 @@ from pydantic import BaseModel, Field
 from typing import Any
 
 
+class ImageAttachment(BaseModel):
+    file_path: str | None = Field(default=None, alias="filePath")
+    base64_data: str | None = Field(default=None, alias="base64Data")
+    mime_type: str | None = Field(default=None, alias="mimeType")
+
+    model_config = {"populate_by_name": True}
+
+
 # ---------------------------------------------------------------------------
 # Chat
 # ---------------------------------------------------------------------------
@@ -12,6 +20,7 @@ from typing import Any
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=2000)
     session_id: str | None = Field(None, alias="sessionId")
+    attachments: list[ImageAttachment] | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -69,6 +78,7 @@ class MentorExplainRequest(BaseModel):
     attempt_id: str = Field(..., alias="attemptId")
     question_id: str = Field(..., alias="questionId")
     message: str | None = None
+    attachments: list[ImageAttachment] | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -123,6 +133,7 @@ class StudentTutorStartRequest(BaseModel):
 class StudentTutorMessageRequest(BaseModel):
     session_id: str = Field(..., alias="sessionId")
     message: str = Field(..., max_length=2000)
+    attachments: list[ImageAttachment] | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -130,6 +141,7 @@ class StudentTutorMessageRequest(BaseModel):
 class StudentTutorAnswerRequest(BaseModel):
     session_id: str = Field(..., alias="sessionId")
     answers: list[str] = Field(..., min_length=1, max_length=3)
+    attachments: list[ImageAttachment] | None = None
 
     model_config = {"populate_by_name": True}
 

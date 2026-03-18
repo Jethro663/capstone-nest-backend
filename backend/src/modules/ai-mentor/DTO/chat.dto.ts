@@ -1,11 +1,15 @@
 import {
+  IsArray,
   IsString,
   IsNotEmpty,
   IsOptional,
   IsUUID,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { ImageAttachmentDto } from './image-attachment.dto';
 
 /**
  * DTO for the JAKIPIR AI Mentor chat endpoint.
@@ -32,4 +36,14 @@ export class ChatRequestDto {
   @IsUUID()
   @IsOptional()
   sessionId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional image attachments for multimodal chat',
+    type: [ImageAttachmentDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImageAttachmentDto)
+  attachments?: ImageAttachmentDto[];
 }

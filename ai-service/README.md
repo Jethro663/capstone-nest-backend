@@ -29,9 +29,12 @@ uvicorn app.main:app --reload --port 8000
 |---|---|---|
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:200411@localhost:5432/capstone` | Async PostgreSQL DSN |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API endpoint |
-| `OLLAMA_MODEL` | `llama3.2:3b` | LLM model name |
+| `OLLAMA_TEXT_MODEL` | `qwen2.5:3b` | Default text model for tutor, grading, quiz generation, and intervention suggestions |
+| `OLLAMA_VISION_MODEL` | `gemma3:4b` | Vision/document model for scanned PDFs and image-based prompts |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Ollama embedding model for retrieval and pgvector indexing |
-| `OLLAMA_TIMEOUT` | `120` | Ollama request timeout (seconds) |
+| `OLLAMA_TIMEOUT_CHAT_S` | `60` | Ollama timeout for chat-style requests (seconds) |
+| `OLLAMA_TIMEOUT_EXTRACTION_S` | `240` | Ollama timeout for extraction/document requests (seconds) |
+| `OLLAMA_KEEP_ALIVE` | `15m` | Keeps the active model warm between requests |
 | `UPLOAD_DIR` | `../backend/uploads` | Shared upload volume path |
 | `MAX_RAW_TEXT` | `50000` | Max characters extracted from PDF |
 | `LOG_LEVEL` | `INFO` | Logging level |

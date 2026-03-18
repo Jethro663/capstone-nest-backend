@@ -8,8 +8,38 @@ from sqlalchemy import bindparam, text as sa_text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from . import ollama_client
 from .retrieval_service import similarity_search
 from .schemas import RequestUser
+
+INTERVENTION_RECOMMENDATION_SYSTEM_PROMPT = """You generate concise, grounded intervention recommendations for teachers in a high-school LMS.
+
+Rules:
+- Use only the supplied mistake summary, weak concepts, and retrieved lesson evidence.
+- Keep the tone teacher-facing and practical.
+- Do not invent student performance details that are not provided.
+- Return valid JSON only.
+"""
+
+INTERVENTION_RECOMMENDATION_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "teacherActions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 2,
+            "maxItems": 4,
+        },
+        "studentFocus": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 2,
+            "maxItems": 4,
+        },
+    },
+    "required": ["summary", "teacherActions", "studentFocus"],
+}
 
 
 async def recommend_intervention_case(
@@ -155,6 +185,39 @@ async def recommend_intervention_case(
         for row in assessment_rows.mappings()
     ][:2]
 
+    lesson_evidence = "\n".join(
+        f"- {item['title']}: {item['reason']}" for item in recommended_lessons
+    ) or "- No strong lesson evidence found"
+    ai_summary = {
+        "summary": "Review the student's most repeated weak concepts using the recommended lessons before assigning another check for understanding.",
+        "teacherActions": [
+            "Revisit one weak concept at a time using the linked lesson.",
+            "Give a short guided retry after the review.",
+        ],
+        "studentFocus": weak_concepts[:3],
+    }
+    try:
+        prompt = f"""
+Subject: {intervention_case["subject_name"]} ({intervention_case["subject_code"]})
+Grade level: {intervention_case["grade_level"] or "Unknown"}
+Trigger score: {intervention_case["trigger_score"]}
+Threshold: {intervention_case["threshold_applied"]}
+Weak concepts: {json.dumps(weak_concepts, ensure_ascii=False)}
+Teacher note: {note or "[None]"}
+
+Recommended lesson evidence:
+{lesson_evidence}
+"""
+        raw = await ollama_client.generate(
+            prompt,
+            INTERVENTION_RECOMMENDATION_SYSTEM_PROMPT,
+            task="intervention",
+            response_format=INTERVENTION_RECOMMENDATION_FORMAT,
+        )
+        ai_summary = json.loads(raw)
+    except Exception:
+        pass
+
     for concept_key, evidence_count in list(concept_counts.items())[:8]:
         await db.execute(
             sa_text(
@@ -234,6 +297,7 @@ async def recommend_intervention_case(
         "weakConcepts": weak_concepts,
         "recommendedLessons": recommended_lessons,
         "recommendedAssessments": recommended_assessments,
+        "aiSummary": ai_summary,
         "note": note,
     }
     output_row = await db.execute(
@@ -281,6 +345,7 @@ async def recommend_intervention_case(
         "weakConcepts": weak_concepts,
         "recommendedLessons": recommended_lessons,
         "recommendedAssessments": recommended_assessments,
+        "aiSummary": ai_summary,
         "suggestedAssignmentPayload": {
             "lessonIds": [item["lessonId"] for item in recommended_lessons],
             "assessmentIds": [item["assessmentId"] for item in recommended_assessments],

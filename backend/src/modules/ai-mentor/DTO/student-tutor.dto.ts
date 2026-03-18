@@ -11,6 +11,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { ImageAttachmentDto } from './image-attachment.dto';
 
 export class TutorRecommendationPayloadDto {
   @ApiProperty()
@@ -75,6 +76,13 @@ export class StudentTutorMessageDto {
   @IsNotEmpty()
   @MaxLength(2000)
   message: string;
+
+  @ApiPropertyOptional({ type: [ImageAttachmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImageAttachmentDto)
+  attachments?: ImageAttachmentDto[];
 }
 
 export class StudentTutorAnswersDto {
@@ -88,6 +96,13 @@ export class StudentTutorAnswersDto {
   @ArrayMaxSize(3)
   @IsString({ each: true })
   answers: string[];
+
+  @ApiPropertyOptional({ type: [ImageAttachmentDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImageAttachmentDto)
+  attachments?: ImageAttachmentDto[];
 }
 
 export class StudentTutorBootstrapQueryDto {

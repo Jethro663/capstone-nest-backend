@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .media_utils import normalize_attachment_images, resolve_backend_upload_path
 from .retrieval_service import similarity_search
 from .schemas import RequestUser
 
@@ -42,6 +43,7 @@ async def explain_mistake(
     attempt_id: str,
     question_id: str,
     message: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     attempt_row = await db.execute(
         sa_text(
@@ -63,6 +65,7 @@ async def explain_mistake(
               q.id AS question_id,
               q.content AS question_content,
               q.explanation AS question_explanation,
+              q.image_url AS question_image_url,
               q.type AS question_type,
               q.points,
               q.concept_tags,
@@ -203,8 +206,24 @@ Retrieved lesson context:
 {chr(10).join(context_blocks) if context_blocks else "[No retrieved lesson chunks found]"}
 """
 
+    prepared_images = normalize_attachment_images(attachments)
+    question_image_path = resolve_backend_upload_path(row["question_image_url"] or "")
+    if question_image_path:
+        prepared_images.append(
+            {
+                "filePath": question_image_path,
+                "mimeType": "image/png",
+            }
+        )
+
     start = time.time()
-    reply = await ollama_client.generate(prompt, MENTOR_SYSTEM_PROMPT)
+    task_name = "vision_explanation" if prepared_images else "chat"
+    reply = await ollama_client.generate(
+        prompt,
+        MENTOR_SYSTEM_PROMPT,
+        task=task_name,
+        images=prepared_images,
+    )
     response_time_ms = int((time.time() - start) * 1000)
 
     suggested_next = next(
@@ -248,7 +267,10 @@ Retrieved lesson context:
             "userId": user.id,
             "inputText": (message or row["question_content"])[:2000],
             "outputText": reply[:5000],
-            "modelUsed": ollama_client.get_model_name(),
+            "modelUsed": ollama_client.get_task_model_name(
+                task_name,
+                images=prepared_images,
+            ),
             "responseTimeMs": response_time_ms,
             "sessionId": str(uuid.uuid4()),
             "contextMetadata": {
@@ -258,6 +280,7 @@ Retrieved lesson context:
                 "classId": str(row["class_id"]),
                 "citations": citations,
                 "suggestedNext": suggested_next,
+                "attachmentCount": len(prepared_images),
             },
         },
     )
@@ -267,5 +290,8 @@ Retrieved lesson context:
         "reply": reply,
         "citations": citations,
         "suggestedNext": suggested_next,
-        "modelUsed": ollama_client.get_model_name(),
+        "modelUsed": ollama_client.get_task_model_name(
+            task_name,
+            images=prepared_images,
+        ),
     }
