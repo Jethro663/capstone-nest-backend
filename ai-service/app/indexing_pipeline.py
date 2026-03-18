@@ -423,7 +423,7 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
                 )
                 VALUES (
                   :chunkId,
-                  :embedding::vector,
+                  CAST(:embedding AS vector),
                   :embeddingModel,
                   NOW()
                 )

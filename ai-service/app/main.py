@@ -323,13 +323,17 @@ async def student_tutor_answers(
 @app.get("/health")
 async def health():
     status = await ollama_client.is_available()
+    available_models = status["models"]
     return {
         "success": True,
         "message": "AI health status",
         "data": {
             "ollamaAvailable": status["available"],
             "configuredModel": ollama_client.get_model_name(),
-            "availableModels": status["models"],
+            "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
+            "embeddingModelAvailable": ollama_client.get_embedding_model_name()
+            in available_models,
+            "availableModels": available_models,
         },
     }
 

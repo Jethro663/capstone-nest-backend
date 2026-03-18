@@ -7,6 +7,7 @@ import {
 import { LessonsService } from './lessons.service';
 import { DatabaseService } from '../../database/database.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
+import { AuditService } from '../audit/audit.service';
 
 // ─── Fixture data ────────────────────────────────────────────────────────────
 
@@ -118,11 +119,21 @@ function mockSelect(db: any, rows: any[]) {
   db.select.mockReturnValueOnce({ from });
 }
 
+/** Chains select({}).from().where() → resolves with `rows`. */
+function mockSelectWhere(db: any, rows: any[]) {
+  const where = jest.fn().mockResolvedValue(rows);
+  const from = jest.fn().mockReturnValue({ where });
+  db.select.mockReturnValueOnce({ from });
+}
+
 // ─── Test suite ──────────────────────────────────────────────────────────────
 
 describe('LessonsService', () => {
   let service: LessonsService;
   let db: ReturnType<typeof buildMockDb>;
+  const mockAuditService = {
+    log: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     db = buildMockDb();
@@ -133,6 +144,10 @@ describe('LessonsService', () => {
         {
           provide: DatabaseService,
           useValue: { db },
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
         },
       ],
     }).compile();
@@ -151,28 +166,37 @@ describe('LessonsService', () => {
         MOCK_LESSON,
         MOCK_DRAFT_LESSON,
       ]);
+      mockSelectWhere(db, [{ total: 2 }]);
 
-      const result = await service.getLessonsByClass(CLASS_ID, false);
+      const result = await service.getLessonsByClass(CLASS_ID, {
+        filterDrafts: false,
+      });
 
       expect(db.query.lessons.findMany).toHaveBeenCalledTimes(1);
-      expect(result).toHaveLength(2);
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
     });
 
     it('returns only published lessons when filterDrafts=true', async () => {
       db.query.lessons.findMany.mockResolvedValue([MOCK_LESSON]);
+      mockSelectWhere(db, [{ total: 1 }]);
 
-      const result = await service.getLessonsByClass(CLASS_ID, true);
+      const result = await service.getLessonsByClass(CLASS_ID, {
+        filterDrafts: true,
+      });
 
-      expect(result).toHaveLength(1);
-      expect(result[0].isDraft).toBe(false);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].isDraft).toBe(false);
     });
 
     it('returns empty array when class has no lessons', async () => {
       db.query.lessons.findMany.mockResolvedValue([]);
+      mockSelectWhere(db, [{ total: 0 }]);
 
       const result = await service.getLessonsByClass(CLASS_ID);
 
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
     });
   });
 

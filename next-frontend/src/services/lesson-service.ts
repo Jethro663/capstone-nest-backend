@@ -7,13 +7,20 @@ import type {
   CreateContentBlockDto,
   UpdateContentBlockDto,
   ReorderBlocksDto,
+  ReorderLessonsDto,
+  BulkLessonDraftStateDto,
+  BulkLessonIdsDto,
   LessonCompletion,
+  LessonsResponse,
+  LessonListQuery,
 } from '@/types/lesson';
 
 export const lessonService = {
   /** GET /lessons/class/:classId — All roles */
-  async getByClass(classId: string): Promise<{ success: boolean; message: string; data: Lesson[]; count: number }> {
-    const { data } = await api.get(`/lessons/class/${classId}`);
+  async getByClass(classId: string, query: LessonListQuery = {}): Promise<LessonsResponse> {
+    const { data } = await api.get(`/lessons/class/${classId}`, {
+      params: query,
+    });
     return data;
   },
 
@@ -44,6 +51,33 @@ export const lessonService = {
   /** PUT /lessons/:id/publish — Admin, Teacher */
   async publish(id: string): Promise<{ success: boolean; message: string; data: Lesson }> {
     const { data } = await api.put(`/lessons/${id}/publish`);
+    return data;
+  },
+
+  /** PUT /lessons/class/:classId/bulk-status — Admin, Teacher */
+  async bulkUpdateDraftState(
+    classId: string,
+    dto: BulkLessonDraftStateDto,
+  ): Promise<{ success: boolean; message: string; data: Lesson[]; count: number }> {
+    const { data } = await api.put(`/lessons/class/${classId}/bulk-status`, dto);
+    return data;
+  },
+
+  /** POST /lessons/class/:classId/bulk-delete — Admin, Teacher */
+  async bulkDelete(
+    classId: string,
+    dto: BulkLessonIdsDto,
+  ): Promise<{ success: boolean; message: string; data: Lesson[]; count: number }> {
+    const { data } = await api.post(`/lessons/class/${classId}/bulk-delete`, dto);
+    return data;
+  },
+
+  /** PUT /lessons/class/:classId/reorder — Admin, Teacher */
+  async reorderByClass(
+    classId: string,
+    dto: ReorderLessonsDto,
+  ): Promise<{ success: boolean; message: string; data: Lesson[]; count: number }> {
+    const { data } = await api.put(`/lessons/class/${classId}/reorder`, dto);
     return data;
   },
 

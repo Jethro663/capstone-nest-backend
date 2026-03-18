@@ -32,6 +32,14 @@ export class BlockOrderItem {
   order: number;
 }
 
+export class LessonOrderItem {
+  @IsUUID()
+  id: string;
+
+  @IsInt()
+  order: number;
+}
+
 export class CreateLessonDto {
   @IsString()
   @IsNotEmpty()
@@ -114,4 +122,24 @@ export class ReorderBlocksDto {
   @ValidateNested({ each: true })
   @Type(() => BlockOrderItem)
   blocks: BlockOrderItem[];
+}
+
+export class ReorderLessonsDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ValidateNested({ each: true })
+  @Type(() => LessonOrderItem)
+  lessons: LessonOrderItem[];
+}
+
+export class BulkLessonIdsDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  lessonIds: string[];
+}
+
+export class BulkLessonDraftStateDto extends BulkLessonIdsDto {
+  @IsBoolean()
+  isDraft: boolean;
 }

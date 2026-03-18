@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -22,6 +23,9 @@ import {
   CreateContentBlockDto,
   UpdateContentBlockDto,
   ReorderBlocksDto,
+  ReorderLessonsDto,
+  BulkLessonDraftStateDto,
+  BulkLessonIdsDto,
 } from './DTO/lesson.dto';
 
 @ApiTags('Lessons')
@@ -39,19 +43,41 @@ export class LessonsController {
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getLessonsByClass(
     @Param('classId') classId: string,
+    @Query('page') pageQuery: string | undefined,
+    @Query('pageSize') pageSizeQuery: string | undefined,
+    @Query('status') statusQuery: string | undefined,
+    @Query('includeBlocks') includeBlocksQuery: string | undefined,
     @CurrentUser() user: any,
   ) {
     const filterDrafts: boolean = user.roles.includes(RoleName.Student);
-    const lessonList = await this.lessonsService.getLessonsByClass(
-      classId,
+    const page = pageQuery
+      ? Math.max(Number.parseInt(pageQuery, 10) || 1, 1)
+      : undefined;
+    const pageSize = pageSizeQuery
+      ? Math.min(Math.max(Number.parseInt(pageSizeQuery, 10) || 20, 1), 200)
+      : undefined;
+    const status =
+      statusQuery === 'draft' || statusQuery === 'published'
+        ? statusQuery
+        : 'all';
+    const includeBlocks = includeBlocksQuery !== 'false';
+    const lessonPage = await this.lessonsService.getLessonsByClass(classId, {
       filterDrafts,
-    );
+      includeBlocks,
+      page,
+      pageSize,
+      status,
+    });
 
     return {
       success: true,
       message: 'Lessons retrieved successfully',
-      data: lessonList,
-      count: lessonList.length,
+      data: lessonPage.data,
+      count: lessonPage.count,
+      total: lessonPage.total,
+      page: lessonPage.page,
+      pageSize: lessonPage.pageSize,
+      totalPages: lessonPage.totalPages,
     };
   }
 
@@ -150,6 +176,84 @@ export class LessonsController {
       success: true,
       message: 'Lesson published successfully',
       data: lesson,
+    };
+  }
+
+  /**
+   * Bulk update lesson draft/published state for a class (Teacher / Admin).
+   */
+  @Put('class/:classId/bulk-status')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async bulkUpdateLessonDraftState(
+    @Param('classId') classId: string,
+    @Body() dto: BulkLessonDraftStateDto,
+    @CurrentUser() user: any,
+  ) {
+    const updatedLessons = await this.lessonsService.bulkUpdateLessonDraftState(
+      classId,
+      dto.lessonIds,
+      dto.isDraft,
+      user.userId,
+      user.roles,
+    );
+
+    return {
+      success: true,
+      message: dto.isDraft
+        ? 'Lessons unpublished successfully'
+        : 'Lessons published successfully',
+      data: updatedLessons,
+      count: updatedLessons.length,
+    };
+  }
+
+  /**
+   * Bulk delete lessons for a class (Teacher / Admin).
+   */
+  @Post('class/:classId/bulk-delete')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async bulkDeleteLessons(
+    @Param('classId') classId: string,
+    @Body() dto: BulkLessonIdsDto,
+    @CurrentUser() user: any,
+  ) {
+    const deletedLessons = await this.lessonsService.bulkDeleteLessons(
+      classId,
+      dto.lessonIds,
+      user.userId,
+      user.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Lessons deleted successfully',
+      data: deletedLessons,
+      count: deletedLessons.length,
+    };
+  }
+
+  /**
+   * Reorder lessons within a class (Teacher / Admin).
+   */
+  @Put('class/:classId/reorder')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async reorderLessons(
+    @Param('classId') classId: string,
+    @Body() reorderDto: ReorderLessonsDto,
+    @CurrentUser() user: any,
+  ) {
+    const updatedLessons = await this.lessonsService.reorderLessons(
+      classId,
+      reorderDto,
+      user.userId,
+      user.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Lessons reordered successfully',
+      data: updatedLessons,
+      count: updatedLessons.length,
     };
   }
 

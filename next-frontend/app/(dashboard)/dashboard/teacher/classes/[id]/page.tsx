@@ -30,12 +30,13 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion } from 'framer-motion';
-import { LayoutGrid, List, ArrowUpDown } from 'lucide-react';
+import { LayoutGrid, List, ArrowUpDown, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { getDescription } from '@/utils/helpers';
+import { cn } from '@/utils/cn';
 import type { ClassItem, Enrollment } from '@/types/class';
-import type { Lesson } from '@/types/lesson';
+import type { Lesson, LessonStatusFilter } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
 import type { GenerateQuizDraftDto } from '@/types/ai';
@@ -55,6 +56,15 @@ const ASSESSMENT_CATEGORIES: Array<{
   { value: 'drafts', label: 'Drafts' },
 ];
 
+const LESSON_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const nextItems = [...items];
+  const [moved] = nextItems.splice(fromIndex, 1);
+  nextItems.splice(toIndex, 0, moved);
+  return nextItems;
+}
+
 export default function TeacherClassDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -62,6 +72,18 @@ export default function TeacherClassDetailPage() {
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessonPage, setLessonPage] = useState(1);
+  const [lessonPageSize, setLessonPageSize] = useState(20);
+  const [lessonTotal, setLessonTotal] = useState(0);
+  const [lessonTotalPages, setLessonTotalPages] = useState(1);
+  const [lessonStatusFilter, setLessonStatusFilter] = useState<LessonStatusFilter>('all');
+  const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
+  const [bulkLessonAction, setBulkLessonAction] = useState<
+    'publish' | 'unpublish' | 'delete' | 'selecting-all' | null
+  >(null);
+  const [savingLessonOrder, setSavingLessonOrder] = useState(false);
+  const [lessonOrderDirty, setLessonOrderDirty] = useState(false);
+  const [draggedLessonId, setDraggedLessonId] = useState<string | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -143,17 +165,32 @@ export default function TeacherClassDetailPage() {
     }, {});
   }, [assessments, assessmentCategoryTab, assessmentSortOrder]);
 
+  const sortedLessons = useMemo(
+    () => [...lessons].sort((a, b) => a.order - b.order),
+    [lessons],
+  );
+
+  const selectedLessonIdSet = useMemo(
+    () => new Set(selectedLessonIds),
+    [selectedLessonIds],
+  );
+
+  const allVisibleLessonsSelected =
+    sortedLessons.length > 0 &&
+    sortedLessons.every((lesson) => selectedLessonIdSet.has(lesson.id));
+
+  const canReorderLessons =
+    lessonStatusFilter === 'all' && sortedLessons.length > 1;
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes] = await Promise.all([
+      const [classRes, assessmentsRes, enrollmentsRes] = await Promise.all([
         classService.getById(classId),
-        lessonService.getByClass(classId),
         assessmentService.getByClass(classId),
         classService.getEnrollments(classId),
       ]);
       setClassItem(classRes.data);
-      setLessons(lessonsRes.data || []);
       setAssessments(assessmentsRes.data || []);
       setEnrollments(enrollmentsRes.data || []);
      
@@ -163,6 +200,30 @@ export default function TeacherClassDetailPage() {
       setLoading(false);
     }
   }, [classId]);
+
+  const fetchLessons = useCallback(
+    async (
+      page = lessonPage,
+      pageSize = lessonPageSize,
+      status = lessonStatusFilter,
+    ) => {
+      const response = await lessonService.getByClass(classId, {
+        includeBlocks: false,
+        page,
+        pageSize,
+        status,
+      });
+
+      setLessons(response.data || []);
+      setLessonTotal(response.total ?? 0);
+      setLessonTotalPages(response.totalPages ?? 1);
+      setLessonPage(response.page ?? page);
+      setLessonPageSize(response.pageSize ?? pageSize);
+
+      return response;
+    },
+    [classId, lessonPage, lessonPageSize, lessonStatusFilter],
+  );
 
   const fetchAnnouncements = useCallback(async () => {
     try {
@@ -193,6 +254,17 @@ export default function TeacherClassDetailPage() {
   }, [classId]);
 
   useEffect(() => {
+    fetchLessons().catch(() => {
+      toast.error('Failed to load lessons');
+    });
+  }, [fetchLessons]);
+
+  useEffect(() => {
+    setLessonOrderDirty(false);
+    setDraggedLessonId(null);
+  }, [lessonPage, lessonPageSize, lessonStatusFilter]);
+
+  useEffect(() => {
     if (activeTab === 'announcements') {
       fetchAnnouncements();
     }
@@ -209,8 +281,7 @@ export default function TeacherClassDetailPage() {
       setShowCreateLesson(false);
       setLessonTitle('');
       setLessonDesc('');
-      const res = await lessonService.getByClass(classId);
-      setLessons(res.data || []);
+      await fetchLessons(lessonPage);
     } catch {
       toast.error('Failed to create lesson');
     }
@@ -221,9 +292,201 @@ export default function TeacherClassDetailPage() {
     try {
       await lessonService.delete(id);
       toast.success('Lesson deleted');
-      setLessons((prev) => prev.filter((l) => l.id !== id));
+      setSelectedLessonIds((prev) => prev.filter((lessonId) => lessonId !== id));
+      const response = await fetchLessons(lessonPage);
+      if (response.count === 0 && lessonPage > 1) {
+        setLessonPage((prev) => prev - 1);
+      }
     } catch {
       toast.error('Failed to delete lesson');
+    }
+  };
+
+  const handlePublishLesson = async (lessonId: string) => {
+    try {
+      await lessonService.publish(lessonId);
+      toast.success('Lesson published');
+      await fetchLessons(lessonPage);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to publish lesson'));
+    }
+  };
+
+  const toggleLessonSelection = (lessonId: string) => {
+    setSelectedLessonIds((current) =>
+      current.includes(lessonId)
+        ? current.filter((id) => id !== lessonId)
+        : [...current, lessonId],
+    );
+  };
+
+  const handleSelectVisibleLessons = () => {
+    const visibleLessonIds = sortedLessons.map((lesson) => lesson.id);
+    setSelectedLessonIds((current) => {
+      const currentSet = new Set(current);
+      const nextSet = new Set(current);
+      const shouldSelect = visibleLessonIds.some((id) => !currentSet.has(id));
+
+      for (const lessonId of visibleLessonIds) {
+        if (shouldSelect) {
+          nextSet.add(lessonId);
+        } else {
+          nextSet.delete(lessonId);
+        }
+      }
+
+      return Array.from(nextSet);
+    });
+  };
+
+  const handleSelectAllFilteredLessons = async () => {
+    try {
+      setBulkLessonAction('selecting-all');
+      const response = await lessonService.getByClass(classId, {
+        includeBlocks: false,
+        page: 1,
+        pageSize: 5000,
+        status: lessonStatusFilter,
+      });
+      setSelectedLessonIds(response.data.map((lesson) => lesson.id));
+      toast.success(`Selected ${response.data.length} lesson(s)`);
+    } catch {
+      toast.error('Failed to select all filtered lessons');
+    } finally {
+      setBulkLessonAction(null);
+    }
+  };
+
+  const clearLessonSelection = () => {
+    setSelectedLessonIds([]);
+  };
+
+  const handleBulkLessonDraftState = async (isDraft: boolean) => {
+    if (selectedLessonIds.length === 0) return;
+
+    try {
+      setBulkLessonAction(isDraft ? 'unpublish' : 'publish');
+      await lessonService.bulkUpdateDraftState(classId, {
+        lessonIds: selectedLessonIds,
+        isDraft,
+      });
+      toast.success(
+        isDraft
+          ? `Unpublished ${selectedLessonIds.length} lesson(s)`
+          : `Published ${selectedLessonIds.length} lesson(s)`,
+      );
+      clearLessonSelection();
+      await fetchLessons(lessonPage);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to update lessons'));
+    } finally {
+      setBulkLessonAction(null);
+    }
+  };
+
+  const handleBulkDeleteLessons = async () => {
+    if (selectedLessonIds.length === 0) return;
+    if (
+      !confirm(`Delete ${selectedLessonIds.length} selected lesson(s)? This cannot be undone.`)
+    ) {
+      return;
+    }
+
+    try {
+      setBulkLessonAction('delete');
+      await lessonService.bulkDelete(classId, {
+        lessonIds: selectedLessonIds,
+      });
+      toast.success(`Deleted ${selectedLessonIds.length} lesson(s)`);
+      clearLessonSelection();
+      const response = await fetchLessons(lessonPage);
+      if (response.count === 0 && lessonPage > 1) {
+        setLessonPage((prev) => prev - 1);
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete lessons'));
+    } finally {
+      setBulkLessonAction(null);
+    }
+  };
+
+  const handleLessonPageChange = (nextPage: number) => {
+    setLessonPage(Math.min(Math.max(nextPage, 1), lessonTotalPages));
+  };
+
+  const handleLessonPageSizeChange = (value: string) => {
+    setLessonPageSize(Number.parseInt(value, 10));
+    setLessonPage(1);
+  };
+
+  const handleLessonStatusFilterChange = (value: LessonStatusFilter) => {
+    setLessonStatusFilter(value);
+    setLessonPage(1);
+    setLessonOrderDirty(false);
+    clearLessonSelection();
+  };
+
+  const handleLessonDragStart = (lessonId: string) => {
+    if (!canReorderLessons) return;
+    setDraggedLessonId(lessonId);
+  };
+
+  const handleLessonDrop = (targetLessonId: string) => {
+    if (!canReorderLessons || !draggedLessonId || draggedLessonId === targetLessonId) {
+      setDraggedLessonId(null);
+      return;
+    }
+
+    setLessons((current) => {
+      const ordered = [...current].sort((a, b) => a.order - b.order);
+      const fromIndex = ordered.findIndex((lesson) => lesson.id === draggedLessonId);
+      const toIndex = ordered.findIndex((lesson) => lesson.id === targetLessonId);
+
+      if (fromIndex === -1 || toIndex === -1) {
+        return current;
+      }
+
+      const reordered = moveItem(ordered, fromIndex, toIndex);
+      const pageStart = (lessonPage - 1) * lessonPageSize;
+
+      return reordered.map((lesson, index) => ({
+        ...lesson,
+        order: pageStart + index + 1,
+      }));
+    });
+
+    setLessonOrderDirty(true);
+    setDraggedLessonId(null);
+  };
+
+  const handleSaveLessonOrder = async () => {
+    if (!lessonOrderDirty || sortedLessons.length === 0) return;
+
+    try {
+      setSavingLessonOrder(true);
+      await lessonService.reorderByClass(classId, {
+        lessons: sortedLessons.map((lesson) => ({
+          id: lesson.id,
+          order: lesson.order,
+        })),
+      });
+      toast.success('Lesson order updated');
+      setLessonOrderDirty(false);
+      await fetchLessons(lessonPage);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reorder lessons'));
+    } finally {
+      setSavingLessonOrder(false);
+    }
+  };
+
+  const handleResetLessonOrder = async () => {
+    try {
+      await fetchLessons(lessonPage);
+      setLessonOrderDirty(false);
+      setDraggedLessonId(null);
+    } catch {
+      toast.error('Failed to reset lesson order');
     }
   };
 
@@ -535,28 +798,202 @@ export default function TeacherClassDetailPage() {
 
         {/* Lessons Tab */}
         <TabsContent value="lessons" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{lessons.length} lessons</p>
-            <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
-          </div>
-          {lessons.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No lessons yet.</CardContent></Card>
+          <Card className="border-slate-200 shadow-sm">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    {lessonTotal} lesson{lessonTotal === 1 ? '' : 's'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Bulk publish, unpublish, delete, and drag lessons into a cleaner sequence.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={lessonStatusFilter}
+                    onChange={(e) =>
+                      handleLessonStatusFilterChange(e.target.value as LessonStatusFilter)
+                    }
+                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="all">All lessons</option>
+                    <option value="draft">Draft only</option>
+                    <option value="published">Published only</option>
+                  </select>
+                  <select
+                    value={String(lessonPageSize)}
+                    onChange={(e) => handleLessonPageSizeChange(e.target.value)}
+                    className="h-9 rounded-md border bg-background px-3 text-sm"
+                  >
+                    {LESSON_PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size} / page
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-slate-50/80 p-3">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectVisibleLessons}
+                      disabled={sortedLessons.length === 0}
+                    >
+                      {allVisibleLessonsSelected ? 'Clear Page' : 'Select Page'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSelectAllFilteredLessons}
+                      disabled={lessonTotal === 0 || bulkLessonAction === 'selecting-all'}
+                    >
+                      {bulkLessonAction === 'selecting-all' ? 'Selecting...' : 'Select All Filtered'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearLessonSelection}
+                      disabled={selectedLessonIds.length === 0}
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleBulkLessonDraftState(false)}
+                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
+                    >
+                      {bulkLessonAction === 'publish' ? 'Publishing...' : 'Publish Selected'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleBulkLessonDraftState(true)}
+                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
+                    >
+                      {bulkLessonAction === 'unpublish' ? 'Unpublishing...' : 'Unpublish Selected'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleBulkDeleteLessons}
+                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
+                    >
+                      {bulkLessonAction === 'delete' ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+                  <span>
+                    {selectedLessonIds.length} selected across {lessonTotal} filtered lesson
+                    {lessonTotal === 1 ? '' : 's'}.
+                  </span>
+                  <span>
+                    Reordering is available in <strong>All lessons</strong> view so the saved sequence stays global.
+                  </span>
+                </div>
+              </div>
+
+              {canReorderLessons && (
+                <div className="flex flex-col gap-3 rounded-xl border bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Drag lessons by the handle to change the order shown to students.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResetLessonOrder}
+                      disabled={!lessonOrderDirty || savingLessonOrder}
+                    >
+                      Reset Order
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveLessonOrder}
+                      disabled={!lessonOrderDirty || savingLessonOrder}
+                    >
+                      {savingLessonOrder ? 'Saving...' : 'Save Order'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {sortedLessons.length === 0 ? (
+            <Card><CardContent className="p-6 text-center text-muted-foreground">No lessons in this view yet.</CardContent></Card>
           ) : (
             <div className="space-y-3">
-              {lessons.sort((a, b) => a.order - b.order).map((lesson) => (
-                <Card key={lesson.id}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{lesson.title}</p>
-                        <Badge variant={lesson.isDraft ? 'secondary' : 'default'}>
-                          {lesson.isDraft ? 'Draft' : 'Published'}
-                        </Badge>
+              {sortedLessons.map((lesson) => (
+                <Card
+                  key={lesson.id}
+                  className={cn(
+                    'border-slate-200 shadow-sm transition',
+                    selectedLessonIdSet.has(lesson.id) && 'ring-2 ring-primary/40',
+                    draggedLessonId === lesson.id && 'opacity-70',
+                  )}
+                  draggable={canReorderLessons}
+                  onDragStart={() => handleLessonDragStart(lesson.id)}
+                  onDragEnd={() => setDraggedLessonId(null)}
+                  onDragOver={(event) => {
+                    if (canReorderLessons) event.preventDefault();
+                  }}
+                  onDrop={() => handleLessonDrop(lesson.id)}
+                >
+                  <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedLessonIdSet.has(lesson.id)}
+                        onChange={() => toggleLessonSelection(lesson.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300"
+                      />
+                      <button
+                        type="button"
+                        className={cn(
+                          'mt-0.5 rounded-md border p-2 text-slate-500 transition',
+                          canReorderLessons
+                            ? 'cursor-grab hover:bg-slate-50 active:cursor-grabbing'
+                            : 'cursor-not-allowed opacity-50',
+                        )}
+                        disabled={!canReorderLessons}
+                        onMouseDown={() => handleLessonDragStart(lesson.id)}
+                        aria-label={`Reorder ${lesson.title}`}
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </button>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{lesson.title}</p>
+                          <Badge variant={lesson.isDraft ? 'secondary' : 'default'}>
+                            {lesson.isDraft ? 'Draft' : 'Published'}
+                          </Badge>
+                          <Badge variant="outline">Order #{lesson.order}</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {getDescription(lesson.description)}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-1">{getDescription(lesson.description)}</p>
-                      <p className="text-xs text-muted-foreground">{lesson.contentBlocks?.length ?? 0} blocks</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!lesson.isDraft ? null : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handlePublishLesson(lesson.id)}
+                          disabled={bulkLessonAction !== null}
+                        >
+                          Publish
+                        </Button>
+                      )}
                       <Link href={`/dashboard/teacher/lessons/${lesson.id}/edit`}>
                         <Button variant="outline" size="sm">Edit</Button>
                       </Link>
@@ -565,6 +1002,34 @@ export default function TeacherClassDetailPage() {
                   </CardContent>
                 </Card>
               ))}
+
+              <Card className="border-slate-200 shadow-sm">
+                <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Page {lessonPage} of {lessonTotalPages}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleLessonPageChange(lessonPage - 1)}
+                      disabled={lessonPage <= 1}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleLessonPageChange(lessonPage + 1)}
+                      disabled={lessonPage >= lessonTotalPages}
+                    >
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </TabsContent>
@@ -774,7 +1239,6 @@ export default function TeacherClassDetailPage() {
 
                 <div className={assessmentViewMode === 'grid' ? 'grid gap-3 md:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>
                   {groupedAssessments.map((assessment, index) => {
-                    const isPastDue = assessment.dueDate && new Date(assessment.dueDate) < new Date();
                     const categoryStyle = assessment.classRecordCategory === 'written_work'
                       ? 'border-l-4 border-l-blue-500'
                       : assessment.classRecordCategory === 'performance_task'

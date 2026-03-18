@@ -70,8 +70,7 @@ async def similarity_search(
         "topK": top_k * 2,
     }
     filters = ["c.class_id = :classId"]
-    query = sa_text(
-        """
+    query_text_template = """
         SELECT
           c.id,
           c.source_type,
@@ -84,27 +83,27 @@ async def similarity_search(
           c.chunk_text,
           c.chunk_order,
           c.metadata_json,
-          (e.embedding <=> :embedding::vector) AS distance
+          (e.embedding <=> CAST(:embedding AS vector)) AS distance
         FROM content_chunks c
         INNER JOIN content_chunk_embeddings e ON e.chunk_id = c.id
         WHERE __FILTERS__
-        ORDER BY e.embedding <=> :embedding::vector ASC
+        ORDER BY e.embedding <=> CAST(:embedding AS vector) ASC
         LIMIT :topK
         """
-    )
+    expanding_binds = []
 
     if lesson_ids:
         params["lessonIds"] = lesson_ids
         filters.append("c.lesson_id IN :lessonIds")
-        query = query.bindparams(bindparam("lessonIds", expanding=True))
+        expanding_binds.append(bindparam("lessonIds", expanding=True))
     if assessment_ids:
         params["assessmentIds"] = assessment_ids
         filters.append("c.assessment_id IN :assessmentIds")
-        query = query.bindparams(bindparam("assessmentIds", expanding=True))
+        expanding_binds.append(bindparam("assessmentIds", expanding=True))
     if source_types:
         params["sourceTypes"] = source_types
         filters.append("c.source_type IN :sourceTypes")
-        query = query.bindparams(bindparam("sourceTypes", expanding=True))
+        expanding_binds.append(bindparam("sourceTypes", expanding=True))
     if only_published:
         filters.append(
             """
@@ -115,13 +114,11 @@ async def similarity_search(
             """
         )
 
-    query = sa_text(query.text.replace("__FILTERS__", " AND ".join(filters)))
-    if lesson_ids:
-        query = query.bindparams(bindparam("lessonIds", expanding=True))
-    if assessment_ids:
-        query = query.bindparams(bindparam("assessmentIds", expanding=True))
-    if source_types:
-        query = query.bindparams(bindparam("sourceTypes", expanding=True))
+    query = sa_text(
+        query_text_template.replace("__FILTERS__", " AND ".join(filters))
+    )
+    if expanding_binds:
+        query = query.bindparams(*expanding_binds)
 
     rows = await db.execute(query, params)
 

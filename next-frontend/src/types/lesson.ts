@@ -12,6 +12,26 @@ export interface Lesson {
   updatedAt?: string;
 }
 
+export type LessonStatusFilter = 'all' | 'draft' | 'published';
+
+export interface LessonListQuery {
+  includeBlocks?: boolean;
+  page?: number;
+  pageSize?: number;
+  status?: LessonStatusFilter;
+}
+
+export interface LessonsResponse {
+  success: boolean;
+  message: string;
+  data: Lesson[];
+  count: number;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface ContentBlock {
   id: string;
   lessonId: string;
@@ -52,6 +72,19 @@ export interface UpdateContentBlockDto {
 
 export interface ReorderBlocksDto {
   blocks: { id: string; order: number }[];
+}
+
+export interface ReorderLessonsDto {
+  lessons: { id: string; order: number }[];
+}
+
+export interface BulkLessonDraftStateDto {
+  lessonIds: string[];
+  isDraft: boolean;
+}
+
+export interface BulkLessonIdsDto {
+  lessonIds: string[];
 }
 
 export interface LessonCompletion {

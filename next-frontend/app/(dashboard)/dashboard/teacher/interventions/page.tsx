@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { getApiErrorMessage } from '@/lib/api-error';
 import {
   Dialog,
   DialogContent,
@@ -127,8 +128,10 @@ export default function TeacherInterventionsPage() {
       setRecommendationLoadingId(caseId);
       const res = await aiService.recommendIntervention(caseId);
       setSelectedRecommendation(res.data);
-    } catch {
-      toast.error('Failed to generate AI intervention recommendation');
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, 'Failed to generate AI intervention recommendation'),
+      );
     } finally {
       setRecommendationLoadingId(null);
     }

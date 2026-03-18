@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '@/services/ai-service';
+import { getApiErrorMessage } from '@/lib/api-error';
 import type {
   StudentTutorBootstrapResponse,
   StudentTutorHistoryItem,
@@ -92,8 +93,8 @@ export default function StudentChatbotPage() {
       const payload = res.data;
       setBootstrap(payload);
       setSelectedClassId(payload.selectedClassId ?? payload.classes[0]?.id ?? '');
-    } catch {
-      toast.error('Failed to load the student chatbot');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load the student chatbot'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -112,8 +113,8 @@ export default function StudentChatbotPage() {
       setActiveSessionState(res.data.state);
       setMessages(buildChatFromSession(res.data.messages));
       setAnswerInputs(['', '', '']);
-    } catch {
-      toast.error('Failed to open the tutor session');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to open the tutor session'));
     } finally {
       setLoadingHistorySessionId(null);
     }
@@ -162,8 +163,8 @@ export default function StudentChatbotPage() {
       ]);
       setAnswerInputs(['', '', '']);
       await fetchBootstrap(selectedClassId, true);
-    } catch {
-      toast.error('Failed to start the tutoring session');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to start the tutoring session'));
     } finally {
       setStartingRecommendationId(null);
     }
@@ -199,8 +200,8 @@ export default function StudentChatbotPage() {
             }
           : prev,
       );
-    } catch {
-      toast.error('Failed to send your message to Ja');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to send your message to Ja'));
     } finally {
       setSendingMessage(false);
     }
@@ -246,8 +247,8 @@ export default function StudentChatbotPage() {
       );
       setAnswerInputs(['', '', '']);
       await fetchBootstrap(selectedClassId, true);
-    } catch {
-      toast.error('Failed to evaluate your answers');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to evaluate your answers'));
     } finally {
       setSubmittingAnswers(false);
     }

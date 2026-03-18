@@ -86,13 +86,33 @@ describe('LessonsController', () => {
 
   describe('getLessonsByClass', () => {
     it('passes filterDrafts=false for a teacher caller', async () => {
-      mockLessonsService.getLessonsByClass.mockResolvedValue([MOCK_LESSON]);
+      mockLessonsService.getLessonsByClass.mockResolvedValue({
+        data: [MOCK_LESSON],
+        count: 1,
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
 
-      const res = await controller.getLessonsByClass(CLASS_ID, TEACHER_USER);
+      const res = await controller.getLessonsByClass(
+        CLASS_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        TEACHER_USER,
+      );
 
       expect(mockLessonsService.getLessonsByClass).toHaveBeenCalledWith(
         CLASS_ID,
-        false, // teacher should NOT have drafts filtered
+        expect.objectContaining({
+          filterDrafts: false,
+          includeBlocks: true,
+          page: undefined,
+          pageSize: undefined,
+          status: 'all',
+        }),
       );
       expect(res.success).toBe(true);
       expect(res.count).toBe(1);
@@ -100,37 +120,87 @@ describe('LessonsController', () => {
     });
 
     it('passes filterDrafts=true for a student caller', async () => {
-      mockLessonsService.getLessonsByClass.mockResolvedValue([MOCK_LESSON]);
+      mockLessonsService.getLessonsByClass.mockResolvedValue({
+        data: [MOCK_LESSON],
+        count: 1,
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
 
-      await controller.getLessonsByClass(CLASS_ID, STUDENT_USER);
+      await controller.getLessonsByClass(
+        CLASS_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        STUDENT_USER,
+      );
 
       expect(mockLessonsService.getLessonsByClass).toHaveBeenCalledWith(
         CLASS_ID,
-        true, // student should only see published
+        expect.objectContaining({
+          filterDrafts: true,
+        }),
       );
     });
 
     it('passes filterDrafts=false for an admin caller', async () => {
-      mockLessonsService.getLessonsByClass.mockResolvedValue([]);
+      mockLessonsService.getLessonsByClass.mockResolvedValue({
+        data: [],
+        count: 0,
+        total: 0,
+        page: 1,
+        pageSize: 1,
+        totalPages: 1,
+      });
 
-      await controller.getLessonsByClass(CLASS_ID, ADMIN_USER);
+      await controller.getLessonsByClass(
+        CLASS_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ADMIN_USER,
+      );
 
       expect(mockLessonsService.getLessonsByClass).toHaveBeenCalledWith(
         CLASS_ID,
-        false,
+        expect.objectContaining({
+          filterDrafts: false,
+        }),
       );
     });
 
     it('returns { success, message, data, count }', async () => {
-      mockLessonsService.getLessonsByClass.mockResolvedValue([MOCK_LESSON]);
+      mockLessonsService.getLessonsByClass.mockResolvedValue({
+        data: [MOCK_LESSON],
+        count: 1,
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
 
-      const res = await controller.getLessonsByClass(CLASS_ID, TEACHER_USER);
+      const res = await controller.getLessonsByClass(
+        CLASS_ID,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        TEACHER_USER,
+      );
 
       expect(res).toMatchObject({
         success: true,
         message: expect.any(String),
         data: expect.any(Array),
         count: expect.any(Number),
+        total: expect.any(Number),
+        page: expect.any(Number),
+        pageSize: expect.any(Number),
+        totalPages: expect.any(Number),
       });
     });
   });

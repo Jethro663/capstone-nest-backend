@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, count, desc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   lessons,
@@ -20,8 +20,18 @@ import {
   CreateContentBlockDto,
   UpdateContentBlockDto,
   ReorderBlocksDto,
+  ReorderLessonsDto,
 } from './DTO/lesson.dto';
 import { RoleName } from '../auth/decorators/roles.decorator';
+
+type LessonStatusFilter = 'all' | 'draft' | 'published';
+type GetLessonsByClassOptions = {
+  filterDrafts?: boolean;
+  includeBlocks?: boolean;
+  page?: number;
+  pageSize?: number;
+  status?: LessonStatusFilter;
+};
 
 @Injectable()
 export class LessonsService {
@@ -65,6 +75,29 @@ export class LessonsService {
     }
   }
 
+  private buildLessonClassConditions(
+    classId: string,
+    filterDrafts: boolean,
+    status: LessonStatusFilter,
+  ) {
+    const conditions = [eq(lessons.classId, classId)];
+
+    if (filterDrafts) {
+      conditions.push(eq(lessons.isDraft, false));
+      return and(...conditions);
+    }
+
+    if (status === 'draft') {
+      conditions.push(eq(lessons.isDraft, true));
+    }
+
+    if (status === 'published') {
+      conditions.push(eq(lessons.isDraft, false));
+    }
+
+    return and(...conditions);
+  }
+
   // ---------------------------------------------------------------------------
   // Lesson CRUD
   // ---------------------------------------------------------------------------
@@ -95,20 +128,60 @@ export class LessonsService {
    * When `filterDrafts` is true, only published (isDraft = false) lessons are
    * returned — use this when the caller is a student.
    */
-  async getLessonsByClass(classId: string, filterDrafts = false) {
-    const conditions = filterDrafts
-      ? and(eq(lessons.classId, classId), eq(lessons.isDraft, false))
-      : eq(lessons.classId, classId);
+  async getLessonsByClass(
+    classId: string,
+    {
+      filterDrafts = false,
+      includeBlocks = true,
+      page,
+      pageSize,
+      status = 'all',
+    }: GetLessonsByClassOptions = {},
+  ) {
+    const conditions = this.buildLessonClassConditions(
+      classId,
+      filterDrafts,
+      status,
+    );
+    const hasPagination = page !== undefined && pageSize !== undefined;
+    const safePage = Math.max(page ?? 1, 1);
+    const safePageSize = Math.max(pageSize ?? 1, 1);
+    const offset = (safePage - 1) * safePageSize;
 
-    return this.db.query.lessons.findMany({
-      where: conditions,
-      with: {
-        contentBlocks: {
-          orderBy: (blocks, { asc }) => [asc(blocks.order)],
-        },
-      },
-      orderBy: (l, { asc }) => [asc(l.order)],
-    });
+    const [rows, totalResult] = await Promise.all([
+      this.db.query.lessons.findMany({
+        where: conditions,
+        with: includeBlocks
+          ? {
+              contentBlocks: {
+                orderBy: (blocks, { asc }) => [asc(blocks.order)],
+              },
+            }
+          : undefined,
+        orderBy: (l, { asc }) => [asc(l.order)],
+        ...(hasPagination
+          ? {
+              limit: safePageSize,
+              offset,
+            }
+          : {}),
+      }),
+      this.db.select({ total: count() }).from(lessons).where(conditions),
+    ]);
+
+    const total = totalResult[0]?.total ?? 0;
+    const effectivePageSize = hasPagination ? safePageSize : Math.max(total, 1);
+
+    return {
+      data: rows,
+      count: rows.length,
+      total,
+      page: safePage,
+      pageSize: effectivePageSize,
+      totalPages: hasPagination
+        ? Math.max(Math.ceil(total / safePageSize), 1)
+        : 1,
+    };
   }
 
   /**
@@ -270,6 +343,176 @@ export class LessonsService {
     });
 
     return published;
+  }
+
+  /**
+   * Bulk update lesson draft state within a class.
+   */
+  async bulkUpdateLessonDraftState(
+    classId: string,
+    lessonIds: string[],
+    isDraft: boolean,
+    userId: string,
+    userRoles: string[],
+  ) {
+    if (lessonIds.length === 0) {
+      throw new BadRequestException('At least one lesson ID is required');
+    }
+
+    await this.assertTeacherOwnership(classId, userId, userRoles);
+
+    const existingLessons = await this.db.query.lessons.findMany({
+      where: and(
+        eq(lessons.classId, classId),
+        inArray(lessons.id, lessonIds),
+      ),
+      columns: {
+        id: true,
+        title: true,
+      },
+    });
+
+    if (existingLessons.length !== lessonIds.length) {
+      const foundIds = new Set(existingLessons.map((lesson) => lesson.id));
+      const unknownIds = lessonIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `The following lesson IDs do not belong to class "${classId}": ${unknownIds.join(', ')}`,
+      );
+    }
+
+    await this.db
+      .update(lessons)
+      .set({ isDraft, updatedAt: new Date() })
+      .where(
+        and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
+      );
+
+    await this.auditService.log({
+      actorId: userId,
+      action: isDraft ? 'lesson.bulk_unpublished' : 'lesson.bulk_published',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        lessonIds,
+        count: lessonIds.length,
+      },
+    });
+
+    const updatedLessons = await this.db.query.lessons.findMany({
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
+      orderBy: (l, { asc }) => [asc(l.order)],
+    });
+
+    return updatedLessons;
+  }
+
+  /**
+   * Bulk delete lessons within a class.
+   */
+  async bulkDeleteLessons(
+    classId: string,
+    lessonIds: string[],
+    userId: string,
+    userRoles: string[],
+  ) {
+    if (lessonIds.length === 0) {
+      throw new BadRequestException('At least one lesson ID is required');
+    }
+
+    await this.assertTeacherOwnership(classId, userId, userRoles);
+
+    const existingLessons = await this.db.query.lessons.findMany({
+      where: and(
+        eq(lessons.classId, classId),
+        inArray(lessons.id, lessonIds),
+      ),
+      columns: {
+        id: true,
+        title: true,
+        order: true,
+      },
+      orderBy: (l, { asc }) => [asc(l.order)],
+    });
+
+    if (existingLessons.length !== lessonIds.length) {
+      const foundIds = new Set(existingLessons.map((lesson) => lesson.id));
+      const unknownIds = lessonIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `The following lesson IDs do not belong to class "${classId}": ${unknownIds.join(', ')}`,
+      );
+    }
+
+    await this.db
+      .delete(lessons)
+      .where(and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)));
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.bulk_deleted',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        lessonIds,
+        count: lessonIds.length,
+      },
+    });
+
+    return existingLessons;
+  }
+
+  /**
+   * Reorder lessons within a class.
+   */
+  async reorderLessons(
+    classId: string,
+    reorderDto: ReorderLessonsDto,
+    userId: string,
+    userRoles: string[],
+  ) {
+    await this.assertTeacherOwnership(classId, userId, userRoles);
+
+    const requestedIds = reorderDto.lessons.map((lesson) => lesson.id);
+    if (requestedIds.length === 0) {
+      throw new BadRequestException('At least one lesson reorder entry is required');
+    }
+
+    const existingLessons = await this.db.query.lessons.findMany({
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
+      columns: { id: true },
+    });
+
+    if (existingLessons.length !== requestedIds.length) {
+      const foundIds = new Set(existingLessons.map((lesson) => lesson.id));
+      const unknownIds = requestedIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `The following lesson IDs do not belong to class "${classId}": ${unknownIds.join(', ')}`,
+      );
+    }
+
+    await this.db.transaction(async (tx) => {
+      for (const lessonUpdate of reorderDto.lessons) {
+        await tx
+          .update(lessons)
+          .set({ order: lessonUpdate.order, updatedAt: new Date() })
+          .where(eq(lessons.id, lessonUpdate.id));
+      }
+    });
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.reordered',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        lessonIds: requestedIds,
+        count: requestedIds.length,
+      },
+    });
+
+    return this.db.query.lessons.findMany({
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
+      orderBy: (l, { asc }) => [asc(l.order)],
+    });
   }
 
   // ---------------------------------------------------------------------------
