@@ -7,6 +7,7 @@ export interface ClassRecord {
   classId: string;
   gradingPeriod: GradingPeriod;
   status: ClassRecordStatus;
+  teacherId?: string;
   categories?: ClassRecordCategory[];
   createdAt?: string;
   updatedAt?: string;

@@ -60,7 +60,13 @@ export const lxpService = {
 
   async assignIntervention(
     caseId: string,
-    payload: { lessonIds?: string[]; assessmentIds?: string[]; note?: string },
+    payload: {
+      lessonIds?: string[];
+      assessmentIds?: string[];
+      lessonAssignments?: { lessonId: string; xpAwarded: number; label?: string }[];
+      assessmentAssignments?: { assessmentId: string; xpAwarded: number; label?: string }[];
+      note?: string;
+    },
   ): Promise<Envelope<TeacherInterventionQueueResponse>> {
     const { data } = await api.post(`/lxp/teacher/interventions/${caseId}/assign`, payload);
     return normalizeEnvelope<TeacherInterventionQueueResponse>(data);

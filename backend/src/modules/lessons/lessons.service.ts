@@ -14,6 +14,7 @@ import {
   users,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
+import { RagIndexingService } from '../rag/rag-indexing.service';
 import {
   CreateLessonDto,
   UpdateLessonDto,
@@ -38,6 +39,7 @@ export class LessonsService {
   constructor(
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly ragIndexingService: RagIndexingService,
   ) {}
 
   private get db() {
@@ -258,6 +260,12 @@ export class LessonsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_created',
+      actorId: userId,
+      source: 'lessons.createLesson',
+    });
+
     return lesson;
   }
 
@@ -291,6 +299,12 @@ export class LessonsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(updated.classId, {
+      reason: 'lesson_updated',
+      actorId: userId,
+      source: 'lessons.updateLesson',
+    });
+
     return updated;
   }
 
@@ -312,6 +326,12 @@ export class LessonsService {
         classId: lesson.classId,
         title: lesson.title,
       },
+    });
+
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_deleted',
+      actorId: userId,
+      source: 'lessons.deleteLesson',
     });
 
     return lesson;
@@ -340,6 +360,12 @@ export class LessonsService {
         classId: published.classId,
         title: published.title,
       },
+    });
+
+    await this.ragIndexingService.queueClassReindex(published.classId, {
+      reason: 'lesson_published',
+      actorId: userId,
+      source: 'lessons.publishLesson',
     });
 
     return published;
@@ -396,6 +422,12 @@ export class LessonsService {
         lessonIds,
         count: lessonIds.length,
       },
+    });
+
+    await this.ragIndexingService.queueClassReindex(classId, {
+      reason: isDraft ? 'lesson_bulk_unpublished' : 'lesson_bulk_published',
+      actorId: userId,
+      source: 'lessons.bulkUpdateLessonDraftState',
     });
 
     const updatedLessons = await this.db.query.lessons.findMany({
@@ -457,6 +489,12 @@ export class LessonsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(classId, {
+      reason: 'lesson_bulk_deleted',
+      actorId: userId,
+      source: 'lessons.bulkDeleteLessons',
+    });
+
     return existingLessons;
   }
 
@@ -509,6 +547,12 @@ export class LessonsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(classId, {
+      reason: 'lesson_reordered',
+      actorId: userId,
+      source: 'lessons.reorderLessons',
+    });
+
     return this.db.query.lessons.findMany({
       where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
       orderBy: (l, { asc }) => [asc(l.order)],
@@ -544,6 +588,12 @@ export class LessonsService {
         metadata: createBlockDto.metadata ?? {},
       })
       .returning();
+
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_block_added',
+      actorId: userId,
+      source: 'lessons.addContentBlock',
+    });
 
     return newBlock;
   }
@@ -594,6 +644,12 @@ export class LessonsService {
       .set(updateData)
       .where(eq(lessonContentBlocks.id, blockId));
 
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_block_updated',
+      actorId: userId,
+      source: 'lessons.updateContentBlock',
+    });
+
     return this.getContentBlockById(blockId);
   }
 
@@ -612,6 +668,12 @@ export class LessonsService {
     await this.db
       .delete(lessonContentBlocks)
       .where(eq(lessonContentBlocks.id, blockId));
+
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_block_deleted',
+      actorId: userId,
+      source: 'lessons.deleteContentBlock',
+    });
 
     return block;
   }
@@ -657,6 +719,12 @@ export class LessonsService {
           .set({ order: blockUpdate.order, updatedAt: new Date() })
           .where(eq(lessonContentBlocks.id, blockUpdate.id));
       }
+    });
+
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_blocks_reordered',
+      actorId: userId,
+      source: 'lessons.reorderBlocks',
     });
 
     return this.getLessonById(lessonId);

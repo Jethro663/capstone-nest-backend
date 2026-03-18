@@ -12,6 +12,7 @@ export class AiProxyService {
   private readonly baseUrl: string;
   private readonly chatTimeoutMs: number;
   private readonly extractionTimeoutMs: number;
+  private readonly sharedSecret: string;
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl =
@@ -24,6 +25,7 @@ export class AiProxyService {
       this.config.get<string>('AI_SERVICE_TIMEOUT_EXTRACTION_MS') || '300000',
       10,
     );
+    this.sharedSecret = this.config.get<string>('AI_SERVICE_SHARED_SECRET') || '';
     this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
   }
 
@@ -52,6 +54,9 @@ export class AiProxyService {
       'X-User-Email': user.email ?? '',
       'X-User-Roles': (user.roles ?? []).join(','),
     };
+    if (this.sharedSecret) {
+      headers['X-Internal-Service-Token'] = this.sharedSecret;
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(

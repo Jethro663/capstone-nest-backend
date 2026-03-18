@@ -216,6 +216,8 @@ export const classes = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
 
     room: text('room'),
+    cardPreset: text('card_preset').notNull().default('aurora'),
+    cardBannerUrl: text('card_banner_url'),
     schoolYear: text('school_year').notNull(),
 
     isActive: boolean('is_active').notNull().default(true),

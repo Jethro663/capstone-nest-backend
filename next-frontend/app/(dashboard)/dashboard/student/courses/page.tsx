@@ -3,13 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { motion, Variants } from 'framer-motion';
-import { BookOpen, GraduationCap, ArrowRight, Sparkles } from 'lucide-react';
+import { GraduationCap, ArrowRight, Sparkles } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import { StudentEmptyState } from '@/components/student/student-primitives';
+import { ClassCard } from '@/components/class/ClassCard';
 import type { ClassItem } from '@/types/class';
 
 const fContainer: Variants = {
@@ -85,7 +85,7 @@ export default function StudentCoursesPage() {
       <div className="mx-auto max-w-7xl space-y-8 p-8">
         <Skeleton className="h-12 w-64 rounded-xl" />
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-56 rounded-[1.5rem]" />)}
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-72 rounded-[1.5rem]" />)}
         </div>
       </div>
     );
@@ -120,52 +120,32 @@ export default function StudentCoursesPage() {
           className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
           {courses.map((course) => (
-            <motion.div key={course.id} variants={fItem} whileHover={{ y: -5 }}>
+            <motion.div key={course.id} variants={fItem}>
               <Link href={`/dashboard/student/classes/${course.id}`}>
-                <div className="student-panel student-panel-hover group flex h-full flex-col rounded-[1.5rem] p-6">
-                  <div className="mb-4 flex items-start justify-between">
-                    <Badge variant="outline" className="student-badge font-black text-[10px]">
-                      {course.section?.gradeLevel ? `GRADE ${course.section.gradeLevel}` : 'COURSE'}
-                    </Badge>
-                    <div className="rounded-lg bg-[var(--student-surface-soft)] p-2 text-[var(--student-text-muted)] transition-colors group-hover:bg-[var(--student-accent-soft)] group-hover:text-[var(--student-accent)]">
-                      <BookOpen className="h-4 w-4" />
-                    </div>
-                  </div>
-
-                  <div className="flex-1">
-                    <h3 className="text-lg font-black leading-tight text-[var(--student-text-strong)] transition-colors group-hover:text-[var(--student-accent)]">
-                      {course.subjectName || course.className || course.name}
-                    </h3>
-                    <p className="mt-1 text-xs font-bold uppercase tracking-tight text-[var(--student-text-muted)]">
-                      {course.section?.name || 'Standard Section'}
-                    </p>
-                  </div>
-
-                  <div className="mt-6 space-y-3">
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-[var(--student-text-muted)]">Progress</p>
-                        <p className="text-sm font-black text-[var(--student-text-strong)]">{course.completedCount} / {course.totalLessons} Lessons</p>
+                <ClassCard
+                  classItem={course}
+                  className="student-panel"
+                  subtitle={course.section?.name || 'Standard Section'}
+                  meta={[
+                    `${course.completedCount} / ${course.totalLessons} lessons`,
+                    `${course.progress}% progress`,
+                  ]}
+                  footer={
+                    <div className="space-y-3">
+                      <div className="student-progress-track relative h-2 w-full overflow-hidden rounded-full">
+                        <motion.div
+                          className="student-progress-fill absolute left-0 top-0 h-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${course.progress}%` }}
+                          transition={{ duration: 1, ease: 'easeOut' }}
+                        />
                       </div>
-                      <span className="text-lg font-black text-[var(--student-accent)]">{course.progress}%</span>
-                    </div>
-
-                    <div className="student-progress-track relative h-2 w-full overflow-hidden rounded-full">
-                      <motion.div
-                        className="student-progress-fill absolute left-0 top-0 h-full"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${course.progress}%` }}
-                        transition={{ duration: 1, ease: 'easeOut' }}
-                      />
-                    </div>
-
-                    <div className="pt-2">
                       <div className="flex items-center justify-between text-[10px] font-black uppercase text-[var(--student-accent)] opacity-0 transition-opacity group-hover:opacity-100">
                         Continue Learning <ArrowRight className="h-3 w-3" />
                       </div>
                     </div>
-                  </div>
-                </div>
+                  }
+                />
               </Link>
             </motion.div>
           ))}

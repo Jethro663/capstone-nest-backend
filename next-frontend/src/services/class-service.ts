@@ -71,6 +71,35 @@ export const classService = {
     return data;
   },
 
+  /** PATCH /classes/:id/presentation â€” Teacher, Admin */
+  async updatePresentation(
+    id: string,
+    dto: Pick<UpdateClassDto, 'cardPreset' | 'cardBannerUrl'>,
+  ): Promise<{ success: boolean; message: string; data: ClassItem }> {
+    const { data } = await api.patch(`/classes/${id}/presentation`, dto);
+    return data;
+  },
+
+  /** POST /classes/:id/banner â€” Teacher, Admin */
+  async uploadBanner(
+    id: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      cardBannerUrl: string;
+      class: ClassItem;
+    };
+  }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const { data } = await api.post(`/classes/${id}/banner`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
   /** PUT /classes/:id/toggle-status — Admin only */
   async toggleStatus(id: string): Promise<{ success: boolean; message: string; data: ClassItem }> {
     const { data } = await api.put(`/classes/${id}/toggle-status`);

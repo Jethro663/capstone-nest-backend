@@ -59,13 +59,40 @@ export class AuthController {
     const ttlMs = parseExpiryMs(
       this.configService.get<string>('jwt.refreshTokenExpiry'),
     );
+    const frontendUrl = process.env.FRONTEND_URL;
+    const cookieDomain = process.env.COOKIE_DOMAIN?.trim() || undefined;
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    const isProd = nodeEnv === 'production';
+    let sameSite: 'lax' | 'none' = 'lax';
+
+    if (isProd && frontendUrl) {
+      try {
+        const frontendOrigin = new URL(frontendUrl);
+        const apiOrigin = new URL(
+          process.env.BACKEND_PUBLIC_URL ?? 'http://localhost:3000',
+        );
+        const isCrossSite =
+          frontendOrigin.hostname !== apiOrigin.hostname ||
+          frontendOrigin.protocol !== apiOrigin.protocol;
+        sameSite = isCrossSite ? 'none' : 'lax';
+      } catch {
+        sameSite = 'none';
+      }
+    }
+
     return {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax' as const,
+      secure: isProd,
+      sameSite,
+      domain: cookieDomain,
       path: '/',
       maxAge: ttlMs,
     };
+  }
+
+  private clearRefreshCookie(response: express.Response) {
+    const { maxAge: _maxAge, ...clearOptions } = this.refreshCookieOptions();
+    response.clearCookie('refreshToken', clearOptions);
   }
 
   // --------------------------------------------------------------------------
@@ -169,7 +196,7 @@ export class AuthController {
     }
 
     // Clear with same path/domain as when it was set
-    response.clearCookie('refreshToken', { path: '/' });
+    this.clearRefreshCookie(response);
 
     return {
       success: true,
@@ -197,7 +224,7 @@ export class AuthController {
     }
 
     await this.tokenService.revokeAllForUser(user.userId);
-    response.clearCookie('refreshToken', { path: '/' });
+    this.clearRefreshCookie(response);
 
     return {
       success: true,

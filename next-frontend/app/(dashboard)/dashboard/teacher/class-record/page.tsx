@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import { classRecordService } from '@/services/class-record-service';
 import { dashboardService } from '@/services/dashboard-service';
 import { Card, CardContent } from '@/components/ui/card';
@@ -9,12 +10,27 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import type { ClassRecord, SpreadsheetData, SpreadsheetCategory } from '@/types/class-record';
+import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
 import type { ClassItem } from '@/types/class';
 import type { GradingPeriod } from '@/utils/constants';
 
 const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return (
+    (error as { response?: { data?: { message?: string } } })?.response?.data
+      ?.message || fallback
+  );
+}
 
 export default function ClassRecordPage() {
   const router = useRouter();
@@ -28,8 +44,11 @@ export default function ClassRecordPage() {
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [editingCell, setEditingCell] = useState<{ itemId: string; studentId: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const editRef = useRef<HTMLInputElement>(null);
 
   // Fetch classes
@@ -95,12 +114,12 @@ export default function ClassRecordPage() {
       await classRecordService.generate({ classId: selectedClassId, gradingPeriod: quarter });
       toast.success(`Class record for ${quarter} generated`);
       await fetchClassRecords();
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
+    } catch (err: unknown) {
+      if ((err as { response?: { status?: number } })?.response?.status === 409) {
         toast.info(`${quarter} record already exists — loading it now`);
         await fetchClassRecords();
       } else {
-        toast.error(err?.response?.data?.message || 'Failed to generate class record');
+        toast.error(getErrorMessage(err, 'Failed to generate class record'));
       }
     } finally {
       setGenerating(false);
@@ -108,13 +127,31 @@ export default function ClassRecordPage() {
   };
 
   const handleFinalize = async () => {
-    if (!selectedRecord || !confirm('Finalize this quarter? This cannot be undone.')) return;
+    if (!selectedRecord) return;
     try {
+      setFinalizing(true);
       await classRecordService.finalize(selectedRecord.id);
       toast.success('Quarter finalized');
+      setShowFinalizeDialog(false);
       fetchClassRecords();
     } catch {
       toast.error('Failed to finalize');
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!selectedRecord) return;
+    try {
+      setReopening(true);
+      await classRecordService.reopen(selectedRecord.id);
+      toast.success('Quarter reopened for editing');
+      await fetchClassRecords();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reopen class record'));
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -140,8 +177,8 @@ export default function ClassRecordPage() {
       });
       setEditingCell(null);
       fetchSpreadsheet();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save score');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save score'));
     }
   };
 
@@ -152,6 +189,54 @@ export default function ClassRecordPage() {
 
   // Computed: which quarters already exist
   const existingQuarters = new Set(classRecords.map((r) => r.gradingPeriod));
+  void existingQuarters;
+
+  const exportSpreadsheet = () => {
+    if (!spreadsheet || !selectedRecord) return;
+
+    const rows: (string | number)[][] = [
+      ['Subject', spreadsheet.header.subject || ''],
+      ['Teacher', spreadsheet.header.teacher || ''],
+      ['Quarter', spreadsheet.header.quarter],
+      ['Section', `${spreadsheet.header.gradeLevel ? `Grade ${spreadsheet.header.gradeLevel} - ` : ''}${spreadsheet.header.section || ''}`],
+      [],
+    ];
+
+    const headerRow = ['Learner'];
+    spreadsheet.categories.forEach((category) => {
+      category.items.forEach((item) => headerRow.push(item.title));
+      headerRow.push(`${category.name} Total`, `${category.name} PS`, `${category.name} WS`);
+    });
+    headerRow.push('Initial Grade', 'Quarterly Grade');
+    rows.push(headerRow);
+
+    const hpsRow: (string | number)[] = ['HPS'];
+    spreadsheet.categories.forEach((category) => {
+      category.items.forEach((item) => hpsRow.push(item.hps ?? ''));
+      hpsRow.push(
+        category.items.reduce((sum, item) => sum + (item.hps || 0), 0),
+        '',
+        '',
+      );
+    });
+    hpsRow.push('', '');
+    rows.push(hpsRow);
+
+    spreadsheet.students.forEach((student) => {
+      const row: (string | number)[] = [`${student.lastName}, ${student.firstName}`];
+      student.categories.forEach((category) => {
+        category.scores.forEach((score) => row.push(score ?? ''));
+        row.push(category.total, category.ps, category.ws);
+      });
+      row.push(student.initialGrade, student.quarterlyGrade);
+      rows.push(row);
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, selectedRecord.gradingPeriod);
+    XLSX.writeFile(workbook, `class-record-${selectedRecord.gradingPeriod}-${selectedRecord.classId}.xlsx`);
+  };
 
   if (loading) {
     return (
@@ -161,22 +246,6 @@ export default function ClassRecordPage() {
       </div>
     );
   }
-
-  // Build column structure for spreadsheet
-  const buildColumns = (categories: SpreadsheetCategory[]) => {
-    const cols: { type: 'item' | 'total' | 'ps' | 'ws' | 'ig' | 'qg'; catIdx?: number; itemIdx?: number; label: string; catName?: string }[] = [];
-    categories.forEach((cat, catIdx) => {
-      cat.items.forEach((item, itemIdx) => {
-        cols.push({ type: 'item', catIdx, itemIdx, label: item.title, catName: cat.name });
-      });
-      cols.push({ type: 'total', catIdx, label: 'Total', catName: cat.name });
-      cols.push({ type: 'ps', catIdx, label: 'PS', catName: cat.name });
-      cols.push({ type: 'ws', catIdx, label: 'WS', catName: cat.name });
-    });
-    cols.push({ type: 'ig', label: 'Initial Grade' });
-    cols.push({ type: 'qg', label: 'Quarterly Grade' });
-    return cols;
-  };
 
   return (
     <div className="space-y-6">
@@ -273,11 +342,19 @@ export default function ClassRecordPage() {
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2 mt-3">
-                {selectedRecord?.status === 'draft' && (
-                  <Button size="sm" variant="outline" onClick={handleFinalize}>
+                {selectedRecord?.status === 'draft' ? (
+                  <Button size="sm" variant="outline" onClick={() => setShowFinalizeDialog(true)}>
                     Finalize Quarter
                   </Button>
-                )}
+                ) : null}
+                {selectedRecord?.status === 'finalized' ? (
+                  <Button size="sm" variant="outline" onClick={handleReopen} disabled={reopening}>
+                    {reopening ? 'Reopening...' : 'Reopen Quarter'}
+                  </Button>
+                ) : null}
+                <Button size="sm" onClick={exportSpreadsheet}>
+                  Export Excel
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -442,6 +519,25 @@ export default function ClassRecordPage() {
           </Card>
         </>
       )}
+
+      <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Finalize quarter</DialogTitle>
+            <DialogDescription>
+              Finalizing locks in the computed grades for this quarter until you explicitly reopen it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFinalizeDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleFinalize} disabled={finalizing}>
+              {finalizing ? 'Finalizing...' : 'Confirm Finalize'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -30,6 +30,7 @@ import { AuditService } from '../audit/audit.service';
 const INTERVENTION_THRESHOLD = 74;
 const LESSON_XP = 20;
 const ASSESSMENT_XP = 30;
+const STAR_XP = 1000;
 
 type UserContext = {
   userId: string;
@@ -57,6 +58,10 @@ export class LxpService {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private xpToStars(xp: number) {
+    return Math.round((xp / STAR_XP) * 100) / 100;
   }
 
   private async assertTeacherClassAccess(classId: string, user: UserContext) {
@@ -413,6 +418,7 @@ export class LxpService {
       },
       progress: {
         xpTotal: progress.xpTotal,
+        starsTotal: this.xpToStars(progress.xpTotal),
         streakDays: progress.streakDays,
         checkpointsCompleted: progress.checkpointsCompleted,
         completionPercent:
@@ -625,12 +631,18 @@ export class LxpService {
           totalCheckpoints > 0
             ? Math.round((completed / totalCheckpoints) * 100)
             : 0,
-        progress: progress ?? {
-          xpTotal: 0,
-          streakDays: 0,
-          checkpointsCompleted: 0,
-          lastActivityAt: null,
-        },
+        progress: progress
+          ? {
+              ...progress,
+              starsTotal: this.xpToStars(progress.xpTotal),
+            }
+          : {
+              xpTotal: 0,
+              starsTotal: 0,
+              streakDays: 0,
+              checkpointsCompleted: 0,
+              lastActivityAt: null,
+            },
       };
     });
 
@@ -665,8 +677,33 @@ export class LxpService {
       );
     }
 
-    const lessonIds = [...new Set(dto.lessonIds ?? [])];
-    const assessmentIds = [...new Set(dto.assessmentIds ?? [])];
+    const lessonAssignments: Array<{
+      lessonId: string;
+      xpAwarded: number;
+      label?: string;
+    }> =
+      dto.lessonAssignments && dto.lessonAssignments.length > 0
+        ? dto.lessonAssignments
+        : [...new Set(dto.lessonIds ?? [])].map((lessonId) => ({
+            lessonId,
+            xpAwarded: LESSON_XP,
+          }));
+    const assessmentAssignments: Array<{
+      assessmentId: string;
+      xpAwarded: number;
+      label?: string;
+    }> =
+      dto.assessmentAssignments && dto.assessmentAssignments.length > 0
+        ? dto.assessmentAssignments
+        : [...new Set(dto.assessmentIds ?? [])].map((assessmentId) => ({
+            assessmentId,
+            xpAwarded: ASSESSMENT_XP,
+          }));
+
+    const lessonIds = [...new Set(lessonAssignments.map((entry) => entry.lessonId))];
+    const assessmentIds = [
+      ...new Set(assessmentAssignments.map((entry) => entry.assessmentId)),
+    ];
 
     if (lessonIds.length === 0 && assessmentIds.length === 0) {
       throw new BadRequestException(
@@ -712,24 +749,26 @@ export class LxpService {
       const assignmentPayload: (typeof interventionAssignments.$inferInsert)[] =
         [];
       let order = 1;
-      lessonIds.forEach((lessonId) => {
+      lessonAssignments.forEach((lessonEntry) => {
         assignmentPayload.push({
           caseId: interventionCase.id,
           assignmentType: 'lesson_review',
-          lessonId,
-          checkpointLabel: 'Teacher-assigned lesson review',
+          lessonId: lessonEntry.lessonId,
+          checkpointLabel:
+            lessonEntry.label?.trim() || 'Teacher-assigned lesson review',
           orderIndex: order++,
-          xpAwarded: LESSON_XP,
+          xpAwarded: lessonEntry.xpAwarded,
         });
       });
-      assessmentIds.forEach((assessmentId) => {
+      assessmentAssignments.forEach((assessmentEntry) => {
         assignmentPayload.push({
           caseId: interventionCase.id,
           assignmentType: 'assessment_retry',
-          assessmentId,
-          checkpointLabel: 'Teacher-assigned assessment retry',
+          assessmentId: assessmentEntry.assessmentId,
+          checkpointLabel:
+            assessmentEntry.label?.trim() || 'Teacher-assigned assessment retry',
           orderIndex: order++,
-          xpAwarded: ASSESSMENT_XP,
+          xpAwarded: assessmentEntry.xpAwarded,
         });
       });
 
@@ -760,8 +799,8 @@ export class LxpService {
       metadata: {
         classId: interventionCase.classId,
         studentId: interventionCase.studentId,
-        lessonIds,
-        assessmentIds,
+        lessonAssignments,
+        assessmentAssignments,
       },
     });
 
@@ -846,6 +885,27 @@ export class LxpService {
     const snapshotMap = new Map(
       snapshots.map((row) => [row.studentId, this.toNumber(row.blendedScore)]),
     );
+    const progressRows = await this.db.query.lxpProgress.findMany({
+      where: eq(lxpProgress.classId, classId),
+      columns: {
+        studentId: true,
+        xpTotal: true,
+        streakDays: true,
+        checkpointsCompleted: true,
+        lastActivityAt: true,
+      },
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [desc(lxpProgress.xpTotal), desc(lxpProgress.updatedAt)],
+    });
 
     const withDelta = cases.map((entry) => {
       const baseline = this.toNumber(entry.triggerScore);
@@ -891,6 +951,16 @@ export class LxpService {
             : null,
       },
       rows: withDelta,
+      leaderboard: progressRows.map((row, index) => ({
+        rank: index + 1,
+        studentId: row.studentId,
+        xpTotal: row.xpTotal,
+        starsTotal: this.xpToStars(row.xpTotal),
+        streakDays: row.streakDays,
+        checkpointsCompleted: row.checkpointsCompleted,
+        lastActivityAt: row.lastActivityAt,
+        student: row.student,
+      })),
     };
   }
 

@@ -53,6 +53,8 @@ export interface InterventionRecommendation {
   suggestedAssignmentPayload: {
     lessonIds: string[];
     assessmentIds: string[];
+    lessonAssignments?: { lessonId: string; xpAwarded: number; label?: string }[];
+    assessmentAssignments?: { assessmentId: string; xpAwarded: number; label?: string }[];
     note?: string;
   };
 }

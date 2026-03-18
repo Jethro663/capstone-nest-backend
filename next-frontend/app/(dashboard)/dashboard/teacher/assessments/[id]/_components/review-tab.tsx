@@ -34,6 +34,7 @@ interface AttemptQuestion {
   content?: string;
   points?: number;
   explanation?: string;
+  imageUrl?: string;
   options?: AttemptOption[];
 }
 
@@ -514,6 +515,12 @@ function ResponseCard({ response: r, index }: { response: AttemptResponse; index
           </div>
         </div>
 
+        {question.imageUrl && (
+          <div className="overflow-hidden rounded-xl border">
+            <img src={question.imageUrl} alt="Question" className="max-h-56 w-full object-contain" />
+          </div>
+        )}
+
         {/* Show options with student's selection */}
         {question.options && question.options.length > 0 && (
           <div className="space-y-1 ml-1">
@@ -540,6 +547,20 @@ function ResponseCard({ response: r, index }: { response: AttemptResponse; index
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {((r.selectedOptionId && question.options?.length) ||
+          ((r.selectedOptionIds?.length ?? 0) > 0 && question.options?.length)) && (
+          <div className="mt-1">
+            <p className="text-xs text-muted-foreground mb-0.5">Captured answer:</p>
+            <p className="text-sm bg-muted/50 rounded px-3 py-1.5">
+              {r.selectedOptionId
+                ? question.options?.find((opt) => opt.id === r.selectedOptionId)?.text || r.selectedOptionId
+                : (r.selectedOptionIds ?? [])
+                    .map((optionId) => question.options?.find((opt) => opt.id === optionId)?.text || optionId)
+                    .join(', ')}
+            </p>
           </div>
         )}
 

@@ -74,6 +74,12 @@ export const classRecordService = {
     return data;
   },
 
+  /** POST /class-record/:id/reopen â€” Teacher, Admin */
+  async reopen(id: string): Promise<{ success: boolean; data: ClassRecord }> {
+    const { data } = await api.post(`/class-record/${id}/reopen`);
+    return data;
+  },
+
   /** GET /class-record/:id/final-grades — Teacher, Admin */
   async getFinalGrades(id: string): Promise<{ success: boolean; data: FinalGrade[] }> {
     const { data } = await api.get(`/class-record/${id}/final-grades`);

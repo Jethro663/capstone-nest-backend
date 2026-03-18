@@ -19,6 +19,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'An unexpected error occurred';
+    let data: unknown;
 
     // Handle multer file-size limit errors
     if (
@@ -46,6 +47,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       ) {
         const body = exceptionResponse as Record<string, unknown>;
         message = (body.message as string) ?? message;
+        data = body.data;
       }
     } else {
       // Unexpected errors — log full stack internally, return generic message
@@ -59,6 +61,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       success: false,
       statusCode: status,
       message: Array.isArray(message) ? message : message,
+      ...(data !== undefined ? { data } : {}),
       timestamp: new Date().toISOString(),
       path: request.url,
     });

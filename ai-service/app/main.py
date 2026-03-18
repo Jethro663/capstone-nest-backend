@@ -8,12 +8,14 @@ User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
 import uuid
+from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
 from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -99,12 +101,53 @@ def get_current_user(
     x_user_id: str = Header(...),
     x_user_email: str = Header(...),
     x_user_roles: str = Header(...),
+    x_internal_service_token: str | None = Header(None),
 ) -> RequestUser:
+    if settings.ai_service_shared_secret:
+        if x_internal_service_token != settings.ai_service_shared_secret:
+            raise HTTPException(401, "Invalid internal service token")
     return RequestUser(
         id=x_user_id,
         email=x_user_email,
         roles=x_user_roles.split(","),
     )
+
+
+def require_internal_service(
+    x_internal_service_token: str | None = Header(None),
+) -> None:
+    if not settings.ai_service_shared_secret:
+        return
+    if x_internal_service_token != settings.ai_service_shared_secret:
+        raise HTTPException(401, "Invalid internal service token")
+
+
+async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
+    database_status = {"ok": True}
+    try:
+        await db.execute(sa_text("SELECT 1"))
+    except Exception as err:
+        database_status = {"ok": False, "message": str(err)}
+
+    ollama_status = await ollama_client.is_available()
+    ai_degraded_allowed = settings.ai_degraded_allowed
+    ready = database_status["ok"] and (
+        ollama_status["available"] or ai_degraded_allowed
+    )
+
+    return {
+        "ready": ready,
+        "degradedMode": bool(ai_degraded_allowed and not ollama_status["available"]),
+        "dependencies": {
+            "database": database_status,
+            "ollama": {
+                "ok": ollama_status["available"],
+                "models": ollama_status["models"],
+            },
+        },
+        "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +411,29 @@ async def health():
     }
 
 
+@app.get("/live")
+async def live():
+    return {
+        "success": True,
+        "message": "AI service process is up",
+        "data": {
+            "status": "ok",
+        },
+    }
+
+
+@app.get("/ready")
+async def ready(db: AsyncSession = Depends(get_db)):
+    state = await get_readiness_state(db)
+    if not state["ready"]:
+        raise HTTPException(503, "AI service dependencies are not ready")
+    return {
+        "success": True,
+        "message": "AI service is ready",
+        "data": state,
+    }
+
+
 # ---------------------------------------------------------------------------
 # POST /index/classes/:id
 # ---------------------------------------------------------------------------
@@ -396,6 +462,56 @@ async def index_class(
         "success": True,
         "message": "Class content indexed",
         "data": data,
+    }
+
+
+@app.post("/internal/index/classes/{class_id}")
+async def internal_index_class(
+    class_id: str,
+    payload: dict[str, Any] | None = Body(default=None),
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await reindex_class_content(db, class_id)
+    return {
+        "success": True,
+        "message": "Class content indexed via internal service",
+        "data": {
+            **data,
+            "requestedBy": payload or {},
+        },
+    }
+
+
+@app.post("/internal/index/backfill")
+async def internal_backfill_index(
+    payload: dict[str, Any] | None = Body(default=None),
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await db.execute(
+        sa_text(
+            """
+            SELECT id
+            FROM classes
+            WHERE is_active = true
+            ORDER BY created_at ASC
+            """
+        )
+    )
+    class_ids = [str(row["id"]) for row in rows.mappings()]
+    results = []
+    for class_id in class_ids:
+        results.append(await reindex_class_content(db, class_id))
+
+    return {
+        "success": True,
+        "message": "Backfill indexing completed",
+        "data": {
+            "requestedBy": payload or {},
+            "classesProcessed": len(results),
+            "results": results,
+        },
     }
 
 

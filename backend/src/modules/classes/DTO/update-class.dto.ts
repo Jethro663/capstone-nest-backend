@@ -58,4 +58,12 @@ export class UpdateClassDto {
   @IsOptional()
   @IsBoolean({ message: 'isActive must be a boolean' })
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString({ message: 'cardPreset must be a string' })
+  cardPreset?: string;
+
+  @IsOptional()
+  @IsString({ message: 'cardBannerUrl must be a string' })
+  cardBannerUrl?: string | null;
 }

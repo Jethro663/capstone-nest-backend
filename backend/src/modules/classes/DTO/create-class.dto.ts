@@ -49,4 +49,12 @@ export class CreateClassDto {
   @IsOptional()
   @IsString({ message: 'room must be a string' })
   room?: string;
+
+  @IsOptional()
+  @IsString({ message: 'cardPreset must be a string' })
+  cardPreset?: string;
+
+  @IsOptional()
+  @IsString({ message: 'cardBannerUrl must be a string' })
+  cardBannerUrl?: string;
 }

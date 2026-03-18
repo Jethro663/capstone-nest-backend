@@ -56,6 +56,8 @@ export default function TeacherInterventionsPage() {
   const [recommendationLoadingId, setRecommendationLoadingId] = useState<string | null>(null);
   const [assigningCaseId, setAssigningCaseId] = useState<string | null>(null);
   const [selectedRecommendation, setSelectedRecommendation] = useState<InterventionRecommendation | null>(null);
+  const [recommendationLessonXp, setRecommendationLessonXp] = useState<Record<string, number>>({});
+  const [recommendationAssessmentXp, setRecommendationAssessmentXp] = useState<Record<string, number>>({});
 
   const selectedClass = useMemo(
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
@@ -128,6 +130,14 @@ export default function TeacherInterventionsPage() {
       setRecommendationLoadingId(caseId);
       const res = await aiService.recommendIntervention(caseId);
       setSelectedRecommendation(res.data);
+      setRecommendationLessonXp(
+        Object.fromEntries(res.data.recommendedLessons.map((lesson) => [lesson.lessonId, 20])),
+      );
+      setRecommendationAssessmentXp(
+        Object.fromEntries(
+          res.data.recommendedAssessments.map((assessment) => [assessment.assessmentId, 30]),
+        ),
+      );
     } catch (error) {
       toast.error(
         getApiErrorMessage(error, 'Failed to generate AI intervention recommendation'),
@@ -143,7 +153,19 @@ export default function TeacherInterventionsPage() {
       setAssigningCaseId(selectedRecommendation.caseId);
       await lxpService.assignIntervention(
         selectedRecommendation.caseId,
-        selectedRecommendation.suggestedAssignmentPayload,
+        {
+          note: selectedRecommendation.suggestedAssignmentPayload.note,
+          lessonAssignments: selectedRecommendation.recommendedLessons.map((lesson) => ({
+            lessonId: lesson.lessonId,
+            xpAwarded: recommendationLessonXp[lesson.lessonId] ?? 20,
+            label: `AI plan: ${lesson.title}`,
+          })),
+          assessmentAssignments: selectedRecommendation.recommendedAssessments.map((assessment) => ({
+            assessmentId: assessment.assessmentId,
+            xpAwarded: recommendationAssessmentXp[assessment.assessmentId] ?? 30,
+            label: `AI plan: ${assessment.title}`,
+          })),
+        },
       );
       toast.success('AI recommendation assigned to the intervention case');
       setSelectedRecommendation(null);
@@ -265,6 +287,7 @@ export default function TeacherInterventionsPage() {
                       <TableHead>Trigger Score</TableHead>
                       <TableHead>Progress</TableHead>
                       <TableHead>XP</TableHead>
+                      <TableHead>Stars</TableHead>
                       <TableHead>Streak</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Action</TableHead>
@@ -290,6 +313,7 @@ export default function TeacherInterventionsPage() {
                           </div>
                         </TableCell>
                         <TableCell>{entry.progress.xpTotal}</TableCell>
+                        <TableCell>{entry.progress.starsTotal.toFixed(2)}</TableCell>
                         <TableCell>{entry.progress.streakDays}</TableCell>
                         <TableCell>
                           <Badge variant="destructive">Active</Badge>
@@ -371,6 +395,40 @@ export default function TeacherInterventionsPage() {
               )}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>XP Leaderboard</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {(report?.leaderboard.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">No XP progress recorded yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Rank</TableHead>
+                      <TableHead>Student</TableHead>
+                      <TableHead>XP</TableHead>
+                      <TableHead>Stars</TableHead>
+                      <TableHead>Streak</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report?.leaderboard.map((row) => (
+                      <TableRow key={row.studentId}>
+                        <TableCell className="font-semibold">#{row.rank}</TableCell>
+                        <TableCell>{studentName(row.student ?? {})}</TableCell>
+                        <TableCell>{row.xpTotal}</TableCell>
+                        <TableCell>{row.starsTotal.toFixed(2)}</TableCell>
+                        <TableCell>{row.streakDays}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
 
@@ -418,6 +476,21 @@ export default function TeacherInterventionsPage() {
                         <div key={lesson.lessonId} className="rounded-lg border p-3">
                           <p className="font-medium">{lesson.title}</p>
                           <p className="mt-1 text-sm text-muted-foreground">{lesson.reason}</p>
+                          <label className="mt-3 block text-xs font-medium text-muted-foreground">
+                            XP Award
+                            <input
+                              type="number"
+                              min={0}
+                              value={recommendationLessonXp[lesson.lessonId] ?? 20}
+                              onChange={(event) =>
+                                setRecommendationLessonXp((prev) => ({
+                                  ...prev,
+                                  [lesson.lessonId]: Number(event.target.value) || 0,
+                                }))
+                              }
+                              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                            />
+                          </label>
                         </div>
                       ))
                     )}
@@ -436,6 +509,21 @@ export default function TeacherInterventionsPage() {
                         <div key={assessment.assessmentId} className="rounded-lg border p-3">
                           <p className="font-medium">{assessment.title}</p>
                           <p className="mt-1 text-sm text-muted-foreground">{assessment.reason}</p>
+                          <label className="mt-3 block text-xs font-medium text-muted-foreground">
+                            XP Award
+                            <input
+                              type="number"
+                              min={0}
+                              value={recommendationAssessmentXp[assessment.assessmentId] ?? 30}
+                              onChange={(event) =>
+                                setRecommendationAssessmentXp((prev) => ({
+                                  ...prev,
+                                  [assessment.assessmentId]: Number(event.target.value) || 0,
+                                }))
+                              }
+                              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
+                            />
+                          </label>
                         </div>
                       ))
                     )}

@@ -33,6 +33,7 @@ import {
 } from './DTO/assessment.dto';
 import { FeedbackService } from './feedback.service';
 import { AuditService } from '../audit/audit.service';
+import { RagIndexingService } from '../rag/rag-indexing.service';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -80,6 +81,7 @@ export class AssessmentsService {
     private readonly eventEmitter: EventEmitter2,
     private readonly feedbackService: FeedbackService,
     private readonly auditService: AuditService,
+    private readonly ragIndexingService: RagIndexingService,
   ) {}
 
   private get db() {
@@ -565,6 +567,12 @@ export class AssessmentsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: 'assessment_created',
+      actorId,
+      source: 'assessments.createAssessment',
+    });
+
     return assessment;
   }
 
@@ -827,6 +835,14 @@ export class AssessmentsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: assessment.isPublished
+        ? 'assessment_updated_published'
+        : 'assessment_updated',
+      actorId,
+      source: 'assessments.updateAssessment',
+    });
+
     return assessment;
   }
 
@@ -849,6 +865,12 @@ export class AssessmentsService {
       },
     });
 
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: 'assessment_deleted',
+      actorId,
+      source: 'assessments.deleteAssessment',
+    });
+
     return { success: true, message: 'Assessment deleted successfully' };
   }
 
@@ -857,7 +879,7 @@ export class AssessmentsService {
    */
   async createQuestion(createQuestionDto: CreateQuestionDto) {
     // Verify assessment exists
-    await this.getAssessmentById(createQuestionDto.assessmentId);
+    const assessment = await this.getAssessmentById(createQuestionDto.assessmentId);
 
     const [newQuestion] = await this.db
       .insert(assessmentQuestions)
@@ -887,6 +909,11 @@ export class AssessmentsService {
 
     // Recalculate total points
     await this.recalculateTotalPoints(createQuestionDto.assessmentId);
+
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: 'assessment_question_created',
+      source: 'assessments.createQuestion',
+    });
 
     return this.getQuestionById(newQuestion.id);
   }
@@ -980,6 +1007,12 @@ export class AssessmentsService {
       await this.recalculateTotalPoints(qRecord.assessmentId);
     }
 
+    const assessment = await this.getAssessmentById(question.assessmentId);
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: 'assessment_question_updated',
+      source: 'assessments.updateQuestion',
+    });
+
     return updatedQuestion;
   }
 
@@ -988,6 +1021,7 @@ export class AssessmentsService {
    */
   async deleteQuestion(questionId: string) {
     const question = await this.getQuestionById(questionId);
+    const assessment = await this.getAssessmentById(question.assessmentId);
 
     // Look up assessmentId before deletion
     const qRecord = await this.db.query.assessmentQuestions.findFirst({
@@ -1003,6 +1037,11 @@ export class AssessmentsService {
     if (qRecord) {
       await this.recalculateTotalPoints(qRecord.assessmentId);
     }
+
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: 'assessment_question_deleted',
+      source: 'assessments.deleteQuestion',
+    });
 
     return { success: true, message: 'Question deleted successfully' };
   }

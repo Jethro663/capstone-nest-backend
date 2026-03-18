@@ -16,12 +16,20 @@ done
 echo "==> PostgreSQL is ready!"
 
 echo "==> Running database migrations..."
-node run-migrations.js
+if [ "${RUN_DB_MIGRATIONS:-true}" = "true" ]; then
+  node run-migrations.js
+else
+  echo "==> Skipping migrations (RUN_DB_MIGRATIONS=${RUN_DB_MIGRATIONS})"
+fi
 echo "==> Migrations complete!"
 
-echo "==> Seeding database..."
-node seed-database.js
-echo "==> Seeding complete!"
+if [ "${RUN_DB_SEED:-false}" = "true" ]; then
+  echo "==> Seeding database..."
+  node seed-database.js
+  echo "==> Seeding complete!"
+else
+  echo "==> Skipping database seed (RUN_DB_SEED=${RUN_DB_SEED:-false})"
+fi
 
 echo "==> Starting NestJS server..."
 exec node dist/main

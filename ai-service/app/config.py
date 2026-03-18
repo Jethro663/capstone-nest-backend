@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     upload_dir: str = "../backend/uploads"
     max_raw_text: int = 50_000
     log_level: str = "INFO"
+    ai_service_shared_secret: str = ""
+    ai_degraded_allowed: bool = False
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

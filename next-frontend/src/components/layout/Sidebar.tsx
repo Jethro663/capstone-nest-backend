@@ -57,6 +57,7 @@ const teacherNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/admin', icon: LayoutDashboard },
+  { label: 'Diagnostics', href: '/dashboard/admin/diagnostics', icon: Settings },
   { label: 'Users', href: '/dashboard/admin/users', icon: Users },
   { label: 'Sections', href: '/dashboard/admin/sections', icon: FolderOpen },
   { label: 'Classes', href: '/dashboard/admin/classes', icon: BookOpen },

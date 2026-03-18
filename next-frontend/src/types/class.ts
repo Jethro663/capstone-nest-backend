@@ -18,6 +18,8 @@ export interface ClassItem {
   teacher?: { id: string; firstName?: string; lastName?: string; email?: string };
   schoolYear: string;
   room?: string;
+  cardPreset?: string;
+  cardBannerUrl?: string | null;
   isActive: boolean;
   schedules?: ClassSchedule[];
   enrollments?: Enrollment[];
@@ -36,6 +38,8 @@ export interface CreateClassDto {
   teacherId: string;
   schoolYear: string;
   room?: string;
+  cardPreset?: string;
+  cardBannerUrl?: string | null;
   schedules?: { days: ScheduleDay[]; startTime: string; endTime: string }[];
 }
 
@@ -47,6 +51,8 @@ export interface UpdateClassDto {
   teacherId?: string;
   schoolYear?: string;
   room?: string;
+  cardPreset?: string;
+  cardBannerUrl?: string | null;
   isActive?: boolean;
   schedules?: { days: ScheduleDay[]; startTime: string; endTime: string }[];
 }

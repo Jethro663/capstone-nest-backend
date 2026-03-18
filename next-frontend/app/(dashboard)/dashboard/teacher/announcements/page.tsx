@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { announcementService } from '@/services/announcement-service';
 import { classService } from '@/services/class-service';
 import { useAuth } from '@/providers/AuthProvider';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export default function TeacherAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
@@ -49,20 +50,43 @@ export default function TeacherAnnouncementsPage() {
   }, [selectedClassId]);
 
   useEffect(() => {
-    fetchAnnouncements();
+    const run = async () => {
+      await fetchAnnouncements();
+    };
+    void run();
   }, [fetchAnnouncements]);
 
-  const handleCreate = async () => {
+  const handleEdit = (announcement: Announcement) => {
+    setEditingAnnouncementId(announcement.id);
+    setTitle(announcement.title);
+    setContent(announcement.content);
+    setShowCreate(true);
+  };
+
+  const resetDialog = () => {
+    setShowCreate(false);
+    setEditingAnnouncementId(null);
+    setTitle('');
+    setContent('');
+  };
+
+  const handleSave = async () => {
     if (!selectedClassId || !title.trim() || !content.trim()) return;
     try {
-      await announcementService.create(selectedClassId, { title, content });
-      toast.success('Announcement posted');
-      setShowCreate(false);
-      setTitle('');
-      setContent('');
+      if (editingAnnouncementId) {
+        await announcementService.update(selectedClassId, editingAnnouncementId, {
+          title,
+          content,
+        });
+        toast.success('Announcement updated');
+      } else {
+        await announcementService.create(selectedClassId, { title, content });
+        toast.success('Announcement posted');
+      }
+      resetDialog();
       fetchAnnouncements();
     } catch {
-      toast.error('Failed to create announcement');
+      toast.error(editingAnnouncementId ? 'Failed to update announcement' : 'Failed to create announcement');
     }
   };
 
@@ -99,7 +123,18 @@ export default function TeacherAnnouncementsPage() {
             <option key={c.id} value={c.id}>{c.subjectName} — {c.section?.name}</option>
           ))}
         </select>
-        <Button size="sm" disabled={!selectedClassId} onClick={() => setShowCreate(true)}>+ New Announcement</Button>
+        <Button
+          size="sm"
+          disabled={!selectedClassId}
+          onClick={() => {
+            setEditingAnnouncementId(null);
+            setTitle('');
+            setContent('');
+            setShowCreate(true);
+          }}
+        >
+          + New Announcement
+        </Button>
       </div>
 
       {announcements.length === 0 ? (
@@ -118,7 +153,10 @@ export default function TeacherAnnouncementsPage() {
                     <p className="font-medium">{ann.title}</p>
                     {ann.isPinned && <Badge variant="secondary">📌 Pinned</Badge>}
                   </div>
-                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDelete(ann.id)}>Delete</Button>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(ann)}>Edit</Button>
+                    <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDelete(ann.id)}>Delete</Button>
+                  </div>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{ann.content}</p>
                 <p className="mt-2 text-xs text-muted-foreground">{new Date(ann.createdAt!).toLocaleString()}</p>
@@ -128,16 +166,18 @@ export default function TeacherAnnouncementsPage() {
         </div>
       )}
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Create Announcement</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAnnouncementId ? 'Edit Announcement' : 'Create Announcement'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} /></div>
             <div><Label>Content</Label><Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!title.trim() || !content.trim()}>Post</Button>
+            <Button variant="outline" onClick={resetDialog}>Cancel</Button>
+            <Button onClick={handleSave} disabled={!title.trim() || !content.trim()}>
+              {editingAnnouncementId ? 'Save Changes' : 'Post'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

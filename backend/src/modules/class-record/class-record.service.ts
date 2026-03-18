@@ -625,6 +625,49 @@ export class ClassRecordService {
     return result;
   }
 
+  async reopenClassRecord(
+    classRecordId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    const record = await this.assertClassRecord(classRecordId, userId, roles);
+
+    if (record.status === 'locked') {
+      throw new ConflictException('Locked class records cannot be reopened');
+    }
+
+    if (record.status !== 'finalized') {
+      throw new ConflictException('Only finalized class records can be reopened');
+    }
+
+    const result = await this.db.transaction(async (tx) => {
+      await tx
+        .delete(classRecordFinalGrades)
+        .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
+
+      const [updated] = await tx
+        .update(classRecords)
+        .set({ status: 'draft', updatedAt: new Date() })
+        .where(eq(classRecords.id, classRecordId))
+        .returning();
+
+      return updated;
+    });
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.reopened',
+      targetType: 'class_record',
+      targetId: classRecordId,
+      metadata: {
+        previousStatus: 'finalized',
+        nextStatus: 'draft',
+      },
+    });
+
+    return result;
+  }
+
   // ── Final Grade Reads ─────────────────────────────────────────────────────
 
   async getFinalGrades(classRecordId: string, userId: string, roles: string[]) {

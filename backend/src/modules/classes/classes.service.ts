@@ -266,6 +266,8 @@ export class ClassesService {
       teacherId: createClassDto.teacherId,
       schoolYear: createClassDto.schoolYear,
       room: createClassDto.room,
+      cardPreset: createClassDto.cardPreset ?? 'aurora',
+      cardBannerUrl: createClassDto.cardBannerUrl ?? null,
     };
 
     const [newClass] = await this.db
@@ -386,6 +388,32 @@ export class ClassesService {
         );
       }
     }
+
+    return this.findById(id);
+  }
+
+  async updatePresentation(
+    id: string,
+    presentation: { cardPreset?: string; cardBannerUrl?: string | null },
+    requesterId: string,
+    requesterRoles: string[],
+  ) {
+    const existing = await this.findById(id);
+    this.ensureTeacherCanAccessClass(existing, requesterId, requesterRoles);
+
+    const payload: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (presentation.cardPreset !== undefined) {
+      payload.cardPreset = presentation.cardPreset;
+    }
+
+    if (presentation.cardBannerUrl !== undefined) {
+      payload.cardBannerUrl = presentation.cardBannerUrl;
+    }
+
+    await this.db.update(classes).set(payload).where(eq(classes.id, id));
 
     return this.findById(id);
   }

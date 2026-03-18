@@ -22,6 +22,28 @@ export const adminService = {
     return data;
   },
 
+  async getHealthLive(): Promise<{ status: string; timestamp: string }> {
+    const { data } = await api.get('/health/live');
+    return data;
+  },
+
+  async getHealthReadiness(): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      ready: boolean;
+      timestamp: string;
+      dependencies: {
+        database: { ok: boolean; message?: string };
+        redis: { ok: boolean; message?: string };
+        aiService: { ok: boolean; degraded?: boolean; message?: string };
+      };
+    };
+  }> {
+    const { data } = await api.get('/health/ready');
+    return data;
+  },
+
   getActivityExportUrl(query?: { dateFrom?: string; dateTo?: string }) {
     const params = new URLSearchParams();
     if (query?.dateFrom) params.set('dateFrom', query.dateFrom);

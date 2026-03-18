@@ -162,6 +162,20 @@ export class ClassRecordController {
     return { success: true, data };
   }
 
+  @Post(':id/reopen')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async reopenClassRecord(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.classRecordService.reopenClassRecord(
+      id,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
   @Get(':id/final-grades')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getFinalGrades(

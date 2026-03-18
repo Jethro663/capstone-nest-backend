@@ -11,6 +11,43 @@ import { WinstonLoggerService } from './common/logger/winston-logger.service';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
+function parseOriginList(value?: string): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeOrigin(origin: string): string | null {
+  try {
+    return new URL(origin).origin;
+  } catch {
+    return null;
+  }
+}
+
+function buildAllowedOrigins(isProd: boolean): string[] {
+  const configuredOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.NEXT_FRONTEND_URL,
+    process.env.MOBILE_URL,
+    ...parseOriginList(process.env.CORS_ALLOWED_ORIGINS),
+  ]
+    .map((origin) => normalizeOrigin(origin ?? ''))
+    .filter((origin): origin is string => !!origin);
+
+  const devOrigins = !isProd
+    ? [
+        'http://localhost:5173',
+        'http://localhost:8081',
+        'http://localhost:3001',
+      ]
+    : [];
+
+  return Array.from(new Set([...configuredOrigins, ...devOrigins]));
+}
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
@@ -25,6 +62,14 @@ async function bootstrap() {
   app.useWebSocketAdapter(new IoAdapter(app));
 
   const isProd = process.env.NODE_ENV === 'production';
+  const trustProxyHops = parseInt(
+    process.env.TRUST_PROXY_HOPS ?? (isProd ? '1' : '0'),
+    10,
+  );
+
+  if (trustProxyHops > 0) {
+    (app as any).set('trust proxy', trustProxyHops);
+  }
 
   // Validate required env vars before accepting traffic
   if (isProd && !process.env.FRONTEND_URL) {
@@ -76,22 +121,24 @@ async function bootstrap() {
   // Cookie parser
   app.use(cookieParser());
 
-  // CORS — allow configured origins; localhost only outside production
-  const devOrigins = !isProd
-    ? [
-        'http://localhost:5173',
-        'http://localhost:8081',
-        'http://localhost:3001',
-      ]
-    : [];
+  // CORS - allow configured origins; localhost only outside production
+  const allowedOrigins = buildAllowedOrigins(isProd);
 
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL,
-      process.env.NEXT_FRONTEND_URL,
-      process.env.MOBILE_URL,
-      ...devOrigins,
-    ].filter(Boolean),
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalized = normalizeOrigin(origin);
+      if (normalized && allowedOrigins.includes(normalized)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    },
     credentials: true,
   });
 
@@ -102,6 +149,7 @@ async function bootstrap() {
   logger.log(
     `Application running on http://localhost:3000 [${isProd ? 'production' : 'development'}]`,
   );
+  logger.log(`CORS allowlist: ${allowedOrigins.join(', ') || '[none configured]'}`);
 }
 
 bootstrap();

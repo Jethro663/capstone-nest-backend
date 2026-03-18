@@ -47,15 +47,7 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
       <div className="flex items-center gap-1">
         {isStudentRoute ? <StudentThemeSwitcher/> : null}
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/dashboard/messages')}
-          title="Messages"
-          className={isStudentRoute ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]' : undefined}
-        >
-          <MessageSquare className="h-5 w-5" />
-        </Button>
+        
         <Button
           variant="ghost"
           size="icon"

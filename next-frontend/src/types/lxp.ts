@@ -50,6 +50,7 @@ export interface PlaylistResponse {
   };
   progress: {
     xpTotal: number;
+    starsTotal: number;
     streakDays: number;
     checkpointsCompleted: number;
     completionPercent: number;
@@ -74,6 +75,7 @@ export interface TeacherInterventionQueueItem {
   completionPercent: number;
   progress: {
     xpTotal: number;
+    starsTotal: number;
     streakDays: number;
     checkpointsCompleted: number;
     lastActivityAt: string | null;
@@ -106,6 +108,21 @@ export interface LxpClassReport {
     improvementDelta: number | null;
     openedAt: string;
     closedAt: string | null;
+    student?: {
+      id: string;
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+    } | null;
+  }>;
+  leaderboard: Array<{
+    rank: number;
+    studentId: string;
+    xpTotal: number;
+    starsTotal: number;
+    streakDays: number;
+    checkpointsCompleted: number;
+    lastActivityAt: string | null;
     student?: {
       id: string;
       firstName: string | null;

@@ -62,6 +62,44 @@ export default function StudentAssessmentTakePage() {
   const requestAssessmentFullscreenRef = useRef<(() => void) | null>(null);
   const isFileUploadAssessment = assessment?.type === 'file_upload';
 
+  const getErrorMessage = useCallback((error: unknown) => {
+    const responseMessage = (error as { response?: { data?: { message?: unknown } } })
+      ?.response?.data?.message;
+
+    if (Array.isArray(responseMessage)) {
+      return responseMessage.join(', ');
+    }
+
+    if (typeof responseMessage === 'string') {
+      return responseMessage;
+    }
+
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    return 'Failed to sync assessment state';
+  }, []);
+
+  const isAutoSubmittedMessage = useCallback((message: string) => {
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes('auto-submitted') ||
+      normalized.includes('time is up') ||
+      normalized.includes('attempt already expired')
+    );
+  }, []);
+
+  const redirectToSubmittedState = useCallback(() => {
+    setShowViolationDialog(true);
+    setViolationDialogMessage(
+      'Your assessment session already ended, so the attempt was submitted automatically.',
+    );
+    setTimeout(() => {
+      router.replace(`/dashboard/student/assessments/${assessmentId}?view=submitted`);
+    }, 1000);
+  }, [assessmentId, router]);
+
   const timeSpentSeconds = attemptStartedAt
     ? Math.max(0, Math.floor((nowMs - new Date(attemptStartedAt).getTime()) / 1000))
     : 0;
@@ -86,25 +124,6 @@ export default function StudentAssessmentTakePage() {
     },
     [questions.length],
   );
-
-  const getErrorMessage = useCallback((error: unknown) => {
-    const responseMessage = (error as { response?: { data?: { message?: unknown } } })
-      ?.response?.data?.message;
-
-    if (Array.isArray(responseMessage)) {
-      return responseMessage.join(', ');
-    }
-
-    if (typeof responseMessage === 'string') {
-      return responseMessage;
-    }
-
-    if (error instanceof Error && error.message) {
-      return error.message;
-    }
-
-    return 'Failed to sync assessment state';
-  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -452,13 +471,27 @@ export default function StudentAssessmentTakePage() {
       setTimeout(() => {
         router.replace(`/dashboard/student/assessments/${assessmentId}`);
       }, 900);
-    } catch {
-      toast.error('Failed to submit assessment');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      if (isAutoSubmittedMessage(errorMessage)) {
+        redirectToSubmittedState();
+        return;
+      }
+      toast.error(errorMessage || 'Failed to submit assessment');
     } finally {
       setSubmitting(false);
       setShowConfirm(false);
     }
-  }, [assessment, buildSubmissionResponses, assessmentId, router, timeSpentSeconds]);
+  }, [
+    assessment,
+    buildSubmissionResponses,
+    assessmentId,
+    getErrorMessage,
+    isAutoSubmittedMessage,
+    redirectToSubmittedState,
+    router,
+    timeSpentSeconds,
+  ]);
 
   const handleUploadSubmissionFile = useCallback(async (file: File) => {
     if (!assessment) return;
@@ -511,12 +544,25 @@ export default function StudentAssessmentTakePage() {
       setTimeout(() => {
         router.replace(`/dashboard/student/assessments/${assessmentId}?view=submitted`);
       }, 900);
-    } catch {
-      toast.error('Failed to submit assessment');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      if (isAutoSubmittedMessage(errorMessage)) {
+        redirectToSubmittedState();
+        return;
+      }
+      toast.error(errorMessage || 'Failed to submit assessment');
     } finally {
       setSubmitting(false);
     }
-  }, [uploadedSubmission, assessmentId, router, timeSpentSeconds]);
+  }, [
+    uploadedSubmission,
+    assessmentId,
+    getErrorMessage,
+    isAutoSubmittedMessage,
+    redirectToSubmittedState,
+    router,
+    timeSpentSeconds,
+  ]);
 
   useEffect(() => {
     if (!activeAttemptId || questions.length === 0) return;
@@ -783,7 +829,16 @@ export default function StudentAssessmentTakePage() {
   const progressValue = Math.round((answeredCount / questions.length) * 100);
 
   return (
-    <div className="student-page rounded-3xl p-1">
+    <div
+      className="student-page rounded-3xl p-1"
+      onKeyDown={(event) => {
+        const tagName = (event.target as HTMLElement)?.tagName;
+        const isEditable = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+        if (!isEditable && (event.ctrlKey || event.metaKey) && ['c', 'x'].includes(event.key.toLowerCase())) {
+          event.preventDefault();
+        }
+      }}
+    >
       <div className="sticky top-0 z-30 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-glass)] p-3 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -826,7 +881,23 @@ export default function StudentAssessmentTakePage() {
                 exit={reduceMotion ? {} : { opacity: 0, y: -6 }}
                 transition={{ duration: 0.2 }}
               >
-                <h2 className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]">{current.content}</h2>
+                <div
+                  className="select-none"
+                  onCopy={(event) => event.preventDefault()}
+                  onCut={(event) => event.preventDefault()}
+                  onContextMenu={(event) => event.preventDefault()}
+                >
+                  <h2 className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]">{current.content}</h2>
+                  {current.imageUrl ? (
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3">
+                      <img
+                        src={current.imageUrl}
+                        alt="Question"
+                        className="max-h-[360px] w-full rounded-xl object-contain"
+                      />
+                    </div>
+                  ) : null}
+                </div>
                 <div className="mt-4">
                   <AnswerInput question={current} value={responses[current.id]} onChange={(val) => setResponse(current.id, val)} />
                 </div>
@@ -971,7 +1042,7 @@ function AnswerInput({
                 onChange={() => onChange(opt.id)}
                 className="accent-[var(--student-accent)]"
               />
-              <span>{opt.text}</span>
+              <span className="select-none text-[var(--student-text-strong)]">{opt.text}</span>
             </label>
           ))}
         </div>
@@ -998,7 +1069,7 @@ function AnswerInput({
                   }}
                   className="accent-[var(--student-accent)]"
                 />
-                <span>{opt.text}</span>
+                <span className="select-none text-[var(--student-text-strong)]">{opt.text}</span>
               </label>
             );
           })}

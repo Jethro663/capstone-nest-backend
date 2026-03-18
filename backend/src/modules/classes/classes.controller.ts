@@ -5,16 +5,26 @@ import {
   Get,
   Param,
   Put,
+  Patch,
   Delete,
   UseGuards,
   Query,
   HttpCode,
   HttpStatus,
+  Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as fs from 'fs';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { ClassesService } from './classes.service';
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
+import { UpdateClassPresentationDto } from './DTO/update-class-presentation.dto';
 import { EnrollStudentDto } from './DTO/enroll-student.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -22,6 +32,33 @@ import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { parsePositiveIntQuery } from '../../common/utils/parse-positive-int-query.util';
+import { Public } from '../auth/decorators/public.decorator';
+
+const CLASS_BANNER_UPLOAD_DEST = './uploads/class-banners';
+
+const bannerMulterOptions = {
+  storage: diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(CLASS_BANNER_UPLOAD_DEST, { recursive: true });
+      cb(null, CLASS_BANNER_UPLOAD_DEST);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.png';
+      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+    },
+  }),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+    files: 1,
+  },
+  fileFilter: (
+    _req: Express.Request,
+    file: Express.Multer.File,
+    cb: (error: Error | null, acceptFile: boolean) => void,
+  ) => {
+    cb(null, file.mimetype.startsWith('image/'));
+  },
+};
 
 @ApiTags('Classes')
 @ApiBearerAuth('token')
@@ -196,6 +233,61 @@ export class ClassesController {
       success: true,
       message: 'Class updated successfully',
       data: updatedClass,
+    };
+  }
+
+  @Patch(':id/presentation')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async updateClassPresentation(
+    @Param('id') id: string,
+    @Body() dto: UpdateClassPresentationDto,
+    @CurrentUser() user: any,
+  ) {
+    const updatedClass = await this.classesService.updatePresentation(
+      id,
+      dto,
+      user?.userId,
+      user?.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Class presentation updated successfully',
+      data: updatedClass,
+    };
+  }
+
+  @Post(':id/banner')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(FileInterceptor('image', bannerMulterOptions))
+  async uploadClassBanner(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: any,
+  ) {
+    if (!file) {
+      return {
+        success: false,
+        message: 'Image upload is required',
+      };
+    }
+
+    const cardBannerUrl = `/api/classes/banners/${file.filename}`;
+    const updatedClass = await this.classesService.updatePresentation(
+      id,
+      { cardBannerUrl },
+      user?.userId,
+      user?.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Class banner uploaded successfully',
+      data: {
+        cardBannerUrl,
+        class: updatedClass,
+      },
     };
   }
 
@@ -383,5 +475,29 @@ export class ClassesController {
       success: true,
       message: 'Student removed from class successfully',
     };
+  }
+}
+
+@ApiTags('Classes')
+@Controller('classes')
+export class ClassesPublicController {
+  @Public()
+  @Get('banners/:filename')
+  async serveClassBanner(
+    @Param('filename') filename: string,
+    @Res() res: any,
+  ) {
+    const sanitized = path.basename(filename);
+    const filePath = path.join(CLASS_BANNER_UPLOAD_DEST, sanitized);
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({
+        success: false,
+        message: 'Banner not found',
+      });
+      return;
+    }
+
+    return res.sendFile(path.resolve(filePath));
   }
 }

@@ -158,7 +158,7 @@ export default function StudentLxpPage() {
         </select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card className="student-panel rounded-[1.5rem]">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-[var(--student-text-muted)]">Class</CardTitle>
@@ -177,6 +177,17 @@ export default function StudentLxpPage() {
           <CardContent>
             <p className="text-2xl font-bold text-[var(--student-text-strong)]">{playlist?.progress.xpTotal ?? 0}</p>
             <p className="text-xs text-[var(--student-text-muted)]">Current intervention XP</p>
+          </CardContent>
+        </Card>
+        <Card className="student-panel rounded-[1.5rem]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-[var(--student-text-muted)]">Stars</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-[var(--student-text-strong)]">
+              {(playlist?.progress.starsTotal ?? 0).toFixed(2)}
+            </p>
+            <p className="text-xs text-[var(--student-text-muted)]">1000 XP = 1 star</p>
           </CardContent>
         </Card>
         <Card className="student-panel rounded-[1.5rem]">
