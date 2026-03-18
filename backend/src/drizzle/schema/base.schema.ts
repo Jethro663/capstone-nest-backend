@@ -453,6 +453,8 @@ export const assessments = pgTable('assessments', {
   feedbackDelayHours: integer('feedback_delay_hours').default(24),
   classRecordCategory: classRecordCategoryEnum('class_record_category'),
   quarter: gradingPeriodEnum('quarter'),
+  aiOrigin: text('ai_origin'),
+  aiGenerationOutputId: uuid('ai_generation_output_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
@@ -471,6 +473,7 @@ export const assessmentQuestions = pgTable(
     isRequired: boolean('is_required').default(true),
     explanation: text('explanation'),
     imageUrl: text('image_url'),
+    conceptTags: json('concept_tags'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

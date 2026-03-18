@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { aiService } from '@/services/ai-service';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -37,9 +38,10 @@ import type { ClassItem, Enrollment } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
+import type { GenerateQuizDraftDto } from '@/types/ai';
 import type { Extraction } from '@/types/extraction';
 import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
-import type { GradingPeriod } from '@/utils/constants';
+import type { GradingPeriod, FeedbackLevel, QuestionType } from '@/utils/constants';
 import type { UploadedFile } from '@/types/file';
 
 const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
@@ -69,12 +71,22 @@ export default function TeacherClassDetailPage() {
   // Modal states
   const [showCreateLesson, setShowCreateLesson] = useState(false);
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
+  const [showQuizGenerator, setShowQuizGenerator] = useState(false);
 
   // Extract module states
   const [extractFile, setExtractFile] = useState<File | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [libraryFiles, setLibraryFiles] = useState<UploadedFile[]>([]);
   const [selectedLibraryFileId, setSelectedLibraryFileId] = useState('');
+  const [reindexing, setReindexing] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [quizTitle, setQuizTitle] = useState('');
+  const [quizTeacherNote, setQuizTeacherNote] = useState('');
+  const [quizQuestionCount, setQuizQuestionCount] = useState('5');
+  const [quizQuestionType, setQuizQuestionType] = useState<QuestionType>('multiple_choice');
+  const [quizFeedbackLevel, setQuizFeedbackLevel] = useState<FeedbackLevel>('standard');
+  const [quizSourceLessonIds, setQuizSourceLessonIds] = useState<string[]>([]);
+  const [quizSourceExtractionIds, setQuizSourceExtractionIds] = useState<string[]>([]);
 
   // Class record state
   const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
@@ -233,6 +245,66 @@ export default function TeacherClassDetailPage() {
       setAssessments((prev) => prev.filter((a) => a.id !== id));
     } catch {
       toast.error('Failed to delete assessment');
+    }
+  };
+
+  const toggleSelection = (current: string[], value: string) =>
+    current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value];
+
+  const handleReindexClass = async () => {
+    try {
+      setReindexing(true);
+      const res = await aiService.reindexClass(classId);
+      toast.success(`Indexed ${res.data.chunksIndexed} content chunk(s)`);
+    } catch {
+      toast.error('Failed to reindex class content');
+    } finally {
+      setReindexing(false);
+    }
+  };
+
+  const handleGenerateQuizDraft = async () => {
+    const questionCount = Number(quizQuestionCount);
+    if (!Number.isFinite(questionCount) || questionCount < 1) {
+      toast.error('Question count must be at least 1');
+      return;
+    }
+
+    const payload: GenerateQuizDraftDto = {
+      classId,
+      title: quizTitle.trim() || undefined,
+      teacherNote: quizTeacherNote.trim() || undefined,
+      questionCount,
+      questionType: quizQuestionType,
+      assessmentType: 'quiz',
+      passingScore: 60,
+      feedbackLevel: quizFeedbackLevel,
+      classRecordCategory:
+        assessmentCategoryTab === 'drafts' ? 'written_work' : assessmentCategoryTab,
+      lessonIds: quizSourceLessonIds.length > 0 ? quizSourceLessonIds : undefined,
+      extractionIds: quizSourceExtractionIds.length > 0 ? quizSourceExtractionIds : undefined,
+    };
+
+    try {
+      setGeneratingQuiz(true);
+      const res = await aiService.generateQuizDraft(payload);
+      toast.success(`AI draft created with ${res.data.questionsCreated} question(s)`);
+      setShowQuizGenerator(false);
+      setQuizTitle('');
+      setQuizTeacherNote('');
+      setQuizQuestionCount('5');
+      setQuizQuestionType('multiple_choice');
+      setQuizFeedbackLevel('standard');
+      setQuizSourceLessonIds([]);
+      setQuizSourceExtractionIds([]);
+      await fetchData();
+      router.push(`/dashboard/teacher/assessments/${res.data.assessmentId}/edit`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to generate AI draft quiz'));
+    } finally {
+      setGeneratingQuiz(false);
     }
   };
 
@@ -543,6 +615,13 @@ export default function TeacherClassDetailPage() {
                   >
                     Use Selected PDF
                   </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleReindexClass}
+                    disabled={reindexing}
+                  >
+                    {reindexing ? 'Reindexing...' : 'Reindex Class AI Content'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -652,6 +731,16 @@ export default function TeacherClassDetailPage() {
                   >
                     <ArrowUpDown className="mr-1 h-4 w-4" />
                     {assessmentSortOrder === 'asc' ? 'Date: Nearest' : 'Date: Latest'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      fetchExtractionWorkspace();
+                      setShowQuizGenerator(true);
+                    }}
+                  >
+                    AI Draft Quiz
                   </Button>
                   <Button size="sm" onClick={handleCreateAssessment}>+ New Assessment</Button>
                 </div>
@@ -1118,6 +1207,142 @@ export default function TeacherClassDetailPage() {
       </Dialog>
 
       {/* Create Assessment Modal removed — create-and-redirect flow instead */}
+
+      <Dialog open={showQuizGenerator} onOpenChange={setShowQuizGenerator}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Generate AI Draft Quiz</DialogTitle>
+            <DialogDescription>
+              Create an unpublished draft from indexed lessons and extraction content, then review it in the existing assessment editor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-4">
+              <div>
+                <Label>Draft title</Label>
+                <Input
+                  value={quizTitle}
+                  onChange={(e) => setQuizTitle(e.target.value)}
+                  placeholder="Optional assessment title"
+                />
+              </div>
+
+              <div>
+                <Label>Teacher note</Label>
+                <Textarea
+                  value={quizTeacherNote}
+                  onChange={(e) => setQuizTeacherNote(e.target.value)}
+                  placeholder="Optional focus area, difficulty, or instructions for the generator"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <Label>Question count</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={quizQuestionCount}
+                    onChange={(e) => setQuizQuestionCount(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Question type</Label>
+                  <select
+                    value={quizQuestionType}
+                    onChange={(e) => setQuizQuestionType(e.target.value as QuestionType)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="multiple_choice">Multiple choice</option>
+                    <option value="multiple_select">Multiple select</option>
+                    <option value="true_false">True / False</option>
+                    <option value="short_answer">Short answer</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Feedback level</Label>
+                  <select
+                    value={quizFeedbackLevel}
+                    onChange={(e) => setQuizFeedbackLevel(e.target.value as FeedbackLevel)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="immediate">Immediate</option>
+                    <option value="standard">Standard</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-semibold">Source lessons</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Leave blank to let retrieval use all indexed published content.
+                </p>
+                <div className="mt-3 max-h-40 space-y-2 overflow-auto">
+                  {lessons.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No lessons available.</p>
+                  ) : (
+                    lessons.map((lesson) => (
+                      <label key={lesson.id} className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={quizSourceLessonIds.includes(lesson.id)}
+                          onChange={() =>
+                            setQuizSourceLessonIds((prev) => toggleSelection(prev, lesson.id))
+                          }
+                        />
+                        <span>{lesson.title}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-semibold">Source extractions</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use this when you want to draft from extracted modules that are still under review.
+                </p>
+                <div className="mt-3 max-h-40 space-y-2 overflow-auto">
+                  {extractions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No extraction runs available.</p>
+                  ) : (
+                    extractions.map((extraction) => (
+                      <label key={extraction.id} className="flex items-start gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={quizSourceExtractionIds.includes(extraction.id)}
+                          onChange={() =>
+                            setQuizSourceExtractionIds((prev) =>
+                              toggleSelection(prev, extraction.id),
+                            )
+                          }
+                        />
+                        <span>
+                          {extraction.originalName || extraction.structuredContent?.title || 'Extraction'}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQuizGenerator(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleGenerateQuizDraft} disabled={generatingQuiz}>
+              {generatingQuiz ? 'Generating...' : 'Generate Draft'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Announcement Modal */}
       <Dialog open={showCreateAnnouncement} onOpenChange={setShowCreateAnnouncement}>

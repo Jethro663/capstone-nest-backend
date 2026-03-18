@@ -61,6 +61,80 @@ class UpdateExtractionRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Grounded mentor + AI workflows
+# ---------------------------------------------------------------------------
+
+
+class MentorExplainRequest(BaseModel):
+    attempt_id: str = Field(..., alias="attemptId")
+    question_id: str = Field(..., alias="questionId")
+    message: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class InterventionRecommendationRequest(BaseModel):
+    note: str | None = None
+
+
+class GenerateQuizDraftRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    lesson_ids: list[str] | None = Field(default=None, alias="lessonIds")
+    extraction_ids: list[str] | None = Field(default=None, alias="extractionIds")
+    title: str | None = None
+    question_count: int = Field(default=5, alias="questionCount")
+    question_type: str = Field(default="multiple_choice", alias="questionType")
+    assessment_type: str = Field(default="quiz", alias="assessmentType")
+    passing_score: int = Field(default=60, alias="passingScore")
+    teacher_note: str | None = Field(default=None, alias="teacherNote")
+    feedback_level: str = Field(default="standard", alias="feedbackLevel")
+    class_record_category: str | None = Field(default=None, alias="classRecordCategory")
+    quarter: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class StudentTutorBootstrapRequest(BaseModel):
+    class_id: str | None = Field(default=None, alias="classId")
+
+    model_config = {"populate_by_name": True}
+
+
+class TutorRecommendationDto(BaseModel):
+    id: str
+    title: str
+    reason: str
+    focus_text: str = Field(alias="focusText")
+    lesson_id: str | None = Field(default=None, alias="lessonId")
+    assessment_id: str | None = Field(default=None, alias="assessmentId")
+    question_id: str | None = Field(default=None, alias="questionId")
+    source_chunk_id: str | None = Field(default=None, alias="sourceChunkId")
+
+    model_config = {"populate_by_name": True}
+
+
+class StudentTutorStartRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    recommendation: TutorRecommendationDto
+
+    model_config = {"populate_by_name": True}
+
+
+class StudentTutorMessageRequest(BaseModel):
+    session_id: str = Field(..., alias="sessionId")
+    message: str = Field(..., max_length=2000)
+
+    model_config = {"populate_by_name": True}
+
+
+class StudentTutorAnswerRequest(BaseModel):
+    session_id: str = Field(..., alias="sessionId")
+    answers: list[str] = Field(..., min_length=1, max_length=3)
+
+    model_config = {"populate_by_name": True}
+
+
+# ---------------------------------------------------------------------------
 # Auth context (passed from NestJS proxy via headers)
 # ---------------------------------------------------------------------------
 

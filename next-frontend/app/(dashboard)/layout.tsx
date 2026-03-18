@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
+import { StudentTutorLauncher } from '@/components/student/StudentTutorLauncher';
 import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemptNotifier';
 import { Loader2 } from 'lucide-react';
 
@@ -48,6 +49,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </div>
 
       <UnfinishedAttemptNotifier />
+      <StudentTutorLauncher />
     </div>
   );
 }

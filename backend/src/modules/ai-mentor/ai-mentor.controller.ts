@@ -22,11 +22,20 @@ import {
 
 import { AiProxyService } from './ai-proxy.service';
 import { ChatRequestDto } from './DTO/chat.dto';
+import { MentorExplainDto } from './DTO/mentor-explain.dto';
 import {
   ExtractModuleDto,
   ApplyExtractionDto,
   UpdateExtractionDto,
 } from './DTO/extract-module.dto';
+import { GenerateQuizDraftDto } from './DTO/quiz-generation.dto';
+import { InterventionRecommendationDto } from './DTO/intervention-recommendation.dto';
+import {
+  StudentTutorAnswersDto,
+  StudentTutorBootstrapQueryDto,
+  StudentTutorMessageDto,
+  StudentTutorStartDto,
+} from './DTO/student-tutor.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -60,6 +69,80 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     return this.proxy.forward('POST', '/chat', user, dto);
+  }
+
+  @Post('mentor/explain')
+  @Roles(RoleName.Student, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get grounded mentoring help for a returned assessment question' })
+  async explainMistake(
+    @Body() dto: MentorExplainDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('POST', '/mentor/explain', user, dto);
+  }
+
+  @Get('student/tutor/bootstrap')
+  @Roles(RoleName.Student)
+  @ApiOperation({ summary: 'Get student tutor classes, recommendations, and saved sessions' })
+  async studentTutorBootstrap(
+    @Query() query: StudentTutorBootstrapQueryDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    const suffix = query.classId ? `?classId=${query.classId}` : '';
+    return this.proxy.forward('GET', `/student/tutor/bootstrap${suffix}`, user);
+  }
+
+  @Post('student/tutor/session')
+  @Roles(RoleName.Student)
+  @ApiOperation({ summary: 'Start a student tutor session from a recommended topic' })
+  async startStudentTutorSession(
+    @Body() dto: StudentTutorStartDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('POST', '/student/tutor/session', user, dto);
+  }
+
+  @Get('student/tutor/session/:sessionId')
+  @Roles(RoleName.Student)
+  @ApiOperation({ summary: 'Load a saved student tutor session' })
+  async getStudentTutorSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('GET', `/student/tutor/session/${sessionId}`, user);
+  }
+
+  @Post('student/tutor/session/:sessionId/message')
+  @Roles(RoleName.Student)
+  @ApiOperation({ summary: 'Send a follow-up message to a student tutor session' })
+  async messageStudentTutorSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() dto: StudentTutorMessageDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward(
+      'POST',
+      `/student/tutor/session/${sessionId}/message`,
+      user,
+      dto,
+    );
+  }
+
+  @Post('student/tutor/session/:sessionId/answers')
+  @Roles(RoleName.Student)
+  @ApiOperation({ summary: 'Evaluate the current practice round for a student tutor session' })
+  async answerStudentTutorSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() dto: StudentTutorAnswersDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward(
+      'POST',
+      `/student/tutor/session/${sessionId}/answers`,
+      user,
+      dto,
+    );
   }
 
   // ─── Health check ─────────────────────────────────────────────────────
@@ -225,5 +308,42 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     return this.proxy.forward('GET', '/history', user);
+  }
+
+  @Post('teacher/interventions/:caseId/recommend')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Generate AI intervention recommendations for an active LXP case' })
+  async recommendIntervention(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @Body() dto: InterventionRecommendationDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward(
+      'POST',
+      `/teacher/interventions/${caseId}/recommend`,
+      user,
+      dto,
+    );
+  }
+
+  @Post('teacher/quizzes/generate-draft')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Generate a grounded draft assessment from lesson/module sources' })
+  async generateQuizDraft(
+    @Body() dto: GenerateQuizDraftDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('POST', '/teacher/quizzes/generate-draft', user, dto);
+  }
+
+  @Post('index/classes/:classId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Reindex class lesson and assessment content for semantic retrieval' })
+  async reindexClass(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('POST', `/index/classes/${classId}`, user);
   }
 }

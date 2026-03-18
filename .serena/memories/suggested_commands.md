@@ -1,0 +1,1 @@
+Backend: `cd backend; npm run start:dev`, `npm run test`, `npm run lint`, `npm run build`. Frontend: `cd next-frontend; npm run dev`, `npm run lint`, `npm run build`. AI service: `cd ai-service; uvicorn app.main:app --reload --port 8000`. Mobile: `cd mobile; npm run start`, `npm run test`, `npm run typecheck`. Repo uses PowerShell on Windows; prefer `rg` for search.

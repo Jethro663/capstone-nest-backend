@@ -5,8 +5,17 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, CircleCheckBig, CircleX, Hourglass } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
+import { aiService } from '@/services/ai-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import {
   StudentActionCard,
   StudentSectionHeader,
@@ -15,6 +24,7 @@ import {
 import { getMotionProps } from '@/components/student/student-motion';
 import { toast } from 'sonner';
 import type { AttemptResult } from '@/types/assessment';
+import type { MentorExplainResponse } from '@/types/ai';
 
 export default function StudentAssessmentResultsPage() {
   const params = useParams();
@@ -26,12 +36,16 @@ export default function StudentAssessmentResultsPage() {
 
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mentorOpen, setMentorOpen] = useState(false);
+  const [mentorQuestionId, setMentorQuestionId] = useState<string | null>(null);
+  const [mentorPrompt, setMentorPrompt] = useState('');
+  const [mentorLoading, setMentorLoading] = useState(false);
+  const [mentorResponse, setMentorResponse] = useState<MentorExplainResponse | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await assessmentService.getAttemptResults(attemptId);
-      console.log(res)
       setResult(res.data);
     } catch {
       toast.error('Failed to load results');
@@ -43,6 +57,39 @@ export default function StudentAssessmentResultsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleAskJa = async (questionId: string) => {
+    try {
+      setMentorQuestionId(questionId);
+      setMentorResponse(null);
+      setMentorPrompt('');
+      setMentorOpen(true);
+      setMentorLoading(true);
+      const res = await aiService.explainMistake({ attemptId, questionId });
+      setMentorResponse(res.data);
+    } catch {
+      toast.error('Failed to get AI mentoring help');
+    } finally {
+      setMentorLoading(false);
+    }
+  };
+
+  const handleMentorFollowUp = async () => {
+    if (!mentorQuestionId) return;
+    try {
+      setMentorLoading(true);
+      const res = await aiService.explainMistake({
+        attemptId,
+        questionId: mentorQuestionId,
+        message: mentorPrompt.trim() || undefined,
+      });
+      setMentorResponse(res.data);
+    } catch {
+      toast.error('Failed to refresh AI mentoring help');
+    } finally {
+      setMentorLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -58,7 +105,7 @@ export default function StudentAssessmentResultsPage() {
     return <p className="text-[var(--student-text-muted)]">Results not found.</p>;
   }
 
-  const { attempt, responses, score, passed, isReturned, attemptNumber, teacherFeedback } = result;
+  const { responses, score, passed, isReturned, attemptNumber, teacherFeedback } = result;
   const pct = score ?? 0;
   const correctCount = responses.filter((r) => r.isCorrect === true).length;
 
@@ -211,6 +258,18 @@ export default function StudentAssessmentResultsPage() {
                       {response.question.explanation}
                     </div>
                   )}
+
+                  {response.isCorrect === false && (
+                    <div className="mt-4 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleAskJa(response.questionId)}
+                      >
+                        Ask Ja
+                      </Button>
+                    </div>
+                  )}
                 </StudentActionCard>
               </motion.div>
             ))}
@@ -235,6 +294,66 @@ export default function StudentAssessmentResultsPage() {
           </StudentActionCard>
         </motion.div>
       </motion.div>
+
+      <Dialog open={mentorOpen} onOpenChange={setMentorOpen}>
+        <DialogContent variant="student" className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Ask Ja About This Mistake</DialogTitle>
+            <DialogDescription>
+              Ja is grounded on your returned assessment and related lesson content.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Textarea
+              value={mentorPrompt}
+              onChange={(e) => setMentorPrompt(e.target.value)}
+              placeholder="Optional follow-up: What part do you want Ja to explain more clearly?"
+              rows={3}
+            />
+
+            <div className="flex justify-end">
+              <Button onClick={handleMentorFollowUp} disabled={mentorLoading || !mentorQuestionId}>
+                {mentorLoading ? 'Thinking...' : 'Refresh Help'}
+              </Button>
+            </div>
+
+            <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+              {mentorLoading && !mentorResponse ? (
+                <p className="text-sm student-muted-text">Ja is reviewing your mistake...</p>
+              ) : mentorResponse ? (
+                <div className="space-y-4">
+                  <div className="whitespace-pre-wrap text-sm text-[var(--student-text-strong)]">
+                    {mentorResponse.reply}
+                  </div>
+
+                  {mentorResponse.suggestedNext?.label && (
+                    <div className="rounded-lg border border-[var(--student-outline)] bg-white/60 p-3 text-sm">
+                      <p className="font-semibold text-[var(--student-text-strong)]">Suggested next review</p>
+                      <p className="mt-1 text-[var(--student-text-muted)]">
+                        {mentorResponse.suggestedNext.label}
+                      </p>
+                    </div>
+                  )}
+
+                  {mentorResponse.citations.length > 0 && (
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--student-text-strong)]">Grounded sources</p>
+                      <ul className="mt-2 space-y-1 text-sm text-[var(--student-text-muted)]">
+                        {mentorResponse.citations.map((citation) => (
+                          <li key={citation.chunkId}>{citation.label}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm student-muted-text">No explanation available yet.</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

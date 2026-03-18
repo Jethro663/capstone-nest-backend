@@ -34,6 +34,7 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/student', icon: LayoutDashboard },
   { label: 'My Courses', href: '/dashboard/student/courses', icon: BookOpen },
+  { label: 'AI Chatbot', href: '/dashboard/student/chatbot', icon: Bot },
   { label: 'LXP', href: '/dashboard/student/lxp', icon: ClipboardList },
   { label: 'Performance', href: '/dashboard/student/performance', icon: BarChart3 },
   { label: 'Announcements', href: '/dashboard/student/announcements', icon: Megaphone },

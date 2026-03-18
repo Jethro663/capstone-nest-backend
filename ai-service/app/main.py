@@ -22,11 +22,28 @@ from .config import settings
 from .database import get_db
 from . import ollama_client
 from .extraction_pipeline import run_extraction
+from .indexing_pipeline import reindex_class_content
+from .mentor_service import explain_mistake
+from .quiz_generation_service import generate_quiz_draft
+from .remedial_service import recommend_intervention_case
+from .student_tutor_service import (
+    bootstrap_student_tutor,
+    continue_student_tutor_session,
+    get_student_tutor_session,
+    start_student_tutor_session,
+    submit_student_tutor_answers,
+)
 from .schemas import (
     ApplyExtractionRequest,
     ChatRequest,
     ExtractRequest,
+    GenerateQuizDraftRequest,
+    InterventionRecommendationRequest,
+    MentorExplainRequest,
     RequestUser,
+    StudentTutorAnswerRequest,
+    StudentTutorMessageRequest,
+    StudentTutorStartRequest,
     UpdateExtractionRequest,
 )
 
@@ -178,6 +195,127 @@ async def chat(
 
 
 # ---------------------------------------------------------------------------
+# POST /mentor/explain
+# ---------------------------------------------------------------------------
+
+
+@app.post("/mentor/explain")
+async def mentor_explain(
+    body: MentorExplainRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await explain_mistake(
+        db,
+        user,
+        attempt_id=body.attempt_id,
+        question_id=body.question_id,
+        message=body.message,
+    )
+    return {
+        "success": True,
+        "message": "Grounded explanation generated",
+        "data": data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Student Tutor
+# ---------------------------------------------------------------------------
+
+
+@app.get("/student/tutor/bootstrap")
+async def student_tutor_bootstrap(
+    class_id: str | None = Query(None, alias="classId"),
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await bootstrap_student_tutor(db, user, class_id=class_id)
+    return {
+        "success": True,
+        "message": "Student tutor bootstrap loaded",
+        "data": data,
+    }
+
+
+@app.post("/student/tutor/session")
+async def student_tutor_start(
+    body: StudentTutorStartRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await start_student_tutor_session(
+        db,
+        user,
+        class_id=body.class_id,
+        recommendation=body.recommendation,
+    )
+    return {
+        "success": True,
+        "message": "Tutor session started",
+        "data": data,
+    }
+
+
+@app.get("/student/tutor/session/{session_id}")
+async def student_tutor_get_session(
+    session_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await get_student_tutor_session(db, user, session_id=session_id)
+    return {
+        "success": True,
+        "message": "Tutor session loaded",
+        "data": data,
+    }
+
+
+@app.post("/student/tutor/session/{session_id}/message")
+async def student_tutor_message(
+    session_id: str,
+    body: StudentTutorMessageRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.session_id != session_id:
+        raise HTTPException(400, "Session ID mismatch")
+    data = await continue_student_tutor_session(
+        db,
+        user,
+        session_id=session_id,
+        message=body.message,
+    )
+    return {
+        "success": True,
+        "message": "Tutor follow-up generated",
+        "data": data,
+    }
+
+
+@app.post("/student/tutor/session/{session_id}/answers")
+async def student_tutor_answers(
+    session_id: str,
+    body: StudentTutorAnswerRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if body.session_id != session_id:
+        raise HTTPException(400, "Session ID mismatch")
+    data = await submit_student_tutor_answers(
+        db,
+        user,
+        session_id=session_id,
+        answers=body.answers,
+    )
+    return {
+        "success": True,
+        "message": "Tutor answers evaluated",
+        "data": data,
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /health
 # ---------------------------------------------------------------------------
 
@@ -193,6 +331,37 @@ async def health():
             "configuredModel": ollama_client.get_model_name(),
             "availableModels": status["models"],
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /index/classes/:id
+# ---------------------------------------------------------------------------
+
+
+@app.post("/index/classes/{class_id}")
+async def index_class(
+    class_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    class_row = await db.execute(
+        sa_text("SELECT id, teacher_id FROM classes WHERE id = :classId"),
+        {"classId": class_id},
+    )
+    class_info = class_row.mappings().first()
+    if not class_info:
+        raise HTTPException(404, "Class not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(class_info["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only reindex your own classes")
+
+    data = await reindex_class_content(db, class_id)
+    return {
+        "success": True,
+        "message": "Class content indexed",
+        "data": data,
     }
 
 
@@ -593,6 +762,7 @@ async def apply_extraction(
         {"id": extraction_id},
     )
     await db.commit()
+    index_result = await reindex_class_content(db, str(class_id))
 
     return {
         "success": True,
@@ -603,6 +773,7 @@ async def apply_extraction(
             "lessonsCreated": len(created_lessons),
             "totalLessonsAvailable": len(all_lessons),
             "lessons": created_lessons,
+            "indexing": index_result,
         },
     }
 
@@ -672,6 +843,56 @@ async def interaction_history(
         "message": f"Found {len(data)} interaction(s)",
         "data": data,
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/interventions/:id/recommend
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/interventions/{case_id}/recommend")
+async def recommend_intervention(
+    case_id: str,
+    body: InterventionRecommendationRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await recommend_intervention_case(
+        db,
+        user,
+        case_id=case_id,
+        note=body.note,
+    )
+    return {
+        "success": True,
+        "message": "Intervention recommendation generated",
+        "data": data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/generate-draft
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/generate-draft")
+async def teacher_generate_quiz_draft(
+    body: GenerateQuizDraftRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await generate_quiz_draft(db, user, body)
+    index_result = await reindex_class_content(db, body.class_id)
+    return {
+        "success": True,
+        "message": "AI draft assessment created",
+        "data": {
+            **data,
+            "indexing": index_result,
+        },
+    }
+
+
 def resolve_uploaded_file_path(raw_path: str) -> str:
     """Resolve backend-stored upload paths against ai-service UPLOAD_DIR robustly."""
     normalized = (raw_path or "").strip()

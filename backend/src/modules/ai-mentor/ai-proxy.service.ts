@@ -20,15 +20,16 @@ export class AiProxyService {
   async forward(
     method: string,
     path: string,
-    user: { id: string; email: string; roles: string[] },
+    user: { id?: string; userId?: string; email?: string; roles?: string[] },
     body?: unknown,
   ): Promise<unknown> {
     const url = `${this.baseUrl}${path}`;
+    const userId = user.id ?? user.userId ?? '';
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'X-User-Id': user.id,
-      'X-User-Email': user.email,
-      'X-User-Roles': user.roles.join(','),
+      'X-User-Id': userId,
+      'X-User-Email': user.email ?? '',
+      'X-User-Roles': (user.roles ?? []).join(','),
     };
 
     const controller = new AbortController();

@@ -2,15 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/providers/AuthProvider';
+import { aiService } from '@/services/ai-service';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
 import type { ClassItem } from '@/types/class';
 import type { LxpClassReport, TeacherInterventionQueueResponse } from '@/types/lxp';
+import type { InterventionRecommendation } from '@/types/ai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -43,6 +52,9 @@ export default function TeacherInterventionsPage() {
   const [queue, setQueue] = useState<TeacherInterventionQueueResponse | null>(null);
   const [report, setReport] = useState<LxpClassReport | null>(null);
   const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
+  const [recommendationLoadingId, setRecommendationLoadingId] = useState<string | null>(null);
+  const [assigningCaseId, setAssigningCaseId] = useState<string | null>(null);
+  const [selectedRecommendation, setSelectedRecommendation] = useState<InterventionRecommendation | null>(null);
 
   const selectedClass = useMemo(
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
@@ -107,6 +119,36 @@ export default function TeacherInterventionsPage() {
       toast.error('Failed to resolve intervention case');
     } finally {
       setResolvingCaseId(null);
+    }
+  };
+
+  const handleRecommend = async (caseId: string) => {
+    try {
+      setRecommendationLoadingId(caseId);
+      const res = await aiService.recommendIntervention(caseId);
+      setSelectedRecommendation(res.data);
+    } catch {
+      toast.error('Failed to generate AI intervention recommendation');
+    } finally {
+      setRecommendationLoadingId(null);
+    }
+  };
+
+  const handleApplyRecommendation = async () => {
+    if (!selectedRecommendation) return;
+    try {
+      setAssigningCaseId(selectedRecommendation.caseId);
+      await lxpService.assignIntervention(
+        selectedRecommendation.caseId,
+        selectedRecommendation.suggestedAssignmentPayload,
+      );
+      toast.success('AI recommendation assigned to the intervention case');
+      setSelectedRecommendation(null);
+      await fetchInterventionData();
+    } catch {
+      toast.error('Failed to assign AI recommendation');
+    } finally {
+      setAssigningCaseId(null);
     }
   };
 
@@ -250,14 +292,24 @@ export default function TeacherInterventionsPage() {
                           <Badge variant="destructive">Active</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={resolvingCaseId === entry.id}
-                            onClick={() => handleResolve(entry.id)}
-                          >
-                            {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={recommendationLoadingId === entry.id}
+                              onClick={() => handleRecommend(entry.id)}
+                            >
+                              {recommendationLoadingId === entry.id ? 'Generating...' : 'AI Plan'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={resolvingCaseId === entry.id}
+                              onClick={() => handleResolve(entry.id)}
+                            >
+                              {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -318,6 +370,91 @@ export default function TeacherInterventionsPage() {
           </Card>
         </>
       )}
+
+      <Dialog
+        open={selectedRecommendation !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRecommendation(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>AI Intervention Recommendation</DialogTitle>
+            <DialogDescription>
+              Review the suggested remedial path before assigning it to the student.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedRecommendation && (
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-semibold">Weak concepts</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedRecommendation.weakConcepts.length === 0 ? (
+                    <span className="text-sm text-muted-foreground">No concept tags detected.</span>
+                  ) : (
+                    selectedRecommendation.weakConcepts.map((concept) => (
+                      <Badge key={concept} variant="secondary">
+                        {concept}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Suggested Lessons</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedRecommendation.recommendedLessons.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No lesson recommendations found.</p>
+                    ) : (
+                      selectedRecommendation.recommendedLessons.map((lesson) => (
+                        <div key={lesson.lessonId} className="rounded-lg border p-3">
+                          <p className="font-medium">{lesson.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{lesson.reason}</p>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Suggested Assessments</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedRecommendation.recommendedAssessments.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No assessment recommendations found.</p>
+                    ) : (
+                      selectedRecommendation.recommendedAssessments.map((assessment) => (
+                        <div key={assessment.assessmentId} className="rounded-lg border p-3">
+                          <p className="font-medium">{assessment.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{assessment.reason}</p>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSelectedRecommendation(null)}>
+                  Close
+                </Button>
+                <Button
+                  onClick={handleApplyRecommendation}
+                  disabled={assigningCaseId === selectedRecommendation.caseId}
+                >
+                  {assigningCaseId === selectedRecommendation.caseId ? 'Assigning...' : 'Assign Suggested Path'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
