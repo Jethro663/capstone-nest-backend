@@ -68,6 +68,13 @@ describe('ReviewTab', () => {
         assessmentId="assessment-1"
         onGradeReturned={jest.fn()}
         submissions={{
+          assessment: {
+            id: 'assessment-1',
+            title: 'Assessment 1',
+            type: 'file_upload',
+            totalPoints: 100,
+            isPublished: true,
+          },
           submissions: [
             {
               studentId: 'student-1',
@@ -78,9 +85,6 @@ describe('ReviewTab', () => {
               totalAttempts: 1,
               attempt: {
                 id: 'attempt-1',
-                assessmentId: 'assessment-1',
-                studentId: 'student-1',
-                startedAt: '2026-03-19T00:00:00.000Z',
                 submittedAt: '2026-03-19T00:10:00.000Z',
                 isSubmitted: true,
                 attemptNumber: 1,
@@ -90,9 +94,6 @@ describe('ReviewTab', () => {
               attempts: [
                 {
                   id: 'attempt-1',
-                  assessmentId: 'assessment-1',
-                  studentId: 'student-1',
-                  startedAt: '2026-03-19T00:00:00.000Z',
                   submittedAt: '2026-03-19T00:10:00.000Z',
                   isSubmitted: true,
                   attemptNumber: 1,
@@ -102,7 +103,13 @@ describe('ReviewTab', () => {
               ],
             },
           ],
-          total: 1,
+          summary: {
+            total: 1,
+            notStarted: 0,
+            inProgress: 0,
+            turnedIn: 1,
+            returned: 0,
+          },
         }}
       />,
     );

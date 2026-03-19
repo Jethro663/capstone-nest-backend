@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { AlertTriangle, RefreshCw, ShieldAlert, TrendingUp, Users } from 'lucide-react';
@@ -160,18 +160,6 @@ export default function TeacherPerformancePage() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Performance Tracking</h1>
-          <p className="text-sm text-muted-foreground">
-            {threshold !== null
-              ? `Current at-risk threshold: ${threshold}%`
-              : 'Select a class to load the active at-risk threshold.'}
-          </p>
-        </div>
-=======
     <TeacherPageShell
       badge="Performance Command Center"
       title="Performance Tracking"
@@ -181,7 +169,7 @@ export default function TeacherPerformancePage() {
           : 'Review blended score health, recent risk transitions, and intervention readiness from one livelier teacher performance view.'
       }
       actions={
->>>>>>> Stashed changes
+ 
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedClassId}
@@ -257,71 +245,6 @@ export default function TeacherPerformancePage() {
         </div>
       ) : (
         <>
-<<<<<<< Updated upstream
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Class</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-base font-semibold">
-                  {selectedClass?.subjectName ?? '--'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedClass?.section?.name ?? '--'}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Students</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{summary?.totalStudents ?? 0}</p>
-                <p className="text-xs text-muted-foreground">
-                  {summary?.studentsWithData ?? 0} with data
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">At Risk</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-rose-600">
-                  {summary?.atRiskCount ?? 0}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {(summary?.atRiskRate ?? 0).toFixed(1)}% of class
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Average (Blended)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">
-                  {toPercent(summary?.averages.blended ?? null)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {threshold !== null ? `Threshold ${threshold}%` : 'Threshold --'}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">At-Risk Students</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(atRisk?.students.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No at-risk students found for this class.
-                </p>
-              ) : (
-=======
           <TeacherSectionCard
             title="At-Risk Students"
             description="Spot who needs immediate attention using assessment, class record, and blended performance together."
@@ -333,7 +256,7 @@ export default function TeacherPerformancePage() {
               />
             ) : (
               <div className="teacher-table-shell">
->>>>>>> Stashed changes
+ 
                 <Table>
                   <TableHeader className="teacher-table-head [&_tr]:border-white/15">
                     <TableRow className="border-white/10 hover:bg-transparent">
@@ -501,3 +424,4 @@ export default function TeacherPerformancePage() {
     </TeacherPageShell>
   );
 }
+

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
@@ -12,6 +12,8 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
+import { analyticsService } from '@/services/analytics-service';
+import { adminService } from '@/services/admin-service';
 import { dashboardService, type AdminDashboardStats } from '@/services/dashboard-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Button } from '@/components/ui/button';
@@ -35,14 +37,17 @@ export default function AdminDashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [interval, setInterval] = useState(30000);
   const [error, setError] = useState<string | null>(null);
+  const [overviewAction, setOverviewAction] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState<{
+    activeTeachers: number;
+    activeStudents: number;
+    assessmentSubmissions: number;
+    lessonCompletions: number;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-<<<<<<< Updated upstream
-      const res = await dashboardService.getAdminStats();
-      setStats(res.data);
-=======
       const [statsRes, overviewRes, usageRes] = await Promise.all([
         dashboardService.getAdminStats(),
         analyticsService.getAdminOverview(),
@@ -56,7 +61,7 @@ export default function AdminDashboardPage() {
         assessmentSubmissions: usageRes.data.assessmentSubmissions,
         lessonCompletions: usageRes.data.lessonCompletions,
       });
->>>>>>> Stashed changes
+ 
       setLastUpdated(new Date());
     } catch {
       setError('Failed to load dashboard stats');
@@ -121,60 +126,6 @@ export default function AdminDashboardPage() {
           </Button>
         </div>
       )}
-<<<<<<< Updated upstream
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {/* Stats grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Users</p>
-            <p className="text-3xl font-bold text-blue-600">{totalUsers}</p>
-            <p className="text-xs text-muted-foreground mt-1">Active accounts</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Teachers</p>
-            <p className="text-3xl font-bold text-green-600">{stats?.totalTeachers ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">{teacherPct}% of total</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Students</p>
-            <p className="text-3xl font-bold text-purple-600">{stats?.totalStudents ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">{studentPct}% of total</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Active Classes</p>
-            <p className="text-3xl font-bold text-orange-600">{stats?.activeClasses ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">Running classes</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Total Sections</p>
-            <p className="text-3xl font-bold text-red-600">{stats?.totalSections ?? 0}</p>
-            <p className="text-xs text-muted-foreground mt-1">All sections</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* System Health */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">System Health</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-                <span>API Status: Connected</span>
-=======
       stats={(
         <>
           <AdminStatCard label="Total Users" value={totalUsers} caption="Active platform accounts" icon={Users} accent="emerald" />
@@ -194,7 +145,7 @@ export default function AdminDashboardPage() {
               <div className="flex flex-wrap gap-2">
                 <span className="admin-chip"><Activity className="h-4 w-4" /> {autoRefresh ? `Auto-sync every ${formatRefreshInterval(interval)}` : 'Manual refresh only'}</span>
                 <span className="admin-chip"><Shield className="h-4 w-4" /> {error ? 'Needs attention' : 'Monitoring live'}</span>
->>>>>>> Stashed changes
+ 
               </div>
               <div className="mt-4 space-y-2">
                 <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">Operational Focus</p>
@@ -227,11 +178,6 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           </div>
-<<<<<<< Updated upstream
-        </CardContent>
-      </Card>
-    </div>
-=======
         </AdminSectionCard>
 
         <AdminSectionCard
@@ -327,6 +273,7 @@ export default function AdminDashboardPage() {
         </AdminSectionCard>
       </div>
     </AdminPageShell>
->>>>>>> Stashed changes
+ 
   );
 }
+

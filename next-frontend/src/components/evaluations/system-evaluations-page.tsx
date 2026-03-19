@@ -98,8 +98,8 @@ export function SystemEvaluationsPage({
 
     const totals = rows.reduce(
       (accumulator, row) => {
-        accumulator.satisfaction += row.satisfactionScore;
-        accumulator.usability += row.usabilityScore;
+        accumulator.satisfaction += Number(row.satisfactionScore);
+        accumulator.usability += Number(row.usabilityScore);
         accumulator.feedback += row.feedback?.trim() ? 1 : 0;
         return accumulator;
       },

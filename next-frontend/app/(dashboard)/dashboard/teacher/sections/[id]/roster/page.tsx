@@ -1,20 +1,18 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CalendarRange, GraduationCap, UserPlus, Users } from 'lucide-react';
 import { sectionService, type RosterStudent } from '@/services/section-service';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-<<<<<<< Updated upstream
-=======
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { TeacherEmptyState, TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
->>>>>>> Stashed changes
+ 
 import type { Section } from '@/types/section';
 
 export default function SectionRosterPage() {
@@ -46,6 +44,31 @@ export default function SectionRosterPage() {
     fetchData();
   }, [fetchData]);
 
+  const dedupedRoster = useMemo(() => {
+    const seen = new Set<string>();
+    return roster.filter((student) => {
+      if (seen.has(student.id)) {
+        return false;
+      }
+      seen.add(student.id);
+      return true;
+    });
+  }, [roster]);
+
+  const getInitials = (firstName?: string | null, lastName?: string | null) => {
+    return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || 'ST';
+  };
+
+  const handleRemoveStudent = async (studentId: string) => {
+    try {
+      await sectionService.removeStudent(sectionId, studentId);
+      setRoster((current) => current.filter((student) => student.id !== studentId));
+      toast.success('Student removed from section');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to remove student'));
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -56,44 +79,6 @@ export default function SectionRosterPage() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="space-y-6">
-      <div>
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">← Back</Button>
-        <h1 className="text-2xl font-bold">{section?.name} — Roster</h1>
-        <p className="text-muted-foreground">
-          Grade {section?.gradeLevel} • {section?.schoolYear} • {roster.length} students
-        </p>
-      </div>
-
-      {roster.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">No students in this section.</CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>LRN</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {roster.map((student, i) => (
-                <TableRow key={student.id}>
-                  <TableCell>{i + 1}</TableCell>
-                  <TableCell>{student.firstName} {student.lastName}</TableCell>
-                  <TableCell className="text-muted-foreground">{student.email}</TableCell>
-                  <TableCell className="text-muted-foreground">{student.lrn || '—'}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-=======
     <TeacherPageShell
       badge="Section Roster"
       title={`${section?.name || 'Section'} Roster`}
@@ -113,7 +98,7 @@ export default function SectionRosterPage() {
             Add Students
           </Button>
         </>
->>>>>>> Stashed changes
+ 
       )}
       stats={(
         <>
@@ -126,14 +111,14 @@ export default function SectionRosterPage() {
           />
           <TeacherStatCard
             label="Grade Level"
-            value={section?.gradeLevel || '—'}
+            value={section?.gradeLevel || 'â€”'}
             caption={section?.name || 'Section not set'}
             icon={GraduationCap}
             accent="teal"
           />
           <TeacherStatCard
             label="School Year"
-            value={section?.schoolYear || '—'}
+            value={section?.schoolYear || 'â€”'}
             caption="Active section cycle"
             icon={CalendarRange}
             accent="amber"
@@ -161,7 +146,7 @@ export default function SectionRosterPage() {
                   {section?.name || 'Section'}
                 </p>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                  Grade {section?.gradeLevel || '—'} • {section?.schoolYear || 'School year not set'}
+                  Grade {section?.gradeLevel || 'â€”'} â€¢ {section?.schoolYear || 'School year not set'}
                 </p>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
                   Use this roster hub to keep student movement, section timing, and profile access easy to scan from one place.
@@ -270,8 +255,8 @@ export default function SectionRosterPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-[var(--teacher-text-muted)]">{student.email || 'N/A'}</TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.lrn || '—'}</TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.gradeLevel || '—'}</TableCell>
+                    <TableCell className="text-[var(--teacher-text-muted)]">{student.lrn || 'â€”'}</TableCell>
+                    <TableCell className="text-[var(--teacher-text-muted)]">{student.gradeLevel || 'â€”'}</TableCell>
                     <TableCell
                       className="text-right"
                       onClick={(event) => event.stopPropagation()}
@@ -305,3 +290,4 @@ export default function SectionRosterPage() {
     </TeacherPageShell>
   );
 }
+

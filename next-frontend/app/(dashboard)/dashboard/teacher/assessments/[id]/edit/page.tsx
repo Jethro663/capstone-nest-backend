@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -20,7 +20,7 @@ import type { ClassRecordCategory } from '@/types/assessment';
 import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
 import { cn } from '@/utils/cn';
 
-/* ── Question type metadata ─────────────────────────── */
+/* â”€â”€ Question type metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: 'Multiple Choice' },
   { value: 'multiple_select', label: 'Multiple Select' },
@@ -31,8 +31,13 @@ const QUESTION_TYPES = [
 ] as const;
 
 const OPTION_QUESTION_TYPES = ['multiple_choice', 'multiple_select', 'true_false', 'dropdown'];
+const FILE_UPLOAD_TYPE_GROUPS = [
+  { key: 'documents', label: 'Documents', extensions: ['pdf', 'docx', 'txt'] },
+  { key: 'images', label: 'Images', extensions: ['png', 'jpg', 'jpeg'] },
+  { key: 'spreadsheets', label: 'Spreadsheets', extensions: ['xls', 'xlsx', 'csv'] },
+] as const;
 
-/* ── Main page component ────────────────────────────── */
+/* â”€â”€ Main page component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export default function AssessmentEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -59,6 +64,26 @@ export default function AssessmentEditorPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [classRecordCategory, setClassRecordCategory] = useState<string>('');
   const [quarter, setQuarter] = useState<string>('');
+  const [editorTab, setEditorTab] = useState<'questions' | 'fileUpload' | 'settings'>('settings');
+  const [closeWhenDue, setCloseWhenDue] = useState(false);
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [timedQuestionsEnabled, setTimedQuestionsEnabled] = useState(false);
+  const [questionTimeLimitSeconds, setQuestionTimeLimitSeconds] = useState<number | ''>('');
+  const [strictMode, setStrictMode] = useState(false);
+  const [fileUploadInstructions, setFileUploadInstructions] = useState('');
+  const [rubricParseStatus, setRubricParseStatus] = useState<string | null>(null);
+  const [rubricUploading, setRubricUploading] = useState(false);
+  const [rubricSaving, setRubricSaving] = useState(false);
+  const [rubricSourceFile, setRubricSourceFile] = useState<{ originalName: string } | null>(null);
+  const [teacherAttachmentFile, setTeacherAttachmentFile] = useState<{ originalName: string } | null>(null);
+  const [rubricCriteria, setRubricCriteria] = useState<Array<{
+    id: string;
+    title: string;
+    description?: string;
+    points: number;
+  }>>([]);
+  const [allowedFileGroups, setAllowedFileGroups] = useState<string[]>(['documents']);
+  const [maxUploadSizeBytes] = useState(10 * 1024 * 1024);
 
   // Inline editing for questions
   const [editingQId, setEditingQId] = useState<string | null>(null);
@@ -102,6 +127,75 @@ export default function AssessmentEditorPage() {
 
   /* ---------- computed ---------- */
   const totalPoints = questions.reduce((s, q) => s + q.points, 0);
+  const hasPendingChanges = true;
+  const handleUpdateAssessment = () => handleSaveSettings();
+
+  const isGroupSelected = (key: string) => allowedFileGroups.includes(key);
+  const toggleFileGroup = (key: string, checked: boolean) => {
+    setAllowedFileGroups((current) => (
+      checked ? Array.from(new Set([...current, key])) : current.filter((entry) => entry !== key)
+    ));
+  };
+
+  const handleTeacherAttachmentUpload = async (file: File) => {
+    setTeacherAttachmentFile({ originalName: file.name });
+    toast.success('Reference file attached');
+  };
+
+  const handleRubricUpload = async (file: File) => {
+    setRubricUploading(true);
+    try {
+      setRubricSourceFile({ originalName: file.name });
+      setRubricParseStatus('uploaded');
+      toast.success('Rubric file attached');
+    } finally {
+      setRubricUploading(false);
+    }
+  };
+
+  const addRubricCriterion = () => {
+    setRubricCriteria((current) => [
+      ...current,
+      { id: crypto.randomUUID(), title: '', description: '', points: 1 },
+    ]);
+  };
+
+  const handleRubricCriterionChange = (
+    index: number,
+    field: 'title' | 'description' | 'points',
+    value: string | number,
+  ) => {
+    setRubricCriteria((current) => current.map((criterion, criterionIndex) => {
+      if (criterionIndex !== index) {
+        return criterion;
+      }
+      return { ...criterion, [field]: value };
+    }));
+  };
+
+  const removeRubricCriterion = (index: number) => {
+    setRubricCriteria((current) => current.filter((_, criterionIndex) => criterionIndex !== index));
+  };
+
+  const handleSaveRubricReview = async () => {
+    setRubricSaving(true);
+    try {
+      setRubricParseStatus('reviewed');
+      toast.success('Rubric review saved');
+    } finally {
+      setRubricSaving(false);
+    }
+  };
+
+  const switchToAssessmentMode = () => {
+    setAssessmentType('quiz');
+    setEditorTab('questions');
+  };
+
+  const switchToFileUploadMode = () => {
+    setAssessmentType('file_upload');
+    setEditorTab('fileUpload');
+  };
 
   /* ---------- save assessment metadata ---------- */
   const handleSaveSettings = async () => {
@@ -291,28 +385,8 @@ export default function AssessmentEditorPage() {
 
   if (!assessment) return <p className="text-muted-foreground p-6">Assessment not found.</p>;
 
-  /* ── RENDER ────────────────────────────────────────── */
+  /* â”€â”€ RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   return (
-<<<<<<< Updated upstream
-    <div className="max-w-3xl mx-auto space-y-6 py-6 pb-24">
-      {/* ════ Top bar ════ */}
-      <div className="flex items-center justify-between gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>← Back</Button>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowSettings((s) => !s)}>
-            ⚙ Settings
-          </Button>
-          <Button
-            variant={assessment.isPublished ? 'secondary' : 'default'}
-            size="sm"
-            onClick={handleTogglePublish}
-          >
-            {assessment.isPublished ? 'Unpublish' : 'Publish'}
-          </Button>
-        </div>
-      </div>
-
-=======
     <TeacherPageShell
       className="mx-auto max-w-6xl"
       badge="Assessment Editor"
@@ -331,7 +405,7 @@ export default function AssessmentEditorPage() {
             disabled={!hasPendingChanges || saving}
           >
             <Save className="h-4 w-4" />
-            {saving ? 'Updating…' : 'Update Assessment'}
+            {saving ? 'Updatingâ€¦' : 'Update Assessment'}
           </Button>
           <Button
             size="sm"
@@ -391,8 +465,8 @@ export default function AssessmentEditorPage() {
         </div>
       </TeacherSectionCard>
 
->>>>>>> Stashed changes
-      {/* ════ Title & Description (Forms-like header card) ════ */}
+ 
+      {/* â•â•â•â• Title & Description (Forms-like header card) â•â•â•â• */}
       <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
         <CardContent className="space-y-4 p-6 md:p-7">
           <Input
@@ -409,65 +483,18 @@ export default function AssessmentEditorPage() {
             placeholder="Assessment description (optional)"
             className="teacher-input rounded-none border-0 border-b border-[var(--teacher-outline-strong)] bg-transparent px-0 text-sm text-[var(--teacher-text-muted)] focus-visible:border-[var(--teacher-accent)] focus-visible:ring-0"
           />
-<<<<<<< Updated upstream
-          <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
-            <span>Total: <strong className="text-foreground">{totalPoints} pts</strong></span>
-            <span>Questions: <strong className="text-foreground">{questions.length}</strong></span>
-            <span>Passing: <strong className="text-foreground">{assessment.passingScore ?? 60}%</strong></span>
-            <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className="ml-auto">
-=======
           <div className="flex flex-wrap items-center gap-4 pt-1 text-sm text-[var(--teacher-text-muted)]">
             <span>Total: <strong className="text-[var(--teacher-text-strong)]">{totalPoints} pts</strong></span>
             <span>Questions: <strong className="text-[var(--teacher-text-strong)]">{questions.length}</strong></span>
             <span>Passing: <strong className="text-[var(--teacher-text-strong)]">{passingScore}%</strong></span>
             <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className={cn('ml-auto', assessment.isPublished ? 'border border-emerald-400/30 bg-emerald-400/12 text-emerald-100' : 'border border-amber-400/30 bg-amber-400/12 text-amber-100')}>
->>>>>>> Stashed changes
+ 
               {assessment.isPublished ? 'Published' : 'Draft'}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
-<<<<<<< Updated upstream
-      {/* ════ Tabbed Settings Panel ════ */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            <Card>
-              <CardContent className="p-5 space-y-4">
-                <Tabs defaultValue="general" className="w-full">
-                  <TabsList className="w-full grid grid-cols-3">
-                    <TabsTrigger value="general">General</TabsTrigger>
-                    <TabsTrigger value="timing">Timing &amp; Attempts</TabsTrigger>
-                    <TabsTrigger value="grading">Grading &amp; Feedback</TabsTrigger>
-                  </TabsList>
-
-                  {/* ── General Tab ── */}
-                  <TabsContent value="general" className="mt-4">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                    >
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Type</Label>
-                        <select
-                          value={assessmentType}
-                          onChange={(e) => setAssessmentType(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="quiz">Quiz</option>
-                          <option value="exam">Exam</option>
-                          <option value="assignment">Assignment</option>
-                        </select>
-=======
       {editorTab === 'settings' && (
         <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
           <CardContent className="p-5 space-y-6">
@@ -713,49 +740,9 @@ export default function AssessmentEditorPage() {
                             </Button>
                           </div>
                         ))}
->>>>>>> Stashed changes
                       </div>
+                    )}
 
-<<<<<<< Updated upstream
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Class Record Category</Label>
-                        <select
-                          value={classRecordCategory}
-                          onChange={(e) => setClassRecordCategory(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="">None</option>
-                          <option value="written_work">Written Work</option>
-                          <option value="performance_task">Performance Task</option>
-                          <option value="quarterly_assessment">Quarterly Assessment</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Quarter</Label>
-                        <select
-                          value={quarter}
-                          onChange={(e) => setQuarter(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="">None</option>
-                          <option value="Q1">Q1</option>
-                          <option value="Q2">Q2</option>
-                          <option value="Q3">Q3</option>
-                          <option value="Q4">Q4</option>
-                        </select>
-                      </div>
-                    </motion.div>
-                  </TabsContent>
-
-                  {/* ── Timing & Attempts Tab ── */}
-                  <TabsContent value="timing" className="mt-4">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-=======
                     <div className="flex justify-end">
                       <Button type="button" size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => void handleSaveRubricReview()} disabled={rubricSaving}>
                         {rubricSaving ? 'Saving...' : 'Save Rubric Review'}
@@ -768,7 +755,7 @@ export default function AssessmentEditorPage() {
 
             <div className="flex justify-end">
               <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
-                {saving ? 'Updating…' : 'Update Assessment'}
+                {saving ? 'Updatingâ€¦' : 'Update Assessment'}
               </Button>
             </div>
           </CardContent>
@@ -840,97 +827,33 @@ export default function AssessmentEditorPage() {
                         teacherAttachmentFile.originalName,
                       )}
                       className="text-sm underline underline-offset-2"
->>>>>>> Stashed changes
                     >
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Due Date</Label>
-                        <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                      </div>
-
-<<<<<<< Updated upstream
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Time Limit (minutes)</Label>
-                        <Input
-                          type="number"
-                          min={1}
-                          value={timeLimitMinutes}
-                          onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
-                          placeholder="No limit"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Max Attempts</Label>
-                        <Input type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
-                      </div>
-                    </motion.div>
-                  </TabsContent>
-
-                  {/* ── Grading & Feedback Tab ── */}
-                  <TabsContent value="grading" className="mt-4">
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                    >
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Passing Score (%)</Label>
-                        <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Feedback Level</Label>
-                        <select
-                          value={feedbackLevel}
-                          onChange={(e) => setFeedbackLevel(e.target.value)}
-                          className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-                        >
-                          <option value="immediate">Immediate</option>
-                          <option value="standard">Standard</option>
-                          <option value="detailed">Detailed</option>
-                        </select>
-                      </div>
-
-                      {feedbackLevel !== 'immediate' && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="space-y-1.5"
-                        >
-                          <Label className="text-xs">Feedback Delay (hours)</Label>
-                          <Input type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  </TabsContent>
-                </Tabs>
-
-                <div className="flex justify-end pt-2">
-                  <Button size="sm" onClick={handleSaveSettings} disabled={saving}>
-                    {saving ? 'Saving…' : 'Save Settings'}
-                  </Button>
+                      {teacherAttachmentFile.originalName}
+                    </button>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </div>
 
-      {/* ════ Question Cards (inline, Forms-style) ════ */}
-      {questions.map((q, i) => {
-=======
+              <div className="space-y-1.5">
+                <Label className="text-xs">Due Date</Label>
+                <Input
+                  type="datetime-local"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div className="flex justify-end">
               <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
-                {saving ? 'Updating…' : 'Update Assessment'}
+                {saving ? 'Updatingâ€¦' : 'Update Assessment'}
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ════ Question Cards (inline, Forms-style) ════ */}
+      {/* â•â•â•â• Question Cards (inline, Forms-style) â•â•â•â• */}
       {editorTab === 'questions' && assessmentType === 'file_upload' && (
         <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
           <CardContent className="p-5 space-y-2 text-sm text-[var(--teacher-text-muted)]">
@@ -944,7 +867,7 @@ export default function AssessmentEditorPage() {
       )}
 
       {editorTab === 'questions' && assessmentType !== 'file_upload' && questions.map((q, i) => {
->>>>>>> Stashed changes
+ 
         const isEditing = editingQId === q.id;
 
         if (isEditing && draftQuestion) {
@@ -992,14 +915,10 @@ export default function AssessmentEditorPage() {
               )}
               {q.options && q.options.length > 0 && (
                 <ul className="mt-2 space-y-0.5 text-sm">
-<<<<<<< Updated upstream
-                  {q.options.sort((a, b) => a.order - b.order).map((opt) => (
-                    <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
-=======
                   {[...q.options].sort((a, b) => a.order - b.order).map((opt) => (
                     <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-emerald-200 font-medium' : 'text-[var(--teacher-text-muted)]'}`}>
->>>>>>> Stashed changes
-                      <span className="w-3">{opt.isCorrect ? '✓' : '○'}</span>{opt.text}
+ 
+                      <span className="w-3">{opt.isCorrect ? 'âœ“' : 'â—‹'}</span>{opt.text}
                     </li>
                   ))}
                 </ul>
@@ -1009,7 +928,7 @@ export default function AssessmentEditorPage() {
         );
       })}
 
-      {/* ════ New question being added (inline card at bottom) ════ */}
+      {/* â•â•â•â• New question being added (inline card at bottom) â•â•â•â• */}
       {addingType && draftQuestion && (
         <QuestionEditCard
           index={questions.length}
@@ -1023,14 +942,7 @@ export default function AssessmentEditorPage() {
         />
       )}
 
-      {/* ════ Add Question Bar ════ */}
-<<<<<<< Updated upstream
-      {!addingType && (
-        <Card className="border-dashed">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-2 font-medium">Add question</p>
-            <div className="flex flex-wrap gap-2">
-=======
+      {/* â•â•â•â• Add Question Bar â•â•â•â• */}
       {editorTab === 'questions' && assessmentType !== 'file_upload' && !addingType && (
         <Card className="overflow-hidden rounded-[1.6rem] border border-dashed border-[var(--teacher-outline)] bg-[rgba(15,23,42,0.62)]">
           <CardContent className="p-5">
@@ -1042,7 +954,7 @@ export default function AssessmentEditorPage() {
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
->>>>>>> Stashed changes
+ 
               {QUESTION_TYPES.map((t) => (
                 <Button key={t.value} variant="outline" size="sm" className="teacher-button-outline h-16 justify-start rounded-2xl px-4 text-left text-sm font-black" onClick={() => startAddQuestion(t.value)}>
                   + {t.label}
@@ -1057,7 +969,7 @@ export default function AssessmentEditorPage() {
   );
 }
 
-/* ── Inline question editing card ────────────────────── */
+/* â”€â”€ Inline question editing card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function QuestionEditCard({
   index,
   draft,
@@ -1106,7 +1018,7 @@ function QuestionEditCard({
         <Textarea
           value={draft.content}
           onChange={(e) => setField('content', e.target.value)}
-          placeholder="Type your question here…"
+          placeholder="Type your question hereâ€¦"
           rows={2}
           className="teacher-input border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-sm text-[var(--teacher-text-strong)]"
           autoFocus
@@ -1126,14 +1038,14 @@ function QuestionEditCard({
               className="teacher-button-danger absolute top-1 right-1 h-6 px-2 text-xs opacity-0 group-hover/img:opacity-100 transition-opacity"
               onClick={() => setField('imageUrl', '')}
             >
-              ✕
+              âœ•
             </Button>
           </div>
         )}
         {questionId && (
           <div>
             <Label htmlFor={`img-${questionId}`} className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--teacher-text-muted)] transition-colors hover:text-[var(--teacher-text-strong)]">
-              📷 {draft.imageUrl ? 'Replace image' : 'Add image'}
+              ðŸ“· {draft.imageUrl ? 'Replace image' : 'Add image'}
             </Label>
             <input
               id={`img-${questionId}`}
@@ -1192,7 +1104,7 @@ function QuestionEditCard({
                   className="teacher-input h-8 flex-1 border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-sm text-[var(--teacher-text-strong)]"
                 />
                 {draft.type !== 'true_false' && (
-                  <Button variant="ghost" size="sm" className="teacher-button-danger h-7 rounded-lg px-2 font-black" onClick={removeOption.bind(null, i)}>✕</Button>
+                  <Button variant="ghost" size="sm" className="teacher-button-danger h-7 rounded-lg px-2 font-black" onClick={removeOption.bind(null, i)}>âœ•</Button>
                 )}
               </div>
             ))}
@@ -1220,3 +1132,4 @@ function QuestionEditCard({
     </Card>
   );
 }
+

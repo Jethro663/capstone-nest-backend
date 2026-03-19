@@ -1,19 +1,18 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-<<<<<<< Updated upstream
-import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, BookOpen, Megaphone } from 'lucide-react';
-=======
 import { ArrowLeft, BookOpen, ChevronRight, Clock3, FileText, FolderOpen, Megaphone, Sparkles, Target } from 'lucide-react';
->>>>>>> Stashed changes
+import { motion, useReducedMotion } from 'framer-motion';
+
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
+import { fileService } from '@/services/file-service';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -28,6 +27,14 @@ import type { ClassItem } from '@/types/class';
 import type { Lesson, LessonCompletion } from '@/types/lesson';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
+import type { UploadedFile } from '@/types/file';
+
+const LESSONS_PAGE_SIZE = 6;
+const ASSESSMENTS_PAGE_SIZE = 6;
+const MODULES_PAGE_SIZE = 8;
+
+type AssessmentBucket = 'all' | 'upcoming' | 'past_due' | 'completed';
+type TabKey = 'lessons' | 'assessments' | 'announcements' | 'modules';
 
 export default function StudentClassDetailPage() {
   const params = useParams();
@@ -42,7 +49,18 @@ export default function StudentClassDetailPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [attempts, setAttempts] = useState<Record<string, AssessmentAttempt[]>>({});
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [modules, setModules] = useState<UploadedFile[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(false);
+  const [modulesTotalPages, setModulesTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabKey>('lessons');
+  const [lessonFilter, setLessonFilter] = useState<'all' | 'completed' | 'pending'>('all');
+  const [lessonSort, setLessonSort] = useState<'asc' | 'desc'>('asc');
+  const [lessonPage, setLessonPage] = useState(1);
+  const [assessmentBucket, setAssessmentBucket] = useState<AssessmentBucket>('all');
+  const [assessmentPage, setAssessmentPage] = useState(1);
+  const [moduleSearch, setModuleSearch] = useState('');
+  const [modulePage, setModulePage] = useState(1);
 
   const fetchData = useCallback(async () => {
     try {
@@ -84,13 +102,28 @@ export default function StudentClassDetailPage() {
     }
   }, [classId]);
 
+  const fetchModules = useCallback(async () => {
+    try {
+      setModulesLoading(true);
+      const response = await fileService.getAll({
+        classId,
+        search: moduleSearch || undefined,
+        page: modulePage,
+        limit: MODULES_PAGE_SIZE,
+      });
+      setModules(response.data || []);
+      setModulesTotalPages(response.totalPages || 1);
+    } catch {
+      setModules([]);
+      setModulesTotalPages(1);
+    } finally {
+      setModulesLoading(false);
+    }
+  }, [classId, modulePage, moduleSearch]);
+
   useEffect(() => {
-<<<<<<< Updated upstream
-    fetchData();
+    void fetchData();
   }, [fetchData]);
-=======
-    void fetchBaseData();
-  }, [fetchBaseData]);
 
   useEffect(() => {
     if (activeTab === 'modules') {
@@ -160,7 +193,7 @@ export default function StudentClassDetailPage() {
   const lessonCompletionRate = lessons.length ? Math.round((completedLessonCount / lessons.length) * 100) : 0;
   const pendingLessonCount = Math.max(lessons.length - completedLessonCount, 0);
   const upcomingAssessmentCount = assessmentCards.filter((entry) => entry.bucket === 'upcoming').length;
->>>>>>> Stashed changes
+ 
 
   if (loading) {
     return (
@@ -183,45 +216,6 @@ export default function StudentClassDetailPage() {
         Back
       </Button>
 
-<<<<<<< Updated upstream
-      <StudentActionCard className="border-0 bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-white">
-        <StudentSectionHeader
-title={classItem.subjectName || classItem.className || "Class"}          subtitle={`${classItem.section?.name} • Grade ${classItem.section?.gradeLevel}`}
-          className="[&_h2]:text-white [&_p]:text-red-100"
-        />
-      </StudentActionCard>
-
-      <Tabs defaultValue="lessons">
-        <TabsList>
-          <TabsTrigger value="lessons">Lessons</TabsTrigger>
-          <TabsTrigger value="assessments">Assessments</TabsTrigger>
-          <TabsTrigger value="announcements">Announcements</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="lessons" className="mt-4 space-y-3">
-          <StudentSectionHeader title="Lessons" subtitle={`${lessons.length} lesson(s)`} />
-          {lessons.length === 0 ? (
-            <StudentEmptyState title="No lessons yet" description="Your teacher hasn't posted lessons yet." icon={<BookOpen className="h-5 w-5" />} />
-          ) : (
-            <motion.div {...motionProps.container} className="space-y-3">
-              {lessons
-                .filter((l) => !l.isDraft)
-                .sort((a, b) => a.order - b.order)
-                .map((lesson) => (
-                  <motion.div key={lesson.id} {...motionProps.item}>
-                    <Link href={`/dashboard/student/lessons/${lesson.id}?classId=${classId}`}>
-                      <StudentActionCard>
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <p className="font-semibold text-slate-900">{lesson.title}</p>
-                            <p className="line-clamp-1 text-sm student-muted-text">{getDescription(lesson.description)}</p>
-                          </div>
-                          {completions[lesson.id] && <StudentStatusChip tone="success">Completed</StudentStatusChip>}
-                        </div>
-                      </StudentActionCard>
-                    </Link>
-                  </motion.div>
-=======
       <StudentActionCard className="relative overflow-hidden border-0 bg-[linear-gradient(135deg,var(--student-accent)_0%,color-mix(in_srgb,var(--student-accent)_68%,white)_100%)] text-[var(--student-accent-contrast)] shadow-[var(--student-shadow-hover)]">
         <div className="absolute right-[-2rem] top-[-1rem] h-28 w-28 rounded-full bg-white/18 blur-2xl" />
         <div className="absolute bottom-[-2rem] left-[-1rem] h-24 w-24 rounded-full bg-white/14 blur-2xl" />
@@ -235,7 +229,7 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
               <div className="space-y-2">
                 <h1 className="text-3xl font-extrabold tracking-tight text-[var(--student-text-strong)]">{classItem.subjectName || classItem.className || 'Class'}</h1>
                 <p className="max-w-2xl text-sm font-medium text-[color:color-mix(in_srgb,var(--student-text-muted)_92%,var(--student-text-strong)_8%)]">
-                  {`${classItem.section?.name || 'Section'} • Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'TBA'}`}
+                  {`${classItem.section?.name || 'Section'} â€¢ Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'TBA'}`}
                 </p>
                 <p className="max-w-2xl text-sm text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">
                   Keep moving through lessons, check what is still pending, and jump back into the next part of this class without digging through a plain list.
@@ -449,52 +443,76 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
                           ? 'Past Due'
                           : 'Completed'}
                   </Button>
->>>>>>> Stashed changes
                 ))}
-            </motion.div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="assessments" className="mt-4 space-y-3">
-          <StudentSectionHeader title="Assessments" subtitle={`${assessments.filter((a) => a.isPublished).length} published`} />
-          {assessments.filter((a) => a.isPublished).length === 0 ? (
-            <StudentEmptyState title="No assessments" description="Published assessments will appear here." icon={<BookOpen className="h-5 w-5" />} />
+              </div>
+            )}
+          />
+          {assessmentPageItems.length === 0 ? (
+            <StudentEmptyState
+              title="No assessments in this view"
+              description="Try another bucket or wait for your teacher to publish more work."
+              icon={<FileText className="h-5 w-5" />}
+            />
           ) : (
             <motion.div {...motionProps.container} className="space-y-3">
-              {assessments
-                .filter((a) => a.isPublished)
-                .map((assessment) => {
-                  const myAttempts = attempts[assessment.id] || [];
-                  const bestAttempt = myAttempts.length > 0
-                    ? myAttempts.reduce((best, a) => ((a.score ?? 0) > (best.score ?? 0) ? a : best), myAttempts[0])
-                    : null;
-                  return (
-                    <motion.div key={assessment.id} {...motionProps.item}>
-                      <Link href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
-                        <StudentActionCard>
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold text-slate-900">{assessment.title}</p>
-                              <p className="line-clamp-1 text-sm student-muted-text">{getDescription(assessment.description)}</p>
-                            </div>
-                            {bestAttempt ? (
-                              <StudentStatusChip tone={bestAttempt.passed ? 'success' : 'danger'}>
-                                {bestAttempt.passed ? 'Passed' : 'Needs Improvement'} • {bestAttempt.score}/{bestAttempt.totalPoints}
-                              </StudentStatusChip>
-                            ) : (
-                              <StudentStatusChip tone="warning">Not Started</StudentStatusChip>
-                            )}
+              {assessmentPageItems.map(({ assessment, latestAttempt, bucket }) => {
+                const isCompleted = bucket === 'completed';
+                const isPastDue = bucket === 'past_due';
+                const statusTone = isCompleted
+                  ? latestAttempt?.passed ? 'success' : 'danger'
+                  : isPastDue
+                    ? 'danger'
+                    : 'warning';
+
+                return (
+                  <motion.div key={assessment.id} {...motionProps.item}>
+                    <Link href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
+                      <StudentActionCard>
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">{assessment.title}</p>
+                            <p className="line-clamp-1 text-sm student-muted-text">{getDescription(assessment.description)}</p>
                           </div>
-                        </StudentActionCard>
-                      </Link>
-                    </motion.div>
-                  );
-                })}
+                          <StudentStatusChip tone={statusTone}>
+                            {isCompleted
+                              ? latestAttempt?.passed
+                                ? `Passed • ${latestAttempt.score}/${latestAttempt.totalPoints}`
+                                : `Needs Improvement • ${latestAttempt?.score ?? 0}/${latestAttempt?.totalPoints ?? assessment.totalPoints}`
+                              : isPastDue
+                                ? 'Past Due'
+                                : 'Upcoming'}
+                          </StudentStatusChip>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
+                          <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
+                            {assessment.type.replace(/_/g, ' ')}
+                          </span>
+                          <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
+                            {assessment.totalPoints} points
+                          </span>
+                          <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
+                            Due {assessment.dueDate ? new Date(assessment.dueDate).toLocaleDateString() : 'anytime'}
+                          </span>
+                        </div>
+                      </StudentActionCard>
+                    </Link>
+                  </motion.div>
+                );
+              })}
             </motion.div>
           )}
-        </TabsContent>
-
-        <TabsContent value="announcements" className="mt-4 space-y-3">
+          <Pagination
+            page={assessmentPage}
+            totalPages={assessmentTotalPages}
+            onPageChange={setAssessmentPage}
+            align="start"
+          />
+        </div>
+      )}
+ 
+      {activeTab === 'announcements' && (
+        <div className="mt-4 space-y-3">
           <StudentSectionHeader title="Announcements" subtitle={`${announcements.length} update(s)`} />
           {announcements.length === 0 ? (
             <StudentEmptyState title="No announcements" description="Class updates from your teacher will appear here." icon={<Megaphone className="h-5 w-5" />} />
@@ -516,10 +534,6 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
               ))}
             </motion.div>
           )}
-<<<<<<< Updated upstream
-        </TabsContent>
-      </Tabs>
-=======
         </div>
       )}
 
@@ -558,7 +572,7 @@ title={classItem.subjectName || classItem.className || "Class"}          subtitl
                     <div className="space-y-1">
                       <p className="font-semibold text-[var(--student-text-strong)]">{moduleFile.originalName}</p>
                       <p className="text-xs student-muted-text">
-                        {(moduleFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {moduleFile.mimeType}
+                        {(moduleFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB â€¢ {moduleFile.mimeType}
                       </p>
                     </div>
                     <Button type="button" className="student-button-outline" onClick={async () => {
@@ -606,7 +620,8 @@ function Pagination({
       <Button type="button" size="sm" variant="outline" className="student-button-outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
         Next
       </Button>
->>>>>>> Stashed changes
+ 
     </div>
   );
 }
+

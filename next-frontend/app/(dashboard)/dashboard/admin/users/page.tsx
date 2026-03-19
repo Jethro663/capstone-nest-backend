@@ -1,11 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-<<<<<<< Updated upstream
-=======
 import { useRouter } from 'next/navigation';
 import { Download, Eye, ShieldCheck, UserPlus, Users, UserX } from 'lucide-react';
->>>>>>> Stashed changes
+ 
 import { userService } from '@/services/user-service';
 import {
   AdminEmptyState,
@@ -24,7 +22,6 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import type { User } from '@/types/user';
 import { getRoleName } from '@/utils/helpers';
-import CreateUserModal from '@/components/modals/CreateUserModal';
 
 type StatusTab = 'active' | 'pending' | 'suspended' | 'deleted';
 
@@ -36,18 +33,14 @@ const STATUS_MAP: Record<StatusTab, string> = {
 };
 
 export default function UserManagementPage() {
+  const router = useRouter();
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<StatusTab>('active');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-<<<<<<< Updated upstream
-
-  // Modal states
-  const [showCreate, setShowCreate] = useState(false);
-=======
->>>>>>> Stashed changes
+ 
   const [showSuspend, setShowSuspend] = useState<User | null>(null);
   const [showPurge, setShowPurge] = useState<User | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
@@ -85,25 +78,7 @@ export default function UserManagementPage() {
     return true;
   });
 
-<<<<<<< Updated upstream
-  const handleOpenCreate = () => {
-    setEditUser(null);
-    setShowCreate(true);
-  };
-
-  const handleOpenEdit = (u: User) => {
-    setEditUser(u);
-    setShowCreate(true);
-  };
-
-  const handleModalSaved = () => {
-    setShowCreate(false);
-    setEditUser(null);
-    fetchUsers();
-  };
-
-=======
->>>>>>> Stashed changes
+ 
   const handleSuspend = async () => {
     if (!showSuspend) return;
     try {
@@ -247,177 +222,6 @@ export default function UserManagementPage() {
                 </div>
               )}
             </div>
-<<<<<<< Updated upstream
-          )}
-        </div>
-
-        {/* Active Users */}
-        <TabsContent value="active" className="mt-4">
-          {loading ? (
-            <Skeleton className="h-64 rounded-lg" />
-          ) : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No users found.</TableCell></TableRow>
-                  ) : filtered.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>
-                        {u.firstName} {u.lastName}
-                        {isSelf(u.id) && <Badge variant="outline" className="ml-2">YOU</Badge>}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                      <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
-                      <TableCell><Badge variant={u.status === 'ACTIVE' ? 'default' : 'secondary'}>{u.status}</Badge></TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)}>Edit</Button>
-                        {!isSelf(u.id) && (
-                          <Button variant="ghost" size="sm" className="text-amber-600" onClick={() => setShowSuspend(u)}>Suspend</Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Pending Users */}
-        <TabsContent value="pending" className="mt-4">
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-            These accounts have been created but the user has not yet verified their email. They cannot log in until verification is complete. To remove access, suspend the account first — then archive it from the Suspended tab.
-          </div>
-          {loading ? <Skeleton className="h-64 rounded-lg" /> : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Email Verified</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No pending accounts.</TableCell></TableRow>
-                  ) : filtered.map((u) => (
-                    <TableRow key={u.id} className="opacity-90">
-                      <TableCell>{u.firstName} {u.lastName}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                      <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
-                      <TableCell>
-                        <Badge variant={u.isEmailVerified ? 'default' : 'outline'} className={u.isEmailVerified ? '' : 'text-amber-600 border-amber-400'}>
-                          {u.isEmailVerified ? 'Verified' : 'Awaiting Verification'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(u)}>Edit</Button>
-                        <Button variant="ghost" size="sm" className="text-amber-600" onClick={() => setShowSuspend(u)}>Suspend</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Suspended Users */}
-        <TabsContent value="suspended" className="mt-4">
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-            Suspended users cannot log in, but their data is preserved and they can be reactivated.
-          </div>
-          {loading ? <Skeleton className="h-64 rounded-lg" /> : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No suspended users.</TableCell></TableRow>
-                  ) : filtered.map((u) => (
-                    <TableRow key={u.id} className="opacity-80">
-                      <TableCell>{u.firstName} {u.lastName}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                      <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" className="text-green-600" onClick={() => handleReactivate(u.id)}>Reactivate</Button>
-                        <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleSoftDelete(u.id)}>Archive & Delete</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </TabsContent>
-
-        {/* Deleted Users */}
-        <TabsContent value="deleted" className="mt-4">
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-            Deleted users have been archived. You can export their data or permanently purge them.
-          </div>
-          {loading ? <Skeleton className="h-64 rounded-lg" /> : (
-            <Card>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No deleted users.</TableCell></TableRow>
-                  ) : filtered.map((u) => (
-                    <TableRow key={u.id} className="opacity-60">
-                      <TableCell>{u.firstName} {u.lastName}</TableCell>
-                      <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                      <TableCell><Badge variant="secondary">{getRoleName(u.roles?.[0])}</Badge></TableCell>
-                      <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleExport(u.id)}>Export</Button>
-                        <Button variant="ghost" size="sm" className="text-red-600" onClick={() => { setShowPurge(u); setPurgeConfirmName(''); }}>Purge</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Create / Edit User Modal */}
-      <CreateUserModal
-        user={editUser}
-        open={showCreate}
-        onClose={() => { setShowCreate(false); setEditUser(null); }}
-        onSaved={handleModalSaved}
-      />
-
-      {/* Suspend Confirmation */}
-=======
           </div>
         </AdminSectionCard>
 
@@ -538,7 +342,7 @@ export default function UserManagementPage() {
         ))}
       </Tabs>
 
->>>>>>> Stashed changes
+ 
       <Dialog open={!!showSuspend} onOpenChange={() => setShowSuspend(null)}>
         <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader>
@@ -589,3 +393,4 @@ export default function UserManagementPage() {
     </AdminPageShell>
   );
 }
+

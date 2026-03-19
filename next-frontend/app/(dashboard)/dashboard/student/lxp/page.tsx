@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -123,19 +123,6 @@ export default function StudentLxpPage() {
 
   if (eligibleClasses.length === 0) {
     return (
-<<<<<<< Updated upstream
-      <Card>
-        <CardHeader>
-          <CardTitle>LXP Intervention</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>You currently have no active intervention classes.</p>
-          <p>
-            LXP access is enabled when your blended score is below {threshold}% in a class.
-          </p>
-        </CardContent>
-      </Card>
-=======
       <StudentPageShell
         badge="LXP Adventure"
         title="LXP"
@@ -147,25 +134,11 @@ export default function StudentLxpPage() {
           icon={<Gamepad2 className="h-5 w-5" />}
         />
       </StudentPageShell>
->>>>>>> Stashed changes
+ 
     );
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">LXP Intervention</h1>
-          <p className="text-sm text-muted-foreground">
-            Threshold: {threshold}% | Complete checkpoints to gain XP and recover faster.
-          </p>
-        </div>
-        <select
-          value={selectedClassId}
-          onChange={(e) => setSelectedClassId(e.target.value)}
-          className="rounded-md border px-3 py-2 text-sm min-w-[260px]"
-=======
     <StudentPageShell
       badge="LXP Adventure"
       title="LXP"
@@ -179,7 +152,7 @@ export default function StudentLxpPage() {
           value={selectedClassId}
           onChange={(e) => setSelectedClassId(e.target.value)}
           className="student-input min-w-[260px] rounded-2xl border px-3 py-2 text-sm"
->>>>>>> Stashed changes
+ 
         >
           {eligibleClasses.map((entry) => (
             <option key={entry.classId} value={entry.classId}>
@@ -187,103 +160,6 @@ export default function StudentLxpPage() {
             </option>
           ))}
         </select>
-<<<<<<< Updated upstream
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Class</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-semibold">{selectedClass ? classLabel(selectedClass) : '--'}</p>
-            <p className="text-xs text-muted-foreground">
-              {selectedClass?.class.section?.name ?? 'Section unavailable'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">XP</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{playlist?.progress.xpTotal ?? 0}</p>
-            <p className="text-xs text-muted-foreground">Current intervention XP</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Streak</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{playlist?.progress.streakDays ?? 0} day(s)</p>
-            <p className="text-xs text-muted-foreground">Daily intervention streak</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {loadingPlaylist ? (
-        <Skeleton className="h-96 rounded-lg" />
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Remedial Checkpoints</span>
-              <Badge variant="secondary">
-                {playlist?.progress.completionPercent ?? 0}% complete
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Progress value={playlist?.progress.completionPercent ?? 0} />
-            {(playlist?.checkpoints ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No checkpoints assigned yet. Ask your teacher to assign intervention tasks.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {playlist?.checkpoints.map((checkpoint) => (
-                  <div
-                    key={checkpoint.id}
-                    className="rounded-lg border bg-background p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium">{checkpoint.label}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {checkpoint.type === 'lesson_review'
-                            ? 'Review lesson checkpoint'
-                            : 'Retry assessment checkpoint'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={checkpoint.isCompleted ? 'default' : 'outline'}>
-                          {checkpoint.isCompleted ? 'Completed' : 'Pending'}
-                        </Badge>
-                        <Badge variant="secondary">+{checkpoint.xpAwarded} XP</Badge>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {checkpoint.lesson && (
-                        <Link href={`/dashboard/student/lessons/${checkpoint.lesson.id}`}>
-                          <Button variant="outline" size="sm">
-                            Open Lesson
-                          </Button>
-                        </Link>
-                      )}
-                      {checkpoint.assessment && (
-                        <Link href={`/dashboard/student/assessments/${checkpoint.assessment.id}`}>
-                          <Button variant="outline" size="sm">
-                            Open Assessment
-                          </Button>
-                        </Link>
-                      )}
-                      <Button
-                        size="sm"
-                        onClick={() => handleComplete(checkpoint.id)}
-                        disabled={checkpoint.isCompleted || completingId === checkpoint.id}
-=======
       }
       stats={
         <>
@@ -320,7 +196,7 @@ export default function StudentLxpPage() {
     >
       <StudentSectionCard
         title="Class Snapshot"
-        description="Here’s the class you’re currently working on and the progress you’ve built so far."
+        description="Hereâ€™s the class youâ€™re currently working on and the progress youâ€™ve built so far."
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-[1.5rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-5">
@@ -381,7 +257,7 @@ export default function StudentLxpPage() {
                             ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
                             : 'student-badge'
                         }
->>>>>>> Stashed changes
+ 
                       >
                         {checkpoint.isCompleted ? 'Completed' : 'Pending'}
                       </Badge>
@@ -428,15 +304,6 @@ export default function StudentLxpPage() {
         )}
       </StudentSectionCard>
 
-<<<<<<< Updated upstream
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Quick LXP Feedback</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <textarea
-            className="min-h-24 w-full rounded-md border p-2 text-sm"
-=======
       <StudentSectionCard
         title="Quick LXP Feedback"
         description="Tell us what felt helpful so this support space can keep getting better for students."
@@ -444,16 +311,13 @@ export default function StudentLxpPage() {
         <div className="space-y-3">
           <textarea
             className="student-input min-h-28 w-full rounded-2xl border p-3 text-sm"
->>>>>>> Stashed changes
+ 
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             placeholder="Share what helped you most (optional)"
           />
-<<<<<<< Updated upstream
-          <Button size="sm" onClick={submitEvaluation} disabled={submittingEval}>
-=======
           <Button size="sm" onClick={submitEvaluation} disabled={submittingEval} className="student-button-solid rounded-xl">
->>>>>>> Stashed changes
+ 
             {submittingEval ? 'Submitting...' : 'Submit Feedback'}
           </Button>
         </div>
@@ -461,3 +325,4 @@ export default function StudentLxpPage() {
     </StudentPageShell>
   );
 }
+

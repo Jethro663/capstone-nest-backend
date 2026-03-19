@@ -32,8 +32,6 @@
   --radius-xl: 0.75rem;
 }
 
-<<<<<<< Updated upstream
-=======
 :root {
   --color-background: #ffffff;
   --color-foreground: #111827;
@@ -365,7 +363,6 @@ html[data-theme='stone-mountain'] {
   --student-shadow-hover: 0 28px 66px -28px rgba(139, 115, 85, 0.36);
 }
 
->>>>>>> Stashed changes
 body {
   color: var(--color-foreground);
   background: var(--color-background);
@@ -1601,8 +1598,6 @@ body {
   .student-card-hover:hover {
     transform: none;
   }
-<<<<<<< Updated upstream
-=======
 
   .student-panel-hover,
   .student-theme-trigger,
@@ -1640,5 +1635,4 @@ body {
   .teacher-tab:hover {
     transform: none;
   }
->>>>>>> Stashed changes
 }

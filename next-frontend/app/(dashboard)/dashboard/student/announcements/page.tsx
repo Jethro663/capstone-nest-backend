@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
@@ -20,24 +20,13 @@ interface AnnouncementWithClass extends Announcement {
 
 function LocalEmptyState() {
   return (
-<<<<<<< Updated upstream
-    <motion.div 
-      variants={fItem} 
-      className="flex flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-slate-200 bg-slate-50/30 p-16 text-center"
-    >
-      <div className="rounded-3xl bg-white p-6 shadow-sm mb-6 text-slate-300">
-        <Inbox className="h-10 w-10" />
-      </div>
-      <h3 className="text-xl font-black text-slate-900">All caught up!</h3>
-      <p className="mt-2 text-sm font-medium text-slate-500 max-w-sm leading-relaxed">
-=======
     <div className="flex flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-[var(--student-outline)] bg-[var(--student-surface-soft)]/30 p-16 text-center">
       <div className="mb-6 rounded-3xl bg-[var(--student-elevated)] p-6 text-[var(--student-text-muted)] shadow-sm">
         <Inbox className="h-10 w-10" />
       </div>
       <h3 className="text-xl font-black text-[var(--student-text-strong)]">All caught up!</h3>
       <p className="mt-2 max-w-sm text-sm font-medium leading-relaxed text-[var(--student-text-muted)]">
->>>>>>> Stashed changes
+ 
         No announcements have been posted for your classes yet. Check back later for updates.
       </p>
     </div>
@@ -145,92 +134,6 @@ export default function StudentAnnouncementsPage() {
         </>
       }
     >
-<<<<<<< Updated upstream
-      {/* --- HERO SECTION --- */}
-      <motion.section 
-        variants={fItem} 
-        className="relative overflow-hidden rounded-[1.5rem] border-[1.5px] border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <div className="absolute top-0 right-0 w-32 h-full bg-red-500/5 -skew-x-12 translate-x-8" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-red-500/10 px-3 py-1 border border-red-500/20 text-[10px] font-black uppercase tracking-widest text-red-500">
-              <Sparkles className="h-3 w-3" /> Virtual Bulletin
-            </div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">Announcements</h1>
-            <p className="text-slate-500 text-sm font-medium">
-              Important updates from all <span className="text-red-500 font-bold">{announcements.length}</span> class feeds.
-            </p>
-          </div>
-
-          
-        </div>
-      </motion.section>
-
-      {/* --- CONTENT LIST --- */}
-      {announcements.length === 0 ? (
-        <LocalEmptyState />
-      ) : (
-        <motion.div variants={fContainer} className="space-y-4">
-          {announcements.map((ann) => (
-            <motion.div 
-              key={`${ann.classId}-${ann.id}`} 
-              variants={fItem}
-              whileHover={{ y: -2 }}
-              className={`relative bg-white border-[1.5px] rounded-[1.5rem] p-6 transition-all duration-200 shadow-sm group ${
-                ann.isPinned 
-                  ? 'border-red-200 bg-red-50/10' 
-                  : 'border-slate-200 hover:border-red-500'
-              }`}
-            >
-              {ann.isPinned && (
-                <div className="absolute top-4 right-6 flex items-center gap-1.5 px-3 py-1 bg-red-500 rounded-full">
-                   <Pin className="h-3 w-3 text-white fill-current" />
-                   <span className="text-[9px] font-black text-white uppercase tracking-tighter">Pinned</span>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {/* Meta Info */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="outline" className="border-red-500 text-red-500 font-black text-[10px] px-2 py-0">
-                    {ann.subjectCode}
-                  </Badge>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-tight">
-                    {ann.className}
-                  </span>
-                  <div className="h-1 w-1 rounded-full bg-slate-200" />
-                  <span className="flex items-center gap-1 text-xs font-medium text-slate-400">
-                    <Calendar className="h-3 w-3" />
-                    {ann.createdAt ? new Date(ann.createdAt).toLocaleDateString('en-US', {
-                      month: 'short', day: 'numeric', year: 'numeric'
-                    }) : ''}
-                  </span>
-                </div>
-
-                {/* Title & Content */}
-                <div className="space-y-2">
-                  <h3 className="text-xl font-black text-slate-900 group-hover:text-red-500 transition-colors leading-tight">
-                    {ann.title}
-                  </h3>
-                  <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">
-                    {ann.content}
-                  </p>
-                </div>
-
-                {/* Footer / Author */}
-                {ann.author && (
-                  <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                        <User2 className="h-3.5 w-3.5" />
-                      </div>
-                      <p className="text-xs font-black text-slate-900 uppercase tracking-tighter">
-                        Prof. {ann.author.firstName} {ann.author.lastName}
-                      </p>
-                    </div>
-=======
       <StudentSectionCard
         title="Bulletin Board"
         description="Pinned messages float to the top so the most important reminders are always easiest to find."
@@ -259,7 +162,7 @@ export default function StudentAnnouncementsPage() {
                         Pinned
                       </div>
                     ) : null}
->>>>>>> Stashed changes
+ 
                   </div>
 
                   <div className="space-y-2">
@@ -302,3 +205,4 @@ export default function StudentAnnouncementsPage() {
     </StudentPageShell>
   );
 }
+

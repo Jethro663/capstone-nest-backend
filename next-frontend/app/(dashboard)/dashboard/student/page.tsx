@@ -1,11 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-<<<<<<< Updated upstream
-import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { GraduationCap, BookOpen, ClipboardCheck, Sparkles, ArrowRight, Clock, AlertCircle } from 'lucide-react';
-=======
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -18,7 +14,6 @@ import {
   Sparkles,
   Target,
 } from 'lucide-react';
->>>>>>> Stashed changes
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
@@ -35,28 +30,6 @@ import { StudentStatusChip } from '@/components/student/student-primitives';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
-<<<<<<< Updated upstream
-import type { Assessment } from '@/types/assessment';
-import { getDescription, getTeacherName } from '@/utils/helpers';
-
-// --- Framer Motion Animation Configs ---
-const fContainer: Variants = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1, 
-    transition: { staggerChildren: 0.1, delayChildren: 0.1 } 
-  }
-};
-
-const fItem: Variants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { 
-    y: 0, 
-    opacity: 1, 
-    transition: { type: 'spring', stiffness: 300, damping: 24 } 
-  }
-};
-=======
 import { getTeacherName } from '@/utils/helpers';
 
 function formatShortDate(value?: string) {
@@ -75,7 +48,6 @@ function getAssessmentHref(assessment: Assessment) {
     ? `/dashboard/student/assessments/${assessment.id}/take`
     : `/dashboard/student/assessments/${assessment.id}`;
 }
->>>>>>> Stashed changes
 
 export default function StudentDashboardPage() {
   const { user } = useAuth();
@@ -112,11 +84,6 @@ export default function StudentDashboardPage() {
         ),
       ]);
 
-<<<<<<< Updated upstream
-      setLessons(lessonResults.flatMap((r) => r.data || []));
-      setAssessments(assessmentResults.flatMap((r) => r.data || []));
-    } catch { /* silent fail */ } finally { setLoading(false); }
-=======
       setLessons(lessonResults.flatMap((result) => result.data || []));
       setAssessments(assessmentResults.flatMap((result) => result.data || []));
     } catch {
@@ -124,26 +91,18 @@ export default function StudentDashboardPage() {
     } finally {
       setLoading(false);
     }
->>>>>>> Stashed changes
   }, [user?.id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) {
     return (
-<<<<<<< Updated upstream
-      <div className="max-w-7xl mx-auto space-y-6 p-8">
-        <Skeleton className="h-32 w-full rounded-2xl" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-=======
       <div className="mx-auto max-w-7xl space-y-8 p-6 md:p-10">
         <Skeleton className="h-52 w-full rounded-[1.75rem]" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((index) => (
             <Skeleton key={index} className="h-32 rounded-[1.5rem]" />
           ))}
->>>>>>> Stashed changes
         </div>
         <Skeleton className="h-52 w-full rounded-[1.7rem]" />
         <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
@@ -158,13 +117,6 @@ export default function StudentDashboardPage() {
   }
 
   const profileIncomplete = !user?.firstName || !user?.lastName;
-<<<<<<< Updated upstream
-  const publishedAssessments = assessments.filter((a) => a.isPublished);
-  
-  // Progress Logic
-  const completionRate = lessons.length > 0 
-    ? Math.min(100, Math.round((classes.length / Math.max(1, lessons.length)) * 100)) 
-=======
   const publishedAssessments = assessments.filter((assessment) => assessment.isPublished);
   const recentLessons = lessons.slice(0, 4);
   const pendingAssessments = publishedAssessments.slice(0, 4);
@@ -172,107 +124,17 @@ export default function StudentDashboardPage() {
   const profileCompletion = profileIncomplete ? 70 : 100;
   const learningProgress = lessons.length > 0
     ? Math.min(100, Math.round((classes.length / Math.max(1, lessons.length)) * 100))
->>>>>>> Stashed changes
     : 0;
   const completedFocusCount = Math.max(0, lessons.length - pendingAssessments.length);
   const continueHref = classes[0] ? `/dashboard/student/classes/${classes[0].id}` : '/dashboard/student/courses';
 
   return (
-<<<<<<< Updated upstream
-    <motion.div 
-      className="max-w-7xl mx-auto space-y-8 p-6 md:p-10"
-      initial="hidden"
-      animate="visible"
-      variants={fContainer}
-    >
-      {/* --- COMPACT HERO SECTION --- */}
-      <motion.section 
-        variants={fItem} 
-        className="relative overflow-hidden rounded-[1.5rem] border-[1.5px] border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <div className="absolute top-0 right-0 w-32 h-full bg-red-500/5 -skew-x-12 translate-x-8" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-red-500/10 px-3 py-1 border border-red-500/20 text-[10px] font-black uppercase tracking-widest text-red-500">
-              <Sparkles className="h-3 w-3" /> Learning Hub
-            </div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">
-              Hello, <span className="text-red-500">{user?.firstName || 'Student'}</span>.
-            </h1>
-            <p className="text-slate-500 text-sm font-medium">
-              You have <span className="text-slate-900 font-bold border-b-2 border-red-500">{publishedAssessments.length} pending tasks</span> to finalize.
-            </p>
-          </div>
-
-          {/* Compact Progress Box */}
-          <div className="flex items-center gap-4 rounded-2xl bg-slate-50 px-5 py-3 border border-slate-200 shadow-sm min-w-[220px]">
-            <div className="text-center flex-1">
-              <p className="text-[9px] uppercase font-black tracking-tighter text-slate-400">Profile</p>
-              <p className="text-xl font-black text-slate-900">{profileIncomplete ? '70%' : '100%'}</p>
-            </div>
-            <div className="h-8 w-[1px] bg-slate-200" />
-            <div className="text-center flex-1">
-              <p className="text-[9px] uppercase font-black tracking-tighter text-slate-400">Progress</p>
-              <p className="text-xl font-black text-red-500">{completionRate}%</p>
-            </div>
-          </div>
-        </div>
-      </motion.section>
-
-      {/* --- STATS GRID --- */}
-      <motion.div variants={fContainer} className="grid gap-6 md:grid-cols-3">
-        {[
-          { label: "My Classes", val: classes.length, icon: <GraduationCap />, color: "bg-slate-900" },
-          { label: "Lessons", val: lessons.length, icon: <BookOpen />, color: "bg-red-500" },
-          { label: "Assessments", val: publishedAssessments.length, icon: <ClipboardCheck />, color: "bg-slate-900" }
-        ].map((stat, i) => (
-          <motion.div key={i} variants={fItem} whileHover={{ y: -5 }} whileTap={{ scale: 0.98 }}>
-            <StudentStatCard 
-              label={stat.label} 
-              value={stat.val} 
-              accent={stat.color} 
-              icon={stat.icon} 
-            />
-          </motion.div>
-        ))}
-      </motion.div>
-
-      {/* --- CLASSES SECTION --- */}
-      <motion.section variants={fItem} className="space-y-6">
-        <div className="flex items-center justify-between border-b-[1.5px] border-slate-200 pb-3">
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Your Enrolled Classes</h2>
-          <Button variant="ghost" className="text-red-500 font-bold hover:bg-red-50 text-xs">See All</Button>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {classes.map((cls) => (
-            <motion.div key={cls.id} variants={fItem} whileHover={{ scale: 1.02 }}>
-              <div className="bg-white border-[1.5px] border-slate-200 rounded-[1.5rem] p-6 transition-all duration-200 hover:border-red-500 group shadow-sm">
-                <div className="space-y-4">
-                  <Badge variant="outline" className="border-red-500 text-red-500 font-black text-[10px]">COURSE</Badge>
-                  <h3 className="text-lg font-black text-slate-900 leading-tight">
-                    {cls.subjectName || cls.className || cls.name}
-                  </h3>
-                  <p className="text-slate-500 font-bold text-xs">
-                    Teacher: {getTeacherName(cls.teacher)}
-                  </p>
-                  
-                  {/* Visual Line (Replaces Separator) */}
-                  <div className="h-[1px] w-full bg-slate-100 group-hover:bg-red-100 transition-colors" />
-
-                  <Link href={`/dashboard/student/classes/${cls.id}`} className="block">
-                    <Button variant="outline" className="w-full border-slate-200 font-bold group-hover:border-red-500 group-hover:text-red-500 transition-all flex justify-between h-9 text-xs">
-                      Enter Class <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </Link>
-=======
     <StudentPageShell
       badge="Student Dashboard"
       title={`Welcome back, ${user?.firstName || 'Student'}!`}
       description={
         classes.length > 0
-          ? `You’re enrolled in ${classes.length} class${classes.length === 1 ? '' : 'es'} today. Let’s keep your learning streak moving with a quick, calm view of what’s next.`
+          ? `Youâ€™re enrolled in ${classes.length} class${classes.length === 1 ? '' : 'es'} today. Letâ€™s keep your learning streak moving with a quick, calm view of whatâ€™s next.`
           : 'Your learning space is ready. Once your classes appear, this dashboard will guide you to what to read, finish, and celebrate next.'
       }
       actions={(
@@ -324,7 +186,7 @@ export default function StudentDashboardPage() {
       )}
     >
       <StudentSectionCard
-        title="Today’s Learning Rhythm"
+        title="Todayâ€™s Learning Rhythm"
         description="A softer progress snapshot so you can quickly see where you are and where to head next."
       >
         <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -361,7 +223,6 @@ export default function StudentDashboardPage() {
                 <div className="student-dashboard-hero-chip">
                   <CalendarClock className="h-4 w-4 text-amber-600" />
                   <span>{pendingAssessments.length} task{pendingAssessments.length === 1 ? '' : 's'} to check soon</span>
->>>>>>> Stashed changes
                 </div>
               </div>
             </div>
@@ -405,7 +266,7 @@ export default function StudentDashboardPage() {
               </div>
               <p className="mt-3 text-sm text-[var(--student-text-muted)]">
                 {recentLessons.length > 0
-                  ? `Start with ${recentLessons[0].title} for an easy return to today’s learning flow.`
+                  ? `Start with ${recentLessons[0].title} for an easy return to todayâ€™s learning flow.`
                   : 'Once a lesson is shared with you, this card becomes your quickest way back in.'}
               </p>
             </div>
@@ -413,57 +274,6 @@ export default function StudentDashboardPage() {
         </div>
       </StudentSectionCard>
 
-<<<<<<< Updated upstream
-      {/* --- TASKS GRID --- */}
-      <div className="grid gap-8 lg:grid-cols-2">
-         {/* Recent Lessons */}
-         <motion.section variants={fItem} className="space-y-4">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <BookOpen className="text-red-500 h-4 w-4" /> Recent Lessons
-            </h2>
-            <div className="space-y-3">
-              {lessons.slice(0, 3).map((l) => (
-                <motion.div key={l.id} whileHover={{ x: 5 }}>
-                  <div className="bg-white border-[1.5px] border-slate-200 rounded-xl p-4 flex items-center justify-between hover:border-red-500 transition-all group shadow-sm">
-                    <p className="font-bold text-slate-800 text-sm truncate">{l.title}</p>
-                    <Link href={`/dashboard/student/lessons/${l.id}`}>
-                      <ArrowRight className="text-slate-300 group-hover:text-red-500 transition-colors cursor-pointer h-4 w-4" />
-                    </Link>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-         </motion.section>
-
-         {/* Pending Tasks */}
-         <motion.section variants={fItem} className="space-y-4">
-            <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-              <ClipboardCheck className="text-red-500 h-4 w-4" /> Pending Tasks
-            </h2>
-            <div className="space-y-3">
-              {publishedAssessments.slice(0, 3).map((a) => (
-                <motion.div key={a.id} whileHover={{ scale: 1.01 }}>
-                  <div className="bg-white border-[1.5px] border-slate-200 rounded-2xl p-5 hover:border-red-500 transition-all shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
-                      <StudentStatusChip tone={a.type === 'exam' ? 'danger' : 'warning'}>
-                        {a.type.toUpperCase()}
-                      </StudentStatusChip>
-                      <span className="text-[9px] font-black text-slate-400 flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : 'NO DATE'}
-                      </span>
-                    </div>
-                    <p className="font-black text-slate-900 text-base mb-4 truncate">{a.title}</p>
-                    <Link href={`/dashboard/student/assessments/${a.id}`}>
-                      <Button className="w-full bg-slate-900 hover:bg-red-500 text-white font-black rounded-xl transition-all h-9 text-xs">
-                        START
-                      </Button>
-                    </Link>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-         </motion.section>
-=======
       <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
         <StudentSectionCard
           title="Keep Exploring Your Classes"
@@ -558,7 +368,7 @@ export default function StudentDashboardPage() {
               <div className="space-y-1">
                 <p className="text-base font-black text-[var(--student-text-strong)]">Your dashboard is ready for your first class.</p>
                 <p className="text-sm text-[var(--student-text-muted)]">
-                  Once you’re enrolled, your active classrooms will show up here with quick ways to continue learning.
+                  Once youâ€™re enrolled, your active classrooms will show up here with quick ways to continue learning.
                 </p>
               </div>
               <Link href="/dashboard/student/courses">
@@ -602,7 +412,7 @@ export default function StudentDashboardPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-black text-[var(--student-text-strong)]">No recent lessons yet.</p>
                   <p className="text-sm text-[var(--student-text-muted)]">
-                    As soon as your teacher publishes lessons, they’ll appear here for quick return visits.
+                    As soon as your teacher publishes lessons, theyâ€™ll appear here for quick return visits.
                   </p>
                 </div>
               </div>
@@ -634,7 +444,7 @@ export default function StudentDashboardPage() {
                     <p className="mt-3 text-sm text-[var(--student-text-muted)]">
                       {assessment.description?.trim()
                         ? assessment.description
-                        : 'You have a task waiting here. Open it when you’re ready and work through it one step at a time.'}
+                        : 'You have a task waiting here. Open it when youâ€™re ready and work through it one step at a time.'}
                     </p>
                     <Link href={getAssessmentHref(assessment)}>
                       <Button className="student-button-solid mt-4 h-10 w-full rounded-2xl font-black">
@@ -648,7 +458,7 @@ export default function StudentDashboardPage() {
               <div className="student-dashboard-empty student-dashboard-empty--compact">
                 <ClipboardCheck className="h-7 w-7 text-emerald-600" />
                 <div className="space-y-1">
-                  <p className="text-sm font-black text-[var(--student-text-strong)]">You’re all caught up right now.</p>
+                  <p className="text-sm font-black text-[var(--student-text-strong)]">Youâ€™re all caught up right now.</p>
                   <p className="text-sm text-[var(--student-text-muted)]">
                     When a new assessment is published, this area will show the due date and fastest way to begin.
                   </p>
@@ -657,8 +467,8 @@ export default function StudentDashboardPage() {
             )}
           </StudentSectionCard>
         </div>
->>>>>>> Stashed changes
       </div>
     </StudentPageShell>
   );
 }
+

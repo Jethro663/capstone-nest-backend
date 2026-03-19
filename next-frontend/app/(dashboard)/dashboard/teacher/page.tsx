@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -13,13 +13,11 @@ import {
   TimerReset,
   Zap,
 } from 'lucide-react';
+import { analyticsService } from '@/services/analytics-service';
 import { dashboardService } from '@/services/dashboard-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
-<<<<<<< Updated upstream
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-=======
 import { useAuth } from '@/providers/AuthProvider';
->>>>>>> Stashed changes
+ 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -42,6 +40,7 @@ function formatRefreshInterval(value: number) {
 }
 
 export default function TeacherDashboardPage() {
+  const { user } = useAuth();
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -49,6 +48,10 @@ export default function TeacherDashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [interval, setInterval] = useState(30000);
+  const [workloadAction, setWorkloadAction] = useState<string | null>(null);
+  const [improvementAction, setImprovementAction] = useState<string | null>(null);
+  const [pendingClassRecords, setPendingClassRecords] = useState(0);
+  const [activeInterventions, setActiveInterventions] = useState(0);
 
   const fetchData = useCallback(async () => {
     try {
@@ -57,11 +60,6 @@ export default function TeacherDashboardPage() {
         dashboardService.getTeacherClasses(),
         dashboardService.getTeacherAssessments(),
       ]);
-<<<<<<< Updated upstream
-      setLessons(lessonsRes.data || []);
-      setClasses(classesRes.data || []);
-      setAssessments(assessmentsRes.data || []);
-=======
       const nextLessons = lessonsRes.data || [];
       const nextClasses = classesRes.data || [];
       const nextAssessments = assessmentsRes.data || [];
@@ -84,7 +82,7 @@ export default function TeacherDashboardPage() {
         setImprovementAction(null);
       }
 
->>>>>>> Stashed changes
+ 
       setLastUpdated(new Date());
     } catch {
       // Keep the dashboard usable even when one insight feed fails.
@@ -215,40 +213,6 @@ export default function TeacherDashboardPage() {
                 </span>
               </div>
 
-<<<<<<< Updated upstream
-      {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Link href="/dashboard/teacher/lessons">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">My Lessons</p>
-              <p className="text-3xl font-bold text-blue-600">{lessons.length}</p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">My Classes</p>
-            <p className="text-3xl font-bold text-green-600">{classes.length}</p>
-          </CardContent>
-        </Card>
-        <Link href="/dashboard/teacher/assessments">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Assessments</p>
-              <p className="text-3xl font-bold text-purple-600">{assessments.length}</p>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
-
-      {/* Recent Lessons */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recent Lessons</CardTitle>
-        </CardHeader>
-        <CardContent>
-=======
               <div className="space-y-2">
                 <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--teacher-text-muted)]">
                   Current Focus
@@ -380,7 +344,7 @@ export default function TeacherDashboardPage() {
             </Link>
           )}
         >
->>>>>>> Stashed changes
+ 
           {lessons.length === 0 ? (
             <TeacherEmptyState
               title="No lessons created yet"
@@ -396,7 +360,7 @@ export default function TeacherDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-[var(--teacher-text-strong)]">{lesson.title}</p>
                     <p className="text-xs text-[var(--teacher-text-muted)]">
-                      Class {lesson.classId.slice(0, 8)} • {formatDate(lesson.createdAt || '')}
+                      Class {lesson.classId.slice(0, 8)} â€¢ {formatDate(lesson.createdAt || '')}
                     </p>
                   </div>
                   <Link href={`/dashboard/teacher/lessons/${lesson.id}/edit`}>
@@ -436,7 +400,7 @@ export default function TeacherDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-[var(--teacher-text-strong)]">{assessment.title}</p>
                     <p className="text-xs uppercase text-[var(--teacher-text-muted)]">
-                      {assessment.type.replace('_', ' ')} • {assessment.dueDate ? formatDate(assessment.dueDate) : 'No due date'}
+                      {assessment.type.replace('_', ' ')} â€¢ {assessment.dueDate ? formatDate(assessment.dueDate) : 'No due date'}
                     </p>
                   </div>
                   <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>
@@ -453,3 +417,4 @@ export default function TeacherDashboardPage() {
     </TeacherPageShell>
   );
 }
+

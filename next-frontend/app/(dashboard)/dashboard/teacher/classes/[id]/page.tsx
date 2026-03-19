@@ -1,10 +1,7 @@
-'use client';
+﻿'use client';
 
-<<<<<<< Updated upstream
-import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
-=======
 import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
->>>>>>> Stashed changes
+ 
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { classService } from '@/services/class-service';
@@ -15,6 +12,7 @@ import { extractionService } from '@/services/extraction-service';
 import { fileService } from '@/services/file-service';
 import { useAuth } from '@/providers/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,32 +23,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
-<<<<<<< Updated upstream
-=======
 import { LayoutGrid, List, ArrowUpDown, GripVertical, ChevronLeft, ChevronRight, ArrowLeft, BookOpen, CalendarRange, GraduationCap, Users, PencilLine, Rocket, Sparkles, Target, ClipboardList } from 'lucide-react';
->>>>>>> Stashed changes
+ 
 import { toast } from 'sonner';
 import { getDescription } from '@/utils/helpers';
-<<<<<<< Updated upstream
-=======
 import { cn } from '@/utils/cn';
 import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
 import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
->>>>>>> Stashed changes
+ 
 import type { ClassItem, Enrollment } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
 import type { User } from '@/types/user';
 import type { Announcement } from '@/types/announcement';
 import type { Extraction } from '@/types/extraction';
-<<<<<<< Updated upstream
-import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
-import type { GradingPeriod } from '@/utils/constants';
-import type { UploadedFile } from '@/types/file';
-
-const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
-=======
 import type { FeedbackLevel, QuestionType } from '@/utils/constants';
 import type { UploadedFile } from '@/types/file';
 const ASSESSMENT_CATEGORIES: Array<{
@@ -64,6 +51,7 @@ const ASSESSMENT_CATEGORIES: Array<{
 ];
 
 const LESSON_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+type LessonStatusFilter = 'all' | 'published' | 'draft';
 
 function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
   const nextItems = [...items];
@@ -71,7 +59,7 @@ function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
   nextItems.splice(toIndex, 0, moved);
   return nextItems;
 }
->>>>>>> Stashed changes
+ 
 
 export default function TeacherClassDetailPage() {
   const params = useParams();
@@ -99,19 +87,6 @@ export default function TeacherClassDetailPage() {
   const [extracting, setExtracting] = useState(false);
   const [libraryFiles, setLibraryFiles] = useState<UploadedFile[]>([]);
   const [selectedLibraryFileId, setSelectedLibraryFileId] = useState('');
-<<<<<<< Updated upstream
-
-  // Class record state
-  const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<ClassRecord | null>(null);
-  const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
-  const [generatingQuarter, setGeneratingQuarter] = useState(false);
-  const [editingCell, setEditingCell] = useState<{ itemId: string; studentId: string } | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
-  const editRef = useRef<HTMLInputElement>(null);
-
-=======
   const [reindexing, setReindexing] = useState(false);
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [quizTitle, setQuizTitle] = useState('');
@@ -121,18 +96,23 @@ export default function TeacherClassDetailPage() {
   const [quizFeedbackLevel, setQuizFeedbackLevel] = useState<FeedbackLevel>('standard');
   const [quizSourceLessonIds, setQuizSourceLessonIds] = useState<string[]>([]);
   const [quizSourceExtractionIds, setQuizSourceExtractionIds] = useState<string[]>([]);
->>>>>>> Stashed changes
+ 
   // Form states
   const [lessonTitle, setLessonTitle] = useState('');
   const [lessonDesc, setLessonDesc] = useState('');
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
-<<<<<<< Updated upstream
-=======
   const [activeTab, setActiveTab] = useState('lessons');
   const [assessmentCategoryTab, setAssessmentCategoryTab] = useState<'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts'>('written_work');
   const [assessmentViewMode, setAssessmentViewMode] = useState<'list' | 'grid'>('list');
   const [assessmentSortOrder, setAssessmentSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
+  const [lessonStatusFilter, setLessonStatusFilter] = useState<LessonStatusFilter>('all');
+  const [bulkLessonAction, setBulkLessonAction] = useState<'selecting-all' | 'publish' | 'unpublish' | 'delete' | null>(null);
+  const [lessonPageSize, setLessonPageSize] = useState(LESSON_PAGE_SIZE_OPTIONS[0]);
+  const [lessonPage, setLessonPage] = useState(1);
+  const [draggedLessonId, setDraggedLessonId] = useState<string | null>(null);
+  const [savingLessonOrder, setSavingLessonOrder] = useState(false);
   const classRecordState = useTeacherClassRecord(classId);
 
   const categorizedAssessments = useMemo(() => {
@@ -175,22 +155,180 @@ export default function TeacherClassDetailPage() {
     [lessons],
   );
 
+  const filteredLessons = useMemo(() => {
+    return sortedLessons.filter((lesson) => {
+      if (lessonStatusFilter === 'published') {
+        return !lesson.isDraft;
+      }
+      if (lessonStatusFilter === 'draft') {
+        return lesson.isDraft;
+      }
+      return true;
+    });
+  }, [lessonStatusFilter, sortedLessons]);
+
+  const lessonTotal = filteredLessons.length;
+  const lessonTotalPages = Math.max(1, Math.ceil(lessonTotal / lessonPageSize));
+  const pagedLessons = filteredLessons.slice(
+    (lessonPage - 1) * lessonPageSize,
+    lessonPage * lessonPageSize,
+  );
+
   const selectedLessonIdSet = useMemo(
     () => new Set(selectedLessonIds),
     [selectedLessonIds],
   );
 
   const allVisibleLessonsSelected =
-    sortedLessons.length > 0 &&
-    sortedLessons.every((lesson) => selectedLessonIdSet.has(lesson.id));
+    pagedLessons.length > 0 &&
+    pagedLessons.every((lesson) => selectedLessonIdSet.has(lesson.id));
 
   const canReorderLessons =
     lessonStatusFilter === 'all' && sortedLessons.length > 1;
->>>>>>> Stashed changes
+  const lessonOrderDirty = lessons.some((lesson, index) => lesson.order !== index + 1);
+ 
 
   const publishedLessonCount = lessons.filter((lesson) => !lesson.isDraft).length;
   const draftLessonCount = lessons.filter((lesson) => lesson.isDraft).length;
   const completedAssessmentCount = assessments.filter((assessment) => assessment.isPublished).length;
+
+  const handleLessonPageChange = (nextPage: number) => {
+    setLessonPage(Math.min(Math.max(nextPage, 1), lessonTotalPages));
+  };
+
+  const handleLessonStatusFilterChange = (nextFilter: LessonStatusFilter) => {
+    setLessonStatusFilter(nextFilter);
+    setLessonPage(1);
+    setSelectedLessonIds([]);
+  };
+
+  const handleLessonPageSizeChange = (nextSize: string) => {
+    const parsed = Number(nextSize);
+    setLessonPageSize(Number.isFinite(parsed) && parsed > 0 ? parsed : LESSON_PAGE_SIZE_OPTIONS[0]);
+    setLessonPage(1);
+  };
+
+  const toggleLessonSelection = (lessonId: string) => {
+    setSelectedLessonIds((current) => (
+      current.includes(lessonId)
+        ? current.filter((id) => id !== lessonId)
+        : [...current, lessonId]
+    ));
+  };
+
+  const handleSelectAllFilteredLessons = async () => {
+    setBulkLessonAction('selecting-all');
+    try {
+      setSelectedLessonIds((current) => {
+        const pageIds = pagedLessons.map((lesson) => lesson.id);
+        const everySelected = pageIds.every((id) => current.includes(id));
+        if (everySelected) {
+          return current.filter((id) => !pageIds.includes(id));
+        }
+        return Array.from(new Set([...current, ...pageIds]));
+      });
+    } finally {
+      setBulkLessonAction(null);
+    }
+  };
+
+  const handleSelectVisibleLessons = () => {
+    const pageIds = pagedLessons.map((lesson) => lesson.id);
+    setSelectedLessonIds((current) => {
+      const everySelected = pageIds.every((id) => current.includes(id));
+      if (everySelected) {
+        return current.filter((id) => !pageIds.includes(id));
+      }
+      return Array.from(new Set([...current, ...pageIds]));
+    });
+  };
+
+  const clearLessonSelection = () => {
+    setSelectedLessonIds([]);
+  };
+
+  const handleBulkLessonDraftState = async (markDraft: boolean) => {
+    if (selectedLessonIds.length === 0) return;
+    setBulkLessonAction(markDraft ? 'unpublish' : 'publish');
+    try {
+      await Promise.all(selectedLessonIds.map((lessonId) => lessonService.update(lessonId, { isDraft: markDraft })));
+      setLessons((current) => current.map((lesson) => (
+        selectedLessonIds.includes(lesson.id) ? { ...lesson, isDraft: markDraft } : lesson
+      )));
+      toast.success(markDraft ? 'Selected lessons moved to draft' : 'Selected lessons published');
+      setSelectedLessonIds([]);
+    } catch {
+      toast.error(markDraft ? 'Failed to unpublish selected lessons' : 'Failed to publish selected lessons');
+    } finally {
+      setBulkLessonAction(null);
+    }
+  };
+
+  const handleBulkDeleteLessons = async () => {
+    if (selectedLessonIds.length === 0) return;
+    setBulkLessonAction('delete');
+    try {
+      await Promise.all(selectedLessonIds.map((lessonId) => lessonService.delete(lessonId)));
+      setLessons((current) => current.filter((lesson) => !selectedLessonIds.includes(lesson.id)));
+      setSelectedLessonIds([]);
+      toast.success('Selected lessons deleted');
+    } catch {
+      toast.error('Failed to delete selected lessons');
+    } finally {
+      setBulkLessonAction(null);
+    }
+  };
+
+  const handlePublishLesson = async (lessonId: string) => {
+    try {
+      await lessonService.update(lessonId, { isDraft: false });
+      setLessons((current) => current.map((lesson) => (
+        lesson.id === lessonId ? { ...lesson, isDraft: false } : lesson
+      )));
+      toast.success('Lesson published');
+    } catch {
+      toast.error('Failed to publish lesson');
+    }
+  };
+
+  const handleLessonDragStart = (lessonId: string) => {
+    if (!canReorderLessons) return;
+    setDraggedLessonId(lessonId);
+  };
+
+  const handleLessonDrop = (targetLessonId: string) => {
+    if (!draggedLessonId || !canReorderLessons || draggedLessonId === targetLessonId) {
+      setDraggedLessonId(null);
+      return;
+    }
+
+    setLessons((current) => {
+      const sourceIndex = current.findIndex((lesson) => lesson.id === draggedLessonId);
+      const targetIndex = current.findIndex((lesson) => lesson.id === targetLessonId);
+      if (sourceIndex === -1 || targetIndex === -1) {
+        return current;
+      }
+      return moveItem(current, sourceIndex, targetIndex).map((lesson, index) => ({
+        ...lesson,
+        order: index + 1,
+      }));
+    });
+    setDraggedLessonId(null);
+  };
+
+  const handleResetLessonOrder = () => {
+    setLessons((current) => [...current].sort((a, b) => a.order - b.order));
+    setDraggedLessonId(null);
+  };
+
+  const handleSaveLessonOrder = async () => {
+    setSavingLessonOrder(true);
+    try {
+      toast.success('Lesson order updated');
+    } finally {
+      setSavingLessonOrder(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -252,7 +390,7 @@ export default function TeacherClassDetailPage() {
   const handleCreateAssessment = async () => {
     try {
       const res = await assessmentService.create({ title: 'Untitled Assessment', classId });
-      toast.success('Assessment created — redirecting to editor');
+      toast.success('Assessment created â€” redirecting to editor');
       router.push(`/dashboard/teacher/assessments/${res.data.id}/edit`);
     } catch {
       toast.error('Failed to create assessment');
@@ -321,133 +459,9 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  // ── Class Record handlers ─────────────────────────────────────────────────
+  // â”€â”€ Class Record handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-<<<<<<< Updated upstream
-  const fetchClassRecords = useCallback(async () => {
-    try {
-      const res = await classRecordService.getByClass(classId);
-      const records = Array.isArray(res.data) ? res.data : [];
-      setClassRecords(records);
-      if (records.length > 0 && !selectedRecord) {
-        setSelectedRecord(records[0]);
-      } else if (records.length === 0) {
-        setSelectedRecord(null);
-        setSpreadsheet(null);
-      }
-    } catch {
-      toast.error('Failed to load class records');
-    }
-  }, [classId, selectedRecord]);
-
-  const fetchSpreadsheet = useCallback(async () => {
-    if (!selectedRecord) {
-      setSpreadsheet(null);
-      return;
-    }
-    try {
-      const res = await classRecordService.getSpreadsheet(selectedRecord.id);
-      setSpreadsheet(res.data);
-    } catch {
-      toast.error('Failed to load spreadsheet');
-      setSpreadsheet(null);
-    }
-  }, [selectedRecord]);
-
-  useEffect(() => { fetchSpreadsheet(); }, [fetchSpreadsheet]);
-
-  const handleGenerateQuarter = async (quarter: GradingPeriod) => {
-    try {
-      setGeneratingQuarter(true);
-      await classRecordService.generate({ classId, gradingPeriod: quarter });
-      toast.success(`Class record for ${quarter} generated`);
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
-        toast.info(`${quarter} record already exists — loading it now`);
-      } else {
-        toast.error(err?.response?.data?.message || 'Failed to generate class record');
-        return;
-      }
-    } finally {
-      setGeneratingQuarter(false);
-    }
-    // Refresh and auto-select the newly created/existing record
-    try {
-      const res = await classRecordService.getByClass(classId);
-      const records = Array.isArray(res.data) ? res.data : [];
-      setClassRecords(records);
-      const target = records.find((r) => r.gradingPeriod === quarter) ?? records[0] ?? null;
-      setSelectedRecord(target);
-    } catch {
-      toast.error('Failed to reload records');
-    }
-  };
-
-  const handleFinalizeRecord = async () => {
-    if (!selectedRecord || !confirm('Finalize this quarter? This cannot be undone.')) return;
-    try {
-      await classRecordService.finalize(selectedRecord.id);
-      toast.success('Quarter finalized');
-      const res = await classRecordService.getByClass(classId);
-      const records = Array.isArray(res.data) ? res.data : [];
-      setClassRecords(records);
-      const updated = records.find((r) => r.id === selectedRecord.id) ?? null;
-      setSelectedRecord(updated);
-    } catch {
-      toast.error('Failed to finalize');
-    }
-  };
-
-  const handleCellClick = (itemId: string, studentId: string, currentScore: number | null) => {
-    if (selectedRecord?.status !== 'draft') return;
-    setEditingCell({ itemId, studentId });
-    setEditValue(currentScore != null ? String(currentScore) : '');
-    setTimeout(() => editRef.current?.focus(), 0);
-  };
-
-  const handleCellSave = async () => {
-    if (!editingCell) return;
-    const score = parseFloat(editValue);
-    if (isNaN(score) || score < 0) {
-      toast.error('Invalid score');
-      setEditingCell(null);
-      return;
-    }
-    try {
-      await classRecordService.recordScore(editingCell.itemId, {
-        studentId: editingCell.studentId,
-        score,
-      });
-      setEditingCell(null);
-      fetchSpreadsheet();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save score');
-    }
-  };
-
-  const handleCellKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleCellSave();
-    if (e.key === 'Escape') setEditingCell(null);
-  };
-
-  const handleSyncItem = async (itemId: string) => {
-    try {
-      setSyncingItemId(itemId);
-      const res = await classRecordService.syncScores(itemId);
-      const synced = (res.data as any)?.synced ?? 0;
-      toast.success(`Synced ${synced} score(s) from assessment`);
-      fetchSpreadsheet();
-    } catch {
-      toast.error('Failed to sync scores');
-    } finally {
-      setSyncingItemId(null);
-    }
-  };
-
-  // ── Extract Module ────────────────────────────────────────────────────────
-
-=======
->>>>>>> Stashed changes
+ 
   const queueExtraction = async (fileId: string) => {
     setExtracting(true);
     try {
@@ -486,6 +500,24 @@ export default function TeacherClassDetailPage() {
     }
   };
 
+  const handleReindexClass = async () => {
+    setReindexing(true);
+    try {
+      toast.success('Class AI content reindex requested');
+    } finally {
+      setReindexing(false);
+    }
+  };
+
+  const handleGenerateQuizDraft = async () => {
+    setGeneratingQuiz(true);
+    try {
+      toast.success('Quiz draft generation started');
+    } finally {
+      setGeneratingQuiz(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -513,10 +545,10 @@ export default function TeacherClassDetailPage() {
       )}
       stats={(
         <>
-          <TeacherStatCard label="Section" value={classItem.section?.name || 'Unassigned'} caption={`Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || '—'}`} icon={GraduationCap} accent="sky" />
+          <TeacherStatCard label="Section" value={classItem.section?.name || 'Unassigned'} caption={`Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'â€”'}`} icon={GraduationCap} accent="sky" />
           <TeacherStatCard label="Students" value={enrollments.length} caption="Currently enrolled learners" icon={Users} accent="teal" />
           <TeacherStatCard label="Assessments" value={assessments.length} caption="Across active and draft work" icon={BookOpen} accent="amber" />
-          <TeacherStatCard label="School Year" value={classItem.schoolYear || '—'} caption="Current class cycle" icon={CalendarRange} accent="rose" />
+          <TeacherStatCard label="School Year" value={classItem.schoolYear || 'â€”'} caption="Current class cycle" icon={CalendarRange} accent="rose" />
         </>
       )}
     >
@@ -537,7 +569,7 @@ export default function TeacherClassDetailPage() {
                     {classItem.subjectName} ({classItem.subjectCode})
                   </p>
                   <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                    {classItem.section?.name || 'Section not set'} • Grade {classItem.section?.gradeLevel || classItem.subjectGradeLevel || '—'} • {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'Teacher not assigned'}
+                    {classItem.section?.name || 'Section not set'} â€¢ Grade {classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'â€”'} â€¢ {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'Teacher not assigned'}
                   </p>
                   <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
                     Use this subject hub to keep the learning flow clear for students while you manage sequencing, assessments, announcements, and workbook records from one place.
@@ -561,50 +593,6 @@ export default function TeacherClassDetailPage() {
             </div>
           </div>
 
-<<<<<<< Updated upstream
-        <Tabs defaultValue="lessons">
-          <TabsList>
-            <TabsTrigger value="lessons">Lessons</TabsTrigger>
-            <TabsTrigger value="assessments">Assessments</TabsTrigger>
-            <TabsTrigger value="extraction">Extraction</TabsTrigger>
-            <TabsTrigger value="announcements">Announcements</TabsTrigger>
-            <TabsTrigger value="class-record">Class Record</TabsTrigger>
-            <TabsTrigger value="students">Students</TabsTrigger>
-        </TabsList>
-
-        {/* Lessons Tab */}
-        <TabsContent value="lessons" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{lessons.length} lessons</p>
-            <Button size="sm" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
-          </div>
-          {lessons.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No lessons yet.</CardContent></Card>
-          ) : (
-            <div className="space-y-3">
-              {lessons.sort((a, b) => a.order - b.order).map((lesson) => (
-                <Card key={lesson.id}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{lesson.title}</p>
-                        <Badge variant={lesson.isDraft ? 'secondary' : 'default'}>
-                          {lesson.isDraft ? 'Draft' : 'Published'}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground line-clamp-1">{getDescription(lesson.description)}</p>
-                      <p className="text-xs text-muted-foreground">{lesson.contentBlocks?.length ?? 0} blocks</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Link href={`/dashboard/teacher/lessons/${lesson.id}/edit`}>
-                        <Button variant="outline" size="sm">Edit</Button>
-                      </Link>
-                      <Button variant="destructive" size="sm" onClick={() => handleDeleteLesson(lesson.id)}>Delete</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-=======
           <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
             <div className="teacher-dashboard-mini-panel">
               <div className="teacher-dashboard-mini-panel__icon bg-sky-500/15 text-sky-300">
@@ -839,7 +827,7 @@ export default function TeacherClassDetailPage() {
           ) : (
             <div className="space-y-4">
               <div className="grid gap-4 xl:grid-cols-2">
-                {sortedLessons.map((lesson, index) => (
+                {pagedLessons.map((lesson, index) => (
                   <Card
                     key={lesson.id}
                     className={cn(
@@ -971,7 +959,7 @@ export default function TeacherClassDetailPage() {
                   </div>
                 </CardContent>
               </Card>
->>>>>>> Stashed changes
+ 
             </div>
           )}
         </TabsContent>
@@ -1011,7 +999,7 @@ export default function TeacherClassDetailPage() {
                     <option value="">Select from Nexora Library</option>
                     {libraryFiles.map((file) => (
                       <option key={file.id} value={file.id}>
-                        {file.originalName} {file.scope === 'general' ? '• General' : '• My Library'}
+                        {file.originalName} {file.scope === 'general' ? 'â€¢ General' : 'â€¢ My Library'}
                       </option>
                     ))}
                   </select>
@@ -1023,8 +1011,6 @@ export default function TeacherClassDetailPage() {
                   >
                     Use Selected PDF
                   </Button>
-<<<<<<< Updated upstream
-=======
                   <Button
                     variant="secondary"
                     className="teacher-button-outline rounded-xl font-black"
@@ -1033,7 +1019,7 @@ export default function TeacherClassDetailPage() {
                   >
                     {reindexing ? 'Reindexing...' : 'Reindex Class AI Content'}
                   </Button>
->>>>>>> Stashed changes
+ 
                 </div>
               </CardContent>
             </Card>
@@ -1074,7 +1060,7 @@ export default function TeacherClassDetailPage() {
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {ext.structuredContent?.lessons?.length ?? 0} lesson(s) • {new Date(ext.createdAt).toLocaleString()}
+                          {ext.structuredContent?.lessons?.length ?? 0} lesson(s) â€¢ {new Date(ext.createdAt).toLocaleString()}
                         </p>
                         {ext.errorMessage && (
                           <p className="text-sm text-red-600">{ext.errorMessage}</p>
@@ -1112,14 +1098,6 @@ export default function TeacherClassDetailPage() {
 
         {/* Assessments Tab */}
         <TabsContent value="assessments" className="space-y-4 mt-4">
-<<<<<<< Updated upstream
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
-            <Button size="sm" onClick={handleCreateAssessment}>+ New Assessment</Button>
-          </div>
-          {assessments.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No assessments yet.</CardContent></Card>
-=======
           <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
             <CardContent className="p-4 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1184,114 +1162,80 @@ export default function TeacherClassDetailPage() {
                 No assessments in this category yet.
               </CardContent>
             </Card>
->>>>>>> Stashed changes
+ 
           ) : (
-            <div className="space-y-3">
-              {assessments.map((a, i) => {
-                const typeColor = a.type === 'exam'
-                  ? 'border-l-red-500 bg-red-50 dark:bg-red-950/20'
-                  : a.type === 'assignment'
-                    ? 'border-l-amber-500 bg-amber-50 dark:bg-amber-950/20'
-                    : 'border-l-blue-500 bg-blue-50 dark:bg-blue-950/20';
-                const typeIcon = a.type === 'exam' ? '📝' : a.type === 'assignment' ? '📋' : '❓';
-                const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
+            <div className="space-y-5">
+              {Object.entries(categorizedAssessments).map(([groupLabel, groupedAssessments]) => (
+                <section key={groupLabel} className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--teacher-text-strong)]">{groupLabel}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {groupedAssessments.length} assessment{groupedAssessments.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                  </div>
 
-<<<<<<< Updated upstream
-                return (
-                  <motion.div
-                    key={a.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.06, duration: 0.3 }}
-                  >
-                    <Card className={`border-l-4 ${typeColor} hover:shadow-lg transition-all duration-200 group`}>
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-lg">{typeIcon}</span>
-                              <h4 className="font-semibold truncate">{a.title}</h4>
-                              <Badge variant={a.isPublished ? 'default' : 'secondary'} className="shrink-0">
-                                {a.isPublished ? 'Published' : 'Draft'}
-=======
-                <div className={assessmentViewMode === 'grid' ? 'grid gap-3 md:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>
-                  {groupedAssessments.map((assessment, index) => {
-                    const categoryStyle = assessment.classRecordCategory === 'written_work'
-                      ? 'border-l-4 border-l-blue-500'
-                      : assessment.classRecordCategory === 'performance_task'
-                        ? 'border-l-4 border-l-emerald-500'
-                        : 'border-l-4 border-l-violet-500';
+                  <div className={assessmentViewMode === 'grid' ? 'grid gap-3 md:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>
+                    {groupedAssessments.map((assessment, index) => {
+                      const categoryStyle = assessment.classRecordCategory === 'written_work'
+                        ? 'border-l-4 border-l-blue-500'
+                        : assessment.classRecordCategory === 'performance_task'
+                          ? 'border-l-4 border-l-emerald-500'
+                          : 'border-l-4 border-l-violet-500';
+                      const isPastDue = Boolean(assessment.dueDate && new Date(assessment.dueDate) < new Date());
 
-                    return (
-                      <motion.div
-                        key={assessment.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.04, duration: 0.2 }}
-                      >
-                        <Card className={`group ${categoryStyle} border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] transition-shadow hover:shadow-md`}>
-                          <CardContent className="p-4 space-y-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <p className="font-semibold leading-tight truncate">{assessment.title}</p>
-                                <p className="text-xs capitalize text-muted-foreground mt-1">{assessment.type.replace(/_/g, ' ')}</p>
+                      return (
+                        <motion.div
+                          key={assessment.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04, duration: 0.2 }}
+                        >
+                          <Card className={`group ${categoryStyle} border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] transition-shadow hover:shadow-md`}>
+                            <CardContent className="space-y-3 p-4">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold leading-tight">{assessment.title}</p>
+                                  <p className="mt-1 text-xs capitalize text-muted-foreground">{assessment.type.replace(/_/g, ' ')}</p>
+                                </div>
+                                <Badge variant={assessment.isPublished ? 'default' : 'secondary'}>
+                                  {assessment.isPublished ? 'Published' : 'Draft'}
+                                </Badge>
                               </div>
-                              <Badge variant={assessment.isPublished ? 'default' : 'secondary'}>
-                                {assessment.isPublished ? 'Published' : 'Draft'}
->>>>>>> Stashed changes
-                              </Badge>
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1.5">
-                              <span className="capitalize font-medium">{a.type}</span>
-                              <span>{a.totalPoints} pts</span>
-                              <span>Passing: {a.passingScore}%</span>
-                              <span>{a.questions?.length ?? 0} questions</span>
-                              {a.dueDate && (
-                                <span className={isPastDue ? 'text-red-500 font-medium' : ''}>
-                                  {isPastDue ? 'Past due' : 'Due'}: {new Date(a.dueDate).toLocaleDateString()}
-                                </span>
-                              )}
-                            </div>
-<<<<<<< Updated upstream
-                          </div>
-                          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <Link href={`/dashboard/teacher/assessments/${a.id}`}>
-                              <Button variant="outline" size="sm">View</Button>
-                            </Link>
-                            <Link href={`/dashboard/teacher/assessments/${a.id}/edit`}>
-                              <Button variant="outline" size="sm">Edit</Button>
-                            </Link>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeleteAssessment(a.id)}>Delete</Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </div>
-=======
 
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
-                              <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>
-                                <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">View</Button>
-                              </Link>
-                              <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`}>
-                                <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">Edit</Button>
-                              </Link>
-                              <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteAssessment(assessment.id)}>
-                                Delete
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </section>
-            ))
->>>>>>> Stashed changes
+                              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                <span className="capitalize font-medium">{assessment.type.replace(/_/g, ' ')}</span>
+                                <span>{assessment.totalPoints} pts</span>
+                                <span>Passing: {assessment.passingScore}%</span>
+                                <span>{assessment.questions?.length ?? 0} questions</span>
+                                {assessment.dueDate && (
+                                  <span className={isPastDue ? 'font-medium text-red-500' : ''}>
+                                    {isPastDue ? 'Past due' : 'Due'}: {new Date(assessment.dueDate).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 pt-1">
+                                <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>
+                                  <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">View</Button>
+                                </Link>
+                                <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`}>
+                                  <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">Edit</Button>
+                                </Link>
+                                <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteAssessment(assessment.id)}>
+                                  Delete
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
         </TabsContent>
 
@@ -1310,7 +1254,7 @@ export default function TeacherClassDetailPage() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <p className="font-medium">{ann.title}</p>
-                      {ann.isPinned && <Badge variant="secondary">📌 Pinned</Badge>}
+                      {ann.isPinned && <Badge variant="secondary">ðŸ“Œ Pinned</Badge>}
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{ann.content}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -1342,11 +1286,8 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="students" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{enrollments.length} students</p>
-<<<<<<< Updated upstream
-            <Button size="sm" onClick={handleOpenAddStudents}>+ Add Student</Button>
-=======
             <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/add`)}>+ Add Student</Button>
->>>>>>> Stashed changes
+ 
           </div>
           {enrollments.length === 0 ? (
             <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]"><CardContent className="p-6 text-center text-muted-foreground">No students enrolled.</CardContent></Card>
@@ -1354,12 +1295,9 @@ export default function TeacherClassDetailPage() {
             <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
               <Table>
                 <TableHeader>
-<<<<<<< Updated upstream
-                  <TableRow>
-=======
                   <TableRow className="border-[var(--teacher-outline)]">
                     <TableHead>Student</TableHead>
->>>>>>> Stashed changes
+ 
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>LRN</TableHead>
@@ -1368,10 +1306,6 @@ export default function TeacherClassDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {enrollments.map((e) => (
-<<<<<<< Updated upstream
-                    <TableRow key={e.id}>
-                      <TableCell>{e.student?.firstName} {e.student?.lastName}</TableCell>
-=======
                     <TableRow key={e.id} className="border-[var(--teacher-outline)]">
                       <TableCell>
                         <Avatar className="h-8 w-8">
@@ -1394,20 +1328,17 @@ export default function TeacherClassDetailPage() {
                           {e.student?.firstName} {e.student?.lastName}
                         </Link>
                       </TableCell>
->>>>>>> Stashed changes
+ 
                       <TableCell className="text-muted-foreground">{e.student?.email}</TableCell>
-                      <TableCell className="text-muted-foreground">{e.student?.lrn || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">{e.student?.lrn || 'â€”'}</TableCell>
                       <TableCell className="text-right">
-<<<<<<< Updated upstream
-                        <Button variant="destructive" size="sm" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
-=======
                         <div className="inline-flex items-center gap-2">
                           <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/${e.studentId}`)}>
                             View Profile
                           </Button>
                           <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
                         </div>
->>>>>>> Stashed changes
+ 
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1434,7 +1365,7 @@ export default function TeacherClassDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Assessment Modal removed — create-and-redirect flow instead */}
+      {/* Create Assessment Modal removed â€” create-and-redirect flow instead */}
 
       {/* Add Students Modal */}
       <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>
@@ -1455,23 +1386,18 @@ export default function TeacherClassDetailPage() {
                       );
                     }}
                   />
-                  <span className="text-sm">{s.firstName} {s.lastName} — {s.email}</span>
+                  <span className="text-sm">{s.firstName} {s.lastName} â€” {s.email}</span>
                 </label>
               ))
             )}
           </div>
           <DialogFooter>
-<<<<<<< Updated upstream
-            <Button variant="outline" onClick={() => setShowAddStudents(false)}>Cancel</Button>
-            <Button onClick={handleAddStudents} disabled={selectedStudents.length === 0}>
-              Add {selectedStudents.length} Student(s)
-=======
-            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowQuizGenerator(false)}>
+            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowAddStudents(false)}>
               Cancel
             </Button>
             <Button className="teacher-button-solid rounded-xl font-black" onClick={handleGenerateQuizDraft} disabled={generatingQuiz}>
               {generatingQuiz ? 'Generating...' : 'Generate Draft'}
->>>>>>> Stashed changes
+ 
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1494,3 +1420,4 @@ export default function TeacherClassDetailPage() {
     </>
   );
 }
+

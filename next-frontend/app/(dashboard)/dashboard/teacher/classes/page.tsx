@@ -1,12 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-<<<<<<< Updated upstream
-import { useAuth } from '@/providers/AuthProvider';
-import { classService } from '@/services/class-service';
-import { Card, CardContent } from '@/components/ui/card';
-=======
 import { Palette, Presentation, School, Sparkles, Wand2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -23,9 +18,10 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
->>>>>>> Stashed changes
+ 
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ClassItem } from '@/types/class';
+import { toast } from 'sonner';
+import type { ClassItem, ClassVisibilityStatus } from '@/types/class';
 
 const COLORS = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-red-500', 'bg-teal-500', 'bg-pink-500', 'bg-indigo-500'];
 
@@ -35,41 +31,38 @@ function getClassColor(code: string) {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
+function formatScheduleLine(schedule: { days: string[]; startTime: string; endTime: string }) {
+  return `${schedule.days.join('/')} ${schedule.startTime}-${schedule.endTime}`;
+}
+
 export default function TeacherClassesPage() {
   const { user } = useAuth();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<ClassVisibilityStatus>('active');
+  const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<string>(CLASS_CARD_PRESETS[0]?.id || 'aurora');
+  const [savingPresentation, setSavingPresentation] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
     try {
       setLoading(true);
-<<<<<<< Updated upstream
-      const res = await classService.getByTeacher(user.id);
-      setClasses(res.data || []);
-=======
       const response = await classService.getByTeacher(user.id, tab);
       setClasses(response.data || []);
->>>>>>> Stashed changes
+ 
     } catch {
       // Keep the page usable even if the class list fails once.
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [tab, user?.id]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-<<<<<<< Updated upstream
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
-=======
   useEffect(() => {
     if (editingClass) {
       setSelectedPreset(editingClass.cardPreset || 'aurora');
@@ -144,7 +137,7 @@ export default function TeacherClassesPage() {
           {[1, 2, 3, 4].map((item) => (
             <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
           ))}
->>>>>>> Stashed changes
+ 
         </div>
         <Skeleton className="h-[28rem] rounded-[1.7rem]" />
       </div>
@@ -152,43 +145,6 @@ export default function TeacherClassesPage() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">My Classes</h1>
-        <p className="text-muted-foreground">Manage your assigned classes</p>
-      </div>
-
-      {classes.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-lg font-medium">No classes assigned</p>
-            <p className="text-sm text-muted-foreground">Contact your administrator to get classes assigned.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {classes.map((cls) => (
-            <Link key={cls.id} href={`/dashboard/teacher/classes/${cls.id}`}>
-              <Card className="overflow-hidden hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer h-full">
-                <div className={`h-2 ${getClassColor(cls.subjectCode)}`} />
-                <CardContent className="p-4 space-y-2">
-                  <p className="font-semibold">{cls.subjectName} ({cls.subjectCode})</p>
-                  <p className="text-sm text-muted-foreground">
-                    {cls.section?.name} • Grade {cls.section?.gradeLevel || cls.subjectGradeLevel}
-                  </p>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>👤 {cls.enrollmentCount ?? 0} students</span>
-                    {cls.room && <span>🏫 {cls.room}</span>}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-=======
     <TeacherPageShell
       badge="Teacher Classes"
       title="Classes That Feel Ready to Teach"
@@ -283,7 +239,7 @@ export default function TeacherClassesPage() {
                 <ClassCard
                   classItem={course}
                   className="teacher-dashboard-class-card"
-                  subtitle={`${course.section?.name || 'Standard Section'} • Grade ${course.section?.gradeLevel || course.subjectGradeLevel || 'TBA'}`}
+                  subtitle={`${course.section?.name || 'Standard Section'} â€¢ Grade ${course.section?.gradeLevel || course.subjectGradeLevel || 'TBA'}`}
                   meta={[
                     `${course.enrollments?.length ?? 0} students`,
                     course.room ? `Room ${course.room}` : 'Room TBA',
@@ -346,7 +302,7 @@ export default function TeacherClassesPage() {
                 </p>
                 <ClassCard
                   classItem={{ ...editingClass, cardPreset: selectedPreset }}
-                  subtitle={`${editingClass.section?.name || 'Standard Section'} • Grade ${editingClass.section?.gradeLevel || editingClass.subjectGradeLevel || 'TBA'}`}
+                  subtitle={`${editingClass.section?.name || 'Standard Section'} â€¢ Grade ${editingClass.section?.gradeLevel || editingClass.subjectGradeLevel || 'TBA'}`}
                   meta={[
                     `${editingClass.enrollments?.length ?? 0} students`,
                     editingClass.room ? `Room ${editingClass.room}` : 'Room TBA',
@@ -438,6 +394,7 @@ export default function TeacherClassesPage() {
         </DialogContent>
       </Dialog>
     </TeacherPageShell>
->>>>>>> Stashed changes
+ 
   );
 }
+

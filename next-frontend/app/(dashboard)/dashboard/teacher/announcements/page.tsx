@@ -1,21 +1,17 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BellRing, Megaphone, Pin, Sparkles } from 'lucide-react';
 import { announcementService } from '@/services/announcement-service';
 import { classService } from '@/services/class-service';
 import { useAuth } from '@/providers/AuthProvider';
-<<<<<<< Updated upstream
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-=======
 import {
   TeacherEmptyState,
   TeacherPageShell,
   TeacherSectionCard,
   TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
->>>>>>> Stashed changes
+ 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -34,6 +30,7 @@ export default function TeacherAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
 
@@ -69,12 +66,6 @@ export default function TeacherAnnouncementsPage() {
   }, [selectedClassId]);
 
   useEffect(() => {
-<<<<<<< Updated upstream
-    fetchAnnouncements();
-  }, [fetchAnnouncements]);
-
-  const handleCreate = async () => {
-=======
     const run = async () => {
       await fetchAnnouncements();
     };
@@ -102,17 +93,10 @@ export default function TeacherAnnouncementsPage() {
   };
 
   const handleSave = async () => {
->>>>>>> Stashed changes
+ 
     if (!selectedClassId || !title.trim() || !content.trim()) return;
 
     try {
-<<<<<<< Updated upstream
-      await announcementService.create(selectedClassId, { title, content });
-      toast.success('Announcement posted');
-      setShowCreate(false);
-      setTitle('');
-      setContent('');
-=======
       if (editingAnnouncementId) {
         await announcementService.update(selectedClassId, editingAnnouncementId, {
           title,
@@ -125,7 +109,7 @@ export default function TeacherAnnouncementsPage() {
       }
 
       resetDialog();
->>>>>>> Stashed changes
+ 
       fetchAnnouncements();
     } catch {
       toast.error('Failed to create announcement');
@@ -173,7 +157,7 @@ export default function TeacherAnnouncementsPage() {
             <option value="">Select a class...</option>
             {classes.map((course) => (
               <option key={course.id} value={course.id}>
-                {course.subjectName} — {course.section?.name}
+                {course.subjectName} â€” {course.section?.name}
               </option>
             ))}
           </select>
@@ -272,39 +256,6 @@ export default function TeacherAnnouncementsPage() {
                       </span>
                     </div>
 
-<<<<<<< Updated upstream
-      <div className="flex items-center gap-4">
-        <select
-          value={selectedClassId}
-          onChange={(e) => setSelectedClassId(e.target.value)}
-          className="rounded-md border px-3 py-2 text-sm min-w-[250px]"
-        >
-          <option value="">Select a class...</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>{c.subjectName} — {c.section?.name}</option>
-          ))}
-        </select>
-        <Button size="sm" disabled={!selectedClassId} onClick={() => setShowCreate(true)}>+ New Announcement</Button>
-      </div>
-
-      {announcements.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            {selectedClassId ? 'No announcements for this class.' : 'Select a class to view announcements.'}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {announcements.map((ann) => (
-            <Card key={ann.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{ann.title}</p>
-                    {ann.isPinned && <Badge variant="secondary">📌 Pinned</Badge>}
-                  </div>
-                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDelete(ann.id)}>Delete</Button>
-=======
                     <div className="space-y-2">
                       <p className="text-xl font-black tracking-tight text-[var(--teacher-text-strong)]">
                         {announcement.title}
@@ -333,7 +284,7 @@ export default function TeacherAnnouncementsPage() {
                       Delete
                     </Button>
                   </div>
->>>>>>> Stashed changes
+ 
                 </div>
               </div>
             ))}
@@ -341,11 +292,6 @@ export default function TeacherAnnouncementsPage() {
         )}
       </TeacherSectionCard>
 
-<<<<<<< Updated upstream
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Announcement</DialogTitle></DialogHeader>
-=======
       <Dialog open={showCreate} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent className="rounded-[1.8rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(240,249,255,0.92))] shadow-2xl">
           <DialogHeader>
@@ -354,7 +300,7 @@ export default function TeacherAnnouncementsPage() {
             </DialogTitle>
           </DialogHeader>
 
->>>>>>> Stashed changes
+ 
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Title</Label>
@@ -377,10 +323,6 @@ export default function TeacherAnnouncementsPage() {
           </div>
 
           <DialogFooter>
-<<<<<<< Updated upstream
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!title.trim() || !content.trim()}>Post</Button>
-=======
             <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={resetDialog}>
               Cancel
             </Button>
@@ -391,10 +333,11 @@ export default function TeacherAnnouncementsPage() {
             >
               {editingAnnouncementId ? 'Save Changes' : 'Post Announcement'}
             </Button>
->>>>>>> Stashed changes
+ 
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </TeacherPageShell>
   );
 }
+

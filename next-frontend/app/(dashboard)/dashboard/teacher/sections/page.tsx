@@ -1,13 +1,9 @@
-'use client';
+﻿'use client';
 
-<<<<<<< Updated upstream
-import { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '@/providers/AuthProvider';
-=======
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, LayoutGrid, School2, Sparkles, Users } from 'lucide-react';
->>>>>>> Stashed changes
+ 
 import { sectionService } from '@/services/section-service';
 import {
   TeacherEmptyState,
@@ -17,26 +13,18 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import Link from 'next/link';
 import type { Section } from '@/types/section';
 
 export default function TeacherSectionsPage() {
-  const { user } = useAuth();
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-<<<<<<< Updated upstream
-      const res = await sectionService.getMy();
-      setSections(res.data || []);
-    } catch {
-      // fail silently
-=======
       const response = await sectionService.getMy();
       setSections(response.data || []);
->>>>>>> Stashed changes
+ 
     } finally {
       setLoading(false);
     }
@@ -54,17 +42,12 @@ export default function TeacherSectionsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-<<<<<<< Updated upstream
-        <Skeleton className="h-10 w-48" />
-        <div className="space-y-3">
-          {[1, 2].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
-=======
         <Skeleton className="h-56 rounded-[1.9rem]" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
             <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
           ))}
->>>>>>> Stashed changes
+ 
         </div>
         <Skeleton className="h-[28rem] rounded-[1.7rem]" />
       </div>
@@ -72,39 +55,6 @@ export default function TeacherSectionsPage() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">My Sections</h1>
-        <p className="text-muted-foreground">Sections you are assigned to advise</p>
-      </div>
-
-      {sections.length === 0 ? (
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            You are not assigned to any section.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {sections.map((section) => (
-            <Card key={section.id}>
-              <CardContent className="flex items-center justify-between p-4">
-                <div>
-                  <p className="font-semibold">{section.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Grade {section.gradeLevel} • {section.schoolYear}
-                    {section.studentCount !== undefined && ` • ${section.studentCount} students`}
-                  </p>
-                </div>
-                <Link href={`/dashboard/teacher/sections/${section.id}/roster`}>
-                  <Button variant="outline" size="sm">View Roster</Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-=======
     <TeacherPageShell
       badge="Teacher Sections"
       title="Advisory Sections With Clearer Focus"
@@ -113,7 +63,7 @@ export default function TeacherSectionsPage() {
         <Button className="teacher-button-solid rounded-xl px-4 font-black" onClick={fetchData}>
           Refresh Sections
         </Button>
->>>>>>> Stashed changes
+ 
       )}
       stats={(
         <>
@@ -205,3 +155,4 @@ export default function TeacherSectionsPage() {
     </TeacherPageShell>
   );
 }
+

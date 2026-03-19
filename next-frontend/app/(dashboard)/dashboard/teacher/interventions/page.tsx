@@ -1,11 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-<<<<<<< Updated upstream
-=======
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Bot, Sparkles, Target, Trophy } from 'lucide-react';
->>>>>>> Stashed changes
+ 
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
@@ -46,6 +44,7 @@ function studentName(entry: {
 
 export default function TeacherInterventionsPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [loadingClasses, setLoadingClasses] = useState(true);
@@ -58,6 +57,7 @@ export default function TeacherInterventionsPage() {
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
+  const thresholdLabel = report?.threshold ?? queue?.threshold ?? null;
 
   const fetchClassList = useCallback(async () => {
     if (!user?.id) return;
@@ -119,6 +119,10 @@ export default function TeacherInterventionsPage() {
     }
   };
 
+  const handleRecommend = (caseId: string) => {
+    router.push(`/dashboard/teacher/interventions/${caseId}`);
+  };
+
   if (loadingClasses) {
     return (
       <div className="space-y-6">
@@ -130,16 +134,6 @@ export default function TeacherInterventionsPage() {
   }
 
   return (
-<<<<<<< Updated upstream
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Intervention Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Threshold is fixed at 74% (LXP intervention trigger).
-          </p>
-        </div>
-=======
     <TeacherPageShell
       badge="Intervention Studio"
       title="Intervention Management"
@@ -149,7 +143,7 @@ export default function TeacherInterventionsPage() {
           : 'Review active support cases, generated recommendations, and progression signals in one more interactive teacher queue.'
       }
       actions={
->>>>>>> Stashed changes
+ 
         <select
           value={selectedClassId}
           onChange={(e) => setSelectedClassId(e.target.value)}
@@ -231,17 +225,6 @@ export default function TeacherInterventionsPage() {
             ) : (
               <div className="teacher-table-shell">
                 <Table>
-<<<<<<< Updated upstream
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Trigger Score</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead>XP</TableHead>
-                      <TableHead>Streak</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-=======
                   <TableHeader className="teacher-table-head [&_tr]:border-white/15">
                     <TableRow className="border-white/10 hover:bg-transparent">
                       <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
@@ -268,7 +251,7 @@ export default function TeacherInterventionsPage() {
                       <TableHead className="text-right text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
                         Action
                       </TableHead>
->>>>>>> Stashed changes
+ 
                     </TableRow>
                   </TableHeader>
                   <TableBody className="[&_tr:last-child]:border-0">
@@ -294,10 +277,6 @@ export default function TeacherInterventionsPage() {
                             </p>
                           </div>
                         </TableCell>
-<<<<<<< Updated upstream
-                        <TableCell>{entry.progress.xpTotal}</TableCell>
-                        <TableCell>{entry.progress.streakDays}</TableCell>
-=======
                         <TableCell className="text-[var(--teacher-text-strong)]">
                           {entry.progress.xpTotal}
                         </TableCell>
@@ -307,21 +286,11 @@ export default function TeacherInterventionsPage() {
                         <TableCell className="text-[var(--teacher-text-strong)]">
                           {entry.progress.streakDays}
                         </TableCell>
->>>>>>> Stashed changes
+ 
                         <TableCell>
                           <Badge className="teacher-badge-danger border-0">Active</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-<<<<<<< Updated upstream
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={resolvingCaseId === entry.id}
-                            onClick={() => handleResolve(entry.id)}
-                          >
-                            {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
-                          </Button>
-=======
                           <div className="flex justify-end gap-2">
                             <Button
                               size="sm"
@@ -341,7 +310,7 @@ export default function TeacherInterventionsPage() {
                               {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
                             </Button>
                           </div>
->>>>>>> Stashed changes
+ 
                         </TableCell>
                       </TableRow>
                     ))}
@@ -412,14 +381,6 @@ export default function TeacherInterventionsPage() {
                     ))}
                   </TableBody>
                 </Table>
-<<<<<<< Updated upstream
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
-    </div>
-=======
               </div>
             )}
           </TeacherSectionCard>
@@ -483,6 +444,7 @@ export default function TeacherInterventionsPage() {
         </>
       )}
     </TeacherPageShell>
->>>>>>> Stashed changes
+ 
   );
 }
+
