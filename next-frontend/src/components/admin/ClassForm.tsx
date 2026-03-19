@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,7 +27,7 @@ const SUBJECTS = [
 ] as const;
 
 const SELECT_CLS =
-  'flex h-10 w-full rounded-md border-2 border-zinc-300 dark:border-zinc-600 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
+  'admin-select flex h-12 w-full rounded-2xl px-4 py-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
 
 export type ClassFormValues = {
   subjectName: string;
@@ -207,6 +207,15 @@ export default function ClassForm({
 
   return (
     <div className="space-y-6">
+      <div className="admin-filter-shell space-y-2 rounded-[1.35rem] px-4 py-4">
+        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
+          Class Setup
+        </p>
+        <p className="text-sm leading-6 text-[var(--admin-text-muted)]">
+          Set the subject, section, teacher, and schedule in one cleaner admin flow before publishing the class.
+        </p>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Subject Name">
           <select
@@ -227,7 +236,7 @@ export default function ClassForm({
             value={form.subjectCode}
             onChange={(event) => setField('subjectCode', event.target.value)}
             placeholder="e.g. MATH-7"
-            className="border-2 border-zinc-300 dark:border-zinc-600 shadow-sm focus-visible:ring-2"
+            className="admin-input h-12 rounded-2xl"
           />
         </Field>
       </div>
@@ -306,7 +315,7 @@ export default function ClassForm({
           value={form.room}
           onChange={(event) => setField('room', event.target.value)}
           placeholder="e.g. Room 201"
-          className="border-2 border-zinc-300 dark:border-zinc-600 shadow-sm focus-visible:ring-2"
+          className="admin-input h-12 rounded-2xl"
         />
       </Field>
 
@@ -319,16 +328,25 @@ export default function ClassForm({
         disabled={!isScheduleReady || loadingSection}
       />
 
-      <div className="flex items-center justify-end gap-2 border-t pt-4">
-        <Button variant="outline" onClick={onCancel}>
+      <div className="admin-filter-shell flex flex-col gap-3 rounded-[1.35rem] border-t-0 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-black text-[var(--admin-text-strong)]">Ready to save?</p>
+          <p className="text-xs text-[var(--admin-text-muted)]">
+            Double-check the section, teacher, and schedule before confirming this class setup.
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={onCancel}>
           Cancel
         </Button>
         <Button
+          className="admin-button-solid rounded-xl font-black"
           onClick={handleSubmit}
           disabled={saving || !form.subjectName || !form.subjectCode.trim() || !form.subjectGradeLevel}
         >
           {saving ? 'Saving...' : submitLabel}
         </Button>
+        </div>
       </div>
     </div>
   );

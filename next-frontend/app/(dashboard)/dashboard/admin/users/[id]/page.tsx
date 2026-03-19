@@ -2,25 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { Copy, KeyRound, ShieldCheck, UserCircle2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { userService } from '@/services/user-service';
+import {
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { getRoleName, formatDate } from '@/utils/helpers';
-import { Copy } from 'lucide-react';
 import type { UpdateUserDto, User } from '@/types/user';
 
 type UserFormState = {
@@ -59,7 +56,6 @@ const EMPTY_FORM: UserFormState = {
 
 function toFormState(user: User): UserFormState {
   const role = getRoleName(user.roles?.[0]) || 'student';
-
   return {
     firstName: user.firstName ?? '',
     middleName: user.middleName ?? '',
@@ -142,10 +138,7 @@ export default function AdminUserDetailPage() {
   };
 
   const handleCopyPassword = async () => {
-    if (!generatedPassword) {
-      return;
-    }
-
+    if (!generatedPassword) return;
     try {
       await navigator.clipboard.writeText(generatedPassword);
       toast.success('Password copied to clipboard');
@@ -165,7 +158,6 @@ export default function AdminUserDetailPage() {
         toast.error('Student LRN must be exactly 12 digits');
         return;
       }
-
       if (!form.gradeLevel) {
         toast.error('Grade level is required for student accounts');
         return;
@@ -185,9 +177,7 @@ export default function AdminUserDetailPage() {
       phone: isStudent ? form.phone || undefined : undefined,
       address: isStudent ? form.address || undefined : undefined,
       familyName: isStudent ? form.familyName || undefined : undefined,
-      familyRelationship: isStudent
-        ? (form.familyRelationship || undefined)
-        : undefined,
+      familyRelationship: isStudent ? (form.familyRelationship || undefined) : undefined,
       familyContact: isStudent ? form.familyContact || undefined : undefined,
     };
 
@@ -208,9 +198,13 @@ export default function AdminUserDetailPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-64 rounded-lg" />
-        <Skeleton className="h-80 rounded-lg" />
+        <Skeleton className="h-56 rounded-[1.9rem]" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((item) => (
+            <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
+          ))}
+        </div>
+        <Skeleton className="h-[32rem] rounded-[1.7rem]" />
       </div>
     );
   }
@@ -220,262 +214,165 @@ export default function AdminUserDetailPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+    <AdminPageShell
+      badge="Admin Users"
+      title={`${form.firstName} ${form.lastName}`}
+      description="User details now live inside a stronger admin profile workspace, with the same edit and reset actions presented in a more readable way."
+      actions={(
+        <>
+          <Button variant="outline" className="admin-button-outline rounded-xl px-4 font-black" onClick={() => router.back()}>
             Back
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold">
-              {form.firstName} {form.lastName}
-            </h1>
-            <p className="text-muted-foreground">
-              Review and update account details, role assignment, and student
-              profile fields from one page.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowResetConfirm(true)}
-            disabled={resetting}
-          >
+          <Button variant="outline" className="admin-button-outline rounded-xl px-4 font-black" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
+            <KeyRound className="h-4 w-4" />
             {resetting ? 'Resetting...' : 'Reset Password'}
           </Button>
-          <Badge variant={user.status === 'ACTIVE' ? 'default' : 'secondary'}>
-            {user.status}
-          </Badge>
-          <Badge variant="outline">{role}</Badge>
+        </>
+      )}
+      stats={(
+        <>
+          <AdminStatCard label="Status" value={user.status} caption="Current account state" icon={ShieldCheck} accent="emerald" />
+          <AdminStatCard label="Role" value={role} caption="Primary role assignment" icon={UserCircle2} accent="sky" />
+          <AdminStatCard label="Created" value={user.createdAt ? formatDate(user.createdAt) : 'Unknown'} caption="Account creation date" icon={Users} accent="amber" />
+          <AdminStatCard label="Last Login" value={user.lastLoginAt ? formatDate(String(user.lastLoginAt)) : 'Never'} caption="Most recent sign-in" icon={KeyRound} accent="rose" />
+        </>
+      )}
+    >
+      <AdminSectionCard title="Identity Snapshot" description="High-signal account facts stay visible at the top while you manage the details below.">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="admin-metric">
+            <span>User ID</span>
+            <strong className="break-all">{user.id}</strong>
+          </div>
+          <div className="admin-metric">
+            <span>Status</span>
+            <strong>{user.status}</strong>
+          </div>
+          <div className="admin-metric">
+            <span>Role</span>
+            <strong>{role}</strong>
+          </div>
         </div>
-      </div>
+      </AdminSectionCard>
 
-      <Card>
-        <CardContent className="grid gap-4 p-5 md:grid-cols-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              User ID
-            </p>
-            <p className="mt-1 break-all text-sm">{user.id}</p>
+      <AdminSectionCard
+        title="Account Details"
+        description="Core identity, email, and role assignment stay editable here, but the layout now mirrors the upgraded admin workspace."
+        action={(
+          <div className="flex items-center gap-2">
+            <Badge variant={user.status === 'ACTIVE' ? 'default' : 'secondary'}>{user.status}</Badge>
+            <Badge variant="outline">{role}</Badge>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Created
-            </p>
-            <p className="mt-1 text-sm">
-              {user.createdAt ? formatDate(user.createdAt) : 'Unknown'}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Last Login
-            </p>
-            <p className="mt-1 text-sm">
-              {user.lastLoginAt ? formatDate(String(user.lastLoginAt)) : 'Never'}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        )}
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="First Name">
+            <Input value={form.firstName} onChange={(event) => setField('firstName', event.target.value)} className="admin-input" />
+          </Field>
+          <Field label="Middle Name">
+            <Input value={form.middleName} onChange={(event) => setField('middleName', event.target.value)} className="admin-input" />
+          </Field>
+          <Field label="Last Name">
+            <Input value={form.lastName} onChange={(event) => setField('lastName', event.target.value)} className="admin-input" />
+          </Field>
+        </div>
 
-      <Card>
-        <CardContent className="space-y-5 p-5">
-          <div>
-            <h2 className="text-lg font-semibold">Account details</h2>
-            <p className="text-sm text-muted-foreground">
-              Core identity, email, and role assignment.
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <Field label="First Name">
-              <Input
-                value={form.firstName}
-                onChange={(event) => setField('firstName', event.target.value)}
-                className="bg-background"
-              />
-            </Field>
-            <Field label="Middle Name">
-              <Input
-                value={form.middleName}
-                onChange={(event) => setField('middleName', event.target.value)}
-                className="bg-background"
-              />
-            </Field>
-            <Field label="Last Name">
-              <Input
-                value={form.lastName}
-                onChange={(event) => setField('lastName', event.target.value)}
-                className="bg-background"
-              />
-            </Field>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Email Address">
-              <Input
-                type="email"
-                value={form.email}
-                onChange={(event) => setField('email', event.target.value)}
-                className="bg-background"
-              />
-            </Field>
-            <Field label="Role">
-              <select
-                value={form.role}
-                onChange={(event) =>
-                  setField(
-                    'role',
-                    event.target.value as 'student' | 'teacher' | 'admin',
-                  )
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-                <option value="admin">Admin</option>
-              </select>
-            </Field>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Field label="Email Address">
+            <Input type="email" value={form.email} onChange={(event) => setField('email', event.target.value)} className="admin-input" />
+          </Field>
+          <Field label="Role">
+            <select value={form.role} onChange={(event) => setField('role', event.target.value as 'student' | 'teacher' | 'admin')} className="admin-select w-full text-sm font-semibold">
+              <option value="student">Student</option>
+              <option value="teacher">Teacher</option>
+              <option value="admin">Admin</option>
+            </select>
+          </Field>
+        </div>
+      </AdminSectionCard>
 
       {isStudent ? (
-        <Card>
-          <CardContent className="space-y-5 p-5">
-            <div>
-              <h2 className="text-lg font-semibold">Student profile</h2>
-              <p className="text-sm text-muted-foreground">
-                Profile fields now live outside the core user identity model.
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label="LRN">
-                <Input
-                  value={form.lrn}
-                  onChange={(event) => setField('lrn', event.target.value)}
-                  placeholder="12-digit LRN"
-                  className="bg-background"
-                />
-              </Field>
-              <Field label="Grade Level">
-                <select
-                  value={form.gradeLevel}
-                  onChange={(event) => setField('gradeLevel', event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Select grade</option>
-                  <option value="7">Grade 7</option>
-                  <option value="8">Grade 8</option>
-                  <option value="9">Grade 9</option>
-                  <option value="10">Grade 10</option>
-                </select>
-              </Field>
-              <Field label="Date of Birth">
-                <Input
-                  type="date"
-                  value={form.dateOfBirth}
-                  onChange={(event) =>
-                    setField('dateOfBirth', event.target.value)
-                  }
-                  className="bg-background"
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Gender">
-                <select
-                  value={form.gender}
-                  onChange={(event) => setField('gender', event.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Select gender</option>
-                  <option value="Male">Male</option>
-                  <option value="Female">Female</option>
-                </select>
-              </Field>
-              <Field label="Phone">
-                <Input
-                  value={form.phone}
-                  onChange={(event) => setField('phone', event.target.value)}
-                  className="bg-background"
-                />
-              </Field>
-            </div>
-
-            <Field label="Address">
-              <Input
-                value={form.address}
-                onChange={(event) => setField('address', event.target.value)}
-                className="bg-background"
-              />
+        <AdminSectionCard
+          title="Student Profile"
+          description="Student-specific profile fields stay separate, but now sit in the same polished detail workspace."
+        >
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="LRN">
+              <Input value={form.lrn} onChange={(event) => setField('lrn', event.target.value)} placeholder="12-digit LRN" className="admin-input" />
             </Field>
+            <Field label="Grade Level">
+              <select value={form.gradeLevel} onChange={(event) => setField('gradeLevel', event.target.value)} className="admin-select w-full text-sm font-semibold">
+                <option value="">Select grade</option>
+                <option value="7">Grade 7</option>
+                <option value="8">Grade 8</option>
+                <option value="9">Grade 9</option>
+                <option value="10">Grade 10</option>
+              </select>
+            </Field>
+            <Field label="Date of Birth">
+              <Input type="date" value={form.dateOfBirth} onChange={(event) => setField('dateOfBirth', event.target.value)} className="admin-input" />
+            </Field>
+          </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field label="Guardian Name">
-                <Input
-                  value={form.familyName}
-                  onChange={(event) => setField('familyName', event.target.value)}
-                  className="bg-background"
-                />
-              </Field>
-              <Field label="Relationship">
-                <select
-                  value={form.familyRelationship}
-                  onChange={(event) =>
-                    setField('familyRelationship', event.target.value)
-                  }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="">Select relationship</option>
-                  <option value="Father">Father</option>
-                  <option value="Mother">Mother</option>
-                  <option value="Guardian">Guardian</option>
-                  <option value="Sibling">Sibling</option>
-                  <option value="Other">Other</option>
-                </select>
-              </Field>
-              <Field label="Guardian Contact">
-                <Input
-                  value={form.familyContact}
-                  onChange={(event) =>
-                    setField('familyContact', event.target.value)
-                  }
-                  className="bg-background"
-                />
-              </Field>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Field label="Gender">
+              <select value={form.gender} onChange={(event) => setField('gender', event.target.value)} className="admin-select w-full text-sm font-semibold">
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </Field>
+            <Field label="Phone">
+              <Input value={form.phone} onChange={(event) => setField('phone', event.target.value)} className="admin-input" />
+            </Field>
+          </div>
+
+          <div className="mt-4">
+            <Field label="Address">
+              <Input value={form.address} onChange={(event) => setField('address', event.target.value)} className="admin-input" />
+            </Field>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <Field label="Guardian Name">
+              <Input value={form.familyName} onChange={(event) => setField('familyName', event.target.value)} className="admin-input" />
+            </Field>
+            <Field label="Relationship">
+              <select value={form.familyRelationship} onChange={(event) => setField('familyRelationship', event.target.value)} className="admin-select w-full text-sm font-semibold">
+                <option value="">Select relationship</option>
+                <option value="Father">Father</option>
+                <option value="Mother">Mother</option>
+                <option value="Guardian">Guardian</option>
+                <option value="Sibling">Sibling</option>
+                <option value="Other">Other</option>
+              </select>
+            </Field>
+            <Field label="Guardian Contact">
+              <Input value={form.familyContact} onChange={(event) => setField('familyContact', event.target.value)} className="admin-input" />
+            </Field>
+          </div>
+        </AdminSectionCard>
       ) : null}
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving}>
+        <Button className="admin-button-solid rounded-xl px-5 font-black" onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
-        <DialogContent>
+        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader>
             <DialogTitle>Reset User Password</DialogTitle>
             <DialogDescription>
-              This will generate a new temporary password for {form.firstName}{' '}
-              {form.lastName}. The password will be emailed to the user.
+              This will generate a new temporary password for {form.firstName} {form.lastName}. The password will be emailed to the user.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowResetConfirm(false)}
-              disabled={resetting}
-            >
+            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => setShowResetConfirm(false)} disabled={resetting}>
               Cancel
             </Button>
-            <Button onClick={handleResetPassword} disabled={resetting}>
+            <Button className="admin-button-solid rounded-xl font-black" onClick={handleResetPassword} disabled={resetting}>
               {resetting ? 'Resetting...' : 'Confirm Reset'}
             </Button>
           </DialogFooter>
@@ -491,26 +388,28 @@ export default function AdminUserDetailPage() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader>
             <DialogTitle>New Temporary Password</DialogTitle>
             <DialogDescription>
               Share this securely. This value is shown once in this admin view.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border bg-muted/40 p-3">
+          <div className="rounded-xl border border-[var(--admin-outline)] bg-white/75 p-3">
             <p className="break-all font-mono text-sm">{generatedPassword}</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCopyPassword}>
+            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={handleCopyPassword}>
               <Copy className="mr-2 h-4 w-4" />
               Copy Password
             </Button>
-            <Button onClick={() => setShowResetResult(false)}>Done</Button>
+            <Button className="admin-button-solid rounded-xl font-black" onClick={() => setShowResetResult(false)}>
+              Done
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 }
 

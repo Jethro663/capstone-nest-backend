@@ -8,12 +8,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/utils/cn';
 
-export function ProfileSecurityCard() {
+export function ProfileSecurityCard({
+  appearance = 'student',
+}: {
+  appearance?: 'student' | 'teacher' | 'admin';
+}) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPw, setChangingPw] = useState(false);
+  const isTeacher = appearance === 'teacher';
+  const isAdmin = appearance === 'admin';
 
   const handleChangePassword = async () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
@@ -27,11 +34,7 @@ export function ProfileSecurityCard() {
 
     try {
       setChangingPw(true);
-      await changePassword({
-        oldPassword,
-        newPassword,
-        confirmPassword,
-      });
+      await changePassword({ oldPassword, newPassword, confirmPassword });
       toast.success('Password changed');
       setOldPassword('');
       setNewPassword('');
@@ -44,45 +47,33 @@ export function ProfileSecurityCard() {
   };
 
   return (
-    <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
-      <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
-        <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
-          <Lock className="h-4 w-4 text-[var(--student-accent)]" /> Security
+    <Card className={cn('overflow-hidden rounded-[1.5rem]', isTeacher ? 'teacher-panel teacher-panel-hover' : isAdmin ? 'admin-panel' : 'student-panel student-panel-hover')}>
+      <div className={cn('border-b px-6 py-4', isTeacher ? 'border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)]' : isAdmin ? 'border-[var(--admin-outline)] bg-[var(--admin-surface-soft)]' : 'border-[var(--student-outline)] bg-[var(--student-surface-soft)]')}>
+        <h3 className={cn('flex items-center gap-2 text-sm font-black uppercase tracking-widest', isTeacher ? 'text-[var(--teacher-text-strong)]' : isAdmin ? 'text-[var(--admin-text-strong)]' : 'text-[var(--student-text-strong)]')}>
+          <Lock className={cn('h-4 w-4', isTeacher ? 'text-[var(--teacher-accent)]' : isAdmin ? 'text-[var(--admin-accent)]' : 'text-[var(--student-accent)]')} /> Security
         </h3>
       </div>
-      <CardContent className="p-6 space-y-4">
+      <CardContent className="space-y-4 p-6">
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Current Password</Label>
-          <Input
-            type="password"
-            className="student-input rounded-xl"
-            value={oldPassword}
-            onChange={(e) => setOldPassword(e.target.value)}
-          />
+          <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--student-text-muted)]')}>Current Password</Label>
+          <Input type="password" className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'student-input')} value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">New Password</Label>
-          <Input
-            type="password"
-            className="student-input rounded-xl"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-          />
+          <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--student-text-muted)]')}>New Password</Label>
+          <Input type="password" className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'student-input')} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Confirm New Password</Label>
-          <Input
-            type="password"
-            className="student-input rounded-xl"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
+          <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--student-text-muted)]')}>Confirm New Password</Label>
+          <Input type="password" className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'student-input')} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
         </div>
         <Button
-          variant="outline"
           onClick={handleChangePassword}
           disabled={changingPw}
-          className="student-button-outline mt-2 w-full rounded-xl font-bold transition-all"
+          className={cn(
+            'mt-2 w-full rounded-xl font-bold transition-all',
+            isTeacher ? 'teacher-button-outline' : isAdmin ? 'admin-button-outline' : 'student-button-outline',
+          )}
+          variant="outline"
         >
           {changingPw ? 'Processing...' : 'Update Password'}
         </Button>

@@ -1,6 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  BarChart3,
+  Download,
+  FileBarChart2,
+  GraduationCap,
+  Layers3,
+} from 'lucide-react';
 import { classRecordService } from '@/services/class-record-service';
 import { classService } from '@/services/class-service';
 import { dashboardService } from '@/services/dashboard-service';
@@ -23,7 +30,6 @@ import type {
 } from '@/types/report';
 import type { ClassItem } from '@/types/class';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -35,6 +41,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  TeacherEmptyState,
+  TeacherPageShell,
+  TeacherSectionCard,
+  TeacherStatCard,
+} from '@/components/teacher/TeacherPageShell';
+import { cn } from '@/utils/cn';
 import { toast } from 'sonner';
 
 function formatStudentName(row: InterventionReportRow): string {
@@ -252,37 +265,74 @@ export function ClassRecordReportsPage({
     window.open(`${endpoint}?${params.toString()}`, '_blank', 'noopener,noreferrer');
   };
 
+  const totalUsageActions = (systemUsage?.topActions ?? []).reduce(
+    (sum, row) => sum + row.total,
+    0,
+  );
+
   if (loadingClasses) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-24 rounded-lg" />
-        <Skeleton className="h-80 rounded-lg" />
+        <Skeleton className="h-44 rounded-[1.8rem]" />
+        <Skeleton className="h-28 rounded-[1.5rem]" />
+        <Skeleton className="h-96 rounded-[1.5rem]" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">{heading}</h1>
-          <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-        <Button variant="outline" onClick={handleExport}>
-          Export CSV
+    <TeacherPageShell
+      badge={scope === 'teacher' ? 'Teacher Reports Hub' : 'Admin Reports Hub'}
+      title={heading}
+      description={description}
+      actions={
+        <Button variant="teacher" onClick={handleExport} className="rounded-2xl px-5">
+          <Download className="h-4 w-4" />
+          Export {reportTabs.find((tab) => tab.value === activeTab)?.label ?? 'Report'}
         </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
+      }
+      stats={
+        <>
+          <TeacherStatCard
+            label="Classes Connected"
+            value={classes.length}
+            caption="Data sources ready for reporting"
+            icon={Layers3}
+            accent="sky"
+          />
+          <TeacherStatCard
+            label="Report Windows"
+            value={records.length}
+            caption={loadingRecords ? 'Refreshing grading records...' : 'Available grading periods'}
+            icon={FileBarChart2}
+            accent="teal"
+          />
+          <TeacherStatCard
+            label="Class Average"
+            value={average ? `${average.average.toFixed(1)}%` : '--'}
+            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Choose a class'}
+            icon={BarChart3}
+            accent="amber"
+          />
+          <TeacherStatCard
+            label="Intervention Queue"
+            value={average?.interventionCount ?? 0}
+            caption="Students flagged from this record"
+            icon={GraduationCap}
+            accent="rose"
+          />
+        </>
+      }
+    >
+      <TeacherSectionCard
+        title="Filters & Export Controls"
+        description="Blend grading-period data with wider reporting windows to surface cleaner trends."
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <select
             value={selectedClassId}
             onChange={(event) => setSelectedClassId(event.target.value)}
-            className="min-w-[260px] rounded-md border px-3 py-2 text-sm"
+            className="teacher-select w-full text-sm"
           >
             <option value="">Select class...</option>
             {classes.map((item) => (
@@ -295,7 +345,7 @@ export function ClassRecordReportsPage({
           <select
             value={selectedRecordId}
             onChange={(event) => setSelectedRecordId(event.target.value)}
-            className="min-w-[220px] rounded-md border px-3 py-2 text-sm"
+            className="teacher-select w-full text-sm"
             disabled={!selectedClassId || loadingRecords || records.length === 0}
           >
             <option value="">Select quarter...</option>
@@ -310,139 +360,110 @@ export function ClassRecordReportsPage({
             type="date"
             value={dateFrom}
             onChange={(event) => setDateFrom(event.target.value)}
-            className="max-w-[180px]"
+            className="teacher-input h-12"
           />
           <Input
             type="date"
             value={dateTo}
             onChange={(event) => setDateTo(event.target.value)}
-            className="max-w-[180px]"
+            className="teacher-input h-12"
           />
-        </CardContent>
-      </Card>
+        </div>
+      </TeacherSectionCard>
 
       {loadingReports ? (
         <div className="space-y-4">
-          <Skeleton className="h-24 rounded-lg" />
-          <Skeleton className="h-80 rounded-lg" />
+          <Skeleton className="h-20 rounded-[1.5rem]" />
+          <Skeleton className="h-[32rem] rounded-[1.8rem]" />
         </div>
       ) : (
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ReportTab)}>
-          <TabsList className="h-auto flex-wrap justify-start">
+          <TabsList className="teacher-tab-list h-auto flex-wrap justify-start">
             {reportTabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value}>
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="teacher-tab px-4 py-2.5 text-sm font-bold"
+              >
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
 
           <TabsContent value="classRecord" className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Class</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="font-semibold">{selectedClass?.subjectName ?? '--'}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedClass?.section?.name ?? '--'}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Average</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">
-                    {average ? `${average.average.toFixed(2)}%` : '--'}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Student Count</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">{average?.count ?? 0}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">For Intervention</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold text-rose-600">
-                    {average?.interventionCount ?? 0}
-                  </p>
-                </CardContent>
-              </Card>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard
+                label="Class"
+                value={selectedClass?.subjectName ?? '--'}
+                caption={selectedClass?.section?.name ?? 'No section selected'}
+              />
+              <SummaryCard
+                label="Average"
+                value={average ? `${average.average.toFixed(2)}%` : '--'}
+                caption="Latest computed class average"
+              />
+              <SummaryCard
+                label="Student Count"
+                value={average?.count ?? 0}
+                caption="Students included in the record"
+              />
+              <SummaryCard
+                label="For Intervention"
+                value={average?.interventionCount ?? 0}
+                caption="Students needing follow-up"
+                tone="danger"
+              />
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Grade Distribution</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!distribution || distribution.total === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No finalized grade distribution available yet.
-                  </p>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-5">
-                    {Object.entries(distribution.distribution).map(([band, count]) => (
-                      <div key={band} className="rounded-lg border p-4">
-                        <p className="text-xs text-muted-foreground">{band}</p>
-                        <p className="mt-2 text-2xl font-bold">{count}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <TeacherSectionCard
+              title="Grade Distribution"
+              description="A quick visual pulse of score clusters in the selected grading period."
+            >
+              {!distribution || distribution.total === 0 ? (
+                <TeacherEmptyState
+                  title="No finalized distribution yet"
+                  description="Once the grading period has enough finalized scores, the distribution bands will appear here."
+                />
+              ) : (
+                <div className="grid gap-3 md:grid-cols-5">
+                  {Object.entries(distribution.distribution).map(([band, count], index) => (
+                    <div
+                      key={band}
+                      className={cn(
+                        'teacher-soft-panel teacher-panel-hover rounded-[1.35rem] px-4 py-5',
+                        index % 2 === 0 ? 'teacher-highlight' : '',
+                      )}
+                    >
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--teacher-text-muted)]">
+                        {band}
+                      </p>
+                      <p className="mt-3 text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]">
+                        {count}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </TeacherSectionCard>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Intervention List</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {interventions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No students are currently marked for intervention in this record.
-                  </p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Final Percentage</TableHead>
-                        <TableHead>Remarks</TableHead>
-                        <TableHead>Computed At</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {interventions.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell className="font-medium">
-                            {formatStudentName(row)}
-                          </TableCell>
-                          <TableCell>{Number(row.finalPercentage).toFixed(2)}%</TableCell>
-                          <TableCell>{row.remarks}</TableCell>
-                          <TableCell>
-                            {new Date(row.computedAt).toLocaleString('en-US')}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+            <SimpleTableCard
+              title="Intervention List"
+              description="Students who fell below the selected record’s intervention thresholds."
+              empty="No students are currently marked for intervention in this record."
+              headers={['Student', 'Final Percentage', 'Remarks', 'Computed At']}
+              rows={interventions.map((row) => [
+                formatStudentName(row),
+                `${Number(row.finalPercentage).toFixed(2)}%`,
+                row.remarks,
+                new Date(row.computedAt).toLocaleString('en-US'),
+              ])}
+            />
           </TabsContent>
 
           <TabsContent value="studentMasterList">
             <SimpleTableCard
               title="Student Master List"
+              description="A clean roster snapshot across the currently selected report window."
               empty="No enrolled students matched the selected filters."
               headers={['Student', 'Email', 'LRN', 'Class', 'Section']}
               rows={studentMasterList.map((row) => [
@@ -458,6 +479,7 @@ export function ClassRecordReportsPage({
           <TabsContent value="classEnrollment">
             <SimpleTableCard
               title="Class Enrollment"
+              description="Monitor class size and teacher ownership at a glance."
               empty="No class enrollment data matched the selected filters."
               headers={['Class', 'Section', 'Teacher', 'Enrollment']}
               rows={classEnrollment.map((row) => [
@@ -474,6 +496,7 @@ export function ClassRecordReportsPage({
           <TabsContent value="studentPerformance">
             <SimpleTableCard
               title="Student Performance"
+              description="Cross-check blended performance and active risk flags in one place."
               empty="No student performance data matched the selected filters."
               headers={['Student', 'Class', 'Blended', 'At Risk', 'Threshold']}
               rows={studentPerformance.map((row) => [
@@ -489,6 +512,7 @@ export function ClassRecordReportsPage({
           <TabsContent value="interventionParticipation">
             <SimpleTableCard
               title="Intervention Participation"
+              description="Track case status, completion rates, and earned XP for assigned learners."
               empty="No intervention cases matched the selected filters."
               headers={['Student', 'Class', 'Status', 'Completion', 'XP']}
               rows={interventionParticipation.map((row) => [
@@ -504,6 +528,7 @@ export function ClassRecordReportsPage({
           <TabsContent value="assessmentSummary">
             <SimpleTableCard
               title="Assessment Summary"
+              description="See assessment throughput and score health without leaving the reports flow."
               empty="No assessments matched the selected filters."
               headers={['Title', 'Class', 'Quarter', 'Submissions', 'Average']}
               rows={assessmentSummary.map((row) => [
@@ -517,20 +542,33 @@ export function ClassRecordReportsPage({
           </TabsContent>
 
           <TabsContent value="systemUsage" className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-4">
-              <SummaryCard label="Lesson Completions" value={systemUsage?.lessonCompletions ?? 0} />
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard
+                label="Lesson Completions"
+                value={systemUsage?.lessonCompletions ?? 0}
+                caption="Learning progress events"
+              />
               <SummaryCard
                 label="Assessment Submissions"
                 value={systemUsage?.assessmentSubmissions ?? 0}
+                caption="Submitted attempts"
               />
-              <SummaryCard label="Intervention Opens" value={systemUsage?.interventionOpens ?? 0} />
               <SummaryCard
-                label="Intervention Closures"
-                value={systemUsage?.interventionClosures ?? 0}
+                label="Intervention Opens"
+                value={systemUsage?.interventionOpens ?? 0}
+                caption="Cases started"
+                tone="accent"
+              />
+              <SummaryCard
+                label="Tracked Actions"
+                value={totalUsageActions}
+                caption="Top activity volume"
+                tone="accent"
               />
             </div>
             <SimpleTableCard
               title="Top Actions"
+              description="The most frequent user actions captured inside the selected date range."
               empty="No usage activity matched the selected filters."
               headers={['Action', 'Count']}
               rows={(systemUsage?.topActions ?? []).map((row) => [row.action, row.total])}
@@ -538,56 +576,90 @@ export function ClassRecordReportsPage({
           </TabsContent>
         </Tabs>
       )}
-    </div>
+    </TeacherPageShell>
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+function SummaryCard({
+  label,
+  value,
+  caption,
+  tone = 'default',
+}: {
+  label: string;
+  value: string | number;
+  caption?: string;
+  tone?: 'default' | 'accent' | 'danger';
+}) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-bold">{value}</p>
-      </CardContent>
-    </Card>
+    <div
+      className={cn(
+        'teacher-soft-panel teacher-panel-hover rounded-[1.5rem] px-5 py-5',
+        tone === 'accent' && 'teacher-highlight',
+        tone === 'danger' && 'bg-rose-50/75 dark:bg-rose-950/20',
+      )}
+    >
+      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--teacher-text-muted)]">
+        {label}
+      </p>
+      <p
+        className={cn(
+          'mt-3 text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]',
+          tone === 'danger' && 'text-rose-600 dark:text-rose-300',
+        )}
+      >
+        {value}
+      </p>
+      {caption ? (
+        <p className="mt-2 text-xs font-medium text-[var(--teacher-text-muted)]">{caption}</p>
+      ) : null}
+    </div>
   );
 }
 
 function SimpleTableCard({
   title,
+  description,
   headers,
   rows,
   empty,
 }: {
   title: string;
+  description?: string;
   headers: string[];
   rows: Array<Array<string | number | null>>;
   empty: string;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{empty}</p>
-        ) : (
+    <TeacherSectionCard title={title} description={description}>
+      {rows.length === 0 ? (
+        <TeacherEmptyState title={`No data for ${title.toLowerCase()}`} description={empty} />
+      ) : (
+        <div className="teacher-table-shell">
           <Table>
-            <TableHeader>
-              <TableRow>
+            <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+              <TableRow className="border-white/10 hover:bg-transparent">
                 {headers.map((header) => (
-                  <TableHead key={header}>{header}</TableHead>
+                  <TableHead
+                    key={header}
+                    className="h-12 text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]"
+                  >
+                    {header}
+                  </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="[&_tr:last-child]:border-0">
               {rows.map((row, rowIndex) => (
-                <TableRow key={`${title}-${rowIndex}`}>
+                <TableRow
+                  key={`${title}-${rowIndex}`}
+                  className="teacher-table-row border-white/10"
+                >
                   {row.map((cell, cellIndex) => (
-                    <TableCell key={`${title}-${rowIndex}-${cellIndex}`}>
+                    <TableCell
+                      key={`${title}-${rowIndex}-${cellIndex}`}
+                      className="text-[13px] text-[var(--teacher-text-strong)]"
+                    >
                       {cell ?? '--'}
                     </TableCell>
                   ))}
@@ -595,8 +667,8 @@ function SimpleTableCard({
               ))}
             </TableBody>
           </Table>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </TeacherSectionCard>
   );
 }

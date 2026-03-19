@@ -197,24 +197,15 @@ export const mockUserProfile = {
 
 // Service functions
 export const getAssessments = async () => {
-  // Simulate API delay
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(mockAssessments), 500);
-  });
+  return mockAssessments;
 };
 
 export const getLessons = async () => {
-  // Simulate API delay
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(mockLessons), 500);
-  });
+  return mockLessons;
 };
 
 export const getUserProfile = async () => {
-  // Simulate API delay
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(mockUserProfile), 400);
-  });
+  return mockUserProfile;
 };
 
 export const getAssessmentById = async (id) => {
@@ -250,52 +241,55 @@ export const getDifficultyEmoji = (difficulty) => {
 };
 
 export const getJAcademyStats = async () => {
-  // Aggregate subject-wise progress and badges
-  const lessons = await getLessons();
-  const assessments = await getAssessments();
-  const profile = await getUserProfile();
+  try {
+    // Aggregate subject-wise progress and badges
+    const [lessons, assessments, profile] = await Promise.all([
+      getLessons(),
+      getAssessments(),
+      getUserProfile(),
+    ]);
 
-  // subjects from lessons
-  const subjects = {};
-  lessons.forEach((l) => {
-    if (!subjects[l.subject]) {
-      subjects[l.subject] = { subject: l.subject, lessonsTotal: 0, lessonsCompleted: 0, assessmentsTotal: 0, assessmentsPassed: 0, progress: 0 };
-    }
-    subjects[l.subject].lessonsTotal += 1;
-    if (l.isCompleted) subjects[l.subject].lessonsCompleted += 1;
-    subjects[l.subject].progress += l.progress;
-  });
+    // subjects from lessons
+    const subjects = {};
+    lessons.forEach((l) => {
+      if (!subjects[l.subject]) {
+        subjects[l.subject] = { subject: l.subject, lessonsTotal: 0, lessonsCompleted: 0, assessmentsTotal: 0, assessmentsPassed: 0, progress: 0 };
+      }
+      subjects[l.subject].lessonsTotal += 1;
+      if (l.isCompleted) subjects[l.subject].lessonsCompleted += 1;
+      subjects[l.subject].progress += l.progress;
+    });
 
-  // average progress per subject
-  Object.keys(subjects).forEach((k) => {
-    const s = subjects[k];
-    s.progress = Math.round(s.progress / s.lessonsTotal) || 0;
-  });
+    // average progress per subject
+    Object.keys(subjects).forEach((k) => {
+      const s = subjects[k];
+      s.progress = Math.round(s.progress / s.lessonsTotal) || 0;
+    });
 
-  // assessments counts
-  assessments.forEach((a) => {
-    if (!subjects[a.subject]) {
-      subjects[a.subject] = { subject: a.subject, lessonsTotal: 0, lessonsCompleted: 0, assessmentsTotal: 0, assessmentsPassed: 0, progress: 0 };
-    }
-    subjects[a.subject].assessmentsTotal += 1;
-    if (a.isCompleted && a.score >= 70) subjects[a.subject].assessmentsPassed += 1;
-  });
+    // assessments counts
+    assessments.forEach((a) => {
+      if (!subjects[a.subject]) {
+        subjects[a.subject] = { subject: a.subject, lessonsTotal: 0, lessonsCompleted: 0, assessmentsTotal: 0, assessmentsPassed: 0, progress: 0 };
+      }
+      subjects[a.subject].assessmentsTotal += 1;
+      if (a.isCompleted && a.score >= 70) subjects[a.subject].assessmentsPassed += 1;
+    });
 
-  const subjectArray = Object.values(subjects);
+    const subjectArray = Object.values(subjects);
 
-  const overallProgress = subjectArray.length
-    ? Math.round(subjectArray.reduce((acc, s) => acc + s.progress, 0) / subjectArray.length)
-    : 0;
+    const overallProgress = subjectArray.length
+      ? Math.round(subjectArray.reduce((acc, s) => acc + s.progress, 0) / subjectArray.length)
+      : 0;
 
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        overallProgress,
-        totalXP: profile.totalXP || 0,
-        subjects: subjectArray,
-        badges: profile.badges || [],
-        remarks: 'Great progress — focus on Mathematics and Biology to improve overall score.',
-      });
-    }, 500);
-  });
+    return {
+      overallProgress,
+      totalXP: profile.totalXP || 0,
+      subjects: subjectArray,
+      badges: profile.badges || [],
+      remarks: 'Great progress — focus on Mathematics and Biology to improve overall score.',
+    };
+  } catch (error) {
+    console.error('Error in getJAcademyStats:', error);
+    throw error;
+  }
 };

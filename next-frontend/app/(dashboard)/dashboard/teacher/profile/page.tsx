@@ -6,6 +6,7 @@ export default function TeacherProfileRoute() {
       roleLabel="Teacher"
       title="Teacher Profile"
       subtitle="Teacher profile management is being expanded. Your account identity is read-only here for now, while password updates remain available."
+      appearance="teacher"
     />
   );
 }

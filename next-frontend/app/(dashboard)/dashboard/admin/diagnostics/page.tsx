@@ -1,8 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Activity, Bot, Database, RefreshCcw, ServerCog } from 'lucide-react';
 import { adminService } from '@/services/admin-service';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -19,20 +24,21 @@ function DependencyCard({
   degraded?: boolean;
   message?: string;
 }) {
-  const tone = ok ? (degraded ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-red-500';
+  const tone = ok ? (degraded ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-rose-500';
+  const label = ok ? (degraded ? 'Degraded' : 'Healthy') : 'Unavailable';
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
+    <div className="admin-grid-card min-h-[11rem]">
+      <div className="admin-grid-card__accent" />
+      <div className="relative z-10 space-y-3">
+        <div className="flex items-center gap-2">
           <span className={`inline-block h-2.5 w-2.5 rounded-full ${tone}`} />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1 text-sm">
-        <p className="font-medium">{ok ? (degraded ? 'Degraded' : 'Healthy') : 'Unavailable'}</p>
-        <p className="text-muted-foreground">{message || 'No issues reported.'}</p>
-      </CardContent>
-    </Card>
+          <p className="text-base font-black text-[var(--admin-text-strong)]">{title}</p>
+        </div>
+        <p className="text-xl font-black text-[var(--admin-text-strong)]">{label}</p>
+        <p className="text-sm text-[var(--admin-text-muted)]">{message || 'No issues reported.'}</p>
+      </div>
+    </div>
   );
 }
 
@@ -66,10 +72,11 @@ export default function AdminDiagnosticsPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-72" />
+        <Skeleton className="h-56 rounded-[1.9rem]" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-lg" />)}
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-[1.5rem]" />)}
         </div>
+        <Skeleton className="h-[24rem] rounded-[1.7rem]" />
       </div>
     );
   }
@@ -77,64 +84,49 @@ export default function AdminDiagnosticsPage() {
   const dependencies = readiness?.data?.dependencies;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">System Diagnostics</h1>
-          <p className="text-sm text-muted-foreground">
-            Live backend readiness checks for API, database, Redis, and AI services.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={fetchDiagnostics}>
+    <AdminPageShell
+      badge="Admin Diagnostics"
+      title="System Diagnostics"
+      description="Live backend readiness checks now sit in a clearer admin health console, with stronger service cards and a calmer readiness summary."
+      actions={(
+        <Button className="admin-button-solid rounded-xl px-4 font-black" onClick={fetchDiagnostics}>
+          <RefreshCcw className="h-4 w-4" />
           Refresh
         </Button>
-      </div>
+      )}
+      stats={(
+        <>
+          <AdminStatCard label="API" value={live?.status === 'ok' ? 'Live' : 'Check'} caption={live?.timestamp ? new Date(live.timestamp).toLocaleTimeString() : 'No timestamp'} icon={ServerCog} accent="emerald" />
+          <AdminStatCard label="Database" value={dependencies?.database?.ok ? 'Healthy' : 'Down'} caption={dependencies?.database?.message || 'Database readiness'} icon={Database} accent="sky" />
+          <AdminStatCard label="Redis" value={dependencies?.redis?.ok ? 'Healthy' : 'Down'} caption={dependencies?.redis?.message || 'Cache readiness'} icon={Activity} accent="amber" />
+          <AdminStatCard label="AI Service" value={dependencies?.aiService?.ok ? (dependencies?.aiService?.degraded ? 'Degraded' : 'Healthy') : 'Down'} caption={dependencies?.aiService?.message || 'AI provider readiness'} icon={Bot} accent="rose" />
+        </>
+      )}
+    >
+      <AdminSectionCard title="Dependency Checks" description="The same diagnostics data, now grouped into richer service panels that are easier to scan at a glance.">
+        {error ? <p className="mb-4 text-sm font-semibold text-rose-600">{error}</p> : null}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <DependencyCard title="API Process" ok={live?.status === 'ok'} message={live?.timestamp ? `Live at ${new Date(live.timestamp).toLocaleString()}` : 'No live timestamp returned.'} />
+          <DependencyCard title="Database" ok={Boolean(dependencies?.database?.ok)} message={dependencies?.database?.message} />
+          <DependencyCard title="Redis" ok={Boolean(dependencies?.redis?.ok)} message={dependencies?.redis?.message} />
+          <DependencyCard title="AI Service" ok={Boolean(dependencies?.aiService?.ok)} degraded={dependencies?.aiService?.degraded} message={dependencies?.aiService?.message} />
+        </div>
+      </AdminSectionCard>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <DependencyCard
-          title="API Process"
-          ok={live?.status === 'ok'}
-          message={live?.timestamp ? `Live at ${new Date(live.timestamp).toLocaleString()}` : 'No live timestamp returned.'}
-        />
-        <DependencyCard
-          title="Database"
-          ok={Boolean(dependencies?.database?.ok)}
-          message={dependencies?.database?.message}
-        />
-        <DependencyCard
-          title="Redis"
-          ok={Boolean(dependencies?.redis?.ok)}
-          message={dependencies?.redis?.message}
-        />
-        <DependencyCard
-          title="AI Service"
-          ok={Boolean(dependencies?.aiService?.ok)}
-          degraded={dependencies?.aiService?.degraded}
-          message={dependencies?.aiService?.message}
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Readiness Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>
-            Overall status:{' '}
-            <span className={readiness?.data?.ready ? 'font-semibold text-emerald-600' : 'font-semibold text-red-600'}>
+      <AdminSectionCard title="Readiness Summary" description="A single place to check whether the platform is ready for admin operations.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="admin-metric">
+            <span>Overall Status</span>
+            <strong className={readiness?.data?.ready ? 'text-emerald-600' : 'text-rose-600'}>
               {readiness?.data?.ready ? 'Ready' : 'Not Ready'}
-            </span>
-          </p>
-          <p className="text-muted-foreground">
-            Last readiness check:{' '}
-            {readiness?.data?.timestamp
-              ? new Date(readiness.data.timestamp).toLocaleString()
-              : 'Unavailable'}
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+            </strong>
+          </div>
+          <div className="admin-metric">
+            <span>Last Readiness Check</span>
+            <strong>{readiness?.data?.timestamp ? new Date(readiness.data.timestamp).toLocaleString() : 'Unavailable'}</strong>
+          </div>
+        </div>
+      </AdminSectionCard>
+    </AdminPageShell>
   );
 }

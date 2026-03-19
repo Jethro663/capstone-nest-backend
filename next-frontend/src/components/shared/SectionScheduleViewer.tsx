@@ -13,6 +13,7 @@ import {
 import { classService } from '@/services/class-service';
 import { SCHEDULE_DAYS, type ScheduleDay } from '@/utils/constants';
 import type { ClassItem } from '@/types/class';
+import { cn } from '@/utils/cn';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,11 +82,15 @@ interface FlatSlot {
 
 interface SectionScheduleViewerProps {
   sectionId: string;
+  theme?: 'default' | 'teacher';
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SectionScheduleViewer({ sectionId }: SectionScheduleViewerProps) {
+export function SectionScheduleViewer({
+  sectionId,
+  theme = 'default',
+}: SectionScheduleViewerProps) {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -205,7 +210,9 @@ export function SectionScheduleViewer({ sectionId }: SectionScheduleViewerProps)
   }
 
   // ─── Slot position computation ──────────────────────────────────────────────
-  const totalGridMinutes = (gridEnd - gridStart) * 60;
+  const totalGridMinutes = hourSlots.length * 60;
+
+  const isTeacherTheme = theme === 'teacher';
 
   const getSlotStyle = (slot: FlatSlot): React.CSSProperties => {
     const startMin = timeToMinutes(slot.startTime) - gridStart * 60;
@@ -217,25 +224,41 @@ export function SectionScheduleViewer({ sectionId }: SectionScheduleViewerProps)
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-3">
+    <Card
+      className={cn(
+        'overflow-hidden',
+        isTeacherTheme &&
+          'rounded-[1.7rem] border-white/30 bg-[linear-gradient(180deg,rgba(15,23,42,0.86),rgba(30,41,59,0.78))] shadow-[0_28px_60px_-38px_rgba(2,6,23,0.72)]',
+      )}
+    >
+      <CardHeader className={cn('pb-3', isTeacherTheme && 'border-b border-white/10 bg-white/5')}>
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-lg">Section Schedule</CardTitle>
-          <span className="text-sm text-muted-foreground">
+          <CardTitle className={cn('text-lg', isTeacherTheme && 'text-[var(--teacher-text-strong)]')}>Section Schedule</CardTitle>
+          <span className={cn('text-sm text-muted-foreground', isTeacherTheme && 'text-[var(--teacher-text-muted)]')}>
             {classesWithSchedules.length} class{classesWithSchedules.length !== 1 ? 'es' : ''} scheduled
           </span>
         </div>
       </CardHeader>
       <CardContent className="p-0 sm:p-6 sm:pt-0">
         {/* ── Calendar Grid ──────────────────────────────────────────── */}
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div
+          className={cn(
+            'rounded-xl border overflow-hidden',
+            isTeacherTheme
+              ? 'border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(15,23,42,0.56))]'
+              : 'bg-card',
+          )}
+        >
           {/* Day headers */}
-          <div className="flex border-b bg-muted/40">
+          <div className={cn('flex border-b bg-muted/40', isTeacherTheme && 'border-white/10 bg-white/5')}>
             <div className="w-16 sm:w-20 shrink-0" />
             {SCHEDULE_DAYS.map((day) => (
               <div
                 key={day}
-                className="flex-1 min-w-0 px-1 py-2.5 text-center font-semibold text-muted-foreground border-r last:border-r-0"
+                className={cn(
+                  'flex-1 min-w-0 px-1 py-2.5 text-center font-semibold text-muted-foreground border-r last:border-r-0',
+                  isTeacherTheme && 'border-white/10 text-[var(--teacher-text-muted)]',
+                )}
               >
                 {/* Full label on sm+ , abbreviation on mobile */}
                 <span className="hidden sm:inline text-xs uppercase tracking-wider">{DAY_SHORT[day]}</span>
@@ -251,9 +274,17 @@ export function SectionScheduleViewer({ sectionId }: SectionScheduleViewerProps)
               {hourSlots.map((time) => (
                 <div
                   key={time}
-                  className="h-14 sm:h-16 flex items-start justify-end pr-2 pt-0.5 border-b border-border/30"
+                  className={cn(
+                    'h-14 sm:h-16 flex items-start justify-end pr-2 pt-0.5 border-b border-border/30',
+                    isTeacherTheme && 'border-white/10',
+                  )}
                 >
-                  <span className="text-[11px] sm:text-xs text-muted-foreground font-medium whitespace-nowrap">
+                  <span
+                    className={cn(
+                      'text-[11px] sm:text-xs text-muted-foreground font-medium whitespace-nowrap',
+                      isTeacherTheme && 'text-[var(--teacher-text-muted)]',
+                    )}
+                  >
                     {formatTime12h(time).replace(':00 ', ' ')}
                   </span>
                 </div>
@@ -270,7 +301,10 @@ export function SectionScheduleViewer({ sectionId }: SectionScheduleViewerProps)
                     {hourSlots.map((time) => (
                       <div
                         key={time}
-                        className="h-14 sm:h-16 border-b border-r border-border/30"
+                        className={cn(
+                          'h-14 sm:h-16 border-b border-r border-border/30',
+                          isTeacherTheme && 'border-white/10',
+                        )}
                       />
                     ))}
 

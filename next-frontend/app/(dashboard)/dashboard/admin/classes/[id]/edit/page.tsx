@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft, BookOpenCheck, CalendarRange, School2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
+import {
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
@@ -111,8 +117,11 @@ export default function EditClassPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-[520px] rounded-lg" />
+        <Skeleton className="h-56 rounded-[1.9rem]" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
+        </div>
+        <Skeleton className="h-[38rem] rounded-[1.7rem]" />
       </div>
     );
   }
@@ -120,32 +129,44 @@ export default function EditClassPage() {
   if (!classItem) return null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Edit Class</h1>
-        <p className="text-muted-foreground">Update class details, assignment, and schedule.</p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {classItem.subjectName} ({classItem.subjectCode})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ClassForm
-            initialValues={initialValues}
-            sections={sections}
-            teachers={teachers}
-            schoolYears={schoolYears}
-            saving={saving}
-            submitLabel="Update"
-            onSubmit={handleSubmit}
-            onCancel={() => router.push('/dashboard/admin/classes')}
-            editingClassId={classId}
-          />
-        </CardContent>
-      </Card>
-    </div>
+    <AdminPageShell
+      badge="Admin Classes"
+      title={`Edit ${classItem.subjectName}`}
+      description="Refine subject, assignment, and schedule details from a more polished admin editing surface without changing the underlying class logic."
+      actions={(
+        <Button
+          variant="outline"
+          className="admin-button-outline rounded-xl font-black"
+          onClick={() => router.push('/dashboard/admin/classes')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Classes
+        </Button>
+      )}
+      stats={(
+        <>
+          <AdminStatCard label="Subject Code" value={classItem.subjectCode || '—'} caption="Current class identifier" icon={BookOpenCheck} accent="emerald" />
+          <AdminStatCard label="Grade Level" value={`Grade ${classItem.subjectGradeLevel || '—'}`} caption="Assigned learning level" icon={School2} accent="sky" />
+          <AdminStatCard label="School Year" value={classItem.schoolYear || '—'} caption="Academic cycle for this class" icon={CalendarRange} accent="amber" />
+        </>
+      )}
+    >
+      <AdminSectionCard
+        title={`${classItem.subjectName} (${classItem.subjectCode})`}
+        description="The edit form keeps the same fields and validation, now presented in a calmer and more engaging admin workspace."
+      >
+        <ClassForm
+          initialValues={initialValues}
+          sections={sections}
+          teachers={teachers}
+          schoolYears={schoolYears}
+          saving={saving}
+          submitLabel="Save Changes"
+          onSubmit={handleSubmit}
+          onCancel={() => router.push('/dashboard/admin/classes')}
+          editingClassId={classId}
+        />
+      </AdminSectionCard>
+    </AdminPageShell>
   );
 }

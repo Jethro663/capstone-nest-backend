@@ -1,115 +1,207 @@
 'use client';
 
+<<<<<<< Updated upstream
 import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '@/providers/AuthProvider';
+=======
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, LayoutGrid, Users } from 'lucide-react';
+import { ArrowRight, LayoutGrid, School2, Sparkles, Users } from 'lucide-react';
+>>>>>>> Stashed changes
 import { sectionService } from '@/services/section-service';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  TeacherEmptyState,
+  TeacherPageShell,
+  TeacherSectionCard,
+  TeacherStatCard,
+} from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import Link from 'next/link';
 import type { Section } from '@/types/section';
 
 export default function TeacherSectionsPage() {
+  const { user } = useAuth();
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+<<<<<<< Updated upstream
       const res = await sectionService.getMy();
       setSections(res.data || []);
+    } catch {
+      // fail silently
+=======
+      const response = await sectionService.getMy();
+      setSections(response.data || []);
+>>>>>>> Stashed changes
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchData();
+    fetchData();
   }, [fetchData]);
+
+  const totalStudents = useMemo(
+    () => sections.reduce((total, section) => total + (section.studentCount ?? 0), 0),
+    [sections],
+  );
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-36 rounded-3xl" />
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2].map((i) => <Skeleton key={i} className="h-52 rounded-3xl" />)}
+<<<<<<< Updated upstream
+        <Skeleton className="h-10 w-48" />
+        <div className="space-y-3">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-20 rounded-lg" />)}
+=======
+        <Skeleton className="h-56 rounded-[1.9rem]" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((item) => (
+            <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
+          ))}
+>>>>>>> Stashed changes
         </div>
+        <Skeleton className="h-[28rem] rounded-[1.7rem]" />
       </div>
     );
   }
 
   return (
+<<<<<<< Updated upstream
     <div className="space-y-6">
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-slate-900 via-slate-800 to-sky-900 text-white shadow-xl">
-        <CardContent className="grid gap-6 p-8 md:grid-cols-[1.4fr_0.8fr] md:items-end">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em]">
-              <LayoutGrid className="h-3.5 w-3.5" /> Advisory Sections
-            </div>
-            <h1 className="text-3xl font-black tracking-tight">My Sections</h1>
-            <p className="max-w-2xl text-sm text-white/75">
-              Keep roster work, advisory follow-ups, and grade-level context in one place. This view mirrors the stronger class dashboard treatment so your section pages feel like part of the same workflow.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/60">Sections</p>
-              <p className="mt-2 text-3xl font-black">{sections.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/60">Students</p>
-              <p className="mt-2 text-3xl font-black">
-                {sections.reduce((total, section) => total + (section.studentCount ?? 0), 0)}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div>
+        <h1 className="text-2xl font-bold">My Sections</h1>
+        <p className="text-muted-foreground">Sections you are assigned to advise</p>
+      </div>
 
       {sections.length === 0 ? (
         <Card>
-          <CardContent className="flex min-h-56 flex-col items-center justify-center gap-3 text-center">
-            <Users className="h-10 w-10 text-muted-foreground" />
-            <p className="text-lg font-semibold">No sections assigned</p>
-            <p className="max-w-md text-sm text-muted-foreground">
-              Once a section is assigned to you, its roster and advisory workflows will appear here.
-            </p>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            You are not assigned to any section.
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-3">
           {sections.map((section) => (
-            <Card key={section.id} className="overflow-hidden rounded-3xl border shadow-sm">
-              <CardContent className="space-y-5 p-6">
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
-                    Grade {section.gradeLevel}
+            <Card key={section.id}>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <p className="font-semibold">{section.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Grade {section.gradeLevel} • {section.schoolYear}
+                    {section.studentCount !== undefined && ` • ${section.studentCount} students`}
                   </p>
-                  <h2 className="text-2xl font-black tracking-tight">{section.name}</h2>
-                  <p className="text-sm text-muted-foreground">{section.schoolYear}</p>
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Roster</p>
-                    <p className="mt-2 text-2xl font-bold">{section.studentCount ?? 0}</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Year</p>
-                    <p className="mt-2 text-lg font-bold">{section.schoolYear}</p>
-                  </div>
-                </div>
-
                 <Link href={`/dashboard/teacher/sections/${section.id}/roster`}>
-                  <Button className="w-full justify-between">
-                    View Roster <ArrowRight className="h-4 w-4" />
-                  </Button>
+                  <Button variant="outline" size="sm">View Roster</Button>
                 </Link>
               </CardContent>
             </Card>
           ))}
         </div>
+=======
+    <TeacherPageShell
+      badge="Teacher Sections"
+      title="Advisory Sections With Clearer Focus"
+      description="Keep roster work, advisory context, and section-level visibility in one stronger teacher workspace with calmer panels and faster scanability."
+      actions={(
+        <Button className="teacher-button-solid rounded-xl px-4 font-black" onClick={fetchData}>
+          Refresh Sections
+        </Button>
+>>>>>>> Stashed changes
       )}
-    </div>
+      stats={(
+        <>
+          <TeacherStatCard
+            label="Sections"
+            value={sections.length}
+            caption={sections.length > 0 ? 'Assigned advisory spaces' : 'Waiting for section assignments'}
+            icon={LayoutGrid}
+            accent="sky"
+          />
+          <TeacherStatCard
+            label="Students"
+            value={totalStudents}
+            caption="Across your current section list"
+            icon={Users}
+            accent="teal"
+          />
+          <TeacherStatCard
+            label="Grade Levels"
+            value={new Set(sections.map((section) => section.gradeLevel)).size}
+            caption="Represented in your advisory load"
+            icon={School2}
+            accent="amber"
+          />
+          <TeacherStatCard
+            label="Roster Flow"
+            value={sections.length > 0 ? 'Ready' : 'Pending'}
+            caption="Open any section to jump into roster work"
+            icon={Sparkles}
+            accent="rose"
+          />
+        </>
+      )}
+    >
+      <TeacherSectionCard
+        title="Section Panels"
+        description="A more deliberate section grid that keeps grade, year, and roster actions easy to pick up at a glance."
+      >
+        {sections.length === 0 ? (
+          <TeacherEmptyState
+            title="No sections assigned"
+            description="Once a section is assigned to you, its roster, grade context, and advisory work will appear here."
+          />
+        ) : (
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {sections.map((section) => (
+              <div key={section.id} className="teacher-sections-card">
+                <div className="teacher-sections-card__accent" />
+                <div className="relative z-10 space-y-5">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="teacher-dashboard-chip">
+                        <School2 className="h-4 w-4" />
+                        Grade {section.gradeLevel}
+                      </span>
+                      <span className="teacher-dashboard-chip">{section.schoolYear}</span>
+                    </div>
+                    <h2 className="text-2xl font-black tracking-tight text-[var(--teacher-text-strong)]">
+                      {section.name}
+                    </h2>
+                    <p className="text-sm text-[var(--teacher-text-muted)]">
+                      Advisory roster and learner details stay grouped here so you can move into section work faster.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="teacher-sections-card__metric">
+                      <span>Roster</span>
+                      <strong>{section.studentCount ?? 0}</strong>
+                    </div>
+                    <div className="teacher-sections-card__metric">
+                      <span>School Year</span>
+                      <strong>{section.schoolYear}</strong>
+                    </div>
+                  </div>
+
+                  <Link href={`/dashboard/teacher/sections/${section.id}/roster`}>
+                    <Button className="teacher-button-solid h-11 w-full justify-between rounded-2xl px-4 font-black">
+                      View Roster
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </TeacherSectionCard>
+    </TeacherPageShell>
   );
 }

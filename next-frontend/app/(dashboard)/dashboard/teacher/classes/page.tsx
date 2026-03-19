@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Palette } from 'lucide-react';
+<<<<<<< Updated upstream
+import { useAuth } from '@/providers/AuthProvider';
+import { classService } from '@/services/class-service';
+import { Card, CardContent } from '@/components/ui/card';
+=======
+import { Palette, Presentation, School, Sparkles, Wand2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { ClassCard } from '@/components/class/ClassCard';
@@ -10,65 +15,61 @@ import {
   CLASS_CARD_PRESETS,
   getClassCardPreset,
 } from '@/components/class/class-card-presets';
+import {
+  TeacherEmptyState,
+  TeacherPageShell,
+  TeacherSectionCard,
+  TeacherStatCard,
+} from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+>>>>>>> Stashed changes
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
-import type { ClassItem, ClassVisibilityStatus } from '@/types/class';
+import type { ClassItem } from '@/types/class';
 
-function formatTime(time?: string) {
-  if (!time) return '';
-  const [hourRaw, minuteRaw] = time.split(':');
-  const hour = Number(hourRaw);
-  const minute = Number(minuteRaw);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return time;
+const COLORS = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 'bg-red-500', 'bg-teal-500', 'bg-pink-500', 'bg-indigo-500'];
 
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const normalizedHour = hour % 12 || 12;
-  return `${normalizedHour}:${String(minute).padStart(2, '0')} ${period}`;
-}
-
-function formatDays(days?: string[]) {
-  if (!days?.length) return 'TBA';
-  return days.join('/');
-}
-
-function formatScheduleLine(schedule?: { days?: string[]; startTime?: string; endTime?: string }) {
-  if (!schedule) return 'TBA';
-  const days = formatDays(schedule.days);
-  const start = formatTime(schedule.startTime);
-  const end = formatTime(schedule.endTime);
-  return start && end ? `${days} • ${start}-${end}` : days;
+function getClassColor(code: string) {
+  let hash = 0;
+  for (let i = 0; i < (code || '').length; i++) hash = code.charCodeAt(i) + ((hash << 5) - hash);
+  return COLORS[Math.abs(hash) % COLORS.length];
 }
 
 export default function TeacherClassesPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<ClassVisibilityStatus>('active');
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState('aurora');
-  const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [savingPresentation, setSavingPresentation] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const res = await classService.getByTeacher(user.id, tab);
+<<<<<<< Updated upstream
+      const res = await classService.getByTeacher(user.id);
       setClasses(res.data || []);
+=======
+      const response = await classService.getByTeacher(user.id, tab);
+      setClasses(response.data || []);
+>>>>>>> Stashed changes
     } catch {
-      // fail silently
+      // Keep the page usable even if the class list fails once.
     } finally {
       setLoading(false);
     }
-  }, [tab, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+<<<<<<< Updated upstream
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
+=======
   useEffect(() => {
     if (editingClass) {
       setSelectedPreset(editingClass.cardPreset || 'aurora');
@@ -82,12 +83,13 @@ export default function TeacherClassesPage() {
 
   const handleSavePresentation = async () => {
     if (!editingClass) return;
+
     try {
       setSavingPresentation(true);
-      const res = await classService.updatePresentation(editingClass.id, {
+      const response = await classService.updatePresentation(editingClass.id, {
         cardPreset: selectedPreset,
       });
-      syncClass(res.data);
+      syncClass(response.data);
       toast.success('Class card updated');
     } catch {
       toast.error('Failed to update class card');
@@ -98,10 +100,11 @@ export default function TeacherClassesPage() {
 
   const handleBannerUpload = async (file: File) => {
     if (!editingClass) return;
+
     try {
       setUploadingBanner(true);
-      const res = await classService.uploadBanner(editingClass.id, file);
-      syncClass(res.data.class);
+      const response = await classService.uploadBanner(editingClass.id, file);
+      syncClass(response.data.class);
       toast.success('Banner uploaded');
     } catch {
       toast.error('Failed to upload class banner');
@@ -112,13 +115,14 @@ export default function TeacherClassesPage() {
 
   const handleRemoveBanner = async () => {
     if (!editingClass) return;
+
     try {
       setSavingPresentation(true);
-      const res = await classService.updatePresentation(editingClass.id, {
+      const response = await classService.updatePresentation(editingClass.id, {
         cardPreset: selectedPreset,
         cardBannerUrl: null,
       });
-      syncClass(res.data);
+      syncClass(response.data);
       toast.success('Custom banner removed');
     } catch {
       toast.error('Failed to remove custom banner');
@@ -127,108 +131,219 @@ export default function TeacherClassesPage() {
     }
   };
 
+  const totalStudents = useMemo(
+    () => classes.reduce((sum, entry) => sum + (entry.enrollments?.length ?? 0), 0),
+    [classes],
+  );
+
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-48" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-64 rounded-[1.5rem]" />)}
+        <Skeleton className="h-56 rounded-[1.9rem]" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((item) => (
+            <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
+          ))}
+>>>>>>> Stashed changes
         </div>
+        <Skeleton className="h-[28rem] rounded-[1.7rem]" />
       </div>
     );
   }
 
   return (
+<<<<<<< Updated upstream
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">My Classes</h1>
-        <p className="text-muted-foreground">Manage your assigned classes and customize each class card.</p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {(['active', 'archived', 'hidden'] as const).map((value) => (
-          <Button
-            key={value}
-            type="button"
-            size="sm"
-            variant={tab === value ? 'default' : 'outline'}
-            onClick={() => setTab(value)}
-          >
-            {value === 'active' ? 'Active' : value === 'archived' ? 'Archived' : 'Hidden'}
-          </Button>
-        ))}
+        <p className="text-muted-foreground">Manage your assigned classes</p>
       </div>
 
       {classes.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-lg font-medium">No classes in this view</p>
-            <p className="text-sm text-muted-foreground">
-              {tab === 'hidden'
-                ? 'Hidden classes stay here until you restore them.'
-                : 'Contact your administrator to get classes assigned.'}
-            </p>
+            <p className="text-lg font-medium">No classes assigned</p>
+            <p className="text-sm text-muted-foreground">Contact your administrator to get classes assigned.</p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {classes.map((cls) => (
             <Link key={cls.id} href={`/dashboard/teacher/classes/${cls.id}`}>
-              <ClassCard
-                classItem={cls}
-                subtitle={`${cls.section?.name || 'Standard Section'} • Grade ${cls.section?.gradeLevel || cls.subjectGradeLevel || 'TBA'}`}
-                meta={[
-                  `${cls.enrollments?.length ?? 0} students`,
-                  cls.room ? `Room ${cls.room}` : 'Room TBA',
-                ]}
-                action={
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    className="shrink-0"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setEditingClass(cls);
-                    }}
-                  >
-                    <Palette className="mr-1 h-4 w-4" /> Customize
-                  </Button>
-                }
-                footer={
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    {(cls.schedules?.length ?? 0) === 0 ? (
-                      <p className="font-medium">Schedule: TBA</p>
-                    ) : (
-                      <>
-                        {(cls.schedules ?? []).slice(0, 2).map((schedule) => (
-                          <p key={schedule.id} className="font-medium truncate">
-                            {formatScheduleLine(schedule)}
-                          </p>
-                        ))}
-                        {(cls.schedules?.length ?? 0) > 2 && (
-                          <p className="text-[11px] text-muted-foreground">+{(cls.schedules?.length ?? 0) - 2} more schedule(s)</p>
-                        )}
-                      </>
-                    )}
+              <Card className="overflow-hidden hover:shadow-md transition-all hover:scale-[1.02] cursor-pointer h-full">
+                <div className={`h-2 ${getClassColor(cls.subjectCode)}`} />
+                <CardContent className="p-4 space-y-2">
+                  <p className="font-semibold">{cls.subjectName} ({cls.subjectCode})</p>
+                  <p className="text-sm text-muted-foreground">
+                    {cls.section?.name} • Grade {cls.section?.gradeLevel || cls.subjectGradeLevel}
+                  </p>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span>👤 {cls.enrollmentCount ?? 0} students</span>
+                    {cls.room && <span>🏫 {cls.room}</span>}
                   </div>
-                }
-              />
+                </CardContent>
+              </Card>
             </Link>
           ))}
         </div>
       )}
+    </div>
+=======
+    <TeacherPageShell
+      badge="Teacher Classes"
+      title="Classes That Feel Ready to Teach"
+      description="Manage active, archived, and hidden classes in one livelier workspace, with class presentation controls and quicker visual scanning built into the same flow."
+      actions={(
+        <>
+          <Link href="/dashboard/teacher">
+            <Button variant="outline" className="teacher-button-outline rounded-xl px-4 font-black">
+              Back to Dashboard
+            </Button>
+          </Link>
+          <Button className="teacher-button-solid rounded-xl px-4 font-black" onClick={fetchData}>
+            Refresh Classes
+          </Button>
+        </>
+      )}
+      stats={(
+        <>
+          <TeacherStatCard
+            label="Visible Classes"
+            value={classes.length}
+            caption={tab === 'active' ? 'Currently in teaching rotation' : 'Shown in this view'}
+            icon={School}
+            accent="sky"
+          />
+          <TeacherStatCard
+            label="Students"
+            value={totalStudents}
+            caption="Across the classes in this tab"
+            icon={Presentation}
+            accent="teal"
+          />
+          <TeacherStatCard
+            label="Schedules"
+            value={classes.reduce((sum, entry) => sum + (entry.schedules?.length ?? 0), 0)}
+            caption="Mapped schedule blocks"
+            icon={Sparkles}
+            accent="amber"
+          />
+          <TeacherStatCard
+            label="Card Styling"
+            value={editingClass ? 'Editing' : 'Ready'}
+            caption={editingClass ? editingClass.subjectName : 'Choose a class to customize'}
+            icon={Wand2}
+            accent="rose"
+          />
+        </>
+      )}
+    >
+      <TeacherSectionCard
+        title="Class Views"
+        description="Swap between active, archived, and hidden classes without losing the new visual rhythm."
+      >
+        <div className="teacher-dashboard-tab-row">
+          {(['active', 'archived', 'hidden'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className="teacher-tab px-4 text-sm font-black"
+              data-state={tab === value ? 'active' : 'inactive'}
+              onClick={() => setTab(value)}
+            >
+              {value === 'active' ? 'Active' : value === 'archived' ? 'Archived' : 'Hidden'}
+            </button>
+          ))}
+        </div>
+      </TeacherSectionCard>
+
+      <TeacherSectionCard
+        title="Your Teaching Spaces"
+        description="These cards stay interactive and customizable, but now sit inside a more deliberate teacher command center."
+        action={(
+          <div className="teacher-dashboard-chip">
+            <Palette className="h-4 w-4" />
+            Customize from any class card
+          </div>
+        )}
+      >
+        {classes.length === 0 ? (
+          <TeacherEmptyState
+            title="No classes in this view"
+            description={
+              tab === 'hidden'
+                ? 'Hidden classes stay here until you restore them to your regular workspace.'
+                : 'Once classes are assigned to you, they will appear here with stronger scheduling and customization context.'
+            }
+          />
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {classes.map((course) => (
+              <Link key={course.id} href={`/dashboard/teacher/classes/${course.id}`}>
+                <ClassCard
+                  classItem={course}
+                  className="teacher-dashboard-class-card"
+                  subtitle={`${course.section?.name || 'Standard Section'} • Grade ${course.section?.gradeLevel || course.subjectGradeLevel || 'TBA'}`}
+                  meta={[
+                    `${course.enrollments?.length ?? 0} students`,
+                    course.room ? `Room ${course.room}` : 'Room TBA',
+                  ]}
+                  action={(
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="shrink-0 rounded-xl bg-white/80 font-black text-slate-700 shadow-sm hover:bg-white"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        setEditingClass(course);
+                      }}
+                    >
+                      <Palette className="mr-1 h-4 w-4" />
+                      Customize
+                    </Button>
+                  )}
+                  footer={(
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      {(course.schedules?.length ?? 0) === 0 ? (
+                        <p className="font-medium">Schedule: TBA</p>
+                      ) : (
+                        <>
+                          {(course.schedules ?? []).slice(0, 2).map((schedule) => (
+                            <p key={schedule.id} className="truncate font-medium">
+                              {formatScheduleLine(schedule)}
+                            </p>
+                          ))}
+                          {(course.schedules?.length ?? 0) > 2 && (
+                            <p className="text-[11px] text-muted-foreground">
+                              +{(course.schedules?.length ?? 0) - 2} more schedule(s)
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                />
+              </Link>
+            ))}
+          </div>
+        )}
+      </TeacherSectionCard>
 
       <Dialog open={Boolean(editingClass)} onOpenChange={(open) => !open && setEditingClass(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-5xl rounded-[1.8rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(240,249,255,0.92))] shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Customize Class Card</DialogTitle>
+            <DialogTitle className="text-2xl font-black tracking-tight text-[var(--teacher-text-strong)]">
+              Customize Class Card
+            </DialogTitle>
           </DialogHeader>
 
           {editingClass ? (
             <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
               <div className="space-y-4">
-                <p className="text-sm font-medium text-muted-foreground">Preview</p>
+                <p className="text-sm font-bold uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                  Live Preview
+                </p>
                 <ClassCard
                   classItem={{ ...editingClass, cardPreset: selectedPreset }}
                   subtitle={`${editingClass.section?.name || 'Standard Section'} • Grade ${editingClass.section?.gradeLevel || editingClass.subjectGradeLevel || 'TBA'}`}
@@ -236,42 +351,57 @@ export default function TeacherClassesPage() {
                     `${editingClass.enrollments?.length ?? 0} students`,
                     editingClass.room ? `Room ${editingClass.room}` : 'Room TBA',
                   ]}
-                  footer={<p className="text-xs text-muted-foreground">Changes here apply to both teacher and student dashboards.</p>}
+                  footer={(
+                    <p className="text-xs text-muted-foreground">
+                      Changes here apply to both teacher and student dashboards.
+                    </p>
+                  )}
                 />
               </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Preset</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {CLASS_CARD_PRESETS.map((preset) => {
-                      const active = preset.id === selectedPreset;
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => setSelectedPreset(preset.id)}
-                          className={`rounded-xl border p-3 text-left transition ${active ? 'border-slate-900 ring-2 ring-slate-900/10' : 'border-slate-200 hover:border-slate-400'}`}
-                        >
-                          <div className={`h-12 rounded-lg ${preset.bannerClass}`} />
-                          <p className="mt-2 text-sm font-semibold">{preset.label}</p>
-                        </button>
-                      );
-                    })}
+              <div className="space-y-5">
+                <div className="teacher-dashboard-dialog-card">
+                  <div className="space-y-3">
+                    <p className="text-sm font-black text-[var(--teacher-text-strong)]">Preset</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {CLASS_CARD_PRESETS.map((preset) => {
+                        const active = preset.id === selectedPreset;
+
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => setSelectedPreset(preset.id)}
+                            className={`teacher-dashboard-preset ${active ? 'teacher-dashboard-preset--active' : ''}`}
+                          >
+                            <div className={`h-12 rounded-xl ${preset.bannerClass}`} />
+                            <p className="mt-2 text-sm font-black text-slate-900">{preset.label}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <Button onClick={handleSavePresentation} disabled={savingPresentation}>
-                    {savingPresentation ? 'Saving...' : 'Save preset'}
+
+                  <Button
+                    className="teacher-button-solid rounded-xl font-black"
+                    onClick={handleSavePresentation}
+                    disabled={savingPresentation}
+                  >
+                    {savingPresentation ? 'Saving...' : 'Save Preset'}
                   </Button>
                 </div>
 
-                <div className="space-y-2 rounded-2xl border p-4">
-                  <p className="text-sm font-medium">Custom banner</p>
-                  <p className="text-xs text-muted-foreground">
-                    Upload a header image to override the preset banner background.
-                  </p>
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-slate-50">
+                <div className="teacher-dashboard-dialog-card">
+                  <div className="space-y-2">
+                    <p className="text-sm font-black text-[var(--teacher-text-strong)]">Custom Banner</p>
+                    <p className="text-xs leading-6 text-[var(--teacher-text-muted)]">
+                      Upload a header image to override the preset background while keeping the class card structure.
+                    </p>
+                  </div>
+
+                  <label className="teacher-dashboard-upload">
                     <Palette className="h-4 w-4" />
-                    {uploadingBanner ? 'Uploading...' : 'Upload banner'}
+                    {uploadingBanner ? 'Uploading...' : 'Upload Banner'}
                     <input
                       type="file"
                       accept="image/png,image/jpeg,image/webp,image/gif"
@@ -283,21 +413,31 @@ export default function TeacherClassesPage() {
                       }}
                     />
                   </label>
+
                   {editingClass.cardBannerUrl ? (
-                    <Button variant="outline" onClick={handleRemoveBanner} disabled={savingPresentation}>
-                      Remove custom banner
+                    <Button
+                      variant="outline"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={handleRemoveBanner}
+                      disabled={savingPresentation}
+                    >
+                      Remove Custom Banner
                     </Button>
                   ) : null}
-                </div>
 
-                <div className="rounded-2xl border p-4 text-sm text-muted-foreground">
-                  Active preset: <span className="font-semibold text-slate-900">{getClassCardPreset(selectedPreset).label}</span>
+                  <div className="rounded-2xl border border-white/50 bg-white/70 p-4 text-sm text-[var(--teacher-text-muted)]">
+                    Active preset:{' '}
+                    <span className="font-black text-[var(--teacher-text-strong)]">
+                      {getClassCardPreset(selectedPreset).label}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
-    </div>
+    </TeacherPageShell>
+>>>>>>> Stashed changes
   );
 }

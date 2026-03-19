@@ -2,9 +2,11 @@ import { SystemEvaluationsPage } from '@/components/evaluations/system-evaluatio
 
 export default function AdminEvaluationsPage() {
   return (
-    <SystemEvaluationsPage
-      heading="System Evaluations"
-      description="Review submitted LMS/LXP evaluation responses from across the platform."
-    />
+    <div className="theme-admin-bridge">
+      <SystemEvaluationsPage
+        heading="System Evaluations"
+        description="Review submitted LMS/LXP evaluation responses from across the platform."
+      />
+    </div>
   );
 }

@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowLeft, BookOpenCheck, CalendarRange, School2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
+import {
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
@@ -22,7 +28,6 @@ export default function CreateClassPage() {
   const schoolYears = useMemo(() => {
     const now = new Date();
     const year = now.getFullYear();
-    // Philippine SY starts June; if before June we're still in the previous SY
     const startYear = now.getMonth() >= 5 ? year : year - 1;
     return Array.from({ length: 4 }, (_, i) => `${startYear + i}-${startYear + i + 1}`);
   }, []);
@@ -77,36 +82,53 @@ export default function CreateClassPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-56" />
-        <Skeleton className="h-[520px] rounded-lg" />
+        <Skeleton className="h-56 rounded-[1.9rem]" />
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
+        </div>
+        <Skeleton className="h-[38rem] rounded-[1.7rem]" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Create Class</h1>
-        <p className="text-muted-foreground">Set class details, teacher assignment, and weekly schedule.</p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Class Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ClassForm
-            initialValues={initialValues}
-            sections={sections}
-            teachers={teachers}
-            schoolYears={schoolYears}
-            saving={saving}
-            submitLabel="Create"
-            onSubmit={handleSubmit}
-            onCancel={() => router.push('/dashboard/admin/classes')}
-          />
-        </CardContent>
-      </Card>
-    </div>
+    <AdminPageShell
+      badge="Admin Classes"
+      title="Create Class"
+      description="Launch a new class from a more polished setup flow that keeps assignment, scheduling, and school-year details easy to review."
+      actions={(
+        <Button
+          variant="outline"
+          className="admin-button-outline rounded-xl font-black"
+          onClick={() => router.push('/dashboard/admin/classes')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Classes
+        </Button>
+      )}
+      stats={(
+        <>
+          <AdminStatCard label="Sections Ready" value={sections.length} caption="Available section assignments" icon={School2} accent="emerald" />
+          <AdminStatCard label="Teachers Ready" value={teachers.length} caption="Eligible teacher assignments" icon={BookOpenCheck} accent="sky" />
+          <AdminStatCard label="School Year" value={schoolYears[0] || '—'} caption="Default academic cycle for this class" icon={CalendarRange} accent="amber" />
+        </>
+      )}
+    >
+      <AdminSectionCard
+        title="Class Details"
+        description="The create flow keeps the same logic, now presented inside a stronger admin workspace shell."
+      >
+        <ClassForm
+          initialValues={initialValues}
+          sections={sections}
+          teachers={teachers}
+          schoolYears={schoolYears}
+          saving={saving}
+          submitLabel="Create Class"
+          onSubmit={handleSubmit}
+          onCancel={() => router.push('/dashboard/admin/classes')}
+        />
+      </AdminSectionCard>
+    </AdminPageShell>
   );
 }

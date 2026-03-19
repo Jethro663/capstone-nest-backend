@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ShieldAlert, TrendingUp, Users } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { performanceService } from '@/services/performance-service';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -17,6 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  TeacherEmptyState,
+  TeacherPageShell,
+  TeacherSectionCard,
+  TeacherStatCard,
+} from '@/components/teacher/TeacherPageShell';
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
 import type {
@@ -147,14 +152,15 @@ export default function TeacherPerformancePage() {
   if (loadingClasses) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-28 rounded-lg" />
-        <Skeleton className="h-72 rounded-lg" />
+        <Skeleton className="h-44 rounded-[1.8rem]" />
+        <Skeleton className="h-24 rounded-[1.5rem]" />
+        <Skeleton className="h-[34rem] rounded-[1.8rem]" />
       </div>
     );
   }
 
   return (
+<<<<<<< Updated upstream
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -165,11 +171,22 @@ export default function TeacherPerformancePage() {
               : 'Select a class to load the active at-risk threshold.'}
           </p>
         </div>
+=======
+    <TeacherPageShell
+      badge="Performance Command Center"
+      title="Performance Tracking"
+      description={
+        threshold !== null
+          ? `Current at-risk threshold: ${threshold}%. Track class health, monitor risk changes, and recompute snapshots when fresh scores arrive.`
+          : 'Review blended score health, recent risk transitions, and intervention readiness from one livelier teacher performance view.'
+      }
+      actions={
+>>>>>>> Stashed changes
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={selectedClassId}
             onChange={(event) => setSelectedClassId(event.target.value)}
-            className="rounded-md border px-3 py-2 text-sm min-w-[240px]"
+            className="teacher-select min-w-[260px] text-sm"
           >
             <option value="">Select class...</option>
             {classes.map((item) => (
@@ -179,32 +196,68 @@ export default function TeacherPerformancePage() {
             ))}
           </select>
           <Button
-            variant="outline"
+            variant="teacherOutline"
             onClick={handleRecompute}
             disabled={!selectedClassId || recomputing}
+            className="rounded-2xl px-5"
           >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${recomputing ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className={`h-4 w-4 ${recomputing ? 'animate-spin' : ''}`} />
             Recompute
           </Button>
         </div>
-      </div>
-
+      }
+      stats={
+        <>
+          <TeacherStatCard
+            label="Students"
+            value={summary?.totalStudents ?? 0}
+            caption={`${summary?.studentsWithData ?? 0} with data snapshots`}
+            icon={Users}
+            accent="sky"
+          />
+          <TeacherStatCard
+            label="At Risk"
+            value={summary?.atRiskCount ?? 0}
+            caption={`${(summary?.atRiskRate ?? 0).toFixed(1)}% of selected class`}
+            icon={ShieldAlert}
+            accent="rose"
+          />
+          <TeacherStatCard
+            label="Average Blend"
+            value={toPercent(summary?.averages.blended ?? null)}
+            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} blended score` : 'No class selected'}
+            icon={TrendingUp}
+            accent="teal"
+          />
+          <TeacherStatCard
+            label="Threshold"
+            value={threshold !== null ? `${threshold}%` : '--'}
+            caption="Current class risk threshold"
+            icon={AlertTriangle}
+            accent="amber"
+          />
+        </>
+      }
+    >
       {!selectedClassId ? (
-        <Card>
-          <CardContent className="p-6 text-center text-muted-foreground">
-            Select a class to view performance summaries.
-          </CardContent>
-        </Card>
+        <TeacherSectionCard
+          title="Waiting for a class"
+          description="Select a class above to reveal the at-risk list and recent performance transitions."
+        >
+          <TeacherEmptyState
+            title="No class selected yet"
+            description="Choose one of your classes to load summary metrics, learner risk states, and change logs."
+          />
+        </TeacherSectionCard>
       ) : loadingData ? (
         <div className="space-y-4">
-          <Skeleton className="h-24 rounded-lg" />
-          <Skeleton className="h-72 rounded-lg" />
-          <Skeleton className="h-72 rounded-lg" />
+          <Skeleton className="h-24 rounded-[1.5rem]" />
+          <Skeleton className="h-[24rem] rounded-[1.8rem]" />
+          <Skeleton className="h-[24rem] rounded-[1.8rem]" />
         </div>
       ) : (
         <>
+<<<<<<< Updated upstream
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
@@ -268,65 +321,116 @@ export default function TeacherPerformancePage() {
                   No at-risk students found for this class.
                 </p>
               ) : (
+=======
+          <TeacherSectionCard
+            title="At-Risk Students"
+            description="Spot who needs immediate attention using assessment, class record, and blended performance together."
+          >
+            {(atRisk?.students.length ?? 0) === 0 ? (
+              <TeacherEmptyState
+                title="No at-risk students found"
+                description="This class is currently stable based on the latest blended scores and thresholds."
+              />
+            ) : (
+              <div className="teacher-table-shell">
+>>>>>>> Stashed changes
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Assessment Avg</TableHead>
-                      <TableHead>Class Record Avg</TableHead>
-                      <TableHead>Blended Score</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Computed</TableHead>
+                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Student
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Assessment Avg
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Class Record Avg
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Blended Score
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Last Computed
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="[&_tr:last-child]:border-0">
                     {(atRisk?.students ?? []).map((student) => (
-                      <TableRow key={student.studentId}>
-                        <TableCell className="font-medium">
+                      <TableRow
+                        key={student.studentId}
+                        className="teacher-table-row border-white/10"
+                      >
+                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
                           {formatStudentName(student)}
                         </TableCell>
-                        <TableCell>{toPercent(student.assessmentAverage)}</TableCell>
-                        <TableCell>{toPercent(student.classRecordAverage)}</TableCell>
-                        <TableCell>{toPercent(student.blendedScore)}</TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {toPercent(student.assessmentAverage)}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {toPercent(student.classRecordAverage)}
+                        </TableCell>
+                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                          {toPercent(student.blendedScore)}
+                        </TableCell>
                         <TableCell>
-                          <Badge variant={student.isAtRisk ? 'destructive' : 'secondary'}>
+                          <Badge
+                            className={student.isAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}
+                          >
                             {student.isAtRisk ? 'At Risk' : 'Stable'}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatDateTime(student.lastComputedAt)}</TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {formatDateTime(student.lastComputedAt)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </TeacherSectionCard>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Recent Performance Logs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(logs?.logs.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No risk status transitions recorded yet.
-                </p>
-              ) : (
+          <TeacherSectionCard
+            title="Recent Performance Logs"
+            description="Follow risk-state transitions over time to understand how learners are moving."
+          >
+            {(logs?.logs.length ?? 0) === 0 ? (
+              <TeacherEmptyState
+                title="No risk transitions recorded"
+                description="When learner risk states change, the latest transitions will be listed here."
+              />
+            ) : (
+              <div className="teacher-table-shell">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>When</TableHead>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Transition</TableHead>
-                      <TableHead>Blended</TableHead>
-                      <TableHead>Trigger</TableHead>
+                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        When
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Student
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Transition
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Blended
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Trigger
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="[&_tr:last-child]:border-0">
                     {(logs?.logs ?? []).map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell>{formatDateTime(entry.createdAt)}</TableCell>
-                        <TableCell>
+                      <TableRow key={entry.id} className="teacher-table-row border-white/10">
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {formatDateTime(entry.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
                           {entry.student
                             ? formatStudentName({
                                 studentId: entry.student.id,
@@ -347,44 +451,53 @@ export default function TeacherPerformancePage() {
                             : entry.studentId}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Badge
-                              variant={entry.previousIsAtRisk ? 'destructive' : 'secondary'}
+                              className={entry.previousIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}
                             >
                               {entry.previousIsAtRisk ? 'At Risk' : 'Stable'}
                             </Badge>
-                            <span className="text-muted-foreground">to</span>
+                            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
+                              to
+                            </span>
                             <Badge
-                              variant={entry.currentIsAtRisk ? 'destructive' : 'secondary'}
+                              className={entry.currentIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}
                             >
                               {entry.currentIsAtRisk ? 'At Risk' : 'Stable'}
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell>{toPercent(entry.blendedScore)}</TableCell>
-                        <TableCell>{formatTriggerSource(entry.triggerSource)}</TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {toPercent(entry.blendedScore)}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {formatTriggerSource(entry.triggerSource)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </TeacherSectionCard>
+
+          {selectedClassId && (summary?.atRiskCount ?? 0) > 0 ? (
+            <div className="teacher-soft-panel flex items-start gap-3 rounded-[1.5rem] px-5 py-4">
+              <div className="rounded-2xl bg-amber-400/15 p-3 text-amber-600 dark:text-amber-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-black uppercase tracking-[0.2em] text-[var(--teacher-text-strong)]">
+                  Intervention-ready list generated
+                </p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">
+                  This class currently has students who can flow directly into intervention planning based on the latest risk snapshot.
+                </p>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
-
-      {selectedClassId && (summary?.atRiskCount ?? 0) > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <div className="flex items-center gap-2 font-medium">
-            <AlertTriangle className="h-4 w-4" />
-            Intervention-ready list generated
-          </div>
-          <p className="mt-1 text-xs">
-            This output can feed later LXP intervention flows once those modules
-            are available.
-          </p>
-        </div>
-      )}
-    </div>
+    </TeacherPageShell>
   );
 }

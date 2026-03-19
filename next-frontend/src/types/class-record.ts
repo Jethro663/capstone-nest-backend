@@ -67,6 +67,7 @@ export interface SpreadsheetCategory {
   id: string;
   name: string;
   weight: number;
+  totalHps?: number;
   items: {
     id: string;
     title: string;
@@ -79,8 +80,11 @@ export interface SpreadsheetCategory {
 export interface SpreadsheetStudentRow {
   studentId: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
   lrn?: string;
+  email?: string;
+  gender?: string;
   categories: {
     categoryId: string;
     scores: (number | null)[];
@@ -90,18 +94,29 @@ export interface SpreadsheetStudentRow {
   }[];
   initialGrade: number;
   quarterlyGrade: number;
+  remarks?: 'Passed' | 'For Intervention';
 }
 
 export interface SpreadsheetData {
   classRecord: ClassRecord;
   header: {
+    region?: string;
+    division?: string;
+    district?: string;
     schoolName?: string;
+    schoolId?: string;
     schoolYear?: string;
     quarter: GradingPeriod;
     gradeLevel?: string;
     section?: string;
     teacher?: string;
     subject?: string;
+    subjectCode?: string;
+    workbookTitle?: string;
+    workbookSubtitle?: string;
+    workbookSheetName?: string;
+    templateKey?: string;
+    templateLabel?: string;
   };
   categories: SpreadsheetCategory[];
   students: SpreadsheetStudentRow[];

@@ -2,11 +2,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, History, Loader2, MessageSquare, Plus, Send, Wifi, WifiOff } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
 import { createApiClient } from '@/lib/api-client';
+import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
 
 interface ChatMessage {
   id: string;
@@ -73,30 +73,15 @@ const getSessionType = (item: HistoryInteraction) => item.sessionType ?? item.se
 const getModelUsed = (item: HistoryInteraction) => item.modelUsed ?? item.model_used ?? 'unknown';
 const getCreatedAt = (item: HistoryInteraction) => new Date(item.createdAt ?? item.created_at ?? Date.now());
 
-const truncate = (value: string, max = 56) =>
-  value.length > max ? `${value.slice(0, max - 3).trimEnd()}...` : value;
-
-const formatTime = (value: Date) =>
-  value.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-const formatHistoryTime = (value: Date) =>
-  value.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const truncate = (value: string, max = 56) => value.length > max ? `${value.slice(0, max - 3).trimEnd()}...` : value;
+const formatTime = (value: Date) => value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const formatHistoryTime = (value: Date) => value.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 function buildHistorySessions(items: HistoryInteraction[]): HistorySession[] {
   const grouped = new Map<string, HistoryInteraction[]>();
-
   items.forEach((item) => {
     const sessionType = getSessionType(item);
     if (sessionType && sessionType !== 'mentor_chat') return;
-
     const key = getSessionId(item) ?? item.id;
     const existing = grouped.get(key);
     if (existing) {
@@ -108,32 +93,18 @@ function buildHistorySessions(items: HistoryInteraction[]): HistorySession[] {
 
   return Array.from(grouped.entries())
     .map(([key, rows]) => {
-      const sortedRows = [...rows].sort(
-        (a, b) => getCreatedAt(a).getTime() - getCreatedAt(b).getTime(),
-      );
+      const sortedRows = [...rows].sort((a, b) => getCreatedAt(a).getTime() - getCreatedAt(b).getTime());
       const firstRow = sortedRows[0];
       const updatedAt = getCreatedAt(sortedRows[sortedRows.length - 1]);
       const firstPrompt = getInputText(firstRow).trim();
       const lastReply = getOutputText(sortedRows[sortedRows.length - 1]).trim();
-
       const messages = sortedRows.flatMap((row) => {
         const timestamp = getCreatedAt(row);
         return [
-          {
-            id: `${row.id}-user`,
-            role: 'user' as const,
-            content: getInputText(row),
-            timestamp,
-          },
-          {
-            id: `${row.id}-assistant`,
-            role: 'assistant' as const,
-            content: getOutputText(row),
-            timestamp,
-          },
+          { id: `${row.id}-user`, role: 'user' as const, content: getInputText(row), timestamp },
+          { id: `${row.id}-assistant`, role: 'assistant' as const, content: getOutputText(row), timestamp },
         ];
       });
-
       return {
         id: key,
         sessionId: getSessionId(firstRow),
@@ -200,10 +171,7 @@ export default function AdminChatbotPage() {
   }, [checkHealth, fetchHistory]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: 'smooth',
-    });
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
 
   useEffect(() => {
@@ -224,52 +192,33 @@ export default function AdminChatbotPage() {
   const sendMessage = async (text?: string) => {
     const content = (text ?? input).trim();
     if (!content || sending) return;
-
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
-
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content, timestamp: new Date() };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setSending(true);
-
     try {
       const payload: Record<string, string> = { message: content };
       if (sessionId) payload.sessionId = sessionId;
-
       const { data } = await api.post('/ai/chat', payload);
       const reply = data.data;
       const nextSessionId = reply.sessionId ?? sessionId ?? null;
-
       if (nextSessionId) {
         setSessionId(nextSessionId);
         setSelectedHistoryId(nextSessionId);
       }
-
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: reply.reply,
         timestamp: new Date(),
       };
-
       setMessages((prev) => [...prev, assistantMsg]);
       await fetchHistory();
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorText =
-        err?.response?.data?.message ?? 'Failed to reach Ja. Please try again.';
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Warning: ${errorText}`,
-          timestamp: new Date(),
-        },
-      ]);
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to reach Ja. Please try again.';
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: `Warning: ${errorText}`, timestamp: new Date() }]);
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -292,229 +241,184 @@ export default function AdminChatbotPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="flex items-center justify-between border-b bg-white px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-            <Bot className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold">J.A.K.I.P.I.R</h1>
-            <p className="text-xs text-muted-foreground">
-              AI Mentor Detective - Admin Testing Console
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
+    <AdminPageShell
+      badge="Admin AI Console"
+      title="J.A.K.I.P.I.R Testing Console"
+      description="The admin chatbot now feels more like part of the admin workspace, with a calmer shell around history, health, and live chat while keeping the same AI endpoints and session flow."
+      actions={(
+        <>
           {healthLoading ? (
-            <Badge variant="outline" className="gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" /> Checking...
-            </Badge>
+            <span className="admin-chip"><Loader2 className="h-4 w-4 animate-spin" /> Checking...</span>
           ) : health?.ollamaOnline ? (
-            <Badge variant="default" className="gap-1 bg-green-600 hover:bg-green-700">
-              <Wifi className="h-3 w-3" /> {health.model}
-            </Badge>
+            <span className="admin-chip"><Wifi className="h-4 w-4" /> {health.model}</span>
           ) : (
-            <Badge variant="destructive" className="gap-1">
-              <WifiOff className="h-3 w-3" /> Offline
-            </Badge>
+            <span className="admin-chip"><WifiOff className="h-4 w-4" /> Offline</span>
           )}
-
-          <Button variant="outline" size="sm" onClick={startNewChat}>
-            <Plus className="mr-1 h-4 w-4" />
+          <Button variant="outline" className="admin-button-outline rounded-xl px-4 font-black" onClick={startNewChat}>
+            <Plus className="h-4 w-4" />
             New Chat
           </Button>
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-80 shrink-0 border-r bg-slate-50/70 lg:flex lg:flex-col">
-          <div className="border-b px-4 py-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <History className="h-4 w-4" />
-              Recent Chats
+        </>
+      )}
+      stats={(
+        <>
+          <AdminStatCard label="Saved Sessions" value={historySessions.length} caption="Available in chat history" icon={History} accent="emerald" />
+          <AdminStatCard label="Current Messages" value={messages.length} caption={sessionId ? 'Inside the open session' : 'No active session yet'} icon={MessageSquare} accent="sky" />
+          <AdminStatCard label="Model" value={health?.model ?? 'unknown'} caption={health?.ollamaOnline ? 'Currently reachable' : 'Not reachable right now'} icon={Bot} accent="amber" />
+          <AdminStatCard label="Session State" value={sessionId ? 'Active' : 'Fresh'} caption={selectedHistoryId ? 'History session loaded' : 'Ready for a new prompt'} icon={Plus} accent="rose" />
+        </>
+      )}
+    >
+      <AdminSectionCard title="Chat Workspace" description="The AI console is still the same tool underneath, but the outer frame now feels more intentional and easier to use.">
+        <div className="grid min-h-[48rem] gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
+          <aside className="admin-chat-surface flex min-h-0 flex-col p-0">
+            <div className="border-b border-[var(--admin-outline)] px-4 py-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--admin-text-strong)]">
+                <History className="h-4 w-4" />
+                Recent Chats
+              </div>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">Reopen a previous JAKIPIR conversation.</p>
             </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Reopen a previous JAKIPIR conversation.
-            </p>
-          </div>
-
-          <div className="flex-1 space-y-2 overflow-y-auto p-3">
-            {historyLoading ? (
-              <div className="flex items-center gap-2 rounded-2xl border bg-white px-3 py-3 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading history...
-              </div>
-            ) : historyError ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
-                {historyError}
-              </div>
-            ) : historySessions.length === 0 ? (
-              <div className="rounded-2xl border border-dashed bg-white px-3 py-6 text-center text-sm text-slate-500">
-                No saved chats yet.
-              </div>
-            ) : (
-              historySessions.map((historySession) => (
-                <button
-                  key={historySession.id}
-                  type="button"
-                  onClick={() => openHistorySession(historySession)}
-                  className={cn(
-                    'w-full rounded-2xl border bg-white px-3 py-3 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5',
-                    selectedHistoryId === historySession.id && 'border-primary bg-primary/5',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">
-                        {historySession.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                        {historySession.preview}
-                      </p>
+            <div className="flex-1 space-y-2 overflow-y-auto p-3">
+              {historyLoading ? (
+                <div className="admin-filter-shell flex items-center gap-2 text-sm text-[var(--admin-text-muted)]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading history...
+                </div>
+              ) : historyError ? (
+                <div className="admin-filter-shell text-sm text-rose-700">{historyError}</div>
+              ) : historySessions.length === 0 ? (
+                <div className="admin-filter-shell text-center text-sm text-[var(--admin-text-muted)]">No saved chats yet.</div>
+              ) : (
+                historySessions.map((historySession) => (
+                  <button
+                    key={historySession.id}
+                    type="button"
+                    onClick={() => openHistorySession(historySession)}
+                    className={cn('admin-grid-card w-full text-left', selectedHistoryId === historySession.id && 'border-[var(--admin-outline-strong)] bg-emerald-50/60')}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-[var(--admin-text-strong)]">{historySession.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-[var(--admin-text-muted)]">{historySession.preview}</p>
+                      </div>
+                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-text-muted)]" />
                     </div>
-                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>{historySession.turns} turn(s) • {historySession.model}</span>
-                    <span>{formatHistoryTime(historySession.updatedAt)}</span>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </aside>
+                    <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--admin-text-muted)]">
+                      <span>{historySession.turns} turn(s) • {historySession.model}</span>
+                      <span>{formatHistoryTime(historySession.updatedAt)}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </aside>
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div
-            ref={scrollRef}
-            className="flex-1 space-y-4 overflow-y-auto bg-gray-50/50 p-6"
-          >
-            {messages.length === 0 && !sending && (
-              <div className="flex flex-col items-center justify-center gap-6 pt-20 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <Bot className="h-8 w-8 text-primary" />
+          <div className="admin-chat-surface flex min-h-0 flex-col p-0">
+            <div className="border-b border-[var(--admin-outline)] bg-white/70 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  <Bot className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold">Meet Ja</h2>
-                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                    J.A.K.I.P.I.R is your detective-hype-coach AI mentor.
-                    Ask a question, pick a suggestion, or open a previous chat.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-2">
-                  {SUGGESTION_CHIPS.map((chip) => (
-                    <Button
-                      key={chip}
-                      variant="outline"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => sendMessage(chip)}
-                    >
-                      {chip}
-                    </Button>
-                  ))}
+                  <h2 className="text-lg font-black text-[var(--admin-text-strong)]">Ja Admin Console</h2>
+                  <p className="text-xs text-[var(--admin-text-muted)]">AI mentor detective for admin-side testing and inspection.</p>
                 </div>
               </div>
-            )}
+            </div>
 
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  'flex gap-3',
-                  msg.role === 'user' ? 'justify-end' : 'justify-start',
-                )}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <Bot className="h-4 w-4 text-primary" />
+            <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.72),rgba(236,253,245,0.45))] p-6">
+              {messages.length === 0 && !sending ? (
+                <div className="flex flex-col items-center justify-center gap-6 pt-16 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <Bot className="h-8 w-8" />
                   </div>
-                )}
+                  <div>
+                    <h3 className="text-xl font-black text-[var(--admin-text-strong)]">Meet Ja</h3>
+                    <p className="mt-1 max-w-md text-sm text-[var(--admin-text-muted)]">
+                      Ask a question, pick a suggestion, or reopen a previous session from the admin history rail.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {SUGGESTION_CHIPS.map((chip) => (
+                      <Button key={chip} variant="outline" size="sm" className="admin-button-outline rounded-xl text-xs font-black" onClick={() => sendMessage(chip)}>
+                        {chip}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
-                <div
-                  className={cn(
-                    'max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap',
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'border bg-white text-foreground shadow-sm',
-                  )}
-                >
-                  {msg.content}
+              {messages.map((msg) => (
+                <div key={msg.id} className={cn('flex gap-3', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+                  {msg.role === 'assistant' ? (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                  ) : null}
+
                   <div
                     className={cn(
-                      'mt-1 text-[10px]',
+                      'max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap',
                       msg.role === 'user'
-                        ? 'text-primary-foreground/60'
-                        : 'text-muted-foreground',
+                        ? 'bg-[linear-gradient(135deg,#0f766e,#10b981)] text-white shadow-lg shadow-emerald-900/10'
+                        : 'border border-[var(--admin-outline)] bg-white text-foreground shadow-sm',
                     )}
                   >
-                    {formatTime(msg.timestamp)}
+                    {msg.content}
+                    <div className={cn('mt-1 text-[10px]', msg.role === 'user' ? 'text-white/65' : 'text-muted-foreground')}>
+                      {formatTime(msg.timestamp)}
+                    </div>
+                  </div>
+
+                  {msg.role === 'user' ? (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold uppercase text-slate-600">
+                      {user?.firstName?.[0] ?? 'U'}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+
+              {sending ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div className="flex items-center gap-1 rounded-2xl border border-[var(--admin-outline)] bg-white px-4 py-3 shadow-sm">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]" />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]" />
                   </div>
                 </div>
+              ) : null}
+            </div>
 
-                {msg.role === 'user' && (
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold uppercase text-gray-600">
-                    {user?.firstName?.[0] ?? 'U'}
-                  </div>
-                )}
+            <div className="border-t border-[var(--admin-outline)] bg-white/75 p-4">
+              {sessionId ? <p className="mb-2 text-[10px] text-muted-foreground">Session: {sessionId}</p> : null}
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={inputRef}
+                  className="admin-input flex-1 resize-none rounded-xl bg-white px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+                  placeholder="Type a message for Ja..."
+                  rows={1}
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onInput={(event) => {
+                    const element = event.currentTarget;
+                    element.style.height = 'auto';
+                    element.style.height = `${Math.min(element.scrollHeight, 120)}px`;
+                  }}
+                  disabled={sending}
+                />
+                <Button size="icon" className="admin-button-solid h-11 w-11 rounded-xl" onClick={() => sendMessage()} disabled={!input.trim() || sending}>
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
               </div>
-            ))}
-
-            {sending && (
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Bot className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex items-center gap-1 rounded-2xl border bg-white px-4 py-3 shadow-sm">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="border-t bg-white p-4">
-            {sessionId && (
-              <p className="mb-2 text-[10px] text-muted-foreground">
-                Session: {sessionId}
-              </p>
-            )}
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={inputRef}
-                className="flex-1 resize-none rounded-xl border bg-gray-50 px-4 py-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
-                placeholder="Type a message for Ja..."
-                rows={1}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={handleKeyDown}
-                onInput={(event) => {
-                  const element = event.currentTarget;
-                  element.style.height = 'auto';
-                  element.style.height = `${Math.min(element.scrollHeight, 120)}px`;
-                }}
-                disabled={sending}
-              />
-              <Button
-                size="icon"
-                className="h-11 w-11 rounded-xl"
-                onClick={() => sendMessage()}
-                disabled={!input.trim() || sending}
-              >
-                {sending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </AdminSectionCard>
+    </AdminPageShell>
   );
 }
