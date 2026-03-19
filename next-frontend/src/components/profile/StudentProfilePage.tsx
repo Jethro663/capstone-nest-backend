@@ -131,10 +131,6 @@ export default function StudentProfilePage() {
     event.target.value = '';
 
     if (!file) return;
-    if (isLocked) {
-      toast.error('Profile picture is locked once your profile is completed');
-      return;
-    }
 
     try {
       setUploadingAvatar(true);
@@ -277,7 +273,7 @@ export default function StudentProfilePage() {
             <Button
               type="button"
               onClick={handleChooseAvatar}
-              disabled={isLocked || uploadingAvatar}
+              disabled={uploadingAvatar}
               className="student-button-solid rounded-xl font-black gap-2"
             >
               {uploadingAvatar ? (
@@ -290,11 +286,7 @@ export default function StudentProfilePage() {
                 </>
               )}
             </Button>
-            {isLocked ? (
-              <p className="text-[11px] font-semibold text-[var(--student-text-muted)]">Profile picture is locked after confirmation.</p>
-            ) : (
-              <p className="text-[11px] font-semibold text-[var(--student-text-muted)]">PNG, JPG, GIF, or WebP up to 5 MB.</p>
-            )}
+            <p className="text-[11px] font-semibold text-[var(--student-text-muted)]">PNG, JPG, GIF, or WebP up to 5 MB.</p>
           </div>
         }
         left={

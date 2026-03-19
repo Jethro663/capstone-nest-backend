@@ -1,4 +1,14 @@
-import { IsEnum, IsOptional, IsString, IsUUID, Length } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export enum FileScopeDto {
   Private = 'private',
@@ -39,6 +49,19 @@ export class FileQueryDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
 }
 
 export class CreateLibraryFolderDto {

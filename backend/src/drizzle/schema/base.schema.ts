@@ -39,6 +39,13 @@ export const assessmentTypeEnum = pgEnum('assessment_type', [
   'file_upload',
 ]);
 
+export const rubricParseStatusEnum = pgEnum('rubric_parse_status', [
+  'pending',
+  'parsed',
+  'reviewed',
+  'failed',
+]);
+
 export const classRecordCategoryEnum = pgEnum('class_record_category', [
   'written_work',
   'performance_task',
@@ -443,6 +450,14 @@ export const assessments = pgTable('assessments', {
   strictMode: boolean('strict_mode').notNull().default(false),
   fileUploadInstructions: text('file_upload_instructions'),
   teacherAttachmentFileId: uuid('teacher_attachment_file_id'),
+  rubricSourceFileId: uuid('rubric_source_file_id'),
+  rubricParseStatus: rubricParseStatusEnum('rubric_parse_status')
+    .notNull()
+    .default('pending'),
+  rubricParsedAt: timestamp('rubric_parsed_at'),
+  rubricRawText: text('rubric_raw_text'),
+  rubricParseError: text('rubric_parse_error'),
+  rubricCriteria: json('rubric_criteria'),
   allowedUploadMimeTypes: text('allowed_upload_mime_types').array(),
   allowedUploadExtensions: text('allowed_upload_extensions').array(),
   maxUploadSizeBytes: integer('max_upload_size_bytes').default(104857600),
@@ -533,6 +548,8 @@ export const assessmentAttempts = pgTable(
     isReturned: boolean('is_returned').default(false),
     returnedAt: timestamp('returned_at'),
     teacherFeedback: text('teacher_feedback'),
+    rubricScores: json('rubric_scores'),
+    directScore: integer('direct_score'),
     submittedFileId: uuid('submitted_file_id'),
     submittedFileOriginalName: text('submitted_file_original_name'),
     submittedFileMimeType: varchar('submitted_file_mime_type', {
@@ -861,6 +878,29 @@ export const uploadedFiles = pgTable(
   }),
 );
 
+export const classVisibilityPreferences = pgTable(
+  'class_visibility_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    isHidden: boolean('is_hidden').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('class_visibility_preferences_user_idx').on(table.userId),
+    classIdx: index('class_visibility_preferences_class_idx').on(table.classId),
+    uniquePreference: unique(
+      'class_visibility_preferences_user_class_unique',
+    ).on(table.userId, table.classId),
+  }),
+);
+
 export const libraryFolders = pgTable(
   'library_folders',
   {
@@ -896,6 +936,20 @@ export const uploadedFilesRelations = relations(uploadedFiles, ({ one }) => ({
     references: [libraryFolders.id],
   }),
 }));
+
+export const classVisibilityPreferencesRelations = relations(
+  classVisibilityPreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [classVisibilityPreferences.userId],
+      references: [users.id],
+    }),
+    class: one(classes, {
+      fields: [classVisibilityPreferences.classId],
+      references: [classes.id],
+    }),
+  }),
+);
 
 export const libraryFoldersRelations = relations(
   libraryFolders,

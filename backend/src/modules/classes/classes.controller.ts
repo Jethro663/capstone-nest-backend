@@ -114,12 +114,19 @@ export class ClassesController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getClassesByTeacher(
     @Param('teacherId') teacherId: string,
+    @Query('status')
+    statusQuery: 'active' | 'archived' | 'hidden' | 'all' | undefined,
     @CurrentUser() user: any,
   ) {
     const classes = await this.classesService.getClassesByTeacher(
       teacherId,
       user?.userId,
       user?.roles,
+      statusQuery === 'active' ||
+        statusQuery === 'archived' ||
+        statusQuery === 'hidden'
+        ? statusQuery
+        : 'all',
     );
 
     return {
@@ -170,12 +177,19 @@ export class ClassesController {
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getClassesByStudent(
     @Param('studentId') studentId: string,
+    @Query('status')
+    statusQuery: 'active' | 'archived' | 'hidden' | 'all' | undefined,
     @CurrentUser() user: any,
   ) {
     const classes = await this.classesService.getClassesByStudent(
       studentId,
       user?.userId,
       user?.roles,
+      statusQuery === 'active' ||
+        statusQuery === 'archived' ||
+        statusQuery === 'hidden'
+        ? statusQuery
+        : 'all',
     );
 
     return {
@@ -338,6 +352,40 @@ export class ClassesController {
    * Get all students enrolled in a class
    * Teacher (of the class) and Admin can access
    */
+  @Patch(':id/hide')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async hideClass(@Param('id') id: string, @CurrentUser() user: any) {
+    const data = await this.classesService.setClassHiddenState(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+      true,
+    );
+
+    return {
+      success: true,
+      message: 'Class hidden successfully',
+      data,
+    };
+  }
+
+  @Patch(':id/unhide')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async unhideClass(@Param('id') id: string, @CurrentUser() user: any) {
+    const data = await this.classesService.setClassHiddenState(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+      false,
+    );
+
+    return {
+      success: true,
+      message: 'Class restored successfully',
+      data,
+    };
+  }
+
   @Get(':classId/enrollments')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getEnrollments(@Param('classId') classId: string) {

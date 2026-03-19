@@ -230,6 +230,32 @@ export default function StudentAssessmentPage() {
           </StudentActionCard>
         </motion.div>
 
+        {(assessment.rubricCriteria?.length ?? 0) > 0 && (
+          <motion.div {...motionProps.item}>
+            <StudentActionCard>
+              <StudentSectionHeader
+                title="Rubric"
+                subtitle="Your teacher will score this assessment using the reviewed rubric below."
+              />
+              <div className="mt-4 space-y-3">
+                {assessment.rubricCriteria?.map((criterion) => (
+                  <div key={criterion.id} className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-[var(--student-text-strong)]">{criterion.title}</p>
+                        {criterion.description && (
+                          <p className="mt-1 text-sm student-muted-text">{criterion.description}</p>
+                        )}
+                      </div>
+                      <StudentStatusChip tone="info">{criterion.points} pts</StudentStatusChip>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </StudentActionCard>
+          </motion.div>
+        )}
+
         <motion.section {...motionProps.item} className="space-y-3">
           <StudentSectionHeader title="My Attempts" subtitle="Review all your submitted attempts." />
           {submittedAttempts.length === 0 ? (

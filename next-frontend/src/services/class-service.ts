@@ -1,6 +1,7 @@
 import { api } from '@/lib/api-client';
 import type {
   ClassItem,
+  ClassVisibilityStatus,
   CreateClassDto,
   UpdateClassDto,
   Enrollment,
@@ -30,8 +31,13 @@ export const classService = {
   },
 
   /** GET /classes/teacher/:teacherId — Admin, Teacher */
-  async getByTeacher(teacherId: string): Promise<{ success: boolean; message: string; data: ClassItem[] }> {
-    const { data } = await api.get(`/classes/teacher/${teacherId}`);
+  async getByTeacher(
+    teacherId: string,
+    status: ClassVisibilityStatus = 'all',
+  ): Promise<{ success: boolean; message: string; data: ClassItem[] }> {
+    const { data } = await api.get(`/classes/teacher/${teacherId}`, {
+      params: { status },
+    });
     return data;
   },
 
@@ -48,8 +54,13 @@ export const classService = {
   },
 
   /** GET /classes/student/:studentId — All roles */
-  async getByStudent(studentId: string): Promise<{ success: boolean; message: string; data: ClassItem[] }> {
-    const { data } = await api.get(`/classes/student/${studentId}`);
+  async getByStudent(
+    studentId: string,
+    status: ClassVisibilityStatus = 'all',
+  ): Promise<{ success: boolean; message: string; data: ClassItem[] }> {
+    const { data } = await api.get(`/classes/student/${studentId}`, {
+      params: { status },
+    });
     return data;
   },
 
@@ -114,6 +125,16 @@ export const classService = {
   /** DELETE /classes/:id/purge — Admin only */
   async purge(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/classes/${id}/purge`);
+    return data;
+  },
+
+  async hide(id: string): Promise<{ success: boolean; message: string; data: { classId: string; isHidden: boolean } }> {
+    const { data } = await api.patch(`/classes/${id}/hide`);
+    return data;
+  },
+
+  async unhide(id: string): Promise<{ success: boolean; message: string; data: { classId: string; isHidden: boolean } }> {
+    const { data } = await api.patch(`/classes/${id}/unhide`);
     return data;
   },
 

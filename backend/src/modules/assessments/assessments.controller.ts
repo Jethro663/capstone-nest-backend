@@ -8,6 +8,7 @@ import {
   Body,
   Param,
   Res,
+  Query,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -83,15 +84,43 @@ export class AssessmentsController {
    */
   @Get('class/:classId')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getAssessmentsByClass(@Param('classId') classId: string) {
-    const assessmentList =
-      await this.assessmentsService.getAssessmentsByClass(classId);
+  async getAssessmentsByClass(
+    @Param('classId') classId: string,
+    @Query('page') pageQuery: string | undefined,
+    @Query('limit') limitQuery: string | undefined,
+    @Query('status')
+    statusQuery: 'all' | 'upcoming' | 'past_due' | 'completed' | undefined,
+    @CurrentUser() user: any,
+  ) {
+    const assessmentPage = await this.assessmentsService.getAssessmentsByClass(
+      classId,
+      {
+        page: pageQuery ? Math.max(Number.parseInt(pageQuery, 10) || 1, 1) : 1,
+        limit: limitQuery
+          ? Math.min(Math.max(Number.parseInt(limitQuery, 10) || 20, 1), 100)
+          : 20,
+        status:
+          statusQuery === 'upcoming' ||
+          statusQuery === 'past_due' ||
+          statusQuery === 'completed'
+            ? statusQuery
+            : 'all',
+        studentId:
+          Array.isArray(user?.roles) && user.roles.includes(RoleName.Student)
+            ? user.userId
+            : undefined,
+      },
+    );
 
     return {
       success: true,
       message: 'Assessments retrieved successfully',
-      data: assessmentList,
-      count: assessmentList.length,
+      data: assessmentPage.data,
+      count: assessmentPage.data.length,
+      total: assessmentPage.total,
+      page: assessmentPage.page,
+      limit: assessmentPage.limit,
+      totalPages: assessmentPage.totalPages,
     };
   }
 
@@ -564,6 +593,81 @@ export class AssessmentsController {
       success: true,
       message: 'Assessment submitted successfully',
       data: result,
+    };
+  }
+
+  @Post(':assessmentId/rubric-source')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(FILE_UPLOAD_DEST, { recursive: true });
+          cb(null, FILE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_FILE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (
+          ['application/pdf', 'text/plain'].includes(file.mimetype) ||
+          file.originalname.toLowerCase().endsWith('.docx')
+        ) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only PDF, DOCX, and TXT rubric files are supported',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async uploadRubricSource(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Rubric file is required');
+    }
+
+    const result = await this.assessmentsService.uploadRubricSource(
+      assessmentId,
+      user,
+      file,
+    );
+
+    return {
+      success: true,
+      message: 'Rubric uploaded and parsed successfully',
+      data: result,
+    };
+  }
+
+  @Put(':assessmentId/rubric-review')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async reviewRubric(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+    @Body() dto: UpdateAssessmentDto,
+  ) {
+    const assessment = await this.assessmentsService.reviewRubric(
+      assessmentId,
+      user,
+      dto.rubricCriteria ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Rubric reviewed successfully',
+      data: assessment,
     };
   }
 

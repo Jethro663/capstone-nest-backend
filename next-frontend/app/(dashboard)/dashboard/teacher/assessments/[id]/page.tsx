@@ -17,7 +17,7 @@ import type {
   QuestionAnalyticsResponse,
 } from '@/types/assessment';
 import { ResponsesTab } from '@/components/teacher/assessment/responses-tab';
-import { ReviewTab } from '@/components/teacher/assessment/review-tab';
+import { ReviewTab } from './_components/review-tab';
 import { PostScoresTab } from '@/components/teacher/assessment/post-scores-tab';
 
 const CATEGORY_LABELS: Record<string, string> = {

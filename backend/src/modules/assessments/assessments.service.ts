@@ -7,6 +7,8 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
 import { eq, and, desc, inArray, sql, sum } from 'drizzle-orm';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import {
   assessments,
@@ -74,6 +76,24 @@ const DEFAULT_FILE_UPLOAD_MIME_TYPES = [
   'image/webp',
 ];
 
+type RubricCriterion = {
+  id: string;
+  title: string;
+  description?: string;
+  points: number;
+};
+
+type ReturnedRubricScore = {
+  criterionId: string;
+  pointsEarned: number;
+  feedback?: string;
+};
+
+// pdf-parse ships CommonJS typings that do not expose a callable default import cleanly.
+const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{
+  text: string;
+}>;
+
 @Injectable()
 export class AssessmentsService {
   constructor(
@@ -112,6 +132,158 @@ export class AssessmentsService {
     return Array.from(
       new Set(source.map((item) => item.trim().toLowerCase()).filter(Boolean)),
     );
+  }
+
+  private normalizeRubricCriteria(
+    criteria?: Array<{
+      id?: string;
+      title?: string;
+      description?: string;
+      points?: number;
+    }> | null,
+  ): RubricCriterion[] {
+    if (!Array.isArray(criteria)) return [];
+
+    const normalized = criteria
+      .map((criterion, index) => ({
+        id: criterion.id?.trim() || `criterion-${index + 1}`,
+        title: criterion.title?.trim() || '',
+        description: criterion.description?.trim() || undefined,
+        points: Number(criterion.points ?? 0),
+      }))
+      .filter((criterion) => criterion.title.length > 0);
+
+    if (normalized.some((criterion) => criterion.points < 0)) {
+      throw new BadRequestException('Rubric criterion points cannot be negative');
+    }
+
+    const seenIds = new Set<string>();
+    for (const criterion of normalized) {
+      if (seenIds.has(criterion.id)) {
+        throw new BadRequestException('Rubric criterion IDs must be unique');
+      }
+      seenIds.add(criterion.id);
+    }
+
+    return normalized;
+  }
+
+  private sumRubricPoints(criteria: RubricCriterion[]) {
+    return criteria.reduce((total, criterion) => total + criterion.points, 0);
+  }
+
+  private sanitizeRubricForViewer(
+    criteria: unknown,
+    viewerRole?: string,
+    parseStatus?: string | null,
+  ) {
+    if (!Array.isArray(criteria)) return [];
+    if (viewerRole === 'student' && parseStatus !== 'reviewed') return [];
+    return criteria;
+  }
+
+  private stripXmlTags(input: string) {
+    return input
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private async extractRubricTextFromFile(file: {
+    filePath: string;
+    originalName: string;
+    mimeType?: string | null;
+  }) {
+    const absolutePath = path.resolve(file.filePath);
+    const extension = this.fileExtensionFromName(file.originalName);
+
+    if (extension === 'txt') {
+      return (await fs.readFile(absolutePath, 'utf8')).trim();
+    }
+
+    if (extension === 'pdf') {
+      const buffer = await fs.readFile(absolutePath);
+      const parsed = await pdfParse(buffer);
+      return parsed.text.trim();
+    }
+
+    if (extension === 'docx') {
+      const buffer = await fs.readFile(absolutePath);
+      const JSZipModule = await import('jszip');
+      const zip = await JSZipModule.default.loadAsync(buffer);
+      const documentXml = await zip.file('word/document.xml')?.async('string');
+
+      if (!documentXml) {
+        throw new BadRequestException('Unable to read DOCX rubric contents');
+      }
+
+      return this.stripXmlTags(documentXml);
+    }
+
+    throw new BadRequestException('Only PDF, DOCX, and TXT rubrics are supported');
+  }
+
+  private draftRubricCriteriaFromText(text: string): RubricCriterion[] {
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const criteria = lines
+      .map((line, index) => {
+        const pointsMatch = line.match(/(\d+)\s*(?:pts?|points?)\b/i);
+        const title = line
+          .replace(/^[-*•\d.)\s]+/, '')
+          .replace(/\(?\d+\s*(?:pts?|points?)\)?/gi, '')
+          .trim();
+
+        if (!title || !pointsMatch) return null;
+
+        return {
+          id: `criterion-${index + 1}`,
+          title,
+          points: Number(pointsMatch[1]),
+        } satisfies RubricCriterion;
+      })
+      .filter((criterion): criterion is RubricCriterion => Boolean(criterion));
+
+    if (criteria.length > 0) {
+      return criteria;
+    }
+
+    const paragraphChunks = text
+      .split(/\n\s*\n/)
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+
+    return paragraphChunks.map((chunk, index) => ({
+      id: `criterion-${index + 1}`,
+      title: chunk.split(/[.!?]/)[0]?.trim().slice(0, 120) || `Criterion ${index + 1}`,
+      description: chunk.slice(0, 500),
+      points: 20,
+    }));
+  }
+
+  private async getAssessmentRubricSourceFile(assessment: {
+    rubricSourceFileId?: string | null;
+  }) {
+    if (!assessment.rubricSourceFileId) return null;
+
+    return this.db.query.uploadedFiles.findFirst({
+      where: eq(uploadedFiles.id, assessment.rubricSourceFileId),
+      columns: {
+        id: true,
+        originalName: true,
+        mimeType: true,
+        sizeBytes: true,
+        uploadedAt: true,
+        filePath: true,
+      },
+    });
   }
 
   private ensureValidFileUploadSettings(input: {
@@ -381,8 +553,19 @@ export class AssessmentsService {
   /**
    * Get all assessments for a class
    */
-  async getAssessmentsByClass(classId: string) {
-    const assessmentList = await this.db.query.assessments.findMany({
+  async getAssessmentsByClass(
+    classId: string,
+    options?: {
+      page?: number;
+      limit?: number;
+      status?: 'all' | 'upcoming' | 'past_due' | 'completed';
+      studentId?: string;
+    },
+  ) {
+    const page = options?.page ?? 1;
+    const limit = options?.limit ?? 20;
+    const offset = (page - 1) * limit;
+    let assessmentList = await this.db.query.assessments.findMany({
       where: eq(assessments.classId, classId),
       with: {
         questions: {
@@ -397,7 +580,61 @@ export class AssessmentsService {
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
 
-    return assessmentList;
+    if (options?.studentId) {
+      const assessmentIds = assessmentList.map((assessment) => assessment.id);
+      const attempts =
+        assessmentIds.length > 0
+          ? await this.db.query.assessmentAttempts.findMany({
+              where: and(
+                eq(assessmentAttempts.studentId, options.studentId),
+                inArray(assessmentAttempts.assessmentId, assessmentIds),
+              ),
+              orderBy: (attempt, { desc: descending }) => [
+                descending(attempt.updatedAt),
+              ],
+            })
+          : [];
+
+      const attemptMap = new Map<string, (typeof attempts)[number]>();
+      for (const attempt of attempts) {
+        if (!attemptMap.has(attempt.assessmentId)) {
+          attemptMap.set(attempt.assessmentId, attempt);
+        }
+      }
+
+      assessmentList = assessmentList
+        .map((assessment) => ({
+          ...assessment,
+          latestAttempt: attemptMap.get(assessment.id) ?? null,
+        }))
+        .filter((assessment) => {
+          const status = options.status ?? 'all';
+          if (status === 'all') return true;
+          if (status === 'completed') {
+            return Boolean(assessment.latestAttempt?.isSubmitted);
+          }
+          if (status === 'past_due') {
+            return Boolean(
+              assessment.dueDate && new Date(assessment.dueDate) < new Date(),
+            );
+          }
+          if (status === 'upcoming') {
+            return !assessment.dueDate || new Date(assessment.dueDate) >= new Date();
+          }
+          return true;
+        });
+    }
+
+    const total = assessmentList.length;
+    const paginated = assessmentList.slice(offset, offset + limit);
+
+    return {
+      data: paginated,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    };
   }
 
   /**
@@ -465,9 +702,26 @@ export class AssessmentsService {
       });
     }
 
+    const rubricSourceFile = await this.getAssessmentRubricSourceFile(assessment);
+    const rubricCriteria = this.sanitizeRubricForViewer(
+      assessment.rubricCriteria,
+      viewerRole,
+      assessment.rubricParseStatus,
+    );
+
     const assessmentWithAttachment = {
       ...assessment,
       teacherAttachmentFile,
+      rubricSourceFile: rubricSourceFile
+        ? {
+            id: rubricSourceFile.id,
+            originalName: rubricSourceFile.originalName,
+            mimeType: rubricSourceFile.mimeType,
+            sizeBytes: rubricSourceFile.sizeBytes,
+            uploadedAt: rubricSourceFile.uploadedAt,
+          }
+        : null,
+      rubricCriteria,
     };
 
     if (
@@ -529,6 +783,14 @@ export class AssessmentsService {
         teacherAttachmentFileId: isFileUpload
           ? createAssessmentDto.teacherAttachmentFileId
           : null,
+        rubricSourceFileId: isFileUpload
+          ? createAssessmentDto.rubricSourceFileId ?? null
+          : null,
+        rubricParseStatus: isFileUpload
+          ? createAssessmentDto.rubricSourceFileId
+            ? 'pending'
+            : undefined
+          : undefined,
         allowedUploadMimeTypes: isFileUpload
           ? this.normalizeMimeTypes(createAssessmentDto.allowedUploadMimeTypes)
           : null,
@@ -541,7 +803,7 @@ export class AssessmentsService {
           ? (createAssessmentDto.maxUploadSizeBytes ??
             MAX_ASSESSMENT_UPLOAD_SIZE_BYTES)
           : null,
-        totalPoints: 0,
+        totalPoints: isFileUpload ? 100 : 0,
         passingScore: createAssessmentDto.passingScore,
         maxAttempts: createAssessmentDto.maxAttempts ?? 1,
         timeLimitMinutes: createAssessmentDto.timeLimitMinutes ?? null,
@@ -764,6 +1026,12 @@ export class AssessmentsService {
     if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
       updateData.teacherAttachmentFileId =
         updateAssessmentDto.teacherAttachmentFileId;
+    if (updateAssessmentDto.rubricSourceFileId !== undefined) {
+      updateData.rubricSourceFileId = updateAssessmentDto.rubricSourceFileId;
+      updateData.rubricParseStatus = updateAssessmentDto.rubricSourceFileId
+        ? existingAssessment.rubricParseStatus ?? 'pending'
+        : null;
+    }
     if (updateAssessmentDto.allowedUploadMimeTypes !== undefined)
       updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
         updateAssessmentDto.allowedUploadMimeTypes,
@@ -791,9 +1059,27 @@ export class AssessmentsService {
     if (updateAssessmentDto.quarter !== undefined)
       updateData.quarter = updateAssessmentDto.quarter;
 
+    if (updateAssessmentDto.rubricCriteria !== undefined) {
+      const rubricCriteria = this.normalizeRubricCriteria(
+        updateAssessmentDto.rubricCriteria,
+      );
+      updateData.rubricCriteria = rubricCriteria;
+      updateData.rubricParseStatus = rubricCriteria.length > 0 ? 'reviewed' : null;
+      updateData.rubricParsedAt = rubricCriteria.length > 0 ? new Date() : null;
+      updateData.totalPoints = rubricCriteria.length > 0
+        ? this.sumRubricPoints(rubricCriteria)
+        : 100;
+    }
+
     if (!nextIsFileUpload) {
       updateData.fileUploadInstructions = null;
       updateData.teacherAttachmentFileId = null;
+      updateData.rubricSourceFileId = null;
+      updateData.rubricParseStatus = null;
+      updateData.rubricParsedAt = null;
+      updateData.rubricRawText = null;
+      updateData.rubricParseError = null;
+      updateData.rubricCriteria = null;
       updateData.allowedUploadMimeTypes = null;
       updateData.allowedUploadExtensions = null;
       updateData.maxUploadSizeBytes = null;
@@ -812,6 +1098,15 @@ export class AssessmentsService {
         updateData.maxUploadSizeBytes =
           existingAssessment.maxUploadSizeBytes ??
           MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
+      }
+      if (updateData.totalPoints === undefined) {
+        const existingRubricCriteria = this.normalizeRubricCriteria(
+          (existingAssessment.rubricCriteria as RubricCriterion[]) ?? [],
+        );
+        updateData.totalPoints =
+          existingRubricCriteria.length > 0
+            ? this.sumRubricPoints(existingRubricCriteria)
+            : 100;
       }
     }
 
@@ -1549,6 +1844,131 @@ export class AssessmentsService {
     return record;
   }
 
+  async uploadRubricSource(
+    assessmentId: string,
+    currentUser: any,
+    file: Express.Multer.File,
+  ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    if (
+      role === 'teacher' &&
+      assessment.class?.teacherId &&
+      assessment.class.teacherId !== userId
+    ) {
+      throw new ForbiddenException(
+        'You can only manage rubrics for your own class assessments',
+      );
+    }
+
+    const [record] = await this.db
+      .insert(uploadedFiles)
+      .values({
+        teacherId: userId,
+        classId: assessment.classId,
+        scope: 'private',
+        originalName: file.originalname,
+        storedName: file.filename,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        filePath: file.path.replace(/\\/g, '/'),
+      })
+      .returning();
+
+    let rubricRawText = '';
+    let rubricCriteria: RubricCriterion[] = [];
+    let rubricParseStatus: 'parsed' | 'failed' = 'parsed';
+    let rubricParseError: string | null = null;
+
+    try {
+      rubricRawText = await this.extractRubricTextFromFile({
+        filePath: record.filePath,
+        originalName: record.originalName,
+        mimeType: record.mimeType,
+      });
+      rubricCriteria = this.draftRubricCriteriaFromText(rubricRawText);
+    } catch (error) {
+      rubricParseStatus = 'failed';
+      rubricParseError =
+        error instanceof Error ? error.message : 'Unable to parse rubric file';
+    }
+
+    await this.db
+      .update(assessments)
+      .set({
+        rubricSourceFileId: record.id,
+        rubricParseStatus,
+        rubricParsedAt: rubricParseStatus === 'parsed' ? new Date() : null,
+        rubricRawText: rubricRawText || null,
+        rubricParseError,
+        rubricCriteria: rubricCriteria,
+        totalPoints:
+          rubricCriteria.length > 0 ? this.sumRubricPoints(rubricCriteria) : 100,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessments.id, assessmentId));
+
+    const updatedAssessment = await this.getAssessmentById(assessmentId);
+
+    return {
+      file: record,
+      rubricParseStatus,
+      rubricParseError,
+      rubricRawText,
+      rubricCriteria: updatedAssessment.rubricCriteria,
+    };
+  }
+
+  async reviewRubric(
+    assessmentId: string,
+    currentUser: any,
+    rubricCriteria: RubricCriterion[],
+  ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    if (
+      role === 'teacher' &&
+      assessment.class?.teacherId &&
+      assessment.class.teacherId !== userId
+    ) {
+      throw new ForbiddenException(
+        'You can only review rubrics for your own class assessments',
+      );
+    }
+
+    const normalizedCriteria = this.normalizeRubricCriteria(rubricCriteria);
+
+    await this.db
+      .update(assessments)
+      .set({
+        rubricCriteria: normalizedCriteria,
+        rubricParseStatus: normalizedCriteria.length > 0 ? 'reviewed' : 'parsed',
+        rubricParsedAt: new Date(),
+        totalPoints:
+          normalizedCriteria.length > 0
+            ? this.sumRubricPoints(normalizedCriteria)
+            : 100,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessments.id, assessmentId));
+
+    return this.getAssessmentById(assessmentId);
+  }
+
   async unsubmitFileUploadAssessment(studentId: string, assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
     if (assessment.type !== AssessmentType.FILE_UPLOAD) {
@@ -1852,6 +2272,8 @@ export class AssessmentsService {
         // Hide score and detailed results
         score: null,
         passed: null,
+        directScore: null,
+        rubricScores: [],
         responses: [],
         feedbackStatus: {
           level: 'awaiting_return',
@@ -1864,19 +2286,37 @@ export class AssessmentsService {
           title: attempt.assessment.title,
           type: attempt.assessment.type,
           totalPoints: attempt.assessment.totalPoints,
+          rubricCriteria: this.sanitizeRubricForViewer(
+            attempt.assessment.rubricCriteria,
+            userRole,
+            attempt.assessment.rubricParseStatus,
+          ),
         },
         submittedFile,
       };
     }
 
-    // Apply smart feedback filtering via dedicated FeedbackService
-    const filtered = this.feedbackService.applyFeedbackFiltering(attempt);
-    // Add return status info
-    filtered.isReturned = attempt.isReturned;
-    filtered.returnedAt = attempt.returnedAt;
-    filtered.teacherFeedback = attempt.teacherFeedback;
-    filtered.submittedFile = submittedFile;
-    return filtered;
+    if (userRole === 'student') {
+      // Apply smart feedback filtering via dedicated FeedbackService
+      const filtered = this.feedbackService.applyFeedbackFiltering(attempt);
+      filtered.isReturned = attempt.isReturned;
+      filtered.returnedAt = attempt.returnedAt;
+      filtered.teacherFeedback = attempt.teacherFeedback;
+      filtered.submittedFile = submittedFile;
+      filtered.directScore = attempt.directScore;
+      filtered.rubricScores = attempt.rubricScores ?? [];
+      return filtered;
+    }
+
+    return {
+      ...attempt,
+      isReturned: attempt.isReturned,
+      returnedAt: attempt.returnedAt,
+      teacherFeedback: attempt.teacherFeedback,
+      submittedFile,
+      directScore: attempt.directScore,
+      rubricScores: attempt.rubricScores ?? [],
+    };
   }
 
   // ─── Private helpers (extracted from submitAssessment) ──────────────
@@ -2212,6 +2652,8 @@ export class AssessmentsService {
         id: attempt.id,
         attemptNumber: attempt.attemptNumber,
         score: attempt.score,
+        directScore: attempt.directScore,
+        rubricScores: attempt.rubricScores ?? [],
         passed: attempt.passed,
         isSubmitted: attempt.isSubmitted,
         isReturned: attempt.isReturned,
@@ -2248,6 +2690,26 @@ export class AssessmentsService {
       orderBy: (a, { desc: d }) => [d(a.submittedAt)],
     });
 
+    const submittedFileIds = attempts
+      .map((attempt) => attempt.submittedFileId)
+      .filter((fileId): fileId is string => Boolean(fileId));
+    const submittedFiles =
+      submittedFileIds.length > 0
+        ? await this.db.query.uploadedFiles.findMany({
+            where: inArray(uploadedFiles.id, submittedFileIds),
+            columns: {
+              id: true,
+              originalName: true,
+              mimeType: true,
+              sizeBytes: true,
+              uploadedAt: true,
+            },
+          })
+        : [];
+    const submittedFileMap = new Map(
+      submittedFiles.map((file) => [file.id, file]),
+    );
+
     // Map students to their submission status
     const submissions = enrolledStudents.map((student) => {
       const studentAttempts = attempts.filter(
@@ -2278,8 +2740,20 @@ export class AssessmentsService {
         lastName: student.lastName,
         email: student.email,
         status,
-        attempt: latestAttempt ? mapAttemptSummary(latestAttempt) : null,
-        attempts: studentAttempts.map(mapAttemptSummary),
+        attempt: latestAttempt
+          ? {
+              ...mapAttemptSummary(latestAttempt),
+              submittedFile: latestAttempt.submittedFileId
+                ? submittedFileMap.get(latestAttempt.submittedFileId) ?? null
+                : null,
+            }
+          : null,
+        attempts: studentAttempts.map((attempt) => ({
+          ...mapAttemptSummary(attempt),
+          submittedFile: attempt.submittedFileId
+            ? submittedFileMap.get(attempt.submittedFileId) ?? null
+            : null,
+        })),
         totalAttempts: studentAttempts.length,
       };
     });
@@ -2294,6 +2768,8 @@ export class AssessmentsService {
         totalPoints: assessment.totalPoints,
         dueDate: assessment.dueDate,
         isPublished: assessment.isPublished,
+        rubricParseStatus: assessment.rubricParseStatus,
+        rubricCriteria: assessment.rubricCriteria ?? [],
       },
       submissions,
       summary: {
@@ -2314,6 +2790,9 @@ export class AssessmentsService {
   async returnGrade(attemptId: string, dto: ReturnGradeDto) {
     const attempt = await this.db.query.assessmentAttempts.findFirst({
       where: eq(assessmentAttempts.id, attemptId),
+      with: {
+        assessment: true,
+      },
     });
 
     if (!attempt) {
@@ -2332,12 +2811,105 @@ export class AssessmentsService {
       );
     }
 
+    let score = attempt.score;
+    let passed = attempt.passed;
+    let directScore: number | null = attempt.directScore ?? null;
+    let rubricScores: ReturnedRubricScore[] | null =
+      (attempt.rubricScores as ReturnedRubricScore[] | null) ?? null;
+
+    if (attempt.assessment?.type === AssessmentType.FILE_UPLOAD) {
+      const rubricCriteria = this.normalizeRubricCriteria(
+        (attempt.assessment.rubricCriteria as RubricCriterion[]) ?? [],
+      );
+
+      if (rubricCriteria.length > 0) {
+        if (!dto.rubricScores || dto.rubricScores.length === 0) {
+          throw new BadRequestException(
+            'Rubric scores are required when a reviewed rubric is attached',
+          );
+        }
+
+        const rubricMap = new Map(
+          rubricCriteria.map((criterion) => [criterion.id, criterion]),
+        );
+        const normalizedScores = dto.rubricScores.map((rubricScore) => {
+          const criterion = rubricMap.get(rubricScore.criterionId);
+
+          if (!criterion) {
+            throw new BadRequestException(
+              `Unknown rubric criterion "${rubricScore.criterionId}"`,
+            );
+          }
+
+          if (rubricScore.pointsEarned < 0 || rubricScore.pointsEarned > criterion.points) {
+            throw new BadRequestException(
+              `Rubric score for "${criterion.title}" must be between 0 and ${criterion.points}`,
+            );
+          }
+
+          return {
+            criterionId: rubricScore.criterionId,
+            pointsEarned: rubricScore.pointsEarned,
+            feedback: rubricScore.feedback?.trim() || undefined,
+          } satisfies ReturnedRubricScore;
+        });
+
+        const earnedPoints = normalizedScores.reduce(
+          (total, rubricScore) => total + rubricScore.pointsEarned,
+          0,
+        );
+        const totalPoints = Math.max(this.sumRubricPoints(rubricCriteria), 1);
+
+        score = Math.round((earnedPoints / totalPoints) * 100);
+        passed = score >= (attempt.assessment.passingScore || 60);
+        rubricScores = normalizedScores;
+        directScore = null;
+
+        this.emitSubmissionEvent(
+          attempt.assessmentId,
+          attempt.studentId,
+          earnedPoints,
+          totalPoints,
+          attempt.assessment.classRecordCategory ?? undefined,
+          attempt.assessment.quarter ?? undefined,
+        );
+      } else {
+        if (dto.directScore === undefined || dto.directScore === null) {
+          throw new BadRequestException(
+            'A direct score from 0 to 100 is required when no rubric is attached',
+          );
+        }
+
+        if (dto.directScore < 0 || dto.directScore > 100) {
+          throw new BadRequestException('Direct score must be between 0 and 100');
+        }
+
+        score = Math.round(dto.directScore);
+        directScore = score;
+        rubricScores = [];
+        passed = score >= (attempt.assessment.passingScore || 60);
+
+        this.emitSubmissionEvent(
+          attempt.assessmentId,
+          attempt.studentId,
+          score,
+          100,
+          attempt.assessment.classRecordCategory ?? undefined,
+          attempt.assessment.quarter ?? undefined,
+        );
+      }
+    }
+
     const [updated] = await this.db
       .update(assessmentAttempts)
       .set({
         isReturned: true,
         returnedAt: new Date(),
         teacherFeedback: dto.teacherFeedback || null,
+        score,
+        passed,
+        directScore,
+        rubricScores,
       })
       .where(eq(assessmentAttempts.id, attemptId))
       .returning();

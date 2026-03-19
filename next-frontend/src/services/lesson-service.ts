@@ -114,7 +114,9 @@ export const lessonService = {
   // --- Lesson Completions ---
 
   /** POST /lessons/:lessonId/complete — Student */
-  async complete(lessonId: string): Promise<{ success: boolean; message: string; data: unknown }> {
+  async complete(
+    lessonId: string,
+  ): Promise<{ success: boolean; message: string; data: { completed: boolean; completedAt?: string } }> {
     const { data } = await api.post(`/lessons/${lessonId}/complete`);
     return data;
   },

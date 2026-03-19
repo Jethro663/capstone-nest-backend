@@ -13,12 +13,16 @@ export interface Lesson {
 }
 
 export type LessonStatusFilter = 'all' | 'draft' | 'published';
+export type LessonCompletionFilter = 'all' | 'completed' | 'pending';
+export type LessonOrderDirection = 'asc' | 'desc';
 
 export interface LessonListQuery {
   includeBlocks?: boolean;
   page?: number;
   pageSize?: number;
   status?: LessonStatusFilter;
+  completion?: LessonCompletionFilter;
+  order?: LessonOrderDirection;
 }
 
 export interface LessonsResponse {

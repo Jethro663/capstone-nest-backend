@@ -2,6 +2,19 @@ import type { AssessmentType, QuestionType, FeedbackLevel, GradingPeriod } from 
 
 export type ClassRecordCategory = 'written_work' | 'performance_task' | 'quarterly_assessment';
 
+export interface RubricCriterion {
+  id: string;
+  title: string;
+  description?: string;
+  points: number;
+}
+
+export interface RubricScore {
+  criterionId: string;
+  pointsEarned: number;
+  feedback?: string;
+}
+
 export interface Assessment {
   id: string;
   title: string;
@@ -20,6 +33,16 @@ export interface Assessment {
   strictMode?: boolean;
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string | null;
+  rubricSourceFileId?: string | null;
+  rubricParseStatus?: 'pending' | 'parsed' | 'reviewed' | 'failed' | null;
+  rubricSourceFile?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  } | null;
+  rubricCriteria?: RubricCriterion[];
   teacherAttachmentFile?: {
     id: string;
     originalName: string;
@@ -73,6 +96,7 @@ export interface CreateAssessmentDto {
   strictMode?: boolean;
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string;
+  rubricSourceFileId?: string;
   allowedUploadMimeTypes?: string[];
   allowedUploadExtensions?: string[];
   maxUploadSizeBytes?: number;
@@ -97,6 +121,8 @@ export interface UpdateAssessmentDto {
   strictMode?: boolean;
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string | null;
+  rubricSourceFileId?: string | null;
+  rubricCriteria?: RubricCriterion[];
   allowedUploadMimeTypes?: string[];
   allowedUploadExtensions?: string[];
   maxUploadSizeBytes?: number;
@@ -162,6 +188,8 @@ export interface AssessmentAttempt {
   isReturned?: boolean;
   returnedAt?: string;
   teacherFeedback?: string;
+  directScore?: number | null;
+  rubricScores?: RubricScore[] | null;
   submittedFileId?: string | null;
   submittedFileOriginalName?: string | null;
   submittedFileMimeType?: string | null;
@@ -180,12 +208,14 @@ export interface SubmitAssessmentDto {
 }
 
 export interface AttemptResult {
-  attempt: AssessmentAttempt;
-  score: number;
-  passed: boolean;
+  attempt?: AssessmentAttempt;
+  score: number | null;
+  passed: boolean | null;
   isReturned: boolean;
-  attemptNumber: number;
-  teacherFeedback: string;
+  attemptNumber?: number;
+  teacherFeedback?: string | null;
+  directScore?: number | null;
+  rubricScores?: RubricScore[];
   responses: {
     questionId: string;
     studentAnswer?: string;
@@ -202,6 +232,13 @@ export interface AttemptResult {
     sizeBytes: number;
     uploadedAt: string;
   } | null;
+  assessment?: {
+    id: string;
+    title?: string;
+    type?: string;
+    totalPoints?: number;
+    rubricCriteria?: RubricCriterion[];
+  };
 }
 
 export interface StartAttemptResult {
@@ -262,6 +299,8 @@ export interface StudentAttemptSummary {
   id: string;
   attemptNumber?: number;
   score?: number;
+  directScore?: number | null;
+  rubricScores?: RubricScore[];
   passed?: boolean;
   isSubmitted?: boolean;
   isReturned?: boolean;
@@ -271,6 +310,13 @@ export interface StudentAttemptSummary {
   timeSpentSeconds?: number;
   isLate?: boolean;
   lateByMinutes?: number;
+  submittedFile?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  } | null;
 }
 
 export interface StudentSubmission {
@@ -294,6 +340,8 @@ export interface SubmissionsResponse {
     totalPoints: number;
     dueDate?: string;
     isPublished: boolean;
+    rubricParseStatus?: string | null;
+    rubricCriteria?: RubricCriterion[];
   };
   submissions: StudentSubmission[];
   summary: {
@@ -303,6 +351,17 @@ export interface SubmissionsResponse {
     turnedIn: number;
     returned: number;
   };
+}
+
+export interface AssessmentsByClassResponse {
+  success: boolean;
+  message: string;
+  data: Assessment[];
+  count: number;
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 // Question analytics types

@@ -148,7 +148,9 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
     if (!selectedStudent || !selectedAttempt?.id) return;
     try {
       setReturning(true);
-      await assessmentService.returnGrade(selectedAttempt.id, feedback || undefined);
+      await assessmentService.returnGrade(selectedAttempt.id, {
+        teacherFeedback: feedback || undefined,
+      });
       toast.success(
         `Grade returned to ${selectedStudent.firstName} ${selectedStudent.lastName} (Attempt ${selectedAttempt.attemptNumber ?? '?'})`,
       );

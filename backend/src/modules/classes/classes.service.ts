@@ -23,6 +23,7 @@ import { DatabaseService } from '../../database/database.service';
 import {
   assessments,
   classSchedules,
+  classVisibilityPreferences,
   classes,
   sections,
   users,
@@ -418,6 +419,42 @@ export class ClassesService {
     return this.findById(id);
   }
 
+  private async getHiddenClassIdsForUser(userId: string, classIds: string[]) {
+    if (!userId || classIds.length === 0) return new Set<string>();
+
+    const preferences = await this.db.query.classVisibilityPreferences.findMany({
+      where: and(
+        eq(classVisibilityPreferences.userId, userId),
+        inArray(classVisibilityPreferences.classId, classIds),
+        eq(classVisibilityPreferences.isHidden, true),
+      ),
+      columns: {
+        classId: true,
+      },
+    });
+
+    return new Set(preferences.map((preference) => preference.classId));
+  }
+
+  private applyClassVisibilityFilter(
+    classList: any[],
+    hiddenClassIds: Set<string>,
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+  ) {
+    return classList
+      .map((classRecord) => ({
+        ...classRecord,
+        isHidden: hiddenClassIds.has(classRecord.id),
+      }))
+      .filter((classRecord) => {
+        if (status === 'hidden') return classRecord.isHidden;
+        if (classRecord.isHidden) return false;
+        if (status === 'active') return classRecord.isActive;
+        if (status === 'archived') return !classRecord.isActive;
+        return true;
+      });
+  }
+
   /**
    * Delete a class.
    * Blocked when active enrollments OR lessons are attached to prevent data loss.
@@ -490,6 +527,7 @@ export class ClassesService {
     teacherId: string,
     requesterId?: string,
     requesterRoles?: string[],
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
   ) {
     if (
       requesterId &&
@@ -514,10 +552,21 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList.map((c) => ({
+    const normalizedClassList = classList.map((c) => ({
       ...c,
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
+
+    const hiddenClassIds = await this.getHiddenClassIdsForUser(
+      requesterId ?? teacherId,
+      normalizedClassList.map((classRecord) => classRecord.id),
+    );
+
+    return this.applyClassVisibilityFilter(
+      normalizedClassList,
+      hiddenClassIds,
+      status,
+    );
   }
 
   /**
@@ -577,6 +626,7 @@ export class ClassesService {
     studentId: string,
     requesterId?: string,
     requesterRoles?: string[],
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
   ) {
     if (
       requesterId &&
@@ -632,10 +682,82 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList.map((c) => ({
+    const normalizedClassList = classList.map((c) => ({
       ...c,
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
+
+    const hiddenClassIds = await this.getHiddenClassIdsForUser(
+      requesterId ?? studentId,
+      normalizedClassList.map((classRecord) => classRecord.id),
+    );
+
+    return this.applyClassVisibilityFilter(
+      normalizedClassList,
+      hiddenClassIds,
+      status,
+    );
+  }
+
+  async setClassHiddenState(
+    classId: string,
+    userId: string,
+    userRoles: string[],
+    hidden: boolean,
+  ) {
+    const classRecord = await this.findById(classId);
+
+    if (userRoles.includes('teacher') && !userRoles.includes('admin')) {
+      this.ensureTeacherCanAccessClass(classRecord, userId, userRoles);
+    }
+
+    if (userRoles.includes('student')) {
+      const enrollment = await this.db.query.enrollments.findFirst({
+        where: and(
+          eq(enrollments.classId, classId),
+          eq(enrollments.studentId, userId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+        columns: {
+          id: true,
+        },
+      });
+
+      if (!enrollment) {
+        throw new ForbiddenException(
+          'You can only manage visibility for your own classes',
+        );
+      }
+    }
+
+    const existingPreference =
+      await this.db.query.classVisibilityPreferences.findFirst({
+        where: and(
+          eq(classVisibilityPreferences.classId, classId),
+          eq(classVisibilityPreferences.userId, userId),
+        ),
+      });
+
+    if (existingPreference) {
+      await this.db
+        .update(classVisibilityPreferences)
+        .set({
+          isHidden: hidden,
+          updatedAt: new Date(),
+        })
+        .where(eq(classVisibilityPreferences.id, existingPreference.id));
+    } else {
+      await this.db.insert(classVisibilityPreferences).values({
+        classId,
+        userId,
+        isHidden: hidden,
+      });
+    }
+
+    return {
+      classId,
+      isHidden: hidden,
+    };
   }
 
   /**

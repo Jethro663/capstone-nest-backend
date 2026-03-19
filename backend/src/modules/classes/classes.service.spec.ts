@@ -95,6 +95,7 @@ describe('ClassesService', () => {
   const mockDb: any = {
     query: {
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
+      classVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
       classSchedules: { findFirst: jest.fn(), findMany: jest.fn() },
       sections: { findFirst: jest.fn() },
       users: { findFirst: jest.fn() },
@@ -115,6 +116,8 @@ describe('ClassesService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockAuditService.log.mockResolvedValue(undefined);
+    mockDb.query.classVisibilityPreferences.findMany.mockResolvedValue([]);
+    mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -631,7 +634,12 @@ describe('ClassesService', () => {
         'teacher',
       ]);
 
-      expect(result).toEqual(classList);
+      expect(result).toEqual(
+        classList.map((classRecord) => ({
+          ...classRecord,
+          isHidden: false,
+        })),
+      );
     });
 
     it("allows an admin to view any teacher's classes", async () => {
@@ -644,7 +652,12 @@ describe('ClassesService', () => {
         ['admin'],
       );
 
-      expect(result).toEqual(classList);
+      expect(result).toEqual(
+        classList.map((classRecord) => ({
+          ...classRecord,
+          isHidden: false,
+        })),
+      );
     });
 
     it("throws ForbiddenException when a teacher requests another teacher's classes", async () => {

@@ -12,6 +12,7 @@ import {
   IsDateString,
   ValidateIf,
   Max,
+  MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -104,6 +105,10 @@ export class CreateAssessmentDto {
   teacherAttachmentFileId?: string;
 
   @IsOptional()
+  @IsUUID()
+  rubricSourceFileId?: string;
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   allowedUploadMimeTypes?: string[];
@@ -150,6 +155,24 @@ export class CreateAssessmentDto {
   @IsOptional()
   @IsEnum(Quarter)
   quarter?: Quarter;
+}
+
+export class RubricCriterionDto {
+  @IsString()
+  @MinLength(1)
+  id: string;
+
+  @IsString()
+  @MinLength(1)
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsInt()
+  @Min(0)
+  points: number;
 }
 
 export class UpdateAssessmentDto {
@@ -199,6 +222,17 @@ export class UpdateAssessmentDto {
   @ValidateIf((o) => o.teacherAttachmentFileId !== null)
   @IsUUID()
   teacherAttachmentFileId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.rubricSourceFileId !== null)
+  @IsUUID()
+  rubricSourceFileId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RubricCriterionDto)
+  rubricCriteria?: RubricCriterionDto[];
 
   @IsOptional()
   @IsArray()
@@ -400,10 +434,36 @@ export class UpdateAttemptProgressDto {
 // Grade Return DTOs (MS Teams-like)
 // ==========================================
 
+export class ReturnedRubricScoreDto {
+  @IsString()
+  @MinLength(1)
+  criterionId: string;
+
+  @IsInt()
+  @Min(0)
+  pointsEarned: number;
+
+  @IsOptional()
+  @IsString()
+  feedback?: string;
+}
+
 export class ReturnGradeDto {
   @IsOptional()
   @IsString()
   teacherFeedback?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  directScore?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReturnedRubricScoreDto)
+  rubricScores?: ReturnedRubricScoreDto[];
 }
 
 export class BulkReturnGradesDto {

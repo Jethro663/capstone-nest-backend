@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { and, eq, count, desc } from 'drizzle-orm';
+import { and, eq, count, desc, SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { notifications } from '../../drizzle/schema';
 import { QueryNotificationsDto } from './DTO/query-notifications.dto';
@@ -52,15 +52,36 @@ export class NotificationsService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
+    const conditions: SQL<unknown>[] = [eq(notifications.userId, userId)];
 
-    const rows = await this.db.query.notifications.findMany({
-      where: eq(notifications.userId, userId),
-      orderBy: [desc(notifications.createdAt)],
+    if (typeof query.isRead === 'boolean') {
+      conditions.push(eq(notifications.isRead, query.isRead));
+    }
+
+    const whereClause = and(...conditions);
+
+    const [rows, totalResult] = await Promise.all([
+      this.db.query.notifications.findMany({
+        where: whereClause,
+        orderBy: [desc(notifications.createdAt)],
+        limit,
+        offset,
+      }),
+      this.db
+        .select({ total: count() })
+        .from(notifications)
+        .where(whereClause),
+    ]);
+
+    const total = Number(totalResult[0]?.total ?? 0);
+
+    return {
+      data: rows,
+      total,
+      page,
       limit,
-      offset,
-    });
-
-    return rows;
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    };
   }
 
   // ─── REST: unread count ───────────────────────────────────────────────────

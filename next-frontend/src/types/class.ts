@@ -21,6 +21,7 @@ export interface ClassItem {
   cardPreset?: string;
   cardBannerUrl?: string | null;
   isActive: boolean;
+  isHidden?: boolean;
   schedules?: ClassSchedule[];
   enrollments?: Enrollment[];
   createdAt?: string;
@@ -42,6 +43,8 @@ export interface CreateClassDto {
   cardBannerUrl?: string | null;
   schedules?: { days: ScheduleDay[]; startTime: string; endTime: string }[];
 }
+
+export type ClassVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
 
 export interface UpdateClassDto {
   subjectName?: string;

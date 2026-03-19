@@ -1,14 +1,15 @@
 import { api } from '@/lib/api-client';
-import type { Notification } from '@/types/notification';
+import type { NotificationsResponse } from '@/types/notification';
 
 export interface NotificationsQuery {
   page?: number;
   limit?: number;
+  isRead?: boolean;
 }
 
 export const notificationService = {
   /** GET /notifications — All roles */
-  async getAll(query?: NotificationsQuery): Promise<{ success: boolean; message: string; data: Notification[] }> {
+  async getAll(query?: NotificationsQuery): Promise<NotificationsResponse> {
     const { data } = await api.get('/notifications', { params: query });
     return data;
   },

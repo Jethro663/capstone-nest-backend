@@ -15,7 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import type { ClassItem } from '@/types/class';
+import type { ClassItem, ClassVisibilityStatus } from '@/types/class';
 
 function formatTime(time?: string) {
   if (!time) return '';
@@ -44,6 +44,7 @@ function formatScheduleLine(schedule?: { days?: string[]; startTime?: string; en
 
 export default function TeacherClassesPage() {
   const { user } = useAuth();
+  const [tab, setTab] = useState<ClassVisibilityStatus>('active');
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
@@ -55,14 +56,14 @@ export default function TeacherClassesPage() {
     if (!user?.id) return;
     try {
       setLoading(true);
-      const res = await classService.getByTeacher(user.id);
+      const res = await classService.getByTeacher(user.id, tab);
       setClasses(res.data || []);
     } catch {
       // fail silently
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [tab, user?.id]);
 
   useEffect(() => {
     fetchData();
@@ -144,11 +145,29 @@ export default function TeacherClassesPage() {
         <p className="text-muted-foreground">Manage your assigned classes and customize each class card.</p>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {(['active', 'archived', 'hidden'] as const).map((value) => (
+          <Button
+            key={value}
+            type="button"
+            size="sm"
+            variant={tab === value ? 'default' : 'outline'}
+            onClick={() => setTab(value)}
+          >
+            {value === 'active' ? 'Active' : value === 'archived' ? 'Archived' : 'Hidden'}
+          </Button>
+        ))}
+      </div>
+
       {classes.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-lg font-medium">No classes assigned</p>
-            <p className="text-sm text-muted-foreground">Contact your administrator to get classes assigned.</p>
+            <p className="text-lg font-medium">No classes in this view</p>
+            <p className="text-sm text-muted-foreground">
+              {tab === 'hidden'
+                ? 'Hidden classes stay here until you restore them.'
+                : 'Contact your administrator to get classes assigned.'}
+            </p>
           </CardContent>
         </Card>
       ) : (

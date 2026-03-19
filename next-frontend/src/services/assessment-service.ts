@@ -1,6 +1,7 @@
 import { api } from '@/lib/api-client';
 import type {
   Assessment,
+  AssessmentsByClassResponse,
   CreateAssessmentDto,
   UpdateAssessmentDto,
   AssessmentQuestion,
@@ -15,6 +16,8 @@ import type {
   OngoingAttemptResult,
   OngoingAttemptSummary,
   UpdateAttemptProgressDto,
+  RubricCriterion,
+  RubricScore,
 } from '@/types/assessment';
 
 function getDownloadFilename(contentDisposition: string | undefined, fallback: string) {
@@ -55,8 +58,17 @@ function openBlobInNewTab(blob: Blob) {
 
 export const assessmentService = {
   /** GET /assessments/class/:classId — All roles */
-  async getByClass(classId: string): Promise<{ success: boolean; message: string; data: Assessment[]; count: number }> {
-    const { data } = await api.get(`/assessments/class/${classId}`);
+  async getByClass(
+    classId: string,
+    query?: {
+      page?: number;
+      limit?: number;
+      status?: 'all' | 'upcoming' | 'past_due' | 'completed';
+    },
+  ): Promise<AssessmentsByClassResponse> {
+    const { data } = await api.get(`/assessments/class/${classId}`, {
+      params: query,
+    });
     return data;
   },
 
@@ -234,6 +246,48 @@ export const assessmentService = {
     return data;
   },
 
+  async uploadRubricSource(
+    assessmentId: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      file: {
+        id: string;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+        uploadedAt: string;
+      };
+      rubricParseStatus: string;
+      rubricParseError?: string | null;
+      rubricRawText?: string;
+      rubricCriteria: RubricCriterion[];
+    };
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post(
+      `/assessments/${assessmentId}/rubric-source`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    );
+    return data;
+  },
+
+  async reviewRubric(
+    assessmentId: string,
+    rubricCriteria: RubricCriterion[],
+  ): Promise<{ success: boolean; message: string; data: Assessment }> {
+    const { data } = await api.put(`/assessments/${assessmentId}/rubric-review`, {
+      rubricCriteria,
+    });
+    return data;
+  },
+
   async unsubmitFileUpload(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
     const { data } = await api.post(`/assessments/${assessmentId}/unsubmit-file-upload`);
     return data;
@@ -272,9 +326,18 @@ export const assessmentService = {
   },
 
   /** POST /assessments/attempts/:attemptId/return — Teacher, Admin */
-  async returnGrade(attemptId: string, feedback?: string): Promise<{ success: boolean; message: string }> {
+  async returnGrade(
+    attemptId: string,
+    payload: {
+      teacherFeedback?: string;
+      directScore?: number;
+      rubricScores?: RubricScore[];
+    } = {},
+  ): Promise<{ success: boolean; message: string }> {
     const { data } = await api.post(`/assessments/attempts/${attemptId}/return`, {
-      teacherFeedback: feedback || undefined,
+      teacherFeedback: payload.teacherFeedback || undefined,
+      directScore: payload.directScore,
+      rubricScores: payload.rubricScores,
     });
     return data;
   },

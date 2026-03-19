@@ -39,8 +39,19 @@ export class NotificationsController {
     @CurrentUser() user: { userId: string },
     @Query() query: QueryNotificationsDto,
   ) {
-    const data = await this.notificationsService.findByUser(user.userId, query);
-    return { success: true, message: 'Notifications retrieved.', data };
+    const result = await this.notificationsService.findByUser(
+      user.userId,
+      query,
+    );
+    return {
+      success: true,
+      message: 'Notifications retrieved.',
+      data: result.data,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
+    };
   }
 
   @Get('unread-count')

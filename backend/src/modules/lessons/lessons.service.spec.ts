@@ -8,6 +8,7 @@ import { LessonsService } from './lessons.service';
 import { DatabaseService } from '../../database/database.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
 import { AuditService } from '../audit/audit.service';
+import { RagIndexingService } from '../rag/rag-indexing.service';
 
 // ─── Fixture data ────────────────────────────────────────────────────────────
 
@@ -148,6 +149,12 @@ describe('LessonsService', () => {
         {
           provide: AuditService,
           useValue: mockAuditService,
+        },
+        {
+          provide: RagIndexingService,
+          useValue: {
+            queueClassReindex: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -598,7 +605,7 @@ describe('LessonsService', () => {
   // markLessonComplete
   // ───────────────────────────────────────────────────────────────────────────
   describe('markLessonComplete', () => {
-    it('inserts a completion record and returns { isCompleted: true, completedAt }', async () => {
+    it('inserts a completion record and returns { completed: true, completedAt }', async () => {
       db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON); // published
       db.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
 
@@ -607,7 +614,7 @@ describe('LessonsService', () => {
 
       const result = await service.markLessonComplete(STUDENT_ID, LESSON_ID);
 
-      expect(result.isCompleted).toBe(true);
+      expect(result.completed).toBe(true);
       expect(result.completedAt).toBe(now);
     });
 
@@ -633,7 +640,7 @@ describe('LessonsService', () => {
 
       const result = await service.markLessonComplete(STUDENT_ID, LESSON_ID);
 
-      expect(result.isCompleted).toBe(true);
+      expect(result.completed).toBe(true);
       expect(result.message).toBe('Lesson already marked as complete');
       expect(result.completedAt).toBe(now);
     });
@@ -667,21 +674,21 @@ describe('LessonsService', () => {
   // isLessonCompleted
   // ───────────────────────────────────────────────────────────────────────────
   describe('isLessonCompleted', () => {
-    it('returns { isCompleted: false, completedAt: null } for a new student', async () => {
+    it('returns { completed: false, completedAt: null } for a new student', async () => {
       db.query.lessonCompletions.findFirst.mockResolvedValue(undefined);
 
       const result = await service.isLessonCompleted(STUDENT_ID, LESSON_ID);
 
-      expect(result).toEqual({ isCompleted: false, completedAt: null });
+      expect(result).toEqual({ completed: false, completedAt: null });
     });
 
-    it('returns { isCompleted: true, completedAt } after completion', async () => {
+    it('returns { completed: true, completedAt } after completion', async () => {
       const completedAt = new Date('2026-02-01');
       db.query.lessonCompletions.findFirst.mockResolvedValue({ completedAt });
 
       const result = await service.isLessonCompleted(STUDENT_ID, LESSON_ID);
 
-      expect(result).toEqual({ isCompleted: true, completedAt });
+      expect(result).toEqual({ completed: true, completedAt });
     });
   });
 

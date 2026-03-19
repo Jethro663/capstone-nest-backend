@@ -760,7 +760,7 @@ export class LessonsService {
         .values({ studentId, lessonId, progressPercentage: 100 })
         .returning();
 
-      return { isCompleted: true, completedAt: result[0].completedAt };
+      return { completed: true, completedAt: result[0].completedAt };
     } catch (error: any) {
       // Unique constraint violation — already completed; update timestamp
       if (error?.code === '23505') {
@@ -776,7 +776,7 @@ export class LessonsService {
           .returning();
 
         return {
-          isCompleted: true,
+          completed: true,
           completedAt: updated.completedAt,
           message: 'Lesson already marked as complete',
         };
@@ -797,7 +797,7 @@ export class LessonsService {
     });
 
     return {
-      isCompleted: !!completion,
+      completed: !!completion,
       completedAt: completion?.completedAt ?? null,
     };
   }
@@ -846,6 +846,9 @@ export class LessonsService {
         ),
       );
 
-    return rows;
+    return rows.map((row) => ({
+      ...row,
+      completed: true,
+    }));
   }
 }

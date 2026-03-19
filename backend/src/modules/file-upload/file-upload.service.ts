@@ -4,9 +4,14 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
-import { and, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { classes, libraryFolders, uploadedFiles } from '../../drizzle/schema';
+import {
+  classes,
+  enrollments,
+  libraryFolders,
+  uploadedFiles,
+} from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import {
   FileQueryDto,
@@ -56,6 +61,10 @@ export class FileUploadService {
 
   private isTeacher(user: RequestUser) {
     return user.roles.includes('teacher');
+  }
+
+  private isStudent(user: RequestUser) {
+    return user.roles.includes('student');
   }
 
   private ensureCanWriteScope(
@@ -108,6 +117,25 @@ export class FileUploadService {
     return folder;
   }
 
+  private async ensureStudentCanAccessClass(classId: string, user: RequestUser) {
+    if (!this.isStudent(user)) return;
+
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.studentId, user.id),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: {
+        id: true,
+      },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException('You do not have access to this class');
+    }
+  }
+
   private async ensureFolderWritable(id: string, user: RequestUser) {
     const folder = await this.ensureFolderAccessible(id, user);
 
@@ -155,10 +183,23 @@ export class FileUploadService {
 
     if (
       !this.isAdmin(user) &&
+      !this.isStudent(user) &&
       record.scope !== FileScopeDto.General &&
       record.teacherId !== user.id
     ) {
       throw new ForbiddenException('You do not have access to this file');
+    }
+
+    if (
+      this.isStudent(user) &&
+      record.scope !== FileScopeDto.General &&
+      !record.classId
+    ) {
+      throw new ForbiddenException('You do not have access to this file');
+    }
+
+    if (this.isStudent(user) && record.classId) {
+      await this.ensureStudentCanAccessClass(record.classId, user);
     }
 
     return record;
@@ -230,11 +271,53 @@ export class FileUploadService {
 
   async findAll(user: RequestUser, query: FileQueryDto = {}) {
     const isAdmin = this.isAdmin(user);
+    const isStudent = this.isStudent(user);
     const filters: any[] = [isNull(uploadedFiles.deletedAt)];
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    if (isStudent) {
+      if (query.folderId || query.ownerId) {
+        throw new ForbiddenException(
+          'Students can only browse class or general module files',
+        );
+      }
+
+      const classFilters: any[] = [];
+      if (query.classId) {
+        await this.ensureStudentCanAccessClass(query.classId, user);
+        classFilters.push(eq(uploadedFiles.classId, query.classId));
+      } else {
+        const enrollmentsForStudent = await this.db.query.enrollments.findMany({
+          where: and(
+            eq(enrollments.studentId, user.id),
+            eq(enrollments.status, 'enrolled'),
+          ),
+          columns: {
+            classId: true,
+          },
+        });
+        const classIds = enrollmentsForStudent
+          .map((enrollment) => enrollment.classId)
+          .filter((classId): classId is string => Boolean(classId));
+
+        if (classIds.length > 0) {
+          classFilters.push(inArray(uploadedFiles.classId, classIds));
+        }
+      }
+
+      filters.push(
+        or(
+          eq(uploadedFiles.scope, FileScopeDto.General),
+          ...(classFilters.length > 0 ? classFilters : []),
+        )!,
+      );
+    }
 
     if (query.scope) {
       filters.push(eq(uploadedFiles.scope, query.scope));
-    } else if (!isAdmin) {
+    } else if (!isAdmin && !isStudent) {
       filters.push(
         or(
           eq(uploadedFiles.teacherId, user.id),
@@ -243,7 +326,7 @@ export class FileUploadService {
       );
     }
 
-    if (!isAdmin && query.scope === FileScopeDto.Private) {
+    if (!isAdmin && !isStudent && query.scope === FileScopeDto.Private) {
       filters.push(eq(uploadedFiles.teacherId, user.id));
     }
 
@@ -270,36 +353,52 @@ export class FileUploadService {
       );
     }
 
-    return this.db.query.uploadedFiles.findMany({
-      where: and(...filters),
-      with: {
-        teacher: {
-          columns: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
+    const whereClause = and(...filters);
+    const [data, totalResult] = await Promise.all([
+      this.db.query.uploadedFiles.findMany({
+        where: whereClause,
+        with: {
+          teacher: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          class: {
+            columns: {
+              id: true,
+              subjectName: true,
+              subjectCode: true,
+            },
+          },
+          folder: {
+            columns: {
+              id: true,
+              name: true,
+              ownerId: true,
+              parentId: true,
+              scope: true,
+            },
           },
         },
-        class: {
-          columns: {
-            id: true,
-            subjectName: true,
-            subjectCode: true,
-          },
-        },
-        folder: {
-          columns: {
-            id: true,
-            name: true,
-            ownerId: true,
-            parentId: true,
-            scope: true,
-          },
-        },
-      },
-      orderBy: [desc(uploadedFiles.uploadedAt)],
-    });
+        orderBy: [desc(uploadedFiles.uploadedAt)],
+        limit,
+        offset,
+      }),
+      this.db.select({ total: count() }).from(uploadedFiles).where(whereClause),
+    ]);
+
+    const total = Number(totalResult[0]?.total ?? 0);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    };
   }
 
   async findOne(id: string, user: RequestUser) {

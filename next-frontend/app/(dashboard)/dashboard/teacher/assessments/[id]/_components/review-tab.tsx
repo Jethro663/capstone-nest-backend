@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/cn';
 import type {
+  RubricCriterion,
+  RubricScore,
   SubmissionsResponse,
   StudentSubmission,
   SubmissionStatus,
@@ -51,10 +53,13 @@ interface AttemptResponse {
 
 interface AttemptResultData {
   score?: number;
+  directScore?: number | null;
+  rubricScores?: RubricScore[];
   isReturned?: boolean;
   teacherFeedback?: string;
   assessment?: {
     totalPoints?: number;
+    rubricCriteria?: RubricCriterion[];
   };
   responses?: AttemptResponse[];
   submittedFile?: {
@@ -105,6 +110,8 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
   const [feedback, setFeedback] = useState('');
   const [returning, setReturning] = useState(false);
   const [search, setSearch] = useState('');
+  const [directScore, setDirectScore] = useState<number | ''>('');
+  const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
 
   const selectedStudent = studentsWithAttempts.find((s) => s.studentId === selectedStudentId);
 
@@ -149,6 +156,20 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
           const payload = res.data as unknown as AttemptResultData;
           setAttemptData(payload);
           setFeedback(payload.teacherFeedback ?? '');
+          const criteria = payload.assessment?.rubricCriteria ?? [];
+          setRubricScores(
+            criteria.length > 0
+              ? criteria.map((criterion) => {
+                  const existing = payload.rubricScores?.find((score) => score.criterionId === criterion.id);
+                  return {
+                    criterionId: criterion.id,
+                    pointsEarned: existing?.pointsEarned ?? 0,
+                    feedback: existing?.feedback ?? '',
+                  };
+                })
+              : [],
+          );
+          setDirectScore(payload.directScore ?? payload.score ?? '');
         }
       } catch {
         if (!cancelled) toast.error('Failed to load student attempt');
@@ -165,7 +186,17 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
     if (!selectedStudent || !selectedAttempt?.id) return;
     try {
       setReturning(true);
-      await assessmentService.returnGrade(selectedAttempt.id, feedback || undefined);
+      await assessmentService.returnGrade(selectedAttempt.id, {
+        teacherFeedback: feedback || undefined,
+        directScore:
+          (attemptData?.assessment?.rubricCriteria?.length ?? 0) === 0 && directScore !== ''
+            ? Number(directScore)
+            : undefined,
+        rubricScores:
+          (attemptData?.assessment?.rubricCriteria?.length ?? 0) > 0
+            ? rubricScores
+            : undefined,
+      });
       toast.success(
         `Grade returned to ${selectedStudent.firstName} ${selectedStudent.lastName} (Attempt ${selectedAttempt.attemptNumber ?? '?'})`,
       );
@@ -267,6 +298,10 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
                 data={attemptData}
                 feedback={feedback}
                 setFeedback={setFeedback}
+                directScore={directScore}
+                setDirectScore={setDirectScore}
+                rubricScores={rubricScores}
+                setRubricScores={setRubricScores}
                 onReturn={handleReturnGrade}
                 returning={returning}
               />
@@ -294,6 +329,10 @@ function AttemptDetailPanel({
   data,
   feedback,
   setFeedback,
+  directScore,
+  setDirectScore,
+  rubricScores,
+  setRubricScores,
   onReturn,
   returning,
 }: {
@@ -304,6 +343,10 @@ function AttemptDetailPanel({
   data: AttemptResultData;
   feedback: string;
   setFeedback: (v: string) => void;
+  directScore: number | '';
+  setDirectScore: (value: number | '') => void;
+  rubricScores: RubricScore[];
+  setRubricScores: Dispatch<SetStateAction<RubricScore[]>>;
   onReturn: () => void;
   returning: boolean;
 }) {
@@ -316,6 +359,7 @@ function AttemptDetailPanel({
   const timeSpent = selectedAttempt?.timeSpentSeconds ?? student.attempt?.timeSpentSeconds;
   const submittedAt = selectedAttempt?.submittedAt;
   const isReturned = Boolean(selectedAttempt?.isReturned ?? data?.isReturned ?? student.status === 'returned');
+  const rubricCriteria = data.assessment?.rubricCriteria ?? [];
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -546,6 +590,69 @@ function AttemptDetailPanel({
           </Card>
         )}
       </div>
+
+      {!isReturned && (
+        <Card>
+          <CardContent className="space-y-4 p-4">
+            <div>
+              <p className="text-sm font-semibold">Scoring</p>
+              <p className="text-xs text-muted-foreground">
+                {rubricCriteria.length > 0
+                  ? 'Score each rubric criterion before returning the grade.'
+                  : 'No rubric is attached, so return a direct score from 0 to 100.'}
+              </p>
+            </div>
+
+            {rubricCriteria.length > 0 ? (
+              <div className="space-y-3">
+                {rubricCriteria.map((criterion) => {
+                  const currentScore = rubricScores.find((score) => score.criterionId === criterion.id);
+                  return (
+                    <div key={criterion.id} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1.3fr_140px]">
+                      <div className="space-y-1">
+                        <p className="font-medium">{criterion.title}</p>
+                        {criterion.description && (
+                          <p className="text-xs text-muted-foreground">{criterion.description}</p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Points earned / {criterion.points}</p>
+                        <input
+                          type="number"
+                          min={0}
+                          max={criterion.points}
+                          value={currentScore?.pointsEarned ?? 0}
+                          onChange={(event) => {
+                            const nextPoints = Number(event.target.value);
+                            setRubricScores((current) => current.map((score) => (
+                              score.criterionId === criterion.id
+                                ? { ...score, pointsEarned: nextPoints }
+                                : score
+                            )));
+                          }}
+                          className="w-full rounded-md border px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Direct score</p>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={directScore}
+                  onChange={(event) => setDirectScore(event.target.value === '' ? '' : Number(event.target.value))}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {!isReturned && (
         <Card>

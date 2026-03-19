@@ -43,7 +43,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         notificationService.getAll({ limit: 50 }),
         notificationService.getUnreadCount(),
       ]);
-      if (listRes.data) setNotifications(Array.isArray(listRes.data) ? listRes.data : []);
+      if (listRes.data) {
+        setNotifications(Array.isArray(listRes.data) ? listRes.data : []);
+      }
       if (countRes.data) setUnreadCount(countRes.data.count ?? 0);
     } catch {
       // silently fail — notifications are non-critical

@@ -1,5 +1,6 @@
 import { api } from '@/lib/api-client';
 import type {
+  FileLibraryResponse,
   FileLibraryQuery,
   LibraryFolder,
   StorageSummary,
@@ -27,7 +28,7 @@ export const fileService = {
 
   async getAll(
     query: FileLibraryQuery = {},
-  ): Promise<{ success: boolean; message: string; data: UploadedFile[]; count: number }> {
+  ): Promise<FileLibraryResponse<UploadedFile>> {
     const { data } = await api.get('/files', { params: query });
     return data;
   },

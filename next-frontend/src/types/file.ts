@@ -55,4 +55,17 @@ export interface FileLibraryQuery {
   ownerId?: string;
   classId?: string;
   search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface FileLibraryResponse<T> {
+  success: boolean;
+  message: string;
+  data: T[];
+  count: number;
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }

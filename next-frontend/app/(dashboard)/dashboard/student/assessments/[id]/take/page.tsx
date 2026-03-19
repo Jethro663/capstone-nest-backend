@@ -742,6 +742,23 @@ export default function StudentAssessmentTakePage() {
                 </p>
               </div>
 
+              {(assessment.rubricCriteria?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Rubric</p>
+                  {assessment.rubricCriteria?.map((criterion) => (
+                    <div key={criterion.id} className="flex items-start justify-between gap-3 rounded-lg bg-[var(--student-surface-soft)] p-3">
+                      <div>
+                        <p className="text-sm font-medium text-[var(--student-text-strong)]">{criterion.title}</p>
+                        {criterion.description && (
+                          <p className="text-xs text-[var(--student-text-muted)]">{criterion.description}</p>
+                        )}
+                      </div>
+                      <Badge className="student-badge">{criterion.points} pts</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-2">
                 <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Allowed Formats</p>
                 <div className="flex flex-wrap gap-2">

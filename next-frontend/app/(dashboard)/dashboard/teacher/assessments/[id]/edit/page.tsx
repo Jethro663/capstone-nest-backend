@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import type { Assessment, AssessmentQuestion, CreateQuestionDto } from '@/types/assessment';
+import type { Assessment, AssessmentQuestion, CreateQuestionDto, RubricCriterion } from '@/types/assessment';
 import type { ClassRecordCategory } from '@/types/assessment';
 
 type LocalQuestion = AssessmentQuestion & { isNew?: boolean };
@@ -142,6 +142,11 @@ export default function AssessmentEditorPage() {
     sizeBytes: number;
     uploadedAt: string;
   } | null>(null);
+  const [rubricSourceFile, setRubricSourceFile] = useState<Assessment['rubricSourceFile'] | null>(null);
+  const [rubricCriteria, setRubricCriteria] = useState<RubricCriterion[]>([]);
+  const [rubricParseStatus, setRubricParseStatus] = useState<Assessment['rubricParseStatus']>(null);
+  const [rubricUploading, setRubricUploading] = useState(false);
+  const [rubricSaving, setRubricSaving] = useState(false);
   const [savedMeta, setSavedMeta] = useState<{
     title: string;
     description: string;
@@ -214,6 +219,9 @@ export default function AssessmentEditorPage() {
       );
       setMaxUploadSizeBytes(a.maxUploadSizeBytes ?? FILE_UPLOAD_LIMIT_BYTES);
       setTeacherAttachmentFile(a.teacherAttachmentFile || null);
+      setRubricSourceFile(a.rubricSourceFile || null);
+      setRubricCriteria(a.rubricCriteria || []);
+      setRubricParseStatus(a.rubricParseStatus ?? null);
       const normalizedQuestions = (a.questions || [])
         .map((question) => ({
           ...question,
@@ -330,6 +338,84 @@ export default function AssessmentEditorPage() {
       toast.success('Reference file uploaded');
     } catch {
       toast.error('Failed to upload reference file');
+    }
+  };
+
+  const handleRubricUpload = async (file: File) => {
+    try {
+      setRubricUploading(true);
+      const res = await assessmentService.uploadRubricSource(assessmentId, file);
+      setRubricSourceFile(res.data.file);
+      setRubricCriteria(res.data.rubricCriteria || []);
+      setRubricParseStatus((res.data.rubricParseStatus as Assessment['rubricParseStatus']) ?? null);
+      toast.success(
+        res.data.rubricParseStatus === 'failed'
+          ? 'Rubric file uploaded but could not be parsed automatically'
+          : 'Rubric uploaded and parsed',
+      );
+    } catch {
+      toast.error('Failed to upload rubric');
+    } finally {
+      setRubricUploading(false);
+    }
+  };
+
+  const handleRubricCriterionChange = (
+    index: number,
+    field: keyof RubricCriterion,
+    value: string | number,
+  ) => {
+    setRubricCriteria((current) => current.map((criterion, criterionIndex) => {
+      if (criterionIndex !== index) return criterion;
+      return {
+        ...criterion,
+        [field]: field === 'points' ? Number(value) : value,
+      };
+    }));
+  };
+
+  const addRubricCriterion = () => {
+    setRubricCriteria((current) => [
+      ...current,
+      {
+        id: `criterion-${current.length + 1}`,
+        title: '',
+        description: '',
+        points: 0,
+      },
+    ]);
+  };
+
+  const removeRubricCriterion = (index: number) => {
+    setRubricCriteria((current) => current.filter((_, criterionIndex) => criterionIndex !== index));
+  };
+
+  const handleSaveRubricReview = async () => {
+    const normalized = rubricCriteria
+      .map((criterion, index) => ({
+        ...criterion,
+        id: criterion.id?.trim() || `criterion-${index + 1}`,
+        title: criterion.title.trim(),
+        description: criterion.description?.trim() || undefined,
+        points: Number(criterion.points || 0),
+      }))
+      .filter((criterion) => criterion.title.length > 0);
+
+    if (normalized.length === 0) {
+      toast.error('Add at least one rubric criterion before saving');
+      return;
+    }
+
+    try {
+      setRubricSaving(true);
+      const res = await assessmentService.reviewRubric(assessmentId, normalized);
+      setRubricCriteria(res.data.rubricCriteria || []);
+      setRubricParseStatus(res.data.rubricParseStatus ?? 'reviewed');
+      toast.success('Rubric review saved');
+    } catch {
+      toast.error('Failed to save rubric review');
+    } finally {
+      setRubricSaving(false);
     }
   };
 
@@ -863,6 +949,95 @@ export default function AssessmentEditorPage() {
                 )}
               </div>
             </div>
+
+            {assessmentType === 'file_upload' && (
+              <>
+                <Separator />
+
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Rubric review workflow</p>
+                      <p className="text-xs text-muted-foreground">
+                        Upload PDF, DOCX, or TXT criteria, then review the parsed rubric before students use it.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="capitalize">
+                      {rubricParseStatus || 'not attached'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center justify-center rounded-md border px-3 h-9 text-sm cursor-pointer hover:bg-muted transition-colors">
+                      {rubricUploading ? 'Uploading...' : 'Upload rubric'}
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleRubricUpload(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {rubricSourceFile && (
+                      <span className="text-xs text-muted-foreground">
+                        {rubricSourceFile.originalName}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold">Reviewed rubric criteria</p>
+                      <Button type="button" size="sm" variant="outline" onClick={addRubricCriterion}>
+                        Add Criterion
+                      </Button>
+                    </div>
+
+                    {rubricCriteria.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No rubric criteria yet. Upload a rubric or add criteria manually.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {rubricCriteria.map((criterion, index) => (
+                          <div key={`${criterion.id}-${index}`} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1.3fr_1fr_120px_auto]">
+                            <Input
+                              value={criterion.title}
+                              onChange={(e) => handleRubricCriterionChange(index, 'title', e.target.value)}
+                              placeholder="Criterion title"
+                            />
+                            <Input
+                              value={criterion.description || ''}
+                              onChange={(e) => handleRubricCriterionChange(index, 'description', e.target.value)}
+                              placeholder="Optional description"
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              value={criterion.points}
+                              onChange={(e) => handleRubricCriterionChange(index, 'points', Number(e.target.value))}
+                              placeholder="Points"
+                            />
+                            <Button type="button" size="sm" variant="ghost" onClick={() => removeRubricCriterion(index)}>
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex justify-end">
+                      <Button type="button" size="sm" onClick={() => void handleSaveRubricReview()} disabled={rubricSaving}>
+                        {rubricSaving ? 'Saving...' : 'Save Rubric Review'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex justify-end">
               <Button size="sm" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>

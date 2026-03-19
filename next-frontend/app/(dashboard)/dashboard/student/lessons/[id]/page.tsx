@@ -63,10 +63,9 @@ export default function StudentLessonViewPage() {
   }, [lessonId]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
-  // Scroll progress tracking
   useEffect(() => {
     const handleScroll = () => {
       const scrollTop = window.scrollY;
@@ -80,8 +79,8 @@ export default function StudentLessonViewPage() {
   const handleComplete = async () => {
     try {
       setCompleting(true);
-      await lessonService.complete(lessonId);
-      setIsCompleted(true);
+      const response = await lessonService.complete(lessonId);
+      setIsCompleted(Boolean(response.data?.completed));
       toast.success('Lesson marked as complete!');
     } catch {
       toast.error('Failed to mark lesson as complete');
@@ -92,7 +91,7 @@ export default function StudentLessonViewPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-3xl mx-auto">
+      <div className="mx-auto max-w-3xl space-y-6">
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-6 w-full" />
         <Skeleton className="h-40 w-full" />
@@ -107,16 +106,19 @@ export default function StudentLessonViewPage() {
 
   return (
     <div className="relative">
-      {/* Reading progress bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-[var(--student-progress-track)] z-50">
+      <div className="fixed left-0 right-0 top-0 z-50 h-1 bg-[var(--student-progress-track)]">
         <div className="h-full student-progress-fill transition-all" style={{ width: `${scrollProgress}%` }} />
       </div>
 
-      <div className="max-w-3xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="mx-auto max-w-3xl space-y-6">
         <div>
-          <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2 text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]">
-            ← Back
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+            className="mb-2 text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+          >
+            Back
           </Button>
           <h1 className="text-2xl font-bold text-[var(--student-text-strong)]">{lesson.title}</h1>
           {lesson.description && (
@@ -124,7 +126,6 @@ export default function StudentLessonViewPage() {
           )}
         </div>
 
-        {/* Content blocks */}
         <div className="space-y-6">
           {blocks.map((block) => (
             <ContentBlockRenderer key={block.id} block={block} />
@@ -139,16 +140,29 @@ export default function StudentLessonViewPage() {
           </Card>
         )}
 
-        {/* Completion & Navigation */}
-        <div className="sticky bottom-0 bg-[var(--student-elevated)] border-t border-[var(--student-outline)] py-4 flex items-center justify-between">
+        <div className="sticky bottom-0 flex items-center justify-between border-t border-[var(--student-outline)] bg-[var(--student-elevated)] py-4">
           <Button
             onClick={handleComplete}
             disabled={isCompleted || completing}
-            className={isCompleted ? 'bg-[var(--student-success-bg)] text-[var(--student-success-text)] border border-[var(--student-success-border)]' : 'student-button-solid'}
+            className={
+              isCompleted
+                ? 'border border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
+                : 'student-button-solid'
+            }
           >
-            {isCompleted ? '✓ Completed' : completing ? 'Marking...' : 'Mark Complete'}
+            {isCompleted ? 'Completed' : completing ? 'Marking...' : 'Mark Complete'}
           </Button>
-          <Button variant="outline" onClick={() => router.back()} className="student-button-outline">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (classId) {
+                router.push(`/dashboard/student/classes/${classId}`);
+                return;
+              }
+              router.back();
+            }}
+            className="student-button-outline"
+          >
             Back to Class
           </Button>
         </div>
@@ -161,15 +175,18 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
       return (
-        <div className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]" dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }} />
+        <div
+          className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]"
+          dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }}
+        />
       );
     case 'image': {
       const src = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
       const caption = (block.metadata as Record<string, string>)?.caption;
       return (
         <figure>
-          {src && <img src={src} alt={caption || 'Lesson image'} className="rounded-lg w-full" />}
-          {caption && <figcaption className="text-center text-sm text-[var(--student-text-muted)] mt-2">{caption}</figcaption>}
+          {src && <img src={src} alt={caption || 'Lesson image'} className="w-full rounded-lg" />}
+          {caption && <figcaption className="mt-2 text-center text-sm text-[var(--student-text-muted)]">{caption}</figcaption>}
         </figure>
       );
     }
@@ -181,8 +198,13 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         ? url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')
         : url;
       return (
-        <div className="aspect-video rounded-lg overflow-hidden">
-          <iframe src={embedUrl} className="w-full h-full" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" />
+        <div className="aspect-video overflow-hidden rounded-lg">
+          <iframe
+            src={embedUrl}
+            className="h-full w-full"
+            allowFullScreen
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          />
         </div>
       );
     }
@@ -191,7 +213,9 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         <Card className="student-card border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]">
           <CardContent className="p-4">
             <Badge className="student-badge mb-2">Quiz Question</Badge>
-            <p className="font-medium text-[var(--student-text-strong)] whitespace-pre-wrap">{getBlockTextValue(block.content)}</p>
+            <p className="whitespace-pre-wrap font-medium text-[var(--student-text-strong)]">
+              {getBlockTextValue(block.content)}
+            </p>
           </CardContent>
         </Card>
       );
@@ -200,8 +224,8 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       const fileUrl = (block.metadata as Record<string, string>)?.url;
       return (
         <Card className="student-card">
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-2xl">📎</span>
+          <CardContent className="flex items-center gap-3 p-4">
+            <span className="text-2xl">File</span>
             <div>
               <p className="font-medium text-[var(--student-text-strong)]">{fileName}</p>
               {fileUrl && (

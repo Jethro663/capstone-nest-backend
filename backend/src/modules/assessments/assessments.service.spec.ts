@@ -113,6 +113,7 @@ function buildMockDb() {
       assessmentAttempts: { findFirst: jest.fn(), findMany: jest.fn() },
       assessmentResponses: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
+      uploadedFiles: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
     },
     insert: jest.fn(),
@@ -156,10 +157,14 @@ describe('AssessmentsService', () => {
   let service: AssessmentsService;
   let db: any;
   let eventEmitter: EventEmitter2;
+  let feedbackService: { applyFeedbackFiltering: jest.Mock };
 
   beforeEach(async () => {
     db = buildMockDb();
     eventEmitter = { emit: jest.fn() } as any;
+    feedbackService = {
+      applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -168,9 +173,7 @@ describe('AssessmentsService', () => {
         { provide: EventEmitter2, useValue: eventEmitter },
         {
           provide: FeedbackService,
-          useValue: {
-            applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
-          },
+          useValue: feedbackService,
         },
         {
           provide: AuditService,
@@ -207,7 +210,12 @@ describe('AssessmentsService', () => {
         classId: CLASS_ID,
       } as any);
 
-      expect(result).toEqual({ ...created, teacherAttachmentFile: null });
+      expect(result).toEqual({
+        ...created,
+        teacherAttachmentFile: null,
+        rubricSourceFile: null,
+        rubricCriteria: [],
+      });
       expect(db.insert).toHaveBeenCalled();
     });
 
@@ -759,6 +767,99 @@ describe('AssessmentsService', () => {
       await expect(
         service.unsubmitFileUploadAssessment(STUDENT_ID, ASSESSMENT_ID),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getAttemptResults', () => {
+    it('should return unfiltered responses for teachers', async () => {
+      const attempt = {
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        submittedAt: new Date('2026-03-19T00:10:00.000Z'),
+        teacherFeedback: 'Solid work',
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          feedbackLevel: 'standard',
+          feedbackDelayHours: 24,
+        },
+        responses: [
+          {
+            id: 'response-1',
+            questionId: QUESTION_ID,
+            studentAnswer: '2',
+            selectedOptionId: OPTION_ID_A,
+            isCorrect: true,
+            pointsEarned: 5,
+            question: MOCK_QUESTION,
+          },
+        ],
+        student: {
+          id: STUDENT_ID,
+          firstName: 'Jane',
+          lastName: 'Doe',
+        },
+      };
+
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(attempt);
+
+      const result = await service.getAttemptResults(ATTEMPT_ID);
+
+      expect(result.responses[0].studentAnswer).toBe('2');
+      expect(result.responses[0].selectedOptionId).toBe(OPTION_ID_A);
+      expect(feedbackService.applyFeedbackFiltering).not.toHaveBeenCalled();
+    });
+
+    it('should keep student masking rules for student viewers', async () => {
+      const filteredAttempt = {
+        responses: [
+          {
+            id: 'response-1',
+            questionId: QUESTION_ID,
+            studentAnswer: null,
+            selectedOptionId: null,
+          },
+        ],
+        assessment: {
+          id: ASSESSMENT_ID,
+          title: 'Test Quiz',
+          type: 'quiz',
+          totalPoints: 5,
+        },
+      };
+
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        isReturned: true,
+        submittedAt: new Date('2026-03-19T00:10:00.000Z'),
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          feedbackLevel: 'standard',
+          feedbackDelayHours: 24,
+        },
+        responses: [
+          {
+            id: 'response-1',
+            questionId: QUESTION_ID,
+            studentAnswer: '2',
+            selectedOptionId: OPTION_ID_A,
+            isCorrect: true,
+            pointsEarned: 5,
+            question: MOCK_QUESTION,
+          },
+        ],
+        student: {
+          id: STUDENT_ID,
+          firstName: 'Jane',
+          lastName: 'Doe',
+        },
+      });
+      feedbackService.applyFeedbackFiltering.mockReturnValue(filteredAttempt);
+
+      const result = await service.getAttemptResults(ATTEMPT_ID, 'student');
+
+      expect(feedbackService.applyFeedbackFiltering).toHaveBeenCalled();
+      expect(result.responses[0].studentAnswer).toBeNull();
     });
   });
 

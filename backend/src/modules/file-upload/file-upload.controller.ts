@@ -73,6 +73,14 @@ const multerOptions = {
 export class FileUploadController {
   constructor(private readonly fileUploadService: FileUploadService) {}
 
+  private normalizeUser(user: any) {
+    return {
+      id: user?.userId ?? user?.id,
+      email: user?.email ?? '',
+      roles: Array.isArray(user?.roles) ? user.roles : [],
+    };
+  }
+
   @Post('upload')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
@@ -81,13 +89,14 @@ export class FileUploadController {
   async uploadFile(
     @UploadedFile(new PdfValidationPipe()) file: Express.Multer.File,
     @Query() query: UploadFileDto,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
     const scope = query.scope ?? FileScopeDto.Private;
+    const currentUser = this.normalizeUser(user);
 
     const record = await this.fileUploadService.saveFileRecord(
       {
-        teacherId: user.id,
+        teacherId: currentUser.id,
         classId: query.classId,
         folderId: query.folderId,
         scope,
@@ -97,7 +106,7 @@ export class FileUploadController {
         sizeBytes: file.size,
         filePath: path.posix.join('uploads', 'pdfs', file.filename),
       },
-      user,
+      currentUser,
     );
 
     return {
@@ -108,28 +117,38 @@ export class FileUploadController {
   }
 
   @Get()
-  @Roles(RoleName.Admin, RoleName.Teacher)
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async listFiles(
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
     @Query() query: FileQueryDto,
   ) {
-    const files = await this.fileUploadService.findAll(user, query);
+    const files = await this.fileUploadService.findAll(
+      this.normalizeUser(user),
+      query,
+    );
 
     return {
       success: true,
       message: 'Files retrieved successfully',
-      data: files,
-      count: files.length,
+      data: files.data,
+      count: files.data.length,
+      total: files.total,
+      page: files.page,
+      limit: files.limit,
+      totalPages: files.totalPages,
     };
   }
 
   @Get('folders')
   @Roles(RoleName.Admin, RoleName.Teacher)
   async listFolders(
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
     @Query() query: FileQueryDto,
   ) {
-    const folders = await this.fileUploadService.listFolders(user, query);
+    const folders = await this.fileUploadService.listFolders(
+      this.normalizeUser(user),
+      query,
+    );
 
     return {
       success: true,
@@ -143,9 +162,12 @@ export class FileUploadController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   async createFolder(
     @Body() dto: CreateLibraryFolderDto,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
-    const folder = await this.fileUploadService.createFolder(dto, user);
+    const folder = await this.fileUploadService.createFolder(
+      dto,
+      this.normalizeUser(user),
+    );
 
     return {
       success: true,
@@ -159,9 +181,13 @@ export class FileUploadController {
   async updateFolder(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLibraryFolderDto,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
-    const folder = await this.fileUploadService.updateFolder(id, dto, user);
+    const folder = await this.fileUploadService.updateFolder(
+      id,
+      dto,
+      this.normalizeUser(user),
+    );
 
     return {
       success: true,
@@ -175,9 +201,9 @@ export class FileUploadController {
   @HttpCode(HttpStatus.OK)
   async deleteFolder(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
-    await this.fileUploadService.deleteFolder(id, user);
+    await this.fileUploadService.deleteFolder(id, this.normalizeUser(user));
 
     return {
       success: true,
@@ -198,12 +224,12 @@ export class FileUploadController {
   }
 
   @Get(':id')
-  @Roles(RoleName.Admin, RoleName.Teacher)
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getFile(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
-    const file = await this.fileUploadService.findOne(id, user);
+    const file = await this.fileUploadService.findOne(id, this.normalizeUser(user));
 
     return {
       success: true,
@@ -217,9 +243,13 @@ export class FileUploadController {
   async updateFile(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateFileMetadataDto,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
-    const file = await this.fileUploadService.updateFileMetadata(id, dto, user);
+    const file = await this.fileUploadService.updateFileMetadata(
+      id,
+      dto,
+      this.normalizeUser(user),
+    );
 
     return {
       success: true,
@@ -229,13 +259,16 @@ export class FileUploadController {
   }
 
   @Get(':id/download')
-  @Roles(RoleName.Admin, RoleName.Teacher)
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async downloadFile(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
     @Res() res: Response,
   ) {
-    const filePath = await this.fileUploadService.getFilePath(id, user);
+    const filePath = await this.fileUploadService.getFilePath(
+      id,
+      this.normalizeUser(user),
+    );
     const absolutePath = path.resolve(filePath);
     const uploadsRoot = path.resolve(UPLOAD_DEST);
 
@@ -270,9 +303,9 @@ export class FileUploadController {
   @HttpCode(HttpStatus.OK)
   async deleteFile(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: { id: string; email: string; roles: string[] },
+    @CurrentUser() user: any,
   ) {
-    await this.fileUploadService.softDelete(id, user);
+    await this.fileUploadService.softDelete(id, this.normalizeUser(user));
 
     return {
       success: true,

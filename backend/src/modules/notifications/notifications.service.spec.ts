@@ -143,22 +143,59 @@ describe('NotificationsService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('findByUser()', () => {
-    it('returns notifications from db', async () => {
+    it('returns paginated notifications from db', async () => {
       const rows = [makeNotification()];
+      mockDb.select = jest.fn().mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([{ total: 1 }]),
+        }),
+      });
       mockDb.query.notifications.findMany.mockResolvedValue(rows);
 
       const result = await service.findByUser(USER_ID, { page: 1, limit: 20 });
 
-      expect(result).toEqual(rows);
+      expect(result).toEqual({
+        data: rows,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
     });
 
     it('calculates correct offset for page 2', async () => {
+      mockDb.select = jest.fn().mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([{ total: 0 }]),
+        }),
+      });
       mockDb.query.notifications.findMany.mockResolvedValue([]);
 
       await service.findByUser(USER_ID, { page: 2, limit: 10 });
 
       expect(mockDb.query.notifications.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 10, offset: 10 }),
+      );
+    });
+
+    it('applies the isRead filter when provided', async () => {
+      mockDb.select = jest.fn().mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([{ total: 0 }]),
+        }),
+      });
+      mockDb.query.notifications.findMany.mockResolvedValue([]);
+
+      await service.findByUser(USER_ID, {
+        page: 1,
+        limit: 20,
+        isRead: false,
+      });
+
+      expect(mockDb.query.notifications.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.anything(),
+        }),
       );
     });
   });
