@@ -128,13 +128,13 @@ export default function StudentAssessmentTakePage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [assessmentRes, ongoingRes] = await Promise.all([
-        assessmentService.getById(assessmentId),
-        assessmentService.getOngoingAttempt(assessmentId),
-      ]);
-
+      const assessmentRes = await assessmentService.getById(assessmentId);
       const assessmentData = assessmentRes.data;
-      const ongoing = ongoingRes.data;
+      let ongoing = (await assessmentService.getOngoingAttempt(assessmentId)).data;
+
+      if (!ongoing && assessmentData.type === 'file_upload') {
+        ongoing = (await assessmentService.startAttempt(assessmentId)).data;
+      }
 
       if (!ongoing) {
         toast.info('No active attempt found. Start a new attempt first.');
@@ -177,6 +177,20 @@ export default function StudentAssessmentTakePage() {
       setResponses(restoredResponses);
       setStrictMode(Boolean(ongoing.strictMode));
       setTimedQuestionsEnabled(Boolean(ongoing.timedQuestionsEnabled));
+      setUploadedSubmission(
+        ongoing.attempt.submittedFileId
+          ? {
+              attemptId: ongoing.attempt.id,
+              file: {
+                id: ongoing.attempt.submittedFileId,
+                originalName: ongoing.attempt.submittedFileOriginalName || 'Uploaded file',
+                mimeType: ongoing.attempt.submittedFileMimeType || 'application/octet-stream',
+                sizeBytes: ongoing.attempt.submittedFileSizeBytes || 0,
+                uploadedAt: ongoing.attempt.updatedAt || ongoing.attempt.createdAt || new Date().toISOString(),
+              },
+            }
+          : null,
+      );
       applyAttemptState(
         {
           ...ongoing.attempt,
@@ -197,12 +211,12 @@ export default function StudentAssessmentTakePage() {
       } else {
         setTimeLimit(null);
       }
-    } catch {
-      toast.error('Failed to load assessment');
+    } catch (error) {
+      toast.error(getErrorMessage(error) || 'Failed to load assessment');
     } finally {
       setLoading(false);
     }
-  }, [assessmentId, applyAttemptState, router, searchParams]);
+  }, [assessmentId, applyAttemptState, getErrorMessage, router, searchParams]);
 
   useEffect(() => {
     fetchData();
@@ -359,7 +373,6 @@ export default function StudentAssessmentTakePage() {
       currentIdx,
       isQuestionAnswered,
       persistProgress,
-      questions.length,
       questions,
       responses,
       strictMode,
@@ -673,7 +686,6 @@ export default function StudentAssessmentTakePage() {
   // change (currentIdx, violationCount, etc.), which was causing a cleanup→exit
   // fullscreen→new listener→false violation cycle on every question navigation
   // and on initial page load.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAttemptId, isFileUploadAssessment]);
 
   useEffect(() => {
@@ -752,7 +764,10 @@ export default function StudentAssessmentTakePage() {
                   </div>
                   <Button
                     variant="outline"
-                    onClick={() => window.open(assessmentService.getTeacherAttachmentDownloadUrl(assessmentId), '_blank')}
+                    onClick={() => void assessmentService.downloadTeacherAttachment(
+                      assessmentId,
+                      assessment.teacherAttachmentFile?.originalName || 'teacher-attachment',
+                    )}
                   >
                     <Download className="h-4 w-4 mr-1" /> Download
                   </Button>
@@ -787,7 +802,10 @@ export default function StudentAssessmentTakePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(assessmentService.getAttemptSubmissionDownloadUrl(uploadedSubmission.attemptId), '_blank')}
+                      onClick={() => void assessmentService.downloadAttemptSubmissionFile(
+                        uploadedSubmission.attemptId,
+                        uploadedSubmission.file.originalName,
+                      )}
                     >
                       <FileText className="h-4 w-4 mr-1" /> View
                     </Button>

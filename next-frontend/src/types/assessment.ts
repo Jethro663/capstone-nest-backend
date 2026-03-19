@@ -158,6 +158,7 @@ export interface AssessmentAttempt {
   }[];
   submittedAt?: string;
   createdAt?: string;
+  updatedAt?: string;
   isReturned?: boolean;
   returnedAt?: string;
   teacherFeedback?: string;

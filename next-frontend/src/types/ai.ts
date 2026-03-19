@@ -63,6 +63,65 @@ export interface InterventionRecommendationDto {
   note?: string;
 }
 
+export type AiGenerationStatus =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'approved'
+  | 'rejected'
+  | 'failed';
+
+export interface AiGenerationJob {
+  jobId: string;
+  jobType: 'quiz_generation' | 'remedial_plan_generation' | string;
+  status: AiGenerationStatus;
+  progressPercent: number;
+  statusMessage?: string | null;
+  errorMessage?: string | null;
+  outputId?: string | null;
+  assessmentId?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AiGenerationJobResult<TStructuredOutput = Record<string, unknown>> {
+  job: {
+    jobId: string;
+    jobType: string;
+    status: AiGenerationStatus;
+    outputId: string;
+    assessmentId?: string | null;
+    updatedAt?: string | null;
+  };
+  result: {
+    outputId: string;
+    outputType: string;
+    structuredOutput: TStructuredOutput;
+  };
+}
+
+export interface QuizDraftStructuredOutput {
+  title: string;
+  description?: string;
+  questions: Array<{
+    type: QuestionType;
+    content: string;
+    points?: number;
+    explanation?: string;
+    conceptTags?: string[];
+    options?: Array<{
+      text: string;
+      isCorrect: boolean;
+      order?: number;
+    }>;
+  }>;
+  assessmentId?: string;
+  runtime?: {
+    assessmentId?: string;
+    outputId?: string;
+    indexing?: IndexingSummary;
+  };
+}
+
 export interface GenerateQuizDraftDto {
   classId: string;
   lessonIds?: string[];
@@ -86,6 +145,24 @@ export interface GenerateQuizDraftResponse {
   questionsCreated: number;
   message: string;
   indexing?: IndexingSummary;
+}
+
+export interface InterventionStructuredOutput {
+  caseId: string;
+  weakConcepts: string[];
+  recommendedLessons: InterventionRecommendation['recommendedLessons'];
+  recommendedAssessments: InterventionRecommendation['recommendedAssessments'];
+  aiSummary: {
+    summary: string;
+    teacherActions: string[];
+    studentFocus: string[];
+  };
+  suggestedAssignmentPayload: InterventionRecommendation['suggestedAssignmentPayload'];
+  note?: string | null;
+  runtime?: {
+    outputId?: string;
+    caseId?: string;
+  };
 }
 
 export interface StudentTutorClassSummary {

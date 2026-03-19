@@ -113,6 +113,8 @@ async def generate_quiz_draft(
     db: AsyncSession,
     user: RequestUser,
     body: GenerateQuizDraftRequest,
+    *,
+    existing_job_id: str | None = None,
 ) -> dict[str, Any]:
     class_row = await db.execute(
         sa_text(
@@ -217,37 +219,61 @@ Source material:
 
     questions = questions[: body.question_count]
 
-    job_row = await db.execute(
-        sa_text(
-            """
-            INSERT INTO ai_generation_jobs (
-              job_type,
-              class_id,
-              teacher_id,
-              status,
-              source_filters
-            )
-            VALUES (
-              'quiz_generation',
-              :classId,
-              :teacherId,
-              'completed',
-              :sourceFilters
-            )
-            RETURNING id
-            """
-        ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
-        {
-            "classId": body.class_id,
-            "teacherId": user.id,
-            "sourceFilters": {
-                "lessonIds": body.lesson_ids,
-                "extractionIds": body.extraction_ids,
-                "questionCount": body.question_count,
+    if existing_job_id:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'processing',
+                  error_message = NULL,
+                  source_filters = :sourceFilters,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            {
+                "jobId": existing_job_id,
+                "sourceFilters": {
+                    "lessonIds": body.lesson_ids,
+                    "extractionIds": body.extraction_ids,
+                    "questionCount": body.question_count,
+                },
             },
-        },
-    )
-    job_id = job_row.scalar_one()
+        )
+        job_id = existing_job_id
+    else:
+        job_row = await db.execute(
+            sa_text(
+                """
+                INSERT INTO ai_generation_jobs (
+                  job_type,
+                  class_id,
+                  teacher_id,
+                  status,
+                  source_filters
+                )
+                VALUES (
+                  'quiz_generation',
+                  :classId,
+                  :teacherId,
+                  'completed',
+                  :sourceFilters
+                )
+                RETURNING id
+                """
+            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            {
+                "classId": body.class_id,
+                "teacherId": user.id,
+                "sourceFilters": {
+                    "lessonIds": body.lesson_ids,
+                    "extractionIds": body.extraction_ids,
+                    "questionCount": body.question_count,
+                },
+            },
+        )
+        job_id = job_row.scalar_one()
 
     structured_output = {
         "title": parsed.get("title") or body.title or f"{class_info['subject_name']} AI Draft Quiz",
@@ -405,6 +431,19 @@ Source material:
                 },
             )
 
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET
+              status = 'completed',
+              error_message = NULL,
+              updated_at = NOW()
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
     await db.commit()
 
     return {

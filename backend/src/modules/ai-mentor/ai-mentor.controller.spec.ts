@@ -8,6 +8,7 @@ import { AiProxyService } from './ai-proxy.service';
 
 const EXTRACTION_ID = 'extraction-uuid-1';
 const CLASS_ID = 'class-uuid-1';
+const JOB_ID = '11111111-1111-1111-1111-111111111111';
 
 const STUDENT_USER = {
   id: 'user-1',
@@ -247,6 +248,81 @@ describe('AiMentorController', () => {
         TEACHER_USER,
       );
       expect(result).toEqual({ deleted: true });
+    });
+  });
+
+  describe('queueInterventionRecommendation()', () => {
+    it('should forward POST /teacher/interventions/:caseId/jobs with dto', async () => {
+      const dto = { note: 'Focus on fractions' };
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+
+      const result = await controller.queueInterventionRecommendation(
+        JOB_ID,
+        dto,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/interventions/${JOB_ID}/jobs`,
+        TEACHER_USER,
+        dto,
+      );
+      expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+  });
+
+  describe('queueQuizDraftJob()', () => {
+    it('should forward POST /teacher/quizzes/jobs with dto', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        questionCount: 5,
+        questionType: 'multiple_choice',
+        assessmentType: 'quiz',
+        passingScore: 60,
+        feedbackLevel: 'standard',
+      };
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+
+      const result = await controller.queueQuizDraftJob(dto as any, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/teacher/quizzes/jobs',
+        TEACHER_USER,
+        dto,
+      );
+      expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+  });
+
+  describe('getTeacherJobStatus()', () => {
+    it('should forward GET /teacher/jobs/:jobId', async () => {
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'processing' });
+
+      const result = await controller.getTeacherJobStatus(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET',
+        `/teacher/jobs/${JOB_ID}`,
+        TEACHER_USER,
+      );
+      expect(result).toEqual({ jobId: JOB_ID, status: 'processing' });
+    });
+  });
+
+  describe('getTeacherJobResult()', () => {
+    it('should forward GET /teacher/jobs/:jobId/result', async () => {
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, result: {} });
+
+      const result = await controller.getTeacherJobResult(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET',
+        `/teacher/jobs/${JOB_ID}/result`,
+        TEACHER_USER,
+      );
+      expect(result).toEqual({ jobId: JOB_ID, result: {} });
     });
   });
 

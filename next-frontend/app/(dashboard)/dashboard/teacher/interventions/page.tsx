@@ -1,26 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
-import { aiService } from '@/services/ai-service';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
 import type { ClassItem } from '@/types/class';
 import type { LxpClassReport, TeacherInterventionQueueResponse } from '@/types/lxp';
-import type { InterventionRecommendation } from '@/types/ai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
-import { getApiErrorMessage } from '@/lib/api-error';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -45,6 +36,8 @@ function studentName(entry: {
 }
 
 export default function TeacherInterventionsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -53,11 +46,6 @@ export default function TeacherInterventionsPage() {
   const [queue, setQueue] = useState<TeacherInterventionQueueResponse | null>(null);
   const [report, setReport] = useState<LxpClassReport | null>(null);
   const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
-  const [recommendationLoadingId, setRecommendationLoadingId] = useState<string | null>(null);
-  const [assigningCaseId, setAssigningCaseId] = useState<string | null>(null);
-  const [selectedRecommendation, setSelectedRecommendation] = useState<InterventionRecommendation | null>(null);
-  const [recommendationLessonXp, setRecommendationLessonXp] = useState<Record<string, number>>({});
-  const [recommendationAssessmentXp, setRecommendationAssessmentXp] = useState<Record<string, number>>({});
 
   const selectedClass = useMemo(
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
@@ -72,13 +60,13 @@ export default function TeacherInterventionsPage() {
       const res = await classService.getByTeacher(user.id);
       const rows = res.data ?? [];
       setClasses(rows);
-      setSelectedClassId((prev) => prev || rows[0]?.id || '');
+      setSelectedClassId((prev) => prev || searchParams.get('classId') || rows[0]?.id || '');
     } catch {
       toast.error('Failed to load classes');
     } finally {
       setLoadingClasses(false);
     }
-  }, [user?.id]);
+  }, [searchParams, user?.id]);
 
   const fetchInterventionData = useCallback(async () => {
     if (!selectedClassId) {
@@ -125,56 +113,8 @@ export default function TeacherInterventionsPage() {
     }
   };
 
-  const handleRecommend = async (caseId: string) => {
-    try {
-      setRecommendationLoadingId(caseId);
-      const res = await aiService.recommendIntervention(caseId);
-      setSelectedRecommendation(res.data);
-      setRecommendationLessonXp(
-        Object.fromEntries(res.data.recommendedLessons.map((lesson) => [lesson.lessonId, 20])),
-      );
-      setRecommendationAssessmentXp(
-        Object.fromEntries(
-          res.data.recommendedAssessments.map((assessment) => [assessment.assessmentId, 30]),
-        ),
-      );
-    } catch (error) {
-      toast.error(
-        getApiErrorMessage(error, 'Failed to generate AI intervention recommendation'),
-      );
-    } finally {
-      setRecommendationLoadingId(null);
-    }
-  };
-
-  const handleApplyRecommendation = async () => {
-    if (!selectedRecommendation) return;
-    try {
-      setAssigningCaseId(selectedRecommendation.caseId);
-      await lxpService.assignIntervention(
-        selectedRecommendation.caseId,
-        {
-          note: selectedRecommendation.suggestedAssignmentPayload.note,
-          lessonAssignments: selectedRecommendation.recommendedLessons.map((lesson) => ({
-            lessonId: lesson.lessonId,
-            xpAwarded: recommendationLessonXp[lesson.lessonId] ?? 20,
-            label: `AI plan: ${lesson.title}`,
-          })),
-          assessmentAssignments: selectedRecommendation.recommendedAssessments.map((assessment) => ({
-            assessmentId: assessment.assessmentId,
-            xpAwarded: recommendationAssessmentXp[assessment.assessmentId] ?? 30,
-            label: `AI plan: ${assessment.title}`,
-          })),
-        },
-      );
-      toast.success('AI recommendation assigned to the intervention case');
-      setSelectedRecommendation(null);
-      await fetchInterventionData();
-    } catch {
-      toast.error('Failed to assign AI recommendation');
-    } finally {
-      setAssigningCaseId(null);
-    }
+  const handleRecommend = (caseId: string) => {
+    router.push(`/dashboard/teacher/interventions/${caseId}?classId=${selectedClassId}`);
   };
 
   if (loadingClasses) {
@@ -323,10 +263,9 @@ export default function TeacherInterventionsPage() {
                             <Button
                               size="sm"
                               variant="secondary"
-                              disabled={recommendationLoadingId === entry.id}
                               onClick={() => handleRecommend(entry.id)}
                             >
-                              {recommendationLoadingId === entry.id ? 'Generating...' : 'AI Plan'}
+                              AI Plan
                             </Button>
                             <Button
                               size="sm"
@@ -432,120 +371,6 @@ export default function TeacherInterventionsPage() {
         </>
       )}
 
-      <Dialog
-        open={selectedRecommendation !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedRecommendation(null);
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>AI Intervention Recommendation</DialogTitle>
-            <DialogDescription>
-              Review the suggested remedial path before assigning it to the student.
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRecommendation && (
-            <div className="space-y-6">
-              <div>
-                <p className="text-sm font-semibold">Weak concepts</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedRecommendation.weakConcepts.length === 0 ? (
-                    <span className="text-sm text-muted-foreground">No concept tags detected.</span>
-                  ) : (
-                    selectedRecommendation.weakConcepts.map((concept) => (
-                      <Badge key={concept} variant="secondary">
-                        {concept}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Suggested Lessons</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {selectedRecommendation.recommendedLessons.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No lesson recommendations found.</p>
-                    ) : (
-                      selectedRecommendation.recommendedLessons.map((lesson) => (
-                        <div key={lesson.lessonId} className="rounded-lg border p-3">
-                          <p className="font-medium">{lesson.title}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{lesson.reason}</p>
-                          <label className="mt-3 block text-xs font-medium text-muted-foreground">
-                            XP Award
-                            <input
-                              type="number"
-                              min={0}
-                              value={recommendationLessonXp[lesson.lessonId] ?? 20}
-                              onChange={(event) =>
-                                setRecommendationLessonXp((prev) => ({
-                                  ...prev,
-                                  [lesson.lessonId]: Number(event.target.value) || 0,
-                                }))
-                              }
-                              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                            />
-                          </label>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Suggested Assessments</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {selectedRecommendation.recommendedAssessments.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No assessment recommendations found.</p>
-                    ) : (
-                      selectedRecommendation.recommendedAssessments.map((assessment) => (
-                        <div key={assessment.assessmentId} className="rounded-lg border p-3">
-                          <p className="font-medium">{assessment.title}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{assessment.reason}</p>
-                          <label className="mt-3 block text-xs font-medium text-muted-foreground">
-                            XP Award
-                            <input
-                              type="number"
-                              min={0}
-                              value={recommendationAssessmentXp[assessment.assessmentId] ?? 30}
-                              onChange={(event) =>
-                                setRecommendationAssessmentXp((prev) => ({
-                                  ...prev,
-                                  [assessment.assessmentId]: Number(event.target.value) || 0,
-                                }))
-                              }
-                              className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                            />
-                          </label>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setSelectedRecommendation(null)}>
-                  Close
-                </Button>
-                <Button
-                  onClick={handleApplyRecommendation}
-                  disabled={assigningCaseId === selectedRecommendation.caseId}
-                >
-                  {assigningCaseId === selectedRecommendation.caseId ? 'Assigning...' : 'Assign Suggested Path'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

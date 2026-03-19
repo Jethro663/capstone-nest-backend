@@ -1201,8 +1201,7 @@ export default function TeacherClassDetailPage() {
                     size="sm"
                     variant="secondary"
                     onClick={() => {
-                      fetchExtractionWorkspace();
-                      setShowQuizGenerator(true);
+                      router.push(`/dashboard/teacher/classes/${classId}/ai-draft`);
                     }}
                   >
                     AI Draft Quiz

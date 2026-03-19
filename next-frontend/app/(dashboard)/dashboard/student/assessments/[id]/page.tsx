@@ -30,6 +30,7 @@ export default function StudentAssessmentPage() {
   const [attempts, setAttempts] = useState<AssessmentAttempt[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [unsubmittingAttemptId, setUnsubmittingAttemptId] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,6 +60,13 @@ export default function StudentAssessmentPage() {
   }, [assessment, assessmentId, loading, router, searchParams]);
 
   const submittedAttempts = attempts.filter((a) => a.isSubmitted !== false);
+  const latestSubmittedFileAttempt = assessment?.type === 'file_upload'
+    ? [...submittedAttempts].sort((a, b) => {
+        const aTime = new Date(a.submittedAt || a.updatedAt || a.createdAt || 0).getTime();
+        const bTime = new Date(b.submittedAt || b.updatedAt || b.createdAt || 0).getTime();
+        return bTime - aTime;
+      })[0] ?? null
+    : null;
   const maxAttempts = assessment?.maxAttempts ?? 1;
   const attemptsRemaining = Math.max(0, maxAttempts - submittedAttempts.length);
   const canStart = attemptsRemaining > 0;
@@ -82,6 +90,28 @@ export default function StudentAssessmentPage() {
       toast.error(message);
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleUnsubmitFileUpload = async () => {
+    if (!latestSubmittedFileAttempt) return;
+    try {
+      setUnsubmittingAttemptId(latestSubmittedFileAttempt.id);
+      const res = await assessmentService.unsubmitFileUpload(assessmentId);
+      toast.success('Submission restored. You can continue editing your file upload.');
+      await fetchData();
+      router.push(`/dashboard/student/assessments/${assessmentId}/take?attemptId=${res.data.id}`);
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === 'string'
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : 'Failed to restore file upload draft';
+      toast.error(message);
+    } finally {
+      setUnsubmittingAttemptId(null);
     }
   };
 
@@ -233,6 +263,16 @@ export default function StudentAssessmentPage() {
                         >
                           View Results
                         </Button>
+                        {assessment.type === 'file_upload' && latestSubmittedFileAttempt?.id === attempt.id && attempt.isReturned === false && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUnsubmitFileUpload}
+                            disabled={unsubmittingAttemptId === attempt.id}
+                          >
+                            {unsubmittingAttemptId === attempt.id ? 'Restoring...' : 'Unsubmit'}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </StudentActionCard>

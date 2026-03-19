@@ -326,6 +326,23 @@ export class AiMentorController {
     );
   }
 
+  @Post('teacher/interventions/:caseId/jobs')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Queue AI intervention recommendation generation for an active LXP case' })
+  async queueInterventionRecommendation(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @Body() dto: InterventionRecommendationDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward(
+      'POST',
+      `/teacher/interventions/${caseId}/jobs`,
+      user,
+      dto,
+    );
+  }
+
   @Post('teacher/quizzes/generate-draft')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
@@ -335,6 +352,37 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     return this.proxy.forward('POST', '/teacher/quizzes/generate-draft', user, dto);
+  }
+
+  @Post('teacher/quizzes/jobs')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Queue grounded AI draft assessment generation from lesson/module sources' })
+  async queueQuizDraftJob(
+    @Body() dto: GenerateQuizDraftDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('POST', '/teacher/quizzes/jobs', user, dto);
+  }
+
+  @Get('teacher/jobs/:jobId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Poll the status of a teacher AI generation job' })
+  async getTeacherJobStatus(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('GET', `/teacher/jobs/${jobId}`, user);
+  }
+
+  @Get('teacher/jobs/:jobId/result')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get the completed result of a teacher AI generation job' })
+  async getTeacherJobResult(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return this.proxy.forward('GET', `/teacher/jobs/${jobId}/result`, user);
   }
 
   @Post('index/classes/:classId')

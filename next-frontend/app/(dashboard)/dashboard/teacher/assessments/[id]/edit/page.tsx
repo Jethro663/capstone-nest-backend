@@ -931,14 +931,16 @@ export default function AssessmentEditorPage() {
                     />
                   </label>
                   {teacherAttachmentFile && (
-                    <a
-                      href={assessmentService.getTeacherAttachmentDownloadUrl(assessmentId)}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => void assessmentService.downloadTeacherAttachment(
+                        assessmentId,
+                        teacherAttachmentFile.originalName,
+                      )}
                       className="text-sm underline underline-offset-2"
                     >
                       {teacherAttachmentFile.originalName}
-                    </a>
+                    </button>
                   )}
                 </div>
                 {teacherAttachmentFile && (

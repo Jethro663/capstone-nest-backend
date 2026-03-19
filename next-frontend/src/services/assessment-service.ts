@@ -17,6 +17,42 @@ import type {
   UpdateAttemptProgressDto,
 } from '@/types/assessment';
 
+function getDownloadFilename(contentDisposition: string | undefined, fallback: string) {
+  if (!contentDisposition) return fallback;
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const plainMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  return plainMatch?.[1] ?? fallback;
+}
+
+function triggerBrowserDownload(blob: Blob, filename: string) {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
+function openBlobInNewTab(blob: Blob) {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const popup = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+
+  if (!popup) {
+    window.URL.revokeObjectURL(objectUrl);
+    throw new Error('Unable to open file preview');
+  }
+
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(objectUrl);
+  }, 60_000);
+}
+
 export const assessmentService = {
   /** GET /assessments/class/:classId — All roles */
   async getByClass(classId: string): Promise<{ success: boolean; message: string; data: Assessment[]; count: number }> {
@@ -135,12 +171,35 @@ export const assessmentService = {
     return data;
   },
 
-  getTeacherAttachmentDownloadUrl(assessmentId: string) {
-    return `/api/assessments/${assessmentId}/teacher-attachment/download`;
+  async downloadTeacherAttachment(assessmentId: string, fallbackName = 'teacher-attachment') {
+    const response = await api.get(`/assessments/${assessmentId}/teacher-attachment/download`, {
+      responseType: 'blob',
+    });
+    const filename = getDownloadFilename(response.headers['content-disposition'], fallbackName);
+    triggerBrowserDownload(response.data, filename);
   },
 
-  getAttemptSubmissionDownloadUrl(attemptId: string) {
-    return `/api/assessments/attempts/${attemptId}/submission-file/download`;
+  async downloadAttemptSubmissionFile(attemptId: string, fallbackName = 'submission-file') {
+    const response = await api.get(`/assessments/attempts/${attemptId}/submission-file/download`, {
+      responseType: 'blob',
+    });
+    const filename = getDownloadFilename(response.headers['content-disposition'], fallbackName);
+    triggerBrowserDownload(response.data, filename);
+  },
+
+  async getAttemptSubmissionFileBlob(attemptId: string, fallbackName = 'submission-file') {
+    const response = await api.get(`/assessments/attempts/${attemptId}/submission-file/download`, {
+      responseType: 'blob',
+    });
+    return {
+      blob: response.data as Blob,
+      filename: getDownloadFilename(response.headers['content-disposition'], fallbackName),
+    };
+  },
+
+  async openAttemptSubmissionFile(attemptId: string, fallbackName = 'submission-file') {
+    const { blob } = await this.getAttemptSubmissionFileBlob(attemptId, fallbackName);
+    openBlobInNewTab(blob);
   },
 
   // --- Attempts ---
@@ -172,6 +231,11 @@ export const assessmentService = {
   /** POST /assessments/submit — Admin, Student */
   async submit(dto: SubmitAssessmentDto): Promise<{ success: boolean; message: string; data: unknown }> {
     const { data } = await api.post('/assessments/submit', dto);
+    return data;
+  },
+
+  async unsubmitFileUpload(assessmentId: string): Promise<{ success: boolean; message: string; data: AssessmentAttempt }> {
+    const { data } = await api.post(`/assessments/${assessmentId}/unsubmit-file-upload`);
     return data;
   },
 

@@ -21,7 +21,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
-from .database import get_db
+from .database import AsyncSessionLocal, get_db
 from . import ollama_client
 from .extraction_pipeline import run_extraction
 from .indexing_pipeline import reindex_class_content
@@ -54,6 +54,7 @@ logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
+AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
 
 
 @app.on_event("startup")
@@ -66,6 +67,246 @@ async def preload_ollama_models() -> None:
         await ollama_client.preload_model("vision_extraction")
     except Exception as err:
         logger.warning("Failed to preload vision model: %s", err)
+
+
+def _set_ai_job_runtime(job_id: str, **values: Any) -> None:
+    runtime = AI_JOB_RUNTIME.setdefault(job_id, {})
+    runtime.update(values)
+    runtime["updatedAt"] = datetime.now(timezone.utc).isoformat()
+
+
+def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) -> int:
+    if runtime and isinstance(runtime.get("progressPercent"), int):
+        return max(0, min(100, runtime["progressPercent"]))
+    return {
+        "pending": 5,
+        "processing": 60,
+        "completed": 100,
+        "approved": 100,
+        "rejected": 100,
+        "failed": 100,
+    }.get(status, 0)
+
+
+async def _create_ai_generation_job(
+    db: AsyncSession,
+    *,
+    job_type: str,
+    class_id: str | None,
+    teacher_id: str,
+    source_filters: dict[str, Any],
+) -> str:
+    job_row = await db.execute(
+        sa_text(
+            """
+            INSERT INTO ai_generation_jobs (
+              job_type,
+              class_id,
+              teacher_id,
+              status,
+              source_filters
+            )
+            VALUES (
+              :jobType,
+              :classId,
+              :teacherId,
+              'pending',
+              :sourceFilters
+            )
+            RETURNING id
+            """
+        ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+        {
+            "jobType": job_type,
+            "classId": class_id,
+            "teacherId": teacher_id,
+            "sourceFilters": source_filters,
+        },
+    )
+    await db.commit()
+    job_id = str(job_row.scalar_one())
+    _set_ai_job_runtime(
+        job_id,
+        progressPercent=5,
+        statusMessage="Queued",
+    )
+    return job_id
+
+
+async def _load_ai_job_context(
+    db: AsyncSession,
+    job_id: str,
+    user: RequestUser,
+) -> tuple[dict[str, Any], dict[str, Any] | None, str | None]:
+    job_row = await db.execute(
+        sa_text(
+            """
+            SELECT
+              j.id,
+              j.job_type,
+              j.class_id,
+              j.teacher_id,
+              j.status,
+              j.source_filters,
+              j.error_message,
+              j.created_at,
+              j.updated_at,
+              o.id AS output_id,
+              o.output_type,
+              o.structured_output
+            FROM ai_generation_jobs j
+            LEFT JOIN ai_generation_outputs o ON o.job_id = j.id
+            WHERE j.id = :jobId
+            ORDER BY o.created_at DESC NULLS LAST
+            LIMIT 1
+            """
+        ),
+        {"jobId": job_id},
+    )
+    record = job_row.mappings().first()
+    if not record:
+        raise HTTPException(404, f'AI job "{job_id}" not found')
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(record["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only view your own AI jobs")
+
+    assessment_id: str | None = None
+    if record["output_id"] and record["output_type"] == "assessment_draft":
+        assessment_row = await db.execute(
+            sa_text(
+                """
+                SELECT id
+                FROM assessments
+                WHERE ai_generation_output_id = :outputId
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ),
+            {"outputId": str(record["output_id"])},
+        )
+        assessment_id = assessment_row.scalar()
+        if assessment_id is not None:
+            assessment_id = str(assessment_id)
+
+    return dict(record), AI_JOB_RUNTIME.get(job_id), assessment_id
+
+
+async def _run_quiz_generation_job(
+    job_id: str,
+    body: GenerateQuizDraftRequest,
+    user: RequestUser,
+) -> None:
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=20,
+                statusMessage="Gathering indexed class content",
+            )
+            result = await generate_quiz_draft(
+                bg_db,
+                user,
+                body,
+                existing_job_id=job_id,
+            )
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=85,
+                statusMessage="Refreshing class search index",
+            )
+            indexing = await reindex_class_content(bg_db, body.class_id)
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=100,
+                statusMessage="Draft ready for teacher review",
+                resultSummary={
+                    "assessmentId": result.get("assessmentId"),
+                    "outputId": result.get("outputId"),
+                    "indexing": indexing,
+                },
+            )
+        except Exception as exc:
+            await bg_db.execute(
+                sa_text(
+                    """
+                    UPDATE ai_generation_jobs
+                    SET
+                      status = 'failed',
+                      error_message = :errorMessage,
+                      updated_at = NOW()
+                    WHERE id = :jobId
+                    """
+                ),
+                {
+                    "jobId": job_id,
+                    "errorMessage": str(exc),
+                },
+            )
+            await bg_db.commit()
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=100,
+                statusMessage="Generation failed",
+                errorMessage=str(exc),
+            )
+            logger.exception("[ai-job] Quiz generation %s failed", job_id)
+
+
+async def _run_intervention_generation_job(
+    job_id: str,
+    case_id: str,
+    note: str | None,
+    user: RequestUser,
+) -> None:
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=20,
+                statusMessage="Collecting intervention evidence",
+            )
+            result = await recommend_intervention_case(
+                bg_db,
+                user,
+                case_id=case_id,
+                note=note,
+                existing_job_id=job_id,
+            )
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=100,
+                statusMessage="Recommendation ready for teacher review",
+                resultSummary={
+                    "outputId": result.get("outputId"),
+                    "caseId": result.get("caseId"),
+                },
+            )
+        except Exception as exc:
+            await bg_db.execute(
+                sa_text(
+                    """
+                    UPDATE ai_generation_jobs
+                    SET
+                      status = 'failed',
+                      error_message = :errorMessage,
+                      updated_at = NOW()
+                    WHERE id = :jobId
+                    """
+                ),
+                {
+                    "jobId": job_id,
+                    "errorMessage": str(exc),
+                },
+            )
+            await bg_db.commit()
+            _set_ai_job_runtime(
+                job_id,
+                progressPercent=100,
+                statusMessage="Generation failed",
+                errorMessage=str(exc),
+            )
+            logger.exception("[ai-job] Intervention generation %s failed", job_id)
 
 # ---------------------------------------------------------------------------
 # JAKIPIR System Prompt
@@ -992,6 +1233,206 @@ async def interaction_history(
         "success": True,
         "message": f"Found {len(data)} interaction(s)",
         "data": data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/interventions/:id/jobs
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/interventions/{case_id}/jobs", status_code=202)
+async def queue_intervention_recommendation_job(
+    case_id: str,
+    body: InterventionRecommendationRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    case_row = await db.execute(
+        sa_text(
+            """
+            SELECT ic.class_id, c.teacher_id, ic.status
+            FROM intervention_cases ic
+            INNER JOIN classes c ON c.id = ic.class_id
+            WHERE ic.id = :caseId
+            """
+        ),
+        {"caseId": case_id},
+    )
+    case_info = case_row.mappings().first()
+    if not case_info:
+        raise HTTPException(404, "Intervention case not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(case_info["teacher_id"]) != user.id:
+        raise HTTPException(403, "You do not have access to this intervention case")
+    if case_info["status"] != "active":
+        raise HTTPException(400, "Only active intervention cases can be recommended")
+
+    job_id = await _create_ai_generation_job(
+        db,
+        job_type="remedial_plan_generation",
+        class_id=str(case_info["class_id"]),
+        teacher_id=user.id,
+        source_filters={"caseId": case_id, "note": body.note},
+    )
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(
+            _run_intervention_generation_job(job_id, case_id, body.note, user)
+        )
+    except RuntimeError as exc:
+        logger.exception("[ai-job] Failed to schedule intervention job %s: %s", job_id, exc)
+        raise HTTPException(500, "Failed to schedule intervention generation job") from exc
+
+    return {
+        "success": True,
+        "message": "Intervention recommendation job queued",
+        "data": {
+            "jobId": job_id,
+            "jobType": "remedial_plan_generation",
+            "status": "pending",
+            "progressPercent": 5,
+            "statusMessage": "Queued",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs", status_code=202)
+async def queue_teacher_quiz_draft_job(
+    body: GenerateQuizDraftRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    class_row = await db.execute(
+        sa_text(
+            """
+            SELECT c.id, c.teacher_id
+            FROM classes c
+            WHERE c.id = :classId
+            """
+        ),
+        {"classId": body.class_id},
+    )
+    class_info = class_row.mappings().first()
+    if not class_info:
+        raise HTTPException(404, "Class not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(class_info["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only generate quizzes for your own classes")
+
+    job_id = await _create_ai_generation_job(
+        db,
+        job_type="quiz_generation",
+        class_id=body.class_id,
+        teacher_id=user.id,
+        source_filters={
+            "lessonIds": body.lesson_ids,
+            "extractionIds": body.extraction_ids,
+            "questionCount": body.question_count,
+            "questionType": body.question_type,
+            "assessmentType": body.assessment_type,
+            "title": body.title,
+        },
+    )
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_run_quiz_generation_job(job_id, body, user))
+    except RuntimeError as exc:
+        logger.exception("[ai-job] Failed to schedule quiz job %s: %s", job_id, exc)
+        raise HTTPException(500, "Failed to schedule quiz generation job") from exc
+
+    return {
+        "success": True,
+        "message": "Quiz draft generation job queued",
+        "data": {
+            "jobId": job_id,
+            "jobType": "quiz_generation",
+            "status": "pending",
+            "progressPercent": 5,
+            "statusMessage": "Queued",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /teacher/jobs/:id
+# ---------------------------------------------------------------------------
+
+
+@app.get("/teacher/jobs/{job_id}")
+async def get_teacher_ai_job_status(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job, runtime, assessment_id = await _load_ai_job_context(db, job_id, user)
+    return {
+        "success": True,
+        "message": f'AI job is {job["status"]}',
+        "data": {
+            "jobId": str(job["id"]),
+            "jobType": job["job_type"],
+            "status": job["status"],
+            "progressPercent": _runtime_progress_for_status(job["status"], runtime),
+            "statusMessage": runtime.get("statusMessage") if runtime else None,
+            "errorMessage": job["error_message"] or (runtime.get("errorMessage") if runtime else None),
+            "outputId": str(job["output_id"]) if job["output_id"] else None,
+            "assessmentId": assessment_id,
+            "updatedAt": str(job["updated_at"]) if job["updated_at"] else None,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /teacher/jobs/:id/result
+# ---------------------------------------------------------------------------
+
+
+@app.get("/teacher/jobs/{job_id}/result")
+async def get_teacher_ai_job_result(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job, runtime, assessment_id = await _load_ai_job_context(db, job_id, user)
+    if job["status"] not in {"completed", "approved"}:
+        raise HTTPException(409, "AI generation result is not ready yet")
+    if not job["output_id"]:
+        raise HTTPException(404, "AI generation output not found")
+
+    result_data = dict(job["structured_output"] or {})
+    if job["output_type"] == "assessment_draft":
+        result_data["assessmentId"] = assessment_id
+    if runtime and runtime.get("resultSummary"):
+        result_data["runtime"] = runtime["resultSummary"]
+
+    return {
+        "success": True,
+        "message": "AI generation result retrieved",
+        "data": {
+            "job": {
+                "jobId": str(job["id"]),
+                "jobType": job["job_type"],
+                "status": job["status"],
+                "outputId": str(job["output_id"]),
+                "assessmentId": assessment_id,
+                "updatedAt": str(job["updated_at"]) if job["updated_at"] else None,
+            },
+            "result": {
+                "outputId": str(job["output_id"]),
+                "outputType": job["output_type"],
+                "structuredOutput": result_data,
+            },
+        },
     }
 
 

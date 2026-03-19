@@ -567,6 +567,25 @@ export class AssessmentsController {
     };
   }
 
+  @Post(':assessmentId/unsubmit-file-upload')
+  @Roles(RoleName.Admin, RoleName.Student)
+  @HttpCode(HttpStatus.OK)
+  async unsubmitFileUploadAssessment(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const attempt = await this.assessmentsService.unsubmitFileUploadAssessment(
+      user.userId,
+      assessmentId,
+    );
+
+    return {
+      success: true,
+      message: 'File upload assessment submission restored to draft state',
+      data: attempt,
+    };
+  }
+
   /**
    * Get attempt results
    * Student can view own (score hidden until returned), Teacher can view all

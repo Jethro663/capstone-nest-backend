@@ -8,6 +8,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentsService } from './assessments.service';
 import { DatabaseService } from '../../database/database.service';
 import { FeedbackService } from './feedback.service';
+import { AuditService } from '../audit/audit.service';
+import { RagIndexingService } from '../rag/rag-indexing.service';
 
 // ─── Fixture IDs ─────────────────────────────────────────────────────────────
 
@@ -168,6 +170,19 @@ describe('AssessmentsService', () => {
           provide: FeedbackService,
           useValue: {
             applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
+          },
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn(),
+            logAction: jest.fn(),
+          },
+        },
+        {
+          provide: RagIndexingService,
+          useValue: {
+            queueClassReindex: jest.fn(),
           },
         },
       ],
@@ -700,6 +715,52 @@ describe('AssessmentsService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   // deleteAssessment
   // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('unsubmitFileUploadAssessment', () => {
+    it('should restore the latest submitted file upload attempt to draft state', async () => {
+      const submittedAttempt = {
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        submittedAt: new Date(),
+        submittedFileId: '00000000-0000-0000-0000-000000000099',
+      };
+      const restoredAttempt = {
+        ...submittedAttempt,
+        isSubmitted: false,
+        submittedAt: null,
+        score: null,
+        passed: null,
+        isReturned: false,
+      };
+
+      db.query.assessments.findFirst.mockResolvedValue(MOCK_FILE_UPLOAD_ASSESSMENT);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(submittedAttempt);
+      mockUpdateReturning(db, [restoredAttempt]);
+
+      const result = await service.unsubmitFileUploadAssessment(
+        STUDENT_ID,
+        ASSESSMENT_ID,
+      );
+
+      expect(result.isSubmitted).toBe(false);
+      expect(result.submittedFileId).toBe(submittedAttempt.submittedFileId);
+    });
+
+    it('should reject unsubmit for returned file upload attempts', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(MOCK_FILE_UPLOAD_ASSESSMENT);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        isReturned: true,
+        submittedAt: new Date(),
+        submittedFileId: '00000000-0000-0000-0000-000000000099',
+      });
+
+      await expect(
+        service.unsubmitFileUploadAssessment(STUDENT_ID, ASSESSMENT_ID),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
   describe('deleteAssessment', () => {
     it('should throw NotFoundException if assessment does not exist', async () => {

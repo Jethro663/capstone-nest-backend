@@ -48,6 +48,7 @@ async def recommend_intervention_case(
     *,
     case_id: str,
     note: str | None = None,
+    existing_job_id: str | None = None,
 ) -> dict[str, Any]:
     case_row = await db.execute(
         sa_text(
@@ -261,36 +262,59 @@ Recommended lesson evidence:
             },
         )
 
-    job_row = await db.execute(
-        sa_text(
-            """
-            INSERT INTO ai_generation_jobs (
-              job_type,
-              class_id,
-              teacher_id,
-              status,
-              source_filters
-            )
-            VALUES (
-              'remedial_plan_generation',
-              :classId,
-              :teacherId,
-              'completed',
-              :sourceFilters
-            )
-            RETURNING id
-            """
-        ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
-        {
-            "classId": str(intervention_case["class_id"]),
-            "teacherId": user.id,
-            "sourceFilters": {
-                "caseId": case_id,
-                "weakConcepts": weak_concepts,
+    if existing_job_id:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'processing',
+                  error_message = NULL,
+                  source_filters = :sourceFilters,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            {
+                "jobId": existing_job_id,
+                "sourceFilters": {
+                    "caseId": case_id,
+                    "weakConcepts": weak_concepts,
+                },
             },
-        },
-    )
-    job_id = job_row.scalar_one()
+        )
+        job_id = existing_job_id
+    else:
+        job_row = await db.execute(
+            sa_text(
+                """
+                INSERT INTO ai_generation_jobs (
+                  job_type,
+                  class_id,
+                  teacher_id,
+                  status,
+                  source_filters
+                )
+                VALUES (
+                  'remedial_plan_generation',
+                  :classId,
+                  :teacherId,
+                  'completed',
+                  :sourceFilters
+                )
+                RETURNING id
+                """
+            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            {
+                "classId": str(intervention_case["class_id"]),
+                "teacherId": user.id,
+                "sourceFilters": {
+                    "caseId": case_id,
+                    "weakConcepts": weak_concepts,
+                },
+            },
+        )
+        job_id = job_row.scalar_one()
 
     structured_output = {
         "caseId": case_id,
@@ -336,6 +360,19 @@ Recommended lesson evidence:
         },
     )
     output_id = output_row.scalar_one()
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET
+              status = 'completed',
+              error_message = NULL,
+              updated_at = NOW()
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
     await db.commit()
 
     return {

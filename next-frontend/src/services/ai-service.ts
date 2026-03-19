@@ -1,12 +1,16 @@
 import { api } from '@/lib/api-client';
 import type {
+  AiGenerationJob,
+  AiGenerationJobResult,
   GenerateQuizDraftDto,
   GenerateQuizDraftResponse,
+  InterventionStructuredOutput,
   InterventionRecommendation,
   InterventionRecommendationDto,
   MentorExplainDto,
   MentorExplainResponse,
   IndexingSummary,
+  QuizDraftStructuredOutput,
   StudentTutorAnswerResponse,
   StudentTutorBootstrapResponse,
   StudentTutorMessageResponse,
@@ -47,6 +51,40 @@ export const aiService = {
   ): Promise<Envelope<GenerateQuizDraftResponse>> {
     const { data } = await api.post('/ai/teacher/quizzes/generate-draft', dto);
     return normalizeEnvelope<GenerateQuizDraftResponse>(data);
+  },
+
+  async createInterventionJob(
+    caseId: string,
+    dto?: InterventionRecommendationDto,
+  ): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.post(`/ai/teacher/interventions/${caseId}/jobs`, dto ?? {});
+    return normalizeEnvelope<AiGenerationJob>(data);
+  },
+
+  async createQuizDraftJob(
+    dto: GenerateQuizDraftDto,
+  ): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.post('/ai/teacher/quizzes/jobs', dto);
+    return normalizeEnvelope<AiGenerationJob>(data);
+  },
+
+  async getTeacherJobStatus(jobId: string): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.get(`/ai/teacher/jobs/${jobId}`);
+    return normalizeEnvelope<AiGenerationJob>(data);
+  },
+
+  async getQuizDraftJobResult(
+    jobId: string,
+  ): Promise<Envelope<AiGenerationJobResult<QuizDraftStructuredOutput>>> {
+    const { data } = await api.get(`/ai/teacher/jobs/${jobId}/result`);
+    return normalizeEnvelope<AiGenerationJobResult<QuizDraftStructuredOutput>>(data);
+  },
+
+  async getInterventionJobResult(
+    jobId: string,
+  ): Promise<Envelope<AiGenerationJobResult<InterventionStructuredOutput>>> {
+    const { data } = await api.get(`/ai/teacher/jobs/${jobId}/result`);
+    return normalizeEnvelope<AiGenerationJobResult<InterventionStructuredOutput>>(data);
   },
 
   async reindexClass(classId: string): Promise<Envelope<IndexingSummary>> {

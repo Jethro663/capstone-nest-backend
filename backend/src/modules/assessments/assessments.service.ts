@@ -1549,6 +1549,70 @@ export class AssessmentsService {
     return record;
   }
 
+  async unsubmitFileUploadAssessment(studentId: string, assessmentId: string) {
+    const assessment = await this.getAssessmentById(assessmentId);
+    if (assessment.type !== AssessmentType.FILE_UPLOAD) {
+      throw new BadRequestException(
+        'Only file upload assessments support unsubmit',
+      );
+    }
+
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: and(
+        eq(assessmentAttempts.studentId, studentId),
+        eq(assessmentAttempts.assessmentId, assessmentId),
+        eq(assessmentAttempts.isSubmitted, true),
+      ),
+      orderBy: (a, { desc: d }) => [d(a.submittedAt), d(a.updatedAt)],
+    });
+
+    if (!attempt) {
+      throw new BadRequestException(
+        'No submitted file upload attempt was found to unsubmit',
+      );
+    }
+
+    if (!attempt.submittedFileId) {
+      throw new BadRequestException(
+        'This attempt does not have an uploaded file to restore',
+      );
+    }
+
+    if (attempt.isReturned) {
+      throw new BadRequestException(
+        'Returned file upload attempts can no longer be unsubmitted',
+      );
+    }
+
+    if (
+      (assessment.closeWhenDue ?? true) &&
+      assessment.dueDate &&
+      new Date(assessment.dueDate) < new Date()
+    ) {
+      throw new BadRequestException(
+        'This assessment is already closed and can no longer be unsubmitted',
+      );
+    }
+
+    const [updatedAttempt] = await this.db
+      .update(assessmentAttempts)
+      .set({
+        isSubmitted: false,
+        submittedAt: null,
+        score: null,
+        passed: null,
+        timeSpentSeconds: null,
+        isReturned: false,
+        returnedAt: null,
+        teacherFeedback: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessmentAttempts.id, attempt.id))
+      .returning();
+
+    return updatedAttempt;
+  }
+
   async uploadStudentSubmissionFile(
     assessmentId: string,
     currentUser: any,

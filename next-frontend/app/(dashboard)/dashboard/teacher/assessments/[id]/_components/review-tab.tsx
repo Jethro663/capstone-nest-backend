@@ -66,6 +66,15 @@ interface AttemptResultData {
   } | null;
 }
 
+function canPreviewSubmissionFile(mimeType?: string | null) {
+  if (!mimeType) return false;
+  return (
+    mimeType.startsWith('image/')
+    || mimeType === 'application/pdf'
+    || mimeType.startsWith('text/')
+  );
+}
+
 const STATUS_COLORS: Record<SubmissionStatus, string> = {
   not_started: 'bg-gray-100 text-gray-600',
   in_progress: 'bg-blue-100 text-blue-700',
@@ -302,15 +311,20 @@ function AttemptDetailPanel({
   const totalPoints = data.assessment?.totalPoints ?? 0;
   const responses = data.responses ?? [];
   const submittedFile = data.submittedFile;
+  const hasSubmissionFile = Boolean(submittedFile && selectedAttempt?.id);
+  const canPreviewFile = canPreviewSubmissionFile(submittedFile?.mimeType);
   const timeSpent = selectedAttempt?.timeSpentSeconds ?? student.attempt?.timeSpentSeconds;
   const submittedAt = selectedAttempt?.submittedAt;
   const isReturned = Boolean(selectedAttempt?.isReturned ?? data?.isReturned ?? student.status === 'returned');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const formatDateTime = (value?: string) => {
-    if (!value) return '—';
+    if (!value) return '-';
     const date = new Date(value);
     return Number.isNaN(date.getTime())
-      ? '—'
+      ? '-'
       : date.toLocaleString([], {
           year: 'numeric',
           month: 'short',
@@ -320,9 +334,58 @@ function AttemptDetailPanel({
         });
   };
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  useEffect(() => {
+    setPreviewError(null);
+    setPreviewLoading(false);
+    setPreviewUrl((currentUrl) => {
+      if (currentUrl) {
+        window.URL.revokeObjectURL(currentUrl);
+      }
+      return null;
+    });
+  }, [selectedAttempt?.id, submittedFile?.id]);
+
+  const handlePreviewFile = async () => {
+    if (!selectedAttempt?.id || !submittedFile) return;
+
+    if (!canPreviewFile) {
+      await assessmentService.openAttemptSubmissionFile(
+        selectedAttempt.id,
+        submittedFile.originalName,
+      );
+      return;
+    }
+
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const { blob } = await assessmentService.getAttemptSubmissionFileBlob(
+        selectedAttempt.id,
+        submittedFile.originalName,
+      );
+      setPreviewUrl((currentUrl) => {
+        if (currentUrl) {
+          window.URL.revokeObjectURL(currentUrl);
+        }
+        return window.URL.createObjectURL(blob);
+      });
+    } catch {
+      setPreviewError('Failed to load the submitted file preview.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* Attempt Selector */}
       {attempts.length > 1 && (
         <Card>
           <CardContent className="p-4 space-y-2">
@@ -353,7 +416,7 @@ function AttemptDetailPanel({
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {formatDateTime(attempt.submittedAt)}
-                    {attempt.score != null ? ` · ${attempt.score}%` : ''}
+                    {attempt.score != null ? ` | ${attempt.score}%` : ''}
                   </p>
                 </button>
               ))}
@@ -362,7 +425,6 @@ function AttemptDetailPanel({
         </Card>
       )}
 
-      {/* Student Info Header */}
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-4">
@@ -386,7 +448,7 @@ function AttemptDetailPanel({
                 ) : null}
               </div>
               <p className="text-base font-semibold mt-2">
-                Time done: {timeSpent ? `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s` : '—'}
+                Time done: {timeSpent ? `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s` : '-'}
               </p>
             </div>
             <div className="text-right">
@@ -403,32 +465,79 @@ function AttemptDetailPanel({
         </CardContent>
       </Card>
 
-      {submittedFile && selectedAttempt?.id && (
+      {hasSubmissionFile && submittedFile && selectedAttempt?.id && (
         <Card>
-          <CardContent className="p-4 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{submittedFile.originalName}</p>
-              <p className="text-xs text-muted-foreground">
-                {(submittedFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {submittedFile.mimeType}
-              </p>
+          <CardContent className="p-4 space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Submitted File
+                </p>
+                <p className="text-sm font-medium truncate">{submittedFile.originalName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(submittedFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB | {submittedFile.mimeType}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handlePreviewFile()}
+                  disabled={previewLoading}
+                >
+                  {canPreviewFile ? (previewLoading ? 'Loading Preview...' : 'Preview in LMS') : 'Open File'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void assessmentService.downloadAttemptSubmissionFile(
+                    selectedAttempt.id,
+                    submittedFile.originalName,
+                  )}
+                >
+                  Download
+                </Button>
+              </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(assessmentService.getAttemptSubmissionDownloadUrl(selectedAttempt.id), '_blank')}
-            >
-              View File
-            </Button>
+
+            {previewError && (
+              <div className="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {previewError}
+              </div>
+            )}
+
+            {canPreviewFile && previewUrl && (
+              <div className="overflow-hidden rounded-lg border bg-muted/20">
+                {submittedFile.mimeType.startsWith('image/') ? (
+                  <img
+                    src={previewUrl}
+                    alt={submittedFile.originalName}
+                    className="max-h-[32rem] w-full object-contain bg-background"
+                  />
+                ) : (
+                  <iframe
+                    title={`Preview of ${submittedFile.originalName}`}
+                    src={previewUrl}
+                    className="h-[32rem] w-full bg-background"
+                  />
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Responses */}
       <div className="space-y-3">
         {responses.length > 0 ? (
           responses.map((r: AttemptResponse, i: number) => (
             <ResponseCard key={r.id || r.questionId || i} response={r} index={i} />
           ))
+        ) : hasSubmissionFile ? (
+          <Card>
+            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+              This attempt was submitted as an uploaded file. Use the preview or download actions above to review it.
+            </CardContent>
+          </Card>
         ) : (
           <Card>
             <CardContent className="py-8 text-center text-sm text-muted-foreground">
@@ -438,7 +547,6 @@ function AttemptDetailPanel({
         )}
       </div>
 
-      {/* Feedback + Return */}
       {!isReturned && (
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -450,7 +558,7 @@ function AttemptDetailPanel({
             />
             <Button onClick={onReturn} disabled={returning} className="w-full">
               {returning
-                ? 'Returning…'
+                ? 'Returning...'
                 : `Return Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
             </Button>
           </CardContent>
@@ -458,14 +566,13 @@ function AttemptDetailPanel({
       )}
 
       {isReturned && (
-        <div className="text-center text-sm text-emerald-600 font-medium py-2">
-          ✓ Grade has been returned to this student
+        <div className="py-2 text-center text-sm font-medium text-emerald-600">
+          Grade has been returned to this student
         </div>
       )}
     </div>
   );
 }
-
 function ResponseCard({ response: r, index }: { response: AttemptResponse; index: number }) {
   const question = r.question;
   if (!question) {
