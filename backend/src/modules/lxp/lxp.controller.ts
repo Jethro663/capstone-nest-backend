@@ -42,6 +42,16 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Get('me/overview/:classId')
+  @Roles(RoleName.Student)
+  async getOverview(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getStudentOverview(user.userId, classId);
+    return { success: true, data };
+  }
+
   @Post('me/playlist/:classId/checkpoints/:assignmentId/complete')
   @Roles(RoleName.Student)
   async completeCheckpoint(

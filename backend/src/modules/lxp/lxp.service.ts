@@ -64,6 +64,44 @@ export class LxpService {
     return Math.round((xp / STAR_XP) * 100) / 100;
   }
 
+  private getStatusSummary(input: {
+    caseStatus?: string | null;
+    isAtRisk: boolean;
+    progressPercent: number;
+    streakDays: number;
+    masteryPercent: number | null;
+  }) {
+    if (
+      input.caseStatus === 'completed' ||
+      (!input.isAtRisk &&
+        input.masteryPercent !== null &&
+        input.masteryPercent >= INTERVENTION_THRESHOLD)
+    ) {
+      return {
+        code: 'on_track',
+        label: 'On Track',
+        message:
+          'You are closing the gap well. Keep building consistency to stay above the intervention threshold.',
+      };
+    }
+
+    if (input.progressPercent >= 50 || input.streakDays >= 2) {
+      return {
+        code: 'improving',
+        label: 'Improving',
+        message:
+          'Your recovery work is moving in the right direction. Focus on the next checkpoint to keep momentum.',
+      };
+    }
+
+    return {
+      code: 'needs_attention',
+      label: 'Needs Attention',
+      message:
+        'Start with the next guided checkpoint so you can rebuild mastery without taking on everything at once.',
+    };
+  }
+
   private async assertTeacherClassAccess(classId: string, user: UserContext) {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
@@ -397,6 +435,8 @@ export class LxpService {
             title: true,
             description: true,
             passingScore: true,
+            dueDate: true,
+            type: true,
           },
         },
       },
@@ -435,6 +475,361 @@ export class LxpService {
         lesson: item.lesson,
         assessment: item.assessment,
       })),
+    };
+  }
+
+  async getStudentOverview(studentId: string, classId: string) {
+    await this.assertStudentEnrollment(studentId, classId);
+
+    let interventionCase = await this.db.query.interventionCases.findFirst({
+      where: and(
+        eq(interventionCases.studentId, studentId),
+        eq(interventionCases.classId, classId),
+        eq(interventionCases.status, 'active'),
+      ),
+      orderBy: [desc(interventionCases.createdAt)],
+    });
+
+    const selectedSnapshot = await this.db.query.performanceSnapshots.findFirst({
+      where: and(
+        eq(performanceSnapshots.studentId, studentId),
+        eq(performanceSnapshots.classId, classId),
+      ),
+      columns: {
+        blendedScore: true,
+        thresholdApplied: true,
+        isAtRisk: true,
+        lastComputedAt: true,
+      },
+    });
+
+    if (!interventionCase) {
+      if (!selectedSnapshot?.isAtRisk) {
+        throw new ForbiddenException(
+          'LXP is only available for active intervention students.',
+        );
+      }
+
+      interventionCase = await this.getOrCreateCaseForStudent(
+        studentId,
+        classId,
+        'student_lxp_open',
+      );
+    }
+
+    await this.ensureDefaultAssignments(interventionCase.id, classId);
+    const progress = await this.getOrCreateProgress(studentId, classId);
+
+    const [studentEnrollments, assignments] = await Promise.all([
+      this.db.query.enrollments.findMany({
+        where: and(
+          eq(enrollments.studentId, studentId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+        columns: { classId: true },
+        with: {
+          class: {
+            columns: {
+              id: true,
+              subjectName: true,
+              subjectCode: true,
+            },
+            with: {
+              section: {
+                columns: {
+                  id: true,
+                  name: true,
+                  gradeLevel: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.db.query.interventionAssignments.findMany({
+        where: eq(interventionAssignments.caseId, interventionCase.id),
+        with: {
+          lesson: {
+            columns: { id: true, title: true, description: true, order: true },
+          },
+          assessment: {
+            columns: {
+              id: true,
+              title: true,
+              description: true,
+              passingScore: true,
+              dueDate: true,
+              type: true,
+            },
+          },
+        },
+        orderBy: [asc(interventionAssignments.orderIndex)],
+      }),
+    ]);
+
+    const classIds = studentEnrollments
+      .map((entry) => entry.classId)
+      .filter((value): value is string => Boolean(value));
+
+    const snapshots =
+      classIds.length > 0
+        ? await this.db.query.performanceSnapshots.findMany({
+            where: and(
+              eq(performanceSnapshots.studentId, studentId),
+              inArray(performanceSnapshots.classId, classIds),
+            ),
+            columns: {
+              classId: true,
+              blendedScore: true,
+              thresholdApplied: true,
+              isAtRisk: true,
+              lastComputedAt: true,
+            },
+          })
+        : [];
+
+    const snapshotByClass = new Map(
+      snapshots.map((row) => [row.classId, row] as const),
+    );
+
+    const selectedEnrollment =
+      studentEnrollments.find((entry) => entry.classId === classId) ?? null;
+
+    const masteryRows = studentEnrollments
+      .map((entry) => {
+        if (!entry.classId || !entry.class) return null;
+
+        const snapshot = snapshotByClass.get(entry.classId);
+        const masteryPercent = this.toNumber(snapshot?.blendedScore);
+        const thresholdApplied =
+          this.toNumber(snapshot?.thresholdApplied) ?? INTERVENTION_THRESHOLD;
+        const status = snapshot?.isAtRisk
+          ? 'needs_attention'
+          : masteryPercent !== null && masteryPercent >= thresholdApplied
+            ? 'on_track'
+            : 'improving';
+
+        return {
+          classId: entry.classId,
+          subjectName: entry.class.subjectName,
+          subjectCode: entry.class.subjectCode,
+          masteryPercent,
+          thresholdApplied,
+          status,
+          isSelected: entry.classId === classId,
+          lastComputedAt: snapshot?.lastComputedAt ?? null,
+        };
+      })
+      .filter(
+        (
+          row,
+        ): row is {
+          classId: string;
+          subjectName: string;
+          subjectCode: string;
+          masteryPercent: number | null;
+          thresholdApplied: number;
+          status: 'needs_attention' | 'on_track' | 'improving';
+          isSelected: boolean;
+          lastComputedAt: Date | null;
+        } => Boolean(row),
+      )
+      .sort((a, b) => {
+        if (a.isSelected !== b.isSelected) return a.isSelected ? -1 : 1;
+        const aScore = a.masteryPercent ?? Number.POSITIVE_INFINITY;
+        const bScore = b.masteryPercent ?? Number.POSITIVE_INFINITY;
+        return aScore - bScore;
+      });
+
+    const totalCheckpoints = assignments.length;
+    const completedAssignments = assignments.filter(
+      (item) => item.isCompleted,
+    ).length;
+    const completionPercent =
+      totalCheckpoints > 0
+        ? Math.round((completedAssignments / totalCheckpoints) * 100)
+        : 0;
+
+    const recommendedNext =
+      assignments.find(
+        (item) => !item.isCompleted && item.assignmentType === 'lesson_review',
+      ) ??
+      assignments.find(
+        (item) =>
+          !item.isCompleted && item.assignmentType === 'assessment_retry',
+      ) ??
+      assignments.find((item) => !item.isCompleted) ??
+      null;
+
+    const recommendedAction = recommendedNext
+      ? {
+          assignmentId: recommendedNext.id,
+          type: recommendedNext.assignmentType,
+          title:
+            recommendedNext.lesson?.title ??
+            recommendedNext.assessment?.title ??
+            recommendedNext.checkpointLabel,
+          subtitle:
+            recommendedNext.assignmentType === 'lesson_review'
+              ? 'Review this lesson checkpoint next.'
+              : 'Retry this assessment checkpoint next.',
+          xpAwarded: recommendedNext.xpAwarded,
+          href: recommendedNext.lesson?.id
+            ? `/dashboard/student/lessons/${recommendedNext.lesson.id}`
+            : recommendedNext.assessment?.id
+              ? `/dashboard/student/assessments/${recommendedNext.assessment.id}`
+              : null,
+        }
+      : null;
+
+    const upcomingAssessments = assignments
+      .filter(
+        (item) =>
+          !item.isCompleted &&
+          item.assignmentType === 'assessment_retry' &&
+          item.assessment,
+      )
+      .sort((a, b) => {
+        const aTime = a.assessment?.dueDate
+          ? new Date(a.assessment.dueDate).getTime()
+          : Number.POSITIVE_INFINITY;
+        const bTime = b.assessment?.dueDate
+          ? new Date(b.assessment.dueDate).getTime()
+          : Number.POSITIVE_INFINITY;
+        return aTime - bTime;
+      })
+      .slice(0, 4)
+      .map((item) => ({
+        assignmentId: item.id,
+        assessmentId: item.assessment!.id,
+        title: item.assessment!.title,
+        dueDate: item.assessment!.dueDate ?? null,
+        type: item.assessment!.type,
+        passingScore: item.assessment!.passingScore ?? null,
+        xpAwarded: item.xpAwarded,
+        href: `/dashboard/student/assessments/${item.assessment!.id}`,
+      }));
+
+    const recentActivity = [
+      {
+        id: `opened-${interventionCase.id}`,
+        type: 'intervention_opened',
+        title: 'LXP support unlocked',
+        description: selectedEnrollment?.class
+          ? `Recovery work opened for ${selectedEnrollment.class.subjectName}.`
+          : 'Your intervention support track is now active.',
+        occurredAt: interventionCase.openedAt,
+      },
+      ...assignments
+        .filter((item) => item.isCompleted && item.completedAt)
+        .sort(
+          (a, b) =>
+            new Date(b.completedAt ?? 0).getTime() -
+            new Date(a.completedAt ?? 0).getTime(),
+        )
+        .slice(0, 4)
+        .map((item) => ({
+          id: item.id,
+          type: item.assignmentType,
+          title: item.checkpointLabel,
+          description:
+            item.lesson?.description ??
+            item.assessment?.description ??
+            'Completed one guided LXP checkpoint.',
+          occurredAt: item.completedAt,
+        })),
+    ]
+      .filter((entry) => !!entry.occurredAt)
+      .sort(
+        (a, b) =>
+          new Date(b.occurredAt ?? 0).getTime() -
+          new Date(a.occurredAt ?? 0).getTime(),
+      )
+      .slice(0, 5);
+
+    const weakFocusItems = [
+      ...masteryRows
+        .filter(
+          (row) =>
+            row.masteryPercent !== null &&
+            row.masteryPercent < row.thresholdApplied,
+        )
+        .slice(0, 3)
+        .map((row) => ({
+          id: `class-${row.classId}`,
+          source: 'performance',
+          title: `Boost ${row.subjectName}`,
+          subtitle: `Current blended score: ${row.masteryPercent}%`,
+          masteryPercent: row.masteryPercent,
+          href: `/dashboard/student/lxp`,
+        })),
+      ...assignments
+        .filter((item) => !item.isCompleted)
+        .slice(0, 3)
+        .map((item) => ({
+          id: `checkpoint-${item.id}`,
+          source: 'checkpoint',
+          title: item.checkpointLabel,
+          subtitle:
+            item.assignmentType === 'lesson_review'
+              ? 'Lesson review placeholder for topic-level mastery.'
+              : 'Assessment retry placeholder for weak-topic recovery.',
+          masteryPercent: null,
+          href: item.lesson?.id
+            ? `/dashboard/student/lessons/${item.lesson.id}`
+            : item.assessment?.id
+              ? `/dashboard/student/assessments/${item.assessment.id}`
+              : '/dashboard/student/lxp',
+        })),
+    ].slice(0, 4);
+
+    const selectedMastery =
+      masteryRows.find((row) => row.classId === classId)?.masteryPercent ?? null;
+    const statusSummary = this.getStatusSummary({
+      caseStatus: interventionCase.status,
+      isAtRisk: selectedSnapshot?.isAtRisk ?? true,
+      progressPercent: completionPercent,
+      streakDays: progress.streakDays,
+      masteryPercent: selectedMastery,
+    });
+
+    return {
+      selectedClass: {
+        classId,
+        subjectName: selectedEnrollment?.class?.subjectName ?? 'Selected class',
+        subjectCode: selectedEnrollment?.class?.subjectCode ?? 'LXP',
+        section: selectedEnrollment?.class?.section ?? null,
+        blendedScore: this.toNumber(selectedSnapshot?.blendedScore),
+        thresholdApplied:
+          this.toNumber(selectedSnapshot?.thresholdApplied) ??
+          INTERVENTION_THRESHOLD,
+        lastComputedAt: selectedSnapshot?.lastComputedAt ?? null,
+      },
+      interventionStatus: {
+        caseId: interventionCase.id,
+        status: interventionCase.status,
+        openedAt: interventionCase.openedAt,
+        closedAt: interventionCase.closedAt ?? null,
+        triggerScore: this.toNumber(interventionCase.triggerScore),
+        thresholdApplied:
+          this.toNumber(interventionCase.thresholdApplied) ??
+          INTERVENTION_THRESHOLD,
+        ...statusSummary,
+      },
+      progress: {
+        xpTotal: progress.xpTotal,
+        starsTotal: this.xpToStars(progress.xpTotal),
+        streakDays: progress.streakDays,
+        checkpointsCompleted: progress.checkpointsCompleted,
+        totalCheckpoints,
+        completionPercent,
+        lastActivityAt: progress.lastActivityAt ?? null,
+      },
+      subjectMastery: masteryRows,
+      recommendedAction,
+      upcomingAssessments,
+      recentActivity,
+      weakFocusItems,
     };
   }
 

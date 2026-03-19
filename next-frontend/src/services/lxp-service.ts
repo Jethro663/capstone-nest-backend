@@ -2,6 +2,7 @@ import { api } from '@/lib/api-client';
 import type {
   EligibilityResponse,
   LxpClassReport,
+  LxpOverviewResponse,
   PlaylistResponse,
   SystemEvaluationListResponse,
   SystemEvaluationTargetModule,
@@ -29,6 +30,11 @@ export const lxpService = {
   async getPlaylist(classId: string): Promise<Envelope<PlaylistResponse>> {
     const { data } = await api.get(`/lxp/me/playlist/${classId}`);
     return normalizeEnvelope<PlaylistResponse>(data);
+  },
+
+  async getOverview(classId: string): Promise<Envelope<LxpOverviewResponse>> {
+    const { data } = await api.get(`/lxp/me/overview/${classId}`);
+    return normalizeEnvelope<LxpOverviewResponse>(data);
   },
 
   async completeCheckpoint(

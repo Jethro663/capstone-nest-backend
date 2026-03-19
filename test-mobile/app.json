@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Nexora LMS Prototype",
+    "slug": "nexora-lms-test-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "nexora-lms-test-mobile",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true,
+      "buildNumber": "1"
+    },
+    "android": {
+      "versionCode": 1
+    },
+    "plugins": []
+  }
+}

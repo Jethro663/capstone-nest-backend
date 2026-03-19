@@ -37,6 +37,7 @@ export interface LxpCheckpoint {
     type?: 'quiz' | 'exam' | 'assignment' | 'file_upload';
     description?: string | null;
     passingScore?: number | null;
+    dueDate?: string | null;
   } | null;
 }
 
@@ -56,6 +57,101 @@ export interface PlaylistResponse {
     completionPercent: number;
   };
   checkpoints: LxpCheckpoint[];
+}
+
+export interface LxpOverviewSelectedClass {
+  classId: string;
+  subjectName: string;
+  subjectCode: string;
+  section?: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+  } | null;
+  blendedScore: number | null;
+  thresholdApplied: number;
+  lastComputedAt: string | null;
+}
+
+export interface LxpOverviewStatus {
+  caseId: string;
+  status: string;
+  code: 'on_track' | 'improving' | 'needs_attention';
+  label: string;
+  message: string;
+  openedAt: string;
+  closedAt: string | null;
+  triggerScore: number | null;
+  thresholdApplied: number;
+}
+
+export interface LxpOverviewProgress {
+  xpTotal: number;
+  starsTotal: number;
+  streakDays: number;
+  checkpointsCompleted: number;
+  totalCheckpoints: number;
+  completionPercent: number;
+  lastActivityAt: string | null;
+}
+
+export interface LxpOverviewSubjectMasteryRow {
+  classId: string;
+  subjectName: string;
+  subjectCode: string;
+  masteryPercent: number | null;
+  thresholdApplied: number;
+  status: 'needs_attention' | 'on_track' | 'improving';
+  isSelected: boolean;
+  lastComputedAt: string | null;
+}
+
+export interface LxpOverviewRecommendedAction {
+  assignmentId: string;
+  type: 'lesson_review' | 'assessment_retry';
+  title: string;
+  subtitle: string;
+  xpAwarded: number;
+  href: string | null;
+}
+
+export interface LxpOverviewAssessmentItem {
+  assignmentId: string;
+  assessmentId: string;
+  title: string;
+  dueDate: string | null;
+  type?: 'quiz' | 'exam' | 'assignment' | 'file_upload';
+  passingScore: number | null;
+  xpAwarded: number;
+  href: string;
+}
+
+export interface LxpOverviewActivityItem {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  occurredAt: string;
+}
+
+export interface LxpOverviewWeakFocusItem {
+  id: string;
+  source: 'performance' | 'checkpoint';
+  title: string;
+  subtitle: string;
+  masteryPercent: number | null;
+  href: string;
+}
+
+export interface LxpOverviewResponse {
+  selectedClass: LxpOverviewSelectedClass;
+  interventionStatus: LxpOverviewStatus;
+  progress: LxpOverviewProgress;
+  subjectMastery: LxpOverviewSubjectMasteryRow[];
+  recommendedAction: LxpOverviewRecommendedAction | null;
+  upcomingAssessments: LxpOverviewAssessmentItem[];
+  recentActivity: LxpOverviewActivityItem[];
+  weakFocusItems: LxpOverviewWeakFocusItem[];
 }
 
 export interface TeacherInterventionQueueItem {
