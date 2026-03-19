@@ -10,9 +10,23 @@ const JAcademyScreen = () => {
 
   useEffect(() => {
     let mounted = true;
-    getJAcademyStats().then((s) => {
-      if (mounted) setStats(s);
-    });
+    let defaultStats = null;
+
+    const fetchStats = async () => {
+      try {
+        const data = await getJAcademyStats();
+        if (mounted) {
+          setStats(data);
+        }
+      } catch (error) {
+        console.error('Error fetching JAcademy stats:', error);
+        if (mounted) {
+          setStats(defaultStats);
+        }
+      }
+    };
+
+    fetchStats();
     return () => (mounted = false);
   }, []);
 

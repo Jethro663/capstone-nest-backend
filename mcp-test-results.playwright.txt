@@ -1,0 +1,4 @@
+﻿Playwright MCP smoke test
+- Navigated to data: URL
+- Title: MCP OK
+- H1: playwright mcp

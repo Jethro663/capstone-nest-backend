@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { motion, Variants } from 'framer-motion';
-import { AlertTriangle, BarChart3, Sparkles, Target, Inbox } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { AlertTriangle, BarChart3, Inbox, ShieldCheck, Target } from 'lucide-react';
 import { performanceService } from '@/services/performance-service';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+<<<<<<< Updated upstream
 import {
   StudentStatCard,
   StudentStatusChip,
@@ -31,6 +32,13 @@ const fItem: Variants = {
 };
 
 // --- Helpers ---
+=======
+import { StudentStatusChip } from '@/components/student/student-primitives';
+import { StudentPageShell, StudentPageStat, StudentSectionCard } from '@/components/student/StudentPageShell';
+import { containerReveal, itemReveal } from '@/components/student/student-motion';
+import type { StudentOwnPerformanceSummary } from '@/types/performance';
+
+>>>>>>> Stashed changes
 function toPercent(value: number | null): string {
   if (value === null) return '--';
   return `${value.toFixed(1)}%`;
@@ -48,11 +56,9 @@ function formatDateTime(value: string | Date): string {
   });
 }
 
-/**
- * Custom Local Empty State to avoid import errors
- */
 function LocalEmptyState({ title, description }: { title: string; description: string }) {
   return (
+<<<<<<< Updated upstream
     <motion.div 
       variants={fItem} 
       className="flex flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-slate-200 bg-slate-50/30 p-16 text-center"
@@ -62,9 +68,17 @@ function LocalEmptyState({ title, description }: { title: string; description: s
       </div>
       <h3 className="text-xl font-black text-slate-900">{title}</h3>
       <p className="mt-2 text-sm font-medium text-slate-500 max-w-sm leading-relaxed">
+=======
+    <div className="flex flex-col items-center justify-center rounded-[2.5rem] border-2 border-dashed border-[var(--student-outline)] bg-[var(--student-surface-soft)]/30 p-16 text-center">
+      <div className="mb-6 rounded-3xl bg-[var(--student-elevated)] p-6 text-[var(--student-text-muted)] shadow-sm">
+        <Inbox className="h-10 w-10" />
+      </div>
+      <h3 className="text-xl font-black text-[var(--student-text-strong)]">{title}</h3>
+      <p className="mt-2 max-w-sm text-sm font-medium leading-relaxed text-[var(--student-text-muted)]">
+>>>>>>> Stashed changes
         {description}
       </p>
-    </motion.div>
+    </div>
   );
 }
 
@@ -90,12 +104,12 @@ export default function StudentPerformancePage() {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto space-y-8 p-8">
-        <Skeleton className="h-32 w-full rounded-[1.5rem]" />
-        <div className="grid gap-6 md:grid-cols-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+      <div className="mx-auto max-w-7xl space-y-8 p-8">
+        <Skeleton className="h-44 rounded-[1.8rem]" />
+        <div className="grid gap-6 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-[1.5rem]" />)}
         </div>
-        <Skeleton className="h-64 w-full rounded-[2rem]" />
+        <Skeleton className="h-[32rem] rounded-[1.8rem]" />
       </div>
     );
   }
@@ -104,6 +118,7 @@ export default function StudentPerformancePage() {
   const threshold = summary?.threshold ?? 74;
 
   return (
+<<<<<<< Updated upstream
     <motion.div 
       className="max-w-7xl mx-auto space-y-8 p-6 md:p-10"
       initial="hidden"
@@ -155,20 +170,48 @@ export default function StudentPerformancePage() {
             value={summary?.overall.totalClasses ?? 0}
             accent="bg-slate-900"
             icon={<BarChart3 className="h-4 w-4" />}
+=======
+    <StudentPageShell
+      badge="Progress Tracker"
+      title="Performance"
+      description={
+        threshold !== null
+          ? `You’re aiming to stay above ${threshold}% in each class. This page helps you see what’s going well and where a little extra effort will help most.`
+          : 'Track how your classes are going, celebrate strong progress, and spot where to focus next.'
+      }
+      stats={
+        <>
+          <StudentPageStat
+            label="Classes"
+            value={summary?.overall.totalClasses ?? 0}
+            caption="Subjects currently enrolled"
+            icon={BarChart3}
+            accent="bg-[var(--student-text-strong)] text-white"
+>>>>>>> Stashed changes
           />
-        </motion.div>
-        <motion.div variants={fItem} whileHover={{ y: -5 }}>
-          <StudentStatCard
-            label="Graded Courses"
+          <StudentPageStat
+            label="Graded"
             value={summary?.overall.classesWithData ?? 0}
+<<<<<<< Updated upstream
             accent="bg-red-500"
             icon={<Target className="h-4 w-4" />}
+=======
+            caption="Classes with score data"
+            icon={Target}
+            accent="bg-[var(--student-accent-soft)] text-[var(--student-accent)]"
+>>>>>>> Stashed changes
           />
-        </motion.div>
-        <motion.div variants={fItem} whileHover={{ y: -5 }}>
-          <StudentStatCard
-            label="Risk Alerts"
+          <StudentPageStat
+            label="Average"
+            value={toPercent(summary?.overall.averageBlendedScore ?? null)}
+            caption="Blended overall score"
+            icon={ShieldCheck}
+            accent="bg-emerald-100 text-emerald-700"
+          />
+          <StudentPageStat
+            label="Needs Attention"
             value={summary?.overall.atRiskClasses ?? 0}
+<<<<<<< Updated upstream
             accent={(summary?.overall.atRiskClasses ?? 0) > 0 ? "bg-red-600" : "bg-slate-200"}
             icon={<AlertTriangle className="h-4 w-4" />}
           />
@@ -181,17 +224,38 @@ export default function StudentPerformancePage() {
           <h2 className="text-xl font-black text-slate-900 tracking-tight">Subject Breakdown</h2>
           <Badge variant="outline" className="border-slate-200 text-[10px] font-black uppercase text-slate-400">
             Threshold: {threshold}%
+=======
+            caption="Classes below the threshold"
+            icon={AlertTriangle}
+            accent="bg-amber-100 text-amber-700"
+          />
+        </>
+      }
+    >
+      <StudentSectionCard
+        title="Subject Breakdown"
+        description="Each class shows your blended standing, the latest sync time, and whether you are safely on track."
+        action={
+          <Badge variant="outline" className="student-badge text-[10px] font-black uppercase">
+            {threshold !== null ? `Threshold ${threshold}%` : 'Threshold --'}
+>>>>>>> Stashed changes
           </Badge>
-        </div>
-
+        }
+      >
         {classes.length === 0 ? (
           <LocalEmptyState 
             title="No performance data yet"
-            description="Your assessments haven't been graded yet. Once your teacher enters scores, your analytics will appear here."
+            description="Your assessments have not been graded yet. Once your teacher enters scores, your analytics will appear here."
           />
         ) : (
-          <motion.div variants={fContainer} className="space-y-4">
+          <motion.div
+            variants={containerReveal}
+            initial="hidden"
+            animate="visible"
+            className="space-y-4"
+          >
             {classes.map((entry) => (
+<<<<<<< Updated upstream
               <motion.div 
                 key={entry.classId} 
                 variants={fItem}
@@ -202,17 +266,36 @@ export default function StudentPerformancePage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="text-lg font-black text-slate-900 group-hover:text-red-500 transition-colors">
+=======
+              <motion.div
+                key={entry.classId}
+                variants={itemReveal}
+                className="student-panel student-panel-hover rounded-[1.5rem] p-6"
+              >
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="text-lg font-black text-[var(--student-text-strong)]">
+>>>>>>> Stashed changes
                         {entry.class?.subjectName || entry.classId}
                       </h3>
-                      <StudentStatusChip tone={entry.isAtRisk ? 'danger' : 'info'}>
-                        {entry.isAtRisk ? 'AT RISK' : 'STABLE'}
+                      <StudentStatusChip tone={entry.isAtRisk ? 'warning' : 'success'}>
+                        {entry.isAtRisk ? 'Needs a little help' : 'On track'}
                       </StudentStatusChip>
                     </div>
+<<<<<<< Updated upstream
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-tight">
+=======
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--student-text-muted)]">
+>>>>>>> Stashed changes
                       {entry.class?.section?.name || 'Academic Section'} • Grade {entry.class?.section?.gradeLevel || '-'}
+                    </p>
+                    <p className="text-xs text-[var(--student-text-muted)]">
+                      Last sync: {formatDateTime(entry.lastComputedAt)}
                     </p>
                   </div>
 
+<<<<<<< Updated upstream
                   {/* Individual Scores Grid */}
                   <div className="grid grid-cols-3 gap-3 md:min-w-[360px]">
                     <div className="text-center px-4 py-3 bg-slate-50 rounded-2xl border border-slate-100 group-hover:bg-white transition-colors">
@@ -242,11 +325,62 @@ export default function StudentPerformancePage() {
                      </div>
                    )}
                 </div>
+=======
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[380px]">
+                    <ScorePill label="Assessment" value={toPercent(entry.assessmentAverage)} />
+                    <ScorePill label="Class Record" value={toPercent(entry.classRecordAverage)} />
+                    <ScorePill
+                      label="Blended"
+                      value={toPercent(entry.blendedScore)}
+                      accent
+                    />
+                  </div>
+                </div>
+>>>>>>> Stashed changes
               </motion.div>
             ))}
           </motion.div>
         )}
-      </motion.section>
-    </motion.div>
+      </StudentSectionCard>
+    </StudentPageShell>
+  );
+}
+
+function ScorePill({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={
+        accent
+          ? 'rounded-2xl border border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)] px-4 py-4 text-center'
+          : 'rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-4 text-center'
+      }
+    >
+      <p
+        className={
+          accent
+            ? 'text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-accent)]'
+            : 'text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]'
+        }
+      >
+        {label}
+      </p>
+      <p
+        className={
+          accent
+            ? 'mt-2 text-lg font-black text-[var(--student-accent)]'
+            : 'mt-2 text-lg font-black text-[var(--student-text-strong)]'
+        }
+      >
+        {value}
+      </p>
+    </div>
   );
 }

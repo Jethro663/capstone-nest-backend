@@ -1,6 +1,10 @@
 'use client';
 
+<<<<<<< Updated upstream
 import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
+=======
+import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
+>>>>>>> Stashed changes
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { classService } from '@/services/class-service';
@@ -9,7 +13,7 @@ import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { extractionService } from '@/services/extraction-service';
 import { fileService } from '@/services/file-service';
-import { classRecordService } from '@/services/class-record-service';
+import { useAuth } from '@/providers/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,24 +25,59 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
+<<<<<<< Updated upstream
+=======
+import { LayoutGrid, List, ArrowUpDown, GripVertical, ChevronLeft, ChevronRight, ArrowLeft, BookOpen, CalendarRange, GraduationCap, Users, PencilLine, Rocket, Sparkles, Target, ClipboardList } from 'lucide-react';
+>>>>>>> Stashed changes
 import { toast } from 'sonner';
 import { getDescription } from '@/utils/helpers';
+<<<<<<< Updated upstream
+=======
+import { cn } from '@/utils/cn';
+import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
+import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
+import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
+>>>>>>> Stashed changes
 import type { ClassItem, Enrollment } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
 import type { User } from '@/types/user';
 import type { Announcement } from '@/types/announcement';
 import type { Extraction } from '@/types/extraction';
+<<<<<<< Updated upstream
 import type { ClassRecord, SpreadsheetData } from '@/types/class-record';
 import type { GradingPeriod } from '@/utils/constants';
 import type { UploadedFile } from '@/types/file';
 
 const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
+=======
+import type { FeedbackLevel, QuestionType } from '@/utils/constants';
+import type { UploadedFile } from '@/types/file';
+const ASSESSMENT_CATEGORIES: Array<{
+  value: 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts';
+  label: string;
+}> = [
+  { value: 'written_work', label: 'Written Works' },
+  { value: 'performance_task', label: 'Performance Tasks' },
+  { value: 'quarterly_assessment', label: 'Quarterly Assessment' },
+  { value: 'drafts', label: 'Drafts' },
+];
+
+const LESSON_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const nextItems = [...items];
+  const [moved] = nextItems.splice(fromIndex, 1);
+  nextItems.splice(toIndex, 0, moved);
+  return nextItems;
+}
+>>>>>>> Stashed changes
 
 export default function TeacherClassDetailPage() {
   const params = useParams();
   const router = useRouter();
   const classId = params.id as string;
+  const { role } = useAuth();
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -60,6 +99,7 @@ export default function TeacherClassDetailPage() {
   const [extracting, setExtracting] = useState(false);
   const [libraryFiles, setLibraryFiles] = useState<UploadedFile[]>([]);
   const [selectedLibraryFileId, setSelectedLibraryFileId] = useState('');
+<<<<<<< Updated upstream
 
   // Class record state
   const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
@@ -71,11 +111,86 @@ export default function TeacherClassDetailPage() {
   const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
 
+=======
+  const [reindexing, setReindexing] = useState(false);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
+  const [quizTitle, setQuizTitle] = useState('');
+  const [quizTeacherNote, setQuizTeacherNote] = useState('');
+  const [quizQuestionCount, setQuizQuestionCount] = useState('5');
+  const [quizQuestionType, setQuizQuestionType] = useState<QuestionType>('multiple_choice');
+  const [quizFeedbackLevel, setQuizFeedbackLevel] = useState<FeedbackLevel>('standard');
+  const [quizSourceLessonIds, setQuizSourceLessonIds] = useState<string[]>([]);
+  const [quizSourceExtractionIds, setQuizSourceExtractionIds] = useState<string[]>([]);
+>>>>>>> Stashed changes
   // Form states
   const [lessonTitle, setLessonTitle] = useState('');
   const [lessonDesc, setLessonDesc] = useState('');
   const [annTitle, setAnnTitle] = useState('');
   const [annContent, setAnnContent] = useState('');
+<<<<<<< Updated upstream
+=======
+  const [activeTab, setActiveTab] = useState('lessons');
+  const [assessmentCategoryTab, setAssessmentCategoryTab] = useState<'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts'>('written_work');
+  const [assessmentViewMode, setAssessmentViewMode] = useState<'list' | 'grid'>('list');
+  const [assessmentSortOrder, setAssessmentSortOrder] = useState<'asc' | 'desc'>('asc');
+  const classRecordState = useTeacherClassRecord(classId);
+
+  const categorizedAssessments = useMemo(() => {
+    const filtered = assessments.filter((assessment) => {
+      if (assessmentCategoryTab === 'drafts') {
+        return !assessment.classRecordCategory || !assessment.isPublished;
+      }
+      return assessment.classRecordCategory === assessmentCategoryTab;
+    });
+
+    const withDate = filtered
+      .map((assessment) => ({
+        assessment,
+        dueTs: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
+      }))
+      .sort((a, b) => {
+        if (a.dueTs === b.dueTs) {
+          return new Date(b.assessment.createdAt ?? 0).getTime() - new Date(a.assessment.createdAt ?? 0).getTime();
+        }
+        return assessmentSortOrder === 'asc' ? a.dueTs - b.dueTs : b.dueTs - a.dueTs;
+      })
+      .map((entry) => entry.assessment);
+
+    return withDate.reduce<Record<string, Assessment[]>>((groups, assessment) => {
+      const key = assessment.dueDate
+        ? new Date(assessment.dueDate).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })
+        : 'No due date';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(assessment);
+      return groups;
+    }, {});
+  }, [assessments, assessmentCategoryTab, assessmentSortOrder]);
+
+  const sortedLessons = useMemo(
+    () => [...lessons].sort((a, b) => a.order - b.order),
+    [lessons],
+  );
+
+  const selectedLessonIdSet = useMemo(
+    () => new Set(selectedLessonIds),
+    [selectedLessonIds],
+  );
+
+  const allVisibleLessonsSelected =
+    sortedLessons.length > 0 &&
+    sortedLessons.every((lesson) => selectedLessonIdSet.has(lesson.id));
+
+  const canReorderLessons =
+    lessonStatusFilter === 'all' && sortedLessons.length > 1;
+>>>>>>> Stashed changes
+
+  const publishedLessonCount = lessons.filter((lesson) => !lesson.isDraft).length;
+  const draftLessonCount = lessons.filter((lesson) => lesson.isDraft).length;
+  const completedAssessmentCount = assessments.filter((assessment) => assessment.isPublished).length;
 
   const fetchData = useCallback(async () => {
     try {
@@ -105,7 +220,6 @@ export default function TeacherClassDetailPage() {
 
   useEffect(() => {
     fetchData();
-    fetchClassRecords();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
 
@@ -209,6 +323,7 @@ export default function TeacherClassDetailPage() {
 
   // ── Class Record handlers ─────────────────────────────────────────────────
 
+<<<<<<< Updated upstream
   const fetchClassRecords = useCallback(async () => {
     try {
       const res = await classRecordService.getByClass(classId);
@@ -331,6 +446,8 @@ export default function TeacherClassDetailPage() {
 
   // ── Extract Module ────────────────────────────────────────────────────────
 
+=======
+>>>>>>> Stashed changes
   const queueExtraction = async (fileId: string) => {
     setExtracting(true);
     try {
@@ -382,15 +499,69 @@ export default function TeacherClassDetailPage() {
   if (!classItem) return <p className="text-muted-foreground">Class not found.</p>;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-2">← Back</Button>
-        <h1 className="text-2xl font-bold">{classItem.subjectName} ({classItem.subjectCode})</h1>
-        <p className="text-muted-foreground">
-          {classItem.section?.name} • Grade {classItem.section?.gradeLevel} • {enrollments.length} students
-        </p>
-      </div>
+    <>
+    <TeacherPageShell
+      className={role === 'admin' ? 'theme-admin-bridge' : undefined}
+      badge="Class Workspace"
+      title={`${classItem.subjectName} (${classItem.subjectCode})`}
+      description={`Manage lessons, assessments, announcements, records, and roster details from a clearer workspace for ${classItem.section?.name || 'this class'}.`}
+      actions={(
+        <Button variant="outline" size="sm" onClick={() => router.back()} className="teacher-button-outline rounded-xl font-black">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+      )}
+      stats={(
+        <>
+          <TeacherStatCard label="Section" value={classItem.section?.name || 'Unassigned'} caption={`Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || '—'}`} icon={GraduationCap} accent="sky" />
+          <TeacherStatCard label="Students" value={enrollments.length} caption="Currently enrolled learners" icon={Users} accent="teal" />
+          <TeacherStatCard label="Assessments" value={assessments.length} caption="Across active and draft work" icon={BookOpen} accent="amber" />
+          <TeacherStatCard label="School Year" value={classItem.schoolYear || '—'} caption="Current class cycle" icon={CalendarRange} accent="rose" />
+        </>
+      )}
+    >
+      <TeacherSectionCard
+        title="Subject Space"
+        description="A more welcoming class overview so you can orient quickly before diving into lessons, assessments, and records."
+      >
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="teacher-dashboard-spotlight">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-3">
+                <div className="teacher-dashboard-chip">
+                  <Sparkles className="h-4 w-4" />
+                  Active Subject
+                </div>
+                <div className="space-y-2">
+                  <p className="text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]">
+                    {classItem.subjectName} ({classItem.subjectCode})
+                  </p>
+                  <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
+                    {classItem.section?.name || 'Section not set'} • Grade {classItem.section?.gradeLevel || classItem.subjectGradeLevel || '—'} • {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'Teacher not assigned'}
+                  </p>
+                  <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
+                    Use this subject hub to keep the learning flow clear for students while you manage sequencing, assessments, announcements, and workbook records from one place.
+                  </p>
+                </div>
+              </div>
+              <div className="grid min-w-[220px] grid-cols-3 gap-3 text-right">
+                <div className="teacher-dashboard-metric">
+                  <span>Lessons</span>
+                  <strong>{lessonTotal}</strong>
+                </div>
+                <div className="teacher-dashboard-metric">
+                  <span>Students</span>
+                  <strong>{enrollments.length}</strong>
+                </div>
+                <div className="teacher-dashboard-metric">
+                  <span>Assessments</span>
+                  <strong>{assessments.length}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
 
+<<<<<<< Updated upstream
         <Tabs defaultValue="lessons">
           <TabsList>
             <TabsTrigger value="lessons">Lessons</TabsTrigger>
@@ -433,6 +604,374 @@ export default function TeacherClassDetailPage() {
                   </CardContent>
                 </Card>
               ))}
+=======
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="teacher-dashboard-mini-panel">
+              <div className="teacher-dashboard-mini-panel__icon bg-sky-500/15 text-sky-300">
+                <BookOpen className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Published Lessons</p>
+                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{publishedLessonCount}</p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Ready for student access</p>
+              </div>
+            </div>
+            <div className="teacher-dashboard-mini-panel">
+              <div className="teacher-dashboard-mini-panel__icon bg-amber-400/15 text-amber-200">
+                <ClipboardList className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Draft Lessons</p>
+                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{draftLessonCount}</p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Still waiting for review</p>
+              </div>
+            </div>
+            <div className="teacher-dashboard-mini-panel">
+              <div className="teacher-dashboard-mini-panel__icon bg-emerald-500/15 text-emerald-200">
+                <Target className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Live Assessments</p>
+                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{completedAssessmentCount}</p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Published for this subject</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </TeacherSectionCard>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TeacherSectionCard
+          title="Class Areas"
+          description="Move between learning content, assessment tools, announcements, records, and roster details from one cleaner navigation surface."
+          className="bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))]"
+          contentClassName="pt-5"
+        >
+          <TabsList className="teacher-tab-list h-auto flex-wrap justify-start">
+            <TabsTrigger value="lessons" className="teacher-tab rounded-xl px-4 font-black">Lessons</TabsTrigger>
+            <TabsTrigger value="assessments" className="teacher-tab rounded-xl px-4 font-black">Assessments</TabsTrigger>
+            <TabsTrigger value="extraction" className="teacher-tab rounded-xl px-4 font-black">Extraction</TabsTrigger>
+            <TabsTrigger value="announcements" className="teacher-tab rounded-xl px-4 font-black">Announcements</TabsTrigger>
+            <TabsTrigger value="class-record" className="teacher-tab rounded-xl px-4 font-black">Class Record</TabsTrigger>
+            <TabsTrigger value="students" className="teacher-tab rounded-xl px-4 font-black">Students</TabsTrigger>
+          </TabsList>
+        </TeacherSectionCard>
+
+        {/* Lessons Tab */}
+        <TabsContent value="lessons" className="space-y-4 mt-4">
+          <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-[var(--teacher-text-strong)]">
+                    {lessonTotal} lesson{lessonTotal === 1 ? '' : 's'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Bulk publish, unpublish, delete, and drag lessons into a cleaner sequence.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={lessonStatusFilter}
+                    onChange={(e) =>
+                      handleLessonStatusFilterChange(e.target.value as LessonStatusFilter)
+                    }
+                    className="teacher-select h-9 rounded-md px-3 text-sm"
+                  >
+                    <option value="all">All lessons</option>
+                    <option value="draft">Draft only</option>
+                    <option value="published">Published only</option>
+                  </select>
+                  <select
+                    value={String(lessonPageSize)}
+                    onChange={(e) => handleLessonPageSizeChange(e.target.value)}
+                    className="teacher-select h-9 rounded-md px-3 text-sm"
+                  >
+                    {LESSON_PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size} / page
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-3">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={handleSelectVisibleLessons}
+                      disabled={sortedLessons.length === 0}
+                    >
+                      {allVisibleLessonsSelected ? 'Clear Page' : 'Select Page'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={handleSelectAllFilteredLessons}
+                      disabled={lessonTotal === 0 || bulkLessonAction === 'selecting-all'}
+                    >
+                      {bulkLessonAction === 'selecting-all' ? 'Selecting...' : 'Select All Filtered'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={clearLessonSelection}
+                      disabled={selectedLessonIds.length === 0}
+                    >
+                      Clear Selection
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="teacher-button-solid rounded-xl font-black"
+                      onClick={() => handleBulkLessonDraftState(false)}
+                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
+                    >
+                      {bulkLessonAction === 'publish' ? 'Publishing...' : 'Publish Selected'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={() => handleBulkLessonDraftState(true)}
+                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
+                    >
+                      {bulkLessonAction === 'unpublish' ? 'Unpublishing...' : 'Unpublish Selected'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="teacher-button-danger rounded-xl font-black"
+                      onClick={handleBulkDeleteLessons}
+                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
+                    >
+                      {bulkLessonAction === 'delete' ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+                  <span>
+                    {selectedLessonIds.length} selected across {lessonTotal} filtered lesson
+                    {lessonTotal === 1 ? '' : 's'}.
+                  </span>
+                  <span>
+                    Reordering is available in <strong>All lessons</strong> view so the saved sequence stays global.
+                  </span>
+                </div>
+              </div>
+
+              {canReorderLessons && (
+                <div className="flex flex-col gap-3 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-3 lg:flex-row lg:items-center lg:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Drag lessons by the handle to change the order shown to students.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={handleResetLessonOrder}
+                      disabled={!lessonOrderDirty || savingLessonOrder}
+                    >
+                      Reset Order
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="teacher-button-solid rounded-xl font-black"
+                      onClick={handleSaveLessonOrder}
+                      disabled={!lessonOrderDirty || savingLessonOrder}
+                    >
+                      {savingLessonOrder ? 'Saving...' : 'Save Order'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="teacher-dashboard-mini-panel">
+              <div className="teacher-dashboard-mini-panel__icon bg-sky-500/15 text-sky-300">
+                <BookOpen className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">In View</p>
+                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{sortedLessons.length}</p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Lessons matching the current filter</p>
+              </div>
+            </div>
+            <div className="teacher-dashboard-mini-panel">
+              <div className="teacher-dashboard-mini-panel__icon bg-emerald-500/15 text-emerald-200">
+                <Rocket className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Selection</p>
+                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{selectedLessonIds.length}</p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Lessons selected for bulk actions</p>
+              </div>
+            </div>
+            <div className="teacher-dashboard-mini-panel">
+              <div className="teacher-dashboard-mini-panel__icon bg-amber-400/15 text-amber-200">
+                <ArrowUpDown className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Reorder Mode</p>
+                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{canReorderLessons ? 'On' : 'Off'}</p>
+                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Available in the all-lessons view</p>
+              </div>
+            </div>
+          </div>
+
+          {sortedLessons.length === 0 ? (
+            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
+              <CardContent className="p-8 text-center text-muted-foreground">
+                No lessons in this view yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-4 xl:grid-cols-2">
+                {sortedLessons.map((lesson, index) => (
+                  <Card
+                    key={lesson.id}
+                    className={cn(
+                      'relative overflow-hidden border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(17,24,39,0.92),rgba(30,41,59,0.88))] shadow-[0_28px_54px_-36px_rgba(2,6,23,0.6)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[0_34px_64px_-34px_rgba(2,6,23,0.72)]',
+                      selectedLessonIdSet.has(lesson.id) && 'ring-2 ring-[var(--teacher-accent)]/35',
+                      draggedLessonId === lesson.id && 'opacity-70',
+                    )}
+                    draggable={canReorderLessons}
+                    onDragStart={() => handleLessonDragStart(lesson.id)}
+                    onDragEnd={() => setDraggedLessonId(null)}
+                    onDragOver={(event) => {
+                      if (canReorderLessons) event.preventDefault();
+                    }}
+                    onDrop={() => handleLessonDrop(lesson.id)}
+                  >
+                    <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-[var(--teacher-accent)]/10 blur-3xl opacity-80" />
+                    <CardContent className="relative space-y-4 p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedLessonIdSet.has(lesson.id)}
+                            onChange={() => toggleLessonSelection(lesson.id)}
+                            className="mt-1 h-4 w-4 rounded border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)]"
+                          />
+                          <button
+                            type="button"
+                            className={cn(
+                              'mt-0.5 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-2 text-[var(--teacher-text-muted)] shadow-sm transition',
+                              canReorderLessons
+                                ? 'cursor-grab hover:border-[var(--teacher-accent)]/35 hover:bg-[var(--teacher-accent)]/10 hover:text-[var(--teacher-text-strong)] active:cursor-grabbing'
+                                : 'cursor-not-allowed opacity-50',
+                            )}
+                            disabled={!canReorderLessons}
+                            onMouseDown={() => handleLessonDragStart(lesson.id)}
+                            aria-label={`Reorder ${lesson.title}`}
+                          >
+                            <GripVertical className="h-4 w-4" />
+                          </button>
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="inline-flex rounded-full bg-[var(--teacher-accent)]/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[var(--teacher-accent-strong)]">
+                                Lesson {((lessonPage - 1) * lessonPageSize) + index + 1}
+                              </span>
+                              <Badge variant={lesson.isDraft ? 'secondary' : 'default'} className={lesson.isDraft ? 'border border-amber-400/30 bg-amber-400/12 text-amber-100' : 'border border-emerald-400/30 bg-emerald-400/12 text-emerald-100'}>
+                                {lesson.isDraft ? 'Draft' : 'Published'}
+                              </Badge>
+                            </div>
+                            <p className="text-lg font-black tracking-tight text-[var(--teacher-text-strong)]">{lesson.title}</p>
+                            <p className="line-clamp-3 text-sm leading-6 text-[var(--teacher-text-muted)]">
+                              {getDescription(lesson.description)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--teacher-text-muted)]">
+                        <span className="rounded-full border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-1">
+                          Order #{lesson.order}
+                        </span>
+                        <span className="rounded-full border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-1">
+                          {lesson.contentBlocks?.length ?? 0} block{(lesson.contentBlocks?.length ?? 0) === 1 ? '' : 's'}
+                        </span>
+                        <span className="rounded-full border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-1">
+                          {lesson.isDraft ? 'Needs publishing' : 'Visible to students'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <p className="text-sm text-[var(--teacher-text-muted)]">
+                          {lesson.isDraft
+                            ? 'Review the content, then publish when this lesson is ready for students.'
+                            : 'Students can already access this lesson from their subject space.'}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {!lesson.isDraft ? null : (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="teacher-button-solid rounded-xl font-black"
+                              onClick={() => handlePublishLesson(lesson.id)}
+                              disabled={bulkLessonAction !== null}
+                            >
+                              <Rocket className="mr-1 h-3.5 w-3.5" />
+                              Publish
+                            </Button>
+                          )}
+                          <Link
+                            href={`/dashboard/teacher/lessons/${lesson.id}/edit`}
+                            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 text-sm font-black text-[var(--teacher-text-strong)] shadow-[0_16px_38px_-24px_rgba(2,6,23,0.45)] transition hover:border-[var(--teacher-accent)]/35 hover:bg-[var(--teacher-accent)]/10 hover:text-[var(--teacher-text-strong)]"
+                          >
+                            <PencilLine className="h-3.5 w-3.5" />
+                            Edit Lesson
+                          </Link>
+                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteLesson(lesson.id)}>Delete</Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
+                <CardContent className="flex flex-col items-start gap-3 p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Page {lessonPage} of {lessonTotalPages}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={() => handleLessonPageChange(lessonPage - 1)}
+                      disabled={lessonPage <= 1}
+                    >
+                      <ChevronLeft className="mr-1 h-4 w-4" />
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="teacher-button-outline rounded-xl font-black"
+                      onClick={() => handleLessonPageChange(lessonPage + 1)}
+                      disabled={lessonPage >= lessonTotalPages}
+                    >
+                      Next
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+>>>>>>> Stashed changes
             </div>
           )}
         </TabsContent>
@@ -443,7 +982,7 @@ export default function TeacherClassDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <Card className="overflow-hidden border-red-100 bg-[radial-gradient(circle_at_top_left,_rgba(220,38,38,0.1),_transparent_40%),linear-gradient(135deg,#ffffff_0%,#fff8f5_100%)]">
+            <Card className="overflow-hidden border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))]">
               <CardHeader>
                 <CardTitle className="text-xl">Extraction Workspace</CardTitle>
                 <p className="text-sm text-muted-foreground">
@@ -451,23 +990,23 @@ export default function TeacherClassDetailPage() {
                 </p>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-3 rounded-2xl border bg-white/80 p-4">
+                <div className="space-y-3 rounded-2xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-4">
                   <Label>Upload a fresh module PDF</Label>
                   <Input
                     type="file"
                     accept=".pdf"
                     onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
                   />
-                  <Button onClick={handleExtractModule} disabled={!extractFile || extracting}>
+                  <Button className="teacher-button-solid rounded-xl font-black" onClick={handleExtractModule} disabled={!extractFile || extracting}>
                     {extracting ? 'Uploading & Extracting...' : 'Start New Extraction'}
                   </Button>
                 </div>
-                <div className="space-y-3 rounded-2xl border bg-white/80 p-4">
+                <div className="space-y-3 rounded-2xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-4">
                   <Label>Pick an existing library PDF</Label>
                   <select
                     value={selectedLibraryFileId}
                     onChange={(e) => setSelectedLibraryFileId(e.target.value)}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    className="teacher-select h-10 w-full rounded-md px-3 text-sm"
                   >
                     <option value="">Select from Nexora Library</option>
                     {libraryFiles.map((file) => (
@@ -478,11 +1017,23 @@ export default function TeacherClassDetailPage() {
                   </select>
                   <Button
                     variant="outline"
+                    className="teacher-button-outline rounded-xl font-black"
                     onClick={() => selectedLibraryFileId && queueExtraction(selectedLibraryFileId)}
                     disabled={!selectedLibraryFileId || extracting}
                   >
                     Use Selected PDF
                   </Button>
+<<<<<<< Updated upstream
+=======
+                  <Button
+                    variant="secondary"
+                    className="teacher-button-outline rounded-xl font-black"
+                    onClick={handleReindexClass}
+                    disabled={reindexing}
+                  >
+                    {reindexing ? 'Reindexing...' : 'Reindex Class AI Content'}
+                  </Button>
+>>>>>>> Stashed changes
                 </div>
               </CardContent>
             </Card>
@@ -530,13 +1081,13 @@ export default function TeacherClassDetailPage() {
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" onClick={() => router.push(`/dashboard/teacher/extractions/${ext.id}`)}>
+                        <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/extractions/${ext.id}`)}>
                           Review
                         </Button>
                         {!ext.isApplied && ext.extractionStatus !== 'applied' && (
                           <Button
                             variant="ghost"
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            className="teacher-button-danger rounded-xl font-black"
                             onClick={async () => {
                               try {
                                 await extractionService.delete(ext.id);
@@ -561,12 +1112,79 @@ export default function TeacherClassDetailPage() {
 
         {/* Assessments Tab */}
         <TabsContent value="assessments" className="space-y-4 mt-4">
+<<<<<<< Updated upstream
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
             <Button size="sm" onClick={handleCreateAssessment}>+ New Assessment</Button>
           </div>
           {assessments.length === 0 ? (
             <Card><CardContent className="p-6 text-center text-muted-foreground">No assessments yet.</CardContent></Card>
+=======
+          <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
+            <CardContent className="p-4 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex rounded-md border p-0.5">
+                    <Button
+                      size="sm"
+                      variant={assessmentViewMode === 'list' ? 'default' : 'ghost'}
+                      className={cn('h-8 rounded-xl font-black', assessmentViewMode === 'list' ? 'teacher-button-solid' : 'teacher-button-outline')}
+                      onClick={() => setAssessmentViewMode('list')}
+                    >
+                      <List className="mr-1 h-4 w-4" /> List
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={assessmentViewMode === 'grid' ? 'default' : 'ghost'}
+                      className={cn('h-8 rounded-xl font-black', assessmentViewMode === 'grid' ? 'teacher-button-solid' : 'teacher-button-outline')}
+                      onClick={() => setAssessmentViewMode('grid')}
+                    >
+                      <LayoutGrid className="mr-1 h-4 w-4" /> Grid
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="teacher-button-outline h-8 rounded-xl font-black"
+                    onClick={() => setAssessmentSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                  >
+                    <ArrowUpDown className="mr-1 h-4 w-4" />
+                    {assessmentSortOrder === 'asc' ? 'Date: Nearest' : 'Date: Latest'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="teacher-button-outline rounded-xl font-black"
+                    onClick={() => {
+                      router.push(`/dashboard/teacher/classes/${classId}/ai-draft`);
+                    }}
+                  >
+                    AI Draft Quiz
+                  </Button>
+                  <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={handleCreateAssessment}>+ New Assessment</Button>
+                </div>
+              </div>
+
+              <Tabs value={assessmentCategoryTab} onValueChange={(value) => setAssessmentCategoryTab(value as 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts')}>
+                <TabsList className="teacher-tab-list grid w-full grid-cols-2 sm:grid-cols-4">
+                  {ASSESSMENT_CATEGORIES.map((category) => (
+                    <TabsTrigger key={category.value} value={category.value} className="teacher-tab rounded-xl font-black">
+                      {category.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </CardContent>
+          </Card>
+
+          {Object.keys(categorizedAssessments).length === 0 ? (
+            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
+              <CardContent className="p-6 text-center text-muted-foreground">
+                No assessments in this category yet.
+              </CardContent>
+            </Card>
+>>>>>>> Stashed changes
           ) : (
             <div className="space-y-3">
               {assessments.map((a, i) => {
@@ -578,6 +1196,7 @@ export default function TeacherClassDetailPage() {
                 const typeIcon = a.type === 'exam' ? '📝' : a.type === 'assignment' ? '📋' : '❓';
                 const isPastDue = a.dueDate && new Date(a.dueDate) < new Date();
 
+<<<<<<< Updated upstream
                 return (
                   <motion.div
                     key={a.id}
@@ -594,6 +1213,32 @@ export default function TeacherClassDetailPage() {
                               <h4 className="font-semibold truncate">{a.title}</h4>
                               <Badge variant={a.isPublished ? 'default' : 'secondary'} className="shrink-0">
                                 {a.isPublished ? 'Published' : 'Draft'}
+=======
+                <div className={assessmentViewMode === 'grid' ? 'grid gap-3 md:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>
+                  {groupedAssessments.map((assessment, index) => {
+                    const categoryStyle = assessment.classRecordCategory === 'written_work'
+                      ? 'border-l-4 border-l-blue-500'
+                      : assessment.classRecordCategory === 'performance_task'
+                        ? 'border-l-4 border-l-emerald-500'
+                        : 'border-l-4 border-l-violet-500';
+
+                    return (
+                      <motion.div
+                        key={assessment.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.04, duration: 0.2 }}
+                      >
+                        <Card className={`group ${categoryStyle} border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] transition-shadow hover:shadow-md`}>
+                          <CardContent className="p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-semibold leading-tight truncate">{assessment.title}</p>
+                                <p className="text-xs capitalize text-muted-foreground mt-1">{assessment.type.replace(/_/g, ' ')}</p>
+                              </div>
+                              <Badge variant={assessment.isPublished ? 'default' : 'secondary'}>
+                                {assessment.isPublished ? 'Published' : 'Draft'}
+>>>>>>> Stashed changes
                               </Badge>
                             </div>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1.5">
@@ -607,6 +1252,7 @@ export default function TeacherClassDetailPage() {
                                 </span>
                               )}
                             </div>
+<<<<<<< Updated upstream
                           </div>
                           <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                             <Link href={`/dashboard/teacher/assessments/${a.id}`}>
@@ -624,6 +1270,28 @@ export default function TeacherClassDetailPage() {
                 );
               })}
             </div>
+=======
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>
+                                <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">View</Button>
+                              </Link>
+                              <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`}>
+                                <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">Edit</Button>
+                              </Link>
+                              <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteAssessment(assessment.id)}>
+                                Delete
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </section>
+            ))
+>>>>>>> Stashed changes
           )}
         </TabsContent>
 
@@ -631,14 +1299,14 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="announcements" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{announcements.length} announcements</p>
-            <Button size="sm" onClick={() => setShowCreateAnnouncement(true)}>+ New Announcement</Button>
+            <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setShowCreateAnnouncement(true)}>+ New Announcement</Button>
           </div>
           {announcements.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No announcements yet.</CardContent></Card>
+            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]"><CardContent className="p-6 text-center text-muted-foreground">No announcements yet.</CardContent></Card>
           ) : (
             <div className="space-y-3">
               {announcements.map((ann) => (
-                <Card key={ann.id}>
+                <Card key={ann.id} className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <p className="font-medium">{ann.title}</p>
@@ -663,249 +1331,10 @@ export default function TeacherClassDetailPage() {
             transition={{ duration: 0.3 }}
             className="space-y-4"
           >
-            {/* Quarter selector */}
-            <div className="flex gap-2 items-center flex-wrap">
-              {QUARTERS.map((q) => {
-                const record = classRecords.find((r) => r.gradingPeriod === q);
-                if (record) {
-                  return (
-                    <Button
-                      key={q}
-                      variant={selectedRecord?.id === record.id ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setSelectedRecord(record)}
-                    >
-                      {q}
-                      <Badge variant="secondary" className="ml-2 text-[10px]">
-                        {record.status}
-                      </Badge>
-                    </Button>
-                  );
-                }
-                return (
-                  <Button
-                    key={q}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleGenerateQuarter(q)}
-                    disabled={generatingQuarter}
-                  >
-                    + {q}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {!selectedRecord && (
-              <Card>
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  No class record yet. Click a quarter button above to generate one.
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Spreadsheet Header Info */}
-            {spreadsheet && (
-              <>
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Quarter: </span>
-                        <strong>{spreadsheet.header.quarter}</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Grade &amp; Section: </span>
-                        <strong>
-                          {spreadsheet.header.gradeLevel && `Grade ${spreadsheet.header.gradeLevel} - `}
-                          {spreadsheet.header.section || '—'}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Subject: </span>
-                        <strong>{spreadsheet.header.subject || '—'}</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Teacher: </span>
-                        <strong>{spreadsheet.header.teacher || '—'}</strong>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-2 mt-3">
-                      {selectedRecord?.status === 'draft' && (
-                        <Button size="sm" variant="outline" onClick={handleFinalizeRecord}>
-                          Finalize Quarter
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Spreadsheet Grid */}
-                <Card>
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-muted/70">
-                            <th
-                              className="sticky left-0 z-20 bg-muted/70 border px-2 py-1.5 text-left font-semibold min-w-[180px]"
-                              rowSpan={3}
-                            >
-                              Learner&apos;s Name
-                            </th>
-                            {spreadsheet.categories.map((cat) => (
-                              <th
-                                key={cat.id}
-                                colSpan={cat.items.length + 3}
-                                className="border px-2 py-1.5 text-center font-semibold bg-muted/50"
-                              >
-                                {cat.name} ({cat.weight}%)
-                              </th>
-                            ))}
-                            <th colSpan={2} className="border px-2 py-1.5 text-center font-semibold bg-muted/50">
-                              Grades
-                            </th>
-                          </tr>
-                          <tr className="bg-muted/40">
-                            {spreadsheet.categories.map((cat) => (
-                              <Fragment key={`header-${cat.id}`}>
-                                {cat.items.map((item) => (
-                                  <th key={item.id} className="border px-1.5 py-1 text-center font-medium min-w-[50px]">
-                                    <div className="flex flex-col items-center gap-0.5">
-                                      <span>{item.title}</span>
-                                      {item.assessmentId && selectedRecord?.status === 'draft' && (
-                                        <button
-                                          title="Sync scores from assessment"
-                                          onClick={() => handleSyncItem(item.id)}
-                                          disabled={syncingItemId === item.id}
-                                          className="text-[9px] text-indigo-500 hover:text-indigo-700 disabled:opacity-50 leading-none"
-                                        >
-                                          {syncingItemId === item.id ? '⟳' : '⇄ sync'}
-                                        </button>
-                                      )}
-                                    </div>
-                                  </th>
-                                ))}
-                                <th key={`${cat.id}-total`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[50px]">Total</th>
-                                <th key={`${cat.id}-ps`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[40px]">PS</th>
-                                <th key={`${cat.id}-ws`} className="border px-1.5 py-1 text-center font-medium bg-blue-50 min-w-[40px]">WS</th>
-                              </Fragment>
-                            ))}
-                            <th className="border px-1.5 py-1 text-center font-medium bg-yellow-50 min-w-[50px]">IG</th>
-                            <th className="border px-1.5 py-1 text-center font-medium bg-green-50 min-w-[50px]">QG</th>
-                          </tr>
-                          <tr className="bg-amber-50/50">
-                            {spreadsheet.categories.map((cat) => (
-                              <Fragment key={`hps-${cat.id}`}>
-                                {cat.items.map((item) => (
-                                  <td key={`hps-${item.id}`} className="border px-1.5 py-1 text-center font-semibold text-amber-700">
-                                    {item.hps ?? ''}
-                                  </td>
-                                ))}
-                                <td key={`hps-total-${cat.id}`} className="border px-1.5 py-1 text-center font-semibold text-amber-700">
-                                  {cat.items.reduce((s, i) => s + (i.hps || 0), 0) || ''}
-                                </td>
-                                <td key={`hps-ps-${cat.id}`} className="border px-1.5 py-1 text-center">—</td>
-                                <td key={`hps-ws-${cat.id}`} className="border px-1.5 py-1 text-center">—</td>
-                              </Fragment>
-                            ))}
-                            <td className="border px-1.5 py-1 text-center">—</td>
-                            <td className="border px-1.5 py-1 text-center">—</td>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {spreadsheet.students.map((student) => (
-                            <tr key={student.studentId} className="hover:bg-muted/20">
-                              <td className="sticky left-0 z-10 bg-white border px-2 py-1.5 font-medium whitespace-nowrap">
-                                {student.lastName}, {student.firstName}
-                              </td>
-                              {spreadsheet.categories.map((cat, catIdx) => {
-                                const catData = student.categories[catIdx];
-                                return (
-                                  <Fragment key={`${student.studentId}-${cat.id}`}>
-                                    {cat.items.map((item, itemIdx) => {
-                                      const score = catData?.scores[itemIdx];
-                                      const isEditing =
-                                        editingCell?.itemId === item.id &&
-                                        editingCell?.studentId === student.studentId;
-                                      return (
-                                        <td
-                                          key={`${student.studentId}-${item.id}`}
-                                          className={`border px-1 py-0.5 text-center cursor-pointer hover:bg-blue-50 ${
-                                            item.assessmentId ? 'bg-indigo-50/30' : ''
-                                          }`}
-                                          onClick={() =>
-                                            handleCellClick(item.id, student.studentId, score ?? null)
-                                          }
-                                        >
-                                          {isEditing ? (
-                                            <Input
-                                              ref={editRef}
-                                              type="number"
-                                              min={0}
-                                              value={editValue}
-                                              onChange={(e) => setEditValue(e.target.value)}
-                                              onBlur={handleCellSave}
-                                              onKeyDown={handleCellKeyDown}
-                                              className="h-6 w-14 text-xs text-center p-0 border-0 focus-visible:ring-1"
-                                            />
-                                          ) : (
-                                            <span className={score == null ? 'text-muted-foreground' : ''}>
-                                              {score ?? ''}
-                                            </span>
-                                          )}
-                                        </td>
-                                      );
-                                    })}
-                                    <td key={`${student.studentId}-total-${cat.id}`} className="border px-1 py-0.5 text-center font-medium bg-blue-50/50">
-                                      {catData?.total != null ? catData.total.toFixed(1) : ''}
-                                    </td>
-                                    <td key={`${student.studentId}-ps-${cat.id}`} className="border px-1 py-0.5 text-center bg-blue-50/50">
-                                      {catData?.ps != null ? catData.ps.toFixed(1) : ''}
-                                    </td>
-                                    <td key={`${student.studentId}-ws-${cat.id}`} className="border px-1 py-0.5 text-center bg-blue-50/50">
-                                      {catData?.ws != null ? catData.ws.toFixed(2) : ''}
-                                    </td>
-                                  </Fragment>
-                                );
-                              })}
-                              <td className="border px-1 py-0.5 text-center font-medium bg-yellow-50/50">
-                                {student.initialGrade != null ? student.initialGrade.toFixed(2) : ''}
-                              </td>
-                              <td
-                                className={`border px-1 py-0.5 text-center font-bold ${
-                                  student.quarterlyGrade != null
-                                    ? student.quarterlyGrade >= 75
-                                      ? 'text-green-700 bg-green-50'
-                                      : 'text-red-700 bg-red-50'
-                                    : ''
-                                }`}
-                              >
-                                {student.quarterlyGrade != null ? student.quarterlyGrade : ''}
-                              </td>
-                            </tr>
-                          ))}
-                          {spreadsheet.students.length === 0 && (
-                            <tr>
-                              <td
-                                colSpan={
-                                  1 +
-                                  spreadsheet.categories.reduce((s, c) => s + c.items.length + 3, 0) +
-                                  2
-                                }
-                                className="px-4 py-8 text-center text-muted-foreground"
-                              >
-                                No students enrolled in this class.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
+            <TeacherClassRecordWorkbook
+              state={classRecordState}
+              emptyMessage="No class record exists for this class yet. Generate a quarter workbook to begin."
+            />
           </motion.div>
         </TabsContent>
 
@@ -913,15 +1342,24 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="students" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{enrollments.length} students</p>
+<<<<<<< Updated upstream
             <Button size="sm" onClick={handleOpenAddStudents}>+ Add Student</Button>
+=======
+            <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/add`)}>+ Add Student</Button>
+>>>>>>> Stashed changes
           </div>
           {enrollments.length === 0 ? (
-            <Card><CardContent className="p-6 text-center text-muted-foreground">No students enrolled.</CardContent></Card>
+            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]"><CardContent className="p-6 text-center text-muted-foreground">No students enrolled.</CardContent></Card>
           ) : (
-            <Card>
+            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
               <Table>
                 <TableHeader>
+<<<<<<< Updated upstream
                   <TableRow>
+=======
+                  <TableRow className="border-[var(--teacher-outline)]">
+                    <TableHead>Student</TableHead>
+>>>>>>> Stashed changes
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>LRN</TableHead>
@@ -930,12 +1368,46 @@ export default function TeacherClassDetailPage() {
                 </TableHeader>
                 <TableBody>
                   {enrollments.map((e) => (
+<<<<<<< Updated upstream
                     <TableRow key={e.id}>
                       <TableCell>{e.student?.firstName} {e.student?.lastName}</TableCell>
+=======
+                    <TableRow key={e.id} className="border-[var(--teacher-outline)]">
+                      <TableCell>
+                        <Avatar className="h-8 w-8">
+                          {e.student?.profile?.profilePicture ? (
+                            <AvatarImage
+                              src={e.student.profile.profilePicture}
+                              alt={`${e.student?.firstName || ''} ${e.student?.lastName || ''}`.trim()}
+                            />
+                          ) : null}
+                          <AvatarFallback>
+                            {`${e.student?.firstName?.[0] || ''}${e.student?.lastName?.[0] || ''}`.toUpperCase() || 'S'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${e.studentId}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {e.student?.firstName} {e.student?.lastName}
+                        </Link>
+                      </TableCell>
+>>>>>>> Stashed changes
                       <TableCell className="text-muted-foreground">{e.student?.email}</TableCell>
                       <TableCell className="text-muted-foreground">{e.student?.lrn || '—'}</TableCell>
                       <TableCell className="text-right">
+<<<<<<< Updated upstream
                         <Button variant="destructive" size="sm" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
+=======
+                        <div className="inline-flex items-center gap-2">
+                          <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/${e.studentId}`)}>
+                            View Profile
+                          </Button>
+                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
+                        </div>
+>>>>>>> Stashed changes
                       </TableCell>
                     </TableRow>
                   ))}
@@ -945,6 +1417,7 @@ export default function TeacherClassDetailPage() {
           )}
         </TabsContent>
       </Tabs>
+    </TeacherPageShell>
 
       {/* Create Lesson Modal */}
       <Dialog open={showCreateLesson} onOpenChange={setShowCreateLesson}>
@@ -955,8 +1428,8 @@ export default function TeacherClassDetailPage() {
             <div><Label>Description (optional)</Label><Textarea value={lessonDesc} onChange={(e) => setLessonDesc(e.target.value)} placeholder="Brief description" /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateLesson(false)}>Cancel</Button>
-            <Button onClick={handleCreateLesson} disabled={!lessonTitle.trim()}>Create</Button>
+            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowCreateLesson(false)}>Cancel</Button>
+            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleCreateLesson} disabled={!lessonTitle.trim()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -988,9 +1461,17 @@ export default function TeacherClassDetailPage() {
             )}
           </div>
           <DialogFooter>
+<<<<<<< Updated upstream
             <Button variant="outline" onClick={() => setShowAddStudents(false)}>Cancel</Button>
             <Button onClick={handleAddStudents} disabled={selectedStudents.length === 0}>
               Add {selectedStudents.length} Student(s)
+=======
+            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowQuizGenerator(false)}>
+              Cancel
+            </Button>
+            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleGenerateQuizDraft} disabled={generatingQuiz}>
+              {generatingQuiz ? 'Generating...' : 'Generate Draft'}
+>>>>>>> Stashed changes
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1005,11 +1486,11 @@ export default function TeacherClassDetailPage() {
             <div><Label>Content</Label><Textarea value={annContent} onChange={(e) => setAnnContent(e.target.value)} placeholder="Announcement content" /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateAnnouncement(false)}>Cancel</Button>
-            <Button onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>Create</Button>
+            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowCreateAnnouncement(false)}>Cancel</Button>
+            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

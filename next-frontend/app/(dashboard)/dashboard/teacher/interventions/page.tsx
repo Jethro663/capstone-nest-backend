@@ -1,12 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+<<<<<<< Updated upstream
+=======
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Bot, Sparkles, Target, Trophy } from 'lucide-react';
+>>>>>>> Stashed changes
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
 import type { ClassItem } from '@/types/class';
 import type { LxpClassReport, TeacherInterventionQueueResponse } from '@/types/lxp';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,6 +23,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  TeacherEmptyState,
+  TeacherPageShell,
+  TeacherSectionCard,
+  TeacherStatCard,
+} from '@/components/teacher/TeacherPageShell';
 import { toast } from 'sonner';
 
 function studentName(entry: {
@@ -112,14 +122,15 @@ export default function TeacherInterventionsPage() {
   if (loadingClasses) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-24 rounded-lg" />
-        <Skeleton className="h-80 rounded-lg" />
+        <Skeleton className="h-44 rounded-[1.8rem]" />
+        <Skeleton className="h-24 rounded-[1.5rem]" />
+        <Skeleton className="h-[34rem] rounded-[1.8rem]" />
       </div>
     );
   }
 
   return (
+<<<<<<< Updated upstream
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -128,10 +139,21 @@ export default function TeacherInterventionsPage() {
             Threshold is fixed at 74% (LXP intervention trigger).
           </p>
         </div>
+=======
+    <TeacherPageShell
+      badge="Intervention Studio"
+      title="Intervention Management"
+      description={
+        thresholdLabel !== null
+          ? `Current intervention threshold: ${thresholdLabel}%. Use the queue below to assign AI plans, monitor progress, and close resolved cases faster.`
+          : 'Review active support cases, generated recommendations, and progression signals in one more interactive teacher queue.'
+      }
+      actions={
+>>>>>>> Stashed changes
         <select
           value={selectedClassId}
           onChange={(e) => setSelectedClassId(e.target.value)}
-          className="rounded-md border px-3 py-2 text-sm min-w-[260px]"
+          className="teacher-select min-w-[280px] text-sm"
         >
           <option value="">Select class...</option>
           {classes.map((entry) => (
@@ -140,77 +162,76 @@ export default function TeacherInterventionsPage() {
             </option>
           ))}
         </select>
-      </div>
-
+      }
+      stats={
+        <>
+          <TeacherStatCard
+            label="Active Cases"
+            value={report?.summary.activeCases ?? 0}
+            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} intervention load` : 'Select a class'}
+            icon={Target}
+            accent="rose"
+          />
+          <TeacherStatCard
+            label="Completed Cases"
+            value={report?.summary.completedCases ?? 0}
+            caption="Successfully resolved support runs"
+            icon={Sparkles}
+            accent="teal"
+          />
+          <TeacherStatCard
+            label="Average Delta"
+            value={
+              report?.summary.averageDelta !== null &&
+              report?.summary.averageDelta !== undefined
+                ? `${report.summary.averageDelta.toFixed(2)}%`
+                : '--'
+            }
+            caption="Score lift after interventions"
+            icon={Trophy}
+            accent="amber"
+          />
+          <TeacherStatCard
+            label="XP Momentum"
+            value={report?.leaderboard[0]?.xpTotal ?? 0}
+            caption="Top learner XP in this class"
+            icon={Bot}
+            accent="sky"
+          />
+        </>
+      }
+    >
       {!selectedClassId ? (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            Select a class to view intervention queue and reports.
-          </CardContent>
-        </Card>
+        <TeacherSectionCard
+          title="Pick a class first"
+          description="Once a class is selected, the intervention queue, outcome rows, and leaderboard will load here."
+        >
+          <TeacherEmptyState
+            title="No class selected yet"
+            description="Choose one of your classes from the selector above to start reviewing active support cases."
+          />
+        </TeacherSectionCard>
       ) : loadingData ? (
         <div className="space-y-4">
-          <Skeleton className="h-24 rounded-lg" />
-          <Skeleton className="h-80 rounded-lg" />
-          <Skeleton className="h-80 rounded-lg" />
+          <Skeleton className="h-24 rounded-[1.5rem]" />
+          <Skeleton className="h-[25rem] rounded-[1.8rem]" />
+          <Skeleton className="h-[20rem] rounded-[1.8rem]" />
         </div>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Class</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-semibold">
-                  {selectedClass?.subjectName ?? '--'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedClass?.section?.name ?? '--'}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Active Cases</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{report?.summary.activeCases ?? 0}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Completed Cases</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">{report?.summary.completedCases ?? 0}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Avg Delta</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold">
-                  {report?.summary.averageDelta !== null && report?.summary.averageDelta !== undefined
-                    ? `${report.summary.averageDelta.toFixed(2)}%`
-                    : '--'}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Active Intervention Queue</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(queue?.queue.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No active intervention cases in this class.
-                </p>
-              ) : (
+          <TeacherSectionCard
+            title="Active Intervention Queue"
+            description="Prioritize students, jump into AI-generated plans, and resolve finished support tracks without leaving the page."
+          >
+            {(queue?.queue.length ?? 0) === 0 ? (
+              <TeacherEmptyState
+                title="No active intervention cases"
+                description="This class is currently clear. New at-risk learners will appear here once intervention triggers fire."
+              />
+            ) : (
+              <div className="teacher-table-shell">
                 <Table>
+<<<<<<< Updated upstream
                   <TableHeader>
                     <TableRow>
                       <TableHead>Student</TableHead>
@@ -220,33 +241,78 @@ export default function TeacherInterventionsPage() {
                       <TableHead>Streak</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Action</TableHead>
+=======
+                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Student
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Trigger Score
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Progress
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        XP
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Stars
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Streak
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Action
+                      </TableHead>
+>>>>>>> Stashed changes
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="[&_tr:last-child]:border-0">
                     {queue?.queue.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium">
+                      <TableRow key={entry.id} className="teacher-table-row border-white/10">
+                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
                           {studentName(entry.student ?? {})}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
                           {entry.triggerScore !== null && entry.triggerScore !== undefined
                             ? `${entry.triggerScore.toFixed(1)}%`
                             : '--'}
                         </TableCell>
-                        <TableCell className="min-w-[180px]">
-                          <div className="space-y-1">
-                            <Progress value={entry.completionPercent} />
-                            <p className="text-xs text-muted-foreground">
-                              {entry.completedCheckpoints}/{entry.totalCheckpoints} checkpoints
+                        <TableCell className="min-w-[220px]">
+                          <div className="space-y-2">
+                            <Progress
+                              value={entry.completionPercent}
+                              className="teacher-progress-track h-3"
+                              indicatorClassName="teacher-progress-fill"
+                            />
+                            <p className="text-xs font-medium text-[var(--teacher-text-muted)]">
+                              {entry.completedCheckpoints}/{entry.totalCheckpoints} checkpoints completed
                             </p>
                           </div>
                         </TableCell>
+<<<<<<< Updated upstream
                         <TableCell>{entry.progress.xpTotal}</TableCell>
                         <TableCell>{entry.progress.streakDays}</TableCell>
+=======
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {entry.progress.xpTotal}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {entry.progress.starsTotal.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {entry.progress.streakDays}
+                        </TableCell>
+>>>>>>> Stashed changes
                         <TableCell>
-                          <Badge variant="destructive">Active</Badge>
+                          <Badge className="teacher-badge-danger border-0">Active</Badge>
                         </TableCell>
                         <TableCell className="text-right">
+<<<<<<< Updated upstream
                           <Button
                             size="sm"
                             variant="outline"
@@ -255,53 +321,89 @@ export default function TeacherInterventionsPage() {
                           >
                             {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
                           </Button>
+=======
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="teacher"
+                              className="rounded-xl"
+                              onClick={() => handleRecommend(entry.id)}
+                            >
+                              AI Plan
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="teacherOutline"
+                              className="rounded-xl"
+                              disabled={resolvingCaseId === entry.id}
+                              onClick={() => handleResolve(entry.id)}
+                            >
+                              {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
+                            </Button>
+                          </div>
+>>>>>>> Stashed changes
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </TeacherSectionCard>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Intervention Outcome Rows</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(report?.rows.length ?? 0) === 0 ? (
-                <p className="text-sm text-muted-foreground">No intervention rows available yet.</p>
-              ) : (
+          <TeacherSectionCard
+            title="Intervention Outcomes"
+            description="Compare baseline, current blended scores, and learner recovery deltas."
+          >
+            {(report?.rows.length ?? 0) === 0 ? (
+              <TeacherEmptyState
+                title="No intervention rows yet"
+                description="Outcome data will appear here after interventions begin collecting learner progress."
+              />
+            ) : (
+              <div className="teacher-table-shell">
                 <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Baseline</TableHead>
-                      <TableHead>Current</TableHead>
-                      <TableHead>Delta</TableHead>
+                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Student
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Status
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Baseline
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Current
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Delta
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="[&_tr:last-child]:border-0">
                     {report?.rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell className="font-medium">
+                      <TableRow key={row.id} className="teacher-table-row border-white/10">
+                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
                           {studentName(row.student ?? {})}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={row.status === 'active' ? 'destructive' : 'secondary'}>
+                          <Badge
+                            className={row.status === 'active' ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}
+                          >
                             {row.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
                           {row.triggerScore !== null ? `${row.triggerScore.toFixed(1)}%` : '--'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
                           {row.currentBlendedScore !== null
                             ? `${row.currentBlendedScore.toFixed(1)}%`
                             : '--'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
                           {row.improvementDelta !== null
                             ? `${row.improvementDelta > 0 ? '+' : ''}${row.improvementDelta.toFixed(1)}%`
                             : '--'}
@@ -310,11 +412,77 @@ export default function TeacherInterventionsPage() {
                     ))}
                   </TableBody>
                 </Table>
+<<<<<<< Updated upstream
               )}
             </CardContent>
           </Card>
         </>
       )}
     </div>
+=======
+              </div>
+            )}
+          </TeacherSectionCard>
+
+          <TeacherSectionCard
+            title="XP Leaderboard"
+            description="Celebrate momentum and identify who is responding best to intervention activities."
+          >
+            {(report?.leaderboard.length ?? 0) === 0 ? (
+              <TeacherEmptyState
+                title="No XP progress recorded"
+                description="Leaderboard rankings will appear as soon as students begin earning XP in their intervention track."
+              />
+            ) : (
+              <div className="teacher-table-shell">
+                <Table>
+                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Rank
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Student
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        XP
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Stars
+                      </TableHead>
+                      <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
+                        Streak
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="[&_tr:last-child]:border-0">
+                    {report?.leaderboard.map((row) => (
+                      <TableRow key={row.studentId} className="teacher-table-row border-white/10">
+                        <TableCell className="font-black text-[var(--teacher-text-strong)]">
+                          #{row.rank}
+                        </TableCell>
+                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                          {studentName(row.student ?? {})}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {row.xpTotal}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {row.starsTotal.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-[var(--teacher-text-strong)]">
+                          {row.streakDays}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TeacherSectionCard>
+        </>
+      )}
+    </TeacherPageShell>
+>>>>>>> Stashed changes
   );
 }

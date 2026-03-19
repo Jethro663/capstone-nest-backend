@@ -1,12 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { ClipboardList, FileUp, School2, Users } from 'lucide-react';
 import { rosterImportService, type RosterImportPreview, type PendingImportRow, type CommitStudentRow, type CommitPendingRow } from '@/services/roster-import-service';
 import { sectionService } from '@/services/section-service';
 import type { Section } from '@/types/section';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import {
+  AdminEmptyState,
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -65,16 +71,8 @@ export default function RosterImportPage() {
     if (!sectionId || !preview) return;
     try {
       setCommitting(true);
-      const registered: CommitStudentRow[] = preview.registered.map((r) => ({
-        userId: r.userId,
-        lrn: r.lrn,
-      }));
-      const pendingRows: CommitPendingRow[] = preview.pending.map((p) => ({
-        email: p.email,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        lrn: p.lrn,
-      }));
+      const registered: CommitStudentRow[] = preview.registered.map((r) => ({ userId: r.userId, lrn: r.lrn }));
+      const pendingRows: CommitPendingRow[] = preview.pending.map((p) => ({ email: p.email, firstName: p.firstName, lastName: p.lastName, lrn: p.lrn }));
       await rosterImportService.commit(sectionId, { registered, pending: pendingRows });
       toast.success('Roster import committed');
       setPreview(null);
@@ -88,119 +86,116 @@ export default function RosterImportPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Roster Import</h1>
-        <p className="text-muted-foreground">Upload a CSV file to bulk-import students into a section</p>
-      </div>
-
-      {/* Section selector + Upload */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Upload File</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div>
+    <AdminPageShell
+      badge="Admin Roster Import"
+      title="Roster Import Studio"
+      description="The import flow stays the same, but the page now feels like a proper admin workspace with a clearer upload area, preview stage, and pending queue."
+      stats={(
+        <>
+          <AdminStatCard label="Sections" value={sections.length} caption="Available for roster import" icon={School2} accent="emerald" />
+          <AdminStatCard label="Preview Rows" value={(preview?.registered.length ?? 0) + (preview?.pending.length ?? 0) + (preview?.errors.length ?? 0)} caption="Loaded in the current preview" icon={ClipboardList} accent="sky" />
+          <AdminStatCard label="Pending Rows" value={pending.length} caption="Waiting for section resolution" icon={Users} accent="amber" />
+          <AdminStatCard label="Import State" value={sectionId ? 'Ready' : 'Waiting'} caption={sectionId ? 'Section selected for import' : 'Choose a section first'} icon={FileUp} accent="rose" />
+        </>
+      )}
+    >
+      <AdminSectionCard title="Upload and Preview" description="Choose a section, upload your file, and move into preview without the old plain utility card.">
+        <div className="grid gap-4 xl:grid-cols-[1fr_1fr_auto]">
+          <div className="space-y-2">
             <Label>Section</Label>
-            <select
-              value={sectionId}
-              onChange={(e) => { setSectionId(e.target.value); setPreview(null); }}
-              className="w-full rounded-md border px-3 py-2 text-sm"
-            >
+            <select value={sectionId} onChange={(e) => { setSectionId(e.target.value); setPreview(null); }} className="admin-select w-full text-sm font-semibold">
               <option value="">Select a section</option>
               {sections.map((s) => (
                 <option key={s.id} value={s.id}>{s.name} (Grade {s.gradeLevel})</option>
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-4">
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="text-sm" />
-            <Button onClick={handleUpload} disabled={uploading || !sectionId}>
+          <div className="space-y-2">
+            <Label>Roster File</Label>
+            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="admin-input w-full rounded-2xl px-3 py-2 text-sm" />
+          </div>
+          <div className="flex items-end">
+            <Button className="admin-button-solid rounded-xl px-4 font-black" onClick={handleUpload} disabled={uploading || !sectionId}>
               {uploading ? 'Uploading...' : 'Upload & Preview'}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </AdminSectionCard>
 
-      {/* Preview */}
-      {preview && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                Preview — {preview.sectionMatch.name} (Grade {preview.sectionMatch.gradeLevel})
-              </CardTitle>
-              <div className="flex items-center gap-3">
-                <Badge variant="default">{preview.summary.registered} registered</Badge>
-                <Badge variant="secondary">{preview.summary.pending} pending</Badge>
-                {preview.summary.errors > 0 && <Badge variant="destructive">{preview.summary.errors} errors</Badge>}
-                <Button size="sm" onClick={handleCommit} disabled={committing || preview.summary.registered + preview.summary.pending === 0}>
-                  {committing ? 'Committing...' : 'Commit Import'}
-                </Button>
-              </div>
+      {preview ? (
+        <AdminSectionCard
+          title={`Preview — ${preview.sectionMatch.name} (Grade ${preview.sectionMatch.gradeLevel})`}
+          description="Review the import results before committing. The import logic itself is unchanged."
+          action={(
+            <div className="admin-controls">
+              <Badge variant="default">{preview.summary.registered} registered</Badge>
+              <Badge variant="secondary">{preview.summary.pending} pending</Badge>
+              {preview.summary.errors > 0 ? <Badge variant="destructive">{preview.summary.errors} errors</Badge> : null}
+              <Button size="sm" className="admin-button-solid rounded-xl font-black" onClick={handleCommit} disabled={committing || preview.summary.registered + preview.summary.pending === 0}>
+                {committing ? 'Committing...' : 'Commit Import'}
+              </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="max-h-96 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>LRN</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Details</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {preview.registered.map((r) => (
-                    <TableRow key={`reg-${r.rowNumber}`}>
-                      <TableCell>{r.rowNumber}</TableCell>
-                      <TableCell>{r.firstName} {r.lastName}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.email}</TableCell>
-                      <TableCell>{r.lrn || '—'}</TableCell>
-                      <TableCell><Badge variant="default">Registered</Badge></TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{r.status}</TableCell>
-                    </TableRow>
-                  ))}
-                  {preview.pending.map((p) => (
-                    <TableRow key={`pen-${p.rowNumber}`}>
-                      <TableCell>{p.rowNumber}</TableCell>
-                      <TableCell>{p.firstName} {p.lastName}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.email}</TableCell>
-                      <TableCell>{p.lrn || '—'}</TableCell>
-                      <TableCell><Badge variant="secondary">Pending</Badge></TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{p.reason}</TableCell>
-                    </TableRow>
-                  ))}
-                  {preview.errors.map((e) => (
-                    <TableRow key={`err-${e.rowNumber}`} className="bg-red-50">
-                      <TableCell>{e.rowNumber}</TableCell>
-                      <TableCell colSpan={2} className="text-muted-foreground">{e.email || '—'}</TableCell>
-                      <TableCell>—</TableCell>
-                      <TableCell><Badge variant="destructive">Error</Badge></TableCell>
-                      <TableCell className="text-xs text-red-600">{e.error}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Pending rows for selected section */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Pending Import Rows</CardTitle></CardHeader>
-        <CardContent>
-          {!sectionId ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Select a section to view pending rows.</p>
-          ) : loading ? (
-            <Skeleton className="h-24 rounded" />
-          ) : pending.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No pending import rows for this section.</p>
-          ) : (
+          )}
+        >
+          <div className="admin-table-shell max-h-[32rem] overflow-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="admin-table-head">
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>LRN</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {preview.registered.map((r) => (
+                  <TableRow key={`reg-${r.rowNumber}`}>
+                    <TableCell>{r.rowNumber}</TableCell>
+                    <TableCell>{r.firstName} {r.lastName}</TableCell>
+                    <TableCell className="text-muted-foreground">{r.email}</TableCell>
+                    <TableCell>{r.lrn || '—'}</TableCell>
+                    <TableCell><Badge variant="default">Registered</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.status}</TableCell>
+                  </TableRow>
+                ))}
+                {preview.pending.map((p) => (
+                  <TableRow key={`pen-${p.rowNumber}`}>
+                    <TableCell>{p.rowNumber}</TableCell>
+                    <TableCell>{p.firstName} {p.lastName}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.email}</TableCell>
+                    <TableCell>{p.lrn || '—'}</TableCell>
+                    <TableCell><Badge variant="secondary">Pending</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{p.reason}</TableCell>
+                  </TableRow>
+                ))}
+                {preview.errors.map((e) => (
+                  <TableRow key={`err-${e.rowNumber}`} className="bg-rose-50/60">
+                    <TableCell>{e.rowNumber}</TableCell>
+                    <TableCell colSpan={2} className="text-muted-foreground">{e.email || '—'}</TableCell>
+                    <TableCell>—</TableCell>
+                    <TableCell><Badge variant="destructive">Error</Badge></TableCell>
+                    <TableCell className="text-xs text-rose-600">{e.error}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </AdminSectionCard>
+      ) : null}
+
+      <AdminSectionCard title="Pending Import Rows" description="Keep track of unresolved import rows for the selected section in a stronger queue panel.">
+        {!sectionId ? (
+          <AdminEmptyState title="Select a section to view pending rows" description="The pending queue will load here as soon as a section is selected." />
+        ) : loading ? (
+          <Skeleton className="h-24 rounded-xl" />
+        ) : pending.length === 0 ? (
+          <AdminEmptyState title="No pending import rows" description="This section does not currently have unresolved imported student rows." />
+        ) : (
+          <div className="admin-table-shell">
+            <Table>
+              <TableHeader className="admin-table-head">
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
@@ -221,9 +216,9 @@ export default function RosterImportPage() {
                 ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+          </div>
+        )}
+      </AdminSectionCard>
+    </AdminPageShell>
   );
 }

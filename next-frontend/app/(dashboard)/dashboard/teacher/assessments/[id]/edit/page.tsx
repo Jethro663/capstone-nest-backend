@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { ArrowLeft, ClipboardList, FileCog, Gauge, Save, Send } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { Assessment, AssessmentQuestion, CreateQuestionDto, UpdateQuestionDto } from '@/types/assessment';
 import type { ClassRecordCategory } from '@/types/assessment';
+import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
+import { cn } from '@/utils/cn';
 
 /* ── Question type metadata ─────────────────────────── */
 const QUESTION_TYPES = [
@@ -290,6 +293,7 @@ export default function AssessmentEditorPage() {
 
   /* ── RENDER ────────────────────────────────────────── */
   return (
+<<<<<<< Updated upstream
     <div className="max-w-3xl mx-auto space-y-6 py-6 pb-24">
       {/* ════ Top bar ════ */}
       <div className="flex items-center justify-between gap-4">
@@ -308,34 +312,123 @@ export default function AssessmentEditorPage() {
         </div>
       </div>
 
+=======
+    <TeacherPageShell
+      className="mx-auto max-w-6xl"
+      badge="Assessment Editor"
+      title={title || assessment.title || 'Assessment Draft'}
+      description="Shape instructions, questions, file rules, and publishing controls from one teacher-themed editor."
+      actions={(
+        <>
+          <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <Button
+            size="sm"
+            className="teacher-button-solid rounded-xl font-black"
+            onClick={handleUpdateAssessment}
+            disabled={!hasPendingChanges || saving}
+          >
+            <Save className="h-4 w-4" />
+            {saving ? 'Updating…' : 'Update Assessment'}
+          </Button>
+          <Button
+            size="sm"
+            className={assessment.isPublished ? 'teacher-button-outline rounded-xl font-black' : 'teacher-button-solid rounded-xl font-black'}
+            onClick={handleTogglePublish}
+            disabled={saving}
+          >
+            <Send className="h-4 w-4" />
+            {assessment.isPublished ? 'Unpublish' : 'Publish'}
+          </Button>
+        </>
+      )}
+      stats={(
+        <>
+          <TeacherStatCard label="Questions" value={questions.length} caption="Cards currently in this assessment" icon={ClipboardList} accent="sky" />
+          <TeacherStatCard label="Total Points" value={totalPoints} caption="Calculated from all question weights" icon={Gauge} accent="teal" />
+          <TeacherStatCard label="Passing Score" value={`${passingScore}%`} caption="Current threshold for success" icon={Gauge} accent="amber" />
+          <TeacherStatCard label="Mode" value={assessmentType === 'file_upload' ? 'File Upload' : 'Assessment'} caption={assessment.isPublished ? 'Published and live' : 'Draft editing mode'} icon={FileCog} accent="rose" />
+        </>
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <TeacherSectionCard
+        title="Assessment Controls"
+        description="Switch between delivery modes, move around the editor, and keep the assessment aligned with the current teacher theme."
+      >
+        <div className="space-y-4">
+          <div className="flex max-w-full flex-wrap gap-2 rounded-2xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={assessmentType === 'file_upload' ? 'outline' : 'default'}
+              className={cn('h-9 rounded-xl font-black', assessmentType === 'file_upload' ? 'teacher-button-outline' : 'teacher-button-solid')}
+              onClick={switchToAssessmentMode}
+            >
+              Assessment Mode
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={assessmentType === 'file_upload' ? 'default' : 'outline'}
+              className={cn('h-9 rounded-xl font-black', assessmentType === 'file_upload' ? 'teacher-button-solid' : 'teacher-button-outline')}
+              onClick={switchToFileUploadMode}
+            >
+              File Upload Mode
+            </Button>
+          </div>
+
+          <Tabs value={editorTab} onValueChange={(value) => setEditorTab(value as 'questions' | 'fileUpload' | 'settings')}>
+            <TabsList className="teacher-tab-list grid w-full grid-cols-2">
+              <TabsTrigger className="teacher-tab rounded-xl font-black" value={assessmentType === 'file_upload' ? 'fileUpload' : 'questions'}>
+                {assessmentType === 'file_upload' ? 'File Upload' : 'Questions'}
+              </TabsTrigger>
+              <TabsTrigger className="teacher-tab rounded-xl font-black" value="settings">Settings</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      </TeacherSectionCard>
+
+>>>>>>> Stashed changes
       {/* ════ Title & Description (Forms-like header card) ════ */}
-      <Card className="border-t-4 border-t-primary">
-        <CardContent className="p-5 space-y-3">
+      <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+        <CardContent className="space-y-4 p-6 md:p-7">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={handleSaveSettings}
             placeholder="Untitled assessment"
-            className="text-2xl font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
+            className="teacher-input rounded-none border-0 border-b border-[var(--teacher-outline-strong)] bg-transparent px-0 text-3xl font-black text-[var(--teacher-text-strong)] focus-visible:border-[var(--teacher-accent)] focus-visible:ring-0"
           />
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onBlur={handleSaveSettings}
             placeholder="Assessment description (optional)"
-            className="text-sm text-muted-foreground border-0 border-b rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary"
+            className="teacher-input rounded-none border-0 border-b border-[var(--teacher-outline-strong)] bg-transparent px-0 text-sm text-[var(--teacher-text-muted)] focus-visible:border-[var(--teacher-accent)] focus-visible:ring-0"
           />
+<<<<<<< Updated upstream
           <div className="flex items-center gap-4 text-sm text-muted-foreground pt-1">
             <span>Total: <strong className="text-foreground">{totalPoints} pts</strong></span>
             <span>Questions: <strong className="text-foreground">{questions.length}</strong></span>
             <span>Passing: <strong className="text-foreground">{assessment.passingScore ?? 60}%</strong></span>
             <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className="ml-auto">
+=======
+          <div className="flex flex-wrap items-center gap-4 pt-1 text-sm text-[var(--teacher-text-muted)]">
+            <span>Total: <strong className="text-[var(--teacher-text-strong)]">{totalPoints} pts</strong></span>
+            <span>Questions: <strong className="text-[var(--teacher-text-strong)]">{questions.length}</strong></span>
+            <span>Passing: <strong className="text-[var(--teacher-text-strong)]">{passingScore}%</strong></span>
+            <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className={cn('ml-auto', assessment.isPublished ? 'border border-emerald-400/30 bg-emerald-400/12 text-emerald-100' : 'border border-amber-400/30 bg-amber-400/12 text-amber-100')}>
+>>>>>>> Stashed changes
               {assessment.isPublished ? 'Published' : 'Draft'}
             </Badge>
           </div>
         </CardContent>
       </Card>
 
+<<<<<<< Updated upstream
       {/* ════ Tabbed Settings Panel ════ */}
       <AnimatePresence>
         {showSettings && (
@@ -374,8 +467,256 @@ export default function AssessmentEditorPage() {
                           <option value="exam">Exam</option>
                           <option value="assignment">Assignment</option>
                         </select>
+=======
+      {editorTab === 'settings' && (
+        <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+          <CardContent className="p-5 space-y-6">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-3">
+              <p className="text-sm font-semibold">Deadline (required first)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Due Date &amp; Time</Label>
+                  <Input className="teacher-input" type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Close assessment automatically at due date</Label>
+                  <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                    <input
+                      type="checkbox"
+                      checked={closeWhenDue}
+                      onChange={(e) => setCloseWhenDue(e.target.checked)}
+                    />
+                    Block new attempts after due date
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+              <p className="text-sm font-semibold">Delivery &amp; Anti-cheat</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Randomize questions and options per student</Label>
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                  <input
+                    type="checkbox"
+                    checked={randomizeQuestions}
+                    onChange={(e) => setRandomizeQuestions(e.target.checked)}
+                  />
+                  Enable randomized order for each student attempt
+                </label>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Timed questions</Label>
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                  <input
+                    type="checkbox"
+                    checked={timedQuestionsEnabled}
+                    onChange={(e) => {
+                      setTimedQuestionsEnabled(e.target.checked);
+                      if (!e.target.checked) setQuestionTimeLimitSeconds('');
+                    }}
+                  />
+                  Enable timer per question
+                </label>
+              </div>
+              {timedQuestionsEnabled && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Seconds per question</Label>
+                  <Input className="teacher-input" 
+                    type="number"
+                    min={5}
+                    value={questionTimeLimitSeconds}
+                    onChange={(e) =>
+                      setQuestionTimeLimitSeconds(
+                        e.target.value === '' ? '' : Number(e.target.value),
+                      )
+                    }
+                    placeholder="e.g. 30"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-xs">Strict mode</Label>
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                  <input
+                    type="checkbox"
+                    checked={strictMode}
+                    onChange={(e) => setStrictMode(e.target.checked)}
+                  />
+                  Students must answer current question before moving next and cannot go back
+                </label>
+              </div>
+            </div>
+
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+              <p className="text-sm font-semibold">General</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {assessmentType !== 'file_upload' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Type</Label>
+                    <select
+                      value={assessmentType}
+                      onChange={(e) => setAssessmentType(e.target.value)}
+                      className="teacher-select w-full"
+                    >
+                      <option value="quiz">Quiz</option>
+                      <option value="exam">Exam</option>
+                      <option value="assignment">Assignment</option>
+                    </select>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Class Record Category</Label>
+                  <select
+                    value={classRecordCategory}
+                    onChange={(e) => setClassRecordCategory(e.target.value)}
+                    className="teacher-select w-full"
+                  >
+                    <option value="">None</option>
+                    <option value="written_work">Written Work</option>
+                    <option value="performance_task">Performance Task</option>
+                    <option value="quarterly_assessment">Quarterly Assessment</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Quarter</Label>
+                  <select
+                    value={quarter}
+                    onChange={(e) => setQuarter(e.target.value)}
+                    className="teacher-select w-full"
+                  >
+                    <option value="">None</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+              <p className="text-sm font-semibold">Attempts &amp; Feedback</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Time Limit (minutes)</Label>
+                  <Input className="teacher-input" 
+                    type="number"
+                    min={1}
+                    value={timeLimitMinutes}
+                    onChange={(e) => setTimeLimitMinutes(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="No limit"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Max Attempts</Label>
+                  <Input className="teacher-input"  type="number" min={1} value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Passing Score (%)</Label>
+                  <Input className="teacher-input"  type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Feedback Level</Label>
+                  <select
+                    value={feedbackLevel}
+                    onChange={(e) => setFeedbackLevel(e.target.value)}
+                    className="teacher-select w-full"
+                  >
+                    <option value="immediate">Immediate</option>
+                    <option value="standard">Standard</option>
+                    <option value="detailed">Detailed</option>
+                  </select>
+                </div>
+                {feedbackLevel !== 'immediate' && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Feedback Delay (hours)</Label>
+                    <Input className="teacher-input"  type="number" min={0} value={feedbackDelayHours} onChange={(e) => setFeedbackDelayHours(Number(e.target.value))} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {assessmentType === 'file_upload' && (
+              <>
+                <Separator />
+
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold">Rubric review workflow</p>
+                      <p className="text-xs text-muted-foreground">
+                        Upload PDF, DOCX, or TXT criteria, then review the parsed rubric before students use it.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="capitalize">
+                      {rubricParseStatus || 'not attached'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex items-center justify-center rounded-md border px-3 h-9 text-sm cursor-pointer hover:bg-muted transition-colors">
+                      {rubricUploading ? 'Uploading...' : 'Upload rubric'}
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleRubricUpload(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {rubricSourceFile && (
+                      <span className="text-xs text-muted-foreground">
+                        {rubricSourceFile.originalName}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold">Reviewed rubric criteria</p>
+                      <Button type="button" size="sm" variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={addRubricCriterion}>
+                        Add Criterion
+                      </Button>
+                    </div>
+
+                    {rubricCriteria.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No rubric criteria yet. Upload a rubric or add criteria manually.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {rubricCriteria.map((criterion, index) => (
+                          <div key={`${criterion.id}-${index}`} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1.3fr_1fr_120px_auto]">
+                            <Input className="teacher-input" 
+                              value={criterion.title}
+                              onChange={(e) => handleRubricCriterionChange(index, 'title', e.target.value)}
+                              placeholder="Criterion title"
+                            />
+                            <Input className="teacher-input" 
+                              value={criterion.description || ''}
+                              onChange={(e) => handleRubricCriterionChange(index, 'description', e.target.value)}
+                              placeholder="Optional description"
+                            />
+                            <Input className="teacher-input" 
+                              type="number"
+                              min={0}
+                              value={criterion.points}
+                              onChange={(e) => handleRubricCriterionChange(index, 'points', Number(e.target.value))}
+                              placeholder="Points"
+                            />
+                            <Button type="button" size="sm" variant="ghost" className="teacher-button-danger rounded-xl font-black" onClick={() => removeRubricCriterion(index)}>
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+>>>>>>> Stashed changes
                       </div>
 
+<<<<<<< Updated upstream
                       <div className="space-y-1.5">
                         <Label className="text-xs">Class Record Category</Label>
                         <select
@@ -414,12 +755,99 @@ export default function AssessmentEditorPage() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.2 }}
                       className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+=======
+                    <div className="flex justify-end">
+                      <Button type="button" size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => void handleSaveRubricReview()} disabled={rubricSaving}>
+                        {rubricSaving ? 'Saving...' : 'Save Rubric Review'}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end">
+              <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
+                {saving ? 'Updating…' : 'Update Assessment'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {editorTab === 'fileUpload' && assessmentType === 'file_upload' && (
+        <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+          <CardContent className="p-5 space-y-4">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+              <p className="text-sm font-semibold">File Upload Assessment</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Instruction for students</Label>
+                <Textarea className="teacher-input" 
+                  value={fileUploadInstructions}
+                  onChange={(e) => setFileUploadInstructions(e.target.value)}
+                  rows={4}
+                  placeholder="Add clear instructions for student file submission"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Allowed file type groups</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {FILE_UPLOAD_TYPE_GROUPS.map((group) => (
+                    <label key={group.key} className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isGroupSelected(group.key)}
+                        onChange={(e) => toggleFileGroup(group.key, e.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium">{group.label}</span>
+                        <span className="block text-xs text-muted-foreground">.{group.extensions.join(', .')}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs">Student file size limit</Label>
+                <div className="h-10 rounded-md border px-3 text-sm flex items-center">
+                  {(maxUploadSizeBytes / (1024 * 1024)).toFixed(0)} MB maximum per upload
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Optional reference file for students</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center justify-center rounded-md border px-3 h-9 text-sm cursor-pointer hover:bg-muted transition-colors">
+                    Upload reference file
+                    <input
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleTeacherAttachmentUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {teacherAttachmentFile && (
+                    <button
+                      type="button"
+                      onClick={() => void assessmentService.downloadTeacherAttachment(
+                        assessmentId,
+                        teacherAttachmentFile.originalName,
+                      )}
+                      className="text-sm underline underline-offset-2"
+>>>>>>> Stashed changes
                     >
                       <div className="space-y-1.5">
                         <Label className="text-xs">Due Date</Label>
                         <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                       </div>
 
+<<<<<<< Updated upstream
                       <div className="space-y-1.5">
                         <Label className="text-xs">Time Limit (minutes)</Label>
                         <Input
@@ -492,6 +920,31 @@ export default function AssessmentEditorPage() {
 
       {/* ════ Question Cards (inline, Forms-style) ════ */}
       {questions.map((q, i) => {
+=======
+            <div className="flex justify-end">
+              <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={handleUpdateAssessment} disabled={!hasPendingChanges || saving}>
+                {saving ? 'Updating…' : 'Update Assessment'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ════ Question Cards (inline, Forms-style) ════ */}
+      {editorTab === 'questions' && assessmentType === 'file_upload' && (
+        <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+          <CardContent className="p-5 space-y-2 text-sm text-[var(--teacher-text-muted)]">
+            <p className="font-medium text-[var(--teacher-text-strong)]">File upload mode enabled</p>
+            <p>
+              This assessment uses instruction + file submission instead of question cards.
+              Configure all file-upload settings under the <strong>Settings</strong> tab.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {editorTab === 'questions' && assessmentType !== 'file_upload' && questions.map((q, i) => {
+>>>>>>> Stashed changes
         const isEditing = editingQId === q.id;
 
         if (isEditing && draftQuestion) {
@@ -514,7 +967,7 @@ export default function AssessmentEditorPage() {
         }
 
         return (
-          <Card key={q.id} className="group hover:shadow-md transition-shadow cursor-pointer" onClick={() => startEditQuestion(q)}>
+          <Card key={q.id} className="group cursor-pointer overflow-hidden rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.84),rgba(30,41,59,0.78))] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[0_28px_60px_-36px_rgba(2,6,23,0.68)]" onClick={() => startEditQuestion(q)}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 mb-1.5">
@@ -523,24 +976,29 @@ export default function AssessmentEditorPage() {
                   <span className="text-xs text-muted-foreground">{q.points} pt{q.points !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); startEditQuestion(q); }}>Edit</Button>
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q.id); }}>Delete</Button>
+                  <Button variant="ghost" size="sm" className="teacher-button-outline h-7 rounded-lg px-2 text-xs font-black" onClick={(e) => { e.stopPropagation(); startEditQuestion(q); }}>Edit</Button>
+                  <Button variant="ghost" size="sm" className="teacher-button-danger h-7 rounded-lg px-2 text-xs font-black" onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(q.id); }}>Delete</Button>
                 </div>
               </div>
-              <p className="font-medium text-sm">{q.content}</p>
+              <p className="font-medium text-sm text-[var(--teacher-text-strong)]">{q.content}</p>
               {q.imageUrl && (
                 <div className="mt-2">
                   <img
                     src={q.imageUrl}
                     alt="Question image"
-                    className="max-h-40 rounded-md border object-contain"
+                    className="max-h-40 rounded-md border border-[var(--teacher-outline-strong)] object-contain"
                   />
                 </div>
               )}
               {q.options && q.options.length > 0 && (
                 <ul className="mt-2 space-y-0.5 text-sm">
+<<<<<<< Updated upstream
                   {q.options.sort((a, b) => a.order - b.order).map((opt) => (
                     <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-green-600 font-medium' : 'text-muted-foreground'}`}>
+=======
+                  {[...q.options].sort((a, b) => a.order - b.order).map((opt) => (
+                    <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-emerald-200 font-medium' : 'text-[var(--teacher-text-muted)]'}`}>
+>>>>>>> Stashed changes
                       <span className="w-3">{opt.isCorrect ? '✓' : '○'}</span>{opt.text}
                     </li>
                   ))}
@@ -566,13 +1024,27 @@ export default function AssessmentEditorPage() {
       )}
 
       {/* ════ Add Question Bar ════ */}
+<<<<<<< Updated upstream
       {!addingType && (
         <Card className="border-dashed">
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground mb-2 font-medium">Add question</p>
             <div className="flex flex-wrap gap-2">
+=======
+      {editorTab === 'questions' && assessmentType !== 'file_upload' && !addingType && (
+        <Card className="overflow-hidden rounded-[1.6rem] border border-dashed border-[var(--teacher-outline)] bg-[rgba(15,23,42,0.62)]">
+          <CardContent className="p-5">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--teacher-accent)]/14 text-[var(--teacher-accent-strong)]">+</div>
+              <div>
+                <p className="text-sm font-black text-[var(--teacher-text-strong)]">Add new question</p>
+                <p className="text-xs text-[var(--teacher-text-muted)]">Pick a response type to add the next card.</p>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+>>>>>>> Stashed changes
               {QUESTION_TYPES.map((t) => (
-                <Button key={t.value} variant="outline" size="sm" className="text-xs" onClick={() => startAddQuestion(t.value)}>
+                <Button key={t.value} variant="outline" size="sm" className="teacher-button-outline h-16 justify-start rounded-2xl px-4 text-left text-sm font-black" onClick={() => startAddQuestion(t.value)}>
                   + {t.label}
                 </Button>
               ))}
@@ -580,7 +1052,8 @@ export default function AssessmentEditorPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </TeacherPageShell>
   );
 }
 
@@ -621,12 +1094,12 @@ function QuestionEditCard({
   };
 
   return (
-    <Card className="border-primary shadow-md">
+    <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-accent)]/35 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(30,41,59,0.84))] shadow-[0_30px_60px_-38px_rgba(2,6,23,0.72)]">
       <CardContent className="p-5 space-y-4">
         {/* header */}
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-primary bg-primary/10 rounded px-1.5 py-0.5">Q{index + 1}</span>
-          <Badge variant="secondary" className="text-[10px]">{draft.type.replace(/_/g, ' ')}</Badge>
+          <span className="rounded px-1.5 py-0.5 text-xs font-bold text-[var(--teacher-accent-strong)] bg-[var(--teacher-accent)]/10">Q{index + 1}</span>
+          <Badge variant="secondary" className="border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-[10px] text-[var(--teacher-text-strong)]">{draft.type.replace(/_/g, ' ')}</Badge>
         </div>
 
         {/* question text */}
@@ -635,7 +1108,7 @@ function QuestionEditCard({
           onChange={(e) => setField('content', e.target.value)}
           placeholder="Type your question here…"
           rows={2}
-          className="text-sm"
+          className="teacher-input border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-sm text-[var(--teacher-text-strong)]"
           autoFocus
         />
 
@@ -645,12 +1118,12 @@ function QuestionEditCard({
             <img
               src={draft.imageUrl}
               alt="Question image"
-              className="max-h-48 rounded-md border object-contain"
+              className="max-h-48 rounded-md border border-[var(--teacher-outline)] object-contain"
             />
             <Button
               variant="destructive"
               size="sm"
-              className="absolute top-1 right-1 h-6 px-2 text-xs opacity-0 group-hover/img:opacity-100 transition-opacity"
+              className="teacher-button-danger absolute top-1 right-1 h-6 px-2 text-xs opacity-0 group-hover/img:opacity-100 transition-opacity"
               onClick={() => setField('imageUrl', '')}
             >
               ✕
@@ -659,7 +1132,7 @@ function QuestionEditCard({
         )}
         {questionId && (
           <div>
-            <Label htmlFor={`img-${questionId}`} className="text-xs cursor-pointer inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+            <Label htmlFor={`img-${questionId}`} className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-[var(--teacher-text-muted)] transition-colors hover:text-[var(--teacher-text-strong)]">
               📷 {draft.imageUrl ? 'Replace image' : 'Add image'}
             </Label>
             <input
@@ -676,11 +1149,11 @@ function QuestionEditCard({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Points</Label>
-            <Input type="number" min={0} value={draft.points} onChange={(e) => setField('points', Number(e.target.value))} className="h-8 text-sm" />
+            <Input type="number" min={0} value={draft.points} onChange={(e) => setField('points', Number(e.target.value))} className="teacher-input h-8 border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-sm text-[var(--teacher-text-strong)]" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Explanation (optional)</Label>
-            <Input value={draft.explanation} onChange={(e) => setField('explanation', e.target.value)} placeholder="Shown after grading" className="h-8 text-sm" />
+            <Input value={draft.explanation} onChange={(e) => setField('explanation', e.target.value)} placeholder="Shown after grading" className="teacher-input h-8 border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-sm text-[var(--teacher-text-strong)]" />
           </div>
         </div>
 
@@ -696,7 +1169,7 @@ function QuestionEditCard({
                     name="correct-option"
                     checked={opt.isCorrect}
                     onChange={() => toggleCorrect(i)}
-                    className="accent-primary"
+                  className="accent-primary"
                     title="Mark as correct"
                   />
                 ) : (
@@ -704,7 +1177,7 @@ function QuestionEditCard({
                     type="checkbox"
                     checked={opt.isCorrect}
                     onChange={() => toggleCorrect(i)}
-                    className="accent-primary"
+                  className="accent-primary"
                     title="Mark as correct"
                   />
                 )}
@@ -716,15 +1189,15 @@ function QuestionEditCard({
                     setField('options', newOpts);
                   }}
                   placeholder={`Option ${i + 1}`}
-                  className="flex-1 h-8 text-sm"
+                  className="teacher-input h-8 flex-1 border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-sm text-[var(--teacher-text-strong)]"
                 />
                 {draft.type !== 'true_false' && (
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-destructive" onClick={removeOption.bind(null, i)}>✕</Button>
+                  <Button variant="ghost" size="sm" className="teacher-button-danger h-7 rounded-lg px-2 font-black" onClick={removeOption.bind(null, i)}>✕</Button>
                 )}
               </div>
             ))}
             {draft.type !== 'true_false' && (
-              <Button variant="outline" size="sm" className="text-xs" onClick={addOption}>+ Add option</Button>
+              <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl text-xs font-black" onClick={addOption}>+ Add option</Button>
             )}
           </div>
         )}
@@ -735,12 +1208,12 @@ function QuestionEditCard({
         <div className="flex items-center justify-between">
           <div>
             {onDelete && (
-              <Button variant="ghost" size="sm" className="text-destructive text-xs" onClick={onDelete}>Delete question</Button>
+              <Button variant="ghost" size="sm" className="teacher-button-danger rounded-xl text-xs font-black" onClick={onDelete}>Delete question</Button>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-            <Button size="sm" onClick={onSave} disabled={!draft.content.trim()}>Save</Button>
+            <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={onCancel}>Cancel</Button>
+            <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={onSave} disabled={!draft.content.trim()}>Save</Button>
           </div>
         </div>
       </CardContent>
