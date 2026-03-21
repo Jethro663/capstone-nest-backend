@@ -71,14 +71,14 @@ export function RoleProfilePage({
             </div>
           ) : null}
 
-          <Card className={cn('overflow-hidden rounded-[1.5rem] border-[1.5px] shadow-sm transition-colors', isTeacher ? 'teacher-panel border-white/30' : isAdmin ? 'admin-panel border-white/30' : 'border-slate-200 hover:border-red-200')}>
-            <div className={cn('border-b px-6 py-4', isTeacher ? 'border-[var(--teacher-outline)] bg-white/35' : isAdmin ? 'border-[var(--admin-outline)] bg-white/35' : 'border-slate-100 bg-slate-50/50')}>
+          <Card className={cn('overflow-hidden rounded-[1.5rem] border-[1.5px] shadow-sm transition-colors', isTeacher ? 'teacher-panel border-[var(--teacher-outline)]' : isAdmin ? 'admin-panel border-white/30' : 'student-panel border-[var(--student-outline)]')}>
+            <div className={cn('border-b px-6 py-4', isTeacher ? 'border-[var(--teacher-outline)] bg-white/6' : isAdmin ? 'border-[var(--admin-outline)] bg-white/35' : 'border-[var(--student-outline)] bg-[var(--student-surface-soft)]/80')}>
               <h3 className={cn('flex items-center gap-2 text-sm font-black uppercase tracking-widest', isTeacher ? 'text-[var(--teacher-text-strong)]' : isAdmin ? 'text-[var(--admin-text-strong)]' : 'text-slate-900')}>
                 <ShieldCheck className={cn('h-4 w-4', isTeacher ? 'text-[var(--teacher-accent)]' : isAdmin ? 'text-[var(--admin-accent)]' : 'text-red-500')} /> Account Information
               </h3>
             </div>
             <CardContent className="space-y-6 p-6">
-              <div className={cn('rounded-2xl px-4 py-3 text-sm', isTeacher ? 'teacher-soft-panel text-[var(--teacher-text-muted)]' : isAdmin ? 'admin-soft-panel text-[var(--admin-text-muted)]' : 'border border-slate-200 bg-slate-50 text-slate-600')}>
+              <div className={cn('rounded-2xl px-4 py-3 text-sm', isTeacher ? 'teacher-soft-panel text-[var(--teacher-text-muted)]' : isAdmin ? 'admin-soft-panel text-[var(--admin-text-muted)]' : 'border border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]')}>
                 {subtitle}
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -88,14 +88,14 @@ export function RoleProfilePage({
                   ['Last Name', user?.lastName ?? ''],
                 ].map(([label, value]) => (
                   <div key={label} className="space-y-1.5">
-                    <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-slate-400')}>{label}</Label>
-                    <Input className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'border-slate-200')} value={value} disabled />
+                    <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--student-text-muted)]')}>{label}</Label>
+                    <Input className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'student-input')} value={value} disabled />
                   </div>
                 ))}
               </div>
               <div className="space-y-1.5">
-                <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-slate-400')}>Email Address</Label>
-                <Input className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'border-slate-200')} value={user?.email ?? ''} disabled />
+                <Label className={cn('text-[10px] font-black uppercase', isTeacher ? 'text-[var(--teacher-text-muted)]' : isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--student-text-muted)]')}>Email Address</Label>
+                <Input className={cn('rounded-xl', isTeacher ? 'teacher-input' : isAdmin ? 'admin-input' : 'student-input')} value={user?.email ?? ''} disabled />
               </div>
             </CardContent>
           </Card>

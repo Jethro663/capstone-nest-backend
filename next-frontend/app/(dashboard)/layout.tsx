@@ -16,6 +16,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const shouldRedirect = !loading && (!isAuthenticated || isProfileIncomplete);
   const isStudentRoute = pathname.startsWith('/dashboard/student');
+  const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
+  const shellClass = isStudentRoute
+    ? 'student-shell'
+    : isTeacherRoute
+      ? 'teacher-shell'
+      : 'bg-slate-50';
 
   useEffect(() => {
     if (!shouldRedirect) return;
@@ -32,7 +38,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden ${isStudentRoute ? 'student-shell' : 'bg-slate-50'}`}>
+    <div className={`flex h-screen overflow-hidden ${shellClass}`}>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -45,7 +51,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className={`flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherRoute ? 'teacher-page' : ''}`}>{children}</main>
       </div>
 
       <UnfinishedAttemptNotifier />

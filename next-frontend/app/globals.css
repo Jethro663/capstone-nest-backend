@@ -380,8 +380,99 @@ body {
   --student-motion-normal: 0.28s;
 }
 
+.student-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)),
+    var(--student-page-gradient);
+  color: var(--student-text-strong);
+}
+
+.teacher-shell {
+  background:
+    linear-gradient(180deg, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0)),
+    var(--teacher-page-gradient);
+  color: var(--teacher-text-strong);
+}
+
+.student-topbar,
+.teacher-topbar,
+.student-sidebar,
+.teacher-sidebar {
+  backdrop-filter: blur(22px);
+}
+
+.student-topbar {
+  border-color: var(--student-outline);
+  background: var(--student-topbar-gradient);
+  box-shadow: 0 12px 36px -30px rgba(15, 23, 42, 0.32);
+}
+
+.teacher-topbar {
+  border-color: var(--teacher-outline);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    rgba(8, 18, 33, 0.84);
+  box-shadow: 0 18px 40px -34px rgba(2, 6, 23, 0.92);
+}
+
+.student-sidebar {
+  border-color: var(--student-outline);
+  background: var(--student-sidebar-gradient);
+  box-shadow: 18px 0 40px -30px rgba(15, 23, 42, 0.18);
+}
+
+.teacher-sidebar {
+  border-color: var(--teacher-outline);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    rgba(8, 18, 33, 0.94);
+  box-shadow: 24px 0 54px -38px rgba(2, 6, 23, 0.88);
+}
+
+.student-divider {
+  background: linear-gradient(180deg, transparent, var(--student-outline-strong), transparent);
+}
+
+.teacher-divider {
+  background: linear-gradient(180deg, transparent, var(--teacher-outline-strong), transparent);
+}
+
 .student-page {
   background-image: radial-gradient(circle at 10% 0%, rgba(220, 38, 38, 0.08), transparent 40%);
+}
+
+.student-panel {
+  border: 1px solid var(--student-outline);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.12)),
+    linear-gradient(180deg, var(--student-elevated) 0%, var(--student-surface) 100%);
+  box-shadow: var(--student-shadow);
+}
+
+.student-panel-hover {
+  transition:
+    transform var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease;
+}
+
+.student-panel-hover:hover {
+  transform: translateY(-2px);
+  border-color: var(--student-accent-soft-strong);
+  box-shadow: var(--student-shadow-hover);
+}
+
+.student-kicker {
+  border: 1px solid var(--student-outline);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--student-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.student-note-danger {
+  border: 1px solid var(--student-danger-border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.44), var(--student-danger-bg));
+  color: var(--student-danger-text);
 }
 
 .student-card {
@@ -406,6 +497,91 @@ body {
 
 .student-muted-text {
   color: var(--student-text-soft);
+}
+
+.student-input {
+  border: 1px solid var(--student-outline-strong);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--student-text-strong);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.56),
+    0 8px 20px -18px rgba(15, 23, 42, 0.26);
+}
+
+.student-input::placeholder {
+  color: var(--student-text-muted);
+}
+
+.student-input:focus-visible {
+  border-color: var(--student-accent);
+  outline: none;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--student-accent) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.student-button-solid {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--student-accent), color-mix(in srgb, var(--student-accent) 74%, white));
+  color: var(--student-accent-contrast);
+  box-shadow: 0 18px 32px -22px color-mix(in srgb, var(--student-accent) 42%, transparent);
+}
+
+.student-button-solid:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.04);
+  box-shadow: 0 20px 36px -22px color-mix(in srgb, var(--student-accent) 54%, transparent);
+}
+
+.student-button-outline {
+  border: 1px solid var(--student-outline-strong);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--student-text-strong);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.student-button-outline:hover {
+  border-color: var(--student-accent-soft-strong);
+  background: var(--student-surface-soft);
+  color: var(--student-accent);
+}
+
+.student-theme-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  max-width: 15rem;
+  border: 1px solid var(--student-outline);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--student-text-strong);
+  padding: 0.5rem 0.8rem;
+  box-shadow: 0 14px 28px -24px rgba(15, 23, 42, 0.2);
+  transition:
+    transform var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease,
+    background-color var(--student-motion-fast) ease;
+}
+
+.student-theme-trigger:hover {
+  transform: translateY(-1px);
+  border-color: var(--student-accent-soft-strong);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18px 30px -24px rgba(15, 23, 42, 0.24);
+}
+
+.student-theme-trigger__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  border-radius: 0.85rem;
+  background: var(--student-accent-soft);
+  color: var(--student-accent);
+  flex-shrink: 0;
 }
 
 .teacher-page {

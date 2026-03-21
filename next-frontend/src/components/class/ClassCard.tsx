@@ -14,6 +14,7 @@ type Props = {
   footer?: ReactNode;
   action?: ReactNode;
   className?: string;
+  appearance?: 'student' | 'teacher';
 };
 
 export function ClassCard({
@@ -23,8 +24,10 @@ export function ClassCard({
   footer,
   action,
   className,
+  appearance = 'student',
 }: Props) {
   const preset = getClassCardPreset(classItem.cardPreset);
+  const isTeacher = appearance === 'teacher';
 
   return (
     <div
@@ -77,12 +80,17 @@ export function ClassCard({
       <div className="space-y-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-slate-900">{subtitle}</p>
+            <p className={cn('truncate text-sm font-bold', isTeacher ? 'text-[var(--teacher-text-strong)]' : 'text-[var(--student-text-strong)]')}>{subtitle}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {meta.map((item) => (
                 <span
                   key={item}
-                  className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600"
+                  className={cn(
+                    'rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                    isTeacher
+                      ? 'border border-[var(--teacher-outline)] bg-white/10 text-[var(--teacher-text-muted)]'
+                      : 'border border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]',
+                  )}
                 >
                   {item}
                 </span>

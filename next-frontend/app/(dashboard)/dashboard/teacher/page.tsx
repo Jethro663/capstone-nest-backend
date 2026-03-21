@@ -360,7 +360,7 @@ export default function TeacherDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-[var(--teacher-text-strong)]">{lesson.title}</p>
                     <p className="text-xs text-[var(--teacher-text-muted)]">
-                      Class {lesson.classId.slice(0, 8)} â€¢ {formatDate(lesson.createdAt || '')}
+                      Class {lesson.classId.slice(0, 8)} • {formatDate(lesson.createdAt || '')}
                     </p>
                   </div>
                   <Link href={`/dashboard/teacher/lessons/${lesson.id}/edit`}>
@@ -400,7 +400,7 @@ export default function TeacherDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black text-[var(--teacher-text-strong)]">{assessment.title}</p>
                     <p className="text-xs uppercase text-[var(--teacher-text-muted)]">
-                      {assessment.type.replace('_', ' ')} â€¢ {assessment.dueDate ? formatDate(assessment.dueDate) : 'No due date'}
+                      {assessment.type.replace('_', ' ')} • {assessment.dueDate ? formatDate(assessment.dueDate) : 'No due date'}
                     </p>
                   </div>
                   <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>

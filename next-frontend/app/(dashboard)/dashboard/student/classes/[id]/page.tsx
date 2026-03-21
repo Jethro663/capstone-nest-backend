@@ -229,7 +229,7 @@ export default function StudentClassDetailPage() {
               <div className="space-y-2">
                 <h1 className="text-3xl font-extrabold tracking-tight text-[var(--student-text-strong)]">{classItem.subjectName || classItem.className || 'Class'}</h1>
                 <p className="max-w-2xl text-sm font-medium text-[color:color-mix(in_srgb,var(--student-text-muted)_92%,var(--student-text-strong)_8%)]">
-                  {`${classItem.section?.name || 'Section'} â€¢ Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'TBA'}`}
+                  {`${classItem.section?.name || 'Section'} • Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'TBA'}`}
                 </p>
                 <p className="max-w-2xl text-sm text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">
                   Keep moving through lessons, check what is still pending, and jump back into the next part of this class without digging through a plain list.

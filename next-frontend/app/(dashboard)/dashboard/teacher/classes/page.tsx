@@ -239,7 +239,8 @@ export default function TeacherClassesPage() {
                 <ClassCard
                   classItem={course}
                   className="teacher-dashboard-class-card"
-                  subtitle={`${course.section?.name || 'Standard Section'} â€¢ Grade ${course.section?.gradeLevel || course.subjectGradeLevel || 'TBA'}`}
+                  appearance="teacher"
+                  subtitle={`${course.section?.name || 'Standard Section'} • Grade ${course.section?.gradeLevel || course.subjectGradeLevel || 'TBA'}`}
                   meta={[
                     `${course.enrollments?.length ?? 0} students`,
                     course.room ? `Room ${course.room}` : 'Room TBA',
@@ -249,7 +250,7 @@ export default function TeacherClassesPage() {
                       type="button"
                       size="sm"
                       variant="secondary"
-                      className="shrink-0 rounded-xl bg-white/80 font-black text-slate-700 shadow-sm hover:bg-white"
+                      className="teacher-button-outline shrink-0 rounded-xl font-black"
                       onClick={(event) => {
                         event.preventDefault();
                         setEditingClass(course);
@@ -287,7 +288,7 @@ export default function TeacherClassesPage() {
       </TeacherSectionCard>
 
       <Dialog open={Boolean(editingClass)} onOpenChange={(open) => !open && setEditingClass(null)}>
-        <DialogContent className="max-w-5xl rounded-[1.8rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(240,249,255,0.92))] shadow-2xl">
+        <DialogContent className="teacher-panel max-w-5xl rounded-[1.8rem] border-[var(--teacher-outline)] shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black tracking-tight text-[var(--teacher-text-strong)]">
               Customize Class Card
@@ -302,7 +303,8 @@ export default function TeacherClassesPage() {
                 </p>
                 <ClassCard
                   classItem={{ ...editingClass, cardPreset: selectedPreset }}
-                  subtitle={`${editingClass.section?.name || 'Standard Section'} â€¢ Grade ${editingClass.section?.gradeLevel || editingClass.subjectGradeLevel || 'TBA'}`}
+                  appearance="teacher"
+                  subtitle={`${editingClass.section?.name || 'Standard Section'} • Grade ${editingClass.section?.gradeLevel || editingClass.subjectGradeLevel || 'TBA'}`}
                   meta={[
                     `${editingClass.enrollments?.length ?? 0} students`,
                     editingClass.room ? `Room ${editingClass.room}` : 'Room TBA',
@@ -331,7 +333,7 @@ export default function TeacherClassesPage() {
                             className={`teacher-dashboard-preset ${active ? 'teacher-dashboard-preset--active' : ''}`}
                           >
                             <div className={`h-12 rounded-xl ${preset.bannerClass}`} />
-                            <p className="mt-2 text-sm font-black text-slate-900">{preset.label}</p>
+                            <p className="mt-2 text-sm font-black text-[var(--teacher-text-strong)]">{preset.label}</p>
                           </button>
                         );
                       })}
@@ -381,7 +383,7 @@ export default function TeacherClassesPage() {
                     </Button>
                   ) : null}
 
-                  <div className="rounded-2xl border border-white/50 bg-white/70 p-4 text-sm text-[var(--teacher-text-muted)]">
+                  <div className="rounded-2xl border border-[var(--teacher-outline)] bg-white/8 p-4 text-sm text-[var(--teacher-text-muted)]">
                     Active preset:{' '}
                     <span className="font-black text-[var(--teacher-text-strong)]">
                       {getClassCardPreset(selectedPreset).label}

@@ -134,7 +134,7 @@ export default function StudentDashboardPage() {
       title={`Welcome back, ${user?.firstName || 'Student'}!`}
       description={
         classes.length > 0
-          ? `Youâ€™re enrolled in ${classes.length} class${classes.length === 1 ? '' : 'es'} today. Letâ€™s keep your learning streak moving with a quick, calm view of whatâ€™s next.`
+          ? `You're enrolled in ${classes.length} class${classes.length === 1 ? '' : 'es'} today. Let's keep your learning streak moving with a quick, calm view of what's next.`
           : 'Your learning space is ready. Once your classes appear, this dashboard will guide you to what to read, finish, and celebrate next.'
       }
       actions={(
@@ -186,7 +186,7 @@ export default function StudentDashboardPage() {
       )}
     >
       <StudentSectionCard
-        title="Todayâ€™s Learning Rhythm"
+        title="Today's Learning Rhythm"
         description="A softer progress snapshot so you can quickly see where you are and where to head next."
       >
         <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -266,7 +266,7 @@ export default function StudentDashboardPage() {
               </div>
               <p className="mt-3 text-sm text-[var(--student-text-muted)]">
                 {recentLessons.length > 0
-                  ? `Start with ${recentLessons[0].title} for an easy return to todayâ€™s learning flow.`
+                  ? `Start with ${recentLessons[0].title} for an easy return to today's learning flow.`
                   : 'Once a lesson is shared with you, this card becomes your quickest way back in.'}
               </p>
             </div>
@@ -368,7 +368,7 @@ export default function StudentDashboardPage() {
               <div className="space-y-1">
                 <p className="text-base font-black text-[var(--student-text-strong)]">Your dashboard is ready for your first class.</p>
                 <p className="text-sm text-[var(--student-text-muted)]">
-                  Once youâ€™re enrolled, your active classrooms will show up here with quick ways to continue learning.
+                  Once you&apos;re enrolled, your active classrooms will show up here with quick ways to continue learning.
                 </p>
               </div>
               <Link href="/dashboard/student/courses">
@@ -412,7 +412,7 @@ export default function StudentDashboardPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-black text-[var(--student-text-strong)]">No recent lessons yet.</p>
                   <p className="text-sm text-[var(--student-text-muted)]">
-                    As soon as your teacher publishes lessons, theyâ€™ll appear here for quick return visits.
+                    As soon as your teacher publishes lessons, they&apos;ll appear here for quick return visits.
                   </p>
                 </div>
               </div>
@@ -444,7 +444,7 @@ export default function StudentDashboardPage() {
                     <p className="mt-3 text-sm text-[var(--student-text-muted)]">
                       {assessment.description?.trim()
                         ? assessment.description
-                        : 'You have a task waiting here. Open it when youâ€™re ready and work through it one step at a time.'}
+                        : "You have a task waiting here. Open it when you're ready and work through it one step at a time."}
                     </p>
                     <Link href={getAssessmentHref(assessment)}>
                       <Button className="student-button-solid mt-4 h-10 w-full rounded-2xl font-black">
@@ -458,7 +458,7 @@ export default function StudentDashboardPage() {
               <div className="student-dashboard-empty student-dashboard-empty--compact">
                 <ClipboardCheck className="h-7 w-7 text-emerald-600" />
                 <div className="space-y-1">
-                  <p className="text-sm font-black text-[var(--student-text-strong)]">Youâ€™re all caught up right now.</p>
+                  <p className="text-sm font-black text-[var(--student-text-strong)]">You&apos;re all caught up right now.</p>
                   <p className="text-sm text-[var(--student-text-muted)]">
                     When a new assessment is published, this area will show the due date and fastest way to begin.
                   </p>

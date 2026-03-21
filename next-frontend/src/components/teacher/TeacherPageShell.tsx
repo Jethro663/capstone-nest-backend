@@ -113,7 +113,7 @@ export function TeacherStatCard({
           ) : null}
         </div>
         {Icon ? (
-          <div className="rounded-2xl border border-white/30 bg-white/45 p-3 text-[var(--teacher-accent)] shadow-sm">
+          <div className="rounded-2xl border border-[var(--teacher-outline)] bg-white/10 p-3 text-[var(--teacher-accent)] shadow-sm">
             <Icon className="h-5 w-5" />
           </div>
         ) : null}
@@ -135,7 +135,7 @@ export function TeacherSectionCard({
       variant="teacher"
       className={cn('overflow-hidden rounded-[1.7rem] border-white/30', className)}
     >
-      <CardHeader className="border-b border-white/20 bg-white/35 pb-4">
+      <CardHeader className="border-b border-[var(--teacher-outline)] bg-white/6 pb-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <CardTitle className="text-xl font-black tracking-tight text-[var(--teacher-text-strong)]">

@@ -106,6 +106,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     item.label === 'Profile' ? { ...item, href: getProfileRoute(role) } : item,
   );
   const isStudentRoute = pathname.startsWith('/dashboard/student');
+  const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
 
   const handleLogout = async () => {
     await logoutAction();
@@ -116,17 +117,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-200 md:static md:translate-x-0',
         isStudentRoute && 'student-sidebar',
+        isTeacherRoute && 'teacher-sidebar',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
-      <div className={cn('flex h-16 items-center justify-between border-b px-4', isStudentRoute && 'border-[var(--student-outline)]')}>
+      <div className={cn('flex h-16 items-center justify-between border-b px-4', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
         <div>
-          <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]')}>Nexora</h1>
-          <p className={cn('text-xs text-muted-foreground', isStudentRoute && 'text-[var(--student-text-muted)]')}>
+          <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]', isTeacherRoute && 'text-[var(--teacher-text-strong)]')}>Nexora</h1>
+          <p className={cn('text-xs text-muted-foreground', isStudentRoute && 'text-[var(--student-text-muted)]', isTeacherRoute && 'text-[var(--teacher-text-muted)]')}>
             {getRoleLabel(role)}
           </p>
         </div>
-        <button className="md:hidden" onClick={onClose}>
+        <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
           <X className="h-5 w-5" />
         </button>
       </div>
@@ -146,9 +148,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 active
                   ? isStudentRoute
                     ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]'
+                    : isTeacherRoute
+                      ? 'bg-white/10 text-[var(--teacher-text-strong)]'
                     : 'bg-primary/10 text-primary'
                   : isStudentRoute
                     ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]'
+                    : isTeacherRoute
+                      ? 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-[var(--teacher-text-strong)]'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
@@ -159,12 +165,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]')}>
+      <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
         <Button
           variant="ghost"
           className={cn(
             'w-full justify-start gap-3 text-muted-foreground hover:text-destructive',
             isStudentRoute && 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]',
+            isTeacherRoute && 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-rose-200',
           )}
           onClick={handleLogout}
         >
