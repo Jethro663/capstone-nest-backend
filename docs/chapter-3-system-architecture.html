@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexora System Architecture Flowchart</title>
+  <style>
+    :root {
+      --bg: #f4f4f4;
+      --paper: #ffffff;
+      --ink: #222222;
+      --muted: #5f6368;
+      --frame: #b8b8b8;
+      --dashed: #ea8c2f;
+      --web: #2f80d1;
+      --mobile: #2f80d1;
+      --backend: #2f80d1;
+      --ai: #2f80d1;
+      --data: #169bd5;
+      --event: #6b7280;
+      --planned: #8bc34a;
+      --danger: #ef4444;
+      --shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    .page {
+      width: min(1700px, calc(100vw - 24px));
+      margin: 12px auto;
+      background: var(--paper);
+      border: 2px solid #444;
+      box-shadow: var(--shadow);
+      padding: 22px 18px 26px;
+    }
+
+    .title {
+      text-align: center;
+      margin: 0 0 18px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+    }
+
+    .title p {
+      margin: 8px auto 0;
+      max-width: 1200px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .actors {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+
+    .actor {
+      text-align: center;
+      position: relative;
+      padding-bottom: 34px;
+    }
+
+    .avatar {
+      width: 82px;
+      height: 82px;
+      margin: 0 auto 10px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 36px;
+      color: #fff;
+      box-shadow: none;
+    }
+
+    .avatar.admin,
+    .avatar.teacher,
+    .avatar.student,
+    .avatar.ai { background: #4aa3c0; }
+
+    .actor h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .actor p {
+      margin: 6px auto 0;
+      max-width: 240px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .actor::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 5px;
+      height: 24px;
+      background: var(--event);
+      border-radius: 999px;
+    }
+
+    .actor::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -4px;
+      transform: translateX(-50%);
+      border-left: 7px solid transparent;
+      border-right: 7px solid transparent;
+      border-top: 9px solid var(--event);
+    }
+
+    .system-frame {
+      border: 2px dotted var(--frame);
+      padding: 18px 18px 28px;
+      position: relative;
+    }
+
+    .system-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1.2fr 0.95fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .column {
+      border: 3px dashed var(--dashed);
+      border-radius: 12px;
+      padding: 18px 14px 16px;
+      min-height: 100%;
+      background: #fff;
+    }
+
+    .column h3 {
+      margin: -4px 0 14px;
+      text-align: center;
+      font-size: 20px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .group {
+      border: 3px solid var(--web);
+      border-radius: 12px;
+      padding: 12px;
+      background: #ffffff;
+    }
+
+    .group.mobile-group {
+      border-color: var(--mobile);
+    }
+
+    .group.backend-group {
+      border-color: var(--backend);
+    }
+
+    .group.ai-group {
+      border-color: var(--ai);
+    }
+
+    .group.data-group {
+      border-color: var(--data);
+    }
+
+    .group h4 {
+      margin: 0 0 10px;
+      text-align: center;
+      font-size: 15px;
+    }
+
+    .nodes {
+      display: grid;
+      gap: 8px;
+    }
+
+    .node {
+      border: 2px solid var(--web);
+      border-radius: 999px;
+      padding: 7px 11px;
+      background: #fff;
+      font-size: 12px;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .node.mobile { border-color: var(--mobile); }
+    .node.backend { border-color: var(--backend); }
+    .node.ai { border-color: var(--ai); }
+    .node.data { border-color: var(--data); }
+    .node.event { border-color: var(--event); }
+    .node.planned { border-color: var(--planned); }
+    .node.alert { border-color: var(--danger); }
+    .node.light { border-color: #9ca3af; }
+
+    .substack {
+      border: 2px solid #d6d6d6;
+      border-radius: 14px;
+      padding: 10px;
+      background: #fcfcfc;
+      display: grid;
+      gap: 8px;
+    }
+
+    .middle-flow {
+      position: relative;
+      min-height: 1150px;
+    }
+
+    .vertical-arrow {
+      position: absolute;
+      right: -14px;
+      top: 210px;
+      width: 8px;
+      height: 470px;
+      background: var(--event);
+      border-radius: 999px;
+    }
+
+    .vertical-arrow::before,
+    .vertical-arrow::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+    }
+
+    .vertical-arrow::before {
+      top: -14px;
+      border-bottom: 14px solid var(--event);
+    }
+
+    .vertical-arrow::after {
+      bottom: -14px;
+      border-top: 14px solid var(--event);
+    }
+
+    .bottom-row {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: 1.8fr 1fr;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .flow-strip {
+      position: relative;
+      display: grid;
+      gap: 14px;
+    }
+
+    .flow-strip .link-arrow {
+      position: absolute;
+      top: 50%;
+      right: -48px;
+      transform: translateY(-50%);
+      width: 42px;
+      height: 7px;
+      background: var(--event);
+      border-radius: 999px;
+    }
+
+    .flow-strip .link-arrow::after {
+      content: "";
+      position: absolute;
+      right: -2px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-top: 9px solid transparent;
+      border-bottom: 9px solid transparent;
+      border-left: 12px solid var(--event);
+    }
+
+    .database-panel {
+      position: relative;
+      min-height: 280px;
+      display: grid;
+      place-items: center;
+    }
+
+    .cloud {
+      width: 100%;
+      max-width: 300px;
+      min-height: 220px;
+      border: 5px solid var(--event);
+      border-radius: 120px;
+      background: #ffffff;
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 34px 24px 24px;
+    }
+
+    .cloud::before,
+    .cloud::after {
+      content: "";
+      position: absolute;
+      border: 5px solid var(--event);
+      background: #fff;
+      border-radius: 50%;
+    }
+
+    .cloud::before {
+      width: 96px;
+      height: 96px;
+      left: 30px;
+      top: -40px;
+    }
+
+    .cloud::after {
+      width: 114px;
+      height: 114px;
+      right: 28px;
+      top: -46px;
+    }
+
+    .db-stack {
+      display: grid;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .cylinder {
+      border: 3px solid var(--data);
+      border-radius: 22px;
+      padding: 10px 14px;
+      text-align: center;
+      background: #f7fcff;
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: bold;
+      color: #0f3e4f;
+    }
+
+    .side-label {
+      margin-top: 10px;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .legend {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px 16px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 16px;
+      height: 9px;
+      border-radius: 999px;
+      border: 2px solid currentColor;
+      background: #fff;
+      flex: 0 0 auto;
+    }
+
+    @media (max-width: 1380px) {
+      .system-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .middle-flow {
+        min-height: auto;
+      }
+
+      .vertical-arrow {
+        display: none;
+      }
+
+      .bottom-row {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-strip .link-arrow {
+        display: none;
+      }
+
+      .actors {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .legend {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page {
+        width: calc(100vw - 12px);
+        padding: 14px 10px 18px;
+      }
+
+      .actors {
+        grid-template-columns: 1fr;
+      }
+
+      .title h1 {
+        font-size: 23px;
+      }
+
+      .column h3 {
+        font-size: 19px;
+      }
+
+      .legend {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .page {
+        width: auto;
+        margin: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="title">
+      <h1>Figure 1. Nexora System Architecture</h1>
+      <p>
+        Flowchart view of the current Nexora LMS-LXP ecosystem, showing user entry points, mobile and web modules,
+        backend services, AI support, data storage, and event-driven processing in a readable single-page diagram.
+      </p>
+    </header>
+
+    <section class="actors">
+      <article class="actor">
+        <div class="avatar admin">A</div>
+        <h2>Administrator</h2>
+        <p>Controls users, sections, classes, reports, diagnostics, evaluations, and system oversight.</p>
+      </article>
+      <article class="actor">
+        <div class="avatar teacher">T</div>
+        <h2>Teacher</h2>
+        <p>Manages classes, lessons, assessments, class records, interventions, reports, and extracted content.</p>
+      </article>
+      <article class="actor">
+        <div class="avatar student">S</div>
+        <h2>Student</h2>
+        <p>Accesses learning content, assessments, announcements, LXP intervention, and performance views.</p>
+      </article>
+      <article class="actor">
+        <div class="avatar ai">AI</div>
+        <h2>AI Support Layer</h2>
+        <p>Provides mentor chat, extraction, retrieval, remedial support, and instructional assistance.</p>
+      </article>
+    </section>
+
+    <section class="system-frame">
+      <div class="system-grid">
+        <section class="column">
+          <h3>Mobile Application</h3>
+          <div class="stack">
+            <div class="group mobile-group">
+              <h4>Authentication and Account Access</h4>
+              <div class="nodes">
+                <div class="node mobile">Login</div>
+                <div class="node mobile">Forgot Password</div>
+                <div class="node mobile">Reset Password</div>
+                <div class="node mobile">Verify Email</div>
+                <div class="node mobile">Set Activation Password</div>
+              </div>
+            </div>
+
+            <div class="group mobile-group">
+              <h4>Student Learning Workspace</h4>
+              <div class="substack">
+                <div class="node mobile">Dashboard</div>
+                <div class="node mobile">Courses and Class Detail</div>
+                <div class="node mobile">Lesson Detail</div>
+                <div class="node mobile">Announcements</div>
+                <div class="node mobile">Performance View</div>
+                <div class="node mobile">Profile</div>
+              </div>
+            </div>
+
+            <div class="group mobile-group">
+              <h4>Assessment and Intervention Access</h4>
+              <div class="substack">
+                <div class="node mobile">Assessment Detail</div>
+                <div class="node mobile">Assessment Take Flow</div>
+                <div class="node mobile">Assessment Results</div>
+            <div class="node planned">LXP Remedial Access</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="column middle-flow">
+          <h3>Web System and Service Layer</h3>
+          <div class="stack">
+            <div class="group">
+              <h4>Web Client Entry Points</h4>
+              <div class="nodes">
+                <div class="node">Authentication Pages</div>
+                <div class="node">Administrator Dashboard</div>
+                <div class="node">Teacher Dashboard</div>
+                <div class="node">Student Dashboard</div>
+                <div class="node">Notification and Chat Views</div>
+              </div>
+            </div>
+
+            <div class="group backend-group">
+              <h4>NestJS Backend Core</h4>
+              <div class="substack">
+                <div class="node backend">Auth, JWT, RBAC, Users, Roles, Profiles</div>
+                <div class="node backend">Sections, Classes, Lessons, Uploads, Roster Import</div>
+                <div class="node backend">Assessments, Class Record, Performance</div>
+                <div class="node backend">Announcements, Notifications, Reports, Analytics, Audit</div>
+                <div class="node backend">Admin, Teacher, Health, Metrics</div>
+              </div>
+            </div>
+
+            <div class="group backend-group">
+              <h4>LMS to LXP and Event-Driven Processing</h4>
+              <div class="substack">
+                <div class="node event">Assessment submission emits performance events</div>
+                <div class="node event">Performance listeners update class record and intervention checks</div>
+                <div class="node event">LXP listener controls remedial eligibility</div>
+                <div class="node event">Socket IO pushes live notifications</div>
+                <div class="node event">BullMQ and Redis execute queued jobs</div>
+              </div>
+            </div>
+
+            <div class="group ai-group">
+              <h4>AI Integration Gateway</h4>
+              <div class="substack">
+                <div class="node ai">AI Mentor Module</div>
+                <div class="node ai">RAG Indexing and Retrieval</div>
+                <div class="node ai">Extraction Review and Apply Flow</div>
+                <div class="node ai">Teacher AI Draft and Intervention Support</div>
+              </div>
+            </div>
+          </div>
+          <div class="vertical-arrow" aria-hidden="true"></div>
+        </section>
+
+        <section class="column">
+          <h3>AI, Data, and Infrastructure</h3>
+          <div class="stack">
+            <div class="group ai-group">
+              <h4>FastAPI AI Service</h4>
+              <div class="substack">
+                <div class="node ai">JAKIPIR Chat Endpoint</div>
+                <div class="node ai">PDF Extraction Pipeline</div>
+                <div class="node ai">Retrieval and Indexing Pipeline</div>
+                <div class="node ai">Quiz Generation Service</div>
+                <div class="node ai">Remedial Support Service</div>
+                <div class="node ai">Tutor and Feedback History</div>
+              </div>
+            </div>
+
+            <div class="group ai-group">
+              <h4>Ollama Model Runtime</h4>
+              <div class="nodes">
+                <div class="node ai">qwen2.5:3b text model</div>
+                <div class="node ai">gemma3:4b vision and document model</div>
+                <div class="node ai">nomic-embed-text embedding model</div>
+              </div>
+            </div>
+
+            <div class="group data-group">
+              <h4>Operational Data and Monitoring</h4>
+              <div class="nodes">
+                <div class="node data">PostgreSQL with pgvector</div>
+                <div class="node data">Redis Queue and Cache Layer</div>
+                <div class="node data">Shared Upload Storage</div>
+                <div class="node data">Swagger API Documentation</div>
+                <div class="node data">OpenTelemetry, Prometheus, Tempo, Loki monitoring</div>
+              </div>
+            </div>
+
+            <div class="group data-group">
+              <h4>Planned or Concept-Aligned Scope</h4>
+              <div class="nodes">
+                <div class="node planned">Expanded system evaluation</div>
+                <div class="node planned">Broader instructional recommendation coverage</div>
+                <div class="node planned">Additional intervention intelligence</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="bottom-row">
+        <section class="flow-strip">
+          <div class="group backend-group">
+            <h4>End-to-End Flow Summary</h4>
+            <div class="nodes">
+              <div class="node backend">1. User enters through web or mobile interface</div>
+              <div class="node backend">2. Request is authenticated and handled by NestJS modules</div>
+              <div class="node backend">3. LMS, assessment, and intervention logic is processed</div>
+              <div class="node ai">4. AI tasks are delegated to FastAPI and Ollama</div>
+              <div class="node event">5. Events and queues trigger performance and notifications</div>
+              <div class="node data">6. Results persist in PostgreSQL, Redis, and shared storage</div>
+            </div>
+          </div>
+          <div class="link-arrow" aria-hidden="true"></div>
+        </section>
+
+        <section class="database-panel">
+          <div class="cloud">
+            <div class="db-stack">
+              <div class="cylinder">PostgreSQL + pgvector</div>
+              <div class="cylinder">Redis + BullMQ</div>
+              <div class="cylinder">Uploads and Extraction Artifacts</div>
+              <div class="cylinder">Metrics, Traces, and Logs</div>
+            </div>
+          </div>
+          <div class="side-label">
+            Central storage and operations zone shared by the frontend, backend, and AI service stack.
+          </div>
+        </section>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><span class="swatch" style="color: var(--mobile);"></span>Mobile client modules</div>
+        <div class="legend-item"><span class="swatch" style="color: var(--web);"></span>Web interface modules</div>
+        <div class="legend-item"><span class="swatch" style="color: var(--backend);"></span>Core backend services</div>
+        <div class="legend-item"><span class="swatch" style="color: var(--ai);"></span>AI processing services</div>
+        <div class="legend-item"><span class="swatch" style="color: var(--event);"></span>Event-driven and real-time flows</div>
+        <div class="legend-item"><span class="swatch" style="color: var(--planned);"></span>Planned or concept-aligned scope</div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
