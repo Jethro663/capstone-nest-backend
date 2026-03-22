@@ -58,6 +58,10 @@ export interface RecordScoreDto {
   score: number;
 }
 
+export interface UpdateClassRecordItemDto {
+  maxScore: number;
+}
+
 export interface BulkRecordScoresDto {
   scores: RecordScoreDto[];
 }
@@ -120,6 +124,38 @@ export interface SpreadsheetData {
   };
   categories: SpreadsheetCategory[];
   students: SpreadsheetStudentRow[];
+}
+
+export type ClassRecordSlotStatus =
+  | 'empty'
+  | 'manual'
+  | 'linked_self'
+  | 'linked_other';
+
+export interface ClassRecordSlotOverviewItem {
+  itemId: string;
+  title: string;
+  order: number;
+  maxScore: number;
+  assessmentId: string | null;
+  assessmentTitle: string | null;
+  scoreCount: number;
+  status: ClassRecordSlotStatus;
+  isSelectable: boolean;
+}
+
+export interface ClassRecordSlotOverviewCategory {
+  id: string;
+  key: 'written_work' | 'performance_task' | 'quarterly_assessment';
+  label: string;
+  slots: ClassRecordSlotOverviewItem[];
+}
+
+export interface ClassRecordSlotOverview {
+  classRecordId: string;
+  gradingPeriod: GradingPeriod;
+  status: ClassRecordStatus;
+  categories: ClassRecordSlotOverviewCategory[];
 }
 
 export interface ClassAverageReport {

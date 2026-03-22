@@ -323,17 +323,33 @@ export interface TeacherClassRecordState {
   syncingItemId: string | null;
   editingCell: { itemId: string; studentId: string } | null;
   editValue: string;
+  editingHpsItemId: string | null;
+  hpsValue: string;
   editRef: RefObject<HTMLInputElement | null>;
+  hpsEditRef: RefObject<HTMLInputElement | null>;
   setSelectedRecordId: (id: string) => void;
   setEditValue: (value: string) => void;
+  setHpsValue: (value: string) => void;
   setEditingCell: (value: { itemId: string; studentId: string } | null) => void;
   refresh: () => Promise<void>;
   generateQuarter: (quarter: GradingPeriod) => Promise<void>;
   finalizeQuarter: () => Promise<void>;
   reopenQuarter: () => Promise<void>;
-  handleCellClick: (itemId: string, studentId: string, currentScore: number | null) => void;
+  handleCellClick: (
+    itemId: string,
+    studentId: string,
+    currentScore: number | null,
+    options?: { maxScore?: number | null; assessmentId?: string },
+  ) => void;
   handleCellSave: () => Promise<void>;
   handleCellKeyDown: (e: ReactKeyboardEvent) => void;
+  handleHpsClick: (
+    itemId: string,
+    currentHps: number | null,
+    assessmentId?: string,
+  ) => void;
+  handleHpsSave: () => Promise<void>;
+  handleHpsKeyDown: (e: ReactKeyboardEvent) => void;
   syncItem: (itemId: string) => Promise<void>;
   exportSpreadsheet: () => Promise<void>;
 }
@@ -348,7 +364,10 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
   const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
   const [editingCell, setEditingCell] = useState<{ itemId: string; studentId: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [editingHpsItemId, setEditingHpsItemId] = useState<string | null>(null);
+  const [hpsValue, setHpsValue] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
+  const hpsEditRef = useRef<HTMLInputElement>(null);
 
   const selectedRecord = useMemo(
     () => classRecords.find((record) => record.id === selectedRecordId) ?? null,
@@ -384,27 +403,29 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
   useEffect(() => {
     setEditingCell(null);
     setEditValue('');
+    setEditingHpsItemId(null);
+    setHpsValue('');
     void refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    const fetchSpreadsheet = async () => {
-      if (!selectedRecordId) {
-        setSpreadsheet(null);
-        return;
-      }
+  const reloadSelectedSpreadsheet = useCallback(async () => {
+    if (!selectedRecordId) {
+      setSpreadsheet(null);
+      return;
+    }
 
-      try {
-        const res = await classRecordService.getSpreadsheet(selectedRecordId);
-        setSpreadsheet(res.data);
-      } catch {
-        toast.error('Failed to load spreadsheet');
-        setSpreadsheet(null);
-      }
-    };
-
-    void fetchSpreadsheet();
+    try {
+      const res = await classRecordService.getSpreadsheet(selectedRecordId);
+      setSpreadsheet(res.data);
+    } catch {
+      toast.error('Failed to load spreadsheet');
+      setSpreadsheet(null);
+    }
   }, [selectedRecordId]);
+
+  useEffect(() => {
+    void reloadSelectedSpreadsheet();
+  }, [reloadSelectedSpreadsheet]);
 
   const generateQuarter = useCallback(
     async (quarter: GradingPeriod) => {
@@ -473,9 +494,24 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
   }, [refresh, selectedRecord]);
 
   const handleCellClick = useCallback(
-    (itemId: string, studentId: string, currentScore: number | null) => {
+    (
+      itemId: string,
+      studentId: string,
+      currentScore: number | null,
+      options?: { maxScore?: number | null; assessmentId?: string },
+    ) => {
       if (selectedRecord?.status !== 'draft') return;
+      if (options?.assessmentId) {
+        toast.info('Linked assessment slots must be edited from assessment settings');
+        return;
+      }
+      if ((options?.maxScore ?? 0) <= 0) {
+        toast.error('Set highest possible score first');
+        return;
+      }
 
+      setEditingHpsItemId(null);
+      setHpsValue('');
       setEditingCell({ itemId, studentId });
       setEditValue(currentScore != null ? String(currentScore) : '');
       setTimeout(() => editRef.current?.focus(), 0);
@@ -499,12 +535,11 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
         score,
       });
       setEditingCell(null);
-      const res = await classRecordService.getSpreadsheet(selectedRecordId);
-      setSpreadsheet(res.data);
+      await reloadSelectedSpreadsheet();
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to save score'));
     }
-  }, [editValue, editingCell, selectedRecordId]);
+  }, [editValue, editingCell, reloadSelectedSpreadsheet]);
 
   const handleCellKeyDown = useCallback(
     (e: ReactKeyboardEvent) => {
@@ -518,6 +553,54 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     [handleCellSave],
   );
 
+  const handleHpsClick = useCallback(
+    (itemId: string, currentHps: number | null, assessmentId?: string) => {
+      if (selectedRecord?.status !== 'draft') return;
+      if (assessmentId) {
+        toast.info('Linked assessment slots must be edited from assessment settings');
+        return;
+      }
+
+      setEditingCell(null);
+      setEditValue('');
+      setEditingHpsItemId(itemId);
+      setHpsValue(currentHps != null && currentHps > 0 ? String(currentHps) : '');
+      setTimeout(() => hpsEditRef.current?.focus(), 0);
+    },
+    [selectedRecord?.status],
+  );
+
+  const handleHpsSave = useCallback(async () => {
+    if (!editingHpsItemId) return;
+
+    const maxScore = parseFloat(hpsValue);
+    if (Number.isNaN(maxScore) || maxScore < 0) {
+      toast.error('Invalid highest possible score');
+      setEditingHpsItemId(null);
+      return;
+    }
+
+    try {
+      await classRecordService.updateItem(editingHpsItemId, { maxScore });
+      setEditingHpsItemId(null);
+      await reloadSelectedSpreadsheet();
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Failed to save highest possible score'));
+    }
+  }, [editingHpsItemId, hpsValue, reloadSelectedSpreadsheet]);
+
+  const handleHpsKeyDown = useCallback(
+    (e: ReactKeyboardEvent) => {
+      if (e.key === 'Enter') {
+        void handleHpsSave();
+      }
+      if (e.key === 'Escape') {
+        setEditingHpsItemId(null);
+      }
+    },
+    [handleHpsSave],
+  );
+
   const syncItem = useCallback(
     async (itemId: string) => {
       try {
@@ -529,17 +612,14 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
             : 0;
         toast.success(`Synced ${synced} score(s) from assessment`);
 
-        if (selectedRecordId) {
-          const spreadsheetRes = await classRecordService.getSpreadsheet(selectedRecordId);
-          setSpreadsheet(spreadsheetRes.data);
-        }
+        await reloadSelectedSpreadsheet();
       } catch {
         toast.error('Failed to sync scores');
       } finally {
         setSyncingItemId(null);
       }
     },
-    [selectedRecordId],
+    [reloadSelectedSpreadsheet],
   );
 
   const exportSpreadsheet = useCallback(async () => {
@@ -564,9 +644,13 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     syncingItemId,
     editingCell,
     editValue,
+    editingHpsItemId,
+    hpsValue,
     editRef,
+    hpsEditRef,
     setSelectedRecordId,
     setEditValue,
+    setHpsValue,
     setEditingCell,
     refresh,
     generateQuarter,
@@ -575,6 +659,9 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     handleCellClick,
     handleCellSave,
     handleCellKeyDown,
+    handleHpsClick,
+    handleHpsSave,
+    handleHpsKeyDown,
     syncItem,
     exportSpreadsheet,
   };

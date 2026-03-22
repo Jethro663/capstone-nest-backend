@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
-import { eq, and, desc, inArray, sql, sum } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, sql, sum } from 'drizzle-orm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
@@ -16,6 +16,9 @@ import {
   assessmentQuestionOptions,
   assessmentAttempts,
   assessmentResponses,
+  classRecords,
+  classRecordCategories,
+  classRecordItems,
   classes,
   users,
   enrollments,
@@ -170,6 +173,363 @@ export class AssessmentsService {
 
   private sumRubricPoints(criteria: RubricCriterion[]) {
     return criteria.reduce((total, criterion) => total + criterion.points, 0);
+  }
+
+  private getClassRecordCategoryName(category?: string | null) {
+    switch (category) {
+      case 'written_work':
+        return 'Written Works';
+      case 'performance_task':
+        return 'Performance Tasks';
+      case 'quarterly_assessment':
+        return 'Quarterly Assessment';
+      default:
+        return null;
+    }
+  }
+
+  private getClassRecordCategoryCode(categoryName?: string | null) {
+    switch (categoryName) {
+      case 'Written Works':
+        return 'written_work';
+      case 'Performance Tasks':
+        return 'performance_task';
+      case 'Quarterly Assessment':
+        return 'quarterly_assessment';
+      default:
+        return null;
+    }
+  }
+
+  private getDefaultClassRecordItemTitle(categoryName: string, itemOrder: number) {
+    const prefix =
+      categoryName === 'Written Works'
+        ? 'WW'
+        : categoryName === 'Performance Tasks'
+          ? 'PT'
+          : categoryName === 'Quarterly Assessment'
+            ? 'QA'
+            : 'ITEM';
+
+    return `${prefix}${itemOrder}`;
+  }
+
+  private async getAssessmentPlacementSnapshot(assessment: {
+    id: string;
+    classId: string;
+    classRecordCategory?: string | null;
+    quarter?: string | null;
+  }) {
+    const linkedItem = await this.db.query.classRecordItems.findFirst({
+      where: eq(classRecordItems.assessmentId, assessment.id),
+      with: {
+        category: {
+          columns: {
+            id: true,
+            name: true,
+          },
+        },
+        classRecord: {
+          columns: {
+            id: true,
+            classId: true,
+            gradingPeriod: true,
+          },
+        },
+        scores: {
+          columns: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!linkedItem) {
+      if (!assessment.classRecordCategory || !assessment.quarter) {
+        return null;
+      }
+
+      return {
+        placementMode: 'automatic' as const,
+        classRecordId: null,
+        gradingPeriod: assessment.quarter,
+        itemId: null,
+        category: assessment.classRecordCategory,
+        order: null,
+        title: null,
+        maxScore: null,
+        scoreCount: 0,
+      };
+    }
+
+    let placementMode: 'automatic' | 'manual' = 'manual';
+    const expectedCategoryName = this.getClassRecordCategoryName(
+      assessment.classRecordCategory,
+    );
+
+    if (
+      expectedCategoryName &&
+      assessment.quarter &&
+      linkedItem.classRecord.classId === assessment.classId &&
+      linkedItem.classRecord.gradingPeriod === assessment.quarter &&
+      linkedItem.category.name === expectedCategoryName
+    ) {
+      const categoryItems = await this.db.query.classRecordItems.findMany({
+        where: and(
+          eq(classRecordItems.classRecordId, linkedItem.classRecord.id),
+          eq(classRecordItems.categoryId, linkedItem.category.id),
+        ),
+        with: {
+          scores: {
+            columns: {
+              id: true,
+            },
+          },
+        },
+        orderBy: (items, { asc }) => [asc(items.itemOrder)],
+      });
+
+      const firstAutomaticSlot = categoryItems.find(
+        (item) =>
+          item.id === linkedItem.id ||
+          (!item.assessmentId &&
+            item.scores.length === 0 &&
+            Number(item.maxScore) <= 0),
+      );
+
+      if (firstAutomaticSlot?.id === linkedItem.id) {
+        placementMode = 'automatic';
+      }
+    }
+
+    return {
+      placementMode,
+      classRecordId: linkedItem.classRecord.id,
+      gradingPeriod: linkedItem.classRecord.gradingPeriod,
+      itemId: linkedItem.id,
+      category:
+        this.getClassRecordCategoryCode(linkedItem.category.name) ??
+        assessment.classRecordCategory,
+      order: linkedItem.itemOrder,
+      title: linkedItem.title,
+      maxScore: Number(linkedItem.maxScore),
+      scoreCount: linkedItem.scores.length,
+    };
+  }
+
+  private async syncClassRecordPlacement(params: {
+    assessmentId: string;
+    classId: string;
+    title: string;
+    totalPoints: number;
+    classRecordCategory?: string | null;
+    quarter?: string | null;
+    classRecordItemId?: string | null;
+  }) {
+    if (
+      (params.classRecordCategory && !params.quarter) ||
+      (!params.classRecordCategory && params.quarter)
+    ) {
+      throw new BadRequestException(
+        'Quarter and class record category must be set together',
+      );
+    }
+
+    if (
+      params.classRecordItemId &&
+      (!params.classRecordCategory || !params.quarter)
+    ) {
+      throw new BadRequestException(
+        'A specific slot can only be selected after quarter and category are set',
+      );
+    }
+
+    const linkedItems = await this.db.query.classRecordItems.findMany({
+      where: eq(classRecordItems.assessmentId, params.assessmentId),
+      with: {
+        classRecord: {
+          columns: {
+            id: true,
+            classId: true,
+            gradingPeriod: true,
+            status: true,
+          },
+        },
+        category: {
+          columns: {
+            id: true,
+            name: true,
+          },
+        },
+        scores: {
+          columns: {
+            id: true,
+          },
+        },
+      },
+      orderBy: (items, { asc }) => [asc(items.itemOrder)],
+    });
+
+    if (!params.classRecordCategory || !params.quarter) {
+      if (linkedItems.some((item) => item.scores.length > 0)) {
+        throw new BadRequestException(
+          'This assessment already has recorded scores in the class record and cannot be detached',
+        );
+      }
+
+      await Promise.all(
+        linkedItems.map((item) =>
+          this.db
+            .update(classRecordItems)
+            .set({
+              assessmentId: null,
+              title: this.getDefaultClassRecordItemTitle(
+                item.category.name,
+                item.itemOrder,
+              ),
+              maxScore: '0',
+            })
+            .where(eq(classRecordItems.id, item.id)),
+        ),
+      );
+      return;
+    }
+
+    const categoryName = this.getClassRecordCategoryName(
+      params.classRecordCategory,
+    );
+    if (!categoryName) {
+      throw new BadRequestException('Invalid class record category');
+    }
+
+    const record = await this.db.query.classRecords.findFirst({
+      where: and(
+        eq(classRecords.classId, params.classId),
+        eq(classRecords.gradingPeriod, params.quarter as any),
+      ),
+    });
+
+    if (!record) {
+      throw new BadRequestException(
+        `Create the ${params.quarter} class record workbook before assigning this assessment.`,
+      );
+    }
+
+    if (record.status !== 'draft') {
+      throw new BadRequestException(
+        'Only draft class record workbooks can accept assessment placement changes',
+      );
+    }
+
+    const category = await this.db.query.classRecordCategories.findFirst({
+      where: and(
+        eq(classRecordCategories.classRecordId, record.id),
+        eq(classRecordCategories.name, categoryName),
+      ),
+    });
+
+    if (!category) {
+      throw new BadRequestException(
+        `Unable to find ${categoryName} slots in the selected class record.`,
+      );
+    }
+
+    const categoryItems = await this.db.query.classRecordItems.findMany({
+      where: and(
+        eq(classRecordItems.classRecordId, record.id),
+        eq(classRecordItems.categoryId, category.id),
+      ),
+      with: {
+        scores: {
+          columns: {
+            id: true,
+          },
+        },
+      },
+      orderBy: (items, { asc }) => [asc(items.itemOrder)],
+    });
+
+    const currentLinkedItem = linkedItems.find(
+      (item) =>
+        item.classRecord.id === record.id && item.category.id === category.id,
+    );
+
+    let targetItem =
+      params.classRecordItemId != null
+        ? categoryItems.find((item) => item.id === params.classRecordItemId)
+        : currentLinkedItem
+            ? categoryItems.find((item) => item.id === currentLinkedItem.id)
+            : categoryItems.find(
+                (item) =>
+                  !item.assessmentId &&
+                  item.scores.length === 0 &&
+                  Number(item.maxScore) <= 0,
+              );
+
+    if (params.classRecordItemId && !targetItem) {
+      throw new BadRequestException(
+        'The selected class record slot is not available in this category',
+      );
+    }
+
+    if (!targetItem) {
+      throw new BadRequestException(
+        `Recording ${categoryName} is already full for ${params.quarter}.`,
+      );
+    }
+
+    if (
+      targetItem.assessmentId &&
+      targetItem.assessmentId !== params.assessmentId
+    ) {
+      throw new BadRequestException(
+        'The selected slot is already occupied by another assessment',
+      );
+    }
+
+    if (
+      !targetItem.assessmentId &&
+      (targetItem.scores.length > 0 || Number(targetItem.maxScore) > 0)
+    ) {
+      throw new BadRequestException(
+        'The selected slot already contains manual class record data',
+      );
+    }
+
+    const displacedLinkedItems = linkedItems.filter(
+      (item) => item.id !== targetItem?.id,
+    );
+
+    if (displacedLinkedItems.some((item) => item.scores.length > 0)) {
+      throw new BadRequestException(
+        'This assessment already has recorded scores in another slot and cannot be moved',
+      );
+    }
+
+    await this.db.transaction(async (tx) => {
+      for (const item of displacedLinkedItems) {
+        await tx
+          .update(classRecordItems)
+          .set({
+            assessmentId: null,
+            title: this.getDefaultClassRecordItemTitle(
+              item.category.name,
+              item.itemOrder,
+            ),
+            maxScore: '0',
+          })
+          .where(eq(classRecordItems.id, item.id));
+      }
+
+      await tx
+        .update(classRecordItems)
+        .set({
+          assessmentId: params.assessmentId,
+          title: params.title,
+          maxScore: String(params.totalPoints ?? 0),
+        })
+        .where(eq(classRecordItems.id, targetItem.id));
+    });
   }
 
   private sanitizeRubricForViewer(
@@ -724,15 +1084,28 @@ export class AssessmentsService {
       rubricCriteria,
     };
 
+    const classRecordPlacement = await this.getAssessmentPlacementSnapshot({
+      id: assessment.id,
+      classId: assessment.classId,
+      classRecordCategory: assessment.classRecordCategory ?? undefined,
+      quarter: assessment.quarter ?? undefined,
+    });
+
     if (
       viewerRole === 'student' &&
       assessmentWithAttachment.randomizeQuestions &&
       assessmentWithAttachment.type !== AssessmentType.FILE_UPLOAD
     ) {
-      return this.randomizeAssessmentForStudent(assessmentWithAttachment);
+      return {
+        ...this.randomizeAssessmentForStudent(assessmentWithAttachment),
+        classRecordPlacement,
+      };
     }
 
-    return assessmentWithAttachment;
+    return {
+      ...assessmentWithAttachment,
+      classRecordPlacement,
+    };
   }
 
   /**
@@ -814,6 +1187,16 @@ export class AssessmentsService {
         quarter: createAssessmentDto.quarter,
       })
       .returning();
+
+    await this.syncClassRecordPlacement({
+      assessmentId: newAssessment.id,
+      classId: newAssessment.classId,
+      title: newAssessment.title,
+      totalPoints: newAssessment.totalPoints ?? 0,
+      classRecordCategory: newAssessment.classRecordCategory ?? undefined,
+      quarter: newAssessment.quarter ?? undefined,
+      classRecordItemId: createAssessmentDto.classRecordItemId,
+    });
 
     const assessment = await this.getAssessmentById(newAssessment.id);
 
@@ -1115,6 +1498,16 @@ export class AssessmentsService {
       .set(updateData)
       .where(eq(assessments.id, assessmentId))
       .returning();
+
+    await this.syncClassRecordPlacement({
+      assessmentId: updated.id,
+      classId: updated.classId,
+      title: updated.title,
+      totalPoints: updated.totalPoints ?? 0,
+      classRecordCategory: updated.classRecordCategory ?? undefined,
+      quarter: updated.quarter ?? undefined,
+      classRecordItemId: updateAssessmentDto.classRecordItemId,
+    });
 
     const assessment = await this.getAssessmentById(updated.id);
 

@@ -2,6 +2,20 @@ import type { AssessmentType, QuestionType, FeedbackLevel, GradingPeriod } from 
 
 export type ClassRecordCategory = 'written_work' | 'performance_task' | 'quarterly_assessment';
 
+export type AssessmentPlacementMode = 'automatic' | 'manual';
+
+export interface AssessmentClassRecordPlacement {
+  placementMode: AssessmentPlacementMode;
+  classRecordId: string | null;
+  gradingPeriod: GradingPeriod;
+  itemId: string | null;
+  category: ClassRecordCategory;
+  order: number | null;
+  title: string | null;
+  maxScore: number | null;
+  scoreCount: number;
+}
+
 export interface RubricCriterion {
   id: string;
   title: string;
@@ -58,6 +72,8 @@ export interface Assessment {
   feedbackDelayHours?: number;
   classRecordCategory?: ClassRecordCategory;
   quarter?: GradingPeriod;
+  classRecordItemId?: string | null;
+  classRecordPlacement?: AssessmentClassRecordPlacement | null;
   questions?: AssessmentQuestion[];
   createdAt?: string;
   updatedAt?: string;
@@ -107,6 +123,7 @@ export interface CreateAssessmentDto {
   feedbackDelayHours?: number;
   classRecordCategory?: ClassRecordCategory;
   quarter?: GradingPeriod;
+  classRecordItemId?: string;
 }
 
 export interface UpdateAssessmentDto {
@@ -134,6 +151,7 @@ export interface UpdateAssessmentDto {
   feedbackDelayHours?: number;
   classRecordCategory?: ClassRecordCategory;
   quarter?: GradingPeriod;
+  classRecordItemId?: string | null;
 }
 
 export interface CreateQuestionDto {

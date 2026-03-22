@@ -112,6 +112,9 @@ function buildMockDb() {
       assessmentQuestionOptions: { findFirst: jest.fn(), findMany: jest.fn() },
       assessmentAttempts: { findFirst: jest.fn(), findMany: jest.fn() },
       assessmentResponses: { findFirst: jest.fn(), findMany: jest.fn() },
+      classRecords: { findFirst: jest.fn() },
+      classRecordCategories: { findFirst: jest.fn() },
+      classRecordItems: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
       uploadedFiles: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
@@ -161,6 +164,10 @@ describe('AssessmentsService', () => {
 
   beforeEach(async () => {
     db = buildMockDb();
+    db.query.classRecordItems.findFirst.mockResolvedValue(null);
+    db.query.classRecordItems.findMany.mockResolvedValue([]);
+    db.query.classRecords.findFirst.mockResolvedValue(null);
+    db.query.classRecordCategories.findFirst.mockResolvedValue(null);
     eventEmitter = { emit: jest.fn() } as any;
     feedbackService = {
       applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
@@ -215,6 +222,7 @@ describe('AssessmentsService', () => {
         teacherAttachmentFile: null,
         rubricSourceFile: null,
         rubricCriteria: [],
+        classRecordPlacement: null,
       });
       expect(db.insert).toHaveBeenCalled();
     });
@@ -334,6 +342,128 @@ describe('AssessmentsService', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   // startAttempt — multi-attempt logic
   // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('class record placement', () => {
+    it('links a manually selected class record slot to the assessment', async () => {
+      const updatedAssessment = {
+        ...MOCK_ASSESSMENT,
+        title: 'Mapped Quiz',
+        classRecordCategory: 'written_work',
+        quarter: 'Q1',
+      };
+
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(MOCK_ASSESSMENT)
+        .mockResolvedValueOnce(updatedAssessment);
+      db.query.classRecords.findFirst.mockResolvedValue({
+        id: 'record-1',
+        classId: CLASS_ID,
+        gradingPeriod: 'Q1',
+        status: 'draft',
+      });
+      db.query.classRecordCategories.findFirst.mockResolvedValue({
+        id: 'category-1',
+        classRecordId: 'record-1',
+        name: 'Written Works',
+      });
+      db.query.classRecordItems.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 'slot-1',
+            itemOrder: 1,
+            maxScore: '0',
+            assessmentId: null,
+            scores: [],
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 'slot-1',
+            itemOrder: 1,
+            maxScore: '10',
+            assessmentId: ASSESSMENT_ID,
+            scores: [],
+          },
+        ]);
+      db.query.classRecordItems.findFirst.mockResolvedValue({
+        id: 'slot-1',
+        itemOrder: 1,
+        title: 'Mapped Quiz',
+        maxScore: '10',
+        category: {
+          id: 'category-1',
+          name: 'Written Works',
+        },
+        classRecord: {
+          id: 'record-1',
+          classId: CLASS_ID,
+          gradingPeriod: 'Q1',
+        },
+        scores: [],
+      });
+      mockUpdateReturning(db, [updatedAssessment]);
+      mockUpdateReturning(db, [{ id: 'slot-1' }]);
+
+      const result = await service.updateAssessment(
+        ASSESSMENT_ID,
+        {
+          title: 'Mapped Quiz',
+          classRecordCategory: 'written_work',
+          quarter: 'Q1',
+          classRecordItemId: 'slot-1',
+        } as any,
+        'teacher-1',
+      );
+
+      expect(result.classRecordPlacement?.itemId).toBe('slot-1');
+    });
+
+    it('rejects automatic placement when the selected category is full', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT);
+      db.query.classRecords.findFirst.mockResolvedValue({
+        id: 'record-1',
+        classId: CLASS_ID,
+        gradingPeriod: 'Q1',
+        status: 'draft',
+      });
+      db.query.classRecordCategories.findFirst.mockResolvedValue({
+        id: 'category-1',
+        classRecordId: 'record-1',
+        name: 'Written Works',
+      });
+      db.query.classRecordItems.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 'slot-1',
+            itemOrder: 1,
+            maxScore: '20',
+            assessmentId: null,
+            scores: [{ id: 'score-1' }],
+          },
+        ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ASSESSMENT,
+          classRecordCategory: 'written_work',
+          quarter: 'Q1',
+        },
+      ]);
+
+      await expect(
+        service.updateAssessment(
+          ASSESSMENT_ID,
+          {
+            classRecordCategory: 'written_work',
+            quarter: 'Q1',
+            classRecordItemId: null,
+          } as any,
+          'teacher-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
   describe('startAttempt', () => {
     it('should reject if assessment is not published', async () => {

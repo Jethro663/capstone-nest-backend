@@ -2,8 +2,10 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Param,
   Body,
+  Query,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -15,6 +17,7 @@ import { ClassRecordSyncService } from './class-record-sync.service';
 import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
+import { UpdateClassRecordItemDto } from './DTO/update-class-record-item.dto';
 
 @Controller('class-record')
 @UseGuards(RolesGuard)
@@ -102,6 +105,22 @@ export class ClassRecordController {
     return { success: true, data };
   }
 
+  @Patch('items/:itemId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async updateClassRecordItem(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: UpdateClassRecordItemDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.classRecordService.updateClassRecordItem(
+      itemId,
+      dto,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
   @Post('items/:itemId/scores/bulk')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async bulkRecordScores(
@@ -172,6 +191,24 @@ export class ClassRecordController {
       id,
       user.userId,
       user.roles,
+    );
+    return { success: true, data };
+  }
+
+  @Get('by-class/:classId/slot-overview')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getSlotOverview(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Query('gradingPeriod') gradingPeriod: CreateClassRecordDto['gradingPeriod'],
+    @Query('assessmentId') assessmentId: string | undefined,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.classRecordService.getSlotOverview(
+      classId,
+      gradingPeriod,
+      user.userId,
+      user.roles,
+      assessmentId,
     );
     return { success: true, data };
   }

@@ -13,6 +13,10 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStatusChip } from '@/components/student/student-primitives';
 import { toast } from 'sonner';
+import {
+  getLatestReturnedAttempt,
+  getSubmittedAttempts,
+} from '@/utils/student-assessment-routing';
 import type { Assessment, AssessmentQuestion, UpdateAttemptProgressDto } from '@/types/assessment';
 
 export default function StudentAssessmentTakePage() {
@@ -133,6 +137,23 @@ export default function StudentAssessmentTakePage() {
       let ongoing = (await assessmentService.getOngoingAttempt(assessmentId)).data;
 
       if (!ongoing && assessmentData.type === 'file_upload') {
+        const attemptsRes = await assessmentService.getStudentAttempts(assessmentId);
+        const attempts = attemptsRes.data || [];
+        const submittedAttempts = getSubmittedAttempts(attempts);
+        const latestReturnedAttempt = getLatestReturnedAttempt(attempts);
+        const maxAttempts = assessmentData.maxAttempts ?? 1;
+
+        if (submittedAttempts.length >= maxAttempts) {
+          if (latestReturnedAttempt) {
+            router.replace(
+              `/dashboard/student/assessments/${assessmentId}/results/${latestReturnedAttempt.id}`,
+            );
+          } else {
+            router.replace(`/dashboard/student/assessments/${assessmentId}?view=submitted`);
+          }
+          return;
+        }
+
         ongoing = (await assessmentService.startAttempt(assessmentId)).data;
       }
 

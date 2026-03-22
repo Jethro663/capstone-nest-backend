@@ -26,6 +26,7 @@ import { ClassRecordScoresUpdatedEvent } from '../../common/events';
 import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
+import { UpdateClassRecordItemDto } from './DTO/update-class-record-item.dto';
 import { AuditService } from '../audit/audit.service';
 
 /** DepEd default category configuration */
@@ -34,6 +35,17 @@ const DEPED_CATEGORIES = [
   { name: 'Performance Tasks', weight: '50.00', prefix: 'PT', slots: 10 },
   { name: 'Quarterly Assessment', weight: '20.00', prefix: 'QA', slots: 1 },
 ] as const;
+
+const CATEGORY_NAME_TO_KEY = {
+  'Written Works': 'written_work',
+  'Performance Tasks': 'performance_task',
+  'Quarterly Assessment': 'quarterly_assessment',
+} as const;
+
+function getDefaultItemTitle(categoryName: string, itemOrder: number) {
+  const category = DEPED_CATEGORIES.find((entry) => entry.name === categoryName);
+  return `${category?.prefix ?? 'ITEM'}${itemOrder}`;
+}
 
 @Injectable()
 export class ClassRecordService {
@@ -227,6 +239,95 @@ export class ClassRecordService {
     });
   }
 
+  async getSlotOverview(
+    classId: string,
+    gradingPeriod: CreateClassRecordDto['gradingPeriod'],
+    userId: string,
+    roles: string[],
+    assessmentId?: string,
+  ) {
+    if (!gradingPeriod) {
+      throw new BadRequestException('gradingPeriod is required');
+    }
+
+    const record = await this.db.query.classRecords.findFirst({
+      where: and(
+        eq(classRecords.classId, classId),
+        eq(classRecords.gradingPeriod, gradingPeriod),
+      ),
+      with: {
+        categories: {
+          with: {
+            items: {
+              with: {
+                assessment: {
+                  columns: {
+                    id: true,
+                    title: true,
+                  },
+                },
+                scores: {
+                  columns: {
+                    id: true,
+                  },
+                },
+              },
+              orderBy: (items, { asc }) => [asc(items.itemOrder)],
+            },
+          },
+          orderBy: (categories, { asc }) => [asc(categories.createdAt)],
+        },
+      },
+    });
+
+    if (!record) {
+      throw new NotFoundException(
+        `No class record exists for ${gradingPeriod}. Create the workbook first.`,
+      );
+    }
+
+    if (!this.isAdmin(roles) && record.teacherId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    return {
+      classRecordId: record.id,
+      gradingPeriod: record.gradingPeriod,
+      status: record.status,
+      categories: record.categories.map((category) => ({
+        id: category.id,
+        key:
+          CATEGORY_NAME_TO_KEY[
+            category.name as keyof typeof CATEGORY_NAME_TO_KEY
+          ] ?? 'written_work',
+        label: category.name,
+        slots: category.items.map((item) => {
+          const maxScore = parseFloat(item.maxScore);
+          const scoreCount = item.scores.length;
+          const status = item.assessmentId
+            ? item.assessmentId === assessmentId
+              ? 'linked_self'
+              : 'linked_other'
+            : scoreCount > 0 || maxScore > 0
+              ? 'manual'
+              : 'empty';
+
+          return {
+            itemId: item.id,
+            title: item.title,
+            order: item.itemOrder,
+            maxScore,
+            assessmentId: item.assessmentId ?? null,
+            assessmentTitle: item.assessment?.title ?? null,
+            scoreCount,
+            status,
+            isSelectable: status === 'empty' || status === 'linked_self',
+          };
+        }),
+      })),
+    };
+  }
+
   // ── Spreadsheet Data Endpoint ────────────────────────────────────────────
 
   /**
@@ -372,6 +473,64 @@ export class ClassRecordService {
 
   // ── Scores ────────────────────────────────────────────────────────────────
 
+  async updateClassRecordItem(
+    itemId: string,
+    dto: UpdateClassRecordItemDto,
+    userId: string,
+    roles: string[],
+  ) {
+    const item = await this.db.query.classRecordItems.findFirst({
+      where: eq(classRecordItems.id, itemId),
+      with: {
+        classRecord: true,
+        category: {
+          columns: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!item) {
+      throw new NotFoundException(`Class record item "${itemId}" not found`);
+    }
+
+    if (!this.isAdmin(roles) && item.classRecord.teacherId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    this.assertEditable(item.classRecord);
+
+    if (item.assessmentId) {
+      throw new BadRequestException(
+        'Linked assessment slots must be updated from assessment settings',
+      );
+    }
+
+    const [updated] = await this.db
+      .update(classRecordItems)
+      .set({
+        maxScore: dto.maxScore.toString(),
+        title: getDefaultItemTitle(item.category.name, item.itemOrder),
+      })
+      .where(eq(classRecordItems.id, itemId))
+      .returning();
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.item.updated',
+      targetType: 'class_record_item',
+      targetId: itemId,
+      metadata: {
+        classRecordId: item.classRecord.id,
+        classId: item.classRecord.classId,
+        maxScore: dto.maxScore,
+      },
+    });
+
+    return updated;
+  }
+
   async recordScore(
     itemId: string,
     dto: RecordScoreDto,
@@ -394,7 +553,12 @@ export class ClassRecordService {
     this.assertEditable(item.classRecord);
 
     const maxScore = parseFloat(item.maxScore);
-    if (maxScore > 0 && dto.score > maxScore) {
+    if (maxScore <= 0) {
+      throw new BadRequestException(
+        'Set highest possible score first before recording student scores',
+      );
+    }
+    if (dto.score > maxScore) {
       throw new BadRequestException(
         `Score ${dto.score} exceeds max score of ${maxScore}`,
       );
@@ -467,8 +631,13 @@ export class ClassRecordService {
     this.assertEditable(item.classRecord);
 
     const maxScore = parseFloat(item.maxScore);
+    if (maxScore <= 0) {
+      throw new BadRequestException(
+        'Set highest possible score first before recording student scores',
+      );
+    }
     for (const entry of dto.scores) {
-      if (maxScore > 0 && entry.score > maxScore) {
+      if (entry.score > maxScore) {
         throw new BadRequestException(
           `Score ${entry.score} for student "${entry.studentId}" exceeds max score of ${maxScore}`,
         );

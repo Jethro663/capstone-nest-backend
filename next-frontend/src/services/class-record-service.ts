@@ -4,13 +4,17 @@ import type {
   FinalGrade,
   CreateClassRecordDto,
   RecordScoreDto,
+  UpdateClassRecordItemDto,
   BulkRecordScoresDto,
   SpreadsheetData,
   ClassRecordScore,
   ClassAverageReport,
   GradeDistributionReport,
   InterventionReportRow,
+  ClassRecordItem,
+  ClassRecordSlotOverview,
 } from '@/types/class-record';
+import type { GradingPeriod } from '@/utils/constants';
 
 export const classRecordService = {
   /** POST /class-record — Teacher, Admin */
@@ -48,6 +52,12 @@ export const classRecordService = {
     return data;
   },
 
+  /** PATCH /class-record/items/:itemId — Teacher, Admin */
+  async updateItem(itemId: string, dto: UpdateClassRecordItemDto): Promise<{ success: boolean; data: ClassRecordItem }> {
+    const { data } = await api.patch(`/class-record/items/${itemId}`, dto);
+    return data;
+  },
+
   /** POST /class-record/items/:itemId/scores/bulk — Teacher, Admin */
   async recordScoresBulk(itemId: string, dto: BulkRecordScoresDto): Promise<{ success: boolean; data: unknown }> {
     const { data } = await api.post(`/class-record/items/${itemId}/scores/bulk`, dto);
@@ -57,6 +67,21 @@ export const classRecordService = {
   /** POST /class-record/items/:itemId/sync-scores — Teacher, Admin */
   async syncScores(itemId: string): Promise<{ success: boolean; data: unknown }> {
     const { data } = await api.post(`/class-record/items/${itemId}/sync-scores`);
+    return data;
+  },
+
+  /** GET /class-record/by-class/:classId/slot-overview — Teacher, Admin */
+  async getSlotOverview(
+    classId: string,
+    gradingPeriod: GradingPeriod,
+    assessmentId?: string,
+  ): Promise<{ success: boolean; data: ClassRecordSlotOverview }> {
+    const { data } = await api.get(`/class-record/by-class/${classId}/slot-overview`, {
+      params: {
+        gradingPeriod,
+        assessmentId,
+      },
+    });
     return data;
   },
 

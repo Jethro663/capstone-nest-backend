@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, ClipboardList, FileCog, Gauge, Save, Send } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
+import { classRecordService } from '@/services/class-record-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,8 +16,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import type { Assessment, AssessmentQuestion, CreateQuestionDto, UpdateQuestionDto } from '@/types/assessment';
-import type { ClassRecordCategory } from '@/types/assessment';
+import type {
+  Assessment,
+  AssessmentPlacementMode,
+  AssessmentQuestion,
+  CreateQuestionDto,
+  UpdateQuestionDto,
+  ClassRecordCategory,
+} from '@/types/assessment';
+import type { ClassRecordSlotOverview } from '@/types/class-record';
+import type { GradingPeriod } from '@/utils/constants';
 import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
 import { cn } from '@/utils/cn';
 
@@ -36,6 +45,12 @@ const FILE_UPLOAD_TYPE_GROUPS = [
   { key: 'images', label: 'Images', extensions: ['png', 'jpg', 'jpeg'] },
   { key: 'spreadsheets', label: 'Spreadsheets', extensions: ['xls', 'xlsx', 'csv'] },
 ] as const;
+
+const CLASS_RECORD_CATEGORY_LABELS: Record<ClassRecordCategory, string> = {
+  written_work: 'Written Work',
+  performance_task: 'Performance Task',
+  quarterly_assessment: 'Quarterly Assessment',
+};
 
 /* â”€â”€ Main page component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export default function AssessmentEditorPage() {
@@ -62,8 +77,14 @@ export default function AssessmentEditorPage() {
   const [feedbackLevel, setFeedbackLevel] = useState<string>('immediate');
   const [feedbackDelayHours, setFeedbackDelayHours] = useState<number>(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [classRecordCategory, setClassRecordCategory] = useState<string>('');
-  const [quarter, setQuarter] = useState<string>('');
+  const [classRecordCategory, setClassRecordCategory] = useState<ClassRecordCategory | ''>('');
+  const [quarter, setQuarter] = useState<GradingPeriod | ''>('');
+  const [placementMode, setPlacementMode] = useState<AssessmentPlacementMode>('automatic');
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [slotOverview, setSlotOverview] = useState<ClassRecordSlotOverview | null>(null);
+  const [slotOverviewLoading, setSlotOverviewLoading] = useState(false);
+  const [slotOverviewError, setSlotOverviewError] = useState<string | null>(null);
+  const [showSlotPreview, setShowSlotPreview] = useState(true);
   const [editorTab, setEditorTab] = useState<'questions' | 'fileUpload' | 'settings'>('settings');
   const [closeWhenDue, setCloseWhenDue] = useState(false);
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
@@ -115,6 +136,13 @@ export default function AssessmentEditorPage() {
       setFeedbackDelayHours(a.feedbackDelayHours ?? 0);
       setClassRecordCategory(a.classRecordCategory || '');
       setQuarter(a.quarter || '');
+      setCloseWhenDue(a.closeWhenDue ?? false);
+      setRandomizeQuestions(a.randomizeQuestions ?? false);
+      setTimedQuestionsEnabled(a.timedQuestionsEnabled ?? false);
+      setQuestionTimeLimitSeconds(a.questionTimeLimitSeconds ?? '');
+      setStrictMode(a.strictMode ?? false);
+      setPlacementMode(a.classRecordPlacement?.placementMode || 'automatic');
+      setSelectedSlotId(a.classRecordPlacement?.itemId ?? null);
       setQuestions((a.questions || []).sort((x, y) => x.order - y.order));
     } catch {
       toast.error('Failed to load assessment');
@@ -125,10 +153,87 @@ export default function AssessmentEditorPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSlotOverview = async () => {
+      if (!assessment?.classId || !classRecordCategory || !quarter) {
+        setSlotOverview(null);
+        setSlotOverviewError(null);
+        return;
+      }
+
+      try {
+        setSlotOverviewLoading(true);
+        setSlotOverviewError(null);
+        const res = await classRecordService.getSlotOverview(
+          assessment.classId,
+          quarter,
+          assessmentId,
+        );
+
+        if (cancelled) return;
+
+        setSlotOverview(res.data);
+        const existingPlacementItemId =
+          assessment.classRecordPlacement?.gradingPeriod === quarter &&
+          assessment.classRecordPlacement?.category === classRecordCategory
+            ? assessment.classRecordPlacement.itemId
+            : null;
+        setSelectedSlotId((current) => {
+          if (!current) {
+            return existingPlacementItemId;
+          }
+
+          const slotExists = res.data.categories.some((category) =>
+            category.slots.some((slot) => slot.itemId === current),
+          );
+
+          return slotExists ? current : existingPlacementItemId;
+        });
+      } catch (error: any) {
+        if (cancelled) return;
+        setSlotOverview(null);
+        setSlotOverviewError(
+          error?.response?.data?.message || 'Failed to load class record slots',
+        );
+      } finally {
+        if (!cancelled) {
+          setSlotOverviewLoading(false);
+        }
+      }
+    };
+
+    void loadSlotOverview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    assessment?.classId,
+    assessment?.classRecordPlacement?.itemId,
+    assessmentId,
+    classRecordCategory,
+    quarter,
+  ]);
+
   /* ---------- computed ---------- */
   const totalPoints = questions.reduce((s, q) => s + q.points, 0);
   const hasPendingChanges = true;
   const handleUpdateAssessment = () => handleSaveSettings();
+  const activePlacementItemId =
+    placementMode === 'manual'
+      ? selectedSlotId
+      : assessment?.classRecordPlacement?.gradingPeriod === quarter &&
+          assessment?.classRecordPlacement?.category === classRecordCategory
+        ? assessment.classRecordPlacement.itemId
+        : null;
+  const currentClassRecordCategoryLabel = classRecordCategory
+    ? CLASS_RECORD_CATEGORY_LABELS[classRecordCategory as ClassRecordCategory]
+    : CLASS_RECORD_CATEGORY_LABELS.written_work;
+  const selectedCategorySlots = slotOverview?.categories.find(
+    (category) => category.key === classRecordCategory,
+  );
 
   const isGroupSelected = (key: string) => allowedFileGroups.includes(key);
   const toggleFileGroup = (key: string, checked: boolean) => {
@@ -199,6 +304,11 @@ export default function AssessmentEditorPage() {
 
   /* ---------- save assessment metadata ---------- */
   const handleSaveSettings = async () => {
+    if (placementMode === 'manual' && classRecordCategory && quarter && !selectedSlotId) {
+      toast.error('Pick an open class record slot first');
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await assessmentService.update(assessmentId, {
@@ -209,12 +319,26 @@ export default function AssessmentEditorPage() {
         maxAttempts,
         timeLimitMinutes: timeLimitMinutes === '' ? null : Number(timeLimitMinutes),
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        closeWhenDue,
+        randomizeQuestions,
+        timedQuestionsEnabled,
+        questionTimeLimitSeconds:
+          questionTimeLimitSeconds === '' ? null : Number(questionTimeLimitSeconds),
+        strictMode,
         feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
         feedbackDelayHours,
         classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
         quarter: (quarter || undefined) as Assessment['quarter'],
+        classRecordItemId:
+          classRecordCategory && quarter
+            ? placementMode === 'manual'
+              ? selectedSlotId
+              : null
+            : null,
       });
       setAssessment(res.data);
+      setPlacementMode(res.data.classRecordPlacement?.placementMode || placementMode);
+      setSelectedSlotId(res.data.classRecordPlacement?.itemId ?? null);
       toast.success('Settings saved');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to save settings');
@@ -576,6 +700,227 @@ export default function AssessmentEditorPage() {
             </div>
 
             <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">Class Record Placement</p>
+                  <p className="text-xs text-[var(--teacher-text-muted)]">
+                    Choose where this assessment should appear in the quarter workbook before students start producing record data.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="teacher-button-outline rounded-xl font-black"
+                  disabled={!classRecordCategory || !quarter}
+                  onClick={() => setShowSlotPreview((current) => !current)}
+                >
+                  {showSlotPreview ? 'Hide Slot Preview' : 'Open Slot Preview'}
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Class Record Category</Label>
+                  <select
+                    value={classRecordCategory}
+                    onChange={(e) => {
+                      setClassRecordCategory(e.target.value as ClassRecordCategory | '');
+                      setSelectedSlotId(null);
+                    }}
+                    className="teacher-select w-full"
+                  >
+                    <option value="">None</option>
+                    <option value="written_work">Written Work</option>
+                    <option value="performance_task">Performance Task</option>
+                    <option value="quarterly_assessment">Quarterly Assessment</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Quarter</Label>
+                  <select
+                    value={quarter}
+                    onChange={(e) => {
+                      setQuarter(e.target.value as GradingPeriod | '');
+                      setSelectedSlotId(null);
+                    }}
+                    className="teacher-select w-full"
+                  >
+                    <option value="">None</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPlacementMode('automatic')}
+                  className={cn(
+                    'rounded-xl border px-4 py-3 text-left transition',
+                    placementMode === 'automatic'
+                      ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
+                      : 'border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] text-[var(--teacher-text-strong)] hover:border-emerald-300/60',
+                  )}
+                >
+                  <p className="text-sm font-black">Automatic</p>
+                  <p className="mt-1 text-xs text-[inherit] opacity-80">
+                    Reserve the first open slot in {currentClassRecordCategoryLabel}.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlacementMode('manual')}
+                  className={cn(
+                    'rounded-xl border px-4 py-3 text-left transition',
+                    placementMode === 'manual'
+                      ? 'border-sky-400 bg-sky-500/10 text-sky-100'
+                      : 'border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] text-[var(--teacher-text-strong)] hover:border-sky-300/60',
+                  )}
+                >
+                  <p className="text-sm font-black">Pick a slot</p>
+                  <p className="mt-1 text-xs text-[inherit] opacity-80">
+                    Open the header-only workbook preview and choose a specific empty slot yourself.
+                  </p>
+                </button>
+              </div>
+
+              {!classRecordCategory || !quarter ? (
+                <div className="rounded-xl border border-dashed border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.52)] px-4 py-3 text-sm text-[var(--teacher-text-muted)]">
+                  Select a class record category and quarter to inspect the workbook slots.
+                </div>
+              ) : slotOverviewLoading ? (
+                <div className="rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.52)] px-4 py-4 text-sm text-[var(--teacher-text-muted)]">
+                  Loading class record slots...
+                </div>
+              ) : slotOverviewError ? (
+                <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-4 space-y-3 text-sm text-amber-100">
+                  <p className="font-semibold">This assessment cannot be placed yet.</p>
+                  <p>{slotOverviewError}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="teacher-button-outline rounded-xl font-black"
+                    onClick={() => router.push('/dashboard/teacher/class-record')}
+                  >
+                    Open Class Record Workspace
+                  </Button>
+                </div>
+              ) : showSlotPreview && slotOverview ? (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--teacher-text-muted)]">
+                    <span>
+                      Workbook {slotOverview.gradingPeriod} • {slotOverview.status.toUpperCase()}
+                    </span>
+                    <span>
+                      {placementMode === 'automatic'
+                        ? 'Automatic mode will keep or reserve the first open slot in the selected category.'
+                        : 'Manual mode only allows open slots or the slot already reserved for this assessment.'}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    {slotOverview.categories.map((category) => (
+                      <div
+                        key={category.id}
+                        className={cn(
+                          'rounded-2xl border p-4 space-y-3',
+                          category.key === classRecordCategory
+                            ? 'border-[var(--teacher-accent)] bg-[rgba(15,23,42,0.78)]'
+                            : 'border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.52)]',
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-black text-[var(--teacher-text-strong)]">
+                              {category.label}
+                            </p>
+                            <p className="text-[11px] text-[var(--teacher-text-muted)]">
+                              {category.slots.filter((slot) => slot.status !== 'empty').length} of {category.slots.length} slots occupied
+                            </p>
+                          </div>
+                          {category.key === classRecordCategory && (
+                            <Badge variant="secondary">Selected Category</Badge>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-2">
+                          {category.slots.map((slot) => {
+                            const isSelected = activePlacementItemId === slot.itemId;
+                            const canChoose =
+                              placementMode === 'manual' &&
+                              category.key === classRecordCategory &&
+                              slot.isSelectable;
+
+                            return (
+                              <button
+                                key={slot.itemId}
+                                type="button"
+                                disabled={!canChoose}
+                                onClick={() => setSelectedSlotId(slot.itemId)}
+                                className={cn(
+                                  'rounded-xl border px-3 py-3 text-left transition',
+                                  isSelected
+                                    ? 'border-sky-400 bg-sky-500/10 text-sky-100'
+                                    : slot.status === 'empty'
+                                      ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                                      : slot.status === 'manual'
+                                        ? 'border-amber-400/40 bg-amber-500/10 text-amber-100'
+                                        : 'border-violet-400/40 bg-violet-500/10 text-violet-100',
+                                  !canChoose && 'cursor-not-allowed opacity-70',
+                                )}
+                                title={
+                                  slot.status === 'linked_other'
+                                    ? 'This slot is already reserved by another assessment.'
+                                    : slot.status === 'manual'
+                                      ? 'This slot already has manual class-record data.'
+                                      : slot.isSelectable
+                                        ? 'Click to use this slot.'
+                                        : 'Switch to Pick a slot mode to choose manually.'
+                                }
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm font-black">{slot.title}</span>
+                                  <span className="text-[10px] uppercase tracking-[0.2em]">
+                                    {slot.status.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs opacity-80">HPS {slot.maxScore || 0}</p>
+                                <p className="mt-1 text-[11px] opacity-80">
+                                  {slot.assessmentTitle
+                                    ? slot.assessmentTitle
+                                    : slot.scoreCount > 0
+                                      ? `${slot.scoreCount} learner score(s) recorded`
+                                      : slot.maxScore > 0
+                                        ? 'Manual slot already prepared'
+                                        : 'Open slot'}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {category.key === classRecordCategory && placementMode === 'manual' && (
+                          <p className="text-[11px] text-[var(--teacher-text-muted)]">
+                            Only open slots or this assessment&apos;s current reserved slot can be selected.
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {placementMode === 'manual' && selectedCategorySlots && !selectedSlotId ? (
+                    <p className="text-xs text-amber-200">
+                      Choose one open {selectedCategorySlots.label.toLowerCase()} slot before saving.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
               <p className="text-sm font-semibold">General</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {assessmentType !== 'file_upload' && (
@@ -592,33 +937,6 @@ export default function AssessmentEditorPage() {
                     </select>
                   </div>
                 )}
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Class Record Category</Label>
-                  <select
-                    value={classRecordCategory}
-                    onChange={(e) => setClassRecordCategory(e.target.value)}
-                    className="teacher-select w-full"
-                  >
-                    <option value="">None</option>
-                    <option value="written_work">Written Work</option>
-                    <option value="performance_task">Performance Task</option>
-                    <option value="quarterly_assessment">Quarterly Assessment</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Quarter</Label>
-                  <select
-                    value={quarter}
-                    onChange={(e) => setQuarter(e.target.value)}
-                    className="teacher-select w-full"
-                  >
-                    <option value="">None</option>
-                    <option value="Q1">Q1</option>
-                    <option value="Q2">Q2</option>
-                    <option value="Q3">Q3</option>
-                    <option value="Q4">Q4</option>
-                  </select>
-                </div>
               </div>
             </div>
 

@@ -15,6 +15,11 @@ import {
 } from '@/components/student/student-primitives';
 import { getMotionProps } from '@/components/student/student-motion';
 import { toast } from 'sonner';
+import {
+  getLatestReturnedAttempt,
+  getLatestSubmittedAttempt,
+  getSubmittedAttempts,
+} from '@/utils/student-assessment-routing';
 import { getDescription, formatDate } from '@/utils/helpers';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 
@@ -54,18 +59,21 @@ export default function StudentAssessmentPage() {
 
   useEffect(() => {
     const viewMode = searchParams.get('view');
-    if (!loading && assessment?.type === 'file_upload' && viewMode !== 'submitted') {
+    const hasDraftAttempt = attempts.some((attempt) => attempt.isSubmitted === false);
+    if (
+      !loading &&
+      assessment?.type === 'file_upload' &&
+      viewMode !== 'submitted' &&
+      !getLatestReturnedAttempt(attempts) &&
+      (hasDraftAttempt || attempts.length === 0)
+    ) {
       router.replace(`/dashboard/student/assessments/${assessmentId}/take`);
     }
-  }, [assessment, assessmentId, loading, router, searchParams]);
+  }, [assessment, assessmentId, attempts, loading, router, searchParams]);
 
-  const submittedAttempts = attempts.filter((a) => a.isSubmitted !== false);
+  const submittedAttempts = getSubmittedAttempts(attempts);
   const latestSubmittedFileAttempt = assessment?.type === 'file_upload'
-    ? [...submittedAttempts].sort((a, b) => {
-        const aTime = new Date(a.submittedAt || a.updatedAt || a.createdAt || 0).getTime();
-        const bTime = new Date(b.submittedAt || b.updatedAt || b.createdAt || 0).getTime();
-        return bTime - aTime;
-      })[0] ?? null
+    ? getLatestSubmittedAttempt(attempts)
     : null;
   const maxAttempts = assessment?.maxAttempts ?? 1;
   const attemptsRemaining = Math.max(0, maxAttempts - submittedAttempts.length);

@@ -149,15 +149,22 @@ export function TeacherClassRecordWorkbook({
     syncingItemId,
     editingCell,
     editValue,
+    editingHpsItemId,
+    hpsValue,
     editRef,
+    hpsEditRef,
     setSelectedRecordId,
     setEditValue,
+    setHpsValue,
     generateQuarter,
     finalizeQuarter,
     reopenQuarter,
     handleCellClick,
     handleCellSave,
     handleCellKeyDown,
+    handleHpsClick,
+    handleHpsSave,
+    handleHpsKeyDown,
     syncItem,
     exportSpreadsheet,
   } = state;
@@ -557,9 +564,46 @@ export function TeacherClassRecordWorkbook({
                       </th>
                       {Array.from({ length: 10 }).map((_, index) => {
                         const item = workbookData.writtenCategory?.items[index];
+                        const isEditingHps = !!item && editingHpsItemId === item.id;
+                        const isEditableHps =
+                          !!item &&
+                          selectedRecord.status === 'draft' &&
+                          !item.assessmentId;
                         return (
-                          <th key={`ww-hps-${item?.id ?? index}`} className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                            {item?.hps ?? ''}
+                          <th
+                            key={`ww-hps-${item?.id ?? index}`}
+                            className={cn(
+                              'border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900 transition',
+                              isEditableHps && 'cursor-pointer hover:bg-sky-100',
+                              item?.assessmentId && 'bg-indigo-50/60 text-indigo-700',
+                            )}
+                            title={
+                              item?.assessmentId
+                                ? 'Linked assessment slot. Edit from assessment settings.'
+                                : isEditableHps
+                                  ? 'Click to set highest possible score'
+                                  : undefined
+                            }
+                            onClick={() =>
+                              item
+                                ? handleHpsClick(item.id, item.hps, item.assessmentId)
+                                : undefined
+                            }
+                          >
+                            {isEditingHps ? (
+                              <Input
+                                ref={hpsEditRef}
+                                type="number"
+                                min={0}
+                                value={hpsValue}
+                                onChange={(event) => setHpsValue(event.target.value)}
+                                onBlur={() => void handleHpsSave()}
+                                onKeyDown={handleHpsKeyDown}
+                                className="mx-auto h-7 w-16 border-0 p-0 text-center text-xs focus-visible:ring-1"
+                              />
+                            ) : (
+                              item?.hps || (isEditableHps ? 'Set HPS' : '')
+                            )}
                           </th>
                         );
                       })}
@@ -574,9 +618,46 @@ export function TeacherClassRecordWorkbook({
                       </th>
                       {Array.from({ length: 10 }).map((_, index) => {
                         const item = workbookData.performanceCategory?.items[index];
+                        const isEditingHps = !!item && editingHpsItemId === item.id;
+                        const isEditableHps =
+                          !!item &&
+                          selectedRecord.status === 'draft' &&
+                          !item.assessmentId;
                         return (
-                          <th key={`pt-hps-${item?.id ?? index}`} className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                            {item?.hps ?? ''}
+                          <th
+                            key={`pt-hps-${item?.id ?? index}`}
+                            className={cn(
+                              'border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900 transition',
+                              isEditableHps && 'cursor-pointer hover:bg-amber-100',
+                              item?.assessmentId && 'bg-indigo-50/60 text-indigo-700',
+                            )}
+                            title={
+                              item?.assessmentId
+                                ? 'Linked assessment slot. Edit from assessment settings.'
+                                : isEditableHps
+                                  ? 'Click to set highest possible score'
+                                  : undefined
+                            }
+                            onClick={() =>
+                              item
+                                ? handleHpsClick(item.id, item.hps, item.assessmentId)
+                                : undefined
+                            }
+                          >
+                            {isEditingHps ? (
+                              <Input
+                                ref={hpsEditRef}
+                                type="number"
+                                min={0}
+                                value={hpsValue}
+                                onChange={(event) => setHpsValue(event.target.value)}
+                                onBlur={() => void handleHpsSave()}
+                                onKeyDown={handleHpsKeyDown}
+                                className="mx-auto h-7 w-16 border-0 p-0 text-center text-xs focus-visible:ring-1"
+                              />
+                            ) : (
+                              item?.hps || (isEditableHps ? 'Set HPS' : '')
+                            )}
                           </th>
                         );
                       })}
@@ -589,8 +670,48 @@ export function TeacherClassRecordWorkbook({
                       <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
                         {((workbookData.performanceCategory?.weight ?? 0) / 100).toFixed(1)}
                       </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        {workbookData.quarterlyCategory?.items?.[0]?.hps ?? ''}
+                      <th
+                        className={cn(
+                          'border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900 transition',
+                          workbookData.quarterlyCategory?.items?.[0] &&
+                            selectedRecord.status === 'draft' &&
+                            !workbookData.quarterlyCategory.items[0].assessmentId &&
+                            'cursor-pointer hover:bg-lime-100',
+                          workbookData.quarterlyCategory?.items?.[0]?.assessmentId &&
+                            'bg-indigo-50/60 text-indigo-700',
+                        )}
+                        title={
+                          workbookData.quarterlyCategory?.items?.[0]?.assessmentId
+                            ? 'Linked assessment slot. Edit from assessment settings.'
+                            : workbookData.quarterlyCategory?.items?.[0]
+                              ? 'Click to set highest possible score'
+                              : undefined
+                        }
+                        onClick={() => {
+                          const item = workbookData.quarterlyCategory?.items?.[0];
+                          if (!item) return;
+                          handleHpsClick(item.id, item.hps, item.assessmentId);
+                        }}
+                      >
+                        {editingHpsItemId === workbookData.quarterlyCategory?.items?.[0]?.id ? (
+                          <Input
+                            ref={hpsEditRef}
+                            type="number"
+                            min={0}
+                            value={hpsValue}
+                            onChange={(event) => setHpsValue(event.target.value)}
+                            onBlur={() => void handleHpsSave()}
+                            onKeyDown={handleHpsKeyDown}
+                            className="mx-auto h-7 w-16 border-0 p-0 text-center text-xs focus-visible:ring-1"
+                          />
+                        ) : (
+                          workbookData.quarterlyCategory?.items?.[0]?.hps ||
+                          (workbookData.quarterlyCategory?.items?.[0] &&
+                          selectedRecord.status === 'draft' &&
+                          !workbookData.quarterlyCategory.items[0].assessmentId
+                            ? 'Set HPS'
+                            : '')
+                        )}
                       </th>
                       <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
                         100
@@ -673,7 +794,10 @@ export function TeacherClassRecordWorkbook({
                                     )}
                                     onClick={() =>
                                       item
-                                        ? handleCellClick(item.id, student.studentId, score ?? null)
+                                        ? handleCellClick(item.id, student.studentId, score ?? null, {
+                                            maxScore: item.hps,
+                                            assessmentId: item.assessmentId,
+                                          })
                                         : undefined
                                     }
                                   >
@@ -724,7 +848,10 @@ export function TeacherClassRecordWorkbook({
                                     )}
                                     onClick={() =>
                                       item
-                                        ? handleCellClick(item.id, student.studentId, score ?? null)
+                                        ? handleCellClick(item.id, student.studentId, score ?? null, {
+                                            maxScore: item.hps,
+                                            assessmentId: item.assessmentId,
+                                          })
                                         : undefined
                                     }
                                   >
@@ -774,7 +901,10 @@ export function TeacherClassRecordWorkbook({
                                     )}
                                     onClick={() =>
                                       item
-                                        ? handleCellClick(item.id, student.studentId, score ?? null)
+                                        ? handleCellClick(item.id, student.studentId, score ?? null, {
+                                            maxScore: item.hps,
+                                            assessmentId: item.assessmentId,
+                                          })
                                         : undefined
                                     }
                                   >

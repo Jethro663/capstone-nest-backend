@@ -638,7 +638,7 @@ export default function TeacherClassDetailPage() {
           <TabsList className="teacher-tab-list h-auto flex-wrap justify-start">
             <TabsTrigger value="lessons" className="teacher-tab rounded-xl px-4 font-black">Lessons</TabsTrigger>
             <TabsTrigger value="assessments" className="teacher-tab rounded-xl px-4 font-black">Assessments</TabsTrigger>
-            <TabsTrigger value="extraction" className="teacher-tab rounded-xl px-4 font-black">Extraction</TabsTrigger>
+            <TabsTrigger value="extraction" className="teacher-tab rounded-xl px-4 font-black">Lesson Creator</TabsTrigger>
             <TabsTrigger value="announcements" className="teacher-tab rounded-xl px-4 font-black">Announcements</TabsTrigger>
             <TabsTrigger value="class-record" className="teacher-tab rounded-xl px-4 font-black">Class Record</TabsTrigger>
             <TabsTrigger value="students" className="teacher-tab rounded-xl px-4 font-black">Students</TabsTrigger>

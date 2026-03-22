@@ -31,6 +31,7 @@ jest.mock('@/services/assessment-service', () => ({
   assessmentService: {
     getById: jest.fn(),
     getOngoingAttempt: jest.fn(),
+    getStudentAttempts: jest.fn(),
     startAttempt: jest.fn(),
     updateAttemptProgress: jest.fn(),
     uploadSubmissionFile: jest.fn(),
@@ -64,6 +65,12 @@ describe('StudentAssessmentTakePage', () => {
       message: 'none',
       data: null,
     });
+    mockedAssessmentService.getStudentAttempts.mockResolvedValue({
+      success: true,
+      message: 'attempts',
+      data: [],
+      count: 0,
+    });
     mockedAssessmentService.startAttempt.mockResolvedValue({
       success: true,
       message: 'started',
@@ -93,5 +100,35 @@ describe('StudentAssessmentTakePage', () => {
     });
 
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('redirects to returned results instead of starting a new file upload attempt', async () => {
+    mockedAssessmentService.getStudentAttempts.mockResolvedValue({
+      success: true,
+      message: 'attempts',
+      count: 1,
+      data: [
+        {
+          id: 'attempt-returned',
+          assessmentId: 'assessment-1',
+          studentId: 'student-1',
+          isSubmitted: true,
+          isReturned: true,
+          submittedAt: '2026-03-22T10:00:00.000Z',
+          updatedAt: '2026-03-22T10:00:00.000Z',
+          createdAt: '2026-03-22T09:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<StudentAssessmentTakePage />);
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith(
+        '/dashboard/student/assessments/assessment-1/results/attempt-returned',
+      );
+    });
+
+    expect(mockedAssessmentService.startAttempt).not.toHaveBeenCalled();
   });
 });

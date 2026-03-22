@@ -155,6 +155,10 @@ export class CreateAssessmentDto {
   @IsOptional()
   @IsEnum(Quarter)
   quarter?: Quarter;
+
+  @IsOptional()
+  @IsUUID()
+  classRecordItemId?: string;
 }
 
 export class RubricCriterionDto {
@@ -285,6 +289,11 @@ export class UpdateAssessmentDto {
   @IsOptional()
   @IsEnum(Quarter)
   quarter?: Quarter;
+
+  @IsOptional()
+  @ValidateIf((o) => o.classRecordItemId !== null)
+  @IsUUID()
+  classRecordItemId?: string | null;
 }
 
 // ==========================================

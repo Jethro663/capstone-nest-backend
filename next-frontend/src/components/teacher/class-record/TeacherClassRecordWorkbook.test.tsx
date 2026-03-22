@@ -135,9 +135,13 @@ function createState(): TeacherClassRecordState {
     syncingItemId: null,
     editingCell: null,
     editValue: '',
+    editingHpsItemId: null,
+    hpsValue: '',
     editRef: { current: null },
+    hpsEditRef: { current: null },
     setSelectedRecordId: jest.fn(),
     setEditValue: jest.fn(),
+    setHpsValue: jest.fn(),
     setEditingCell: jest.fn(),
     refresh: jest.fn().mockResolvedValue(undefined),
     generateQuarter: jest.fn().mockResolvedValue(undefined),
@@ -146,6 +150,9 @@ function createState(): TeacherClassRecordState {
     handleCellClick: jest.fn(),
     handleCellSave: jest.fn().mockResolvedValue(undefined),
     handleCellKeyDown: jest.fn(),
+    handleHpsClick: jest.fn(),
+    handleHpsSave: jest.fn().mockResolvedValue(undefined),
+    handleHpsKeyDown: jest.fn(),
     syncItem: jest.fn().mockResolvedValue(undefined),
     exportSpreadsheet: jest.fn().mockResolvedValue(undefined),
   };
@@ -155,7 +162,9 @@ describe('TeacherClassRecordWorkbook', () => {
   it('renders the workbook-style class record summary and learner grid', () => {
     render(<TeacherClassRecordWorkbook state={createState()} />);
 
-    expect(screen.getByText('Mathematics 7')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Mathematics 7' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('MATH')).toBeInTheDocument();
     expect(screen.getByText("LEARNERS' NAMES")).toBeInTheDocument();
     expect(screen.getByText('Santos, Ana')).toBeInTheDocument();

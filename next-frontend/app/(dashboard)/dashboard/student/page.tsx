@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -27,9 +27,10 @@ import {
   StudentSectionCard,
 } from '@/components/student/StudentPageShell';
 import { StudentStatusChip } from '@/components/student/student-primitives';
-import type { Assessment } from '@/types/assessment';
+import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
+import { getStudentAssessmentHref } from '@/utils/student-assessment-routing';
 import { getTeacherName } from '@/utils/helpers';
 
 function formatShortDate(value?: string) {
@@ -43,17 +44,12 @@ function formatShortDate(value?: string) {
   });
 }
 
-function getAssessmentHref(assessment: Assessment) {
-  return assessment.type === 'file_upload'
-    ? `/dashboard/student/assessments/${assessment.id}/take`
-    : `/dashboard/student/assessments/${assessment.id}`;
-}
-
 export default function StudentDashboardPage() {
   const { user } = useAuth();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [assessmentAttempts, setAssessmentAttempts] = useState<Record<string, AssessmentAttempt[]>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -84,8 +80,25 @@ export default function StudentDashboardPage() {
         ),
       ]);
 
-      setLessons(lessonResults.flatMap((result) => result.data || []));
-      setAssessments(assessmentResults.flatMap((result) => result.data || []));
+      const nextLessons = lessonResults.flatMap((result) => result.data || []);
+      const nextAssessments = assessmentResults.flatMap((result) => result.data || []);
+      const pendingFileUploadAssessments = nextAssessments
+        .filter((assessment) => assessment.isPublished && assessment.type === 'file_upload')
+        .slice(0, 4);
+      const attemptEntries = await Promise.all(
+        pendingFileUploadAssessments.map(async (assessment) => {
+          try {
+            const attemptsRes = await assessmentService.getStudentAttempts(assessment.id);
+            return [assessment.id, attemptsRes.data || []] as const;
+          } catch {
+            return [assessment.id, []] as const;
+          }
+        }),
+      );
+
+      setLessons(nextLessons);
+      setAssessments(nextAssessments);
+      setAssessmentAttempts(Object.fromEntries(attemptEntries));
     } catch {
       // Keep the dashboard usable even if one of the feeds has an issue.
     } finally {
@@ -94,6 +107,28 @@ export default function StudentDashboardPage() {
   }, [user?.id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const profileIncomplete = !user?.firstName || !user?.lastName;
+  const publishedAssessments = assessments.filter((assessment) => assessment.isPublished);
+  const recentLessons = lessons.slice(0, 4);
+  const pendingAssessments = publishedAssessments.slice(0, 4);
+  const featuredClasses = classes.slice(0, 3);
+  const profileCompletion = profileIncomplete ? 70 : 100;
+  const learningProgress = lessons.length > 0
+    ? Math.min(100, Math.round((classes.length / Math.max(1, lessons.length)) * 100))
+    : 0;
+  const completedFocusCount = Math.max(0, lessons.length - pendingAssessments.length);
+  const continueHref = classes[0] ? `/dashboard/student/classes/${classes[0].id}` : '/dashboard/student/courses';
+  const assessmentHrefMap = useMemo(
+    () =>
+      Object.fromEntries(
+        pendingAssessments.map((assessment) => [
+          assessment.id,
+          getStudentAssessmentHref(assessment, assessmentAttempts[assessment.id] || []),
+        ]),
+      ),
+    [assessmentAttempts, pendingAssessments],
+  );
 
   if (loading) {
     return (
@@ -115,18 +150,6 @@ export default function StudentDashboardPage() {
       </div>
     );
   }
-
-  const profileIncomplete = !user?.firstName || !user?.lastName;
-  const publishedAssessments = assessments.filter((assessment) => assessment.isPublished);
-  const recentLessons = lessons.slice(0, 4);
-  const pendingAssessments = publishedAssessments.slice(0, 4);
-  const featuredClasses = classes.slice(0, 3);
-  const profileCompletion = profileIncomplete ? 70 : 100;
-  const learningProgress = lessons.length > 0
-    ? Math.min(100, Math.round((classes.length / Math.max(1, lessons.length)) * 100))
-    : 0;
-  const completedFocusCount = Math.max(0, lessons.length - pendingAssessments.length);
-  const continueHref = classes[0] ? `/dashboard/student/classes/${classes[0].id}` : '/dashboard/student/courses';
 
   return (
     <StudentPageShell
@@ -446,7 +469,7 @@ export default function StudentDashboardPage() {
                         ? assessment.description
                         : "You have a task waiting here. Open it when you're ready and work through it one step at a time."}
                     </p>
-                    <Link href={getAssessmentHref(assessment)}>
+                    <Link href={assessmentHrefMap[assessment.id] || `/dashboard/student/assessments/${assessment.id}`}>
                       <Button className="student-button-solid mt-4 h-10 w-full rounded-2xl font-black">
                         Start Task
                       </Button>
