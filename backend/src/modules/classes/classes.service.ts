@@ -55,7 +55,7 @@ export class ClassesService {
   }
 
   private ensureTeacherCanAccessClass(
-    classRecord: { teacherId: string },
+    classRecord: { teacherId: string | null },
     requesterId?: string,
     requesterRoles?: string[],
   ) {
@@ -422,16 +422,18 @@ export class ClassesService {
   private async getHiddenClassIdsForUser(userId: string, classIds: string[]) {
     if (!userId || classIds.length === 0) return new Set<string>();
 
-    const preferences = await this.db.query.classVisibilityPreferences.findMany({
-      where: and(
-        eq(classVisibilityPreferences.userId, userId),
-        inArray(classVisibilityPreferences.classId, classIds),
-        eq(classVisibilityPreferences.isHidden, true),
-      ),
-      columns: {
-        classId: true,
+    const preferences = await this.db.query.classVisibilityPreferences.findMany(
+      {
+        where: and(
+          eq(classVisibilityPreferences.userId, userId),
+          inArray(classVisibilityPreferences.classId, classIds),
+          eq(classVisibilityPreferences.isHidden, true),
+        ),
+        columns: {
+          classId: true,
+        },
       },
-    });
+    );
 
     return new Set(preferences.map((preference) => preference.classId));
   }
@@ -1323,7 +1325,7 @@ export class ClassesService {
   private async checkCollisions(params: {
     classId: string;
     sectionId: string;
-    teacherId: string;
+    teacherId?: string | null;
     room?: string | null;
     slots: ScheduleSlotDto[];
     excludeClassId?: string;
@@ -1359,10 +1361,10 @@ export class ClassesService {
         conditions.push(ne(classSchedules.classId, excludeClassId));
       }
 
-      const scopeParts: SQL[] = [
-        eq(classes.sectionId, sectionId),
-        eq(classes.teacherId, teacherId),
-      ];
+      const scopeParts: SQL[] = [eq(classes.sectionId, sectionId)];
+      if (teacherId) {
+        scopeParts.push(eq(classes.teacherId, teacherId));
+      }
       if (room) {
         scopeParts.push(
           and(sql`${classes.room} IS NOT NULL`, eq(classes.room, room)) as SQL,
@@ -1388,7 +1390,9 @@ export class ClassesService {
       for (const row of conflictRows) {
         const conflictTypes: string[] = [];
         if (row.classSectionId === sectionId) conflictTypes.push('section');
-        if (row.classTeacherId === teacherId) conflictTypes.push('teacher');
+        if (teacherId && row.classTeacherId === teacherId) {
+          conflictTypes.push('teacher');
+        }
         if (room && row.classRoom === room) conflictTypes.push('room');
 
         conflicts.push({

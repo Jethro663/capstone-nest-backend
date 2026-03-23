@@ -19,14 +19,19 @@ export class TeacherProfilesService {
   }
 
   async createProfile(userId: string, dto: Partial<UpdateTeacherProfileDto>) {
+    const phone = dto.phone ?? dto.contactNumber;
+    const dateOfBirth = dto.dateOfBirth ?? dto.dob;
     const [created] = await this.db
       .insert(teacherProfiles)
       .values({
         userId,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        gender: dto.gender,
+        address: dto.address,
         department: dto.department,
         specialization: dto.specialization,
         profilePicture: dto.profilePicture,
-        contactNumber: dto.contactNumber,
+        contactNumber: phone,
         employeeId: dto.employeeId,
       })
       .returning();
@@ -36,6 +41,8 @@ export class TeacherProfilesService {
 
   async updateProfile(userId: string, dto: Partial<UpdateTeacherProfileDto>) {
     const existing = await this.findByUserId(userId);
+    const phone = dto.phone ?? dto.contactNumber;
+    const dateOfBirth = dto.dateOfBirth ?? dto.dob;
 
     if (!existing) {
       return this.createProfile(userId, dto);
@@ -44,10 +51,17 @@ export class TeacherProfilesService {
     const [updated] = await this.db
       .update(teacherProfiles)
       .set({
+        dateOfBirth: dateOfBirth
+          ? new Date(dateOfBirth)
+          : dto.dateOfBirth === null || dto.dob === null
+            ? null
+            : existing.dateOfBirth,
+        gender: dto.gender ?? existing.gender,
+        address: dto.address ?? existing.address,
         department: dto.department ?? existing.department,
         specialization: dto.specialization ?? existing.specialization,
         profilePicture: dto.profilePicture ?? existing.profilePicture,
-        contactNumber: dto.contactNumber ?? existing.contactNumber,
+        contactNumber: phone ?? existing.contactNumber,
         employeeId: dto.employeeId ?? existing.employeeId,
         updatedAt: new Date(),
       })

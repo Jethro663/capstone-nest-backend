@@ -218,9 +218,9 @@ export const classes = pgTable(
     sectionId: uuid('section_id')
       .notNull()
       .references(() => sections.id, { onDelete: 'cascade' }),
-    teacherId: uuid('teacher_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    teacherId: uuid('teacher_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
 
     room: text('room'),
     cardPreset: text('card_preset').notNull().default('aurora'),
@@ -306,6 +306,9 @@ export const teacherProfiles = pgTable(
     specialization: text('specialization'),
     profilePicture: text('profile_picture'),
     contactNumber: text('contact_number'),
+    dateOfBirth: timestamp('date_of_birth'),
+    gender: text('gender'),
+    address: text('address'),
     employeeId: varchar('employee_id', { length: 20 }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

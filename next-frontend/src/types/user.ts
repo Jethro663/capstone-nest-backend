@@ -26,6 +26,8 @@ export interface User {
   familyRelationship?: string;
   familyContact?: string;
   contactNumber?: string;
+  department?: string;
+  specialization?: string;
   employeeId?: string;
   profile?: StudentProfile | null;
   teacherProfile?: TeacherProfile | null;

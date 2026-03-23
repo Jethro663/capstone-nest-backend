@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { FolderOpen, School, UserPlus, Users } from 'lucide-react';
 import { sectionService } from '@/services/section-service';
-import { userService } from '@/services/user-service';
 import {
   AdminEmptyState,
   AdminPageShell,
@@ -22,42 +21,26 @@ import { getApiErrorMessage } from '@/lib/api-error';
  
 import { toast } from 'sonner';
 import type { Section } from '@/types/section';
-import type { User } from '@/types/user';
 
 type StatusTab = 'active' | 'archived';
 
 export default function SectionManagementPage() {
   const router = useRouter();
   const [sections, setSections] = useState<Section[]>([]);
-  const [teachers, setTeachers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<StatusTab>('active');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<Section | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<Section | null>(null);
   const [archiveConfirmText, setArchiveConfirmText] = useState('');
   const [purgeConfirmText, setPurgeConfirmText] = useState('');
-  const [editSection, setEditSection] = useState<Section | null>(null);
-  const [form, setForm] = useState({
-    name: '',
-    gradeLevel: '7',
-    schoolYear: '',
-    capacity: 40,
-    roomNumber: '',
-    adviserId: '',
-  });
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [sectionsRes, teachersRes] = await Promise.all([
-        sectionService.getAll(),
-        userService.getAll({ role: 'teacher', limit: 200 }),
-      ]);
+      const sectionsRes = await sectionService.getAll();
       setSections(sectionsRes.data || []);
-      setTeachers(teachersRes.users || []);
     } catch {
       toast.error('Failed to load data');
     } finally {
@@ -97,33 +80,15 @@ export default function SectionManagementPage() {
       toast.error('Type the exact section name to archive');
       return;
     }
- 
+
     try {
-      if (editSection) {
-        await sectionService.update(editSection.id, {
-          name: form.name,
-          gradeLevel: form.gradeLevel,
-          schoolYear: form.schoolYear,
-          capacity: form.capacity,
-          roomNumber: form.roomNumber || undefined,
-          adviserId: form.adviserId || undefined,
-        });
-        toast.success('Section updated');
-      } else {
-        await sectionService.create({
-          name: form.name,
-          gradeLevel: form.gradeLevel as '7' | '8' | '9' | '10',
-          schoolYear: form.schoolYear,
-          capacity: form.capacity,
-          roomNumber: form.roomNumber || undefined,
-          adviserId: form.adviserId || undefined,
-        });
-        toast.success('Section created');
-      }
-      setShowCreate(false);
-      fetchData();
-    } catch {
-      toast.error('Failed to save section');
+      await sectionService.archive(archiveTarget.id);
+      toast.success('Section archived');
+      setArchiveTarget(null);
+      setArchiveConfirmText('');
+      void fetchData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to archive section'));
     }
   };
 
@@ -148,10 +113,9 @@ export default function SectionManagementPage() {
       toast.success('Section purged from database');
       setPurgeTarget(null);
       setPurgeConfirmText('');
-      fetchData();
+      void fetchData();
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to purge section'));
- 
     }
   };
 

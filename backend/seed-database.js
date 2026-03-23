@@ -1,13 +1,14 @@
 /**
  * Database Seeding Script
- * 
- * This script initializes the LMS database with essential data:
- * - Roles (teacher, student, admin)
- * - Default users (1 teacher, 1 admin, 1 student)
- * - 1 section (Grade level class grouping)
- * - 1 class (Subject + Section + Teacher)
- * - Student enrollment in the class
- * 
+ *
+ * Initializes the LMS database with baseline demo data:
+ * - Roles
+ * - Admin, teacher, and student users
+ * - Teacher and student profiles
+ * - Sections and classes
+ * - Class schedules
+ * - Student enrollments
+ *
  * Usage: node seed-database.js
  */
 
@@ -15,28 +16,32 @@ import { Client } from 'pg';
 import { genSalt, hash } from 'bcrypt';
 import { v4 as uuid } from 'uuid';
 import { config } from 'dotenv';
-config(); 
 
-// ============================================
-// CONFIGURATION
-// ============================================
-const DB_URL = process.env.DATABASE_URL || 'postgresql://postgres:200411@postgres:5432/capstone';
+config();
 
-// Sample data - customize these as needed
+const DB_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:200411@postgres:5432/capstone';
+
 const ROLES = [
   { name: 'admin', description: 'System administrator with full access' },
-  { name: 'teacher', description: 'Teacher who can create and manage classes and lessons' },
-  { name: 'student', description: 'Student who can enroll in classes and complete lessons' },
+  {
+    name: 'teacher',
+    description: 'Teacher who can create and manage classes and lessons',
+  },
+  {
+    name: 'student',
+    description: 'Student who can enroll in classes and complete lessons',
+  },
 ];
 
 const SCHOOL_YEAR = '2024-2025';
 const DEFAULT_TEACHER_PASSWORD = 'Teacher123!';
 const DEFAULT_STUDENT_PASSWORD = 'Student123!';
 
-// Users to create
 const ADMIN_USER = {
   email: 'admin@lms.local',
-  password: 'Test@123', // Change this in production
+  password: 'Test@123',
   firstName: 'System',
   lastName: 'Admin',
 };
@@ -47,8 +52,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Ana',
     lastName: 'Reyes',
+    dateOfBirth: '1988-02-14',
+    gender: 'Female',
+    address: 'Blk 1 Lot 8, Rizal Street, Taguig City',
     department: 'Mathematics',
     specialization: 'Mathematics 7',
+    contactNumber: '09171234567',
     employeeId: 'TCHR-001',
   },
   {
@@ -56,8 +65,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Ben',
     lastName: 'Santos',
+    dateOfBirth: '1987-07-21',
+    gender: 'Male',
+    address: '27 Sampaguita Street, Taguig City',
     department: 'Science',
     specialization: 'Science 7',
+    contactNumber: '09181234567',
     employeeId: 'TCHR-002',
   },
   {
@@ -65,8 +78,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Carla',
     lastName: 'Garcia',
+    dateOfBirth: '1989-11-03',
+    gender: 'Female',
+    address: '15 Acacia Avenue, Taguig City',
     department: 'Languages',
     specialization: 'English 8',
+    contactNumber: '09191234567',
     employeeId: 'TCHR-003',
   },
   {
@@ -74,8 +91,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Daniel',
     lastName: 'Flores',
+    dateOfBirth: '1986-05-29',
+    gender: 'Male',
+    address: '88 Bonifacio Road, Taguig City',
     department: 'Languages',
     specialization: 'Filipino 8',
+    contactNumber: '09201234567',
     employeeId: 'TCHR-004',
   },
   {
@@ -83,8 +104,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Elena',
     lastName: 'Cruz',
+    dateOfBirth: '1985-09-17',
+    gender: 'Female',
+    address: '12 Mabini Extension, Taguig City',
     department: 'Social Studies',
     specialization: 'Araling Panlipunan 9',
+    contactNumber: '09211234567',
     employeeId: 'TCHR-005',
   },
   {
@@ -92,8 +117,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Felix',
     lastName: 'Mendoza',
+    dateOfBirth: '1984-01-12',
+    gender: 'Male',
+    address: '46 Kalayaan Street, Taguig City',
     department: 'Technology and Livelihood Education',
     specialization: 'TLE 9',
+    contactNumber: '09221234567',
     employeeId: 'TCHR-006',
   },
   {
@@ -101,8 +130,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Grace',
     lastName: 'Torres',
+    dateOfBirth: '1990-04-08',
+    gender: 'Female',
+    address: '9 Bayani Road, Taguig City',
     department: 'MAPEH',
     specialization: 'MAPEH 10',
+    contactNumber: '09231234567',
     employeeId: 'TCHR-007',
   },
   {
@@ -110,8 +143,12 @@ const TEACHERS = [
     password: DEFAULT_TEACHER_PASSWORD,
     firstName: 'Henry',
     lastName: 'Aquino',
+    dateOfBirth: '1983-12-01',
+    gender: 'Male',
+    address: '101 Lakandula Street, Taguig City',
     department: 'Values Education',
     specialization: 'ESP 10',
+    contactNumber: '09241234567',
     employeeId: 'TCHR-008',
   },
 ];
@@ -304,17 +341,9 @@ const STUDENTS = [
   },
 ];
 
-// ============================================
-// UTILITIES
-// ============================================
-
 async function hashPassword(plainPassword) {
   const salt = await genSalt(10);
   return hash(plainPassword, salt);
-}
-
-async function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function buildLrn(gradeLevel, sequence) {
@@ -325,18 +354,14 @@ function buildLrn(gradeLevel, sequence) {
 function log(message, type = 'info') {
   const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
   const prefix = {
-    info: `ℹ️  [${timestamp}]`,
-    success: `✅ [${timestamp}]`,
-    error: `❌ [${timestamp}]`,
-    warning: `⚠️  [${timestamp}]`,
-  }[type] || `[${timestamp}]`;
+    info: `[INFO ${timestamp}]`,
+    success: `[OK ${timestamp}]`,
+    error: `[ERROR ${timestamp}]`,
+    warning: `[WARN ${timestamp}]`,
+  }[type];
 
-  console.log(`${prefix} ${message}`);
+  console.log(`${prefix ?? `[${timestamp}]`} ${message}`);
 }
-
-// ============================================
-// MAIN SEEDING FUNCTION
-// ============================================
 
 async function seedDatabase() {
   const client = new Client({ connectionString: DB_URL });
@@ -344,11 +369,8 @@ async function seedDatabase() {
   try {
     await client.connect();
     log('Connected to database');
-
-    // Start transaction
     await client.query('BEGIN');
 
-    // ========== STEP 1: CREATE ROLES ==========
     log('Creating roles...');
     const createdRoles = {};
 
@@ -356,45 +378,54 @@ async function seedDatabase() {
       const roleId = uuid();
       try {
         const result = await client.query(
-          'INSERT INTO roles (id, name, description) VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description RETURNING id',
-          [roleId, role.name, role.description]
+          `INSERT INTO roles (id, name, description)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (name) DO UPDATE
+           SET description = EXCLUDED.description
+           RETURNING id`,
+          [roleId, role.name, role.description],
         );
         createdRoles[role.name] = result.rows[0].id;
-        log(`  ✓ Role '${role.name}' created/verified`, 'success');
+        log(`  - Role '${role.name}' created/verified`, 'success');
       } catch (err) {
-        if (err.code === '23505') { // unique_violation
-          // Role already exists, fetch the existing ID
-          const result = await client.query(
-            'SELECT id FROM roles WHERE name = $1',
-            [role.name]
-          );
-          if (result.rows.length > 0) {
-            createdRoles[role.name] = result.rows[0].id;
-            log(`  ℹ️  Role '${role.name}' already exists`, 'info');
-          }
-        } else {
+        if (err.code !== '23505') {
           throw err;
+        }
+
+        const result = await client.query(
+          'SELECT id FROM roles WHERE name = $1',
+          [role.name],
+        );
+        if (result.rows.length > 0) {
+          createdRoles[role.name] = result.rows[0].id;
+          log(`  - Role '${role.name}' already exists`, 'info');
         }
       }
     }
 
-    // ========== STEP 2: CREATE USERS ==========
     log('Creating users...');
     const users = {};
 
-    // Create Admin
-    const adminId = uuid();
-    const adminPasswordHash = await hashPassword(ADMIN_USER.password);
     {
+      const adminId = uuid();
+      const adminPasswordHash = await hashPassword(ADMIN_USER.password);
       const result = await client.query(
         `INSERT INTO users (id, email, password, first_name, last_name, account_status, is_email_verified)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
-        [adminId, ADMIN_USER.email, adminPasswordHash, ADMIN_USER.firstName, ADMIN_USER.lastName, 'ACTIVE', true]
+        [
+          adminId,
+          ADMIN_USER.email,
+          adminPasswordHash,
+          ADMIN_USER.firstName,
+          ADMIN_USER.lastName,
+          'ACTIVE',
+          true,
+        ],
       );
       users.admin = result.rows[0].id;
-      log(`  ✓ Admin user created (${ADMIN_USER.email})`, 'success');
+      log(`  - Admin user created (${ADMIN_USER.email})`, 'success');
     }
 
     for (const teacher of TEACHERS) {
@@ -405,10 +436,18 @@ async function seedDatabase() {
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
-        [teacherId, teacher.email, teacherPasswordHash, teacher.firstName, teacher.lastName, 'ACTIVE', true]
+        [
+          teacherId,
+          teacher.email,
+          teacherPasswordHash,
+          teacher.firstName,
+          teacher.lastName,
+          'ACTIVE',
+          true,
+        ],
       );
       users[teacher.email] = result.rows[0].id;
-      log(`  ✓ Teacher user created (${teacher.email})`, 'success');
+      log(`  - Teacher user created (${teacher.email})`, 'success');
     }
 
     for (const student of STUDENTS) {
@@ -419,32 +458,38 @@ async function seedDatabase() {
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
          RETURNING id`,
-        [studentUserId, student.email, studentPasswordHash, student.firstName, student.lastName, 'ACTIVE', true]
+        [
+          studentUserId,
+          student.email,
+          studentPasswordHash,
+          student.firstName,
+          student.lastName,
+          'ACTIVE',
+          true,
+        ],
       );
       users[student.email] = result.rows[0].id;
-      log(`  ✓ Student user created (${student.email})`, 'success');
+      log(`  - Student user created (${student.email})`, 'success');
     }
 
-    // ========== STEP 3: ASSIGN ROLES ==========
     log('Assigning roles to users...');
 
-    // Assign admin role
     await client.query(
       `INSERT INTO user_roles (user_id, role_id, assigned_by)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id, role_id) DO NOTHING`,
-      [users.admin, createdRoles.admin, 'SYSTEM']
+      [users.admin, createdRoles.admin, 'SYSTEM'],
     );
-    log(`  ✓ Admin role assigned`, 'success');
+    log('  - Admin role assigned', 'success');
 
     for (const teacher of TEACHERS) {
       await client.query(
         `INSERT INTO user_roles (user_id, role_id, assigned_by)
          VALUES ($1, $2, $3)
          ON CONFLICT (user_id, role_id) DO NOTHING`,
-        [users[teacher.email], createdRoles.teacher, 'SYSTEM']
+        [users[teacher.email], createdRoles.teacher, 'SYSTEM'],
       );
-      log(`  ✓ Teacher role assigned (${teacher.email})`, 'success');
+      log(`  - Teacher role assigned (${teacher.email})`, 'success');
     }
 
     for (const student of STUDENTS) {
@@ -452,29 +497,45 @@ async function seedDatabase() {
         `INSERT INTO user_roles (user_id, role_id, assigned_by)
          VALUES ($1, $2, $3)
          ON CONFLICT (user_id, role_id) DO NOTHING`,
-        [users[student.email], createdRoles.student, 'SYSTEM']
+        [users[student.email], createdRoles.student, 'SYSTEM'],
       );
-      log(`  ✓ Student role assigned (${student.email})`, 'success');
+      log(`  - Student role assigned (${student.email})`, 'success');
     }
 
-    // ========== STEP 4: CREATE STUDENT PROFILE ==========
     log('Creating teacher profiles...');
     for (const teacher of TEACHERS) {
       await client.query(
-        `INSERT INTO teacher_profiles (user_id, department, specialization, employee_id)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO teacher_profiles (
+           user_id,
+           department,
+           specialization,
+           employee_id,
+           date_of_birth,
+           gender,
+           address,
+           contact_number
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (user_id) DO UPDATE
          SET department = EXCLUDED.department,
              specialization = EXCLUDED.specialization,
-             employee_id = EXCLUDED.employee_id`,
+             employee_id = EXCLUDED.employee_id,
+             date_of_birth = EXCLUDED.date_of_birth,
+             gender = EXCLUDED.gender,
+             address = EXCLUDED.address,
+             contact_number = EXCLUDED.contact_number`,
         [
           users[teacher.email],
           teacher.department,
           teacher.specialization,
           teacher.employeeId,
-        ]
+          teacher.dateOfBirth,
+          teacher.gender,
+          teacher.address,
+          teacher.contactNumber,
+        ],
       );
-      log(`  ✓ Teacher profile created (${teacher.email})`, 'success');
+      log(`  - Teacher profile created (${teacher.email})`, 'success');
     }
 
     log('Creating student profiles...');
@@ -486,23 +547,41 @@ async function seedDatabase() {
            ON CONFLICT (user_id) DO UPDATE
            SET grade_level = EXCLUDED.grade_level,
                lrn = EXCLUDED.lrn`,
-          [users[student.email], student.gradeLevel, buildLrn(student.gradeLevel, index + 1)]
+          [
+            users[student.email],
+            student.gradeLevel,
+            buildLrn(student.gradeLevel, index + 1),
+          ],
         );
-        log(`  ✓ Student profile created (${student.email})`, 'success');
+        log(`  - Student profile created (${student.email})`, 'success');
       } catch (err) {
-        if (err.code !== '23505') throw err;
-        log(`  ℹ️  Student profile already exists or LRN conflicts with another user (${student.email})`, 'info');
+        if (err.code !== '23505') {
+          throw err;
+        }
+        log(
+          `  - Student profile already exists or LRN conflicts with another user (${student.email})`,
+          'info',
+        );
       }
     }
 
-    // ========== STEP 5: CREATE SECTION ==========
     log('Creating sections...');
     const sectionIdsByGrade = {};
     for (const section of SECTIONS) {
       const sectionId = uuid();
+
       try {
         await client.query(
-          `INSERT INTO sections (id, name, grade_level, school_year, capacity, room_number, adviser_id, is_active)
+          `INSERT INTO sections (
+             id,
+             name,
+             grade_level,
+             school_year,
+             capacity,
+             room_number,
+             adviser_id,
+             is_active
+           )
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (name, grade_level, school_year) DO NOTHING
            RETURNING id`,
@@ -515,17 +594,20 @@ async function seedDatabase() {
             section.roomNumber,
             users[section.adviserEmail],
             true,
-          ]
+          ],
         );
-        log(`  ✓ Section created: ${section.name}`, 'success');
+        log(`  - Section created: ${section.name}`, 'success');
       } catch (err) {
-        if (err.code !== '23505') throw err;
+        if (err.code !== '23505') {
+          throw err;
+        }
+
         const result = await client.query(
           'SELECT id FROM sections WHERE name = $1 AND grade_level = $2 AND school_year = $3',
-          [section.name, section.gradeLevel, section.schoolYear]
+          [section.name, section.gradeLevel, section.schoolYear],
         );
         if (result.rows.length > 0) {
-          log(`  ℹ️  Section already exists (${section.name})`, 'info');
+          log(`  - Section already exists (${section.name})`, 'info');
         } else {
           throw err;
         }
@@ -533,12 +615,11 @@ async function seedDatabase() {
 
       const sectionQuery = await client.query(
         'SELECT id FROM sections WHERE name = $1 AND grade_level = $2 AND school_year = $3',
-        [section.name, section.gradeLevel, section.schoolYear]
+        [section.name, section.gradeLevel, section.schoolYear],
       );
       sectionIdsByGrade[section.gradeLevel] = sectionQuery.rows[0].id;
     }
 
-    // ========== STEP 6: CREATE CLASS ==========
     log('Creating classes...');
     const classesByGradeLevel = {};
     for (const [index, classConfig] of CLASSES.entries()) {
@@ -547,7 +628,17 @@ async function seedDatabase() {
 
       try {
         await client.query(
-          `INSERT INTO classes (id, subject_name, subject_code, subject_grade_level, section_id, teacher_id, room, school_year, is_active)
+          `INSERT INTO classes (
+             id,
+             subject_name,
+             subject_code,
+             subject_grade_level,
+             section_id,
+             teacher_id,
+             room,
+             school_year,
+             is_active
+           )
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            ON CONFLICT (subject_code, section_id, school_year) DO NOTHING
            RETURNING id`,
@@ -561,17 +652,23 @@ async function seedDatabase() {
             classConfig.room,
             classConfig.schoolYear,
             true,
-          ]
+          ],
         );
-        log(`  ✓ Class created: ${classConfig.subjectName} (${classConfig.subjectCode})`, 'success');
+        log(
+          `  - Class created: ${classConfig.subjectName} (${classConfig.subjectCode})`,
+          'success',
+        );
       } catch (err) {
-        if (err.code !== '23505') throw err;
+        if (err.code !== '23505') {
+          throw err;
+        }
+
         const result = await client.query(
           'SELECT id FROM classes WHERE subject_code = $1 AND section_id = $2 AND school_year = $3',
-          [classConfig.subjectCode, sectionId, classConfig.schoolYear]
+          [classConfig.subjectCode, sectionId, classConfig.schoolYear],
         );
         if (result.rows.length > 0) {
-          log(`  ℹ️  Class already exists (${classConfig.subjectCode})`, 'info');
+          log(`  - Class already exists (${classConfig.subjectCode})`, 'info');
         } else {
           throw err;
         }
@@ -579,36 +676,46 @@ async function seedDatabase() {
 
       const classQuery = await client.query(
         'SELECT id FROM classes WHERE subject_code = $1 AND section_id = $2 AND school_year = $3',
-        [classConfig.subjectCode, sectionId, classConfig.schoolYear]
+        [classConfig.subjectCode, sectionId, classConfig.schoolYear],
       );
       const finalClassId = classQuery.rows[0].id;
+
       if (!classesByGradeLevel[classConfig.sectionGradeLevel]) {
         classesByGradeLevel[classConfig.sectionGradeLevel] = [];
       }
       classesByGradeLevel[classConfig.sectionGradeLevel].push(finalClassId);
 
-      const schedulePattern = CLASS_SCHEDULE_PATTERNS[index % CLASS_SCHEDULE_PATTERNS.length];
+      const schedulePattern =
+        CLASS_SCHEDULE_PATTERNS[index % CLASS_SCHEDULE_PATTERNS.length];
       for (const slot of schedulePattern) {
         const existingSlot = await client.query(
           `SELECT id FROM class_schedules
-           WHERE class_id = $1 AND days = $2::text[] AND start_time = $3 AND end_time = $4`,
-          [finalClassId, slot.days, slot.startTime, slot.endTime]
+           WHERE class_id = $1
+             AND days = $2::text[]
+             AND start_time = $3
+             AND end_time = $4`,
+          [finalClassId, slot.days, slot.startTime, slot.endTime],
         );
 
         if (existingSlot.rows.length === 0) {
           await client.query(
             `INSERT INTO class_schedules (id, class_id, days, start_time, end_time)
              VALUES ($1, $2, $3::text[], $4, $5)`,
-            [uuid(), finalClassId, slot.days, slot.startTime, slot.endTime]
+            [uuid(), finalClassId, slot.days, slot.startTime, slot.endTime],
           );
-          log(`  ✓ Schedule slot: ${classConfig.subjectCode} days=[${slot.days.join(',')}] ${slot.startTime}-${slot.endTime}`, 'success');
+          log(
+            `  - Schedule slot: ${classConfig.subjectCode} days=[${slot.days.join(',')}] ${slot.startTime}-${slot.endTime}`,
+            'success',
+          );
         } else {
-          log(`  ℹ️  Schedule slot already exists for ${classConfig.subjectCode}`, 'info');
+          log(
+            `  - Schedule slot already exists for ${classConfig.subjectCode}`,
+            'info',
+          );
         }
       }
     }
 
-    // ========== STEP 7: CREATE ENROLLMENT ==========
     log('Creating student enrollments...');
     for (const student of STUDENTS) {
       const sectionId = sectionIdsByGrade[student.gradeLevel];
@@ -620,34 +727,37 @@ async function seedDatabase() {
             `INSERT INTO enrollments (student_id, class_id, section_id, status)
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (student_id, class_id) DO NOTHING`,
-            [users[student.email], classId, sectionId, 'enrolled']
+            [users[student.email], classId, sectionId, 'enrolled'],
           );
-          log(`  ✓ ${student.email} enrolled`, 'success');
+          log(`  - ${student.email} enrolled`, 'success');
         } catch (err) {
-          if (err.code !== '23505') throw err;
-          log(`  ℹ️  ${student.email} already enrolled`, 'info');
+          if (err.code !== '23505') {
+            throw err;
+          }
+          log(`  - ${student.email} already enrolled`, 'info');
         }
       }
     }
 
-    // Commit transaction
     await client.query('COMMIT');
 
-    // ========== SUCCESS SUMMARY ==========
-    log('\n' + '='.repeat(60), 'success');
+    log(`\n${'='.repeat(60)}`, 'success');
     log('DATABASE SEEDING COMPLETED SUCCESSFULLY!', 'success');
     log('='.repeat(60), 'success');
     log('\nCreated Users:');
-    log(`  📌 Admin: ${ADMIN_USER.email} / ${ADMIN_USER.password}`);
-    log(`  📌 Teachers: ${TEACHERS.length} accounts / shared password: ${DEFAULT_TEACHER_PASSWORD}`);
-    log(`  📌 Students: ${STUDENTS.length} accounts / shared password: ${DEFAULT_STUDENT_PASSWORD}`);
+    log(`  - Admin: ${ADMIN_USER.email} / ${ADMIN_USER.password}`);
+    log(
+      `  - Teachers: ${TEACHERS.length} accounts / shared password: ${DEFAULT_TEACHER_PASSWORD}`,
+    );
+    log(
+      `  - Students: ${STUDENTS.length} accounts / shared password: ${DEFAULT_STUDENT_PASSWORD}`,
+    );
     log('\nCreated Resources:');
-    log(`  📌 Sections: ${SECTIONS.length} total (Grades 7-10)`);
-    log(`  📌 Classes: ${CLASSES.length} total across 8 subjects`);
-    log(`  📌 Student Enrollments: ${STUDENTS.length * 2} simulated enrollments`);
-    log('\n⚠️  IMPORTANT: Change these passwords in production!');
-    log('='.repeat(60) + '\n');
-
+    log(`  - Sections: ${SECTIONS.length} total (Grades 7-10)`);
+    log(`  - Classes: ${CLASSES.length} total across 8 subjects`);
+    log(`  - Student Enrollments: ${STUDENTS.length * 2} simulated enrollments`);
+    log('\nIMPORTANT: Change these passwords in production!', 'warning');
+    log(`${'='.repeat(60)}\n`);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     log(`Database seeding failed: ${error.message}`, 'error');
@@ -658,7 +768,4 @@ async function seedDatabase() {
   }
 }
 
-// ============================================
-// RUN SEEDING
-// ============================================
 seedDatabase();

@@ -52,12 +52,12 @@ cp .env.example .env
 Edit `.env` with your backend API URL:
 
 ```
-REACT_APP_API_URL=http://localhost:3000/api
+EXPO_PUBLIC_API_URL=http://localhost:3000/api
 ```
 
 For physical devices, use your machine's IP address instead of localhost:
 ```
-REACT_APP_API_URL=http://192.168.x.x:3000/api
+EXPO_PUBLIC_API_URL=http://192.168.x.x:3000/api
 ```
 
 ### 3. Run the Application
@@ -145,7 +145,7 @@ eas build --platform all
 
 ## Environment Variables
 
-- `REACT_APP_API_URL`: Backend API base URL (default: http://localhost:3000/api)
+- `EXPO_PUBLIC_API_URL`: Backend API base URL (default: http://localhost:3000/api)
 
 ## API Integration
 

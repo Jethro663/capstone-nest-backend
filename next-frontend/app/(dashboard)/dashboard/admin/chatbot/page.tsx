@@ -270,51 +270,8 @@ export default function AdminChatbotPage() {
       )}
     >
       <AdminSectionCard title="Chat Workspace" description="The AI console is still the same tool underneath, but the outer frame now feels more intentional and easier to use.">
-        <div className="grid min-h-[48rem] gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
-          <aside className="admin-chat-surface flex min-h-0 flex-col p-0">
-            <div className="border-b border-[var(--admin-outline)] px-4 py-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--admin-text-strong)]">
-                <History className="h-4 w-4" />
-                Recent Chats
-              </div>
-              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">Reopen a previous JAKIPIR conversation.</p>
-            </div>
-            <div className="flex-1 space-y-2 overflow-y-auto p-3">
-              {historyLoading ? (
-                <div className="admin-filter-shell flex items-center gap-2 text-sm text-[var(--admin-text-muted)]">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading history...
-                </div>
-              ) : historyError ? (
-                <div className="admin-filter-shell text-sm text-rose-700">{historyError}</div>
-              ) : historySessions.length === 0 ? (
-                <div className="admin-filter-shell text-center text-sm text-[var(--admin-text-muted)]">No saved chats yet.</div>
-              ) : (
-                historySessions.map((historySession) => (
-                  <button
-                    key={historySession.id}
-                    type="button"
-                    onClick={() => openHistorySession(historySession)}
-                    className={cn('admin-grid-card w-full text-left', selectedHistoryId === historySession.id && 'border-[var(--admin-outline-strong)] bg-emerald-50/60')}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black text-[var(--admin-text-strong)]">{historySession.title}</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-[var(--admin-text-muted)]">{historySession.preview}</p>
-                      </div>
-                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-text-muted)]" />
-                    </div>
-                    <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--admin-text-muted)]">
-                      <span>{historySession.turns} turn(s) • {historySession.model}</span>
-                      <span>{formatHistoryTime(historySession.updatedAt)}</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </aside>
-
-          <div className="admin-chat-surface flex min-h-0 flex-col p-0">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_360px]">
+          <div className="admin-chat-surface flex min-h-0 flex-col p-0 xl:order-1">
             <div className="border-b border-[var(--admin-outline)] bg-white/70 px-6 py-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
@@ -327,9 +284,9 @@ export default function AdminChatbotPage() {
               </div>
             </div>
 
-            <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.72),rgba(236,253,245,0.45))] p-6">
+            <div ref={scrollRef} className="flex min-h-[360px] flex-1 flex-col gap-4 overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.72),rgba(236,253,245,0.45))] p-6">
               {messages.length === 0 && !sending ? (
-                <div className="flex flex-col items-center justify-center gap-6 pt-16 text-center">
+                <div className="flex min-h-[320px] flex-col items-center justify-center gap-6 text-center">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
                     <Bot className="h-8 w-8" />
                   </div>
@@ -359,9 +316,9 @@ export default function AdminChatbotPage() {
 
                   <div
                     className={cn(
-                      'max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap',
+                      'max-w-[80%] rounded-[1.5rem] px-4 py-3 text-sm leading-6 whitespace-pre-wrap',
                       msg.role === 'user'
-                        ? 'bg-[linear-gradient(135deg,#0f766e,#10b981)] text-white shadow-lg shadow-emerald-900/10'
+                        ? 'bg-[linear-gradient(135deg,#b91c1c,#ef4444)] text-white shadow-lg shadow-rose-900/10'
                         : 'border border-[var(--admin-outline)] bg-white text-foreground shadow-sm',
                     )}
                   >
@@ -417,6 +374,49 @@ export default function AdminChatbotPage() {
               </div>
             </div>
           </div>
+
+          <aside className="admin-chat-surface flex min-h-0 flex-col p-0 xl:order-2">
+            <div className="border-b border-[var(--admin-outline)] px-4 py-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[var(--admin-text-strong)]">
+                <History className="h-4 w-4" />
+                Recent Chats
+              </div>
+              <p className="mt-1 text-xs text-[var(--admin-text-muted)]">Reopen a previous JAKIPIR conversation.</p>
+            </div>
+            <div className="flex-1 space-y-2 overflow-y-auto p-3">
+              {historyLoading ? (
+                <div className="admin-filter-shell flex items-center gap-2 text-sm text-[var(--admin-text-muted)]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading history...
+                </div>
+              ) : historyError ? (
+                <div className="admin-filter-shell text-sm text-rose-700">{historyError}</div>
+              ) : historySessions.length === 0 ? (
+                <div className="admin-filter-shell text-center text-sm text-[var(--admin-text-muted)]">No saved chats yet.</div>
+              ) : (
+                historySessions.map((historySession) => (
+                  <button
+                    key={historySession.id}
+                    type="button"
+                    onClick={() => openHistorySession(historySession)}
+                    className={cn('admin-grid-card w-full text-left', selectedHistoryId === historySession.id && 'border-[var(--admin-outline-strong)] bg-emerald-50/60')}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black text-[var(--admin-text-strong)]">{historySession.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-[var(--admin-text-muted)]">{historySession.preview}</p>
+                      </div>
+                      <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--admin-text-muted)]" />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-[11px] text-[var(--admin-text-muted)]">
+                      <span>{historySession.turns} turn(s) • {historySession.model}</span>
+                      <span>{formatHistoryTime(historySession.updatedAt)}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </aside>
         </div>
       </AdminSectionCard>
     </AdminPageShell>

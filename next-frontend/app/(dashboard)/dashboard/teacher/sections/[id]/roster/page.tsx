@@ -211,10 +211,10 @@ export default function SectionRosterPage() {
             )}
           />
         ) : (
-          <div className="overflow-hidden rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[rgba(15,23,42,0.56)]">
+          <div className="teacher-table-shell">
             <Table>
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
+                <TableRow className="teacher-table-head hover:bg-transparent">
                   <TableHead className="text-[var(--teacher-text-muted)]">#</TableHead>
                   <TableHead className="text-[var(--teacher-text-muted)]">Student</TableHead>
                   <TableHead className="text-[var(--teacher-text-muted)]">Email</TableHead>
@@ -227,7 +227,7 @@ export default function SectionRosterPage() {
                 {dedupedRoster.map((student, index) => (
                   <TableRow
                     key={student.id}
-                    className="cursor-pointer border-white/10 transition hover:bg-white/5"
+                    className="teacher-table-row cursor-pointer border-[var(--teacher-outline)] transition"
                     onClick={() =>
                       router.push(`/dashboard/teacher/sections/${sectionId}/students/${student.id}`)
                     }

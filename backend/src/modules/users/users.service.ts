@@ -21,6 +21,7 @@ import {
   lessonCompletions,
   assessmentAttempts,
   classes,
+  classRecords,
   archivedUsers,
 } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
@@ -351,6 +352,9 @@ export class UsersService {
               userId: newUser.id,
               employeeId: employeeId ?? null,
               contactNumber: contactNumber ?? null,
+              dateOfBirth: null,
+              gender: null,
+              address: null,
               createdAt: new Date(),
               updatedAt: new Date(),
             });
@@ -514,6 +518,9 @@ export class UsersService {
                 userId: id,
                 employeeId: updateUserDto.employeeId,
                 contactNumber: updateUserDto.contactNumber,
+                dateOfBirth: null,
+                gender: null,
+                address: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
               });
@@ -540,6 +547,9 @@ export class UsersService {
                 contactNumber:
                   updateUserDto.contactNumber ??
                   existingTeacherProfile.contactNumber,
+                dateOfBirth: existingTeacherProfile.dateOfBirth,
+                gender: existingTeacherProfile.gender,
+                address: existingTeacherProfile.address,
                 updatedAt: new Date(),
               })
               .where(eq(teacherProfiles.userId, id));
@@ -548,6 +558,9 @@ export class UsersService {
               userId: id,
               employeeId: updateUserDto.employeeId,
               contactNumber: updateUserDto.contactNumber,
+              dateOfBirth: null,
+              gender: null,
+              address: null,
               createdAt: new Date(),
               updatedAt: new Date(),
             });
@@ -836,7 +849,18 @@ export class UsersService {
           .where(eq(archivedUsers.originalUserId, id));
       }
 
-      // Hard delete — CASCADE handles related tables
+      // Unassign the teacher from surviving classes and records before purge.
+      await tx
+        .update(classes)
+        .set({ teacherId: null, updatedAt: new Date() })
+        .where(eq(classes.teacherId, id));
+
+      await tx
+        .update(classRecords)
+        .set({ teacherId: null, updatedAt: new Date() })
+        .where(eq(classRecords.teacherId, id));
+
+      // Hard delete — CASCADE handles remaining related tables.
       await tx.delete(users).where(eq(users.id, id));
     });
 

@@ -1,13 +1,22 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Param,
+  Post,
   Put,
   Body,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   ForbiddenException,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { v4 as uuidv4 } from 'uuid';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -19,6 +28,15 @@ type AuthUser = {
   userId: string;
   roles?: string[];
 };
+
+const AVATAR_UPLOAD_DEST = './uploads/profile-pictures';
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
 
 @ApiTags('Teacher Profiles')
 @ApiBearerAuth('token')
@@ -68,6 +86,61 @@ export class TeacherProfilesController {
       success: true,
       message: 'Teacher profile updated successfully',
       data,
+    };
+  }
+
+  @Post('me/avatar')
+  @Roles(RoleName.Teacher)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(AVATAR_UPLOAD_DEST, { recursive: true });
+          cb(null, AVATAR_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_AVATAR_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only JPEG, PNG, GIF and WebP images are allowed',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async uploadMyAvatar(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    const profilePicture = `/api/profiles/images/${file.filename}`;
+    const profile = await this.teacherProfilesService.updateProfile(
+      user.userId,
+      {
+        profilePicture,
+      },
+    );
+
+    return {
+      success: true,
+      message: 'Teacher profile picture updated successfully',
+      data: {
+        profile,
+        profilePicture,
+      },
     };
   }
 }

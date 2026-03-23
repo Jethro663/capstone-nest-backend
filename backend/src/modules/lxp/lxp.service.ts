@@ -253,20 +253,25 @@ export class LxpService {
     });
     if (!cls) return;
 
-    await this.notificationsService.createBulk([
+    const notifications = [
       {
         userId: studentId,
-        type: 'grade_updated',
+        type: 'grade_updated' as const,
         title: 'LXP unlocked',
         body: `You are now enrolled in intervention for ${cls.subjectName} (${cls.subjectCode}).`,
       },
-      {
+    ];
+
+    if (cls.teacherId) {
+      notifications.push({
         userId: cls.teacherId,
-        type: 'grade_updated',
+        type: 'grade_updated' as const,
         title: 'Student flagged for intervention',
         body: `A student has been auto-flagged for LXP support in ${cls.subjectCode}.`,
-      },
-    ]);
+      });
+    }
+
+    await this.notificationsService.createBulk(notifications);
   }
 
   async handlePerformanceStatusChanged(event: PerformanceStatusChangedEvent) {
@@ -490,18 +495,20 @@ export class LxpService {
       orderBy: [desc(interventionCases.createdAt)],
     });
 
-    const selectedSnapshot = await this.db.query.performanceSnapshots.findFirst({
-      where: and(
-        eq(performanceSnapshots.studentId, studentId),
-        eq(performanceSnapshots.classId, classId),
-      ),
-      columns: {
-        blendedScore: true,
-        thresholdApplied: true,
-        isAtRisk: true,
-        lastComputedAt: true,
+    const selectedSnapshot = await this.db.query.performanceSnapshots.findFirst(
+      {
+        where: and(
+          eq(performanceSnapshots.studentId, studentId),
+          eq(performanceSnapshots.classId, classId),
+        ),
+        columns: {
+          blendedScore: true,
+          thresholdApplied: true,
+          isAtRisk: true,
+          lastComputedAt: true,
+        },
       },
-    });
+    );
 
     if (!interventionCase) {
       if (!selectedSnapshot?.isAtRisk) {
@@ -784,7 +791,8 @@ export class LxpService {
     ].slice(0, 4);
 
     const selectedMastery =
-      masteryRows.find((row) => row.classId === classId)?.masteryPercent ?? null;
+      masteryRows.find((row) => row.classId === classId)?.masteryPercent ??
+      null;
     const statusSummary = this.getStatusSummary({
       caseStatus: interventionCase.status,
       isAtRisk: selectedSnapshot?.isAtRisk ?? true,
@@ -1095,7 +1103,9 @@ export class LxpService {
             xpAwarded: ASSESSMENT_XP,
           }));
 
-    const lessonIds = [...new Set(lessonAssignments.map((entry) => entry.lessonId))];
+    const lessonIds = [
+      ...new Set(lessonAssignments.map((entry) => entry.lessonId)),
+    ];
     const assessmentIds = [
       ...new Set(assessmentAssignments.map((entry) => entry.assessmentId)),
     ];
@@ -1161,7 +1171,8 @@ export class LxpService {
           assignmentType: 'assessment_retry',
           assessmentId: assessmentEntry.assessmentId,
           checkpointLabel:
-            assessmentEntry.label?.trim() || 'Teacher-assigned assessment retry',
+            assessmentEntry.label?.trim() ||
+            'Teacher-assigned assessment retry',
           orderIndex: order++,
           xpAwarded: assessmentEntry.xpAwarded,
         });

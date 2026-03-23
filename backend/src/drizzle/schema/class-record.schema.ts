@@ -46,9 +46,9 @@ export const classRecords = pgTable(
     classId: uuid('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
-    teacherId: uuid('teacher_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'restrict' }),
+    teacherId: uuid('teacher_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     gradingPeriod: gradingPeriodEnum('grading_period').notNull(),
     status: classRecordStatusEnum('status').notNull().default('draft'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

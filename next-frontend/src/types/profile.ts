@@ -18,10 +18,15 @@ export interface StudentProfile {
 
 export interface TeacherProfile {
   userId: string;
+  dob?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  phone?: string;
   department?: string;
   specialization?: string;
   profilePicture?: string;
   contactNumber?: string;
+  address?: string;
   employeeId?: string;
   createdAt?: string;
   updatedAt?: string;

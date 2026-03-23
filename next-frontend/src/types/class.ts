@@ -36,7 +36,7 @@ export interface CreateClassDto {
   subjectCode: string;
   subjectGradeLevel?: string;
   sectionId: string;
-  teacherId: string;
+  teacherId: string | null;
   schoolYear: string;
   room?: string;
   cardPreset?: string;
@@ -51,7 +51,7 @@ export interface UpdateClassDto {
   subjectCode?: string;
   subjectGradeLevel?: string;
   sectionId?: string;
-  teacherId?: string;
+  teacherId?: string | null;
   schoolYear?: string;
   room?: string;
   cardPreset?: string;

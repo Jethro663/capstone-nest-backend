@@ -1,11 +1,9 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Eye, LayoutGrid, Presentation, School2 } from 'lucide-react';
 import { classService } from '@/services/class-service';
-import { sectionService } from '@/services/section-service';
-import { userService } from '@/services/user-service';
 import {
   AdminEmptyState,
   AdminPageShell,
@@ -15,17 +13,21 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
- 
+import { getApiErrorMessage } from '@/lib/api-error';
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
-import type { Section } from '@/types/section';
-import type { User } from '@/types/user';
 
 type StatusTab = 'active' | 'archived';
 type ViewMode = 'table' | 'grid';
@@ -33,59 +35,32 @@ type ViewMode = 'table' | 'grid';
 export default function ClassManagementPage() {
   const router = useRouter();
   const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [teachers, setTeachers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<StatusTab>('active');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [gradeFilter, setGradeFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [editClass, setEditClass] = useState<ClassItem | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassItem | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<ClassItem | null>(null);
   const [purgeConfirmText, setPurgeConfirmText] = useState('');
-  const [form, setForm] = useState({
-    subjectName: '',
-    subjectCode: '',
-    subjectGradeLevel: '7',
-    sectionId: '',
-    teacherId: '',
-    schoolYear: '',
-    room: '',
-  });
 
-  const formatSchedules = (schedules?: { days: string[]; startTime: string; endTime: string }[]) => {
+  const formatSchedules = (
+    schedules?: { days: string[]; startTime: string; endTime: string }[],
+  ) => {
     if (!schedules?.length) return 'N/A';
-    return schedules.map((schedule) => `${schedule.days.join('/')} ${schedule.startTime}-${schedule.endTime}`).join(', ');
- 
+    return schedules
+      .map(
+        (schedule) =>
+          `${schedule.days.join('/')} ${schedule.startTime}-${schedule.endTime}`,
+      )
+      .join(', ');
   };
-
-  const currentYear = new Date().getFullYear();
-  const schoolYears = Array.from({ length: 5 }, (_, i) => `${currentYear - 2 + i}-${currentYear - 1 + i}`);
-  const resetForm = useCallback(() => {
-    setForm({
-      subjectName: '',
-      subjectCode: '',
-      subjectGradeLevel: '7',
-      sectionId: '',
-      teacherId: '',
-      schoolYear: schoolYears[2] || '',
-      room: '',
-    });
-  }, [schoolYears]);
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [classesRes, sectionsRes, teachersRes] = await Promise.all([
-        classService.getAll(),
-        sectionService.getAll(),
-        userService.getAll({ role: 'teacher', limit: 200 }),
-      ]);
+      const classesRes = await classService.getAll();
       setClasses(classesRes.data?.data || []);
-      setSections(sectionsRes.data || []);
-      setTeachers(teachersRes.users || []);
     } catch {
       toast.error('Failed to load data');
     } finally {
@@ -97,14 +72,22 @@ export default function ClassManagementPage() {
     fetchData();
   }, [fetchData]);
 
-  const activeCount = useMemo(() => classes.filter((classItem) => classItem.isActive).length, [classes]);
-  const archivedCount = useMemo(() => classes.filter((classItem) => !classItem.isActive).length, [classes]);
+  const activeCount = useMemo(
+    () => classes.filter((classItem) => classItem.isActive).length,
+    [classes],
+  );
+  const archivedCount = useMemo(
+    () => classes.filter((classItem) => !classItem.isActive).length,
+    [classes],
+  );
 
   const filtered = classes.filter((classItem) => {
     if (tab === 'active' && !classItem.isActive) return false;
     if (tab === 'archived' && classItem.isActive) return false;
-    if (gradeFilter !== 'all' && classItem.subjectGradeLevel !== gradeFilter) return false;
- 
+    if (gradeFilter !== 'all' && classItem.subjectGradeLevel !== gradeFilter) {
+      return false;
+    }
+
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -119,45 +102,6 @@ export default function ClassManagementPage() {
     return true;
   });
 
-  const handleOpenCreate = () => {
-    resetForm();
-    setEditClass(null);
-    setShowCreate(true);
-  };
-
-  const handleOpenEdit = (c: ClassItem) => {
-    setEditClass(c);
-    setForm({
-      subjectName: c.subjectName || '',
-      subjectCode: c.subjectCode || '',
-      subjectGradeLevel: c.subjectGradeLevel || '7',
-      sectionId: c.sectionId || '',
-      teacherId: c.teacherId || '',
-      schoolYear: c.schoolYear || '',
-      room: c.room || '',
-    });
-    setShowCreate(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.subjectName.trim() || !form.subjectCode.trim()) return;
-    try {
-      if (editClass) {
-        await classService.update(editClass.id, form);
-        toast.success('Class updated');
-      } else {
-        await classService.create(form);
-        toast.success('Class created');
-      }
-      setShowCreate(false);
-      setEditClass(null);
-      resetForm();
-      void fetchData();
-    } catch {
-      toast.error(editClass ? 'Failed to update class' : 'Failed to create class');
-    }
-  };
-
   const handleToggleArchive = async () => {
     if (!archiveTarget) return;
     try {
@@ -165,8 +109,13 @@ export default function ClassManagementPage() {
       toast.success(archiveTarget.isActive ? 'Class archived' : 'Class restored');
       setArchiveTarget(null);
       void fetchData();
-    } catch {
-      toast.error(archiveTarget.isActive ? 'Failed to archive class' : 'Failed to restore class');
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(
+          error,
+          archiveTarget.isActive ? 'Failed to archive class' : 'Failed to restore class',
+        ),
+      );
     }
   };
 
@@ -177,14 +126,15 @@ export default function ClassManagementPage() {
       toast.error('Confirmation text does not match');
       return;
     }
- 
+
     try {
-      await classService.delete(purgeTarget.id);
-      toast.success('Class deleted');
+      await classService.purge(purgeTarget.id);
+      toast.success('Class permanently deleted');
       setPurgeTarget(null);
+      setPurgeConfirmText('');
       void fetchData();
-    } catch {
-      toast.error('Failed to delete class');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete class'));
     }
   };
 
@@ -193,7 +143,9 @@ export default function ClassManagementPage() {
       <div className="space-y-6">
         <Skeleton className="h-56 rounded-[1.9rem]" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
+          {[1, 2, 3, 4].map((item) => (
+            <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
+          ))}
         </div>
         <Skeleton className="h-[32rem] rounded-[1.7rem]" />
       </div>
@@ -205,7 +157,7 @@ export default function ClassManagementPage() {
       badge="Admin Classes"
       title="Class Management"
       description="Classes now sit inside a stronger admin command surface, with clearer state tabs, more readable filters, and a better presentation for both table and grid views."
-      actions={(
+      actions={
         <Button
           className="admin-button-solid rounded-2xl px-5 py-2.5 font-black shadow-[0_18px_45px_-24px_rgba(16,185,129,0.85)]"
           onClick={() => router.push('/dashboard/admin/classes/new')}
@@ -213,21 +165,59 @@ export default function ClassManagementPage() {
           <BookOpen className="h-4 w-4" />
           Add Class
         </Button>
-      )}
-      stats={(
+      }
+      stats={
         <>
-          <AdminStatCard label="Total Classes" value={classes.length} caption="Across every class record" icon={BookOpen} accent="emerald" />
-          <AdminStatCard label="Active" value={activeCount} caption="Currently running classes" icon={School2} accent="sky" />
-          <AdminStatCard label="Archived" value={archivedCount} caption="Restorable, inactive classes" icon={LayoutGrid} accent="amber" />
-          <AdminStatCard label="Visible" value={filtered.length} caption={`In the ${tab} / ${viewMode} view`} icon={Presentation} accent="rose" />
+          <AdminStatCard
+            label="Total Classes"
+            value={classes.length}
+            caption="Across every class record"
+            icon={BookOpen}
+            accent="emerald"
+          />
+          <AdminStatCard
+            label="Active"
+            value={activeCount}
+            caption="Currently running classes"
+            icon={School2}
+            accent="sky"
+          />
+          <AdminStatCard
+            label="Archived"
+            value={archivedCount}
+            caption="Restorable, inactive classes"
+            icon={LayoutGrid}
+            accent="amber"
+          />
+          <AdminStatCard
+            label="Visible"
+            value={filtered.length}
+            caption={`In the ${tab} / ${viewMode} view`}
+            icon={Presentation}
+            accent="rose"
+          />
         </>
-      )}
+      }
     >
-      <AdminSectionCard title="Class Views" description="Switch class states and view modes without the old flat utility row.">
-        <Tabs value={tab} onValueChange={(value) => { setTab(value as StatusTab); setSearch(''); setGradeFilter('all'); }}>
+      <AdminSectionCard
+        title="Class Views"
+        description="Switch class states and view modes without the old flat utility row."
+      >
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            setTab(value as StatusTab);
+            setSearch('');
+            setGradeFilter('all');
+          }}
+        >
           <TabsList className="admin-tab-list h-auto flex-wrap justify-start">
-            <TabsTrigger value="active" className="admin-tab rounded-xl px-4 font-black">Active</TabsTrigger>
-            <TabsTrigger value="archived" className="admin-tab rounded-xl px-4 font-black">Archived</TabsTrigger>
+            <TabsTrigger value="active" className="admin-tab rounded-xl px-4 font-black">
+              Active
+            </TabsTrigger>
+            <TabsTrigger value="archived" className="admin-tab rounded-xl px-4 font-black">
+              Archived
+            </TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -239,25 +229,68 @@ export default function ClassManagementPage() {
 
         <div className="mt-4 admin-filter-shell">
           <div className="grid gap-4 xl:grid-cols-[1fr_auto_auto]">
-            <Input placeholder="Search subject, section, teacher, room..." value={search} onChange={(event) => setSearch(event.target.value)} className="admin-input" />
+            <Input
+              placeholder="Search subject, section, teacher, room..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="admin-input"
+            />
             <div className="admin-controls">
               {['all', '7', '8', '9', '10'].map((grade) => (
-                <Button key={grade} variant="outline" size="sm" className={gradeFilter === grade ? 'admin-button-solid rounded-xl font-black' : 'admin-button-outline rounded-xl font-black'} onClick={() => setGradeFilter(grade)}>
+                <Button
+                  key={grade}
+                  variant="outline"
+                  size="sm"
+                  className={
+                    gradeFilter === grade
+                      ? 'admin-button-solid rounded-xl font-black'
+                      : 'admin-button-outline rounded-xl font-black'
+                  }
+                  onClick={() => setGradeFilter(grade)}
+                >
                   {grade === 'all' ? 'All' : `Grade ${grade}`}
                 </Button>
               ))}
             </div>
             <div className="admin-controls">
-              <Button variant="outline" size="sm" className={viewMode === 'table' ? 'admin-button-solid rounded-xl font-black' : 'admin-button-outline rounded-xl font-black'} onClick={() => setViewMode('table')}>Table</Button>
-              <Button variant="outline" size="sm" className={viewMode === 'grid' ? 'admin-button-solid rounded-xl font-black' : 'admin-button-outline rounded-xl font-black'} onClick={() => setViewMode('grid')}>Grid</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={
+                  viewMode === 'table'
+                    ? 'admin-button-solid rounded-xl font-black'
+                    : 'admin-button-outline rounded-xl font-black'
+                }
+                onClick={() => setViewMode('table')}
+              >
+                Table
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={
+                  viewMode === 'grid'
+                    ? 'admin-button-solid rounded-xl font-black'
+                    : 'admin-button-outline rounded-xl font-black'
+                }
+                onClick={() => setViewMode('grid')}
+              >
+                Grid
+              </Button>
             </div>
           </div>
         </div>
       </AdminSectionCard>
 
-      <AdminSectionCard title="Class Collection" description="The same class actions and routing are preserved, but the surfaces are now more deliberate and easier to scan.">
+      <AdminSectionCard
+        title="Class Collection"
+        description="The same class actions and routing are preserved, but the surfaces are now more deliberate and easier to scan."
+      >
         {filtered.length === 0 ? (
-          <AdminEmptyState title="No classes found" description="Try another state or search query. The admin class logic is unchanged." />
+          <AdminEmptyState
+            title="No classes found"
+            description="Try another state or search query. The admin class logic is unchanged."
+          />
         ) : viewMode === 'table' ? (
           <div className="admin-table-shell">
             <Table>
@@ -281,25 +314,69 @@ export default function ClassManagementPage() {
                     className="cursor-pointer transition-colors duration-200 hover:bg-emerald-50/50"
                     onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}
                   >
-                    <TableCell className="font-medium">{classItem.subjectName} ({classItem.subjectCode})</TableCell>
+                    <TableCell className="font-medium">
+                      {classItem.subjectName} ({classItem.subjectCode})
+                    </TableCell>
                     <TableCell>{classItem.section?.name || 'N/A'}</TableCell>
                     <TableCell>Grade {classItem.subjectGradeLevel}</TableCell>
-                    <TableCell>{classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'N/A'}</TableCell>
+                    <TableCell>
+                      {classItem.teacher
+                        ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}`
+                        : 'Unassigned'}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{classItem.schoolYear}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatSchedules(classItem.schedules)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatSchedules(classItem.schedules)}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{classItem.room || 'N/A'}</TableCell>
-                    <TableCell><Badge variant={classItem.isActive ? 'default' : 'secondary'}>{classItem.isActive ? 'Active' : 'Archived'}</Badge></TableCell>
-                    <TableCell className="space-x-1 text-right" onClick={(event) => event.stopPropagation()}>
-                      <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}>
+                    <TableCell>
+                      <Badge variant={classItem.isActive ? 'default' : 'secondary'}>
+                        {classItem.isActive ? 'Active' : 'Archived'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell
+                      className="space-x-1 text-right"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="admin-button-outline rounded-xl font-black"
+                        onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}
+                      >
                         <Eye className="mr-1 h-3.5 w-3.5" />
                         View Details
                       </Button>
-                      <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}/edit`)}>Edit</Button>
-                      <Button variant="outline" size="sm" className={classItem.isActive ? 'rounded-xl border-amber-200 bg-white/70 font-black text-amber-700 hover:bg-amber-50' : 'admin-button-outline rounded-xl font-black'} onClick={() => setArchiveTarget(classItem)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="admin-button-outline rounded-xl font-black"
+                        onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}/edit`)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={
+                          classItem.isActive
+                            ? 'rounded-xl border-amber-200 bg-white/70 font-black text-amber-700 hover:bg-amber-50'
+                            : 'admin-button-outline rounded-xl font-black'
+                        }
+                        onClick={() => setArchiveTarget(classItem)}
+                      >
                         {classItem.isActive ? 'Archive' : 'Restore'}
                       </Button>
                       {!classItem.isActive ? (
-                        <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => { setPurgeTarget(classItem); setPurgeConfirmText(''); }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50"
+                          onClick={() => {
+                            setPurgeTarget(classItem);
+                            setPurgeConfirmText('');
+                          }}
+                        >
                           Purge
                         </Button>
                       ) : null}
@@ -312,33 +389,79 @@ export default function ClassManagementPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((classItem) => (
-              <Card key={classItem.id} className="admin-grid-card cursor-pointer p-0" onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}>
+              <Card
+                key={classItem.id}
+                className="admin-grid-card cursor-pointer p-0"
+                onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}
+              >
                 <div className="admin-grid-card__accent" />
                 <div className="relative z-10 space-y-4 p-5">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-black text-[var(--admin-text-strong)]">{classItem.subjectName} ({classItem.subjectCode})</p>
-                      <p className="text-sm text-[var(--admin-text-muted)]">Grade {classItem.subjectGradeLevel} â€¢ {classItem.schoolYear}</p>
+                      <p className="font-black text-[var(--admin-text-strong)]">
+                        {classItem.subjectName} ({classItem.subjectCode})
+                      </p>
+                      <p className="text-sm text-[var(--admin-text-muted)]">
+                        Grade {classItem.subjectGradeLevel} • {classItem.schoolYear}
+                      </p>
                     </div>
-                    <Badge variant={classItem.isActive ? 'default' : 'secondary'}>{classItem.isActive ? 'Active' : 'Archived'}</Badge>
+                    <Badge variant={classItem.isActive ? 'default' : 'secondary'}>
+                      {classItem.isActive ? 'Active' : 'Archived'}
+                    </Badge>
                   </div>
                   <div className="space-y-1 text-sm text-[var(--admin-text-muted)]">
                     <p>Section: {classItem.section?.name || 'N/A'}</p>
-                    <p>Teacher: {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'N/A'}</p>
+                    <p>
+                      Teacher:{' '}
+                      {classItem.teacher
+                        ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}`
+                        : 'Unassigned'}
+                    </p>
                     <p>Room: {classItem.room || 'N/A'}</p>
-                    <p className="line-clamp-2">Schedule: {formatSchedules(classItem.schedules)}</p>
+                    <p className="line-clamp-2">
+                      Schedule: {formatSchedules(classItem.schedules)}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2 pt-1" onClick={(event) => event.stopPropagation()}>
-                    <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="admin-button-outline rounded-xl font-black"
+                      onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}`)}
+                    >
                       <Eye className="mr-1 h-3.5 w-3.5" />
                       View Details
                     </Button>
-                    <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}/edit`)}>Edit</Button>
-                    <Button variant="outline" size="sm" className={classItem.isActive ? 'rounded-xl border-amber-200 bg-white/70 font-black text-amber-700 hover:bg-amber-50' : 'admin-button-outline rounded-xl font-black'} onClick={() => setArchiveTarget(classItem)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="admin-button-outline rounded-xl font-black"
+                      onClick={() => router.push(`/dashboard/admin/classes/${classItem.id}/edit`)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={
+                        classItem.isActive
+                          ? 'rounded-xl border-amber-200 bg-white/70 font-black text-amber-700 hover:bg-amber-50'
+                          : 'admin-button-outline rounded-xl font-black'
+                      }
+                      onClick={() => setArchiveTarget(classItem)}
+                    >
                       {classItem.isActive ? 'Archive' : 'Restore'}
                     </Button>
                     {!classItem.isActive ? (
-                      <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => { setPurgeTarget(classItem); setPurgeConfirmText(''); }}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50"
+                        onClick={() => {
+                          setPurgeTarget(classItem);
+                          setPurgeConfirmText('');
+                        }}
+                      >
                         Purge
                       </Button>
                     ) : null}
@@ -350,60 +473,44 @@ export default function ClassManagementPage() {
         )}
       </AdminSectionCard>
 
-      <Dialog open={!!archiveTarget} onOpenChange={(open) => !open && setArchiveTarget(null)}>
+      <Dialog
+        open={!!archiveTarget}
+        onOpenChange={(open) => !open && setArchiveTarget(null)}
+      >
         <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader>
-            <DialogTitle>{archiveTarget?.isActive ? 'Archive Class' : 'Restore Class'}</DialogTitle>
+            <DialogTitle>
+              {archiveTarget?.isActive ? 'Archive Class' : 'Restore Class'}
+            </DialogTitle>
             <DialogDescription>
               {archiveTarget?.isActive
                 ? 'Archiving marks this class inactive while preserving lessons, schedules, and related history.'
                 : 'Restoring marks this class active again and returns it to the main class list.'}
             </DialogDescription>
- 
           </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Subject Name</Label><Input value={form.subjectName} onChange={(e) => setForm({ ...form, subjectName: e.target.value })} placeholder="e.g. Mathematics" /></div>
-              <div><Label>Subject Code</Label><Input value={form.subjectCode} onChange={(e) => setForm({ ...form, subjectCode: e.target.value })} placeholder="e.g. MATH7" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Grade Level</Label>
-                <select value={form.subjectGradeLevel} onChange={(e) => setForm({ ...form, subjectGradeLevel: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                  {['7', '8', '9', '10'].map((g) => <option key={g} value={g}>Grade {g}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label>School Year</Label>
-                <select value={form.schoolYear} onChange={(e) => setForm({ ...form, schoolYear: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                  <option value="">Select year</option>
-                  {schoolYears.map((y) => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <Label>Section</Label>
-              <select value={form.sectionId} onChange={(e) => setForm({ ...form, sectionId: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                <option value="">Select section</option>
-                {sections.map((s) => <option key={s.id} value={s.id}>{s.name} (Grade {s.gradeLevel})</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>Teacher</Label>
-              <select value={form.teacherId} onChange={(e) => setForm({ ...form, teacherId: e.target.value })} className="w-full rounded-md border px-3 py-2 text-sm">
-                <option value="">Select teacher</option>
-                {teachers.map((t) => <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div><Label>Room</Label><Input value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} placeholder="e.g. Room 201" /></div>
-            </div>
+          <div className="space-y-3 rounded-2xl border border-[var(--admin-outline)] bg-white/75 p-4 text-sm">
+            <p className="font-semibold text-[var(--admin-text-strong)]">
+              {archiveTarget?.subjectName} ({archiveTarget?.subjectCode})
+            </p>
+            <p className="text-[var(--admin-text-muted)]">
+              {archiveTarget?.isActive
+                ? 'This class will move to the archived list and can still be restored later.'
+                : 'This class will move back to the active list and become available again.'}
+            </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => setArchiveTarget(null)}>Cancel</Button>
-            <Button className="admin-button-solid rounded-xl font-black" onClick={handleToggleArchive}>
+            <Button
+              variant="outline"
+              className="admin-button-outline rounded-xl font-black"
+              onClick={() => setArchiveTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="admin-button-solid rounded-xl font-black"
+              onClick={handleToggleArchive}
+            >
               {archiveTarget?.isActive ? 'Archive' : 'Restore'}
- 
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -413,26 +520,44 @@ export default function ClassManagementPage() {
         <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-rose-600">Permanently Delete Class</DialogTitle>
- 
             <DialogDescription>
               Are you sure you want to delete <strong>{purgeTarget?.subjectName}</strong>? This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <p>Type this class label to confirm:</p>
-            <p className="font-mono text-muted-foreground">{purgeTarget?.subjectName} ({purgeTarget?.subjectCode})</p>
-            <Input value={purgeConfirmText} onChange={(event) => setPurgeConfirmText(event.target.value)} placeholder="Type class label here..." className="admin-input" />
+            <p className="font-mono text-muted-foreground">
+              {purgeTarget?.subjectName} ({purgeTarget?.subjectCode})
+            </p>
+            <Input
+              value={purgeConfirmText}
+              onChange={(event) => setPurgeConfirmText(event.target.value)}
+              placeholder="Type class label here..."
+              className="admin-input"
+            />
           </div>
           <DialogFooter>
-            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => setPurgeTarget(null)}>Cancel</Button>
-            <Button variant="destructive" className="rounded-xl font-black" onClick={handlePurge} disabled={purgeConfirmText !== `${purgeTarget?.subjectName} (${purgeTarget?.subjectCode})`}>
+            <Button
+              variant="outline"
+              className="admin-button-outline rounded-xl font-black"
+              onClick={() => setPurgeTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-xl font-black"
+              onClick={handlePurge}
+              disabled={
+                purgeConfirmText !==
+                `${purgeTarget?.subjectName} (${purgeTarget?.subjectCode})`
+              }
+            >
               Permanently Delete
             </Button>
- 
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </AdminPageShell>
   );
 }
-
