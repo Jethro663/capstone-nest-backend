@@ -1,23 +1,82 @@
 import { useMemo } from "react";
+import { useQueries } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Text, View } from "react-native";
-import { Card, GradientHeader, Pill, ScreenScroll, SectionTitle, SimpleBarChart, StatCard } from "../components/ui/primitives";
-import { achievements, assessments, subjects, userProfile } from "../data/mockData";
+import {
+  Card,
+  GradientHeader,
+  Pill,
+  Refreshable,
+  ScreenScroll,
+  SectionTitle,
+  SimpleBarChart,
+  StatCard,
+} from "../components/ui/primitives";
+import { queryKeys, useLxpPlaylist, usePerformanceSummary, useStudentClasses } from "../api/hooks";
+import { assessmentsApi } from "../api/services/assessments";
+import { lessonsApi } from "../api/services/lessons";
+import { buildAchievements, toAssessmentCard, toSubjectCard, toUserProfileSummary } from "../data/mappers";
 import type { MainTabParamList } from "../navigation/types";
+import { useAuth } from "../providers/AuthProvider";
 import { colors, gradients } from "../theme/tokens";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Progress">;
 
-const scoreData = [
-  { label: "W1", value: 72, color: colors.amber },
-  { label: "W2", value: 78, color: colors.amber },
-  { label: "W3", value: 75, color: colors.amber },
-  { label: "W4", value: 85, color: colors.amber },
-  { label: "W5", value: 82, color: colors.amber },
-  { label: "W6", value: 90, color: colors.amber },
-];
-
 export function ProgressScreen(_: Props) {
+  const { user } = useAuth();
+  const classesQuery = useStudentClasses(user?.userId || user?.id);
+  const performanceQuery = usePerformanceSummary();
+  const classIds = classesQuery.data?.map((classItem) => classItem.id) ?? [];
+
+  const lessonQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.lessons(classId),
+      queryFn: () => lessonsApi.getByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
+
+  const completionQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.lessonCompletions(classId),
+      queryFn: () => lessonsApi.getCompletedByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
+
+  const assessmentQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.assessments(classId),
+      queryFn: () => assessmentsApi.getByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
+
+  const subjects = useMemo(
+    () =>
+      (classesQuery.data ?? []).map((classItem, index) =>
+        toSubjectCard(
+          classItem,
+          lessonQueries[index]?.data ?? [],
+          completionQueries[index]?.data ?? [],
+          performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
+        ),
+      ),
+    [classesQuery.data, completionQueries, lessonQueries, performanceQuery.data?.classes],
+  );
+
+  const assessments = useMemo(
+    () =>
+      assessmentQueries.flatMap((query, index) => {
+        const subject = subjects[index];
+        if (!subject || !query.data) return [];
+        return query.data.map((assessment) => toAssessmentCard(assessment, subject, []));
+      }),
+    [assessmentQueries, subjects],
+  );
+
+  const playlistQuery = useLxpPlaylist(classIds[0]);
+  const profileSummary = toUserProfileSummary(user ?? null, null, subjects, performanceQuery.data, assessments, playlistQuery.data);
   const chartData = useMemo(
     () =>
       subjects.map((subject) => ({
@@ -25,27 +84,26 @@ export function ProgressScreen(_: Props) {
         value: subject.progress,
         color: subject.color,
       })),
-    []
+    [subjects],
   );
-  const earnedAchievements = achievements.filter((achievement) => achievement.earned);
-  const completedAssessments = assessments.filter((assessment) => assessment.status === "completed");
-  const averageAssessmentScore =
-    completedAssessments.length > 0
-      ? Math.round(
-          completedAssessments.reduce(
-            (total, assessment) => total + (((assessment.score ?? 0) / assessment.totalScore) * 100),
-            0
-          ) / completedAssessments.length
-        )
-      : userProfile.averageScore;
+  const achievements = buildAchievements(performanceQuery.data, subjects, assessments, playlistQuery.data);
 
   return (
-    <ScreenScroll>
+    <ScreenScroll
+      refreshControl={
+        <Refreshable
+          refreshing={classesQuery.isRefetching || performanceQuery.isRefetching}
+          onRefresh={() => {
+            void Promise.all([classesQuery.refetch(), performanceQuery.refetch(), playlistQuery.refetch()]);
+          }}
+        />
+      }
+    >
       <GradientHeader colors={gradients.progress} eyebrow="Keep it up! 📈" title="My Progress">
         <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
-          <StatCard icon="book-open-page-variant" iconColor="#A5D6A7" value={userProfile.totalLessonsCompleted} label="Lessons" translucent />
-          <StatCard icon="star" iconColor="#FFF176" value={`${averageAssessmentScore}%`} label="Avg Score" translucent />
-          <StatCard icon="fire" iconColor="#FF8A65" value={userProfile.streak} label="Streak" translucent />
+          <StatCard icon="book-open-page-variant" iconColor="#A5D6A7" value={profileSummary.totalLessonsCompleted} label="Lessons" translucent />
+          <StatCard icon="star" iconColor="#FFF176" value={`${profileSummary.averageScore}%`} label="Avg Score" translucent />
+          <StatCard icon="fire" iconColor="#FF8A65" value={profileSummary.streak} label="Streak" translucent />
         </View>
       </GradientHeader>
 
@@ -67,25 +125,26 @@ export function ProgressScreen(_: Props) {
 
         <Card>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <SectionTitle title="Assessment Scores" />
-            <Pill label="↑ Improving!" backgroundColor={colors.paleGreen} color={colors.green} />
+            <SectionTitle title="Performance Snapshot" />
+            <Pill
+              label={performanceQuery.data?.overall.atRiskClasses ? `${performanceQuery.data.overall.atRiskClasses} at risk` : "Stable"}
+              backgroundColor={performanceQuery.data?.overall.atRiskClasses ? colors.paleRed : colors.paleGreen}
+              color={performanceQuery.data?.overall.atRiskClasses ? colors.red : colors.green}
+            />
           </View>
-          <SimpleBarChart data={scoreData} minValue={60} maxValue={100} height={150} />
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-            <View style={{ alignItems: "center" }}>
-              <Text style={{ fontSize: 11, color: colors.muted }}>Before (W1)</Text>
-              <Text style={{ fontSize: 16, fontWeight: "900", color: colors.red }}>72%</Text>
-            </View>
-            <Text style={{ fontSize: 20, color: colors.green }}>↗</Text>
-            <View style={{ alignItems: "center" }}>
-              <Text style={{ fontSize: 11, color: colors.muted }}>After (W6)</Text>
-              <Text style={{ fontSize: 16, fontWeight: "900", color: colors.green }}>90%</Text>
-            </View>
-          </View>
+          <Text style={{ fontSize: 28, fontWeight: "900", color: colors.text }}>
+            {Math.round(performanceQuery.data?.overall.averageBlendedScore ?? 0)}%
+          </Text>
+          <Text style={{ marginTop: 6, fontSize: 12, color: colors.textSecondary }}>
+            Derived from current performance snapshots and backend class data.
+          </Text>
         </Card>
 
         <View style={{ marginBottom: 8 }}>
-          <SectionTitle title="Achievements 🏆" right={<Pill label={`${earnedAchievements.length}/${achievements.length}`} backgroundColor={colors.paleAmber} color={colors.amber} />} />
+          <SectionTitle
+            title="Achievements 🏆"
+            right={<Pill label={`${achievements.filter((entry) => entry.earned).length}/${achievements.length}`} backgroundColor={colors.paleAmber} color={colors.amber} />}
+          />
           <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
             {achievements.map((achievement) => (
               <View key={achievement.id} style={{ width: "48.2%" }}>
@@ -98,34 +157,11 @@ export function ProgressScreen(_: Props) {
                     opacity: achievement.earned ? 1 : 0.66,
                   }}
                 >
-                  {achievement.earned ? (
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: 10,
-                        right: 10,
-                        width: 18,
-                        height: 18,
-                        borderRadius: 999,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: colors.amber,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, color: colors.white }}>✓</Text>
-                    </View>
-                  ) : null}
                   <Text style={{ fontSize: 32 }}>{achievement.emoji}</Text>
-                  <Text style={{ marginTop: 8, fontSize: 12, fontWeight: "900", color: colors.text }}>
-                    {achievement.title}
-                  </Text>
-                  <Text style={{ marginTop: 4, fontSize: 10, lineHeight: 15, color: colors.muted }}>
-                    {achievement.description}
-                  </Text>
+                  <Text style={{ marginTop: 8, fontSize: 12, fontWeight: "900", color: colors.text }}>{achievement.title}</Text>
+                  <Text style={{ marginTop: 4, fontSize: 10, lineHeight: 15, color: colors.muted }}>{achievement.description}</Text>
                   {achievement.earnedDate ? (
-                    <Text style={{ marginTop: 6, fontSize: 9, fontWeight: "800", color: colors.green }}>
-                      Earned {achievement.earnedDate}
-                    </Text>
+                    <Text style={{ marginTop: 6, fontSize: 9, fontWeight: "800", color: colors.green }}>{achievement.earnedDate}</Text>
                   ) : null}
                 </Card>
               </View>

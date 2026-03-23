@@ -1,6 +1,10 @@
 export type RootStackParamList = {
   MainTabs: undefined;
-  SubjectLessons: { subjectId: string };
+  SubjectLessons: { classId: string };
+  AssessmentDetail: { assessmentId: string; classId: string };
+  AssessmentTake: { assessmentId: string };
+  AssessmentResults: { attemptId: string };
+  AiTutor: { classId?: string } | undefined;
 };
 
 export type MainTabParamList = {
@@ -9,4 +13,8 @@ export type MainTabParamList = {
   LXP: undefined;
   Progress: undefined;
   Profile: undefined;
+};
+
+export type AuthStackParamList = {
+  Login: undefined;
 };

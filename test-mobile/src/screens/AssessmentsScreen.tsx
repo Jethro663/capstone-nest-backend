@@ -1,9 +1,23 @@
 import { useMemo, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Card, EmptyState, FloatingIconButton, GradientHeader, Pill, ScreenScroll } from "../components/ui/primitives";
-import { assessments, subjects } from "../data/mockData";
+import {
+  AnimatedEntrance,
+  Card,
+  EmptyState,
+  FloatingIconButton,
+  GradientHeader,
+  Pill,
+  Refreshable,
+  ScreenScroll,
+} from "../components/ui/primitives";
+import { queryKeys, usePerformanceSummary, useStudentClasses } from "../api/hooks";
+import { assessmentsApi } from "../api/services/assessments";
+import { lessonsApi } from "../api/services/lessons";
+import { toAssessmentCard, toSubjectCard } from "../data/mappers";
+import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
 import { colors, gradients } from "../theme/tokens";
 
@@ -25,48 +39,108 @@ const statusConfig = {
   completed: { icon: "check-circle", color: colors.green, bg: colors.paleGreen, label: "Completed" },
 } as const;
 
-export function AssessmentsScreen(_: Props) {
+export function AssessmentsScreen({ navigation }: Props) {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const classesQuery = useStudentClasses(user?.userId || user?.id);
+  const performanceQuery = usePerformanceSummary();
+  const classIds = classesQuery.data?.map((classItem) => classItem.id) ?? [];
+
+  const lessonQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.lessons(classId),
+      queryFn: () => lessonsApi.getByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
+
+  const completionQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.lessonCompletions(classId),
+      queryFn: () => lessonsApi.getCompletedByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
+
+  const assessmentQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.assessments(classId),
+      queryFn: () => assessmentsApi.getByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
+
+  const subjects = useMemo(
+    () =>
+      (classesQuery.data ?? []).map((classItem, index) =>
+        toSubjectCard(
+          classItem,
+          lessonQueries[index]?.data ?? [],
+          completionQueries[index]?.data ?? [],
+          performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
+        ),
+      ),
+    [classesQuery.data, completionQueries, lessonQueries, performanceQuery.data?.classes],
+  );
+
+  const assessments = useMemo(
+    () =>
+      assessmentQueries.flatMap((query, index) => {
+        const subject = subjects[index];
+        if (!subject || !query.data) return [];
+        return query.data.map((assessment) => toAssessmentCard(assessment, subject, []));
+      }),
+    [assessmentQueries, subjects],
+  );
+
+  const attemptQueries = useQueries({
+    queries: assessments.map((assessment) => ({
+      queryKey: queryKeys.assessmentAttempts(assessment.id),
+      queryFn: () => assessmentsApi.getStudentAttempts(assessment.id),
+      enabled: assessments.length > 0,
+    })),
+  });
+
+  const assessmentCards = useMemo(
+    () =>
+      assessments.map((assessment, index) => {
+        const attempts = attemptQueries[index]?.data ?? [];
+        return {
+          ...assessment,
+          ...toAssessmentCard(assessment.raw as any, subjects.find((subject) => subject.id === assessment.subjectId)!, attempts),
+        };
+      }),
+    [assessmentQueries, assessments, attemptQueries, subjects],
+  );
 
   const filters: FilterType[] = ["all", "pending", "late", "missing", "completed"];
-  const pendingCount = useMemo(() => assessments.filter((entry) => entry.status === "pending").length, []);
-  const lateCount = useMemo(() => assessments.filter((entry) => entry.status === "late").length, []);
-  const missingCount = useMemo(() => assessments.filter((entry) => entry.status === "missing").length, []);
-  const filtered = activeFilter === "all" ? assessments : assessments.filter((entry) => entry.status === activeFilter);
+  const pendingCount = assessmentCards.filter((entry) => entry.status === "pending").length;
+  const lateCount = assessmentCards.filter((entry) => entry.status === "late").length;
+  const missingCount = assessmentCards.filter((entry) => entry.status === "missing").length;
+  const filtered =
+    activeFilter === "all" ? assessmentCards : assessmentCards.filter((entry) => entry.status === activeFilter);
+
+  const refreshing =
+    classesQuery.isRefetching ||
+    assessmentQueries.some((query) => query.isRefetching) ||
+    attemptQueries.some((query) => query.isRefetching);
 
   return (
-    <ScreenScroll>
+    <ScreenScroll
+      refreshControl={
+        <Refreshable
+          refreshing={refreshing}
+          onRefresh={() => {
+            void Promise.all([classesQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
+          }}
+        />
+      }
+    >
       <GradientHeader
         colors={gradients.assessments}
         eyebrow="Track your work 📝"
         title="Assessments"
-        rightContent={
-          <FloatingIconButton
-            icon="bell-outline"
-            badge={
-              pendingCount + lateCount + missingCount > 0 ? (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: -2,
-                    right: -2,
-                    minWidth: 18,
-                    height: 18,
-                    borderRadius: 999,
-                    paddingHorizontal: 4,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: "#EF4444",
-                  }}
-                >
-                  <Text style={{ color: colors.white, fontSize: 10, fontWeight: "900" }}>
-                    {pendingCount + lateCount + missingCount}
-                  </Text>
-                </View>
-              ) : null
-            }
-          />
-        }
+        rightContent={<FloatingIconButton icon="clipboard-check-outline" />}
       >
         <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
           {[
@@ -130,87 +204,93 @@ export function AssessmentsScreen(_: Props) {
 
         <View style={{ marginTop: 8, gap: 12 }}>
           {filtered.length === 0 ? (
-            <EmptyState emoji="🎉" title="All clear!" subtitle={`No ${activeFilter} assessments`} />
+            <EmptyState emoji="🎉" title="All clear!" subtitle={`No ${activeFilter} assessments right now.`} />
           ) : (
-            filtered.map((assessment) => {
+            filtered.map((assessment, index) => {
               const config = statusConfig[assessment.status];
-              const subject = subjects.find((entry) => entry.id === assessment.subjectId);
               const isUrgent = assessment.status === "late" || assessment.status === "missing";
 
               return (
-                <Card key={assessment.id} style={{ overflow: "hidden", padding: 0 }}>
-                  {isUrgent ? (
-                    <View style={{ height: 3, backgroundColor: config.color, width: "100%" }} />
-                  ) : null}
-                  <View style={{ flexDirection: "row", gap: 12, padding: 16 }}>
-                    <View
-                      style={{
-                        width: 54,
-                        height: 54,
-                        borderRadius: 18,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: subject?.bgColor ?? "#F3F4F6",
-                      }}
-                    >
-                      <Text style={{ fontSize: 28 }}>{assessment.emoji}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
-                          {assessment.title}
-                        </Text>
-                        {isUrgent ? (
-                          <Pill label={`⚠️ ${config.label}`} backgroundColor={config.bg} color={config.color} />
-                        ) : null}
-                      </View>
-                      <Text style={{ marginTop: 4, fontSize: 12, color: colors.muted }}>{assessment.subject}</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                          <MaterialCommunityIcons name="clock-outline" size={12} color={colors.muted} />
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.muted }}>
-                            Due: {assessment.dueDate}
-                          </Text>
-                        </View>
-                        {assessment.status === "completed" && assessment.score ? (
-                          <Pill
-                            label={`${assessment.score}/${assessment.totalScore} ✓`}
-                            backgroundColor={colors.paleGreen}
-                            color={colors.green}
-                          />
-                        ) : null}
-                      </View>
-                    </View>
-                    <View style={{ alignItems: "center", justifyContent: "space-between" }}>
-                      <View
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 999,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: config.bg,
-                        }}
-                      >
-                        <MaterialCommunityIcons name={config.icon} size={18} color={config.color} />
-                      </View>
-                      {assessment.status !== "completed" ? (
+                <AnimatedEntrance key={assessment.id} delay={index * 80}>
+                  <Pressable
+                    onPress={() =>
+                      (navigation as any).navigate("AssessmentDetail", {
+                        assessmentId: assessment.id,
+                        classId: assessment.classId || assessment.subjectId,
+                      })
+                    }
+                  >
+                    <Card style={{ overflow: "hidden", padding: 0 }}>
+                      {isUrgent ? <View style={{ height: 3, backgroundColor: config.color, width: "100%" }} /> : null}
+                      <View style={{ flexDirection: "row", gap: 12, padding: 16 }}>
                         <View
                           style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 999,
+                            width: 54,
+                            height: 54,
+                            borderRadius: 18,
                             alignItems: "center",
                             justifyContent: "center",
-                            backgroundColor: subject?.color ?? colors.amber,
+                            backgroundColor: config.bg,
                           }}
                         >
-                          <MaterialCommunityIcons name="chevron-right" size={16} color={colors.white} />
+                          <Text style={{ fontSize: 28 }}>{assessment.emoji}</Text>
                         </View>
-                      ) : null}
-                    </View>
-                  </View>
-                </Card>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>{assessment.title}</Text>
+                            {isUrgent ? <Pill label={config.label} backgroundColor={config.bg} color={config.color} /> : null}
+                          </View>
+                          <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>{assessment.subject}</Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                              <MaterialCommunityIcons name="clock-outline" size={12} color={colors.muted} />
+                              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.muted }}>
+                                Due: {assessment.dueDate}
+                              </Text>
+                            </View>
+                            {assessment.status === "completed" && assessment.score !== undefined ? (
+                              <Pill
+                                label={`${Math.round(assessment.score)}/${assessment.totalScore} ✓`}
+                                backgroundColor={colors.paleGreen}
+                                color={colors.green}
+                              />
+                            ) : null}
+                          </View>
+                        </View>
+                        <View style={{ alignItems: "center", justifyContent: "space-between" }}>
+                          <View
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 999,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: config.bg,
+                            }}
+                          >
+                            <MaterialCommunityIcons name={config.icon} size={18} color={config.color} />
+                          </View>
+                          <View
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 999,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: assessment.status === "completed" ? colors.green : colors.amber,
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name={assessment.status === "completed" ? "check" : "chevron-right"}
+                              size={16}
+                              color={colors.white}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    </Card>
+                  </Pressable>
+                </AnimatedEntrance>
               );
             })
           )}

@@ -34,6 +34,8 @@ import { ForgotPasswordDto } from './DTO/forgot-password.dto';
 import { ResetPasswordDto } from './DTO/reset-password.dto';
 import { SetInitialPasswordDto } from './DTO/set-initial-password.dto';
 import { SetActivationPasswordDto } from './DTO/set-activation-password.dto';
+import { MobileRefreshDto } from './DTO/mobile-refresh.dto';
+import { MobileLogoutDto } from './DTO/mobile-logout.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -133,6 +135,34 @@ export class AuthController {
     };
   }
 
+  @Public()
+  @Post('mobile/login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Authenticate a mobile client and return access and refresh tokens',
+  })
+  @ApiBody({ type: LoginDto })
+  @ApiResponse({ status: 200, description: 'Mobile login successful' })
+  async mobileLogin(
+    @Body() loginDto: LoginDto,
+    @Req() request: express.Request,
+  ) {
+    const ip = request.ip;
+    const userAgent = request.headers['user-agent'];
+    const result = await this.authService.login(loginDto, ip, userAgent);
+
+    return {
+      success: true,
+      message: 'Mobile login successful',
+      data: {
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      },
+    };
+  }
+
   // --------------------------------------------------------------------------
   // Refresh (token rotation)
   // --------------------------------------------------------------------------
@@ -176,6 +206,36 @@ export class AuthController {
     };
   }
 
+  @Public()
+  @Post('mobile/refresh')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @ApiOperation({
+    summary: 'Rotate a mobile refresh token and return fresh mobile tokens',
+  })
+  @ApiBody({ type: MobileRefreshDto })
+  @ApiResponse({ status: 200, description: 'Mobile token refreshed' })
+  async mobileRefresh(
+    @Body() dto: MobileRefreshDto,
+    @Req() request: express.Request,
+  ) {
+    const ip = request.ip;
+    const userAgent = request.headers['user-agent'];
+    const result = await this.authService.refreshToken(
+      dto.refreshToken,
+      ip,
+      userAgent,
+    );
+
+    return {
+      success: true,
+      message: 'Mobile token refreshed',
+      data: {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      },
+    };
+  }
+
   // --------------------------------------------------------------------------
   // Logout
   // --------------------------------------------------------------------------
@@ -201,6 +261,22 @@ export class AuthController {
     return {
       success: true,
       message: 'Logout successful',
+    };
+  }
+
+  @Public()
+  @Post('mobile/logout')
+  @HttpCode(HttpStatus.OK)
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Revoke a mobile refresh token' })
+  @ApiBody({ type: MobileLogoutDto })
+  @ApiResponse({ status: 200, description: 'Mobile logout successful' })
+  async mobileLogout(@Body() dto: MobileLogoutDto) {
+    await this.authService.logout(dto.refreshToken);
+
+    return {
+      success: true,
+      message: 'Mobile logout successful',
     };
   }
 

@@ -7,6 +7,9 @@ export interface Subject {
   progress: number;
   totalLessons: number;
   completedLessons: number;
+  section?: string;
+  teacherName?: string;
+  subjectCode?: string;
 }
 
 export interface Lesson {
@@ -17,6 +20,7 @@ export interface Lesson {
   status: "completed" | "ongoing" | "locked";
   duration: string;
   xp: number;
+  order?: number;
 }
 
 export interface Assessment {
@@ -29,6 +33,9 @@ export interface Assessment {
   score?: number;
   totalScore: number;
   emoji: string;
+  classId?: string;
+  attempts?: unknown[];
+  raw?: Record<string, unknown>;
 }
 
 export interface Achievement {
@@ -49,6 +56,7 @@ export interface LxpRecommendation {
   emoji: string;
   xp: number;
   urgent: boolean;
+  completed?: boolean;
 }
 
 export interface UserProfile {
@@ -64,3 +72,21 @@ export interface UserProfile {
   averageScore: number;
   studyHours: number;
 }
+
+export interface AnnouncementPreview {
+  id: string;
+  classId: string;
+  title: string;
+  content: string;
+  subject: string;
+  emoji: string;
+  isPinned: boolean;
+  createdAt: string;
+}
+
+export type SubjectCard = Subject;
+export type LessonCard = Lesson;
+export type AssessmentCard = Assessment;
+export type AchievementCard = Achievement;
+export type TutorRecommendationCard = LxpRecommendation;
+export type UserProfileSummary = UserProfile;

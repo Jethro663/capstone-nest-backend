@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
 import { UsersService } from '../users/users.service';
 import { OtpService } from '../otp/otp.service';
+import { AuditService } from '../audit/audit.service';
 
 // Mock bcrypt at module level so its properties are configurable
 jest.mock('bcrypt', () => ({
@@ -71,6 +72,10 @@ const mockTokenService = {
   revokeAllForUser: jest.fn().mockResolvedValue(undefined),
 };
 
+const mockAuditService = {
+  log: jest.fn().mockResolvedValue(undefined),
+};
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -89,6 +94,7 @@ describe('AuthService', () => {
         { provide: ConfigService, useValue: mockConfigService },
         { provide: OtpService, useValue: mockOtpService },
         { provide: TokenService, useValue: mockTokenService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 

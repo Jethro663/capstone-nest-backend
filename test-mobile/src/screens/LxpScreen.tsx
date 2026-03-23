@@ -2,41 +2,80 @@ import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Card, GradientHeader, Pill, ProgressBar, ScreenScroll, SectionTitle } from "../components/ui/primitives";
-import { aiMentorMessages, lxpRecommendations, subjects, userProfile } from "../data/mockData";
+import {
+  AnimatedEntrance,
+  Card,
+  GradientHeader,
+  Pill,
+  ProgressBar,
+  Refreshable,
+  ScreenScroll,
+  SectionTitle,
+} from "../components/ui/primitives";
+import { useLxpCheckpointMutation, useLxpEligibility, useLxpPlaylist, useStudentClasses, useTutorBootstrap } from "../api/hooks";
+import { toTutorRecommendationCards, toSubjectCard } from "../data/mappers";
+import { lessonsApi } from "../api/services/lessons";
 import type { MainTabParamList } from "../navigation/types";
+import { useAuth } from "../providers/AuthProvider";
 import { colors, gradients, shadow } from "../theme/tokens";
 
 type Props = BottomTabScreenProps<MainTabParamList, "LXP">;
 
 const confettiColors = [colors.amber, colors.green, colors.blue, colors.red, colors.purple];
 
-export function LxpScreen(_: Props) {
-  const [mentorMessageIdx, setMentorMessageIdx] = useState(0);
+export function LxpScreen({ navigation }: Props) {
+  const { user } = useAuth();
+  const [selectedClassId, setSelectedClassId] = useState<string | undefined>();
   const [showConfetti, setShowConfetti] = useState(false);
-  const [completedRecs, setCompletedRecs] = useState<string[]>([]);
-  const weakSubjects = useMemo(() => subjects.filter((subject) => subject.progress < 40), []);
+  const classesQuery = useStudentClasses(user?.userId || user?.id);
+  const eligibilityQuery = useLxpEligibility();
+  const tutorBootstrapQuery = useTutorBootstrap(selectedClassId);
+  const playlistQuery = useLxpPlaylist(selectedClassId);
+  const checkpointMutation = useLxpCheckpointMutation(selectedClassId);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setMentorMessageIdx((prev) => (prev + 1) % aiMentorMessages.length);
-    }, 4000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const handleCompleteRec = (id: string) => {
-    if (completedRecs.includes(id)) {
-      return;
+    if (!selectedClassId) {
+      setSelectedClassId(
+        eligibilityQuery.data?.eligibleClasses[0]?.classId || tutorBootstrapQuery.data?.selectedClassId || classesQuery.data?.[0]?.id,
+      );
     }
+  }, [classesQuery.data, eligibilityQuery.data, selectedClassId, tutorBootstrapQuery.data?.selectedClassId]);
 
-    setCompletedRecs((prev) => [...prev, id]);
+  const selectedClass = classesQuery.data?.find((classItem) => classItem.id === selectedClassId);
+  const selectedSubject = selectedClass
+    ? toSubjectCard(selectedClass, [], [], eligibilityQuery.data?.eligibleClasses.find((entry) => entry.classId === selectedClass.id) as any)
+    : undefined;
+
+  const recommendations = useMemo(
+    () => toTutorRecommendationCards(playlistQuery.data, selectedSubject),
+    [playlistQuery.data, selectedSubject],
+  );
+
+  const refreshing =
+    eligibilityQuery.isRefetching || playlistQuery.isRefetching || tutorBootstrapQuery.isRefetching || classesQuery.isRefetching;
+
+  const handleCompleteCheckpoint = async (assignmentId: string) => {
+    await checkpointMutation.mutateAsync({ assignmentId });
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 1800);
   };
 
   return (
-    <ScreenScroll>
+    <ScreenScroll
+      refreshControl={
+        <Refreshable
+          refreshing={refreshing}
+          onRefresh={() => {
+            void Promise.all([
+              classesQuery.refetch(),
+              eligibilityQuery.refetch(),
+              tutorBootstrapQuery.refetch(),
+              playlistQuery.refetch(),
+            ]);
+          }}
+        />
+      }
+    >
       {showConfetti ? (
         <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, zIndex: 30 }}>
           {Array.from({ length: 16 }).map((_, index) => (
@@ -73,7 +112,9 @@ export function LxpScreen(_: Props) {
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <MaterialCommunityIcons name="fire" size={16} color="#FFD700" />
-              <Text style={{ color: colors.white, fontSize: 18, fontWeight: "900" }}>{userProfile.streak}</Text>
+              <Text style={{ color: colors.white, fontSize: 18, fontWeight: "900" }}>
+                {playlistQuery.data?.progress.streakDays ?? 0}
+              </Text>
             </View>
             <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: "700" }}>Day Streak</Text>
           </View>
@@ -83,30 +124,25 @@ export function LxpScreen(_: Props) {
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <MaterialCommunityIcons name="flash" size={14} color="#FFD700" />
-              <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Level {userProfile.level}</Text>
+              <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>
+                {playlistQuery.data?.progress.xpTotal ?? 0} XP
+              </Text>
             </View>
             <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "700" }}>
-              {userProfile.xp} / 1500 XP
+              {playlistQuery.data?.progress.checkpointsCompleted ?? 0} checkpoints done
             </Text>
           </View>
-          <ProgressBar value={(userProfile.xp / 1500) * 100} color="#FFD700" trackColor="rgba(255,255,255,0.28)" height={10} />
-          <Text style={{ marginTop: 6, color: "rgba(255,255,255,0.7)", fontSize: 11 }}>250 XP to Level {userProfile.level + 1}</Text>
+          <ProgressBar
+            value={playlistQuery.data?.progress.completionPercent ?? 0}
+            color="#FFD700"
+            trackColor="rgba(255,255,255,0.28)"
+            height={10}
+          />
         </View>
       </GradientHeader>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
-        <Card style={{ backgroundColor: "#FFF8E7", marginBottom: 20 }}>
-          <View
-            style={{
-              position: "absolute",
-              top: -20,
-              right: -20,
-              width: 100,
-              height: 100,
-              borderRadius: 999,
-              backgroundColor: "#FFB83033",
-            }}
-          />
+      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 20 }}>
+        <Card style={{ backgroundColor: "#FFF8E7" }}>
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View
               style={{
@@ -122,15 +158,17 @@ export function LxpScreen(_: Props) {
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "900", color: "#92400E" }}>AI Mentor</Text>
+                <Text style={{ fontSize: 13, fontWeight: "900", color: "#92400E" }}>AI Tutor</Text>
                 <Pill label="Live" backgroundColor={colors.amber} color={colors.white} />
               </View>
               <Text style={{ fontSize: 13, lineHeight: 20, fontWeight: "700", color: "#92400E" }}>
-                {aiMentorMessages[mentorMessageIdx]}
+                {tutorBootstrapQuery.data?.recommendations[0]?.reason ||
+                  "The student tutor is ready with grounded recommendations from your weak topics."}
               </Text>
             </View>
           </View>
           <Pressable
+            onPress={() => (navigation as any).navigate("AiTutor", { classId: selectedClassId })}
             style={{
               marginTop: 14,
               alignSelf: "flex-start",
@@ -144,57 +182,47 @@ export function LxpScreen(_: Props) {
             }}
           >
             <MaterialCommunityIcons name="message-text" size={14} color={colors.white} />
-            <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Chat with Mentor</Text>
+            <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Open Tutor</Text>
           </Pressable>
         </Card>
 
-        {weakSubjects.length > 0 ? (
-          <View style={{ marginBottom: 20 }}>
-            <SectionTitle title="Needs Attention ⚠️" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-              {weakSubjects.map((subject) => (
+        <View>
+          <SectionTitle title="Eligible Classes" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+            {(eligibilityQuery.data?.eligibleClasses.length
+              ? eligibilityQuery.data.eligibleClasses
+              : (classesQuery.data ?? []).map((classItem) => ({
+                  classId: classItem.id,
+                  class: { id: classItem.id, subjectName: classItem.subjectName, subjectCode: classItem.subjectCode, section: classItem.section },
+                } as any))
+            ).map((entry) => (
+              <Pressable key={entry.classId} onPress={() => setSelectedClassId(entry.classId)}>
                 <Card
-                  key={subject.id}
                   style={{
-                    width: 148,
+                    width: 176,
                     borderWidth: 2,
-                    borderColor: `${subject.color}33`,
+                    borderColor: entry.classId === selectedClassId ? colors.indigo : `${colors.indigo}22`,
                   }}
                 >
-                  <Text style={{ fontSize: 30 }}>{subject.emoji}</Text>
-                  <Text style={{ marginTop: 10, fontSize: 13, fontWeight: "800", color: colors.text }}>{subject.name}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 }}>
-                    <View style={{ flex: 1 }}>
-                      <ProgressBar value={subject.progress} color={subject.color} trackColor="#EEF2F7" height={6} />
-                    </View>
-                    <Text style={{ fontSize: 11, fontWeight: "900", color: colors.red }}>{subject.progress}%</Text>
-                  </View>
+                  <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "📘"}</Text>
+                  <Text style={{ marginTop: 10, fontSize: 13, fontWeight: "800", color: colors.text }}>
+                    {entry.class.subjectName}
+                  </Text>
+                  <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                    {entry.class.subjectCode}
+                  </Text>
                 </Card>
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
 
-        <View style={{ marginBottom: 20 }}>
+        <View>
           <SectionTitle title="Recommended for You 🎯" />
           <View style={{ gap: 12 }}>
-            {lxpRecommendations.map((recommendation) => {
-              const isDone = completedRecs.includes(recommendation.id);
-              return (
-                <Card key={recommendation.id} style={{ opacity: isDone ? 0.65 : 1 }}>
-                  {recommendation.urgent && !isDone ? (
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: 14,
-                        right: 14,
-                        width: 8,
-                        height: 8,
-                        borderRadius: 999,
-                        backgroundColor: colors.red,
-                      }}
-                    />
-                  ) : null}
+            {recommendations.map((recommendation, index) => (
+              <AnimatedEntrance key={recommendation.id} delay={index * 80}>
+                <Card style={{ opacity: recommendation.completed ? 0.7 : 1 }}>
                   <View style={{ flexDirection: "row", gap: 12 }}>
                     <View
                       style={{
@@ -210,25 +238,25 @@ export function LxpScreen(_: Props) {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Pill
-                        label={recommendation.type === "retry" ? "🔄 Retry" : "📖 Lesson"}
+                        label={recommendation.type === "retry" ? "Retry" : "Lesson"}
                         backgroundColor={recommendation.type === "retry" ? colors.paleRed : colors.paleIndigo}
                         color={recommendation.type === "retry" ? colors.red : colors.indigo}
                       />
                       <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: colors.text }}>
                         {recommendation.title}
                       </Text>
-                      <Text style={{ marginTop: 4, fontSize: 11, color: colors.muted }}>{recommendation.reason}</Text>
+                      <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>{recommendation.reason}</Text>
                     </View>
                     <View style={{ alignItems: "center", justifyContent: "space-between" }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                         <MaterialCommunityIcons name="flash" size={12} color={colors.amber} />
                         <Text style={{ fontSize: 12, fontWeight: "900", color: colors.amber }}>+{recommendation.xp}</Text>
                       </View>
-                      {isDone ? (
+                      {recommendation.completed ? (
                         <Text style={{ fontSize: 18 }}>✅</Text>
                       ) : (
                         <Pressable
-                          onPress={() => handleCompleteRec(recommendation.id)}
+                          onPress={() => void handleCompleteCheckpoint(recommendation.id)}
                           style={[
                             {
                               width: 34,
@@ -236,11 +264,9 @@ export function LxpScreen(_: Props) {
                               borderRadius: 999,
                               alignItems: "center",
                               justifyContent: "center",
-                            },
-                            shadow.card,
-                            {
                               backgroundColor: recommendation.type === "retry" ? colors.red : colors.indigo,
                             },
+                            shadow.card,
                           ]}
                         >
                           <MaterialCommunityIcons
@@ -253,29 +279,26 @@ export function LxpScreen(_: Props) {
                     </View>
                   </View>
                 </Card>
-              );
-            })}
+              </AnimatedEntrance>
+            ))}
           </View>
         </View>
 
         <Card style={{ backgroundColor: "#F4F5FF", marginBottom: 12 }}>
-          <SectionTitle title="Progress Recovery Tracker" />
+          <SectionTitle title="Checkpoint Progress" />
           <View style={{ gap: 14 }}>
-            {subjects.slice(0, 3).map((subject) => (
-              <View key={subject.id}>
+            {(playlistQuery.data?.checkpoints ?? []).map((checkpoint) => (
+              <View key={checkpoint.id}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontSize: 14 }}>{subject.emoji}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{subject.name}</Text>
+                    <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "📘"}</Text>
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
                   </View>
-                  <Text style={{ fontSize: 12, fontWeight: "900", color: subject.color }}>{subject.progress}%</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "900", color: checkpoint.isCompleted ? colors.green : colors.indigo }}>
+                    {checkpoint.isCompleted ? "Done" : `+${checkpoint.xpAwarded} XP`}
+                  </Text>
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <ProgressBar value={subject.progress} color={subject.color} trackColor="rgba(255,255,255,0.7)" height={8} />
-                  </View>
-                  <Text style={{ fontSize: 10, color: colors.muted }}>target: 80%</Text>
-                </View>
+                <ProgressBar value={checkpoint.isCompleted ? 100 : 0} color={checkpoint.isCompleted ? colors.green : colors.indigo} trackColor="rgba(255,255,255,0.7)" height={8} />
               </View>
             ))}
           </View>

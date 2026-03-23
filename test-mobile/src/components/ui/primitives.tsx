@@ -1,8 +1,10 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  Animated,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -14,13 +16,17 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 import { colors, radii, shadow } from "../../theme/tokens";
 
-export function ScreenScroll({ children }: PropsWithChildren) {
+export function ScreenScroll({
+  children,
+  refreshControl,
+}: PropsWithChildren<{ refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"] }>) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["left", "right"]}>
       <ScrollView
         bounces
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 112 }}
+        refreshControl={refreshControl}
         style={{ flex: 1, backgroundColor: colors.surface }}
       >
         {children}
@@ -246,6 +252,53 @@ export function EmptyState({
       <Text style={{ marginTop: 12, fontSize: 16, fontWeight: "800", color: colors.text }}>{title}</Text>
       <Text style={{ marginTop: 4, fontSize: 13, color: colors.muted }}>{subtitle}</Text>
     </View>
+  );
+}
+
+export function Refreshable({ refreshing, onRefresh }: { refreshing: boolean; onRefresh: () => void }) {
+  return <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.amber} />;
+}
+
+export function AnimatedEntrance({
+  children,
+  delay = 0,
+  style,
+}: PropsWithChildren<{ delay?: number; style?: object }>) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 360,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 360,
+        delay,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [delay, opacity, translateY]);
+
+  return <Animated.View style={[{ opacity, transform: [{ translateY }] }, style]}>{children}</Animated.View>;
+}
+
+export function LoadingCard({ height = 120 }: { height?: number }) {
+  return (
+    <View
+      style={[
+        {
+          height,
+          borderRadius: radii.xl,
+          backgroundColor: "#ECEFF6",
+        },
+        shadow.card,
+      ]}
+    />
   );
 }
 
