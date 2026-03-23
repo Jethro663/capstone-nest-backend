@@ -22,6 +22,25 @@ export interface ExtractionStructuredContent {
   title: string;
   description: string;
   lessons: ExtractionLesson[];
+  audit?: {
+    pipelineVersion?: string;
+    overallConfidence?: number;
+    warnings?: string[];
+    sourceMethods?: string[];
+    sectionCount?: number;
+    pipelineStages?: string[];
+    classification?: {
+      safe: boolean;
+      category: string;
+      confidence: number;
+      reason: string;
+    };
+    sanitizationWarnings?: string[];
+    chunkWarnings?: string[];
+    chunkCount?: number;
+    pageCount?: number;
+    sourceDocument?: string;
+  };
 }
 
 export interface Extraction {

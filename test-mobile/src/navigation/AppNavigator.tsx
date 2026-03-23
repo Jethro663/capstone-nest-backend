@@ -1,4 +1,5 @@
-import { ActivityIndicator, Text, View } from "react-native";
+import { Component, type ReactNode, useMemo, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -45,6 +46,71 @@ function RootFallback() {
   );
 }
 
+type NavigationErrorBoundaryProps = {
+  children: ReactNode;
+  currentRouteName: string;
+};
+
+type NavigationErrorBoundaryState = {
+  error: Error | null;
+};
+
+class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, NavigationErrorBoundaryState> {
+  state: NavigationErrorBoundaryState = {
+    error: null,
+  };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidUpdate(prevProps: NavigationErrorBoundaryProps) {
+    if (this.state.error && prevProps.currentRouteName !== this.props.currentRouteName) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (!this.state.error) {
+      return this.props.children;
+    }
+
+    return (
+      <View style={{ flex: 1, justifyContent: "center", padding: 20, backgroundColor: colors.surface }}>
+        <View
+          style={{
+            borderRadius: 28,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.white,
+            padding: 20,
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "900", color: colors.red }}>Screen Render Error</Text>
+          <Text style={{ marginTop: 8, fontSize: 22, fontWeight: "900", color: colors.text }}>
+            {this.props.currentRouteName}
+          </Text>
+          <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+            {this.state.error.message || "This screen failed to render."}
+          </Text>
+          <Pressable
+            onPress={() => this.setState({ error: null })}
+            style={{
+              marginTop: 18,
+              alignItems: "center",
+              borderRadius: 16,
+              backgroundColor: colors.text,
+              paddingVertical: 14,
+            }}
+          >
+            <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Try rendering again</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+}
+
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
@@ -78,12 +144,45 @@ function StudentNavigator() {
   );
 }
 
+function getActiveRouteName(state: any): string {
+  const route = state?.routes?.[state?.index ?? 0];
+  if (!route) {
+    return "Lessons";
+  }
+
+  if (route.state?.routes?.length) {
+    return getActiveRouteName(route.state);
+  }
+
+  return route.name || "Lessons";
+}
+
 export function AppNavigator() {
   const { isAuthenticated, loading } = useAuth();
+  const [currentRouteName, setCurrentRouteName] = useState("Lessons");
+  const navigator = useMemo(
+    () =>
+      isAuthenticated ? (
+        <NavigationErrorBoundary currentRouteName={currentRouteName}>
+          <StudentNavigator />
+        </NavigationErrorBoundary>
+      ) : (
+        <AuthNavigator />
+      ),
+    [currentRouteName, isAuthenticated],
+  );
 
   if (loading) {
     return <RootFallback />;
   }
 
-  return <NavigationContainer theme={navigationTheme}>{isAuthenticated ? <StudentNavigator /> : <AuthNavigator />}</NavigationContainer>;
+  return (
+    <NavigationContainer
+      theme={navigationTheme}
+      onReady={() => setCurrentRouteName(isAuthenticated ? "Lessons" : "Login")}
+      onStateChange={(state) => setCurrentRouteName(getActiveRouteName(state))}
+    >
+      {navigator}
+    </NavigationContainer>
+  );
 }

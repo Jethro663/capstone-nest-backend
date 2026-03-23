@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type {
   Assessment,
@@ -117,6 +118,7 @@ export default function AssessmentEditorPage() {
     imageUrl: string;
     options: { text: string; isCorrect: boolean; order: number }[];
   } | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   /* ---------- fetch ---------- */
   const fetchData = useCallback(async () => {
@@ -440,18 +442,25 @@ export default function AssessmentEditorPage() {
     }
   };
 
-  const handleDeleteQuestion = async (id: string) => {
-    if (!confirm('Delete this question?')) return;
-    try {
-      await assessmentService.deleteQuestion(id);
-      setQuestions((prev) => prev.filter((q) => q.id !== id));
-      if (editingQId === id) cancelDraft();
-      const fresh = await assessmentService.getById(assessmentId);
-      setAssessment(fresh.data);
-      toast.success('Question deleted');
-    } catch {
-      toast.error('Failed to delete question');
-    }
+  const handleDeleteQuestion = (id: string) => {
+    setConfirmation({
+      title: 'Delete question?',
+      description: 'This question will be removed from the assessment and point totals will refresh afterward.',
+      confirmLabel: 'Delete Question',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await assessmentService.deleteQuestion(id);
+          setQuestions((prev) => prev.filter((q) => q.id !== id));
+          if (editingQId === id) cancelDraft();
+          const fresh = await assessmentService.getById(assessmentId);
+          setAssessment(fresh.data);
+          toast.success('Question deleted');
+        } catch {
+          toast.error('Failed to delete question');
+        }
+      },
+    });
   };
 
   const handleImageUpload = async (questionId: string, file: File) => {
@@ -511,7 +520,8 @@ export default function AssessmentEditorPage() {
 
   /* â”€â”€ RENDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   return (
-    <TeacherPageShell
+    <>
+      <TeacherPageShell
       className="mx-auto max-w-6xl"
       badge="Assessment Editor"
       title={title || assessment.title || 'Assessment Draft'}
@@ -1283,7 +1293,9 @@ export default function AssessmentEditorPage() {
         </Card>
       )}
       </div>
-    </TeacherPageShell>
+      </TeacherPageShell>
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+    </>
   );
 }
 

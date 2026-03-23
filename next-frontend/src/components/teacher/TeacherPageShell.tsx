@@ -40,10 +40,10 @@ interface TeacherEmptyStateProps {
 }
 
 const accentMap = {
-  sky: 'from-sky-500/18 via-cyan-400/10 to-transparent text-sky-700 dark:text-sky-200',
-  teal: 'from-teal-500/18 via-emerald-400/10 to-transparent text-teal-700 dark:text-teal-200',
-  amber: 'from-amber-400/24 via-orange-300/10 to-transparent text-amber-700 dark:text-amber-200',
-  rose: 'from-rose-500/18 via-pink-400/10 to-transparent text-rose-700 dark:text-rose-200',
+  sky: 'from-rose-500/16 via-red-400/10 to-transparent text-red-700',
+  teal: 'from-red-500/18 via-rose-400/10 to-transparent text-red-700',
+  amber: 'from-pink-400/20 via-rose-300/10 to-transparent text-rose-700',
+  rose: 'from-red-500/20 via-pink-400/10 to-transparent text-rose-700',
 } as const;
 
 export function TeacherPageShell({
@@ -59,8 +59,8 @@ export function TeacherPageShell({
     <div className={cn('teacher-page space-y-6 pb-4', className)}>
       <section className="teacher-panel relative overflow-hidden rounded-[1.9rem] px-6 py-6 md:px-8 md:py-8">
         <div className="teacher-highlight absolute inset-0 opacity-90" />
-        <div className="absolute -left-10 top-0 h-36 w-36 rounded-full bg-sky-300/20 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-amber-300/20 blur-3xl" />
+        <div className="absolute -left-10 top-0 h-36 w-36 rounded-full bg-red-300/20 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-rose-300/20 blur-3xl" />
 
         <div className="relative z-10 flex flex-col gap-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -113,7 +113,7 @@ export function TeacherStatCard({
           ) : null}
         </div>
         {Icon ? (
-          <div className="rounded-2xl border border-[var(--teacher-outline)] bg-white/10 p-3 text-[var(--teacher-accent)] shadow-sm">
+          <div className="rounded-2xl border border-[var(--teacher-outline)] bg-white/70 p-3 text-[var(--teacher-accent)] shadow-sm">
             <Icon className="h-5 w-5" />
           </div>
         ) : null}
@@ -135,7 +135,7 @@ export function TeacherSectionCard({
       variant="teacher"
       className={cn('overflow-hidden rounded-[1.7rem] border-white/30', className)}
     >
-      <CardHeader className="border-b border-[var(--teacher-outline)] bg-white/6 pb-4">
+      <CardHeader className="border-b border-[var(--teacher-outline)] bg-white/55 pb-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <CardTitle className="text-xl font-black tracking-tight text-[var(--teacher-text-strong)]">

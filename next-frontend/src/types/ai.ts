@@ -8,6 +8,9 @@ export interface AiCitation {
   assessmentId?: string | null;
   questionId?: string | null;
   label: string;
+  scoreBreakdown?: Record<string, number>;
+  selectionReason?: string;
+  sourceReference?: string;
 }
 
 export interface MentorExplainResponse {
@@ -17,6 +20,12 @@ export interface MentorExplainResponse {
     lessonId?: string | null;
     label: string;
   } | null;
+  analysisPacket?: {
+    mistakeSummary: string;
+    likelyMisconceptions: string[];
+    requiredEvidence: string[];
+    answerGuardrail: string;
+  };
   modelUsed: string;
 }
 
@@ -44,6 +53,8 @@ export interface InterventionRecommendation {
     title: string;
     reason: string;
     chunkId: string;
+    scoreBreakdown?: Record<string, number>;
+    sourceReference?: string;
   }>;
   recommendedAssessments: Array<{
     assessmentId: string;
@@ -56,6 +67,12 @@ export interface InterventionRecommendation {
     lessonAssignments?: { lessonId: string; xpAwarded: number; label?: string }[];
     assessmentAssignments?: { assessmentId: string; xpAwarded: number; label?: string }[];
     note?: string;
+  };
+  evidencePacket?: {
+    weakConcepts: string[];
+    recommendedLessons: Array<Record<string, unknown>>;
+    recommendedAssessments: Array<Record<string, unknown>>;
+    mistakeSample: Array<Record<string, unknown>>;
   };
 }
 
@@ -102,6 +119,16 @@ export interface AiGenerationJobResult<TStructuredOutput = Record<string, unknow
 export interface QuizDraftStructuredOutput {
   title: string;
   description?: string;
+  blueprint?: {
+    title: string;
+    description: string;
+    conceptCoverage: string[];
+    questionBlueprints: Array<{
+      intent: string;
+      difficulty: string;
+      sourceCitation: string;
+    }>;
+  };
   questions: Array<{
     type: QuestionType;
     content: string;
@@ -142,6 +169,13 @@ export interface GenerateQuizDraftResponse {
   outputId: string;
   assessmentId: string;
   title: string;
+  blueprint?: QuizDraftStructuredOutput['blueprint'];
+  sourceCitations?: Array<{
+    chunkId: string;
+    sourceReference?: string;
+    selectionReason?: string;
+    scoreBreakdown?: Record<string, number>;
+  }>;
   questionsCreated: number;
   message: string;
   indexing?: IndexingSummary;
@@ -157,6 +191,7 @@ export interface InterventionStructuredOutput {
     teacherActions: string[];
     studentFocus: string[];
   };
+  evidencePacket?: InterventionRecommendation['evidencePacket'];
   suggestedAssignmentPayload: InterventionRecommendation['suggestedAssignmentPayload'];
   note?: string | null;
   runtime?: {
@@ -235,6 +270,17 @@ export interface StudentTutorCitation {
   label: string;
   lessonId?: string | null;
   assessmentId?: string | null;
+  scoreBreakdown?: Record<string, number>;
+  selectionReason?: string;
+  sourceReference?: string;
+}
+
+export interface StudentTutorPlan {
+  teachingGoal: string;
+  likelyMisconceptions: string[];
+  requiredEvidence: string[];
+  questionDifficulty: string;
+  answerGuardrail: string;
 }
 
 export interface StudentTutorSessionStartResponse {
@@ -246,6 +292,7 @@ export interface StudentTutorSessionStartResponse {
   lessonPlan: string[];
   lessonBody: string;
   questions: StudentTutorQuestion[];
+  tutorPlan?: StudentTutorPlan;
   citations: StudentTutorCitation[];
 }
 
@@ -288,6 +335,7 @@ export interface StudentTutorSessionState {
   classId: string;
   classLabel: string;
   recommendation: StudentTutorRecommendation;
+  tutorPlan?: StudentTutorPlan;
   lessonPlan: string[];
   lessonBody: string;
   questions: StudentTutorQuestion[];

@@ -27,8 +27,8 @@ export function AdminPageShell({
     <div className={cn('admin-page space-y-6 pb-4', className)}>
       <section className="admin-panel relative overflow-hidden rounded-[1.9rem] px-6 py-6 md:px-8 md:py-8">
         <div className="admin-highlight absolute inset-0 opacity-90" />
-        <div className="absolute -left-10 top-0 h-36 w-36 rounded-full bg-emerald-300/15 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-amber-300/15 blur-3xl" />
+        <div className="absolute -left-10 top-0 h-36 w-36 rounded-full bg-red-300/15 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-rose-300/15 blur-3xl" />
 
         <div className="relative z-10 flex flex-col gap-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -72,10 +72,10 @@ export function AdminStatCard({
   accent?: 'emerald' | 'sky' | 'amber' | 'rose';
 }) {
   const accentMap = {
-    emerald: 'from-emerald-500/20 via-teal-400/12 to-transparent text-emerald-700',
-    sky: 'from-sky-500/18 via-cyan-400/10 to-transparent text-sky-700',
-    amber: 'from-amber-400/22 via-orange-300/12 to-transparent text-amber-700',
-    rose: 'from-rose-500/18 via-pink-400/10 to-transparent text-rose-700',
+    emerald: 'from-red-500/20 via-rose-400/12 to-transparent text-red-700',
+    sky: 'from-rose-500/18 via-red-400/10 to-transparent text-red-700',
+    amber: 'from-pink-400/22 via-rose-300/12 to-transparent text-rose-700',
+    rose: 'from-red-500/18 via-pink-400/10 to-transparent text-rose-700',
   } as const;
 
   return (

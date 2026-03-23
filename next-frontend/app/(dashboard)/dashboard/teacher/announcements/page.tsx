@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
@@ -33,6 +34,7 @@ export default function TeacherAnnouncementsPage() {
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -116,16 +118,28 @@ export default function TeacherAnnouncementsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this announcement?')) return;
-
-    try {
-      await announcementService.delete(selectedClassId, id);
-      toast.success('Deleted');
-      setAnnouncements((prev) => prev.filter((entry) => entry.id !== id));
-    } catch {
-      toast.error('Failed to delete');
-    }
+  const handleDelete = (announcement: Announcement) => {
+    setConfirmation({
+      title: 'Delete announcement?',
+      description: 'This removes the post from the class bulletin board for students immediately.',
+      confirmLabel: 'Delete Announcement',
+      tone: 'danger',
+      details: (
+        <p className="text-sm">
+          <span className="font-black text-[var(--student-text-strong)]">{announcement.title}</span>
+          {' '}will be removed from {selectedClass?.subjectName ?? 'this class'}.
+        </p>
+      ),
+      onConfirm: async () => {
+        try {
+          await announcementService.delete(selectedClassId, announcement.id);
+          toast.success('Deleted');
+          setAnnouncements((prev) => prev.filter((entry) => entry.id !== announcement.id));
+        } catch {
+          toast.error('Failed to delete');
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -279,7 +293,7 @@ export default function TeacherAnnouncementsPage() {
                       variant="outline"
                       size="sm"
                       className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                      onClick={() => handleDelete(announcement.id)}
+                      onClick={() => handleDelete(announcement)}
                     >
                       Delete
                     </Button>
@@ -337,6 +351,8 @@ export default function TeacherAnnouncementsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </TeacherPageShell>
   );
 }

@@ -1,17 +1,17 @@
 import { apiClient } from "../client";
-import { unwrapEnvelope } from "../http";
+import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type { Lesson, LessonCompletion } from "../../types/lesson";
 
 export const lessonsApi = {
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}`);
-    return unwrapEnvelope(response.data);
+    return normalizeArray<Lesson>(unwrapEnvelope(response.data));
   },
 
   async getCompletedByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<LessonCompletion[]>>(`/lessons/class/${classId}/completed`);
-    return unwrapEnvelope(response.data);
+    return normalizeArray<LessonCompletion>(unwrapEnvelope(response.data));
   },
 
   async getById(lessonId: string) {

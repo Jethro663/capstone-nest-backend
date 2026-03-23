@@ -17,6 +17,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Section } from '@/types/section';
@@ -38,6 +39,7 @@ export default function AdminSectionRosterPage() {
   const [selectedStudent, setSelectedStudent] = useState<RosterStudent | null>(
     null,
   );
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,23 +61,35 @@ export default function AdminSectionRosterPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleRemoveStudent = async (studentId: string) => {
-    if (!confirm('Remove this student from the section?')) return;
-    try {
-      await sectionService.removeStudent(sectionId, studentId);
-      toast.success('Student removed');
-      setRoster((prev) => prev.filter((student) => student.id !== studentId));
-      if (selectedStudent?.id === studentId) {
-        setSelectedStudent(null);
-      }
-    } catch (error) {
-      toast.error(
-        getApiErrorMessage(
-          error,
-          'Failed to remove student',
-        ),
-      );
-    }
+  const handleRemoveStudent = (student: RosterStudent) => {
+    setConfirmation({
+      title: 'Remove student from section?',
+      description: 'This will remove the student from the current section roster.',
+      confirmLabel: 'Remove Student',
+      tone: 'danger',
+      details: (
+        <p className="text-sm font-black text-[var(--student-text-strong)]">
+          {student.firstName} {student.lastName}
+        </p>
+      ),
+      onConfirm: async () => {
+        try {
+          await sectionService.removeStudent(sectionId, student.id);
+          toast.success('Student removed');
+          setRoster((prev) => prev.filter((entry) => entry.id !== student.id));
+          if (selectedStudent?.id === student.id) {
+            setSelectedStudent(null);
+          }
+        } catch (error) {
+          toast.error(
+            getApiErrorMessage(
+              error,
+              'Failed to remove student',
+            ),
+          );
+        }
+      },
+    });
   };
 
   const dedupedRoster = useMemo(() => {
@@ -199,7 +213,7 @@ export default function AdminSectionRosterPage() {
                       variant="ghost"
                       size="sm"
                       className="text-red-600"
-                      onClick={() => handleRemoveStudent(student.id)}
+                      onClick={() => handleRemoveStudent(student)}
                     >
                       Remove
                     </Button>
@@ -254,6 +268,8 @@ export default function AdminSectionRosterPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </div>
   );
 }

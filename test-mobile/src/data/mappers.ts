@@ -25,7 +25,7 @@ const subjectVisuals = [
   { match: ["filipino", "language"], emoji: "🌺", color: colors.purple, bgColor: colors.palePurple, gradient: gradients.profile },
 ];
 
-const normalize = (value: string) => value.trim().toLowerCase();
+const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
 export function getVisualForSubject(subjectName: string) {
   return (
@@ -47,37 +47,43 @@ export function toSubjectCard(
   completions: LessonCompletion[],
   performance?: StudentOwnClassPerformance | null,
 ): SubjectCard {
-  const visual = getVisualForSubject(classItem.subjectName);
-  const completedCount = completions.filter((entry) => entry.completed).length;
-  const totalLessons = lessons.length;
+  const subjectName = classItem.subjectName || classItem.className || classItem.name || "Untitled Subject";
+  const subjectCode = classItem.subjectCode || "CLASS";
+  const visual = getVisualForSubject(subjectName);
+  const safeLessons = Array.isArray(lessons) ? lessons : [];
+  const safeCompletions = Array.isArray(completions) ? completions : [];
+  const completedCount = safeCompletions.filter((entry) => entry.completed).length;
+  const totalLessons = safeLessons.length;
   const progress = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
   const teacherName = [classItem.teacher?.firstName, classItem.teacher?.lastName].filter(Boolean).join(" ");
-  const sectionName = classItem.section?.name || classItem.className || classItem.name || `${classItem.subjectCode} Section`;
+  const sectionName = classItem.section?.name || classItem.className || classItem.name || `${subjectCode} Section`;
 
   return {
     id: classItem.id,
-    name: classItem.subjectName,
+    name: subjectName,
     emoji: visual.emoji,
     color: visual.color,
     bgColor: visual.bgColor,
-    progress: performance?.blendedScore ? Math.round(performance.blendedScore) : progress,
+    progress: performance?.blendedScore != null ? Math.round(performance.blendedScore) : progress,
     totalLessons,
     completedLessons: completedCount,
     section: sectionName,
     teacherName: teacherName || "Assigned teacher",
-    subjectCode: classItem.subjectCode,
+    subjectCode,
   };
 }
 
 export function toLessonCards(lessons: Lesson[], completions: LessonCompletion[], subject: SubjectCard): LessonCard[] {
-  const completedIds = new Set(completions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
-  const ordered = [...lessons].sort((left, right) => left.order - right.order);
+  const safeLessons = Array.isArray(lessons) ? lessons : [];
+  const safeCompletions = Array.isArray(completions) ? completions : [];
+  const completedIds = new Set(safeCompletions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
+  const ordered = [...safeLessons].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
   const firstIncompleteIndex = ordered.findIndex((lesson) => !completedIds.has(lesson.id));
 
   return ordered.map((lesson, index) => ({
     id: lesson.id,
     subjectId: subject.id,
-    title: lesson.title,
+    title: lesson.title || "Untitled lesson",
     description: lesson.description ?? "Lesson content is available in the class module.",
     status: completedIds.has(lesson.id) ? "completed" : firstIncompleteIndex === -1 || index === firstIncompleteIndex ? "ongoing" : "locked",
     duration: `${Math.max((lesson.contentBlocks?.length ?? 3) * 5, 10)} min`,
@@ -127,8 +133,8 @@ export function toAnnouncementPreview(announcement: Announcement, subject: Subje
   return {
     id: announcement.id,
     classId: announcement.classId,
-    title: announcement.title,
-    content: announcement.content,
+    title: announcement.title || "Untitled announcement",
+    content: announcement.content || "No announcement details were provided.",
     subject: subject.name,
     emoji: subject.emoji,
     isPinned: announcement.isPinned,

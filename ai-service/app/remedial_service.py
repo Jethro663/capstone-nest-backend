@@ -143,6 +143,8 @@ async def recommend_intervention_case(
         class_id=str(intervention_case["class_id"]),
         top_k=10,
         only_published=True,
+        policy_name="remedial",
+        concept_hints=weak_concepts,
     )
 
     recommended_lessons: list[dict[str, Any]] = []
@@ -157,8 +159,11 @@ async def recommend_intervention_case(
             {
                 "lessonId": lesson_id,
                 "title": metadata.get("lessonTitle") or "Review lesson",
-                "reason": f"Matches weak concepts: {', '.join(weak_concepts[:2])}",
+                "reason": chunk.get("selectionReason")
+                or f"Matches weak concepts: {', '.join(weak_concepts[:2])}",
                 "chunkId": chunk["id"],
+                "scoreBreakdown": chunk.get("scoreBreakdown") or {},
+                "sourceReference": chunk.get("sourceReference"),
             }
         )
         if len(recommended_lessons) >= 3:
@@ -197,6 +202,20 @@ async def recommend_intervention_case(
         ],
         "studentFocus": weak_concepts[:3],
     }
+    evidence_packet = {
+        "weakConcepts": weak_concepts,
+        "recommendedLessons": recommended_lessons,
+        "recommendedAssessments": recommended_assessments,
+        "mistakeSample": [
+            {
+                "questionId": str(row["question_id"]),
+                "assessmentTitle": row["assessment_title"],
+                "question": row["content"],
+                "explanation": row.get("explanation") or "",
+            }
+            for row in mistakes[:5]
+        ],
+    }
     try:
         prompt = f"""
 Subject: {intervention_case["subject_name"]} ({intervention_case["subject_code"]})
@@ -205,6 +224,8 @@ Trigger score: {intervention_case["trigger_score"]}
 Threshold: {intervention_case["threshold_applied"]}
 Weak concepts: {json.dumps(weak_concepts, ensure_ascii=False)}
 Teacher note: {note or "[None]"}
+Evidence packet:
+{json.dumps(evidence_packet, ensure_ascii=False)}
 
 Recommended lesson evidence:
 {lesson_evidence}
@@ -322,6 +343,7 @@ Recommended lesson evidence:
         "recommendedLessons": recommended_lessons,
         "recommendedAssessments": recommended_assessments,
         "aiSummary": ai_summary,
+        "evidencePacket": evidence_packet,
         "note": note,
     }
     output_row = await db.execute(
@@ -383,6 +405,7 @@ Recommended lesson evidence:
         "recommendedLessons": recommended_lessons,
         "recommendedAssessments": recommended_assessments,
         "aiSummary": ai_summary,
+        "evidencePacket": evidence_packet,
         "suggestedAssignmentPayload": {
             "lessonIds": [item["lessonId"] for item in recommended_lessons],
             "assessmentIds": [item["assessmentId"] for item in recommended_assessments],

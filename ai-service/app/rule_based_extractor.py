@@ -20,7 +20,15 @@ QUESTION_LINE_RE = re.compile(r"^\s*\d+[.)]\s+.+\??\s*$")
 OPTION_RE = re.compile(r"^\s*[\(\[]?[a-dA-D][.):\]]\s*.+")
 
 
-def extract_with_rules(raw_text: str) -> dict[str, Any]:
+def extract_with_rules(
+    raw_text: str,
+    *,
+    source_method: str = "rule_based",
+    chunk_index: int | None = None,
+    page_start: int | None = None,
+    page_end: int | None = None,
+    confidence: float = 0.45,
+) -> dict[str, Any]:
     cleaned = raw_text.replace("\r\n", "\n").replace("\f", "\n\n")
     cleaned = re.sub(r"[ \t]+", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
@@ -50,7 +58,14 @@ def extract_with_rules(raw_text: str) -> dict[str, Any]:
 
     lessons = []
     for section in sections:
-        blocks = _build_blocks(section["body_lines"])
+        blocks = build_blocks_from_text(
+            "\n".join(section["body_lines"]),
+            source_method=source_method,
+            chunk_index=chunk_index,
+            page_start=page_start,
+            page_end=page_end,
+            confidence=confidence,
+        )
         lessons.append({"title": section["heading"], "description": "", "blocks": blocks})
 
     first_non_empty = next((l.strip() for l in lines if l.strip()), "Extracted Module")
@@ -62,12 +77,47 @@ def extract_with_rules(raw_text: str) -> dict[str, Any]:
     }
 
 
-def _build_blocks(body_lines: list[str]) -> list[dict[str, Any]]:
+def build_blocks_from_text(
+    body_text: str,
+    *,
+    source_method: str = "rule-based",
+    chunk_index: int | None = None,
+    page_start: int | None = None,
+    page_end: int | None = None,
+    confidence: float = 0.6,
+) -> list[dict[str, Any]]:
+    return _build_blocks(
+        body_text.split("\n"),
+        source_method=source_method,
+        chunk_index=chunk_index,
+        page_start=page_start,
+        page_end=page_end,
+        confidence=confidence,
+    )
+
+
+def _build_blocks(
+    body_lines: list[str],
+    *,
+    source_method: str = "rule-based",
+    chunk_index: int | None = None,
+    page_start: int | None = None,
+    page_end: int | None = None,
+    confidence: float = 0.6,
+) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = []
     order = 0
     text_buffer: list[str] = []
     question_buffer: list[str] = []
     in_question = False
+
+    provenance = {
+        "source": source_method,
+        "chunkIndex": chunk_index,
+        "pageStart": page_start,
+        "pageEnd": page_end,
+        "confidence": round(confidence, 4),
+    }
 
     def flush_text():
         nonlocal order
@@ -77,7 +127,7 @@ def _build_blocks(body_lines: list[str]) -> list[dict[str, Any]]:
                 "type": "text",
                 "order": order,
                 "content": {"text": joined},
-                "metadata": {"source": "rule-based"},
+                "metadata": dict(provenance),
             })
             order += 1
         text_buffer.clear()
@@ -90,7 +140,7 @@ def _build_blocks(body_lines: list[str]) -> list[dict[str, Any]]:
                 "type": "question",
                 "order": order,
                 "content": {"text": joined},
-                "metadata": {"source": "rule-based", "detectedAs": "question-pattern"},
+                "metadata": {**provenance, "detectedAs": "question-pattern"},
             })
             order += 1
         question_buffer.clear()

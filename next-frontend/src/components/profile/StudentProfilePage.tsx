@@ -36,10 +36,16 @@ type StudentProfileForm = {
   profilePicture: string;
 };
 
+function toDateInputValue(value: string | null | undefined): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  return raw.slice(0, 10);
+}
+
 function toFormState(user: ReturnType<typeof mergeUserWithStudentProfile>): StudentProfileForm {
   return {
     lrn: String(user?.lrn ?? ''),
-    dateOfBirth: String(user?.dateOfBirth ?? user?.dob ?? ''),
+    dateOfBirth: toDateInputValue(user?.dateOfBirth ?? user?.dob),
     gender: String(user?.gender ?? ''),
     phone: String(user?.phone ?? ''),
     address: String(user?.address ?? ''),

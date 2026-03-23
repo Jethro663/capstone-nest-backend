@@ -5,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   AnimatedEntrance,
   Card,
+  EmptyState,
   GradientHeader,
   Pill,
   ProgressBar,
@@ -12,9 +13,9 @@ import {
   ScreenScroll,
   SectionTitle,
 } from "../components/ui/primitives";
+import { toAppError } from "../api/http";
 import { useLxpCheckpointMutation, useLxpEligibility, useLxpPlaylist, useStudentClasses, useTutorBootstrap } from "../api/hooks";
 import { toTutorRecommendationCards, toSubjectCard } from "../data/mappers";
-import { lessonsApi } from "../api/services/lessons";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { colors, gradients, shadow } from "../theme/tokens";
@@ -42,9 +43,8 @@ export function LxpScreen({ navigation }: Props) {
   }, [classesQuery.data, eligibilityQuery.data, selectedClassId, tutorBootstrapQuery.data?.selectedClassId]);
 
   const selectedClass = classesQuery.data?.find((classItem) => classItem.id === selectedClassId);
-  const selectedSubject = selectedClass
-    ? toSubjectCard(selectedClass, [], [], eligibilityQuery.data?.eligibleClasses.find((entry) => entry.classId === selectedClass.id) as any)
-    : undefined;
+  const selectedEligibility = eligibilityQuery.data?.eligibleClasses.find((entry) => entry.classId === selectedClass?.id);
+  const selectedSubject = selectedClass ? toSubjectCard(selectedClass, [], [], selectedEligibility as never) : undefined;
 
   const recommendations = useMemo(
     () => toTutorRecommendationCards(playlistQuery.data, selectedSubject),
@@ -53,6 +53,25 @@ export function LxpScreen({ navigation }: Props) {
 
   const refreshing =
     eligibilityQuery.isRefetching || playlistQuery.isRefetching || tutorBootstrapQuery.isRefetching || classesQuery.isRefetching;
+  const primaryError =
+    classesQuery.error || eligibilityQuery.error || tutorBootstrapQuery.error || playlistQuery.error || checkpointMutation.error;
+  const eligibleClassCards =
+    eligibilityQuery.data?.eligibleClasses.length
+      ? eligibilityQuery.data.eligibleClasses
+      : (classesQuery.data ?? []).map((classItem) => ({
+          classId: classItem.id,
+          class: {
+            id: classItem.id,
+            subjectName: classItem.subjectName || classItem.className || classItem.name || "Untitled Subject",
+            subjectCode: classItem.subjectCode || "CLASS",
+            section: classItem.section ?? null,
+          },
+          interventionCaseId: null,
+          isAtRisk: false,
+          blendedScore: null,
+          thresholdApplied: 0,
+          openedAt: null,
+        }));
 
   const handleCompleteCheckpoint = async (assignmentId: string) => {
     await checkpointMutation.mutateAsync({ assignmentId });
@@ -98,7 +117,7 @@ export function LxpScreen({ navigation }: Props) {
 
       <GradientHeader
         colors={gradients.lxp}
-        eyebrow="Learning Experience ✨"
+        eyebrow="Learning Experience âœ¨"
         title="LXP Dashboard"
         rightContent={
           <View
@@ -142,6 +161,14 @@ export function LxpScreen({ navigation }: Props) {
       </GradientHeader>
 
       <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 20 }}>
+        {primaryError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>LXP data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
+        ) : null}
         <Card style={{ backgroundColor: "#FFF8E7" }}>
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View
@@ -154,7 +181,7 @@ export function LxpScreen({ navigation }: Props) {
                 backgroundColor: "#FDE68A",
               }}
             >
-              <Text style={{ fontSize: 28 }}>🤖</Text>
+              <Text style={{ fontSize: 28 }}>ðŸ¤–</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -188,119 +215,135 @@ export function LxpScreen({ navigation }: Props) {
 
         <View>
           <SectionTitle title="Eligible Classes" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
-            {(eligibilityQuery.data?.eligibleClasses.length
-              ? eligibilityQuery.data.eligibleClasses
-              : (classesQuery.data ?? []).map((classItem) => ({
-                  classId: classItem.id,
-                  class: { id: classItem.id, subjectName: classItem.subjectName, subjectCode: classItem.subjectCode, section: classItem.section },
-                } as any))
-            ).map((entry) => (
-              <Pressable key={entry.classId} onPress={() => setSelectedClassId(entry.classId)}>
-                <Card
-                  style={{
-                    width: 176,
-                    borderWidth: 2,
-                    borderColor: entry.classId === selectedClassId ? colors.indigo : `${colors.indigo}22`,
-                  }}
-                >
-                  <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "📘"}</Text>
-                  <Text style={{ marginTop: 10, fontSize: 13, fontWeight: "800", color: colors.text }}>
-                    {entry.class.subjectName}
-                  </Text>
-                  <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-                    {entry.class.subjectCode}
-                  </Text>
-                </Card>
-              </Pressable>
-            ))}
-          </ScrollView>
+          {eligibleClassCards.length === 0 ? (
+            <EmptyState emoji="ðŸ“˜" title="No classes ready" subtitle="Your account has no classes available for LXP yet." />
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+              {eligibleClassCards.map((entry) => (
+                <Pressable key={entry.classId} onPress={() => setSelectedClassId(entry.classId)}>
+                  <Card
+                    style={{
+                      width: 176,
+                      borderWidth: 2,
+                      borderColor: entry.classId === selectedClassId ? colors.indigo : `${colors.indigo}22`,
+                    }}
+                  >
+                    <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "ðŸ“˜"}</Text>
+                    <Text style={{ marginTop: 10, fontSize: 13, fontWeight: "800", color: colors.text }}>
+                      {entry.class.subjectName}
+                    </Text>
+                    <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                      {entry.class.subjectCode}
+                    </Text>
+                  </Card>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         <View>
-          <SectionTitle title="Recommended for You 🎯" />
+          <SectionTitle title="Recommended for You ðŸŽ¯" />
           <View style={{ gap: 12 }}>
-            {recommendations.map((recommendation, index) => (
-              <AnimatedEntrance key={recommendation.id} delay={index * 80}>
-                <Card style={{ opacity: recommendation.completed ? 0.7 : 1 }}>
-                  <View style={{ flexDirection: "row", gap: 12 }}>
-                    <View
-                      style={{
-                        width: 50,
-                        height: 50,
-                        borderRadius: 16,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: recommendation.type === "retry" ? colors.paleRed : colors.paleIndigo,
-                      }}
-                    >
-                      <Text style={{ fontSize: 28 }}>{recommendation.emoji}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Pill
-                        label={recommendation.type === "retry" ? "Retry" : "Lesson"}
-                        backgroundColor={recommendation.type === "retry" ? colors.paleRed : colors.paleIndigo}
-                        color={recommendation.type === "retry" ? colors.red : colors.indigo}
-                      />
-                      <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: colors.text }}>
-                        {recommendation.title}
-                      </Text>
-                      <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>{recommendation.reason}</Text>
-                    </View>
-                    <View style={{ alignItems: "center", justifyContent: "space-between" }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                        <MaterialCommunityIcons name="flash" size={12} color={colors.amber} />
-                        <Text style={{ fontSize: 12, fontWeight: "900", color: colors.amber }}>+{recommendation.xp}</Text>
+            {recommendations.length === 0 ? (
+              <Card>
+                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No LXP recommendations yet</Text>
+                <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
+                  Once checkpoints are available for a class, they will show up here.
+                </Text>
+              </Card>
+            ) : (
+              recommendations.map((recommendation, index) => (
+                <AnimatedEntrance key={recommendation.id} delay={index * 80}>
+                  <Card style={{ opacity: recommendation.completed ? 0.7 : 1 }}>
+                    <View style={{ flexDirection: "row", gap: 12 }}>
+                      <View
+                        style={{
+                          width: 50,
+                          height: 50,
+                          borderRadius: 16,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: recommendation.type === "retry" ? colors.paleRed : colors.paleIndigo,
+                        }}
+                      >
+                        <Text style={{ fontSize: 28 }}>{recommendation.emoji}</Text>
                       </View>
-                      {recommendation.completed ? (
-                        <Text style={{ fontSize: 18 }}>✅</Text>
-                      ) : (
-                        <Pressable
-                          onPress={() => void handleCompleteCheckpoint(recommendation.id)}
-                          style={[
-                            {
-                              width: 34,
-                              height: 34,
-                              borderRadius: 999,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              backgroundColor: recommendation.type === "retry" ? colors.red : colors.indigo,
-                            },
-                            shadow.card,
-                          ]}
-                        >
-                          <MaterialCommunityIcons
-                            name={recommendation.type === "retry" ? "refresh" : "chevron-right"}
-                            size={16}
-                            color={colors.white}
-                          />
-                        </Pressable>
-                      )}
+                      <View style={{ flex: 1 }}>
+                        <Pill
+                          label={recommendation.type === "retry" ? "Retry" : "Lesson"}
+                          backgroundColor={recommendation.type === "retry" ? colors.paleRed : colors.paleIndigo}
+                          color={recommendation.type === "retry" ? colors.red : colors.indigo}
+                        />
+                        <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: colors.text }}>
+                          {recommendation.title}
+                        </Text>
+                        <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>{recommendation.reason}</Text>
+                      </View>
+                      <View style={{ alignItems: "center", justifyContent: "space-between" }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <MaterialCommunityIcons name="flash" size={12} color={colors.amber} />
+                          <Text style={{ fontSize: 12, fontWeight: "900", color: colors.amber }}>+{recommendation.xp}</Text>
+                        </View>
+                        {recommendation.completed ? (
+                          <Text style={{ fontSize: 18 }}>âœ…</Text>
+                        ) : (
+                          <Pressable
+                            onPress={() => void handleCompleteCheckpoint(recommendation.id)}
+                            style={[
+                              {
+                                width: 34,
+                                height: 34,
+                                borderRadius: 999,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: recommendation.type === "retry" ? colors.red : colors.indigo,
+                              },
+                              shadow.card,
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name={recommendation.type === "retry" ? "refresh" : "chevron-right"}
+                              size={16}
+                              color={colors.white}
+                            />
+                          </Pressable>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                </Card>
-              </AnimatedEntrance>
-            ))}
+                  </Card>
+                </AnimatedEntrance>
+              ))
+            )}
           </View>
         </View>
 
         <Card style={{ backgroundColor: "#F4F5FF", marginBottom: 12 }}>
           <SectionTitle title="Checkpoint Progress" />
           <View style={{ gap: 14 }}>
-            {(playlistQuery.data?.checkpoints ?? []).map((checkpoint) => (
-              <View key={checkpoint.id}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "📘"}</Text>
-                    <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
+            {(playlistQuery.data?.checkpoints ?? []).length === 0 ? (
+              <EmptyState emoji="ðŸš€" title="No checkpoints yet" subtitle="This class has not opened any LXP checkpoint progress." />
+            ) : (
+              (playlistQuery.data?.checkpoints ?? []).map((checkpoint) => (
+                <View key={checkpoint.id}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "ðŸ“˜"}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: "900", color: checkpoint.isCompleted ? colors.green : colors.indigo }}>
+                      {checkpoint.isCompleted ? "Done" : `+${checkpoint.xpAwarded} XP`}
+                    </Text>
                   </View>
-                  <Text style={{ fontSize: 12, fontWeight: "900", color: checkpoint.isCompleted ? colors.green : colors.indigo }}>
-                    {checkpoint.isCompleted ? "Done" : `+${checkpoint.xpAwarded} XP`}
-                  </Text>
+                  <ProgressBar
+                    value={checkpoint.isCompleted ? 100 : 0}
+                    color={checkpoint.isCompleted ? colors.green : colors.indigo}
+                    trackColor="rgba(255,255,255,0.7)"
+                    height={8}
+                  />
                 </View>
-                <ProgressBar value={checkpoint.isCompleted ? 100 : 0} color={checkpoint.isCompleted ? colors.green : colors.indigo} trackColor="rgba(255,255,255,0.7)" height={8} />
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </Card>
       </View>

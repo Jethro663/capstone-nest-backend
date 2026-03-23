@@ -28,6 +28,7 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -53,6 +54,7 @@ export default function NexoraLibraryPage() {
     id: string;
     value: string;
   } | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedUpload, setSelectedUpload] = useState<File | null>(null);
   const [uploadClassId, setUploadClassId] = useState('');
@@ -149,32 +151,46 @@ export default function NexoraLibraryPage() {
     }
   };
 
-  const handleDeleteFile = async (fileId: string) => {
-    if (!window.confirm('Delete this file from Nexora Library?')) return;
-
-    try {
-      await fileService.delete(fileId);
-      toast.success('File deleted');
-      loadLibrary();
-    } catch {
-      toast.error('Failed to delete file');
-    }
+  const handleDeleteFile = (file: UploadedFile) => {
+    setConfirmation({
+      title: 'Delete library file?',
+      description: 'This removes the uploaded file from Nexora Library and any folder it is currently in.',
+      confirmLabel: 'Delete File',
+      tone: 'danger',
+      details: <p className="text-sm font-black text-[var(--student-text-strong)]">{file.originalName}</p>,
+      onConfirm: async () => {
+        try {
+          await fileService.delete(file.id);
+          toast.success('File deleted');
+          loadLibrary();
+        } catch {
+          toast.error('Failed to delete file');
+        }
+      },
+    });
   };
 
-  const handleDeleteFolder = async (folderId: string) => {
-    if (!window.confirm('Delete this folder? Files inside will be moved out of the folder.')) return;
-
-    try {
-      await fileService.deleteFolder(folderId);
-      toast.success('Folder deleted');
-      setFolderTrail((prev) => prev.filter((item) => item.id !== folderId));
-      loadLibrary();
-    } catch (error: unknown) {
-      toast.error(
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          'Failed to delete folder',
-      );
-    }
+  const handleDeleteFolder = (folder: LibraryFolder) => {
+    setConfirmation({
+      title: 'Delete folder?',
+      description: 'Files inside this folder will be moved out before the folder is removed.',
+      confirmLabel: 'Delete Folder',
+      tone: 'danger',
+      details: <p className="text-sm font-black text-[var(--student-text-strong)]">{folder.name}</p>,
+      onConfirm: async () => {
+        try {
+          await fileService.deleteFolder(folder.id);
+          toast.success('Folder deleted');
+          setFolderTrail((prev) => prev.filter((item) => item.id !== folder.id));
+          loadLibrary();
+        } catch (error: unknown) {
+          toast.error(
+            (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+              'Failed to delete folder',
+          );
+        }
+      },
+    });
   };
 
   const handleCreateFolder = async () => {
@@ -485,7 +501,7 @@ export default function NexoraLibraryPage() {
                               className="h-8 w-8 rounded-full p-0 text-rose-600"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                handleDeleteFolder(folder.id);
+                                handleDeleteFolder(folder);
                               }}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -564,7 +580,7 @@ export default function NexoraLibraryPage() {
                               size="sm"
                               variant="outline"
                               className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                              onClick={() => handleDeleteFile(file.id)}
+                              onClick={() => handleDeleteFile(file)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
@@ -635,6 +651,8 @@ export default function NexoraLibraryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </TeacherPageShell>
   );
 }

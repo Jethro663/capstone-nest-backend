@@ -343,6 +343,17 @@ def get_embedding_model_name() -> str:
     return settings.ollama_embed_model
 
 
+def is_model_available(model_name: str, available_models: list[str]) -> bool:
+    normalized = (model_name or "").strip().lower()
+    candidates = {(item or "").strip().lower() for item in available_models}
+    if normalized in candidates:
+        return True
+    return any(
+        candidate == f"{normalized}:latest" or candidate.startswith(f"{normalized}:")
+        for candidate in candidates
+    )
+
+
 async def preload_model(task: TaskName) -> None:
     model = _resolve_model_name(task)
     payload = {

@@ -133,7 +133,14 @@ export default function StudentChatbotPage() {
   };
 
   const startRecommendation = async (recommendation: StudentTutorRecommendation) => {
-    if (!selectedClassId) return;
+    if (!selectedClassId) {
+      toast.error('Pick a class before starting a tutor session');
+      return;
+    }
+    if (!recommendation.title.trim() || !recommendation.reason.trim() || !recommendation.focusText.trim()) {
+      toast.error('This focus area is incomplete. Refresh the page and try again.');
+      return;
+    }
     try {
       setStartingRecommendationId(recommendation.id);
       const res = await aiService.startStudentTutorSession(selectedClassId, recommendation);

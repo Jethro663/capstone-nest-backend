@@ -4,6 +4,7 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Text, View } from "react-native";
 import {
   Card,
+  EmptyState,
   GradientHeader,
   Pill,
   Refreshable,
@@ -12,6 +13,7 @@ import {
   SimpleBarChart,
   StatCard,
 } from "../components/ui/primitives";
+import { toAppError } from "../api/http";
 import { queryKeys, useLxpPlaylist, usePerformanceSummary, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
@@ -87,6 +89,13 @@ export function ProgressScreen(_: Props) {
     [subjects],
   );
   const achievements = buildAchievements(performanceQuery.data, subjects, assessments, playlistQuery.data);
+  const primaryError =
+    classesQuery.error ||
+    performanceQuery.error ||
+    lessonQueries.find((query) => query.error)?.error ||
+    completionQueries.find((query) => query.error)?.error ||
+    assessmentQueries.find((query) => query.error)?.error ||
+    playlistQuery.error;
 
   return (
     <ScreenScroll
@@ -99,7 +108,7 @@ export function ProgressScreen(_: Props) {
         />
       }
     >
-      <GradientHeader colors={gradients.progress} eyebrow="Keep it up! 📈" title="My Progress">
+      <GradientHeader colors={gradients.progress} eyebrow="Keep it up! ðŸ“ˆ" title="My Progress">
         <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
           <StatCard icon="book-open-page-variant" iconColor="#A5D6A7" value={profileSummary.totalLessonsCompleted} label="Lessons" translucent />
           <StatCard icon="star" iconColor="#FFF176" value={`${profileSummary.averageScore}%`} label="Avg Score" translucent />
@@ -108,19 +117,33 @@ export function ProgressScreen(_: Props) {
       </GradientHeader>
 
       <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 18 }}>
+        {primaryError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Progress data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
+        ) : null}
         <Card>
           <SectionTitle title="Subject Progress" />
-          <SimpleBarChart data={chartData} />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 }}>
-            {subjects.map((subject) => (
-              <View key={subject.id} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <Text style={{ fontSize: 12 }}>{subject.emoji}</Text>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary }}>
-                  {subject.name.split(" ")[0]}: {subject.progress}%
-                </Text>
+          {chartData.length === 0 ? (
+            <EmptyState emoji="ðŸ“Š" title="No progress yet" subtitle="Start lessons or assessments to populate this chart." />
+          ) : (
+            <>
+              <SimpleBarChart data={chartData} />
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 }}>
+                {subjects.map((subject) => (
+                  <View key={subject.id} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Text style={{ fontSize: 12 }}>{subject.emoji}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary }}>
+                      {subject.name.split(" ")[0]}: {subject.progress}%
+                    </Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </>
+          )}
         </Card>
 
         <Card>
@@ -142,7 +165,7 @@ export function ProgressScreen(_: Props) {
 
         <View style={{ marginBottom: 8 }}>
           <SectionTitle
-            title="Achievements 🏆"
+            title="Achievements ðŸ†"
             right={<Pill label={`${achievements.filter((entry) => entry.earned).length}/${achievements.length}`} backgroundColor={colors.paleAmber} color={colors.amber} />}
           />
           <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>

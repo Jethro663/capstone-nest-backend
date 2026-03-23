@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { AnnouncementsService } from './announcements.service';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -76,11 +77,13 @@ describe('AnnouncementsService', () => {
   let service: AnnouncementsService;
   let mockDb: any;
   let mockQueue: { add: jest.Mock };
+  let mockAuditService: { log: jest.Mock };
 
   beforeEach(async () => {
     jest.clearAllMocks();
 
     mockQueue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    mockAuditService = { log: jest.fn().mockResolvedValue(undefined) };
 
     mockDb = {
       query: {
@@ -99,6 +102,7 @@ describe('AnnouncementsService', () => {
         AnnouncementsService,
         { provide: DatabaseService, useValue: { db: mockDb } },
         { provide: getQueueToken('announcements'), useValue: mockQueue },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 

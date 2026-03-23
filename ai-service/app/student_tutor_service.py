@@ -59,6 +59,34 @@ TUTOR_PACKET_FORMAT: dict[str, Any] = {
     "required": ["lessonPlan", "lessonBody", "questions"],
 }
 
+TUTOR_PLAN_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "teachingGoal": {"type": "string"},
+        "likelyMisconceptions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 4,
+        },
+        "requiredEvidence": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 5,
+        },
+        "questionDifficulty": {"type": "string"},
+        "answerGuardrail": {"type": "string"},
+    },
+    "required": [
+        "teachingGoal",
+        "likelyMisconceptions",
+        "requiredEvidence",
+        "questionDifficulty",
+        "answerGuardrail",
+    ],
+}
+
 TUTOR_EVALUATION_FORMAT: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -106,6 +134,76 @@ def _safe_json_loads(raw: str) -> dict[str, Any]:
         if len(lines) >= 3:
             text = "\n".join(lines[1:-1]).strip()
     return json.loads(text)
+
+
+def _clip_text(value: str | None, max_len: int) -> str:
+    text = (value or "").strip()
+    if len(text) <= max_len:
+        return text
+    return f"{text[: max_len - 3].rstrip()}..."
+
+
+def _fallback_tutor_plan(recommendation: dict[str, Any]) -> dict[str, Any]:
+    title = recommendation.get("title") or "this concept"
+    reason = recommendation.get("reason") or "Recent class activity suggests this topic needs reinforcement."
+    return {
+        "teachingGoal": f"Help the student review {title} in simple steps.",
+        "likelyMisconceptions": [
+            _clip_text(reason, 120) or "The student may be mixing up the core idea.",
+        ],
+        "requiredEvidence": [
+            _clip_text(recommendation.get("focusText") or title, 120) or title,
+        ],
+        "questionDifficulty": "easy guided practice",
+        "answerGuardrail": "Do not reveal direct answers. Coach the student toward the idea first.",
+    }
+
+
+def _fallback_tutor_packet(
+    *,
+    recommendation: dict[str, Any],
+    context_blocks: list[str],
+) -> dict[str, Any]:
+    title = recommendation.get("title") or "this topic"
+    focus = recommendation.get("focusText") or title
+    first_context = context_blocks[0] if context_blocks else ""
+    first_context = first_context.split("] ", 1)[-1] if "] " in first_context else first_context
+    evidence = _clip_text(first_context or focus, 220) or title
+
+    return {
+        "plan": _fallback_tutor_plan(recommendation),
+        "lessonPlan": [
+            f"Review the main idea behind {title}.",
+            "Connect it to one concrete example from class.",
+            "Check understanding with short guided practice.",
+        ],
+        "lessonBody": (
+            f"We are focusing on {title}. Start with the most important idea in plain language, "
+            f"then connect it to a concrete classroom example.\n\n"
+            f"Use this evidence as a reference point: {evidence}\n\n"
+            "If a detail still feels unclear, ask Ja to explain it in a simpler way before answering the practice questions."
+        ),
+        "questions": [
+            {
+                "id": "q1",
+                "question": f"In your own words, what is the main idea behind {title}?",
+                "expectedAnswer": "A short explanation that names the core idea correctly.",
+                "hint": "Use one simple sentence first.",
+            },
+            {
+                "id": "q2",
+                "question": "Give one class-based example that matches this idea.",
+                "expectedAnswer": "A relevant example that fits the concept.",
+                "hint": "Think about a lesson, activity, or question you saw recently.",
+            },
+            {
+                "id": "q3",
+                "question": "What part of this topic still feels confusing to you?",
+                "expectedAnswer": "A clear remaining question or uncertainty.",
+                "hint": "Be specific about the step or word that feels unclear.",
+            },
+        ],
+    }
 
 
 def _slug(text: str) -> str:
@@ -182,6 +280,7 @@ async def start_student_tutor_session(
             "focusText": recommendation.focus_text,
         },
         context_blocks=context_bundle["contextBlocks"],
+        citations=context_bundle["citations"],
     )
     session_id = str(uuid.uuid4())
     message = _build_start_message(generated)
@@ -200,6 +299,7 @@ async def start_student_tutor_session(
             "questionId": recommendation.question_id,
             "sourceChunkId": recommendation.source_chunk_id,
         },
+        "tutorPlan": generated.get("plan") or {},
         "lessonPlan": generated["lessonPlan"],
         "lessonBody": generated["lessonBody"],
         "questions": generated["questions"],
@@ -225,6 +325,7 @@ async def start_student_tutor_session(
         "lessonPlan": generated["lessonPlan"],
         "lessonBody": generated["lessonBody"],
         "questions": generated["questions"],
+        "tutorPlan": generated.get("plan") or {},
         "citations": context_bundle["citations"],
     }
 
@@ -250,6 +351,8 @@ async def continue_student_tutor_session(
 Class: {state['classLabel']}
 Current focus: {state['recommendation']['title']}
 Reason this was recommended: {state['recommendation']['reason']}
+Tutor plan:
+{json.dumps(state.get('tutorPlan') or {}, ensure_ascii=False)}
 
 Lesson summary:
 {state.get('lessonBody') or ''}
@@ -578,16 +681,13 @@ async def _build_recommendations(
                 "id": rec_id,
                 "title": title,
                 "reason": f"Recent incorrect answers in {row['assessment_title']} suggest this concept needs review.",
-                "focusText": "\n".join(
-                    filter(
-                        None,
-                        [
-                            title,
-                            row["question_content"],
-                            row["question_explanation"],
-                            row["assessment_title"],
-                        ],
-                    )
+                "focusText": _compose_focus_text(
+                    [
+                        title,
+                        row["question_content"],
+                        row["question_explanation"],
+                        row["assessment_title"],
+                    ]
                 ),
                 "questionId": str(row["question_id"]),
                 "assessmentId": str(row["assessment_id"]),
@@ -622,7 +722,7 @@ async def _build_recommendations(
                 "id": rec_id,
                 "title": title,
                 "reason": "This published lesson is strongly related to your recent class activity and is a good next review target.",
-                "focusText": "\n".join(filter(None, [title, chunk["chunkText"]])),
+                "focusText": _compose_focus_text([title, chunk["chunkText"]]),
                 "questionId": chunk.get("questionId"),
                 "assessmentId": chunk.get("assessmentId"),
                 "lessonId": chunk.get("lessonId"),
@@ -639,7 +739,7 @@ async def _build_recommendations(
                 "id": rec_id,
                 "title": lesson["title"],
                 "reason": "You completed this lesson recently, so this is a safe concept to reinforce with guided practice.",
-                "focusText": lesson["title"],
+                "focusText": _compose_focus_text([lesson["title"]], max_len=200),
                 "questionId": None,
                 "assessmentId": None,
                 "lessonId": lesson["lessonId"],
@@ -721,15 +821,21 @@ async def _build_context_bundle(
     if not class_info:
         raise HTTPException(404, "Class not found")
 
-    chunks = await similarity_search(
-        db,
-        query_text=focus_text,
-        class_id=class_id,
-        top_k=5,
-        lesson_ids=[lesson_id] if lesson_id else None,
-        assessment_ids=[assessment_id] if assessment_id else None,
-        only_published=True,
-    )
+    try:
+        chunks = await similarity_search(
+            db,
+            query_text=focus_text,
+            class_id=class_id,
+            top_k=5,
+            lesson_ids=[lesson_id] if lesson_id else None,
+            assessment_ids=[assessment_id] if assessment_id else None,
+            only_published=True,
+            policy_name="student_tutor",
+            reference_lesson_id=lesson_id,
+            reference_assessment_id=assessment_id,
+        )
+    except Exception:
+        chunks = []
     context_blocks = []
     citations = []
     for chunk in chunks:
@@ -742,6 +848,9 @@ async def _build_context_bundle(
                 "label": label,
                 "lessonId": chunk.get("lessonId"),
                 "assessmentId": chunk.get("assessmentId"),
+                "scoreBreakdown": chunk.get("scoreBreakdown") or {},
+                "selectionReason": chunk.get("selectionReason"),
+                "sourceReference": chunk.get("sourceReference"),
             }
         )
 
@@ -761,14 +870,25 @@ async def _generate_lesson_and_questions(
     class_label: str,
     recommendation: dict[str, Any],
     context_blocks: list[str],
+    citations: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    prompt = f"""
+    try:
+        plan = await _plan_tutor_packet(
+            class_label=class_label,
+            recommendation=recommendation,
+            context_blocks=context_blocks,
+            citations=citations,
+        )
+        prompt = f"""
 Create a grounded tutoring packet for one student.
 
 Class: {class_label}
 Focus topic: {recommendation['title']}
 Why it was recommended: {recommendation['reason']}
 Focus query: {recommendation['focusText']}
+
+Planner output:
+{json.dumps(plan, ensure_ascii=False)}
 
 Grounded context:
 {chr(10).join(context_blocks) if context_blocks else "[No additional context found]"}
@@ -791,22 +911,65 @@ Constraints:
 - Exactly 3 questions.
 - Questions must be easier than a normal graded assessment.
 - expectedAnswer must be short and should not include long answer-key wording.
+- Use only evidence that matches the planner's requiredEvidence.
+- If evidence is weak, keep the lesson body conservative and say what idea the student should verify.
 """
-    raw = await ollama_client.generate(
-        prompt,
-        TUTOR_SYSTEM_PROMPT,
-        task="chat",
-        response_format=TUTOR_PACKET_FORMAT,
-    )
-    parsed = _safe_json_loads(raw)
-    questions = parsed.get("questions") or []
-    if len(questions) != 3:
-        raise HTTPException(502, "Tutor generation did not return exactly three practice questions")
-    return {
-        "lessonPlan": parsed.get("lessonPlan") or [],
-        "lessonBody": parsed.get("lessonBody") or "",
-        "questions": questions,
-    }
+        raw = await ollama_client.generate(
+            prompt,
+            TUTOR_SYSTEM_PROMPT,
+            task="chat",
+            response_format=TUTOR_PACKET_FORMAT,
+        )
+        parsed = _safe_json_loads(raw)
+        questions = parsed.get("questions") or []
+        if len(questions) != 3:
+            raise HTTPException(502, "Tutor generation did not return exactly three practice questions")
+        return {
+            "plan": plan,
+            "lessonPlan": parsed.get("lessonPlan") or [],
+            "lessonBody": parsed.get("lessonBody") or "",
+            "questions": questions,
+        }
+    except Exception:
+        return _fallback_tutor_packet(
+            recommendation=recommendation,
+            context_blocks=context_blocks,
+        )
+
+
+async def _plan_tutor_packet(
+    *,
+    class_label: str,
+    recommendation: dict[str, Any],
+    context_blocks: list[str],
+    citations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    prompt = f"""
+Build a tutoring plan before writing any lesson content.
+
+Class: {class_label}
+Focus topic: {recommendation['title']}
+Why it was recommended: {recommendation['reason']}
+Focus query: {recommendation['focusText']}
+
+Available evidence blocks:
+{chr(10).join(context_blocks) if context_blocks else "[No retrieved evidence found]"}
+
+Available citations:
+{json.dumps(citations, ensure_ascii=False)}
+
+Return valid JSON only. The plan should identify the main teaching goal, likely misconceptions, required evidence, the intended question difficulty, and a short answer-guardrail for the tutor.
+"""
+    try:
+        raw = await ollama_client.generate(
+            prompt,
+            TUTOR_SYSTEM_PROMPT,
+            task="chat",
+            response_format=TUTOR_PLAN_FORMAT,
+        )
+        return _safe_json_loads(raw)
+    except Exception:
+        return _fallback_tutor_plan(recommendation)
 
 
 async def _evaluate_answers(
@@ -825,6 +988,9 @@ Class: {class_label}
 Focus topic: {recommendation['title']}
 Lesson summary:
 {lesson_body}
+
+Recommendation packet:
+{json.dumps(recommendation, ensure_ascii=False)}
 
 Questions:
 {json.dumps(questions, ensure_ascii=False)}
@@ -1039,3 +1205,8 @@ def _truncate(value: str | None, max_len: int) -> str:
     if len(text) <= max_len:
         return text
     return f"{text[: max_len - 3].rstrip()}..."
+
+
+def _compose_focus_text(parts: list[str | None], max_len: int = 900) -> str:
+    joined = "\n".join(part.strip() for part in parts if part and part.strip())
+    return _truncate(joined, max_len)

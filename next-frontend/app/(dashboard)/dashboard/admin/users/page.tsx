@@ -14,6 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -45,6 +46,7 @@ export default function UserManagementPage() {
   const [showPurge, setShowPurge] = useState<User | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -101,15 +103,27 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleSoftDelete = async (id: string) => {
-    if (!confirm('Archive & delete this user? They can be purged later.')) return;
-    try {
-      await userService.softDelete(id);
-      toast.success('User archived');
-      fetchUsers();
-    } catch {
-      toast.error('Failed to archive');
-    }
+  const handleSoftDelete = (user: User) => {
+    setConfirmation({
+      title: 'Archive user account?',
+      description: 'The user will lose login access but can still be restored or purged later.',
+      confirmLabel: 'Archive User',
+      tone: 'danger',
+      details: (
+        <p className="text-sm font-black text-[var(--student-text-strong)]">
+          {user.firstName} {user.lastName}
+        </p>
+      ),
+      onConfirm: async () => {
+        try {
+          await userService.softDelete(user.id);
+          toast.success('User archived');
+          fetchUsers();
+        } catch {
+          toast.error('Failed to archive');
+        }
+      },
+    });
   };
 
   const handleExport = async (id: string) => {
@@ -314,7 +328,7 @@ export default function UserManagementPage() {
                                 <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={() => handleReactivate(u.id)}>
                                   Reactivate
                                 </Button>
-                                <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleSoftDelete(u.id)}>
+                                <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleSoftDelete(u)}>
                                   Archive
                                 </Button>
                               </>
@@ -390,6 +404,8 @@ export default function UserManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </AdminPageShell>
   );
 }

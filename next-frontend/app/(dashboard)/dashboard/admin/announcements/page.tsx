@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
@@ -29,6 +30,7 @@ export default function AdminAnnouncementsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -78,15 +80,28 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this announcement?')) return;
-    try {
-      await announcementService.delete(selectedClassId, id);
-      toast.success('Announcement deleted');
-      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    } catch {
-      toast.error('Failed to delete');
-    }
+  const handleDelete = (announcement: Announcement) => {
+    setConfirmation({
+      title: 'Delete announcement?',
+      description: 'This removes the bulletin item from the selected class immediately.',
+      confirmLabel: 'Delete Announcement',
+      tone: 'danger',
+      details: (
+        <p className="text-sm">
+          <span className="font-black text-[var(--student-text-strong)]">{announcement.title}</span>
+          {' '}will be deleted for {selectedClass?.subjectName ?? 'this class'}.
+        </p>
+      ),
+      onConfirm: async () => {
+        try {
+          await announcementService.delete(selectedClassId, announcement.id);
+          toast.success('Announcement deleted');
+          setAnnouncements((prev) => prev.filter((a) => a.id !== announcement.id));
+        } catch {
+          toast.error('Failed to delete');
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -146,7 +161,7 @@ export default function AdminAnnouncementsPage() {
                       <p className="max-w-3xl text-sm leading-6 text-[var(--admin-text-muted)]">{ann.content}</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDelete(ann.id)}>
+                  <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDelete(ann)}>
                     Delete
                   </Button>
                 </div>
@@ -169,6 +184,8 @@ export default function AdminAnnouncementsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </AdminPageShell>
   );
 }

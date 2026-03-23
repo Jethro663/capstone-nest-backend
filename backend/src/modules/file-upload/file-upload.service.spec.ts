@@ -6,6 +6,7 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import { FileUploadService } from './file-upload.service';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -76,12 +77,19 @@ const makeUpdateChain = () => ({
   where: jest.fn().mockResolvedValue(undefined),
 });
 
+const makeSelectChain = (rows: any[]) => ({
+  from: jest.fn().mockReturnValue({
+    where: jest.fn().mockResolvedValue(rows),
+  }),
+});
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
 
 describe('FileUploadService', () => {
   let service: FileUploadService;
+  let mockAuditService: { log: jest.Mock };
 
   const mockDb: any = {
     query: {
@@ -95,12 +103,15 @@ describe('FileUploadService', () => {
     },
     insert: jest.fn(),
     update: jest.fn(),
+    select: jest.fn(),
   };
 
   const mockDatabaseService = { db: mockDb };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockAuditService = { log: jest.fn().mockResolvedValue(undefined) };
+    mockDb.select.mockReturnValue(makeSelectChain([{ total: 0 }]));
     mockDb.query.classes.findFirst.mockResolvedValue({
       id: CLASS_ID,
       teacherId: TEACHER_ID,
@@ -110,6 +121,7 @@ describe('FileUploadService', () => {
       providers: [
         FileUploadService,
         { provide: DatabaseService, useValue: mockDatabaseService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -165,28 +177,39 @@ describe('FileUploadService', () => {
     it('returns all non-deleted files for an admin', async () => {
       const records = [makeFileRecord(), makeFileRecord({ id: FILE_ID_2 })];
       mockDb.query.uploadedFiles.findMany.mockResolvedValue(records);
+      mockDb.select.mockReturnValue(makeSelectChain([{ total: records.length }]));
 
       const result = await service.findAll(ADMIN_USER);
 
-      expect(result).toEqual(records);
+      expect(result).toEqual({
+        data: records,
+        total: 2,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
       expect(mockDb.query.uploadedFiles.findMany).toHaveBeenCalledTimes(1);
     });
 
     it('filters by teacherId for a teacher', async () => {
       const records = [makeFileRecord()];
       mockDb.query.uploadedFiles.findMany.mockResolvedValue(records);
+      mockDb.select.mockReturnValue(makeSelectChain([{ total: records.length }]));
 
       const result = await service.findAll(TEACHER_USER);
 
-      expect(result).toEqual(records);
+      expect(result.data).toEqual(records);
+      expect(result.total).toBe(1);
     });
 
     it('returns an empty array when a teacher has no files', async () => {
       mockDb.query.uploadedFiles.findMany.mockResolvedValue([]);
+      mockDb.select.mockReturnValue(makeSelectChain([{ total: 0 }]));
 
       const result = await service.findAll(TEACHER_USER);
 
-      expect(result).toEqual([]);
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
     });
   });
 

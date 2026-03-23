@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type {
   Extraction,
@@ -91,6 +92,7 @@ export default function ExtractionReviewPage() {
   /* selective application */
   const [selectedLessons, setSelectedLessons] = useState<Set<number>>(new Set());
   const [showApplyDialog, setShowApplyDialog] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -211,15 +213,25 @@ export default function ExtractionReviewPage() {
   };
 
   /* ── Delete extraction ────────────────────────────────────────────── */
-  const handleDelete = async () => {
-    if (!confirm('Delete this extraction? This cannot be undone.')) return;
-    try {
-      await extractionService.delete(extractionId);
-      toast.success('Extraction deleted');
-      router.back();
-    } catch {
-      toast.error('Failed to delete extraction');
-    }
+  const handleDelete = () => {
+    setConfirmation({
+      title: 'Delete extraction review?',
+      description: 'This removes the extraction job and its review state permanently.',
+      confirmLabel: 'Delete Extraction',
+      tone: 'danger',
+      details: extraction?.originalName ? (
+        <p className="text-sm font-black text-[var(--student-text-strong)]">{extraction.originalName}</p>
+      ) : undefined,
+      onConfirm: async () => {
+        try {
+          await extractionService.delete(extractionId);
+          toast.success('Extraction deleted');
+          router.back();
+        } catch {
+          toast.error('Failed to delete extraction');
+        }
+      },
+    });
   };
 
   /* ── Lesson editing helpers ───────────────────────────────────────── */
@@ -567,6 +579,7 @@ export default function ExtractionReviewPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </div>
   );
 }

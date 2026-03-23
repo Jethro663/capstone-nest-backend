@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
  
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { aiService } from '@/services/ai-service';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -18,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -26,6 +28,8 @@ import { motion } from 'framer-motion';
 import { LayoutGrid, List, ArrowUpDown, GripVertical, ChevronLeft, ChevronRight, ArrowLeft, BookOpen, CalendarRange, GraduationCap, Users, PencilLine, Rocket, Sparkles, Target, ClipboardList } from 'lucide-react';
  
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api-error';
+import type { CreateAnnouncementDto, UpdateAnnouncementDto } from '@/types/announcement';
 import { getDescription } from '@/utils/helpers';
 import { cn } from '@/utils/cn';
 import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
@@ -35,10 +39,8 @@ import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import type { ClassItem, Enrollment } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 import type { Assessment } from '@/types/assessment';
-import type { User } from '@/types/user';
 import type { Announcement } from '@/types/announcement';
 import type { Extraction } from '@/types/extraction';
-import type { FeedbackLevel, QuestionType } from '@/utils/constants';
 import type { UploadedFile } from '@/types/file';
 const ASSESSMENT_CATEGORIES: Array<{
   value: 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts';
@@ -72,15 +74,13 @@ export default function TeacherClassDetailPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [candidates, setCandidates] = useState<User[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
   const [showCreateLesson, setShowCreateLesson] = useState(false);
-  const [showAddStudents, setShowAddStudents] = useState(false);
   const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
-  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
 
   // Extract module states
   const [extractFile, setExtractFile] = useState<File | null>(null);
@@ -88,14 +88,6 @@ export default function TeacherClassDetailPage() {
   const [libraryFiles, setLibraryFiles] = useState<UploadedFile[]>([]);
   const [selectedLibraryFileId, setSelectedLibraryFileId] = useState('');
   const [reindexing, setReindexing] = useState(false);
-  const [generatingQuiz, setGeneratingQuiz] = useState(false);
-  const [quizTitle, setQuizTitle] = useState('');
-  const [quizTeacherNote, setQuizTeacherNote] = useState('');
-  const [quizQuestionCount, setQuizQuestionCount] = useState('5');
-  const [quizQuestionType, setQuizQuestionType] = useState<QuestionType>('multiple_choice');
-  const [quizFeedbackLevel, setQuizFeedbackLevel] = useState<FeedbackLevel>('standard');
-  const [quizSourceLessonIds, setQuizSourceLessonIds] = useState<string[]>([]);
-  const [quizSourceExtractionIds, setQuizSourceExtractionIds] = useState<string[]>([]);
  
   // Form states
   const [lessonTitle, setLessonTitle] = useState('');
@@ -113,6 +105,7 @@ export default function TeacherClassDetailPage() {
   const [lessonPage, setLessonPage] = useState(1);
   const [draggedLessonId, setDraggedLessonId] = useState<string | null>(null);
   const [savingLessonOrder, setSavingLessonOrder] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
   const classRecordState = useTeacherClassRecord(classId);
 
   const categorizedAssessments = useMemo(() => {
@@ -264,19 +257,27 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  const handleBulkDeleteLessons = async () => {
+  const handleBulkDeleteLessons = () => {
     if (selectedLessonIds.length === 0) return;
-    setBulkLessonAction('delete');
-    try {
-      await Promise.all(selectedLessonIds.map((lessonId) => lessonService.delete(lessonId)));
-      setLessons((current) => current.filter((lesson) => !selectedLessonIds.includes(lesson.id)));
-      setSelectedLessonIds([]);
-      toast.success('Selected lessons deleted');
-    } catch {
-      toast.error('Failed to delete selected lessons');
-    } finally {
-      setBulkLessonAction(null);
-    }
+    setConfirmation({
+      title: 'Delete selected lessons?',
+      description: 'All selected lessons will be removed from this class permanently.',
+      confirmLabel: `Delete ${selectedLessonIds.length} Lesson${selectedLessonIds.length === 1 ? '' : 's'}`,
+      tone: 'danger',
+      onConfirm: async () => {
+        setBulkLessonAction('delete');
+        try {
+          await Promise.all(selectedLessonIds.map((lessonId) => lessonService.delete(lessonId)));
+          setLessons((current) => current.filter((lesson) => !selectedLessonIds.includes(lesson.id)));
+          setSelectedLessonIds([]);
+          toast.success('Selected lessons deleted');
+        } catch {
+          toast.error('Failed to delete selected lessons');
+        } finally {
+          setBulkLessonAction(null);
+        }
+      },
+    });
   };
 
   const handlePublishLesson = async (lessonId: string) => {
@@ -376,15 +377,23 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  const handleDeleteLesson = async (id: string) => {
-    if (!confirm('Delete this lesson?')) return;
-    try {
-      await lessonService.delete(id);
-      toast.success('Lesson deleted');
-      setLessons((prev) => prev.filter((l) => l.id !== id));
-    } catch {
-      toast.error('Failed to delete lesson');
-    }
+  const handleDeleteLesson = (lesson: Lesson) => {
+    setConfirmation({
+      title: 'Delete lesson?',
+      description: 'This lesson and its class visibility will be removed permanently.',
+      confirmLabel: 'Delete Lesson',
+      tone: 'danger',
+      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{lesson.title}</p>,
+      onConfirm: async () => {
+        try {
+          await lessonService.delete(lesson.id);
+          toast.success('Lesson deleted');
+          setLessons((prev) => prev.filter((entry) => entry.id !== lesson.id));
+        } catch {
+          toast.error('Failed to delete lesson');
+        }
+      },
+    });
   };
 
   const handleCreateAssessment = async () => {
@@ -397,65 +406,103 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  const handleDeleteAssessment = async (id: string) => {
-    if (!confirm('Delete this assessment?')) return;
-    try {
-      await assessmentService.delete(id);
-      toast.success('Assessment deleted');
-      setAssessments((prev) => prev.filter((a) => a.id !== id));
-    } catch {
-      toast.error('Failed to delete assessment');
-    }
+  const handleDeleteAssessment = (assessment: Assessment) => {
+    setConfirmation({
+      title: 'Delete assessment?',
+      description: 'This removes the assessment from the class and deletes its current draft state.',
+      confirmLabel: 'Delete Assessment',
+      tone: 'danger',
+      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{assessment.title}</p>,
+      onConfirm: async () => {
+        try {
+          await assessmentService.delete(assessment.id);
+          toast.success('Assessment deleted');
+          setAssessments((prev) => prev.filter((entry) => entry.id !== assessment.id));
+        } catch {
+          toast.error('Failed to delete assessment');
+        }
+      },
+    });
   };
 
-  const handleOpenAddStudents = async () => {
-    try {
-      const res = await classService.getCandidates(classId);
-      setCandidates(res.data || []);
-      setSelectedStudents([]);
-      setShowAddStudents(true);
-    } catch {
-      toast.error('Failed to load candidates');
-    }
+  const handleRemoveStudent = (enrollment: Enrollment) => {
+    const studentName = `${enrollment.student?.firstName ?? ''} ${enrollment.student?.lastName ?? ''}`.trim() || 'Selected student';
+    setConfirmation({
+      title: 'Remove student from class?',
+      description: 'This unenrolls the student from the class roster.',
+      confirmLabel: 'Remove Student',
+      tone: 'danger',
+      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{studentName}</p>,
+      onConfirm: async () => {
+        try {
+          await classService.unenrollStudent(classId, enrollment.studentId);
+          toast.success('Student removed');
+          setEnrollments((prev) => prev.filter((entry) => entry.studentId !== enrollment.studentId));
+        } catch {
+          toast.error('Failed to remove student');
+        }
+      },
+    });
   };
 
-  const handleAddStudents = async () => {
-    try {
-      for (const studentId of selectedStudents) {
-        await classService.enrollStudent(classId, { studentId });
-      }
-      toast.success(`Added ${selectedStudents.length} student(s)`);
-      setShowAddStudents(false);
-      const res = await classService.getEnrollments(classId);
-      setEnrollments(res.data || []);
-    } catch {
-      toast.error('Failed to add students');
-    }
+  const resetAnnouncementComposer = () => {
+    setEditingAnnouncement(null);
+    setAnnTitle('');
+    setAnnContent('');
   };
 
-  const handleRemoveStudent = async (studentId: string) => {
-    if (!confirm('Remove this student?')) return;
-    try {
-      await classService.unenrollStudent(classId, studentId);
-      toast.success('Student removed');
-      setEnrollments((prev) => prev.filter((e) => e.studentId !== studentId));
-    } catch {
-      toast.error('Failed to remove student');
-    }
+  const handleEditAnnouncement = (announcement: Announcement) => {
+    setEditingAnnouncement(announcement);
+    setAnnTitle(announcement.title);
+    setAnnContent(announcement.content);
+    setShowCreateAnnouncement(true);
+  };
+
+  const handleDeleteAnnouncement = (announcement: Announcement) => {
+    setConfirmation({
+      title: 'Delete announcement?',
+      description: 'This announcement will be removed for everyone in the class.',
+      confirmLabel: 'Delete Announcement',
+      tone: 'danger',
+      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{announcement.title}</p>,
+      onConfirm: async () => {
+        try {
+          await announcementService.delete(classId, announcement.id);
+          setAnnouncements((prev) => prev.filter((entry) => entry.id !== announcement.id));
+          toast.success('Announcement deleted');
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, 'Failed to delete announcement'));
+        }
+      },
+    });
   };
 
   const handleCreateAnnouncement = async () => {
     if (!annTitle.trim() || !annContent.trim()) return;
     try {
-      await announcementService.create(classId, { title: annTitle, content: annContent });
-      toast.success('Announcement created');
+      if (editingAnnouncement) {
+        const payload: UpdateAnnouncementDto = {
+          title: annTitle.trim(),
+          content: annContent.trim(),
+          isPinned: editingAnnouncement.isPinned ?? false,
+        };
+        await announcementService.update(classId, editingAnnouncement.id, payload);
+        toast.success('Announcement updated');
+      } else {
+        const payload: CreateAnnouncementDto = {
+          title: annTitle.trim(),
+          content: annContent.trim(),
+          isPinned: false,
+        };
+        await announcementService.create(classId, payload);
+        toast.success('Announcement created');
+      }
       setShowCreateAnnouncement(false);
-      setAnnTitle('');
-      setAnnContent('');
+      resetAnnouncementComposer();
       const res = await announcementService.getByClass(classId);
       setAnnouncements(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      toast.error('Failed to create announcement');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, editingAnnouncement ? 'Failed to update announcement' : 'Failed to create announcement'));
     }
   };
 
@@ -503,18 +550,12 @@ export default function TeacherClassDetailPage() {
   const handleReindexClass = async () => {
     setReindexing(true);
     try {
-      toast.success('Class AI content reindex requested');
+      const res = await aiService.reindexClass(classId);
+      toast.success(`Indexed ${res.data.chunksIndexed} content chunk(s)`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reindex class content'));
     } finally {
       setReindexing(false);
-    }
-  };
-
-  const handleGenerateQuizDraft = async () => {
-    setGeneratingQuiz(true);
-    try {
-      toast.success('Quiz draft generation started');
-    } finally {
-      setGeneratingQuiz(false);
     }
   };
 
@@ -831,7 +872,7 @@ export default function TeacherClassDetailPage() {
                   <Card
                     key={lesson.id}
                     className={cn(
-                      'relative overflow-hidden border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(17,24,39,0.92),rgba(30,41,59,0.88))] shadow-[0_28px_54px_-36px_rgba(2,6,23,0.6)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[0_34px_64px_-34px_rgba(2,6,23,0.72)]',
+                      'relative overflow-hidden border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[0_34px_64px_-34px_rgba(148,11,26,0.28)]',
                       selectedLessonIdSet.has(lesson.id) && 'ring-2 ring-[var(--teacher-accent)]/35',
                       draggedLessonId === lesson.id && 'opacity-70',
                     )}
@@ -872,7 +913,7 @@ export default function TeacherClassDetailPage() {
                               <span className="inline-flex rounded-full bg-[var(--teacher-accent)]/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[var(--teacher-accent-strong)]">
                                 Lesson {((lessonPage - 1) * lessonPageSize) + index + 1}
                               </span>
-                              <Badge variant={lesson.isDraft ? 'secondary' : 'default'} className={lesson.isDraft ? 'border border-amber-400/30 bg-amber-400/12 text-amber-100' : 'border border-emerald-400/30 bg-emerald-400/12 text-emerald-100'}>
+                              <Badge variant={lesson.isDraft ? 'secondary' : 'default'} className={lesson.isDraft ? 'border border-amber-400/30 bg-amber-50 text-amber-700' : 'border border-emerald-400/30 bg-emerald-50 text-emerald-700'}>
                                 {lesson.isDraft ? 'Draft' : 'Published'}
                               </Badge>
                             </div>
@@ -922,7 +963,7 @@ export default function TeacherClassDetailPage() {
                             <PencilLine className="h-3.5 w-3.5" />
                             Edit Lesson
                           </Link>
-                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteLesson(lesson.id)}>Delete</Button>
+                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteLesson(lesson)}>Delete</Button>
                         </div>
                       </div>
                     </CardContent>
@@ -1074,14 +1115,23 @@ export default function TeacherClassDetailPage() {
                           <Button
                             variant="ghost"
                             className="teacher-button-danger rounded-xl font-black"
-                            onClick={async () => {
-                              try {
-                                await extractionService.delete(ext.id);
-                                toast.success('Extraction deleted');
-                                fetchData();
-                              } catch {
-                                toast.error('Failed to delete extraction');
-                              }
+                            onClick={() => {
+                              setConfirmation({
+                                title: 'Delete extraction run?',
+                                description: 'This removes the extraction record and its review state from this class.',
+                                confirmLabel: 'Delete Extraction',
+                                tone: 'danger',
+                                details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{ext.originalName || ext.structuredContent?.title || 'PDF extraction'}</p>,
+                                onConfirm: async () => {
+                                  try {
+                                    await extractionService.delete(ext.id);
+                                    setExtractions((prev) => prev.filter((entry) => entry.id !== ext.id));
+                                    toast.success('Extraction deleted');
+                                  } catch (error) {
+                                    toast.error(getApiErrorMessage(error, 'Failed to delete extraction'));
+                                  }
+                                },
+                              });
                             }}
                           >
                             Delete
@@ -1145,9 +1195,9 @@ export default function TeacherClassDetailPage() {
               </div>
 
               <Tabs value={assessmentCategoryTab} onValueChange={(value) => setAssessmentCategoryTab(value as 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts')}>
-                <TabsList className="teacher-tab-list grid w-full grid-cols-2 sm:grid-cols-4">
+                <TabsList className="teacher-tab-list h-auto grid w-full grid-cols-2 gap-2 rounded-2xl p-2 sm:grid-cols-4">
                   {ASSESSMENT_CATEGORIES.map((category) => (
-                    <TabsTrigger key={category.value} value={category.value} className="teacher-tab rounded-xl font-black">
+                    <TabsTrigger key={category.value} value={category.value} className="teacher-tab min-h-[44px] rounded-xl px-3 text-center font-black leading-tight">
                       {category.label}
                     </TabsTrigger>
                   ))}
@@ -1223,7 +1273,7 @@ export default function TeacherClassDetailPage() {
                                 <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`}>
                                   <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">Edit</Button>
                                 </Link>
-                                <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteAssessment(assessment.id)}>
+                                <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteAssessment(assessment)}>
                                   Delete
                                 </Button>
                               </div>
@@ -1243,7 +1293,16 @@ export default function TeacherClassDetailPage() {
         <TabsContent value="announcements" className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{announcements.length} announcements</p>
-            <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setShowCreateAnnouncement(true)}>+ New Announcement</Button>
+            <Button
+              size="sm"
+              className="teacher-button-solid rounded-xl font-black"
+              onClick={() => {
+                resetAnnouncementComposer();
+                setShowCreateAnnouncement(true);
+              }}
+            >
+              + New Announcement
+            </Button>
           </div>
           {announcements.length === 0 ? (
             <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]"><CardContent className="p-6 text-center text-muted-foreground">No announcements yet.</CardContent></Card>
@@ -1252,11 +1311,31 @@ export default function TeacherClassDetailPage() {
               {announcements.map((ann) => (
                 <Card key={ann.id} className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium">{ann.title}</p>
-                      {ann.isPinned && <Badge variant="secondary">ðŸ“Œ Pinned</Badge>}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-[var(--teacher-text-strong)]">{ann.title}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{ann.content}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {ann.isPinned ? <Badge variant="secondary">Pinned</Badge> : null}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="teacher-button-outline rounded-xl font-black"
+                          onClick={() => handleEditAnnouncement(ann)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="teacher-button-danger rounded-xl font-black"
+                          onClick={() => handleDeleteAnnouncement(ann)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{ann.content}</p>
                     <p className="mt-2 text-xs text-muted-foreground">
                       {new Date(ann.createdAt!).toLocaleDateString()}
                     </p>
@@ -1336,7 +1415,7 @@ export default function TeacherClassDetailPage() {
                           <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/${e.studentId}`)}>
                             View Profile
                           </Button>
-                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleRemoveStudent(e.studentId)}>Remove</Button>
+                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleRemoveStudent(e)}>Remove</Button>
                         </div>
  
                       </TableCell>
@@ -1367,56 +1446,29 @@ export default function TeacherClassDetailPage() {
 
       {/* Create Assessment Modal removed â€” create-and-redirect flow instead */}
 
-      {/* Add Students Modal */}
-      <Dialog open={showAddStudents} onOpenChange={setShowAddStudents}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Students</DialogTitle></DialogHeader>
-          <div className="max-h-64 overflow-y-auto space-y-2">
-            {candidates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No candidates available.</p>
-            ) : (
-              candidates.map((s) => (
-                <label key={s.id} className="flex items-center gap-3 p-2 rounded hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedStudents.includes(s.id)}
-                    onChange={() => {
-                      setSelectedStudents((prev) =>
-                        prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id],
-                      );
-                    }}
-                  />
-                  <span className="text-sm">{s.firstName} {s.lastName} â€” {s.email}</span>
-                </label>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowAddStudents(false)}>
-              Cancel
-            </Button>
-            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleGenerateQuizDraft} disabled={generatingQuiz}>
-              {generatingQuiz ? 'Generating...' : 'Generate Draft'}
- 
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Create Announcement Modal */}
-      <Dialog open={showCreateAnnouncement} onOpenChange={setShowCreateAnnouncement}>
+      <Dialog
+        open={showCreateAnnouncement}
+        onOpenChange={(open) => {
+          setShowCreateAnnouncement(open);
+          if (!open) resetAnnouncementComposer();
+        }}
+      >
         <DialogContent>
-          <DialogHeader><DialogTitle>Create Announcement</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingAnnouncement ? 'Edit Announcement' : 'Create Announcement'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} placeholder="Announcement title" /></div>
             <div><Label>Content</Label><Textarea value={annContent} onChange={(e) => setAnnContent(e.target.value)} placeholder="Announcement content" /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowCreateAnnouncement(false)}>Cancel</Button>
-            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>Create</Button>
+            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>
+              {editingAnnouncement ? 'Save Changes' : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </>
   );
 }

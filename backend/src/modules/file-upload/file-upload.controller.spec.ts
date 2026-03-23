@@ -172,7 +172,13 @@ describe('FileUploadController', () => {
   describe('listFiles', () => {
     it('returns success:true and the files array with a count', async () => {
       const records = [makeRecord(), makeRecord({ id: 'file-uuid-2' })];
-      mockFileUploadService.findAll.mockResolvedValue(records);
+      mockFileUploadService.findAll.mockResolvedValue({
+        data: records,
+        total: 2,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       const result = await controller.listFiles(TEACHER_USER);
 
@@ -181,11 +187,21 @@ describe('FileUploadController', () => {
         message: 'Files retrieved successfully',
         data: records,
         count: 2,
+        total: 2,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
       });
     });
 
     it('returns count: 0 when there are no files', async () => {
-      mockFileUploadService.findAll.mockResolvedValue([]);
+      mockFileUploadService.findAll.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      });
 
       const result = await controller.listFiles(TEACHER_USER);
 
@@ -194,7 +210,13 @@ describe('FileUploadController', () => {
     });
 
     it('forwards the current user to the service', async () => {
-      mockFileUploadService.findAll.mockResolvedValue([]);
+      mockFileUploadService.findAll.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      });
 
       await controller.listFiles(ADMIN_USER, {} as any);
 

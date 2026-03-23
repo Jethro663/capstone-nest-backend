@@ -2,6 +2,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
+import { API_BASE_URL } from "../api/config";
 import { useAuth } from "../providers/AuthProvider";
 import { toAppError } from "../api/http";
 import type { AuthStackParamList } from "../navigation/types";
@@ -71,6 +72,9 @@ export function LoginScreen(_: Props) {
             <Text style={{ fontSize: 24, fontWeight: "900", color: colors.text }}>Sign in</Text>
             <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
               Use your active student credentials from the main LMS.
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 11, lineHeight: 16, color: colors.muted }}>
+              API: {API_BASE_URL}
             </Text>
 
             <View style={{ marginTop: 18, gap: 12 }}>

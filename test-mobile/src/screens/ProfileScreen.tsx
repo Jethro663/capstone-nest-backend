@@ -21,6 +21,8 @@ import { colors, gradients } from "../theme/tokens";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
+const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");
+
 export function ProfileScreen(_: Props) {
   const { user, logout } = useAuth();
   const profileQuery = useProfile();
@@ -139,7 +141,7 @@ export function ProfileScreen(_: Props) {
                   style={{ width: "100%", height: "100%" }}
                 />
               ) : (
-                <Text style={{ fontSize: 52 }}>🎓</Text>
+                <Text style={{ fontSize: 52 }}>ðŸŽ“</Text>
               )}
             </Pressable>
             <Pressable
@@ -162,7 +164,7 @@ export function ProfileScreen(_: Props) {
 
           <Text style={{ marginTop: 14, fontSize: 24, fontWeight: "900", color: colors.white }}>{fullName}</Text>
           <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.82)" }}>
-            {profile?.gradeLevel || user?.gradeLevel || "Assigned grade"} • {user?.email}
+            {profile?.gradeLevel || user?.gradeLevel || "Assigned grade"} â€¢ {user?.email}
           </Text>
           <View
             style={{
@@ -178,7 +180,7 @@ export function ProfileScreen(_: Props) {
           >
             <MaterialCommunityIcons name="account-check-outline" size={14} color="#FFD700" />
             <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>
-              {user?.status || "ACTIVE"} • Student
+              {user?.status || "ACTIVE"} â€¢ Student
             </Text>
           </View>
         </View>
@@ -198,6 +200,11 @@ export function ProfileScreen(_: Props) {
 
         <Card style={{ marginBottom: 18 }}>
           <SectionTitle title="Profile Details" />
+          {profileQuery.error ? (
+            <View style={{ marginBottom: 12, borderRadius: 16, backgroundColor: colors.paleRed, padding: 12 }}>
+              <Text style={{ color: colors.red, fontWeight: "700" }}>{toAppError(profileQuery.error).message}</Text>
+            </View>
+          ) : null}
           <View style={{ gap: 12 }}>
             {[
               { label: "Phone", value: phone, setter: setPhone, placeholder: "0917..." },
@@ -284,4 +291,3 @@ export function ProfileScreen(_: Props) {
     </ScreenScroll>
   );
 }
-  const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");

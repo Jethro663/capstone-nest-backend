@@ -29,6 +29,21 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
   { value: 'multiple_select', label: 'Multiple Select' },
 ];
 
+function getQuizJobErrorMessage(errorMessage?: string | null): string | null {
+  if (!errorMessage) return null;
+  const normalized = errorMessage.toLowerCase();
+  if (normalized.includes('blueprint')) {
+    return 'Blueprint planning failed. Try a narrower source set or add a shorter teacher note, then run the draft again.';
+  }
+  if (normalized.includes('generated questions were duplicates')) {
+    return 'Question generation finished, but the draft duplicated existing questions. Narrow the source lessons or teacher note and retry.';
+  }
+  if (normalized.includes('no indexed source content')) {
+    return 'No indexed source content was available. Reindex the class or publish lessons first.';
+  }
+  return errorMessage;
+}
+
 export default function TeacherAiDraftQuizPage() {
   const params = useParams();
   const router = useRouter();
@@ -233,7 +248,7 @@ export default function TeacherAiDraftQuizPage() {
                   </Badge>
                 </div>
                 {job?.errorMessage && (
-                  <p className="text-sm text-destructive">{job.errorMessage}</p>
+                  <p className="text-sm text-destructive">{getQuizJobErrorMessage(job.errorMessage)}</p>
                 )}
               </CardContent>
             </Card>

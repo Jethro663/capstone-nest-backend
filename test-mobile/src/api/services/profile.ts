@@ -1,12 +1,18 @@
 import { apiClient } from "../client";
-import { unwrapEnvelope } from "../http";
+import { normalizeObject, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type { StudentProfile, UpdateProfileDto } from "../../types/profile";
+
+const emptyProfile = (): StudentProfile => ({
+  id: "",
+  userId: "",
+});
 
 export const profileApi = {
   async getMine() {
     const response = await apiClient.get<ApiEnvelope<StudentProfile | null>>("/profiles/me");
-    return unwrapEnvelope(response.data);
+    const data = unwrapEnvelope(response.data);
+    return data ? normalizeObject(data, emptyProfile()) : null;
   },
 
   async updateByUserId(userId: string, payload: UpdateProfileDto) {

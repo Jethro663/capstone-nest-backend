@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import ollama_client
 from .retrieval_service import similarity_search
 from .schemas import GenerateQuizDraftRequest, RequestUser
+
+logger = logging.getLogger(__name__)
 
 QUIZ_GENERATION_SYSTEM_PROMPT = """You generate grounded draft assessments for a high-school LMS.
 
@@ -77,17 +80,49 @@ QUIZ_GENERATION_FORMAT: dict[str, Any] = {
     "required": ["title", "description", "questions"],
 }
 
+QUIZ_BLUEPRINT_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "conceptCoverage": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 8,
+        },
+        "questionBlueprints": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "intent": {"type": "string"},
+                    "difficulty": {"type": "string"},
+                    "sourceCitation": {"type": "string"},
+                },
+                "required": ["intent", "difficulty", "sourceCitation"],
+            },
+        },
+    },
+    "required": ["title", "description", "conceptCoverage", "questionBlueprints"],
+}
+
 
 def _normalize_question_text(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", (value or "").lower()))
 
 
-def _parse_generation_output(raw: str) -> dict[str, Any]:
+def _extract_json_payload(raw: str) -> str:
     cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     first = cleaned.find("{")
     last = cleaned.rfind("}")
-    if first != -1 and last > first:
-        cleaned = cleaned[first : last + 1]
+    if first == -1 or last <= first:
+        raise ValueError("Model output did not contain a JSON object")
+    return cleaned[first : last + 1]
+
+
+def _parse_generation_output(raw: str) -> dict[str, Any]:
+    cleaned = _extract_json_payload(raw)
     parsed = json.loads(cleaned)
     if not isinstance(parsed.get("questions"), list) or not parsed["questions"]:
         raise ValueError("Generated output does not contain any questions")
@@ -107,6 +142,118 @@ def _dedupe_generated_questions(
         seen_generated.add(normalized)
         deduped.append(question)
     return deduped
+
+
+def _sanitize_prompt_text(value: str, *, max_chars: int) -> str:
+    normalized = (value or "").replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"[^\x09\x0A\x0D\x20-\x7E\u00A0-\uFFFF]", "", normalized)
+    normalized = re.sub(r"[ \t]{2,}", " ", normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized).strip()
+    if len(normalized) > max_chars:
+        normalized = normalized[: max_chars - 3].rstrip() + "..."
+    return normalized
+
+
+def _build_blueprint_evidence(source_chunks: list[dict[str, Any]], *, strict: bool = False) -> str:
+    max_chunks = 3 if strict else 5
+    max_text_chars = 280 if strict else 520
+    rendered: list[str] = []
+    for item in source_chunks[:max_chunks]:
+        metadata = item.get("metadataJson") or {}
+        concept_tags = metadata.get("conceptTags") or []
+        if not isinstance(concept_tags, list):
+            concept_tags = []
+        snippet = _sanitize_prompt_text(item.get("chunkText") or "", max_chars=max_text_chars)
+        label = _sanitize_prompt_text(item.get("sourceReference") or item.get("sourceType") or "source", max_chars=140)
+        concept_line = ", ".join(str(tag).strip() for tag in concept_tags[:4] if str(tag).strip())
+        parts = [f"Citation: {label}"]
+        if concept_line:
+            parts.append(f"Concepts: {concept_line}")
+        parts.append(f"Evidence snippet: {snippet}")
+        rendered.append("\n".join(parts))
+    return "\n\n".join(rendered)
+
+
+def _parse_quiz_blueprint_output(raw: str) -> dict[str, Any]:
+    cleaned = _extract_json_payload(raw)
+    parsed = json.loads(cleaned)
+    if not isinstance(parsed, dict):
+        raise ValueError("Blueprint output is not a JSON object")
+    if not isinstance(parsed.get("conceptCoverage"), list) or not parsed["conceptCoverage"]:
+        raise ValueError("Blueprint output did not contain concept coverage")
+    if not isinstance(parsed.get("questionBlueprints"), list) or not parsed["questionBlueprints"]:
+        raise ValueError("Blueprint output did not contain question blueprints")
+    return parsed
+
+
+def _log_blueprint_parse_failure(
+    *,
+    raw: str,
+    error: Exception,
+    class_id: str,
+    stage: str,
+) -> None:
+    logger.warning(
+        "[quiz-blueprint] Parse failure for class %s at stage %s: %s | raw=%r",
+        class_id,
+        stage,
+        str(error),
+        _sanitize_prompt_text(raw, max_chars=500),
+    )
+
+
+def _fallback_quiz_blueprint(
+    *,
+    class_info: dict[str, Any],
+    body: GenerateQuizDraftRequest,
+    source_chunks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    concept_coverage: list[str] = []
+    for item in source_chunks[: max(body.question_count, 3)]:
+        metadata = item.get("metadataJson") or {}
+        raw_tags = metadata.get("conceptTags") or []
+        if isinstance(raw_tags, list):
+            for tag in raw_tags:
+                normalized = str(tag).strip()
+                if normalized and normalized not in concept_coverage:
+                    concept_coverage.append(normalized)
+        lesson_title = str(metadata.get("lessonTitle") or "").strip()
+        if lesson_title and lesson_title not in concept_coverage:
+            concept_coverage.append(lesson_title)
+        if len(concept_coverage) >= 8:
+            break
+    if not concept_coverage:
+        concept_coverage.append(str(class_info["subject_name"]))
+
+    question_blueprints: list[dict[str, str]] = []
+    difficulties = ["easy", "easy", "medium", "medium", "medium", "challenging"]
+    selected_sources = source_chunks[: max(body.question_count, 3)] or source_chunks[:1]
+    for index in range(body.question_count):
+        source = selected_sources[index % len(selected_sources)]
+        metadata = source.get("metadataJson") or {}
+        focus = concept_coverage[index % len(concept_coverage)]
+        citation = (
+            source.get("sourceReference")
+            or metadata.get("lessonTitle")
+            or metadata.get("assessmentTitle")
+            or source.get("sourceType")
+            or "class material"
+        )
+        question_blueprints.append(
+            {
+                "intent": f"Check understanding of {focus} using grounded class material.",
+                "difficulty": difficulties[min(index, len(difficulties) - 1)],
+                "sourceCitation": str(citation),
+            }
+        )
+
+    return {
+        "title": body.title or f"{class_info['subject_name']} AI Draft Quiz",
+        "description": "Fallback blueprint derived from selected class evidence.",
+        "conceptCoverage": concept_coverage[:8],
+        "questionBlueprints": question_blueprints,
+        "blueprintSource": "fallback",
+    }
 
 
 async def generate_quiz_draft(
@@ -144,6 +291,7 @@ async def generate_quiz_draft(
             top_k=max(8, body.question_count * 2),
             lesson_ids=body.lesson_ids,
             only_published=False,
+            policy_name="quiz_generation",
         )
     elif body.extraction_ids:
         source_chunks = await similarity_search(
@@ -152,6 +300,7 @@ async def generate_quiz_draft(
             class_id=body.class_id,
             top_k=max(8, body.question_count * 2),
             source_types=["extracted_module"],
+            policy_name="quiz_generation",
         )
         source_chunks = [
             item for item in source_chunks if item.get("extractionId") in set(body.extraction_ids)
@@ -163,6 +312,7 @@ async def generate_quiz_draft(
             class_id=body.class_id,
             top_k=max(8, body.question_count * 2),
             only_published=True,
+            policy_name="quiz_generation",
         )
 
     if not source_chunks:
@@ -186,8 +336,17 @@ async def generate_quiz_draft(
     }
 
     source_material = "\n\n".join(
-        f"[{item.get('metadataJson', {}).get('lessonTitle') or item.get('metadataJson', {}).get('assessmentTitle') or item['sourceType']}]\n{item['chunkText']}"
-        for item in source_chunks[: min(len(source_chunks), 10)]
+        (
+            f"[{item.get('metadataJson', {}).get('lessonTitle') or item.get('metadataJson', {}).get('assessmentTitle') or item['sourceType']}]\n"
+            f"{_sanitize_prompt_text(item['chunkText'], max_chars=900)}"
+        )
+        for item in source_chunks[: min(len(source_chunks), 8)]
+    )
+    blueprint = await _build_quiz_blueprint(
+        class_info=class_info,
+        body=body,
+        source_chunks=source_chunks,
+        existing_question_texts=existing_question_texts,
     )
 
     prompt = f"""
@@ -197,6 +356,8 @@ Teacher draft title: {body.title or f"{class_info['subject_name']} AI Draft Quiz
 Requested question count: {body.question_count}
 Preferred question type: {body.question_type}
 Teacher note: {body.teacher_note or "[None]"}
+Blueprint:
+{json.dumps(blueprint, ensure_ascii=False)}
 
 Existing question texts to avoid:
 {chr(10).join(sorted(existing_question_texts)[:30])}
@@ -213,6 +374,7 @@ Source material:
     )
     parsed = _parse_generation_output(raw)
     questions = _dedupe_generated_questions(parsed.get("questions", []), existing_question_texts)
+    questions = _validate_generated_questions(questions, source_chunks)
 
     if not questions:
         raise HTTPException(400, "Generated questions were duplicates of existing content. Try a narrower source selection.")
@@ -278,6 +440,8 @@ Source material:
     structured_output = {
         "title": parsed.get("title") or body.title or f"{class_info['subject_name']} AI Draft Quiz",
         "description": parsed.get("description") or "AI-generated draft assessment for teacher review.",
+        "blueprint": blueprint,
+        "blueprintSource": blueprint.get("blueprintSource", "model"),
         "questions": questions,
     }
     output_row = await db.execute(
@@ -451,6 +615,117 @@ Source material:
         "outputId": str(output_id),
         "assessmentId": str(assessment_id),
         "title": structured_output["title"],
+        "blueprint": blueprint,
+        "blueprintSource": structured_output["blueprintSource"],
+        "sourceCitations": [
+            {
+                "chunkId": item["id"],
+                "sourceReference": item.get("sourceReference"),
+                "selectionReason": item.get("selectionReason"),
+                "scoreBreakdown": item.get("scoreBreakdown") or {},
+            }
+            for item in source_chunks[: min(len(source_chunks), 6)]
+        ],
         "questionsCreated": len(questions),
         "message": "AI draft assessment created as an unpublished draft for teacher review.",
     }
+
+
+async def _build_quiz_blueprint(
+    *,
+    class_info: dict[str, Any],
+    body: GenerateQuizDraftRequest,
+    source_chunks: list[dict[str, Any]],
+    existing_question_texts: set[str],
+) -> dict[str, Any]:
+    prompt = f"""
+Build a quiz blueprint before writing any questions.
+
+Subject: {class_info["subject_name"]} ({class_info["subject_code"]})
+Grade level: {class_info["grade_level"] or "Unknown"}
+Requested question count: {body.question_count}
+Preferred question type: {body.question_type}
+Teacher note: {body.teacher_note or "[None]"}
+
+Existing question texts to avoid:
+{_sanitize_prompt_text(chr(10).join(sorted(existing_question_texts)[:20]), max_chars=1200)}
+
+Source evidence:
+{_build_blueprint_evidence(source_chunks)}
+
+Return valid JSON only. The blueprint must specify concept coverage and one question blueprint per requested question.
+"""
+    raw = await ollama_client.generate(
+        prompt,
+        QUIZ_GENERATION_SYSTEM_PROMPT,
+        task="quiz_generation",
+        response_format=QUIZ_BLUEPRINT_FORMAT,
+    )
+    try:
+        parsed = _parse_quiz_blueprint_output(raw)
+        parsed["blueprintSource"] = "model"
+        return parsed
+    except (json.JSONDecodeError, ValueError) as err:
+        _log_blueprint_parse_failure(
+            raw=raw,
+            error=err,
+            class_id=str(class_info["id"]),
+            stage="quiz_blueprint_initial",
+        )
+
+    retry_prompt = f"""
+Build a compact quiz blueprint.
+
+Return one JSON object only. Do not include commentary. Keep every string short.
+
+Subject: {class_info["subject_name"]} ({class_info["subject_code"]})
+Grade level: {class_info["grade_level"] or "Unknown"}
+Requested question count: {body.question_count}
+Preferred question type: {body.question_type}
+
+Existing question texts to avoid:
+{_sanitize_prompt_text(chr(10).join(sorted(existing_question_texts)[:10]), max_chars=600)}
+
+Compact source evidence:
+{_build_blueprint_evidence(source_chunks, strict=True)}
+"""
+    retry_raw = await ollama_client.generate(
+        retry_prompt,
+        QUIZ_GENERATION_SYSTEM_PROMPT,
+        task="quiz_generation",
+        response_format=QUIZ_BLUEPRINT_FORMAT,
+    )
+    try:
+        parsed = _parse_quiz_blueprint_output(retry_raw)
+        parsed["blueprintSource"] = "model"
+        return parsed
+    except (json.JSONDecodeError, ValueError) as err:
+        _log_blueprint_parse_failure(
+            raw=retry_raw,
+            error=err,
+            class_id=str(class_info["id"]),
+            stage="quiz_blueprint_retry",
+        )
+        return _fallback_quiz_blueprint(
+            class_info=class_info,
+            body=body,
+            source_chunks=source_chunks,
+        )
+
+
+def _validate_generated_questions(
+    questions: list[dict[str, Any]],
+    source_chunks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    evidence_seed = " ".join(item["chunkText"].lower() for item in source_chunks[:10])
+    validated: list[dict[str, Any]] = []
+    for question in questions:
+        content = (question.get("content") or "").strip()
+        explanation = (question.get("explanation") or "").strip()
+        tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9]{3,}", content.lower()))
+        explanation_tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9]{3,}", explanation.lower()))
+        grounded_overlap = len(tokens & set(re.findall(r"[a-zA-Z][a-zA-Z0-9]{3,}", evidence_seed)))
+        if grounded_overlap == 0 and explanation_tokens and len(explanation_tokens & set(re.findall(r"[a-zA-Z][a-zA-Z0-9]{3,}", evidence_seed))) == 0:
+            continue
+        validated.append(question)
+    return validated

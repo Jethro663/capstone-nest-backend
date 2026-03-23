@@ -96,11 +96,16 @@ def build_lesson_chunks(rows: list[dict[str, Any]]) -> list[IndexChunk]:
                     chunk_text=chunk_text,
                     chunk_order=idx,
                     metadata={
+                        "documentId": f"lesson:{row['lesson_id']}:block:{row['block_id']}",
                         "classId": str(row["class_id"]),
                         "lessonId": str(row["lesson_id"]),
                         "lessonTitle": row["lesson_title"],
                         "lessonOrder": row["lesson_order"],
                         "blockType": row["block_type"],
+                        "sourceReference": (
+                            f"lesson:{row['lesson_id']} | block:{row['block_id']} | "
+                            f"type:{row['block_type']} | order:{idx}"
+                        ),
                         "teacherId": str(row["teacher_id"]),
                         "subjectName": row["subject_name"],
                         "subjectCode": row["subject_code"],
@@ -142,17 +147,23 @@ def build_extraction_chunks(rows: list[dict[str, Any]]) -> list[IndexChunk]:
                         extraction_id=str(row["id"]),
                         chunk_text=chunk_text,
                         chunk_order=(lesson_index * 100) + idx,
-                        metadata={
+                    metadata={
+                            "documentId": f"extraction:{row['id']}:lesson:{lesson_index}",
                             "classId": str(row["class_id"]),
                             "extractionId": str(row["id"]),
                             "teacherId": str(row["teacher_id"]),
                             "title": structured.get("title"),
                             "lessonTitle": lesson.get("title"),
                             "lessonIndex": lesson_index,
+                            "blockType": "extracted_lesson",
+                            "sourceReference": (
+                                f"extraction:{row['id']} | lesson:{lesson_index} | chunk:{idx}"
+                            ),
                             "subjectName": row["subject_name"],
                             "subjectCode": row["subject_code"],
                             "gradeLevel": row["grade_level"],
                             "isApplied": row["is_applied"],
+                            "extractionAudit": structured.get("audit") or {},
                         },
                     )
                 )
@@ -198,12 +209,18 @@ def build_question_chunks(rows: list[dict[str, Any]]) -> list[IndexChunk]:
                 chunk_text=chunk_text,
                 chunk_order=int(row["question_order"] or 0),
                 metadata={
+                    "documentId": f"assessment:{row['assessment_id']}:question:{row['question_id']}",
                     "classId": str(row["class_id"]),
                     "assessmentId": str(row["assessment_id"]),
                     "questionId": str(row["question_id"]),
                     "assessmentTitle": row["assessment_title"],
                     "questionType": row["question_type"],
                     "questionOrder": row["question_order"],
+                    "blockType": "assessment_question",
+                    "sourceReference": (
+                        f"assessment:{row['assessment_id']} | question:{row['question_id']} "
+                        f"| order:{row['question_order']}"
+                    ),
                     "teacherId": str(row["teacher_id"]),
                     "subjectName": row["subject_name"],
                     "subjectCode": row["subject_code"],

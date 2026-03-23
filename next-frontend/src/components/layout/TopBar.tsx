@@ -9,7 +9,6 @@ import { Bell, Menu } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { StudentThemeSwitcher } from '@/components/layout/StudentThemeSwitcher';
 import { getProfileRoute } from '@/utils/profile';
 
 interface TopBarProps {
@@ -46,9 +45,6 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-1">
-        {isStudentRoute ? <StudentThemeSwitcher/> : null}
-
-        
         <Button
           variant="ghost"
           size="icon"

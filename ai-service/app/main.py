@@ -28,7 +28,9 @@ from .indexing_pipeline import reindex_class_content
 from .media_utils import normalize_attachment_images
 from .mentor_service import explain_mistake
 from .quiz_generation_service import generate_quiz_draft
+from .retrieval_service import preview_retrieval
 from .remedial_service import recommend_intervention_case
+from .llamaindex_adapter import build_text_node, llamaindex_available
 from .student_tutor_service import (
     bootstrap_student_tutor,
     continue_student_tutor_session,
@@ -202,7 +204,7 @@ async def _run_quiz_generation_job(
             _set_ai_job_runtime(
                 job_id,
                 progressPercent=20,
-                statusMessage="Gathering indexed class content",
+                statusMessage="Planning quiz blueprint",
             )
             result = await generate_quiz_draft(
                 bg_db,
@@ -213,7 +215,11 @@ async def _run_quiz_generation_job(
             _set_ai_job_runtime(
                 job_id,
                 progressPercent=85,
-                statusMessage="Refreshing class search index",
+                statusMessage=(
+                    "Generating questions from fallback blueprint"
+                    if result.get("blueprintSource") == "fallback"
+                    else "Generating questions from quiz blueprint"
+                ),
             )
             indexing = await reindex_class_content(bg_db, body.class_id)
             _set_ai_job_runtime(
@@ -223,6 +229,7 @@ async def _run_quiz_generation_job(
                 resultSummary={
                     "assessmentId": result.get("assessmentId"),
                     "outputId": result.get("outputId"),
+                    "blueprintSource": result.get("blueprintSource"),
                     "indexing": indexing,
                 },
             )
@@ -387,6 +394,9 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
             },
         },
         "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
+        "frameworks": {
+            "llamaIndexAvailable": llamaindex_available(),
+        },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -645,8 +655,10 @@ async def health():
             "configuredTextModel": ollama_client.get_text_model_name(),
             "configuredVisionModel": ollama_client.get_vision_model_name(),
             "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
-            "embeddingModelAvailable": ollama_client.get_embedding_model_name()
-            in available_models,
+            "embeddingModelAvailable": ollama_client.is_model_available(
+                ollama_client.get_embedding_model_name(),
+                available_models,
+            ),
             "availableModels": available_models,
         },
     }
@@ -672,6 +684,81 @@ async def ready(db: AsyncSession = Depends(get_db)):
         "success": True,
         "message": "AI service is ready",
         "data": state,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Internal diagnostics
+# ---------------------------------------------------------------------------
+
+
+@app.get("/internal/retrieval/preview")
+async def internal_retrieval_preview(
+    class_id: str = Query(..., alias="classId"),
+    query_text: str = Query(..., alias="query"),
+    policy: str = Query("general"),
+    top_k: int = Query(8, alias="topK"),
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(require_internal_service),
+):
+    data = await preview_retrieval(
+        db,
+        query_text=query_text,
+        class_id=class_id,
+        top_k=top_k,
+        policy_name=policy,
+    )
+    if data["results"]:
+        first = data["results"][0]
+        data["llamaIndexNodePreview"] = build_text_node(
+            text=first["chunkText"],
+            node_id=first["documentId"],
+            metadata=first.get("metadataJson") or {},
+        )
+    return {
+        "success": True,
+        "message": "Retrieval preview generated",
+        "data": data,
+    }
+
+
+@app.get("/internal/extractions/{extraction_id}/audit")
+async def internal_extraction_audit(
+    extraction_id: str,
+    db: AsyncSession = Depends(get_db),
+    _auth: None = Depends(require_internal_service),
+):
+    row = await db.execute(
+        sa_text(
+            """
+            SELECT id, class_id, extraction_status, structured_content, error_message, updated_at
+            FROM extracted_modules
+            WHERE id = :id
+            """
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, "Extraction not found")
+
+    structured_content = extraction["structured_content"] or {}
+    if isinstance(structured_content, str):
+        structured_content = json.loads(structured_content)
+    audit = structured_content.get("audit") or {}
+
+    return {
+        "success": True,
+        "message": "Extraction audit loaded",
+        "data": {
+            "extractionId": str(extraction["id"]),
+            "classId": str(extraction["class_id"]),
+            "status": extraction["extraction_status"],
+            "errorMessage": extraction["error_message"],
+            "updatedAt": extraction["updated_at"].isoformat() if extraction["updated_at"] else None,
+            "audit": audit,
+            "lessonCount": len(structured_content.get("lessons") or []),
+        },
     }
 
 

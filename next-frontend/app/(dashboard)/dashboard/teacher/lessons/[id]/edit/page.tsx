@@ -5,12 +5,17 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpenText,
+  CircleHelp,
   FileStack,
+  ImageIcon,
+  Minus,
+  Paperclip,
   PencilLine,
   Plus,
   Rocket,
   Sparkles,
   Trash2,
+  Video,
 } from 'lucide-react';
 import { lessonService } from '@/services/lesson-service';
 import { useAuth } from '@/providers/AuthProvider';
@@ -21,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import {
   TeacherPageShell,
@@ -31,13 +37,67 @@ import { cn } from '@/utils/cn';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
 
 const BLOCK_TYPES = [
-  { type: 'text', label: 'Text', icon: '📝' },
-  { type: 'image', label: 'Image', icon: '🖼️' },
-  { type: 'video', label: 'Video', icon: '🎥' },
-  { type: 'question', label: 'Question', icon: '❓' },
-  { type: 'file', label: 'File', icon: '📎' },
-  { type: 'divider', label: 'Divider', icon: '➖' },
-] as const;
+  {
+    type: 'text',
+    label: 'Text',
+    hint: 'Use this for explanations, instructions, or summaries.',
+    icon: PencilLine,
+  },
+  {
+    type: 'image',
+    label: 'Image',
+    hint: 'Paste an image URL for diagrams or visual examples.',
+    icon: ImageIcon,
+  },
+  {
+    type: 'video',
+    label: 'Video',
+    hint: 'Drop in a video link for walkthroughs or demonstrations.',
+    icon: Video,
+  },
+  {
+    type: 'question',
+    label: 'Question',
+    hint: 'Add a reflection prompt or quick learner checkpoint.',
+    icon: CircleHelp,
+  },
+  {
+    type: 'file',
+    label: 'File',
+    hint: 'Link to a worksheet, PDF, or external supporting file.',
+    icon: Paperclip,
+  },
+  {
+    type: 'divider',
+    label: 'Divider',
+    hint: 'Break the lesson into clearer parts without extra text.',
+    icon: Minus,
+  },
+] as const satisfies Array<{
+  type: CreateContentBlockDto['type'];
+  label: string;
+  hint: string;
+  icon: typeof PencilLine;
+}>;
+
+function getDefaultBlockContent(type: CreateContentBlockDto['type']): string {
+  switch (type) {
+    case 'text':
+      return 'Start writing the core explanation for this lesson section.';
+    case 'image':
+      return 'https://';
+    case 'video':
+      return 'https://';
+    case 'question':
+      return 'Add a short checkpoint question for learners.';
+    case 'file':
+      return 'https://';
+    case 'divider':
+      return 'Section break';
+    default:
+      return 'New content block';
+  }
+}
 
 function getBlockTextValue(content: ContentBlock['content']): string {
   if (typeof content === 'string') return content;
@@ -72,6 +132,7 @@ export default function LessonEditorPage() {
   const [saving, setSaving] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -101,7 +162,7 @@ export default function LessonEditorPage() {
       await lessonService.update(lessonId, { title, description });
       toast.success('Lesson details saved');
     } catch {
-      toast.error('Failed to save');
+      toast.error('Failed to save lesson details');
     } finally {
       setSaving(false);
     }
@@ -113,16 +174,16 @@ export default function LessonEditorPage() {
       setLesson((prev) => (prev ? { ...prev, isDraft: false } : prev));
       toast.success('Lesson published');
     } catch {
-      toast.error('Failed to publish');
+      toast.error('Failed to publish lesson');
     }
   };
 
-  const handleAddBlock = async (type: string) => {
+  const handleAddBlock = async (type: CreateContentBlockDto['type']) => {
     try {
       const dto: CreateContentBlockDto = {
-        type: type as CreateContentBlockDto['type'],
+        type,
         order: blocks.length + 1,
-        content: '',
+        content: getDefaultBlockContent(type),
       };
       const res = await lessonService.createBlock(lessonId, dto);
       setBlocks((prev) => [...prev, res.data]);
@@ -137,7 +198,9 @@ export default function LessonEditorPage() {
   const handleUpdateBlock = async (blockId: string, content: string) => {
     try {
       await lessonService.updateBlock(blockId, { content });
-      setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, content } : b)));
+      setBlocks((prev) => prev.map((block) => (
+        block.id === blockId ? { ...block, content } : block
+      )));
       setEditingBlockId(null);
       toast.success('Block updated');
     } catch {
@@ -145,15 +208,22 @@ export default function LessonEditorPage() {
     }
   };
 
-  const handleDeleteBlock = async (blockId: string) => {
-    if (!confirm('Delete this content block?')) return;
-    try {
-      await lessonService.deleteBlock(blockId);
-      setBlocks((prev) => prev.filter((b) => b.id !== blockId));
-      toast.success('Block deleted');
-    } catch {
-      toast.error('Failed to delete block');
-    }
+  const handleDeleteBlock = (blockId: string) => {
+    setConfirmation({
+      title: 'Delete content block?',
+      description: 'This removes the selected lesson block from the lesson permanently.',
+      confirmLabel: 'Delete Block',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await lessonService.deleteBlock(blockId);
+          setBlocks((prev) => prev.filter((block) => block.id !== blockId));
+          toast.success('Block deleted');
+        } catch {
+          toast.error('Failed to delete block');
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -171,140 +241,177 @@ export default function LessonEditorPage() {
   if (!lesson) return <p className="text-muted-foreground">Lesson not found.</p>;
 
   return (
-    <TeacherPageShell
-      className={role === 'admin' ? 'theme-admin-bridge max-w-5xl mx-auto' : 'max-w-5xl mx-auto'}
-      badge="Lesson Studio"
-      title="Edit Lesson"
-      description="Refine lesson details and content blocks from a cleaner editing workspace that keeps everything easier to scan and update."
-      actions={(
-        <>
-          <Button variant="outline" size="sm" onClick={() => router.back()} className="teacher-button-outline rounded-xl font-black">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <Button
-            variant={lesson.isDraft ? 'teacher' : 'secondary'}
-            onClick={handlePublish}
-            disabled={!lesson.isDraft}
-            className={lesson.isDraft ? 'rounded-xl font-black' : 'rounded-xl font-black border-emerald-200 bg-emerald-50 text-emerald-700'}
-          >
-            <Rocket className="h-4 w-4" />
-            {lesson.isDraft ? 'Publish Lesson' : 'Published'}
-          </Button>
-        </>
-      )}
-      stats={(
-        <>
-          <TeacherStatCard label="Lesson Title" value={lesson.title} caption="Current lesson identity" icon={BookOpenText} accent="sky" />
-          <TeacherStatCard label="Content Blocks" value={blocks.length} caption="Editable learning segments" icon={FileStack} accent="teal" />
-          <TeacherStatCard label="Status" value={lesson.isDraft ? 'Draft' : 'Published'} caption={lesson.isDraft ? 'Ready for review and publishing' : 'Visible to learners'} icon={Sparkles} accent="amber" />
-        </>
-      )}
-    >
-      <TeacherSectionCard
-        title="Lesson Details"
-        description="Keep the title and description polished before arranging the lesson content below."
+    <>
+      <TeacherPageShell
+        className={role === 'admin' ? 'theme-admin-bridge max-w-5xl mx-auto' : 'max-w-5xl mx-auto'}
+        badge="Lesson Studio"
+        title="Edit Lesson"
+        description="Refine lesson details and build the content flow one block at a time from a cleaner editor."
+        actions={(
+          <>
+            <Button variant="outline" size="sm" onClick={() => router.back()} className="teacher-button-outline rounded-xl font-black">
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              variant={lesson.isDraft ? 'teacher' : 'secondary'}
+              onClick={handlePublish}
+              disabled={!lesson.isDraft}
+              className={lesson.isDraft ? 'rounded-xl font-black' : 'rounded-xl font-black border-emerald-200 bg-emerald-50 text-emerald-700'}
+            >
+              <Rocket className="h-4 w-4" />
+              {lesson.isDraft ? 'Publish Lesson' : 'Published'}
+            </Button>
+          </>
+        )}
+        stats={(
+          <>
+            <TeacherStatCard label="Lesson Title" value={lesson.title} caption="Current lesson identity" icon={BookOpenText} accent="sky" />
+            <TeacherStatCard label="Content Blocks" value={blocks.length} caption="Editable lesson sections" icon={FileStack} accent="teal" />
+            <TeacherStatCard label="Status" value={lesson.isDraft ? 'Draft' : 'Published'} caption={lesson.isDraft ? 'Ready for review and publishing' : 'Visible to learners'} icon={Sparkles} accent="amber" />
+          </>
+        )}
       >
-        <div className="grid gap-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="teacher-input h-12 rounded-2xl" />
+        <TeacherSectionCard
+          title="Lesson Details"
+          description="Keep the lesson title and overview clear before you work through the learning blocks."
+        >
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Title</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} className="teacher-input h-12 rounded-2xl" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Description</Label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="teacher-input min-h-[132px] rounded-2xl" />
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={handleSaveDetails} disabled={saving} className="teacher-button-solid rounded-xl font-black">
+                <PencilLine className="h-4 w-4" />
+                {saving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Description</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="teacher-input min-h-[132px] rounded-2xl" />
-          </div>
-          <div className="flex justify-end">
-            <Button onClick={handleSaveDetails} disabled={saving} className="teacher-button-solid rounded-xl font-black">
-              <PencilLine className="h-4 w-4" />
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        </div>
-      </TeacherSectionCard>
+        </TeacherSectionCard>
 
-      <TeacherSectionCard
-        title={`Content Blocks (${blocks.length})`}
-        description="Add, edit, and remove lesson segments from a more expressive content canvas."
-        action={(
-          <div className="relative">
-            <Button size="sm" onClick={() => setShowAddMenu((prev) => !prev)} className="teacher-button-solid rounded-xl font-black">
-              <Plus className="h-4 w-4" />
-              Add Block
-            </Button>
-            {showAddMenu ? (
-              <div className="absolute right-0 top-full z-10 mt-2 min-w-[190px] rounded-2xl border border-white/35 bg-white/95 p-2 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.3)] backdrop-blur">
-                {BLOCK_TYPES.map((bt) => (
+        <TeacherSectionCard
+          title={`Content Blocks (${blocks.length})`}
+          description="Add the next section from the quick builder, then polish one block at a time."
+          action={(
+            <div className="relative">
+              <Button size="sm" onClick={() => setShowAddMenu((prev) => !prev)} className="teacher-button-solid rounded-xl font-black">
+                <Plus className="h-4 w-4" />
+                Add Block
+              </Button>
+              {showAddMenu ? (
+                <div className="absolute right-0 top-full z-10 mt-2 grid min-w-[320px] gap-2 rounded-3xl border border-white/35 bg-white/95 p-3 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.3)] backdrop-blur">
+                  {BLOCK_TYPES.map((blockType) => {
+                    const Icon = blockType.icon;
+                    return (
+                      <button
+                        key={blockType.type}
+                        onClick={() => handleAddBlock(blockType.type)}
+                        className="flex w-full items-start gap-3 rounded-2xl border border-slate-200/70 px-3 py-3 text-left transition hover:border-[var(--teacher-accent)]/35 hover:bg-emerald-50/60"
+                      >
+                        <span className="mt-0.5 rounded-xl bg-[var(--teacher-surface-soft)] p-2 text-[var(--teacher-accent-strong)]">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="space-y-1">
+                          <span className="block text-sm font-black text-slate-800">{blockType.label}</span>
+                          <span className="block text-xs leading-5 text-slate-500">{blockType.hint}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          )}
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 lg:grid-cols-3">
+              {BLOCK_TYPES.map((blockType) => {
+                const Icon = blockType.icon;
+                return (
                   <button
-                    key={bt.type}
-                    onClick={() => handleAddBlock(bt.type)}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-700 transition hover:bg-emerald-50"
+                    key={blockType.type}
+                    type="button"
+                    onClick={() => handleAddBlock(blockType.type)}
+                    className="rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:bg-white"
                   >
-                    <span>{bt.icon}</span>
-                    <span>{bt.label}</span>
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 rounded-xl bg-white p-2 text-[var(--teacher-accent-strong)] shadow-sm">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <p className="text-sm font-black text-[var(--teacher-text-strong)]">{blockType.label}</p>
+                        <p className="mt-1 text-xs leading-5 text-[var(--teacher-text-muted)]">{blockType.hint}</p>
+                      </div>
+                    </div>
                   </button>
+                );
+              })}
+            </div>
+
+            {blocks.length === 0 ? (
+              <div className="rounded-[1.5rem] border border-dashed border-[var(--teacher-outline)] bg-white/55 px-6 py-12 text-center text-sm text-[var(--teacher-text-muted)]">
+                No content blocks yet. Start with a text block, then add media or checkpoints as needed.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {blocks.map((block, index) => (
+                  <Card
+                    key={block.id}
+                    className="overflow-hidden rounded-[1.45rem] border-white/35 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.84))] shadow-[0_24px_48px_-34px_rgba(15,23,42,0.26)]"
+                  >
+                    <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex flex-1 items-start gap-4">
+                        <div className="flex min-w-[62px] flex-col items-center gap-2 rounded-2xl border border-white/60 bg-white/75 px-3 py-3 text-xs font-black text-[var(--teacher-text-muted)] shadow-sm">
+                          <span className="text-sm">##</span>
+                          <span>#{index + 1}</span>
+                        </div>
+                        <div className="flex-1 space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50/80 text-emerald-700">
+                              {block.type}
+                            </Badge>
+                            <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                              {editingBlockId === block.id ? 'Currently editing this block' : 'Ready to review'}
+                            </span>
+                          </div>
+                          {editingBlockId === block.id ? (
+                            <BlockEditor
+                              block={block}
+                              onSave={(content) => handleUpdateBlock(block.id, content)}
+                              onCancel={() => setEditingBlockId(null)}
+                            />
+                          ) : (
+                            <BlockPreview block={block} />
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {block.type !== 'divider' ? (
+                          <Button variant="outline" size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setEditingBlockId(block.id)}>
+                            <PencilLine className="mr-1 h-3.5 w-3.5" />
+                            Edit Block
+                          </Button>
+                        ) : null}
+                        <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/75 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteBlock(block.id)}>
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
-            ) : null}
+            )}
           </div>
-        )}
-      >
-        {blocks.length === 0 ? (
-          <div className="rounded-[1.5rem] border border-dashed border-[var(--teacher-outline)] bg-white/55 px-6 py-12 text-center text-sm text-[var(--teacher-text-muted)]">
-            No content blocks yet. Use <strong>Add Block</strong> to start shaping this lesson.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {blocks.map((block, i) => (
-              <Card
-                key={block.id}
-                className="overflow-hidden rounded-[1.45rem] border-white/35 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.84))] shadow-[0_24px_48px_-34px_rgba(15,23,42,0.26)]"
-              >
-                <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex flex-1 items-start gap-4">
-                    <div className="flex min-w-[62px] flex-col items-center gap-2 rounded-2xl border border-white/60 bg-white/75 px-3 py-3 text-xs font-black text-[var(--teacher-text-muted)] shadow-sm">
-                      <span className="text-sm">⋮⋮</span>
-                      <span>#{i + 1}</span>
-                    </div>
-                    <div className="flex-1 space-y-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50/80 text-emerald-700">
-                          {block.type}
-                        </Badge>
-                        <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
-                          {editingBlockId === block.id ? 'Editing block' : 'Preview'}
-                        </span>
-                      </div>
-                      {editingBlockId === block.id ? (
-                        <BlockEditor
-                          block={block}
-                          onSave={(content) => handleUpdateBlock(block.id, content)}
-                          onCancel={() => setEditingBlockId(null)}
-                        />
-                      ) : (
-                        <BlockPreview block={block} />
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {block.type !== 'divider' ? (
-                      <Button variant="outline" size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setEditingBlockId(block.id)}>
-                        <PencilLine className="mr-1 h-3.5 w-3.5" />
-                        Edit Block
-                      </Button>
-                    ) : null}
-                    <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/75 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteBlock(block.id)}>
-                      <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </TeacherSectionCard>
-    </TeacherPageShell>
+        </TeacherSectionCard>
+      </TeacherPageShell>
+      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+    </>
   );
 }
 
@@ -345,13 +452,13 @@ function BlockPreview({ block }: { block: ContentBlock }) {
     case 'text':
       return <p className={cn(baseClass, 'whitespace-pre-wrap')}>{getBlockTextValue(block.content) || 'Empty text block'}</p>;
     case 'image':
-      return <p className={baseClass}>Image: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
+      return <p className={baseClass}>Image URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
     case 'video':
-      return <p className={baseClass}>Video: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
+      return <p className={baseClass}>Video URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
     case 'question':
       return <p className={cn(baseClass, 'whitespace-pre-wrap')}>{getBlockTextValue(block.content) || 'Empty question block'}</p>;
     case 'file':
-      return <p className={baseClass}>File: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
+      return <p className={baseClass}>File link: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
     case 'divider':
       return (
         <div className="rounded-2xl border border-dashed border-[var(--teacher-outline)] bg-white/60 px-4 py-4">

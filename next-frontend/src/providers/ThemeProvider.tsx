@@ -5,7 +5,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
@@ -13,8 +12,6 @@ import { usePathname } from 'next/navigation';
 import {
   DEFAULT_THEME,
   getThemeDefinition,
-  isThemeId,
-  normalizeThemeId,
   THEME_OPTIONS,
   THEME_STORAGE_KEY,
   type ThemeDefinition,
@@ -33,14 +30,6 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [theme, setTheme] = useState<ThemeId>(() => {
-    if (typeof window === 'undefined') {
-      return DEFAULT_THEME;
-    }
-
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return normalizeThemeId(storedTheme) ?? DEFAULT_THEME;
-  });
   const isHydrated = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -50,23 +39,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = normalizeThemeId(theme) ?? DEFAULT_THEME;
+    root.dataset.theme = DEFAULT_THEME;
     root.dataset.studentRoute = String(isStudentRoute);
 
     if (isHydrated) {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+      window.localStorage.setItem(THEME_STORAGE_KEY, DEFAULT_THEME);
     }
-  }, [isHydrated, isStudentRoute, theme]);
+  }, [isHydrated, isStudentRoute]);
+
+  const setTheme = (_nextTheme: ThemeId) => undefined;
 
   const value = useMemo<ThemeContextValue>(
     () => ({
-      theme,
-      resolvedTheme: getThemeDefinition(theme),
-      themes: THEME_OPTIONS,
+      theme: DEFAULT_THEME,
+      resolvedTheme: getThemeDefinition(DEFAULT_THEME),
+      themes: THEME_OPTIONS.filter((themeOption) => themeOption.id === DEFAULT_THEME),
       isHydrated,
       setTheme,
     }),
-    [isHydrated, theme],
+    [isHydrated],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

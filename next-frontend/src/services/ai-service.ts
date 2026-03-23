@@ -25,6 +25,23 @@ type Envelope<T> = {
   data: T;
 };
 
+const AI_CHAT_TIMEOUT_MS = 90_000;
+const AI_JOB_TIMEOUT_MS = 150_000;
+const TUTOR_FOCUS_TEXT_MAX = 900;
+
+function clampTutorRecommendation(
+  recommendation: StudentTutorRecommendation,
+): StudentTutorRecommendation {
+  const focusText = recommendation.focusText || '';
+  if (focusText.length <= TUTOR_FOCUS_TEXT_MAX) {
+    return recommendation;
+  }
+  return {
+    ...recommendation,
+    focusText: `${focusText.slice(0, TUTOR_FOCUS_TEXT_MAX - 3).trimEnd()}...`,
+  };
+}
+
 function normalizeEnvelope<T>(payload: unknown): Envelope<T> {
   if (payload && typeof payload === 'object' && 'data' in payload) {
     return payload as Envelope<T>;
@@ -34,7 +51,7 @@ function normalizeEnvelope<T>(payload: unknown): Envelope<T> {
 
 export const aiService = {
   async explainMistake(dto: MentorExplainDto): Promise<Envelope<MentorExplainResponse>> {
-    const { data } = await api.post('/ai/mentor/explain', dto);
+    const { data } = await api.post('/ai/mentor/explain', dto, { timeout: AI_CHAT_TIMEOUT_MS });
     return normalizeEnvelope<MentorExplainResponse>(data);
   },
 
@@ -42,14 +59,18 @@ export const aiService = {
     caseId: string,
     dto?: InterventionRecommendationDto,
   ): Promise<Envelope<InterventionRecommendation>> {
-    const { data } = await api.post(`/ai/teacher/interventions/${caseId}/recommend`, dto ?? {});
+    const { data } = await api.post(`/ai/teacher/interventions/${caseId}/recommend`, dto ?? {}, {
+      timeout: AI_CHAT_TIMEOUT_MS,
+    });
     return normalizeEnvelope<InterventionRecommendation>(data);
   },
 
   async generateQuizDraft(
     dto: GenerateQuizDraftDto,
   ): Promise<Envelope<GenerateQuizDraftResponse>> {
-    const { data } = await api.post('/ai/teacher/quizzes/generate-draft', dto);
+    const { data } = await api.post('/ai/teacher/quizzes/generate-draft', dto, {
+      timeout: AI_JOB_TIMEOUT_MS,
+    });
     return normalizeEnvelope<GenerateQuizDraftResponse>(data);
   },
 
@@ -88,12 +109,15 @@ export const aiService = {
   },
 
   async reindexClass(classId: string): Promise<Envelope<IndexingSummary>> {
-    const { data } = await api.post(`/ai/index/classes/${classId}`);
+    const { data } = await api.post(`/ai/index/classes/${classId}`, undefined, {
+      timeout: AI_JOB_TIMEOUT_MS,
+    });
     return normalizeEnvelope<IndexingSummary>(data);
   },
 
   async getStudentTutorBootstrap(classId?: string): Promise<Envelope<StudentTutorBootstrapResponse>> {
     const { data } = await api.get('/ai/student/tutor/bootstrap', {
+      timeout: AI_CHAT_TIMEOUT_MS,
       params: classId ? { classId } : undefined,
     });
     return normalizeEnvelope<StudentTutorBootstrapResponse>(data);
@@ -105,7 +129,9 @@ export const aiService = {
   ): Promise<Envelope<StudentTutorSessionStartResponse>> {
     const { data } = await api.post('/ai/student/tutor/session', {
       classId,
-      recommendation,
+      recommendation: clampTutorRecommendation(recommendation),
+    }, {
+      timeout: AI_CHAT_TIMEOUT_MS,
     });
     return normalizeEnvelope<StudentTutorSessionStartResponse>(data);
   },
@@ -119,10 +145,16 @@ export const aiService = {
     sessionId: string,
     message: string,
   ): Promise<Envelope<StudentTutorMessageResponse>> {
-    const { data } = await api.post(`/ai/student/tutor/session/${sessionId}/message`, {
-      sessionId,
-      message,
-    });
+    const { data } = await api.post(
+      `/ai/student/tutor/session/${sessionId}/message`,
+      {
+        sessionId,
+        message,
+      },
+      {
+        timeout: AI_CHAT_TIMEOUT_MS,
+      },
+    );
     return normalizeEnvelope<StudentTutorMessageResponse>(data);
   },
 
@@ -130,10 +162,16 @@ export const aiService = {
     sessionId: string,
     answers: string[],
   ): Promise<Envelope<StudentTutorAnswerResponse>> {
-    const { data } = await api.post(`/ai/student/tutor/session/${sessionId}/answers`, {
-      sessionId,
-      answers,
-    });
+    const { data } = await api.post(
+      `/ai/student/tutor/session/${sessionId}/answers`,
+      {
+        sessionId,
+        answers,
+      },
+      {
+        timeout: AI_CHAT_TIMEOUT_MS,
+      },
+    );
     return normalizeEnvelope<StudentTutorAnswerResponse>(data);
   },
 };

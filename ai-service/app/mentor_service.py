@@ -26,6 +26,27 @@ RULES:
 - End with a short "Ja's Study Tip:" line.
 """
 
+MENTOR_ANALYSIS_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "mistakeSummary": {"type": "string"},
+        "likelyMisconceptions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 4,
+        },
+        "requiredEvidence": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 5,
+        },
+        "answerGuardrail": {"type": "string"},
+    },
+    "required": ["mistakeSummary", "likelyMisconceptions", "requiredEvidence", "answerGuardrail"],
+}
+
 
 def _normalize_options(options: Any) -> list[dict[str, Any]]:
     if isinstance(options, str):
@@ -137,6 +158,12 @@ async def explain_mistake(
         selected_text = row["student_answer"]
 
     correct_options = [item.get("text", "").strip() for item in options if item.get("isCorrect")]
+    concept_tags = row.get("concept_tags") or []
+    if isinstance(concept_tags, str):
+        try:
+            concept_tags = json.loads(concept_tags)
+        except json.JSONDecodeError:
+            concept_tags = []
     retrieval_query = "\n".join(
         filter(
             None,
@@ -154,6 +181,12 @@ async def explain_mistake(
         class_id=str(row["class_id"]),
         top_k=6,
         only_published=True,
+        policy_name="mentor_explain",
+        teacher_explanation=row["question_explanation"],
+        student_message=message,
+        concept_hints=concept_tags if isinstance(concept_tags, list) else [],
+        reference_assessment_id=str(row["assessment_id"]),
+        reference_question_id=question_id,
     )
 
     context_blocks = []
@@ -170,6 +203,9 @@ async def explain_mistake(
             "assessmentId": chunk.get("assessmentId"),
             "questionId": chunk.get("questionId"),
             "label": label,
+            "scoreBreakdown": chunk.get("scoreBreakdown") or {},
+            "selectionReason": chunk.get("selectionReason"),
+            "sourceReference": chunk.get("sourceReference"),
         }
         citation_key = (
             citation["lessonId"],
@@ -181,6 +217,15 @@ async def explain_mistake(
             continue
         seen_citations.add(citation_key)
         citations.append(citation)
+
+    analysis_packet = await _build_mistake_analysis_packet(
+        question_content=row["question_content"],
+        student_answer=selected_text,
+        teacher_explanation=row["question_explanation"],
+        student_follow_up=message,
+        context_blocks=context_blocks,
+        correct_options=correct_options,
+    )
 
     prompt = f"""
 Assessment: {row["assessment_title"]}
@@ -202,8 +247,14 @@ Teacher explanation:
 Student follow-up:
 {message or "Explain why this answer is incorrect and what to review next."}
 
+Mistake analysis packet:
+{json.dumps(analysis_packet, ensure_ascii=False)}
+
 Retrieved lesson context:
 {chr(10).join(context_blocks) if context_blocks else "[No retrieved lesson chunks found]"}
+
+Citations:
+{json.dumps(citations, ensure_ascii=False)}
 """
 
     prepared_images = normalize_attachment_images(attachments)
@@ -279,6 +330,7 @@ Retrieved lesson context:
                 "questionId": question_id,
                 "classId": str(row["class_id"]),
                 "citations": citations,
+                "analysisPacket": analysis_packet,
                 "suggestedNext": suggested_next,
                 "attachmentCount": len(prepared_images),
             },
@@ -289,9 +341,56 @@ Retrieved lesson context:
     return {
         "reply": reply,
         "citations": citations,
+        "analysisPacket": analysis_packet,
         "suggestedNext": suggested_next,
         "modelUsed": ollama_client.get_task_model_name(
             task_name,
             images=prepared_images,
         ),
     }
+
+
+async def _build_mistake_analysis_packet(
+    *,
+    question_content: str,
+    student_answer: str | None,
+    teacher_explanation: str | None,
+    student_follow_up: str | None,
+    context_blocks: list[str],
+    correct_options: list[str],
+) -> dict[str, Any]:
+    prompt = f"""
+Analyze a student's mistake before explaining it.
+
+Question:
+{question_content}
+
+Student answer:
+{student_answer or "[No answer recorded]"}
+
+Correct option text:
+{", ".join(correct_options) if correct_options else "[No explicit option text stored]"}
+
+Teacher explanation:
+{teacher_explanation or "[No teacher explanation provided]"}
+
+Student follow-up:
+{student_follow_up or "[No follow-up message]"}
+
+Retrieved evidence:
+{chr(10).join(context_blocks) if context_blocks else "[No retrieved lesson chunks found]"}
+
+Return valid JSON only. The packet must summarize the mistake, list likely misconceptions, identify which evidence is required for a grounded explanation, and state a guardrail that avoids leaking the full final answer.
+"""
+    raw = await ollama_client.generate(
+        prompt,
+        MENTOR_SYSTEM_PROMPT,
+        task="grading",
+        response_format=MENTOR_ANALYSIS_FORMAT,
+    )
+    cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    first = cleaned.find("{")
+    last = cleaned.rfind("}")
+    if first != -1 and last > first:
+        cleaned = cleaned[first : last + 1]
+    return json.loads(cleaned)

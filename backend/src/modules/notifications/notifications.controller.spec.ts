@@ -49,7 +49,13 @@ describe('NotificationsController', () => {
   describe('findAll()', () => {
     it('returns paginated notifications in success envelope', async () => {
       const rows = [makeNotification()];
-      mockService.findByUser.mockResolvedValue(rows);
+      mockService.findByUser.mockResolvedValue({
+        data: rows,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       const result = await controller.findAll(CURRENT_USER, {
         page: 1,
@@ -60,6 +66,10 @@ describe('NotificationsController', () => {
         success: true,
         message: 'Notifications retrieved.',
         data: rows,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
       });
       expect(mockService.findByUser).toHaveBeenCalledWith(CURRENT_USER.userId, {
         page: 1,
@@ -68,7 +78,13 @@ describe('NotificationsController', () => {
     });
 
     it('passes userId from CurrentUser to service, not a param', async () => {
-      mockService.findByUser.mockResolvedValue([]);
+      mockService.findByUser.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      });
 
       await controller.findAll(CURRENT_USER, {} as any);
 

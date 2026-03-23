@@ -13,6 +13,7 @@ import {
   Refreshable,
   ScreenScroll,
 } from "../components/ui/primitives";
+import { toAppError } from "../api/http";
 import { queryKeys, usePerformanceSummary, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
@@ -103,14 +104,20 @@ export function AssessmentsScreen({ navigation }: Props) {
 
   const assessmentCards = useMemo(
     () =>
-      assessments.map((assessment, index) => {
+      assessments.flatMap((assessment, index) => {
         const attempts = attemptQueries[index]?.data ?? [];
+        const subject = subjects.find((entry) => entry.id === assessment.subjectId);
+
+        if (!subject) {
+          return [];
+        }
+
         return {
           ...assessment,
-          ...toAssessmentCard(assessment.raw as any, subjects.find((subject) => subject.id === assessment.subjectId)!, attempts),
+          ...toAssessmentCard(assessment.raw as any, subject, attempts),
         };
       }),
-    [assessmentQueries, assessments, attemptQueries, subjects],
+    [assessments, attemptQueries, subjects],
   );
 
   const filters: FilterType[] = ["all", "pending", "late", "missing", "completed"];
@@ -124,6 +131,11 @@ export function AssessmentsScreen({ navigation }: Props) {
     classesQuery.isRefetching ||
     assessmentQueries.some((query) => query.isRefetching) ||
     attemptQueries.some((query) => query.isRefetching);
+  const primaryError =
+    classesQuery.error ||
+    performanceQuery.error ||
+    assessmentQueries.find((query) => query.error)?.error ||
+    attemptQueries.find((query) => query.error)?.error;
 
   return (
     <ScreenScroll
@@ -138,7 +150,7 @@ export function AssessmentsScreen({ navigation }: Props) {
     >
       <GradientHeader
         colors={gradients.assessments}
-        eyebrow="Track your work 📝"
+        eyebrow="Track your work ðŸ“"
         title="Assessments"
         rightContent={<FloatingIconButton icon="clipboard-check-outline" />}
       >
@@ -203,8 +215,16 @@ export function AssessmentsScreen({ navigation }: Props) {
         </ScrollView>
 
         <View style={{ marginTop: 8, gap: 12 }}>
+          {primaryError ? (
+            <Card>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Assessments are unavailable</Text>
+              <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+                {toAppError(primaryError).message}
+              </Text>
+            </Card>
+          ) : null}
           {filtered.length === 0 ? (
-            <EmptyState emoji="🎉" title="All clear!" subtitle={`No ${activeFilter} assessments right now.`} />
+            <EmptyState emoji="ðŸŽ‰" title="All clear!" subtitle={`No ${activeFilter} assessments right now.`} />
           ) : (
             filtered.map((assessment, index) => {
               const config = statusConfig[assessment.status];
@@ -250,7 +270,7 @@ export function AssessmentsScreen({ navigation }: Props) {
                             </View>
                             {assessment.status === "completed" && assessment.score !== undefined ? (
                               <Pill
-                                label={`${Math.round(assessment.score)}/${assessment.totalScore} ✓`}
+                                label={`${Math.round(assessment.score)}/${assessment.totalScore} âœ“`}
                                 backgroundColor={colors.paleGreen}
                                 color={colors.green}
                               />

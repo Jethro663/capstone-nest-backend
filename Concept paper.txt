@@ -38,10 +38,11 @@ school population of Gat Andres Bonifacio High School. The LMS serves as the pri
 managing classes, lessons, and assessments for all students, while the LXP functions as a performancebased intervention component.
 Page 2 of 12
 Access to the LXP is restricted to selected students who demonstrate learning gaps, such as those obtaining
-scores below the defined performance threshold (e.g., below 60%). The LXP is directly connected to the
-LMS to ensure continuity of instruction, allowing students to revisit previous lessons and assessments as
-part of remediation. Automated instructional formulas generated from uploaded modules guide learning
-paths, while teachers retain full control over instruction and intervention through the LMS.
+scores below the defined performance threshold used by the system (currently below 74%). The LXP is
+directly connected to the LMS to ensure continuity of instruction, allowing students to revisit previous
+lessons and assessments as part of remediation. Teacher-guided recommendations generated from uploaded
+modules support intervention planning, while teachers retain full control over instruction and intervention
+through the LMS.
 Page 3 of 12
 2. OBJECTIVES
 State the general objective and at least 5 specific objectives of the study
@@ -49,13 +50,14 @@ General Objective:
 To design and develop a web and mobile-based Learning Management System (LMS) integrated with a
 Learning Experience Platform (LXP) that supports all subjects across all grade levels, provides targeted
 learning intervention for selected students who demonstrate learning gaps, and assists teachers through
-automated instructional support, performance-based intervention, and system evaluation.
+teacher-guided instructional support, performance-based intervention, and system evaluation.
 Specific Objectives:
 1. To develop an LMS that allows teachers and administrators to manage classes, students,
 lessons, assessments, and learning progress effectively, including support for automatic
 formatting and extraction of uploaded learning modules.
 2. To integrate an LXP within the LMS that is accessible only to selected students who
-demonstrate learning gaps (e.g., scores below 60%), ensuring targeted and effective
+demonstrate learning gaps based on the implemented intervention threshold policy,
+ensuring targeted and effective
 intervention.
 3. To design and integrate an AI NPC mentor that assists students by explaining mistakes,
 providing hints, and recommending remedial activities.
@@ -74,7 +76,7 @@ assessments, and follow guided remediation paths based on their performance. Thi
 supports mastery of learning competencies and reduces learning gaps across subjects.
 • For Teachers, Nexora offers clear instructional benefits. Teachers can easily upload learning
 modules through automatic content extraction, identify students who require intervention, and
-manage LXP activities directly through the LMS. Automated instructional formulas assist in
+manage LXP activities directly through the LMS. Teacher-guided recommendations assist in
 recommending remediation without replacing teacher judgment, helping reduce workload while
 improving intervention effectiveness.
 • For the School, the system promotes data-informed academic intervention while maintaining a
@@ -91,11 +93,12 @@ Scope
 • The system supports all high school grade levels and subjects at Gat Andres Bonifacio High School
 through an LMS.
 • The Learning Experience Platform (LXP) is designed for targeted intervention and is accessible only
-to selected students based on assessment performance (e.g., scores below 60%).
+to selected students based on assessment performance using the implemented intervention threshold
+policy (currently below 74%).
 • Students are allowed to revisit previous lessons and assessments as part of the intervention
 process.
 • Teachers access, manage, and monitor LXP activities exclusively through the LMS.
-• The system includes automated instructional formulas generated from uploaded learning modules to
+• The system includes teacher-guided recommendations generated from uploaded learning modules to
 support intervention.
 • Teachers can upload modules with ease through automatic content extraction and formatting
 features.
@@ -120,10 +123,9 @@ History)
 •
 • Software Specification
 • • Frontend: Web and Mobile Frameworks
-• • Backend: Nextjs
+• • Backend: NestJS
 • • Database: PostgreSQL
-• • AI Logic: Rule-based + Lightweight AI Integration
-during recommendation
+• • AI Logic: Rule-based + Lightweight AI Integration for teacher-guided recommendations
 • Hardware Specification
 • • Standard desktop or laptop computers for development
 • • Mobile devices for testing
@@ -233,7 +235,7 @@ Page 9 of 12
 • Assessment Scheduling
 • Score Recording
 Page 10 of 12
-• Performance Threshold Definition (e.g., below 60%)
+• Performance Threshold Definition (implemented at below 74%)
 • Assessment Review Access
 • Assessment History Tracking
 ---
@@ -270,7 +272,7 @@ Page 11 of 12
 • Teacher-Controlled AI Assistance Scope
 ---
 ## 12. Instructional Support Module (Teacher Support)
-- Automated Instructional Formula Generation
+- Teacher-Guided Recommendation Generation
 • Learning Gap Detection Assistance
 • Suggested Remediation Paths
 • Reduced Manual Workload for Teachers

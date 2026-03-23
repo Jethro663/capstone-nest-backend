@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: capstone
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "200411"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-CHANGE_ME_DB_PASSWORD}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
