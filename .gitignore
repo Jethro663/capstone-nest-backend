@@ -1,2 +1,6 @@
 /.npm-cache
 /next-FrontendToRecover
+
+# Prevent accidental in-place transpilation artifacts in the TS backend source tree.
+/backend/src/**/*.js
+/backend/src/**/*.js.map

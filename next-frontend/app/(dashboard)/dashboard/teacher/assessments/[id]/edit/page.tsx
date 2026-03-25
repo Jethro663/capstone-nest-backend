@@ -13,8 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type {
@@ -22,7 +21,7 @@ import type {
   AssessmentPlacementMode,
   AssessmentQuestion,
   CreateQuestionDto,
-  UpdateQuestionDto,
+  RubricCriterion,
   ClassRecordCategory,
 } from '@/types/assessment';
 import type { ClassRecordSlotOverview } from '@/types/class-record';
@@ -53,6 +52,30 @@ const CLASS_RECORD_CATEGORY_LABELS: Record<ClassRecordCategory, string> = {
   quarterly_assessment: 'Quarterly Assessment',
 };
 
+type LocalQuestion = AssessmentQuestion & { isNew?: boolean };
+
+function normalizeQuestions(questions: LocalQuestion[]) {
+  return questions
+    .map((question, index) => ({
+      id: question.id,
+      type: question.type,
+      content: question.content,
+      points: question.points,
+      order: index + 1,
+      isRequired: question.isRequired ?? true,
+      explanation: question.explanation || '',
+      imageUrl: question.imageUrl || '',
+      options: (question.options || [])
+        .map((option, optionIndex) => ({
+          text: option.text,
+          isCorrect: option.isCorrect,
+          order: optionIndex + 1,
+        }))
+        .sort((a, b) => a.order - b.order),
+    }))
+    .sort((a, b) => a.order - b.order);
+}
+
 /* â”€â”€ Main page component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export default function AssessmentEditorPage() {
   const params = useParams();
@@ -61,7 +84,8 @@ export default function AssessmentEditorPage() {
 
   /* ---------- state ---------- */
   const [assessment, setAssessment] = useState<Assessment | null>(null);
-  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  const [questions, setQuestions] = useState<LocalQuestion[]>([]);
+  const [savedQuestions, setSavedQuestions] = useState<LocalQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -77,7 +101,7 @@ export default function AssessmentEditorPage() {
   const [dueDate, setDueDate] = useState('');
   const [feedbackLevel, setFeedbackLevel] = useState<string>('immediate');
   const [feedbackDelayHours, setFeedbackDelayHours] = useState<number>(0);
-  const [showSettings, setShowSettings] = useState(false);
+  const [lastAssessmentType, setLastAssessmentType] = useState<string>('quiz');
   const [classRecordCategory, setClassRecordCategory] = useState<ClassRecordCategory | ''>('');
   const [quarter, setQuarter] = useState<GradingPeriod | ''>('');
   const [placementMode, setPlacementMode] = useState<AssessmentPlacementMode>('automatic');
@@ -93,19 +117,40 @@ export default function AssessmentEditorPage() {
   const [questionTimeLimitSeconds, setQuestionTimeLimitSeconds] = useState<number | ''>('');
   const [strictMode, setStrictMode] = useState(false);
   const [fileUploadInstructions, setFileUploadInstructions] = useState('');
-  const [rubricParseStatus, setRubricParseStatus] = useState<string | null>(null);
+  const [allowedUploadExtensions, setAllowedUploadExtensions] = useState<string[]>([]);
+  const [allowedUploadMimeTypes, setAllowedUploadMimeTypes] = useState<string[]>([]);
+  const [maxUploadSizeBytes, setMaxUploadSizeBytes] = useState<number>(100 * 1024 * 1024);
+  const [rubricParseStatus, setRubricParseStatus] = useState<Assessment['rubricParseStatus']>(null);
   const [rubricUploading, setRubricUploading] = useState(false);
   const [rubricSaving, setRubricSaving] = useState(false);
-  const [rubricSourceFile, setRubricSourceFile] = useState<{ originalName: string } | null>(null);
-  const [teacherAttachmentFile, setTeacherAttachmentFile] = useState<{ originalName: string } | null>(null);
-  const [rubricCriteria, setRubricCriteria] = useState<Array<{
-    id: string;
+  const [rubricSourceFile, setRubricSourceFile] = useState<Assessment['rubricSourceFile'] | null>(null);
+  const [teacherAttachmentFile, setTeacherAttachmentFile] = useState<Assessment['teacherAttachmentFile'] | null>(null);
+  const [rubricCriteria, setRubricCriteria] = useState<RubricCriterion[]>([]);
+  const [savedMeta, setSavedMeta] = useState<{
     title: string;
-    description?: string;
-    points: number;
-  }>>([]);
-  const [allowedFileGroups, setAllowedFileGroups] = useState<string[]>(['documents']);
-  const [maxUploadSizeBytes] = useState(10 * 1024 * 1024);
+    description: string;
+    type: string;
+    passingScore: number;
+    maxAttempts: number;
+    timeLimitMinutes: number | '';
+    dueDate: string;
+    feedbackLevel: string;
+    feedbackDelayHours: number;
+    classRecordCategory: string;
+    quarter: string;
+    closeWhenDue: boolean;
+    randomizeQuestions: boolean;
+    timedQuestionsEnabled: boolean;
+    questionTimeLimitSeconds: number | '';
+    strictMode: boolean;
+    fileUploadInstructions: string;
+    allowedUploadExtensions: string[];
+    allowedUploadMimeTypes: string[];
+    maxUploadSizeBytes: number;
+    teacherAttachmentFileId: string;
+    placementMode: AssessmentPlacementMode;
+    selectedSlotId: string;
+  } | null>(null);
 
   // Inline editing for questions
   const [editingQId, setEditingQId] = useState<string | null>(null);
@@ -143,9 +188,63 @@ export default function AssessmentEditorPage() {
       setTimedQuestionsEnabled(a.timedQuestionsEnabled ?? false);
       setQuestionTimeLimitSeconds(a.questionTimeLimitSeconds ?? '');
       setStrictMode(a.strictMode ?? false);
+      setFileUploadInstructions(a.fileUploadInstructions || '');
+      setAllowedUploadExtensions(
+        a.allowedUploadExtensions && a.allowedUploadExtensions.length > 0
+          ? a.allowedUploadExtensions
+          : FILE_UPLOAD_TYPE_GROUPS.flatMap((group) => [...group.extensions]),
+      );
+      setAllowedUploadMimeTypes(
+        a.allowedUploadMimeTypes && a.allowedUploadMimeTypes.length > 0
+          ? a.allowedUploadMimeTypes
+          : ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'image/png', 'image/jpeg', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'],
+      );
+      setMaxUploadSizeBytes(a.maxUploadSizeBytes ?? 100 * 1024 * 1024);
+      setTeacherAttachmentFile(a.teacherAttachmentFile || null);
+      setRubricSourceFile(a.rubricSourceFile || null);
+      setRubricCriteria(a.rubricCriteria || []);
+      setRubricParseStatus(a.rubricParseStatus ?? null);
       setPlacementMode(a.classRecordPlacement?.placementMode || 'automatic');
       setSelectedSlotId(a.classRecordPlacement?.itemId ?? null);
-      setQuestions((a.questions || []).sort((x, y) => x.order - y.order));
+      const normalizedQuestions = (a.questions || [])
+        .map((question) => ({
+          ...question,
+          options: [...(question.options || [])].sort((x, y) => x.order - y.order),
+        }))
+        .sort((x, y) => x.order - y.order);
+      setQuestions(normalizedQuestions);
+      setSavedQuestions(normalizedQuestions);
+      setSavedMeta({
+        title: a.title,
+        description: a.description || '',
+        type: a.type || 'quiz',
+        passingScore: a.passingScore ?? 60,
+        maxAttempts: a.maxAttempts ?? 1,
+        timeLimitMinutes: a.timeLimitMinutes ?? '',
+        dueDate: a.dueDate ? a.dueDate.slice(0, 16) : '',
+        feedbackLevel: a.feedbackLevel || 'immediate',
+        feedbackDelayHours: a.feedbackDelayHours ?? 0,
+        classRecordCategory: a.classRecordCategory || '',
+        quarter: a.quarter || '',
+        closeWhenDue: a.closeWhenDue ?? false,
+        randomizeQuestions: a.randomizeQuestions ?? false,
+        timedQuestionsEnabled: a.timedQuestionsEnabled ?? false,
+        questionTimeLimitSeconds: a.questionTimeLimitSeconds ?? '',
+        strictMode: a.strictMode ?? false,
+        fileUploadInstructions: a.fileUploadInstructions || '',
+        allowedUploadExtensions:
+          a.allowedUploadExtensions && a.allowedUploadExtensions.length > 0
+            ? [...a.allowedUploadExtensions].sort()
+            : FILE_UPLOAD_TYPE_GROUPS.flatMap((group) => [...group.extensions]).sort(),
+        allowedUploadMimeTypes:
+          a.allowedUploadMimeTypes && a.allowedUploadMimeTypes.length > 0
+            ? [...a.allowedUploadMimeTypes].sort()
+            : ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'image/png', 'image/jpeg', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'].sort(),
+        maxUploadSizeBytes: a.maxUploadSizeBytes ?? 100 * 1024 * 1024,
+        teacherAttachmentFileId: a.teacherAttachmentFileId || '',
+        placementMode: a.classRecordPlacement?.placementMode || 'automatic',
+        selectedSlotId: a.classRecordPlacement?.itemId || '',
+      });
     } catch {
       toast.error('Failed to load assessment');
     } finally {
@@ -154,6 +253,18 @@ export default function AssessmentEditorPage() {
   }, [assessmentId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (assessmentType !== 'file_upload') {
+      setLastAssessmentType(assessmentType);
+    }
+    if (assessmentType === 'file_upload' && editorTab === 'questions') {
+      setEditorTab('fileUpload');
+    }
+    if (assessmentType !== 'file_upload' && editorTab === 'fileUpload') {
+      setEditorTab('questions');
+    }
+  }, [assessmentType, editorTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,11 +304,12 @@ export default function AssessmentEditorPage() {
 
           return slotExists ? current : existingPlacementItemId;
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const slotError = error as { response?: { data?: { message?: string } } };
         if (cancelled) return;
         setSlotOverview(null);
         setSlotOverviewError(
-          error?.response?.data?.message || 'Failed to load class record slots',
+          slotError?.response?.data?.message || 'Failed to load class record slots',
         );
       } finally {
         if (!cancelled) {
@@ -221,8 +333,34 @@ export default function AssessmentEditorPage() {
 
   /* ---------- computed ---------- */
   const totalPoints = questions.reduce((s, q) => s + q.points, 0);
-  const hasPendingChanges = true;
-  const handleUpdateAssessment = () => handleSaveSettings();
+  const currentMeta = {
+    title,
+    description,
+    type: assessmentType,
+    passingScore,
+    maxAttempts,
+    timeLimitMinutes,
+    dueDate,
+    feedbackLevel,
+    feedbackDelayHours,
+    classRecordCategory,
+    quarter,
+    closeWhenDue,
+    randomizeQuestions,
+    timedQuestionsEnabled,
+    questionTimeLimitSeconds,
+    strictMode,
+    fileUploadInstructions,
+    allowedUploadExtensions: [...allowedUploadExtensions].sort(),
+    allowedUploadMimeTypes: [...allowedUploadMimeTypes].sort(),
+    maxUploadSizeBytes,
+    teacherAttachmentFileId: teacherAttachmentFile?.id || '',
+    placementMode,
+    selectedSlotId: selectedSlotId || '',
+  };
+  const hasPendingChanges =
+    (savedMeta ? JSON.stringify(currentMeta) !== JSON.stringify(savedMeta) : false) ||
+    JSON.stringify(normalizeQuestions(questions)) !== JSON.stringify(normalizeQuestions(savedQuestions));
   const activePlacementItemId =
     placementMode === 'manual'
       ? selectedSlotId
@@ -237,24 +375,54 @@ export default function AssessmentEditorPage() {
     (category) => category.key === classRecordCategory,
   );
 
-  const isGroupSelected = (key: string) => allowedFileGroups.includes(key);
-  const toggleFileGroup = (key: string, checked: boolean) => {
-    setAllowedFileGroups((current) => (
-      checked ? Array.from(new Set([...current, key])) : current.filter((entry) => entry !== key)
-    ));
+  const isGroupSelected = (groupKey: string) => {
+    const group = FILE_UPLOAD_TYPE_GROUPS.find((entry) => entry.key === groupKey);
+    if (!group) return false;
+    return group.extensions.every((ext) => allowedUploadExtensions.includes(ext));
+  };
+  const toggleFileGroup = (groupKey: string, checked: boolean) => {
+    const group = FILE_UPLOAD_TYPE_GROUPS.find((entry) => entry.key === groupKey);
+    if (!group) return;
+    const mimeTypes = group.key === 'documents'
+      ? ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
+      : group.key === 'images'
+        ? ['image/png', 'image/jpeg']
+        : ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv'];
+
+    if (checked) {
+      setAllowedUploadExtensions((prev) => Array.from(new Set([...prev, ...group.extensions])));
+      setAllowedUploadMimeTypes((prev) => Array.from(new Set([...prev, ...mimeTypes])));
+      return;
+    }
+
+    setAllowedUploadExtensions((prev) => prev.filter((ext) => !(group.extensions as readonly string[]).includes(ext)));
+    setAllowedUploadMimeTypes((prev) => prev.filter((mime) => !mimeTypes.includes(mime)));
   };
 
   const handleTeacherAttachmentUpload = async (file: File) => {
-    setTeacherAttachmentFile({ originalName: file.name });
-    toast.success('Reference file attached');
+    try {
+      const res = await assessmentService.uploadTeacherAttachment(assessmentId, file);
+      setTeacherAttachmentFile(res.data);
+      toast.success('Reference file uploaded');
+    } catch {
+      toast.error('Failed to upload reference file');
+    }
   };
 
   const handleRubricUpload = async (file: File) => {
-    setRubricUploading(true);
     try {
-      setRubricSourceFile({ originalName: file.name });
-      setRubricParseStatus('uploaded');
-      toast.success('Rubric file attached');
+      setRubricUploading(true);
+      const res = await assessmentService.uploadRubricSource(assessmentId, file);
+      setRubricSourceFile(res.data.file);
+      setRubricCriteria(res.data.rubricCriteria || []);
+      setRubricParseStatus((res.data.rubricParseStatus as Assessment['rubricParseStatus']) ?? null);
+      toast.success(
+        res.data.rubricParseStatus === 'failed'
+          ? 'Rubric file uploaded but could not be parsed automatically'
+          : 'Rubric uploaded and parsed',
+      );
+    } catch {
+      toast.error('Failed to upload rubric');
     } finally {
       setRubricUploading(false);
     }
@@ -276,7 +444,10 @@ export default function AssessmentEditorPage() {
       if (criterionIndex !== index) {
         return criterion;
       }
-      return { ...criterion, [field]: value };
+      return {
+        ...criterion,
+        [field]: field === 'points' ? Number(value) : value,
+      };
     }));
   };
 
@@ -285,35 +456,66 @@ export default function AssessmentEditorPage() {
   };
 
   const handleSaveRubricReview = async () => {
-    setRubricSaving(true);
     try {
-      setRubricParseStatus('reviewed');
+      setRubricSaving(true);
+      const normalized = rubricCriteria
+        .map((criterion, index) => ({
+          ...criterion,
+          id: criterion.id?.trim() || `criterion-${index + 1}`,
+          title: criterion.title.trim(),
+          description: criterion.description?.trim() || undefined,
+          points: Number(criterion.points || 0),
+        }))
+        .filter((criterion) => criterion.title.length > 0);
+
+      if (normalized.length === 0) {
+        toast.error('Add at least one rubric criterion before saving');
+        return;
+      }
+
+      const res = await assessmentService.reviewRubric(assessmentId, normalized);
+      setRubricCriteria(res.data.rubricCriteria || []);
+      setRubricParseStatus(res.data.rubricParseStatus ?? 'reviewed');
       toast.success('Rubric review saved');
+    } catch {
+      toast.error('Failed to save rubric review');
     } finally {
       setRubricSaving(false);
     }
   };
 
   const switchToAssessmentMode = () => {
-    setAssessmentType('quiz');
+    setAssessmentType(lastAssessmentType === 'file_upload' ? 'quiz' : lastAssessmentType);
     setEditorTab('questions');
+    toast.success('Switched to Assessment mode');
   };
 
   const switchToFileUploadMode = () => {
     setAssessmentType('file_upload');
     setEditorTab('fileUpload');
+    toast.success('Switched to File Upload mode');
   };
 
   /* ---------- save assessment metadata ---------- */
-  const handleSaveSettings = async () => {
+  const handleUpdateAssessment = async () => {
     if (placementMode === 'manual' && classRecordCategory && quarter && !selectedSlotId) {
       toast.error('Pick an open class record slot first');
       return;
     }
+    if (assessmentType === 'file_upload') {
+      if (!fileUploadInstructions.trim()) {
+        toast.error('Instruction is required for file upload assessments');
+        return;
+      }
+      if (allowedUploadExtensions.length === 0 || allowedUploadMimeTypes.length === 0) {
+        toast.error('Please select at least one allowed file type group');
+        return;
+      }
+    }
 
     setSaving(true);
     try {
-      const res = await assessmentService.update(assessmentId, {
+      const assessmentRes = await assessmentService.update(assessmentId, {
         title,
         description: description || undefined,
         type: assessmentType as Assessment['type'],
@@ -325,12 +527,19 @@ export default function AssessmentEditorPage() {
         randomizeQuestions,
         timedQuestionsEnabled,
         questionTimeLimitSeconds:
-          questionTimeLimitSeconds === '' ? null : Number(questionTimeLimitSeconds),
+          timedQuestionsEnabled && questionTimeLimitSeconds !== ''
+            ? Number(questionTimeLimitSeconds)
+            : null,
         strictMode,
         feedbackLevel: feedbackLevel as Assessment['feedbackLevel'],
         feedbackDelayHours,
         classRecordCategory: (classRecordCategory || undefined) as ClassRecordCategory | undefined,
         quarter: (quarter || undefined) as Assessment['quarter'],
+        fileUploadInstructions: assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
+        teacherAttachmentFileId: assessmentType === 'file_upload' ? teacherAttachmentFile?.id ?? null : null,
+        allowedUploadExtensions: assessmentType === 'file_upload' ? allowedUploadExtensions : undefined,
+        allowedUploadMimeTypes: assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
+        maxUploadSizeBytes: assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
         classRecordItemId:
           classRecordCategory && quarter
             ? placementMode === 'manual'
@@ -338,12 +547,57 @@ export default function AssessmentEditorPage() {
               : null
             : null,
       });
-      setAssessment(res.data);
-      setPlacementMode(res.data.classRecordPlacement?.placementMode || placementMode);
-      setSelectedSlotId(res.data.classRecordPlacement?.itemId ?? null);
-      toast.success('Settings saved');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save settings');
+
+      if (assessmentType !== 'file_upload') {
+        const deletedQuestions = savedQuestions.filter(
+          (savedQuestion) => !questions.some((currentQuestion) => currentQuestion.id === savedQuestion.id),
+        );
+        for (const question of deletedQuestions) {
+          if (!question.id.startsWith('temp-')) {
+            await assessmentService.deleteQuestion(question.id);
+          }
+        }
+
+        for (let index = 0; index < questions.length; index += 1) {
+          const question = questions[index];
+          const options = OPTION_QUESTION_TYPES.includes(question.type)
+            ? (question.options || []).map((option, optionIndex) => ({
+                text: option.text,
+                isCorrect: option.isCorrect,
+                order: optionIndex + 1,
+              }))
+            : undefined;
+
+          if (question.id.startsWith('temp-') || question.isNew) {
+            await assessmentService.createQuestion({
+              assessmentId,
+              type: question.type as CreateQuestionDto['type'],
+              content: question.content,
+              points: question.points,
+              order: index + 1,
+              explanation: question.explanation || undefined,
+              imageUrl: question.imageUrl || undefined,
+              options,
+            });
+          } else {
+            await assessmentService.updateQuestion(question.id, {
+              content: question.content,
+              points: question.points,
+              order: index + 1,
+              explanation: question.explanation || undefined,
+              imageUrl: question.imageUrl || undefined,
+              options,
+            });
+          }
+        }
+      }
+
+      setAssessment(assessmentRes.data);
+      await fetchData();
+      toast.success('Assessment updated');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } };
+      toast.error(axiosErr?.response?.data?.message || 'Failed to update assessment');
     } finally {
       setSaving(false);
     }
@@ -352,12 +606,17 @@ export default function AssessmentEditorPage() {
   /* ---------- publish / unpublish ---------- */
   const handleTogglePublish = async () => {
     if (!assessment) return;
+    if (hasPendingChanges) {
+      toast.info('Click Update Assessment first to apply pending changes.');
+      return;
+    }
     try {
       const res = await assessmentService.update(assessmentId, { isPublished: !assessment.isPublished });
       setAssessment(res.data);
       toast.success(assessment.isPublished ? 'Assessment unpublished' : 'Assessment published');
-    } catch (err: any) {
-      const data = err?.response?.data;
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { errors?: string[]; message?: string } } };
+      const data = axiosErr?.response?.data;
       const errors = data?.errors;
       if (Array.isArray(errors) && errors.length > 0) {
         toast.error(errors.join('. '));
@@ -408,38 +667,52 @@ export default function AssessmentEditorPage() {
   const handleSaveQuestion = async () => {
     if (!draftQuestion || !draftQuestion.content.trim()) { toast.error('Question text is required'); return; }
     const d = draftQuestion;
-    try {
-      if (editingQId) {
-        const dto: UpdateQuestionDto = {
+    if (editingQId) {
+      setQuestions((prev) => prev.map((question) => {
+        if (question.id !== editingQId) return question;
+        return {
+          ...question,
           content: d.content,
           points: d.points,
           explanation: d.explanation || undefined,
-          options: OPTION_QUESTION_TYPES.includes(d.type) ? d.options : undefined,
+          imageUrl: d.imageUrl || undefined,
+          options: OPTION_QUESTION_TYPES.includes(d.type)
+            ? d.options.map((option, optionIndex) => ({
+                id: `${question.id}-opt-${optionIndex}`,
+                text: option.text,
+                isCorrect: option.isCorrect,
+                order: optionIndex + 1,
+              }))
+            : [],
         };
-        const res = await assessmentService.updateQuestion(editingQId, dto);
-        setQuestions((prev) => prev.map((q) => (q.id === editingQId ? res.data : q)));
-        toast.success('Question updated');
-      } else {
-        const dto: CreateQuestionDto = {
-          assessmentId,
-          type: d.type as CreateQuestionDto['type'],
-          content: d.content,
-          points: d.points,
-          order: questions.length + 1,
-          explanation: d.explanation || undefined,
-          options: OPTION_QUESTION_TYPES.includes(d.type) ? d.options : undefined,
-        };
-        const res = await assessmentService.createQuestion(dto);
-        setQuestions((prev) => [...prev, res.data]);
-        toast.success('Question added');
-      }
-      cancelDraft();
-      // Re-fetch to get updated totalPoints from backend
-      const fresh = await assessmentService.getById(assessmentId);
-      setAssessment(fresh.data);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to save question');
+      }));
+      toast.success('Question staged');
+    } else {
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const stagedQuestion: LocalQuestion = {
+        id: tempId,
+        assessmentId,
+        type: d.type as AssessmentQuestion['type'],
+        content: d.content,
+        points: d.points,
+        order: questions.length + 1,
+        isRequired: true,
+        explanation: d.explanation || undefined,
+        imageUrl: d.imageUrl || undefined,
+        options: OPTION_QUESTION_TYPES.includes(d.type)
+          ? d.options.map((option, optionIndex) => ({
+              id: `${tempId}-opt-${optionIndex}`,
+              text: option.text,
+              isCorrect: option.isCorrect,
+              order: optionIndex + 1,
+            }))
+          : [],
+        isNew: true,
+      };
+      setQuestions((prev) => [...prev, stagedQuestion]);
+      toast.success('Question staged');
     }
+    cancelDraft();
   };
 
   const handleDeleteQuestion = (id: string) => {
@@ -449,26 +722,23 @@ export default function AssessmentEditorPage() {
       confirmLabel: 'Delete Question',
       tone: 'danger',
       onConfirm: async () => {
-        try {
-          await assessmentService.deleteQuestion(id);
-          setQuestions((prev) => prev.filter((q) => q.id !== id));
-          if (editingQId === id) cancelDraft();
-          const fresh = await assessmentService.getById(assessmentId);
-          setAssessment(fresh.data);
-          toast.success('Question deleted');
-        } catch {
-          toast.error('Failed to delete question');
-        }
+        setQuestions((prev) => prev.filter((q) => q.id !== id));
+        if (editingQId === id) cancelDraft();
+        toast.success('Question staged for removal');
       },
     });
   };
 
   const handleImageUpload = async (questionId: string, file: File) => {
+    if (questionId.startsWith('temp-')) {
+      toast.info('Please click Update Assessment first before uploading an image for a new question.');
+      return;
+    }
     try {
       const res = await assessmentService.uploadQuestionImage(questionId, file);
       setDraftQuestion((prev) => prev ? { ...prev, imageUrl: res.data.imageUrl } : prev);
       setQuestions((prev) => prev.map((q) => q.id === questionId ? { ...q, imageUrl: res.data.imageUrl } : q));
-      toast.success('Image uploaded');
+      toast.success('Image uploaded (click Update Assessment to keep other staged changes)');
     } catch {
       toast.error('Failed to upload image');
     }
@@ -601,19 +871,17 @@ export default function AssessmentEditorPage() {
 
  
       {/* â•â•â•â• Title & Description (Forms-like header card) â•â•â•â• */}
-      <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+      <Card className="teacher-card-panel overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface)] shadow-[var(--teacher-shadow-soft)]">
         <CardContent className="space-y-4 p-6 md:p-7">
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleSaveSettings}
             placeholder="Untitled assessment"
             className="teacher-input rounded-none border-0 border-b border-[var(--teacher-outline-strong)] bg-transparent px-0 text-3xl font-black text-[var(--teacher-text-strong)] focus-visible:border-[var(--teacher-accent)] focus-visible:ring-0"
           />
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            onBlur={handleSaveSettings}
             placeholder="Assessment description (optional)"
             className="teacher-input rounded-none border-0 border-b border-[var(--teacher-outline-strong)] bg-transparent px-0 text-sm text-[var(--teacher-text-muted)] focus-visible:border-[var(--teacher-accent)] focus-visible:ring-0"
           />
@@ -621,7 +889,7 @@ export default function AssessmentEditorPage() {
             <span>Total: <strong className="text-[var(--teacher-text-strong)]">{totalPoints} pts</strong></span>
             <span>Questions: <strong className="text-[var(--teacher-text-strong)]">{questions.length}</strong></span>
             <span>Passing: <strong className="text-[var(--teacher-text-strong)]">{passingScore}%</strong></span>
-            <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className={cn('ml-auto', assessment.isPublished ? 'border border-emerald-400/30 bg-emerald-400/12 text-emerald-100' : 'border border-amber-400/30 bg-amber-400/12 text-amber-100')}>
+            <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className={cn('ml-auto', assessment.isPublished ? 'border border-[var(--teacher-accent)]/35 bg-[var(--teacher-accent)]/12 text-[var(--teacher-accent-strong)]' : 'border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] text-[var(--teacher-text-muted)]')}>
  
               {assessment.isPublished ? 'Published' : 'Draft'}
             </Badge>
@@ -630,9 +898,9 @@ export default function AssessmentEditorPage() {
       </Card>
 
       {editorTab === 'settings' && (
-        <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+        <Card className="teacher-card-panel overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface)] shadow-[var(--teacher-shadow-soft)]">
           <CardContent className="p-5 space-y-6">
-            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-3">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] p-5 space-y-3">
               <p className="text-sm font-semibold">Deadline (required first)</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -641,7 +909,7 @@ export default function AssessmentEditorPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Close assessment automatically at due date</Label>
-                  <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                  <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] px-3 text-sm text-[var(--teacher-text-strong)]">
                     <input
                       type="checkbox"
                       checked={closeWhenDue}
@@ -653,11 +921,11 @@ export default function AssessmentEditorPage() {
               </div>
             </div>
 
-            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] p-5 space-y-4">
               <p className="text-sm font-semibold">Delivery &amp; Anti-cheat</p>
               <div className="space-y-1.5">
                 <Label className="text-xs">Randomize questions and options per student</Label>
-                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] px-3 text-sm text-[var(--teacher-text-strong)]">
                   <input
                     type="checkbox"
                     checked={randomizeQuestions}
@@ -668,7 +936,7 @@ export default function AssessmentEditorPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Timed questions</Label>
-                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] px-3 text-sm text-[var(--teacher-text-strong)]">
                   <input
                     type="checkbox"
                     checked={timedQuestionsEnabled}
@@ -698,7 +966,7 @@ export default function AssessmentEditorPage() {
               )}
               <div className="space-y-1.5">
                 <Label className="text-xs">Strict mode</Label>
-                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] px-3 text-sm text-[var(--teacher-text-strong)]">
+                <label className="flex min-h-11 items-center gap-2 rounded-xl border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] px-3 text-sm text-[var(--teacher-text-strong)]">
                   <input
                     type="checkbox"
                     checked={strictMode}
@@ -709,7 +977,7 @@ export default function AssessmentEditorPage() {
               </div>
             </div>
 
-            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] p-5 space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">Class Record Placement</p>
@@ -771,8 +1039,8 @@ export default function AssessmentEditorPage() {
                   className={cn(
                     'rounded-xl border px-4 py-3 text-left transition',
                     placementMode === 'automatic'
-                      ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
-                      : 'border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] text-[var(--teacher-text-strong)] hover:border-emerald-300/60',
+                      ? 'border-[var(--teacher-accent)] bg-[var(--teacher-accent)]/10 text-[var(--teacher-accent-strong)]'
+                      : 'border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] text-[var(--teacher-text-strong)] hover:border-[var(--teacher-accent)]/60',
                   )}
                 >
                   <p className="text-sm font-black">Automatic</p>
@@ -786,8 +1054,8 @@ export default function AssessmentEditorPage() {
                   className={cn(
                     'rounded-xl border px-4 py-3 text-left transition',
                     placementMode === 'manual'
-                      ? 'border-sky-400 bg-sky-500/10 text-sky-100'
-                      : 'border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.7)] text-[var(--teacher-text-strong)] hover:border-sky-300/60',
+                      ? 'border-[var(--teacher-accent)] bg-[var(--teacher-accent)]/10 text-[var(--teacher-accent-strong)]'
+                      : 'border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] text-[var(--teacher-text-strong)] hover:border-[var(--teacher-accent)]/60',
                   )}
                 >
                   <p className="text-sm font-black">Pick a slot</p>
@@ -798,15 +1066,15 @@ export default function AssessmentEditorPage() {
               </div>
 
               {!classRecordCategory || !quarter ? (
-                <div className="rounded-xl border border-dashed border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.52)] px-4 py-3 text-sm text-[var(--teacher-text-muted)]">
+                <div className="rounded-xl border border-dashed border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] px-4 py-3 text-sm text-[var(--teacher-text-muted)]">
                   Select a class record category and quarter to inspect the workbook slots.
                 </div>
               ) : slotOverviewLoading ? (
-                <div className="rounded-xl border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.52)] px-4 py-4 text-sm text-[var(--teacher-text-muted)]">
+                <div className="rounded-xl border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] px-4 py-4 text-sm text-[var(--teacher-text-muted)]">
                   Loading class record slots...
                 </div>
               ) : slotOverviewError ? (
-                <div className="rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-4 space-y-3 text-sm text-amber-100">
+                <div className="rounded-xl border border-[var(--teacher-warning)]/40 bg-[var(--teacher-warning)]/10 px-4 py-4 space-y-3 text-sm text-[var(--teacher-warning-foreground)]">
                   <p className="font-semibold">This assessment cannot be placed yet.</p>
                   <p>{slotOverviewError}</p>
                   <Button
@@ -838,8 +1106,8 @@ export default function AssessmentEditorPage() {
                         className={cn(
                           'rounded-2xl border p-4 space-y-3',
                           category.key === classRecordCategory
-                            ? 'border-[var(--teacher-accent)] bg-[rgba(15,23,42,0.78)]'
-                            : 'border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.52)]',
+                            ? 'border-[var(--teacher-accent)] bg-[var(--teacher-surface)]'
+                            : 'border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)]',
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -873,12 +1141,12 @@ export default function AssessmentEditorPage() {
                                 className={cn(
                                   'rounded-xl border px-3 py-3 text-left transition',
                                   isSelected
-                                    ? 'border-sky-400 bg-sky-500/10 text-sky-100'
+                                    ? 'border-[var(--teacher-accent)] bg-[var(--teacher-accent)]/10 text-[var(--teacher-accent-strong)]'
                                     : slot.status === 'empty'
-                                      ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                                      ? 'border-[var(--teacher-success)]/40 bg-[var(--teacher-success)]/10 text-[var(--teacher-success-foreground)]'
                                       : slot.status === 'manual'
-                                        ? 'border-amber-400/40 bg-amber-500/10 text-amber-100'
-                                        : 'border-violet-400/40 bg-violet-500/10 text-violet-100',
+                                        ? 'border-[var(--teacher-warning)]/40 bg-[var(--teacher-warning)]/10 text-[var(--teacher-warning-foreground)]'
+                                        : 'border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface)] text-[var(--teacher-text-strong)]',
                                   !canChoose && 'cursor-not-allowed opacity-70',
                                 )}
                                 title={
@@ -930,7 +1198,7 @@ export default function AssessmentEditorPage() {
               ) : null}
             </div>
 
-            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] p-5 space-y-4">
               <p className="text-sm font-semibold">General</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {assessmentType !== 'file_upload' && (
@@ -950,7 +1218,7 @@ export default function AssessmentEditorPage() {
               </div>
             </div>
 
-            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] p-5 space-y-4">
               <p className="text-sm font-semibold">Attempts &amp; Feedback</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -1091,9 +1359,9 @@ export default function AssessmentEditorPage() {
       )}
 
       {editorTab === 'fileUpload' && assessmentType === 'file_upload' && (
-        <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+        <Card className="teacher-card-panel overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface)] shadow-[var(--teacher-shadow-soft)]">
           <CardContent className="p-5 space-y-4">
-            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[rgba(8,18,33,0.66)] p-5 space-y-4">
+            <div className="rounded-[1.4rem] border border-[var(--teacher-outline-strong)] bg-[var(--teacher-surface-soft)] p-5 space-y-4">
               <p className="text-sm font-semibold">File Upload Assessment</p>
               <div className="space-y-1.5">
                 <Label className="text-xs">Instruction for students</Label>
@@ -1183,7 +1451,7 @@ export default function AssessmentEditorPage() {
 
       {/* â•â•â•â• Question Cards (inline, Forms-style) â•â•â•â• */}
       {editorTab === 'questions' && assessmentType === 'file_upload' && (
-        <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(30,41,59,0.82))] shadow-[0_28px_60px_-40px_rgba(2,6,23,0.7)]">
+        <Card className="teacher-card-panel overflow-hidden rounded-[1.6rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface)] shadow-[var(--teacher-shadow-soft)]">
           <CardContent className="p-5 space-y-2 text-sm text-[var(--teacher-text-muted)]">
             <p className="font-medium text-[var(--teacher-text-strong)]">File upload mode enabled</p>
             <p>
@@ -1218,7 +1486,7 @@ export default function AssessmentEditorPage() {
         }
 
         return (
-          <Card key={q.id} className="group cursor-pointer overflow-hidden rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,rgba(15,23,42,0.84),rgba(30,41,59,0.78))] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[0_28px_60px_-36px_rgba(2,6,23,0.68)]" onClick={() => startEditQuestion(q)}>
+          <Card key={q.id} className="teacher-card-panel group cursor-pointer overflow-hidden rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[var(--teacher-shadow-soft)]" onClick={() => startEditQuestion(q)}>
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 mb-1.5">
@@ -1244,7 +1512,7 @@ export default function AssessmentEditorPage() {
               {q.options && q.options.length > 0 && (
                 <ul className="mt-2 space-y-0.5 text-sm">
                   {[...q.options].sort((a, b) => a.order - b.order).map((opt) => (
-                    <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-emerald-200 font-medium' : 'text-[var(--teacher-text-muted)]'}`}>
+                    <li key={opt.id} className={`pl-3 flex items-center gap-1.5 ${opt.isCorrect ? 'text-[var(--teacher-accent-strong)] font-medium' : 'text-[var(--teacher-text-muted)]'}`}>
  
                       <span className="w-3">{opt.isCorrect ? 'âœ“' : 'â—‹'}</span>{opt.text}
                     </li>
@@ -1272,7 +1540,7 @@ export default function AssessmentEditorPage() {
 
       {/* â•â•â•â• Add Question Bar â•â•â•â• */}
       {editorTab === 'questions' && assessmentType !== 'file_upload' && !addingType && (
-        <Card className="overflow-hidden rounded-[1.6rem] border border-dashed border-[var(--teacher-outline)] bg-[rgba(15,23,42,0.62)]">
+        <Card className="overflow-hidden rounded-[1.6rem] border border-dashed border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)]">
           <CardContent className="p-5">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--teacher-accent)]/14 text-[var(--teacher-accent-strong)]">+</div>
@@ -1336,7 +1604,7 @@ function QuestionEditCard({
   };
 
   return (
-    <Card className="overflow-hidden rounded-[1.6rem] border border-[var(--teacher-accent)]/35 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(30,41,59,0.84))] shadow-[0_30px_60px_-38px_rgba(2,6,23,0.72)]">
+    <Card className="teacher-card-panel overflow-hidden rounded-[1.6rem] border border-[var(--teacher-accent)]/35 bg-[var(--teacher-surface)] shadow-[var(--teacher-shadow-soft)]">
       <CardContent className="p-5 space-y-4">
         {/* header */}
         <div className="flex items-center gap-2">

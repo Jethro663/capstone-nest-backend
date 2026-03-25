@@ -1413,7 +1413,7 @@ export class AssessmentsService {
       updateData.rubricSourceFileId = updateAssessmentDto.rubricSourceFileId;
       updateData.rubricParseStatus = updateAssessmentDto.rubricSourceFileId
         ? existingAssessment.rubricParseStatus ?? 'pending'
-        : null;
+        : 'pending';
     }
     if (updateAssessmentDto.allowedUploadMimeTypes !== undefined)
       updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
@@ -1447,7 +1447,7 @@ export class AssessmentsService {
         updateAssessmentDto.rubricCriteria,
       );
       updateData.rubricCriteria = rubricCriteria;
-      updateData.rubricParseStatus = rubricCriteria.length > 0 ? 'reviewed' : null;
+      updateData.rubricParseStatus = rubricCriteria.length > 0 ? 'reviewed' : 'pending';
       updateData.rubricParsedAt = rubricCriteria.length > 0 ? new Date() : null;
       updateData.totalPoints = rubricCriteria.length > 0
         ? this.sumRubricPoints(rubricCriteria)
@@ -1458,7 +1458,7 @@ export class AssessmentsService {
       updateData.fileUploadInstructions = null;
       updateData.teacherAttachmentFileId = null;
       updateData.rubricSourceFileId = null;
-      updateData.rubricParseStatus = null;
+      updateData.rubricParseStatus = 'pending';
       updateData.rubricParsedAt = null;
       updateData.rubricRawText = null;
       updateData.rubricParseError = null;
