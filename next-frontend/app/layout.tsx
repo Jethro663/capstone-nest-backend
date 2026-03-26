@@ -8,6 +8,11 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Nexora - Learning Experience Platform',
   description: 'A comprehensive LMS for educators and learners',
+  icons: {
+    icon: '/NexoraHome.png',
+    shortcut: '/NexoraHome.png',
+    apple: '/NexoraHome.png',
+  },
 };
 
 export default function RootLayout({

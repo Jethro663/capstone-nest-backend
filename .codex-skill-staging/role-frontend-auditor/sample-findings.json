@@ -1,0 +1,25 @@
+{
+  "role": "admin",
+  "routes": ["/dashboard/admin", "/dashboard/admin/users"],
+  "skipped": ["Delete user buttons were skipped by default policy."],
+  "runMeta": {
+    "frontendRoot": "next-frontend",
+    "seedFile": "backend/seed-database.js",
+    "baseUrl": "http://127.0.0.1:3001"
+  },
+  "findings": [
+    {
+      "title": "Users page search throws client error",
+      "severity": "high",
+      "route": "/dashboard/admin/users",
+      "action": "Type into the user search input",
+      "symptom": "The page crashes after the first keypress.",
+      "evidence": "Browser console shows a TypeError in the users page state update path.",
+      "owner": "frontend",
+      "source": "next-frontend/app/(dashboard)/dashboard/admin/users/page.tsx",
+      "repro": "Log in as admin, open Users, type one character into the search input.",
+      "fixIntent": "Guard the search-state normalization path so undefined collection data cannot be filtered before load completes.",
+      "verification": "Repeat the admin Users search flow and confirm the table filters without a console error."
+    }
+  ]
+}

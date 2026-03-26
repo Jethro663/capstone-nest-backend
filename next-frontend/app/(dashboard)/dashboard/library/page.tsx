@@ -27,7 +27,7 @@ import {
   TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -603,6 +603,9 @@ export default function NexoraLibraryPage() {
             <DialogTitle className="text-2xl font-black tracking-tight text-[var(--teacher-text-strong)]">
               Create Folder
             </DialogTitle>
+            <DialogDescription className="text-sm text-[var(--teacher-text-muted)]">
+              Create a private library folder to group related modules and uploaded resources.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Folder Name</Label>
@@ -630,6 +633,9 @@ export default function NexoraLibraryPage() {
             <DialogTitle className="text-2xl font-black tracking-tight text-[var(--teacher-text-strong)]">
               Rename {renameState?.type === 'folder' ? 'Folder' : 'File'}
             </DialogTitle>
+            <DialogDescription className="text-sm text-[var(--teacher-text-muted)]">
+              Update the display name shown in your library while keeping the item in its current location.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <Label className="text-sm font-black text-[var(--teacher-text-strong)]">New Name</Label>

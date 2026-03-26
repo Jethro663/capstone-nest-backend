@@ -1,0 +1,4 @@
+interface:
+  display_name: "Role Frontend Auditor"
+  short_description: "Role-scoped Playwright UI audit skill"
+  default_prompt: "Use $role-frontend-auditor to complete testing for admin in this repo."
