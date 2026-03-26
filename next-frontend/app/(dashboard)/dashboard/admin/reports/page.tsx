@@ -4,8 +4,8 @@ export default function AdminReportsPage() {
   return (
     <div className="theme-admin-bridge">
       <ClassRecordReportsPage
-        heading="Admin Reports"
-        description="Inspect teacher class record outcomes and intervention lists across available classes."
+        heading="Reports"
+        description="Inspect class records, performance, intervention, and usage views across the platform."
         scope="admin"
       />
     </div>

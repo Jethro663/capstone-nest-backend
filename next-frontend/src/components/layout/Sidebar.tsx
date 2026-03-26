@@ -101,12 +101,19 @@ interface SidebarProps {
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const items = getNavItems(role).map((item) =>
     item.label === 'Profile' ? { ...item, href: getProfileRoute(role) } : item,
   );
   const isStudentRoute = pathname.startsWith('/dashboard/student');
   const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
+  const isAdminRoute = role === 'admin' && !isStudentRoute && !isTeacherRoute;
+  const displayName = user?.firstName
+    ? `${user.firstName} ${user.lastName ?? ''}`.trim()
+    : user?.email ?? 'Admin User';
+  const initials = user?.firstName
+    ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase()
+    : 'A';
 
   const handleLogout = async () => {
     await logoutAction();
@@ -118,22 +125,35 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-200 md:static md:translate-x-0',
         isStudentRoute && 'student-sidebar',
         isTeacherRoute && 'teacher-sidebar',
+        isAdminRoute && 'admin-sidebar',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
       <div className={cn('flex h-16 items-center justify-between border-b px-4', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
-        <div>
-          <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]', isTeacherRoute && 'text-[var(--teacher-text-strong)]')}>Nexora</h1>
-          <p className={cn('text-xs text-muted-foreground', isStudentRoute && 'text-[var(--student-text-muted)]', isTeacherRoute && 'text-[var(--teacher-text-muted)]')}>
-            {getRoleLabel(role)}
-          </p>
-        </div>
+        {isAdminRoute ? (
+          <div className="admin-sidebar__brand">
+            <div className="admin-sidebar__logo">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <div>
+              <h1 className="admin-sidebar__title">Nexora</h1>
+              <p className="admin-sidebar__subtitle">Admin Portal</p>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]', isTeacherRoute && 'text-[var(--teacher-text-strong)]')}>Nexora</h1>
+            <p className={cn('text-xs text-muted-foreground', isStudentRoute && 'text-[var(--student-text-muted)]', isTeacherRoute && 'text-[var(--teacher-text-muted)]')}>
+              {getRoleLabel(role)}
+            </p>
+          </div>
+        )}
         <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
           <X className="h-5 w-5" />
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+      <nav className={cn('flex-1 space-y-1 overflow-y-auto p-3', isAdminRoute && 'admin-sidebar__nav')}>
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
@@ -150,12 +170,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                     ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]'
                     : isTeacherRoute
                       ? 'bg-white/10 text-[var(--teacher-text-strong)]'
-                    : 'bg-primary/10 text-primary'
+                    : isAdminRoute
+                      ? 'admin-sidebar__item admin-sidebar__item--active'
+                      : 'bg-primary/10 text-primary'
                   : isStudentRoute
                     ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]'
                     : isTeacherRoute
                       ? 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-[var(--teacher-text-strong)]'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    : isAdminRoute
+                      ? 'admin-sidebar__item'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -165,20 +189,40 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         })}
       </nav>
 
-      <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
-        <Button
-          variant="ghost"
-          className={cn(
-            'w-full justify-start gap-3 text-muted-foreground hover:text-destructive',
-            isStudentRoute && 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]',
-            isTeacherRoute && 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-rose-200',
-          )}
-          onClick={handleLogout}
-        >
-          <LogOut className="h-4 w-4" />
-          Logout
-        </Button>
-      </div>
+      {isAdminRoute ? (
+        <div className="admin-sidebar__footer">
+          <div className="admin-sidebar__profile">
+            <div className="admin-sidebar__avatar">{initials}</div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">{displayName}</p>
+              <p className="truncate text-xs text-[var(--admin-sidebar-text)]">admin</p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            className="admin-sidebar__logout"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      ) : (
+        <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
+          <Button
+            variant="ghost"
+            className={cn(
+              'w-full justify-start gap-3 text-muted-foreground hover:text-destructive',
+              isStudentRoute && 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]',
+              isTeacherRoute && 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-rose-200',
+            )}
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+      )}
     </aside>
   );
 }

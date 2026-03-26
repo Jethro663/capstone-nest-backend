@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nexora Context Router"
+  short_description: "Repo-aware kernel and slice selector for the Nexora LMS/LXP workspace"
+  default_prompt: "Use $nexora-context-router to route this Nexora task before implementation."

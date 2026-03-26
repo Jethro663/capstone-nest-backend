@@ -1,76 +1,71 @@
-# Backend Agent Guide
+# Backend Slice
 
-## Purpose
-- Scope: `backend/` only.
-- Stack: NestJS 11, Drizzle ORM, PostgreSQL, BullMQ, EventEmitter, Swagger, JWT auth.
-- Role: system boundary for auth, RBAC, HTTP API, queue/event orchestration, database writes, AI proxying.
+Scope: `backend/` only.
 
-## Entrypoints / run commands
+## Rule IDs In Play
+
+- `ARCH-1`, `ARCH-2`, `ARCH-3`, `ARCH-4`
+- `AUTH-1`, `AUTH-2`, `VALID-1`, `RESP-1`, `ERR-1`, `AUD-1`
+- `DOM-1`, `DOM-3`, `AI-1`, `AI-2`, `AI-3`, `INT-1`, `INT-2`, `REC-1`, `DATA-1`, `DATA-2`
+
+## Entrypoints
+
 - Install: `npm install`
 - Dev: `npm run start:dev`
 - Build: `npm run build`
 - Lint: `npm run lint`
 - Unit tests: `npm run test`
 - E2E: `npm run test:e2e`
-- Drizzle config: `drizzle.config.ts`
-- App boot: `src/main.ts`
+- Boot: `src/main.ts`
 - Module graph root: `src/app.module.ts`
+- Drizzle config: `drizzle.config.ts`
 
-## Architecture / folder map
-- `src/modules/*`: feature modules; default place for controllers, services, DTOs, listeners, guards.
-- `src/database/*`: shared `DatabaseService`; inject this, do not create ad hoc pools.
-- `src/drizzle/schema/*`: schema source of truth; update here when data model changes.
-- `src/config/*`: typed config loaders for DB, JWT, Redis, Ollama.
-- `src/common/*`: shared filters, logger, utils, events, constants.
-- `drizzle/*`: SQL migrations and meta snapshots.
-- Major modules currently wired in `AppModule`: auth, users, roles, otp, sections, classes, lessons, assessments, profiles, admin, teacher, health, metrics, file-upload, roster-import, class-record, announcements, notifications, ai-mentor, performance, lxp, teacher-profiles, audit, reports, analytics, rag.
+## Owning Paths
 
-## Change workflow
-- Start at the owning feature under `src/modules/<feature>`.
-- Route/validation/auth in controller, business logic in service, persistence via `DatabaseService`.
-- Add/update DTOs before controller signatures.
-- Update schema in `src/drizzle/schema/*` when table shape changes.
-- Add SQL migration in `drizzle/*` for persistent schema changes.
-- Register new feature wiring in `<feature>.module.ts`; add to `AppModule` only for top-level modules.
-- If mobile or frontend contract changes, keep response envelopes and field names compatible.
+- `src/modules/*`: feature modules, controllers, services, DTOs, listeners, guards
+- `src/database/*`: shared `DatabaseService`
+- `src/drizzle/schema/*`: schema source of truth
+- `drizzle/*`: migrations and snapshots
+- `src/common/*`: filters, logger, constants, shared utilities
+- `src/config/*`: typed config for DB, JWT, Redis, Ollama
 
-## Patterns to follow
-- Controllers delegate only; no business rules or raw DB access there.
-- Services use `private get db() { return this.databaseService.db; }` pattern.
-- Responses use envelope style: `success`, `message`, `data`.
-- Validation is global in `src/main.ts`; DTOs should use `class-validator`.
-- Global prefix is `/api`.
-- Global guards already apply JWT auth and throttling; add `@Public()` only when intentionally unauthenticated.
-- Role checks use `@Roles(...)` plus `RolesGuard`.
-- Web auth uses httpOnly refresh cookie flows in `auth.controller.ts`.
-- Mobile auth uses `/auth/mobile/*` token flows; never assume cookies for mobile.
-- AI access stays behind Nest auth/RBAC; `AiProxyService` forwards headers to Python service.
+## Working Rules
 
-## Do not break / invariants
-- `src/main.ts` boot contract: validation pipe, CORS, cookie parser, metrics interceptor, Swagger only outside production, global `/api`.
-- `AppModule` global providers: `GlobalExceptionFilter`, `JwtAuthGuard`, `ThrottlerGuard`.
-- No direct cross-module private internals; use exported services/interfaces.
-- Preserve academic record integrity: no unofficial writes to class records, grades, enrollments, intervention history.
-- LXP eligibility is computed; avoid storing stale flags without recalculation logic.
-- AI features stay read-only for official records; logging belongs in dedicated AI/audit tables.
-- Keep error semantics aligned with Nest exceptions and existing status codes.
+- Respect `ARCH-1`: controllers route, validate, delegate, and format only.
+- Respect `ARCH-2` and `ARCH-3`: services own orchestration and use `private get db() { return this.databaseService.db; }`.
+- Respect `RESP-1`: preserve `success/message/data` unless the task explicitly changes the API contract.
+- Respect `AUTH-1` and `AUTH-2`: JWT auth is global; role checks stay explicit; `@Public()` must be intentional.
+- Respect `VALID-1`: DTOs use `class-validator`; validation assumptions come from `src/main.ts`.
+- Respect `AUD-1`: writes to grades, enrollment, interventions, and similar academic surfaces should be auditable.
 
-## Where to add or modify code
-- New endpoint in existing domain: update `src/modules/<feature>/<feature>.controller.ts`, service, DTOs, tests.
-- New DB tables/columns: `src/drizzle/schema/*` plus `drizzle/*.sql`.
-- Shared auth/role behavior: `src/modules/auth/*`.
-- AI-to-Python proxy behavior: `src/modules/ai-mentor/ai-proxy.service.ts` and controller/DTOs in the same module.
-- Queue processors / async jobs: BullMQ-backed modules such as notifications or rag.
-- Shared utilities or app-wide behavior: `src/common/*`, `src/config/*`, `src/main.ts`, `src/app.module.ts`.
+## Change Workflow
 
-## Validation / tests
-- Prefer targeted spec updates in the touched module: `src/modules/**/**/*.spec.ts`.
-- Full backend smoke checks: `npm run test`, `npm run test:e2e`, `npm run build`.
-- Run `npm run lint` after structural TypeScript changes.
-- For schema changes, verify migration + schema file stay aligned.
+1. Start at the owning feature in `src/modules/<feature>/`.
+2. Update DTOs before controller signatures.
+3. Keep business logic in the service and persistence in Drizzle calls through `DatabaseService`.
+4. Update `src/drizzle/schema/*` plus `drizzle/*` when the persistent model changes.
+5. Register feature wiring in `<feature>.module.ts`; only touch `AppModule` for top-level wiring.
+6. If the API contract changes, trace impact into `next-frontend` or `test-mobile`.
 
-## Cross-service touchpoints
-- `next-frontend` and `test-mobile` consume this API; preserve envelope and auth contracts unless coordinated.
-- `ai-service` is internal; backend owns auth, RBAC, timeout policy, and forwarded headers.
-- File uploads and AI extraction share backend-managed upload paths and DB records.
-- Mobile auth depends on `/auth/mobile/login`, `/auth/mobile/refresh`, `/auth/mobile/logout`.
+## Current Repo Anchors
+
+- Global guards and filter: `GlobalExceptionFilter`, `JwtAuthGuard`, `ThrottlerGuard` in `src/app.module.ts`
+- Global `/api` prefix, validation, cookie parser, CORS, Swagger gating: `src/main.ts`
+- AI proxy boundary: `src/modules/ai-mentor/ai-proxy.service.ts`
+- LXP and performance eligibility logic: `src/modules/lxp`, `src/modules/performance`
+- Audit logging: `src/modules/audit`
+
+## Do Not Break
+
+- `DOM-3`: LXP never writes official class records.
+- `AI-1` and `AI-3`: AI features stay read-only for official records and log separately.
+- `INT-1` and `INT-2`: intervention activation remains approved and history remains append-only.
+- `REC-1`: reviewed assessment scores are not casually mutable.
+- `DATA-1` and `DATA-2`: do not introduce stale stored totals or stale eligibility flags.
+
+## Verification
+
+- Prefer targeted specs under `src/modules/**/**/*.spec.ts`.
+- Run `npm run build` after structural backend edits.
+- Run `npm run lint` after TypeScript refactors.
+- Run `npm run test` and `npm run test:e2e` when behavior changes are broad or high risk.

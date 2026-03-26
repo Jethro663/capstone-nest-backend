@@ -4,8 +4,8 @@ export default function AdminEvaluationsPage() {
   return (
     <div className="theme-admin-bridge">
       <SystemEvaluationsPage
-        heading="System Evaluations"
-        description="Review submitted LMS/LXP evaluation responses from across the platform."
+        heading="Evaluations"
+        description="Review submitted LMS and LXP evaluation responses from across the platform."
       />
     </div>
   );

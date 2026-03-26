@@ -98,13 +98,13 @@ export function AuditLogPage() {
   return (
     <AdminPageShell
       badge="Admin Audit Trail"
-      title="Audit and Usage Oversight"
-      description="Sensitive actions and usage summaries now sit in a cleaner oversight workspace, with stronger filters, clearer tabs, and more readable tables."
+      title="Audit Trail"
+      description="Review sensitive admin activity and usage summaries from one audit trail workspace."
       actions={(
         <Button variant="outline" className="admin-button-outline rounded-xl px-4 font-black" asChild>
           <a href={adminService.getActivityExportUrl({ dateFrom: dateFrom || undefined, dateTo: dateTo || undefined })}>
             <Download className="h-4 w-4" />
-            Export CSV
+            Export Log
           </a>
         </Button>
       )}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Uncodixify"
+  short_description: "Make frontend UI feel cleaner, calmer, and less AI-generated"
+  default_prompt: "Use $uncodixify to clean up this UI while preserving the existing design system where possible."

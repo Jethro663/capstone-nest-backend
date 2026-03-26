@@ -5,8 +5,9 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, Menu } from 'lucide-react';
+import { Bell, ChevronDown, Menu } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
+import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getProfileRoute } from '@/utils/profile';
@@ -19,8 +20,11 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, role } = useAuth();
+  const { unreadCount } = useNotifications();
   const isStudentRoute = pathname.startsWith('/dashboard/student');
   const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
+  const isAdminRoute = pathname.startsWith('/dashboard') && !isStudentRoute && !isTeacherRoute;
+  const firstName = user?.firstName ?? 'Admin';
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName ?? ''}`.trim()
     : user?.email ?? 'User';
@@ -32,6 +36,53 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
     user?.teacherProfile?.profilePicture ??
     user?.profilePicture;
   const profileHref = getProfileRoute(role);
+
+  if (isAdminRoute) {
+    return (
+      <header className="admin-topbar">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" className="admin-topbar__menu md:hidden" onClick={onMenuToggle}>
+            <Menu className="h-5 w-5" />
+          </Button>
+          <div className="admin-topbar__welcome">
+            <p className="admin-topbar__title">Welcome back, {firstName}</p>
+          </div>
+        </div>
+
+        <div className="admin-topbar__actions">
+          <button
+            type="button"
+            className="admin-topbar__notif"
+            onClick={() => router.push('/dashboard/notifications')}
+            title="Notifications"
+          >
+            <div className="relative">
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 ? (
+                <span className="admin-topbar__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+              ) : null}
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push(profileHref)}
+            className="admin-topbar__profile"
+          >
+            <Avatar className="h-9 w-9 border border-[#f5d4d4]">
+              {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+              <AvatarFallback className="admin-topbar__profile-avatar">{initials}</AvatarFallback>
+            </Avatar>
+            <span className="admin-topbar__profile-copy">
+              <span className="admin-topbar__profile-name">{displayName}</span>
+              <span className="admin-topbar__profile-role">Admin Portal</span>
+            </span>
+            <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+          </button>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className={`flex h-16 items-center justify-between border-b px-4 ${isStudentRoute ? 'student-topbar' : isTeacherRoute ? 'teacher-topbar' : 'bg-white'}`}>

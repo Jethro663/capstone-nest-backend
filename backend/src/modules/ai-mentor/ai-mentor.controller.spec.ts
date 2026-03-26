@@ -96,6 +96,22 @@ describe('AiMentorController', () => {
       });
       expect(result).toEqual({ status: 'ok' });
     });
+
+    it('should return an offline fallback when the AI service is unavailable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const result = await controller.health();
+
+      expect(result).toEqual({
+        success: true,
+        degraded: true,
+        message: 'AI service unavailable; reporting offline status.',
+        data: {
+          ollamaAvailable: false,
+          configuredModel: 'offline',
+        },
+      });
+    });
   });
 
   // =========================================================================
@@ -157,6 +173,19 @@ describe('AiMentorController', () => {
         TEACHER_USER,
       );
       expect(result).toEqual([{ id: EXTRACTION_ID }]);
+    });
+
+    it('should return an empty-list fallback when extraction history is unavailable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const result = await controller.listExtractions(CLASS_ID, TEACHER_USER);
+
+      expect(result).toEqual({
+        success: true,
+        degraded: true,
+        message: 'AI extraction history unavailable; returning an empty list.',
+        data: [],
+      });
     });
   });
 
@@ -342,6 +371,19 @@ describe('AiMentorController', () => {
         STUDENT_USER,
       );
       expect(result).toEqual([{ id: 'log-1' }]);
+    });
+
+    it('should return an empty history fallback when the AI service is unavailable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const result = await controller.history(STUDENT_USER);
+
+      expect(result).toEqual({
+        success: true,
+        degraded: true,
+        message: 'AI history unavailable; returning an empty list.',
+        data: [],
+      });
     });
   });
 });

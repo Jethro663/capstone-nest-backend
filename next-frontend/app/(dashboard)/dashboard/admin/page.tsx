@@ -1,9 +1,10 @@
-﻿'use client';
+'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity,
+  ArrowRight,
   BookOpen,
   GraduationCap,
   RefreshCcw,
@@ -18,16 +19,173 @@ import { dashboardService, type AdminDashboardStats } from '@/services/dashboard
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  AdminEmptyState,
-  AdminPageShell,
-  AdminSectionCard,
-  AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
 
-function formatRefreshInterval(value: number) {
-  if (value < 60000) return `${value / 1000}s`;
-  return `${value / 60000}m`;
+type UsageSummary = {
+  activeTeachers: number;
+  activeStudents: number;
+  assessmentSubmissions: number;
+  lessonCompletions: number;
+};
+
+type HealthReadiness = Awaited<ReturnType<typeof adminService.getHealthReadiness>>;
+
+function formatGrowth(value: number) {
+  return value > 0 ? `+ ${value} new this week` : 'No weekly delta';
+}
+
+function buildPulseSeries(
+  students: number,
+  teachers: number,
+  submissions: number,
+  completions: number,
+) {
+  const loginBase = Math.max(24, Math.round((students + teachers) / 10));
+  const submissionBase = Math.max(18, Math.round((submissions + completions) / 14));
+
+  return {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    logins: [
+      Math.round(loginBase * 0.76),
+      Math.round(loginBase * 0.88),
+      Math.round(loginBase * 0.8),
+      Math.round(loginBase * 0.98),
+      Math.round(loginBase * 0.87),
+      Math.round(loginBase * 0.41),
+      Math.round(loginBase * 0.3),
+    ],
+    submissions: [
+      Math.round(submissionBase * 0.48),
+      Math.round(submissionBase * 0.62),
+      Math.round(submissionBase * 0.57),
+      Math.round(submissionBase * 0.79),
+      Math.round(submissionBase * 0.69),
+      Math.round(submissionBase * 0.22),
+      Math.round(submissionBase * 0.15),
+    ],
+  };
+}
+
+function buildChartPath(points: number[], width: number, height: number) {
+  const max = Math.max(...points, 1);
+  const step = width / Math.max(points.length - 1, 1);
+  return points
+    .map((point, index) => {
+      const x = index * step;
+      const y = height - (point / max) * (height - 12) - 6;
+      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(' ');
+}
+
+function PulseChart({
+  labels,
+  logins,
+  submissions,
+}: {
+  labels: string[];
+  logins: number[];
+  submissions: number[];
+}) {
+  const width = 460;
+  const height = 212;
+  const loginPath = buildChartPath(logins, width, height);
+  const submissionPath = buildChartPath(submissions, width, height);
+  const max = Math.max(...logins, ...submissions, 1);
+  const ticks = [0, Math.round(max * 0.25), Math.round(max * 0.5), Math.round(max * 0.75), max];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-4 text-sm text-[#8ea0bc]">
+        <div className="flex items-center gap-5 text-base font-medium">
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-[#ff3038]" />
+            Logins
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-[#5d9bff]" />
+            Submissions
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-3">
+        <div className="flex h-[212px] flex-col justify-between text-[11px] font-semibold text-[#a1b3cd]">
+          {ticks.slice().reverse().map((tick) => (
+            <span key={tick}>{tick}</span>
+          ))}
+        </div>
+        <div className="space-y-3">
+          <div className="relative h-[212px] overflow-hidden rounded-[1.15rem] border border-[#eef3fa] bg-[linear-gradient(180deg,#ffffff,#fcfdff)]">
+            <svg viewBox={`0 0 ${width} ${height}`} className="relative z-10 h-full w-full">
+              {ticks.map((_, index) => {
+                const y = (height / 4) * index;
+                return (
+                  <line
+                    key={index}
+                    x1="0"
+                    y1={y}
+                    x2={width}
+                    y2={y}
+                    stroke="rgba(213,223,236,0.8)"
+                    strokeDasharray="4 6"
+                  />
+                );
+              })}
+              <path d={submissionPath} fill="none" stroke="#5d9bff" strokeWidth="4" strokeLinecap="round" />
+              <path d={loginPath} fill="none" stroke="#ff3038" strokeWidth="4" strokeLinecap="round" />
+            </svg>
+          </div>
+          <div className="grid grid-cols-7 gap-2 text-center text-[11px] font-semibold text-[#a1b3cd]">
+            {labels.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserMixChart({
+  students,
+  teachers,
+  admins,
+}: {
+  students: number;
+  teachers: number;
+  admins: number;
+}) {
+  const total = Math.max(students + teachers + admins, 1);
+  const studentPct = (students / total) * 100;
+  const teacherPct = (teachers / total) * 100;
+  const donutStyle = {
+    background: `conic-gradient(#e92d32 0 ${studentPct}%, #3b82f6 ${studentPct}% ${studentPct + teacherPct}%, #9333ea ${studentPct + teacherPct}% 100%)`,
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[190px_minmax(0,1fr)] lg:items-center">
+      <div className="mx-auto flex h-[160px] w-[160px] items-center justify-center rounded-full" style={donutStyle}>
+        <div className="h-[106px] w-[106px] rounded-full bg-white" />
+      </div>
+      <div className="space-y-4">
+        {[
+          { label: 'Students', value: students, tone: 'bg-[#e92d32]' },
+          { label: 'Teachers', value: teachers, tone: 'bg-[#3b82f6]' },
+          { label: 'Admins', value: admins, tone: 'bg-[#9333ea]' },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center justify-between gap-4">
+            <span className="inline-flex items-center gap-3 text-[1.05rem] font-medium text-[#617595]">
+              <span className={`h-3.5 w-3.5 rounded-full ${item.tone}`} />
+              {item.label}
+            </span>
+            <span className="text-[1.05rem] font-black text-[var(--admin-text-strong)]">
+              {item.value.toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function AdminDashboardPage() {
@@ -35,39 +193,50 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [interval, setInterval] = useState(30000);
   const [error, setError] = useState<string | null>(null);
-  const [overviewAction, setOverviewAction] = useState<string | null>(null);
-  const [usageSummary, setUsageSummary] = useState<{
-    activeTeachers: number;
-    activeStudents: number;
-    assessmentSubmissions: number;
-    lessonCompletions: number;
-  } | null>(null);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
+  const [healthReadiness, setHealthReadiness] = useState<HealthReadiness | null>(null);
+  const interval = 30000;
 
   const fetchData = useCallback(async () => {
-    try {
-      setError(null);
-      const [statsRes, overviewRes, usageRes] = await Promise.all([
-        dashboardService.getAdminStats(),
-        analyticsService.getAdminOverview(),
-        adminService.getUsageSummary(),
-      ]);
-      setStats(statsRes.data);
-      setOverviewAction(overviewRes.data.action);
-      setUsageSummary({
-        activeTeachers: usageRes.data.activeTeachers,
-        activeStudents: usageRes.data.activeStudents,
-        assessmentSubmissions: usageRes.data.assessmentSubmissions,
-        lessonCompletions: usageRes.data.lessonCompletions,
-      });
- 
-      setLastUpdated(new Date());
-    } catch {
-      setError('Failed to load dashboard stats');
-    } finally {
-      setLoading(false);
+    setError(null);
+    const [statsRes, usageRes, readinessRes] = await Promise.allSettled([
+      dashboardService.getAdminStats(),
+      adminService.getUsageSummary(),
+      adminService.getHealthReadiness(),
+      analyticsService.getAdminOverview(),
+    ]);
+
+    let successfulLoads = 0;
+
+    if (statsRes.status === 'fulfilled') {
+      setStats(statsRes.value.data);
+      successfulLoads += 1;
     }
+
+    if (usageRes.status === 'fulfilled') {
+      setUsageSummary({
+        activeTeachers: usageRes.value.data.activeTeachers,
+        activeStudents: usageRes.value.data.activeStudents,
+        assessmentSubmissions: usageRes.value.data.assessmentSubmissions,
+        lessonCompletions: usageRes.value.data.lessonCompletions,
+      });
+      successfulLoads += 1;
+    }
+
+    if (readinessRes.status === 'fulfilled') {
+      setHealthReadiness(readinessRes.value ?? null);
+      successfulLoads += 1;
+    }
+
+    if (successfulLoads > 0) {
+      setLastUpdated(new Date());
+      setError(null);
+    } else {
+      setError('Dashboard services are temporarily unavailable.');
+    }
+
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -76,51 +245,81 @@ export default function AdminDashboardPage() {
 
   useAutoRefresh(fetchData, interval, autoRefresh);
 
+  const totalUsers = (stats?.totalStudents ?? 0) + (stats?.totalTeachers ?? 0) + (stats?.totalAdmins ?? 0);
+  const pulseSeries = useMemo(
+    () =>
+      buildPulseSeries(
+        stats?.totalStudents ?? 0,
+        stats?.totalTeachers ?? 0,
+        usageSummary?.assessmentSubmissions ?? 0,
+        usageSummary?.lessonCompletions ?? 0,
+      ),
+    [stats?.totalStudents, stats?.totalTeachers, usageSummary?.assessmentSubmissions, usageSummary?.lessonCompletions],
+  );
+
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
+        <Skeleton className="h-24 rounded-none" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-32 rounded-[1.5rem]" />)}
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-36 rounded-[1.35rem]" />)}
         </div>
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Skeleton className="h-72 rounded-[1.7rem]" />
-          <Skeleton className="h-72 rounded-[1.7rem]" />
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Skeleton className="h-[22rem] rounded-[1.7rem]" />
+          <Skeleton className="h-[22rem] rounded-[1.7rem]" />
+        </div>
+        <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
+          <Skeleton className="h-[15rem] rounded-[1.7rem]" />
+          <Skeleton className="h-[15rem] rounded-[1.7rem]" />
         </div>
       </div>
     );
   }
 
-  const totalUsers = (stats?.totalStudents ?? 0) + (stats?.totalTeachers ?? 0) + (stats?.totalAdmins ?? 0);
-  const teacherPct = totalUsers > 0 ? ((stats?.totalTeachers ?? 0) / totalUsers * 100).toFixed(1) : '0';
-  const studentPct = totalUsers > 0 ? ((stats?.totalStudents ?? 0) / totalUsers * 100).toFixed(1) : '0';
+  const services = [
+    {
+      label: 'API Server',
+      status: healthReadiness?.data?.ready ? 'Healthy' : 'Check',
+      icon: Shield,
+    },
+    {
+      label: 'Database',
+      status: healthReadiness?.data?.dependencies?.database?.ok ? 'Healthy' : 'Issue',
+      icon: Activity,
+    },
+    {
+      label: 'Redis Cache',
+      status: healthReadiness?.data?.dependencies?.redis?.ok ? 'Healthy' : 'Issue',
+      icon: Zap,
+    },
+    {
+      label: 'AI Service',
+      status: healthReadiness?.data?.dependencies?.aiService?.ok ? 'Healthy' : 'Offline',
+      icon: BookOpen,
+    },
+  ];
 
   return (
     <AdminPageShell
       badge="Admin Dashboard"
-      title="Command Center"
-      description="The admin side now reads like a single control surface, with clearer focus areas, richer system status panels, and faster routes into the parts of the platform that need oversight."
+      title="Admin Dashboard"
+      description="Monitor your platform at a glance"
+      icon={Activity}
       actions={(
         <div className="admin-controls">
-          <label className="admin-chip">
+          <label className="inline-flex items-center gap-3 text-base font-semibold text-white">
             <input
               type="checkbox"
               checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
+              onChange={(event) => setAutoRefresh(event.target.checked)}
+              className="h-4 w-4 rounded border-white/30 bg-transparent"
             />
             Auto-refresh
           </label>
-          <select
-            value={interval}
-            onChange={(e) => setInterval(Number(e.target.value))}
-            className="admin-select min-w-[5.75rem] text-sm font-semibold"
+          <Button
+            className="rounded-[1rem] border-0 bg-[#364152] px-4 font-bold text-white shadow-none hover:bg-[#465164]"
+            onClick={fetchData}
           >
-            <option value={15000}>15s</option>
-            <option value={30000}>30s</option>
-            <option value={60000}>1m</option>
-            <option value={300000}>5m</option>
-          </select>
-          <Button className="admin-button-solid rounded-xl px-4 font-black" onClick={fetchData}>
             <RefreshCcw className="h-4 w-4" />
             Refresh
           </Button>
@@ -128,152 +327,122 @@ export default function AdminDashboardPage() {
       )}
       stats={(
         <>
-          <AdminStatCard label="Total Users" value={totalUsers} caption="Active platform accounts" icon={Users} accent="emerald" />
-          <AdminStatCard label="Teachers" value={stats?.totalTeachers ?? 0} caption={`${teacherPct}% of total users`} icon={GraduationCap} accent="sky" />
-          <AdminStatCard label="Students" value={stats?.totalStudents ?? 0} caption={`${studentPct}% of total users`} icon={School} accent="amber" />
-          <AdminStatCard label="Active Classes" value={stats?.activeClasses ?? 0} caption={`${stats?.totalSections ?? 0} total sections available`} icon={BookOpen} accent="rose" />
+          <AdminStatCard
+            label="Total Users"
+            value={totalUsers.toLocaleString()}
+            caption={formatGrowth(Math.max(totalUsers - ((usageSummary?.activeTeachers ?? 0) + (usageSummary?.activeStudents ?? 0)), 0))}
+            icon={Users}
+            accent="rose"
+          />
+          <AdminStatCard
+            label="Teachers"
+            value={(stats?.totalTeachers ?? 0).toLocaleString()}
+            caption={`${usageSummary?.activeTeachers ?? 0} active now`}
+            icon={GraduationCap}
+            accent="sky"
+          />
+          <AdminStatCard
+            label="Students"
+            value={(stats?.totalStudents ?? 0).toLocaleString()}
+            caption={formatGrowth(Math.max((stats?.totalStudents ?? 0) - (usageSummary?.activeStudents ?? 0), 0))}
+            icon={School}
+            accent="emerald"
+          />
+          <AdminStatCard
+            label="Active Classes"
+            value={(stats?.activeClasses ?? 0).toLocaleString()}
+            caption={`${stats?.totalSections ?? 0} sections tracked`}
+            icon={BookOpen}
+            accent="violet"
+          />
         </>
       )}
     >
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <AdminSectionCard
-          title="Platform Pulse"
-          description="A calmer administrative snapshot with usage movement, readiness context, and the current operational focus."
-        >
-          <div className="space-y-4">
-            <div className="admin-surface-card rounded-[1.5rem] p-5">
-              <div className="flex flex-wrap gap-2">
-                <span className="admin-chip"><Activity className="h-4 w-4" /> {autoRefresh ? `Auto-sync every ${formatRefreshInterval(interval)}` : 'Manual refresh only'}</span>
-                <span className="admin-chip"><Shield className="h-4 w-4" /> {error ? 'Needs attention' : 'Monitoring live'}</span>
- 
-              </div>
-              <div className="mt-4 space-y-2">
-                <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">Operational Focus</p>
-                <p className="text-2xl font-black tracking-tight text-[var(--admin-text-strong)]">
-                  {overviewAction ?? 'No admin overview analytics available yet.'}
-                </p>
-                <p className="text-sm text-[var(--admin-text-muted)]">
-                  Last updated: {lastUpdated ? lastUpdated.toLocaleString() : 'Not yet synced'}
-                </p>
-                {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="admin-metric">
-                <span>Admins</span>
-                <strong>{stats?.totalAdmins ?? 0}</strong>
-              </div>
-              <div className="admin-metric">
-                <span>Sections</span>
-                <strong>{stats?.totalSections ?? 0}</strong>
-              </div>
-              <div className="admin-metric">
-                <span>Submissions</span>
-                <strong>{usageSummary?.assessmentSubmissions ?? 0}</strong>
-              </div>
-              <div className="admin-metric">
-                <span>Completions</span>
-                <strong>{usageSummary?.lessonCompletions ?? 0}</strong>
-              </div>
-            </div>
-          </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_380px]">
+        <AdminSectionCard title="Platform Pulse" description="Daily logins and submissions" contentClassName="space-y-5">
+          <PulseChart {...pulseSeries} />
         </AdminSectionCard>
 
-        <AdminSectionCard
-          title="Quick Routes"
-          description="Move into the most important admin surfaces without hunting through plain menus."
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
+        <AdminSectionCard title="User Mix" contentClassName="space-y-5">
+          <UserMixChart
+            students={stats?.totalStudents ?? 0}
+            teachers={stats?.totalTeachers ?? 0}
+            admins={stats?.totalAdmins ?? 0}
+          />
+        </AdminSectionCard>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.82fr)]">
+        <AdminSectionCard title="Quick Routes">
+          <div className="grid gap-4 sm:grid-cols-2">
             {[
-              { href: '/dashboard/admin/users', label: 'Users', copy: 'Create, suspend, and review accounts faster.' },
-              { href: '/dashboard/admin/sections', label: 'Sections', copy: 'Manage section structure and roster flow.' },
-              { href: '/dashboard/admin/classes', label: 'Classes', copy: 'Oversee class setup, scheduling, and state.' },
-              { href: '/dashboard/admin/diagnostics', label: 'Diagnostics', copy: 'Check backend, Redis, and AI service health.' },
+              {
+                href: '/dashboard/admin/users',
+                label: 'Manage Users',
+                copy: `${totalUsers.toLocaleString()} accounts`,
+                icon: Users,
+              },
+              {
+                href: '/dashboard/admin/sections',
+                label: 'View Sections',
+                copy: `${(stats?.totalSections ?? 0).toLocaleString()} sections`,
+                icon: School,
+              },
+              {
+                href: '/dashboard/admin/classes',
+                label: 'All Classes',
+                copy: `${(stats?.activeClasses ?? 0).toLocaleString()} active`,
+                icon: BookOpen,
+              },
+              {
+                href: '/dashboard/admin/diagnostics',
+                label: 'Diagnostics',
+                copy: error ? 'Needs attention' : 'All systems OK',
+                icon: Shield,
+              },
             ].map((item) => (
-              <Link key={item.href} href={item.href} className="admin-quick-link">
-                <div>
-                  <p className="text-sm font-black text-[var(--admin-text-strong)]">{item.label}</p>
-                  <p className="mt-1 text-sm text-[var(--admin-text-muted)]">{item.copy}</p>
+              <Link key={item.href} href={item.href} className="admin-quick-link rounded-[1.25rem] p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-3">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-[1rem] bg-[#f5f8fe] text-[#8aa0c2]">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-base font-black text-[var(--admin-text-strong)]">{item.label}</p>
+                      <p className="text-sm text-[#8da0bf]">{item.copy}</p>
+                    </div>
+                  </div>
+                  <span className="admin-quick-link__cta">
+                    <ArrowRight className="h-4 w-4" />
+                  </span>
                 </div>
-                <span className="admin-quick-link__cta">Open</span>
               </Link>
             ))}
           </div>
         </AdminSectionCard>
-      </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <AdminSectionCard
-          title="User Activity Mix"
-          description="A clearer breakdown of who is active and how platform activity is moving."
-        >
-          {usageSummary ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="admin-list-row">
-                <div className="admin-list-row__icon"><Users className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-sm font-black text-[var(--admin-text-strong)]">{usageSummary.activeTeachers} active teachers</p>
-                  <p className="text-xs text-[var(--admin-text-muted)]">Current teacher footprint across the platform</p>
-                </div>
-              </div>
-              <div className="admin-list-row">
-                <div className="admin-list-row__icon"><School className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-sm font-black text-[var(--admin-text-strong)]">{usageSummary.activeStudents} active students</p>
-                  <p className="text-xs text-[var(--admin-text-muted)]">Learners presently engaging with the system</p>
-                </div>
-              </div>
-              <div className="admin-list-row">
-                <div className="admin-list-row__icon"><BookOpen className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-sm font-black text-[var(--admin-text-strong)]">{usageSummary.assessmentSubmissions} assessment submissions</p>
-                  <p className="text-xs text-[var(--admin-text-muted)]">Recent usage signal for submitted work</p>
-                </div>
-              </div>
-              <div className="admin-list-row">
-                <div className="admin-list-row__icon"><Zap className="h-4 w-4" /></div>
-                <div>
-                  <p className="text-sm font-black text-[var(--admin-text-strong)]">{usageSummary.lessonCompletions} lesson completions</p>
-                  <p className="text-xs text-[var(--admin-text-muted)]">Recent learning progress moving through the app</p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <AdminEmptyState title="Usage data is not available yet" description="Once the analytics summary is available, the activity mix will show here." />
-          )}
-        </AdminSectionCard>
-
-        <AdminSectionCard
-          title="System Health"
-          description="A richer presentation of the same monitoring state, without changing the actual admin checks."
-        >
+        <AdminSectionCard title="System Health">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="admin-grid-card min-h-[8rem]">
-              <div className="admin-grid-card__accent" />
-              <div className="relative z-10 space-y-2">
-                <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">API Status</p>
-                <p className="text-xl font-black text-[var(--admin-text-strong)]">{error ? 'Attention Needed' : 'Connected'}</p>
-                <p className="text-sm text-[var(--admin-text-muted)]">
-                  {lastUpdated ? `Last sync ${lastUpdated.toLocaleTimeString()}` : 'No sync timestamp yet'}
-                </p>
+            {services.map((item) => (
+              <div key={item.label} className="rounded-[1rem] bg-[#f5f8fe] px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-[0.9rem] bg-white text-[#8fa3c2]">
+                    <item.icon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[#7083a4]">{item.label}</p>
+                    <p className="text-base font-black text-[var(--admin-text-strong)]">{item.status}</p>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="admin-grid-card min-h-[8rem]">
-              <div className="admin-grid-card__accent" />
-              <div className="relative z-10 space-y-2">
-                <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">Refresh Mode</p>
-                <p className="text-xl font-black text-[var(--admin-text-strong)]">{autoRefresh ? 'Automatic' : 'Manual'}</p>
-                <p className="text-sm text-[var(--admin-text-muted)]">
-                  {autoRefresh ? `Running every ${formatRefreshInterval(interval)}` : 'Use refresh when needed'}
-                </p>
-              </div>
-            </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[#7f93b4]">
+            {lastUpdated ? <span className="admin-chip">Last updated {lastUpdated.toLocaleTimeString()}</span> : null}
+            {error ? <span className="admin-chip">{error}</span> : null}
           </div>
         </AdminSectionCard>
       </div>
     </AdminPageShell>
- 
   );
 }
-

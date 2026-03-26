@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -47,6 +48,8 @@ import { Public } from '../auth/decorators/public.decorator';
 @Controller('ai')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AiMentorController {
+  private readonly logger = new Logger(AiMentorController.name);
+
   constructor(private readonly proxy: AiProxyService) {}
 
   // ─── JAKIPIR Chat ──────────────────────────────────────────────────────
@@ -156,11 +159,26 @@ export class AiMentorController {
   @Public()
   @ApiOperation({ summary: 'Check Ollama availability' })
   async health() {
-    return this.proxy.forward('GET', '/health', {
-      id: '',
-      email: '',
-      roles: [],
-    });
+    try {
+      return await this.proxy.forward('GET', '/health', {
+        id: '',
+        email: '',
+        roles: [],
+      });
+    } catch (error) {
+      this.logger.warn(
+        `AI health degraded fallback: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {
+        success: true,
+        degraded: true,
+        message: 'AI service unavailable; reporting offline status.',
+        data: {
+          ollamaAvailable: false,
+          configuredModel: 'offline',
+        },
+      };
+    }
   }
 
   // ─── Module Extraction ─────────────────────────────────────────────────
@@ -217,7 +235,25 @@ export class AiMentorController {
     @Query('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/extractions?classId=${classId}`, user);
+    try {
+      return await this.proxy.forward(
+        'GET',
+        `/extractions?classId=${classId}`,
+        user,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `AI extraction list degraded fallback for class ${classId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return {
+        success: true,
+        degraded: true,
+        message: 'AI extraction history unavailable; returning an empty list.',
+        data: [],
+      };
+    }
   }
 
   // ─── Get single extraction ─────────────────────────────────────────────
@@ -307,7 +343,19 @@ export class AiMentorController {
   async history(
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', '/history', user);
+    try {
+      return await this.proxy.forward('GET', '/history', user);
+    } catch (error) {
+      this.logger.warn(
+        `AI history degraded fallback for ${user.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {
+        success: true,
+        degraded: true,
+        message: 'AI history unavailable; returning an empty list.',
+        data: [],
+      };
+    }
   }
 
   @Post('teacher/interventions/:caseId/recommend')

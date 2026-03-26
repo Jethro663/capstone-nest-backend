@@ -111,8 +111,8 @@ export default function AdminAnnouncementsPage() {
   return (
     <AdminPageShell
       badge="Admin Announcements"
-      title="Platform Announcements"
-      description="Manage class announcements in a more presentable bulletin workspace, while keeping the same create and delete flows behind the scenes."
+      title="Announcements"
+      description="Post and manage class announcements from a cleaner admin bulletin view."
       actions={(
         <>
           <select value={selectedClassId} onChange={(e) => setSelectedClassId(e.target.value)} className="admin-select min-w-[18rem] text-sm font-semibold">

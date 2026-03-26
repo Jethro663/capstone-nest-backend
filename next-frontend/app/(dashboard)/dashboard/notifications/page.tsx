@@ -6,6 +6,12 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { notificationService } from '@/services/notification-service';
 import type { Notification } from '@/types/notification';
+import {
+  AdminEmptyState,
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,9 +22,10 @@ type ReadFilter = 'all' | 'unread' | 'read';
 const PAGE_SIZE = 12;
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { unreadCount, markAsRead, markAllAsRead, fetchNotifications } = useNotifications();
   const isStudent = user?.roles?.includes('student');
+  const isAdmin = role === 'admin';
   const [items, setItems] = useState<Notification[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -160,6 +167,135 @@ export default function NotificationsPage() {
 
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <AdminPageShell
+        badge="Admin Notifications"
+        title="Notifications"
+        description="Track unread alerts, workflow events, and platform updates from the admin inbox."
+        actions={(
+          <div className="admin-controls">
+            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => void refreshAll()}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              className="admin-button-outline rounded-xl font-black"
+              onClick={() => void handleMarkAll()}
+              disabled={unreadCount === 0}
+            >
+              <CheckCheck className="mr-2 h-4 w-4" />
+              Mark All Read
+            </Button>
+          </div>
+        )}
+        stats={(
+          <>
+            <AdminStatCard label="Unread" value={unreadCount} caption="Current unread badge count" icon={Bell} accent="emerald" />
+            <AdminStatCard label="Visible" value={items.length} caption={`On page ${page}`} icon={Filter} accent="sky" />
+            <AdminStatCard label="Pages" value={totalPages} caption="Available notification pages" icon={RefreshCcw} accent="amber" />
+            <AdminStatCard label="View" value={filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : 'Read'} caption="Current filter state" icon={CheckCheck} accent="rose" />
+          </>
+        )}
+      >
+        <AdminSectionCard
+          title="Notification Views"
+          description="Switch between unread states and refresh the inbox without leaving the admin shell."
+        >
+          <div className="admin-controls">
+            {(['all', 'unread', 'read'] as const).map((value) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant="outline"
+                className={filter === value ? 'admin-button-solid rounded-xl font-black' : 'admin-button-outline rounded-xl font-black'}
+                onClick={() => setFilter(value)}
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                {value === 'all' ? 'All' : value === 'unread' ? 'Unread' : 'Read'}
+              </Button>
+            ))}
+          </div>
+        </AdminSectionCard>
+
+        <AdminSectionCard
+          title="Recent Notifications"
+          description={`${items.length} visible notification(s) in the current admin inbox view.`}
+        >
+          {items.length === 0 ? (
+            <AdminEmptyState
+              title="No notifications yet"
+              description="System alerts, announcements, and workflow events will appear here."
+            />
+          ) : (
+            <div className="space-y-3">
+              {items.map((notification) => (
+                <Card
+                  key={notification.id}
+                  className={`admin-section-card overflow-hidden border-[var(--admin-outline)] ${notification.isRead ? 'opacity-75' : ''}`}
+                >
+                  <CardContent className="flex flex-col gap-3 p-5 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-black text-[var(--admin-text-strong)]">{notification.title}</p>
+                        <span className="admin-pill">
+                          {notification.isRead ? 'Read' : 'New'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-[var(--admin-text-muted)]">{notification.message}</p>
+                      <p className="text-xs text-[var(--admin-text-muted)]">
+                        {new Date(notification.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    {!notification.isRead ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="admin-button-outline rounded-xl font-black"
+                        onClick={() => void handleMarkRead(notification.id)}
+                      >
+                        Mark Read
+                      </Button>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="admin-button-outline rounded-xl font-black"
+              disabled={page <= 1}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-[var(--admin-text-muted)]">
+              Page {page} of {Math.max(totalPages, 1)}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="admin-button-outline rounded-xl font-black"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </AdminSectionCard>
+      </AdminPageShell>
     );
   }
 

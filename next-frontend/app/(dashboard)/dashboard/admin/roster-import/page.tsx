@@ -88,8 +88,8 @@ export default function RosterImportPage() {
   return (
     <AdminPageShell
       badge="Admin Roster Import"
-      title="Roster Import Studio"
-      description="The import flow stays the same, but the page now feels like a proper admin workspace with a clearer upload area, preview stage, and pending queue."
+      title="Roster Import"
+      description="Upload a roster file, preview the match results, and resolve pending rows from one admin import flow."
       stats={(
         <>
           <AdminStatCard label="Sections" value={sections.length} caption="Available for roster import" icon={School2} accent="emerald" />

@@ -1,0 +1,131 @@
+# Admin Overwrite Change Log
+
+## Outcome
+- Admin-side frontend overwrite completed against the Figma admin preview as the visual source of truth for the main admin surfaces.
+- March 27 follow-up switched the literal source of truth for the captured admin pages to the local screenshot pack in `docs/admin-overwrite/figma-captures/Admin`.
+- March 26 follow-up replaced the earlier red/glass admin treatment with a much closer Figma-style shell and page composition:
+  - dark navy left rail
+  - flatter white top bar
+  - gray workspace background
+  - simplified white cards/tables/segmented controls
+  - Figma-style dashboard, users, sections, and diagnostics layouts
+- Existing route URLs, auth flow, and backend contracts were preserved.
+- Shared admin-accessible routes `/dashboard/library` and `/dashboard/notifications` were brought into the same admin shell language.
+
+## Frontend Changes
+- Rebased the captured admin pages directly against the local screenshot pack rather than the live Figma preview:
+  - `Admin Dashboard.png`
+  - `Admin Dashboard-bottom.png`
+  - `Admin Users.png`
+  - `Admin Sections.png`
+  - `Admin Classes.png`
+  - `Admin Diagnostics.png`
+  - `Admin Diagnostics-bottom.png`
+- Reworked the protected admin shell:
+  - role-aware admin sidebar branding, nav ordering, footer account card, and logout treatment
+  - role-aware admin top bar with welcome copy, notification badge, and compact account affordance
+  - admin-specific dashboard layout wrappers in the protected dashboard layout
+- Added and applied stronger admin shell tokens in `next-frontend/app/globals.css` for:
+  - Figma-style admin dashboard chrome
+  - sidebar
+  - top bar
+  - shared admin page shell surfaces
+- Rebuilt `AdminPageShell` primitives to stop rendering the older hero-card style and instead use:
+  - dark title band
+  - flatter stat cards with screenshot color mapping
+  - quieter section containers
+  - cleaner empty states
+- Rebuilt the captured admin pages for screenshot parity:
+  - dashboard
+  - users
+  - sections
+  - classes
+  - diagnostics
+- Limited the literal page-body rewrite to the captured routes in this pass.
+- Uncaptured admin routes keep the new shared shell but were not rewritten to screenshot parity in this pass:
+  - announcements
+  - audit trail
+  - chatbot
+  - evaluations
+  - reports
+  - roster import
+  - profile
+  - nested CRUD/detail routes
+- Applied the admin shell treatment to shared admin-accessible surfaces:
+  - `/dashboard/library`
+  - `/dashboard/notifications`
+- Preserved nested admin CRUD/detail routes while aligning them to the same design system:
+  - users create/detail
+  - sections create/edit/roster/add-students
+  - classes
+  - classes create/detail/edit
+
+## Runtime Hardening
+- Hardened the frontend production startup path:
+  - `next-frontend` is configured with `output: 'standalone'`
+  - the `start` script now launches `node scripts/start-standalone.js` instead of `next start`
+  - `-p` and `--port` arguments are translated into `PORT` so `npm run start -- -p 3001` keeps working
+  - the standalone launcher now copies `.next/static` and `public` into `.next/standalone` before boot so CSS chunks and public assets are actually served by the standalone runtime
+- Hardened AI availability handling in the backend:
+  - `GET /api/ai/health` now returns an offline fallback payload when the AI service is unavailable
+  - `GET /api/ai/history` now returns an empty-list fallback instead of surfacing `500`
+  - `GET /api/ai/extractions?classId=...` now returns an empty-list fallback instead of surfacing `500`
+- Hardened the admin chatbot page:
+  - suggestion clicks and send actions short-circuit to a local offline assistant response while AI health is loading or offline
+  - this avoids avoidable admin-side `POST /api/ai/chat` failures when the external AI service is down
+- Hardened the admin dashboard loader:
+  - dashboard fetches now use `Promise.allSettled`
+  - partial service failures no longer collapse the whole dashboard into a failed state
+- Hardened the users page loader:
+  - the visible-list request and the four status-count requests now run sequentially
+  - this avoids a backend `429 Too Many Requests` observed when the page fired all five `/api/users/all` calls concurrently during the Playwright audit
+
+## Verification Completed
+- Build/test verification:
+  - `backend`: `npm test -- ai-mentor.controller.spec.ts`
+  - `next-frontend`: `npm run build`
+- Route sweep on the production frontend (`next start` on port `3001`) showed no console errors and no 4xx/5xx responses for:
+- Follow-up visual/runtime verification on the rebuilt standalone frontend confirmed:
+  - `/dashboard/admin` renders the screenshot-driven dashboard shell, stat cards, charts, quick routes, and system health blocks
+  - `/dashboard/admin/users` renders the segmented filter/search/export layout and icon-only action table
+  - `/dashboard/admin/sections` renders the simplified state switcher/search/table layout
+  - `/dashboard/admin/classes` renders the screenshot-driven state/search/grade/toggle controls plus table/grid modes
+  - `/dashboard/admin/diagnostics` renders the status banner, service cards, and dependency-check list
+  - safe Playwright actions completed on tabs, search, view toggles, and diagnostics refresh with no console errors and no failed non-static requests after the users-page `429` fix
+- `/dashboard/admin`
+- `/dashboard/admin/diagnostics`
+- `/dashboard/admin/users`
+- `/dashboard/admin/sections`
+- `/dashboard/admin/classes`
+  - `/dashboard/library`
+  - `/dashboard/admin/roster-import`
+  - `/dashboard/admin/reports`
+  - `/dashboard/admin/evaluations`
+  - `/dashboard/admin/announcements`
+  - `/dashboard/admin/chatbot`
+  - `/dashboard/admin/audit`
+  - `/dashboard/admin/profile`
+  - `/dashboard/notifications`
+- Admin destructive flow verification completed with disposable records:
+  - users: create, detail view, reset password, suspend, reactivate, archive, export, purge
+  - sections: create, archive, restore, archive again, purge
+  - classes: create, detail view, archive, restore, archive again, purge
+
+## Not Exercised In This Pass
+- Roster import commit/resolve with a real uploaded spreadsheet
+- Announcement create/edit/delete from the live admin UI
+- Library folder/file mutations from the admin route
+- Profile save and password update submission
+- Notifications mark-read and mark-all-read actions
+- Reports exports and deeper report drill-downs
+- Evaluations search/module filtering interactions
+- Nested edit routes that were discovered but not needed for the disposable CRUD cleanup:
+  - `/dashboard/admin/classes/[id]/edit`
+  - `/dashboard/admin/sections/[id]/edit`
+  - `/dashboard/admin/sections/[id]/roster`
+  - `/dashboard/admin/sections/[id]/students/add`
+- Class visibility `hide/unhide` endpoints exist in the service layer but are not currently surfaced by the admin UI
+
+## Carryover Notes
+- Admin class detail currently reuses the teacher class workspace route implementation; future teacher class-detail redesign work will also affect admin unless that route is intentionally split.
+- Teacher and student remain functionally compatible after the shell changes, but they still need their own Figma-specific passes rather than inheriting the admin palette.

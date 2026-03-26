@@ -195,6 +195,33 @@ export default function AdminChatbotPage() {
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content, timestamp: new Date() };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
+
+    if (healthLoading) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Ja is still checking the AI service status. Try your prompt again in a moment.',
+          timestamp: new Date(),
+        },
+      ]);
+      return;
+    }
+
+    if (health && !health.ollamaOnline) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: 'Ja is offline in this environment right now, so live AI replies are unavailable.',
+          timestamp: new Date(),
+        },
+      ]);
+      return;
+    }
+
     setSending(true);
     try {
       const payload: Record<string, string> = { message: content };
@@ -242,9 +269,9 @@ export default function AdminChatbotPage() {
 
   return (
     <AdminPageShell
-      badge="Admin AI Console"
-      title="J.A.K.I.P.I.R Testing Console"
-      description="The admin chatbot now feels more like part of the admin workspace, with a calmer shell around history, health, and live chat while keeping the same AI endpoints and session flow."
+      badge="Admin AI Chatbot"
+      title="AI Chatbot"
+      description="Ask anything about your platform from the admin AI workspace while keeping the same live chat and history flow."
       actions={(
         <>
           {healthLoading ? (

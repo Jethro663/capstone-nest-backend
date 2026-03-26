@@ -4,8 +4,8 @@ export default function AdminProfileRoute() {
   return (
     <RoleProfilePage
       roleLabel="Admin"
-      title="Admin Profile"
-      subtitle="Admin profile details stay simple for now. Use this page for account review and password management while role-specific admin profile features are still pending."
+      title="My Profile"
+      subtitle="Review your admin account details, contact information, and password settings from a single profile view."
       appearance="admin"
     />
   );

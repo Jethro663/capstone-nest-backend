@@ -1,0 +1,49 @@
+{
+  "role": "admin",
+  "runMeta": {
+    "frontendRoot": "next-frontend",
+    "seedFile": "backend/seed-database.js",
+    "baseUrl": "http://localhost:3001",
+    "notes": [
+      "Audit run executed after the March 27 screenshot-driven admin rewrite against docs/admin-overwrite/figma-captures/Admin.",
+      "Login used seeded primary admin account from backend/seed-database.js.",
+      "Safe coverage only. Destructive account/section/class mutations were intentionally skipped in this pass.",
+      "Captured-route verification covered /dashboard/admin, /dashboard/admin/users, /dashboard/admin/sections, /dashboard/admin/classes, and /dashboard/admin/diagnostics.",
+      "Users page request burst was reduced to sequential list/count fetches to avoid a backend 429 during the Playwright pass."
+    ]
+  },
+  "routes": [
+    "/dashboard/admin",
+    "/dashboard/admin/announcements",
+    "/dashboard/admin/audit",
+    "/dashboard/admin/chatbot",
+    "/dashboard/admin/classes",
+    "/dashboard/admin/classes/new",
+    "/dashboard/admin/classes/[id]",
+    "/dashboard/admin/classes/[id]/edit",
+    "/dashboard/admin/diagnostics",
+    "/dashboard/admin/evaluations",
+    "/dashboard/admin/profile",
+    "/dashboard/admin/reports",
+    "/dashboard/admin/roster-import",
+    "/dashboard/admin/sections",
+    "/dashboard/admin/sections/new",
+    "/dashboard/admin/sections/[id]/edit",
+    "/dashboard/admin/sections/[id]/roster",
+    "/dashboard/admin/sections/[id]/students/add",
+    "/dashboard/admin/users",
+    "/dashboard/admin/users/create",
+    "/dashboard/admin/users/[id]",
+    "/dashboard/library",
+    "/dashboard/notifications"
+  ],
+  "findings": [],
+  "skipped": [
+    "Delete, purge, archive, suspend, and other destructive mutations were skipped for this focused post-rewrite audit pass.",
+    "Nested CRUD detail routes were inventoried but not exhaustively exercised in this pass.",
+    "Roster import file upload/commit flow was not exercised.",
+    "Announcement create/edit/delete mutations were not exercised.",
+    "Library upload, rename, publish, and delete mutations were not exercised.",
+    "Notification mark-read and mark-all-read writes were not exercised."
+  ]
+}

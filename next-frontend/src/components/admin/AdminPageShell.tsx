@@ -14,6 +14,7 @@ export function AdminPageShell({
   stats,
   children,
   className,
+  icon: Icon = ShieldCheck,
 }: {
   badge?: string;
   title: string;
@@ -22,37 +23,25 @@ export function AdminPageShell({
   stats?: ReactNode;
   children: ReactNode;
   className?: string;
+  icon?: LucideIcon;
 }) {
   return (
-    <div className={cn('admin-page space-y-6 pb-4', className)}>
-      <section className="admin-panel relative overflow-hidden rounded-[1.9rem] px-6 py-6 md:px-8 md:py-8">
-        <div className="admin-highlight absolute inset-0 opacity-90" />
-        <div className="absolute -left-10 top-0 h-36 w-36 rounded-full bg-red-300/15 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-rose-300/15 blur-3xl" />
-
-        <div className="relative z-10 flex flex-col gap-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl space-y-3">
-              <div className="admin-kicker inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em]">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {badge}
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-black tracking-tight text-[var(--admin-text-strong)] md:text-[2.2rem]">
-                  {title}
-                </h1>
-                <p className="max-w-2xl text-sm leading-6 text-[var(--admin-text-muted)] md:text-[15px]">
-                  {description}
-                </p>
-              </div>
-            </div>
-            {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+    <div className={cn('admin-page space-y-6 pb-6', className)}>
+      <section className="admin-page-header">
+        <div className="admin-page-header__copy">
+          <div className="admin-page-header__icon">
+            <Icon className="h-5 w-5" />
           </div>
-
-          {stats ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{stats}</div> : null}
+          <div className="space-y-1">
+            <p className="admin-page-header__eyebrow">{badge}</p>
+            <h1 className="admin-page-header__title">{title}</h1>
+            <p className="admin-page-header__description">{description}</p>
+          </div>
         </div>
+        {actions ? <div className="admin-page-header__actions">{actions}</div> : null}
       </section>
 
+      {stats ? <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{stats}</section> : null}
       {children}
     </div>
   );
@@ -69,30 +58,26 @@ export function AdminStatCard({
   value: ReactNode;
   caption?: ReactNode;
   icon?: LucideIcon;
-  accent?: 'emerald' | 'sky' | 'amber' | 'rose';
+  accent?: 'emerald' | 'sky' | 'amber' | 'rose' | 'violet';
 }) {
   const accentMap = {
-    emerald: 'from-red-500/20 via-rose-400/12 to-transparent text-red-700',
-    sky: 'from-rose-500/18 via-red-400/10 to-transparent text-red-700',
-    amber: 'from-pink-400/22 via-rose-300/12 to-transparent text-rose-700',
-    rose: 'from-red-500/18 via-pink-400/10 to-transparent text-rose-700',
+    emerald: 'bg-[#dcfce7] text-[#22c55e]',
+    sky: 'bg-[#dbeafe] text-[#2563eb]',
+    amber: 'bg-[#ffedd5] text-[#f59e0b]',
+    rose: 'bg-[#fee2e2] text-[#ef4444]',
+    violet: 'bg-[#f3e8ff] text-[#9333ea]',
   } as const;
 
   return (
-    <div className="admin-soft-panel admin-surface-card relative overflow-hidden rounded-[1.5rem] p-4">
-      <div className={cn('absolute inset-x-0 top-0 h-full bg-gradient-to-br opacity-90', accentMap[accent])} />
-      <div className="relative z-10 flex items-start justify-between gap-3">
+    <div className={cn('admin-stat-card', `admin-stat-card--${accent}`)}>
+      <div className="flex items-start justify-between gap-3">
         <div className="space-y-2">
-          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
-            {label}
-          </p>
-          <div className="text-3xl font-black tracking-tight text-[var(--admin-text-strong)]">
-            {value}
-          </div>
-          {caption ? <p className="text-xs font-medium text-[var(--admin-text-muted)]">{caption}</p> : null}
+          <p className="admin-stat-card__label">{label}</p>
+          <div className="admin-stat-card__value">{value}</div>
+          {caption ? <p className="admin-stat-card__caption">{caption}</p> : null}
         </div>
         {Icon ? (
-          <div className="rounded-2xl border border-white/30 bg-white/50 p-3 text-[var(--admin-accent)] shadow-sm">
+          <div className={cn('admin-stat-card__icon', accentMap[accent])}>
             <Icon className="h-5 w-5" />
           </div>
         ) : null}
