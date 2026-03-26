@@ -12,6 +12,7 @@ RUN npm ci
 
 # Copy source code and build
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
+COPY scripts/ ./scripts/
 COPY src/ ./src/
 
 RUN npm run build
