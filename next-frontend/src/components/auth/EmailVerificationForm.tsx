@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 export function EmailVerificationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState('');
+  const [email] = useState(() => searchParams.get('email') ?? '');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -30,12 +30,6 @@ export function EmailVerificationForm() {
   const [success, setSuccess] = useState('');
 
   const flow = searchParams.get('flow'); // 'activation' = admin-created account
-
-  useEffect(() => {
-    const e = searchParams.get('email');
-    if (e) setEmail(e);
-  }, [searchParams]);
-
   useEffect(() => {
     if (cooldown <= 0) return;
     const t = setTimeout(() => setCooldown((c) => c - 1), 1000);

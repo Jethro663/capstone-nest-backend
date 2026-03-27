@@ -3,21 +3,18 @@
  *
  * Thin wrappers around backend auth endpoints.
  * Matches backend response shapes exactly:
- *   login  → { success, message, data: { user, accessToken } }   (refreshToken is httpOnly cookie)
- *   refresh → { success, message, data: { accessToken } }
- *   me     → { success, data: { user } }
- *   profile → PATCH /auth/profile → { success, message, data: { user } }
+ *   login  -> { success, message, data: { user, accessToken } }   (refreshToken is httpOnly cookie)
+ *   refresh -> { success, message, data: { accessToken } }
+ *   me     -> { success, data: { user } }
+ *   profile -> PATCH /auth/profile -> { success, message, data: { user } }
  *
- * No self‑registration — accounts are created by admin.
+ * No self-registration - accounts are created by admin.
  */
 
+import { isAxiosError } from 'axios';
 import { api, type ApiRequestConfig } from './api-client';
-import type { User } from '@/types/user';
 import type { UpdateProfileDto } from '@/types/profile';
-
-// ---------------------------------------------------------------------------
-// Shared types
-// ---------------------------------------------------------------------------
+import type { User } from '@/types/user';
 
 export interface AuthResponse {
   success: boolean;
@@ -28,22 +25,43 @@ export interface AuthResponse {
   };
 }
 
+type AuthErrorResponse = AuthResponse & {
+  errors?: unknown;
+};
+
 const publicAuthRequestConfig: ApiRequestConfig = {
   withCredentials: true,
   skipAuthRefresh: true,
   skipSessionExpiredRedirect: true,
 };
 
-// ---------------------------------------------------------------------------
-// Login / Logout
-// ---------------------------------------------------------------------------
+function toAuthErrorResponse(
+  error: unknown,
+  fallbackMessage: string,
+): AuthErrorResponse {
+  if (isAxiosError<AuthErrorResponse>(error)) {
+    return error.response?.data ?? {
+      success: false,
+      message: error.message || fallbackMessage,
+    };
+  }
 
-export async function login(data: { email: string; password: string }): Promise<AuthResponse> {
+  if (error instanceof Error) {
+    return { success: false, message: error.message || fallbackMessage };
+  }
+
+  return { success: false, message: fallbackMessage };
+}
+
+export async function login(data: {
+  email: string;
+  password: string;
+}): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/login', data, publicAuthRequestConfig);
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Login failed' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Login failed');
   }
 }
 
@@ -51,8 +69,8 @@ export async function logout(): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/logout', {});
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Logout failed' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Logout failed');
   }
 }
 
@@ -60,34 +78,29 @@ export async function logoutAll(): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/logout-all', {});
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Logout all failed' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Logout all failed');
   }
 }
-
-// ---------------------------------------------------------------------------
-// Current user
-// ---------------------------------------------------------------------------
 
 export async function getCurrentUser(): Promise<AuthResponse> {
   try {
     const response = await api.get('/auth/me');
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to get user' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to get user');
   }
 }
 
-// ---------------------------------------------------------------------------
-// OTP / Verification
-// ---------------------------------------------------------------------------
-
-export async function verifyEmail(data: { email: string; code: string }): Promise<AuthResponse> {
+export async function verifyEmail(data: {
+  email: string;
+  code: string;
+}): Promise<AuthResponse> {
   try {
     const response = await api.post('/otp/verify', data, publicAuthRequestConfig);
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Verification failed' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Verification failed');
   }
 }
 
@@ -95,21 +108,21 @@ export async function resendOTP(email: string): Promise<AuthResponse> {
   try {
     const response = await api.post('/otp/resend', { email }, publicAuthRequestConfig);
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to resend OTP' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to resend OTP');
   }
 }
 
-// ---------------------------------------------------------------------------
-// Password management
-// ---------------------------------------------------------------------------
-
 export async function forgotPassword(email: string): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/forgot-password', { email }, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/forgot-password',
+      { email },
+      publicAuthRequestConfig,
+    );
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to request password reset' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to request password reset');
   }
 }
 
@@ -120,10 +133,14 @@ export async function resetPassword(data: {
   confirmPassword: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/reset-password', data, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/reset-password',
+      data,
+      publicAuthRequestConfig,
+    );
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to reset password' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to reset password');
   }
 }
 
@@ -133,10 +150,14 @@ export async function setInitialPassword(data: {
   newPassword: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/set-initial-password', data, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/set-initial-password',
+      data,
+      publicAuthRequestConfig,
+    );
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to set initial password' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to set initial password');
   }
 }
 
@@ -145,10 +166,14 @@ export async function setActivationPassword(data: {
   newPassword: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/set-activation-password', data, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/set-activation-password',
+      data,
+      publicAuthRequestConfig,
+    );
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to set password' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to set password');
   }
 }
 
@@ -159,38 +184,35 @@ export async function changePassword(data: {
 }): Promise<AuthResponse> {
   try {
     const response = await api.post('/auth/change-password', data);
-    console.log('Change password response:', response.data);
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to change password' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to change password');
   }
 }
-
-// ---------------------------------------------------------------------------
-// Validate credentials (for pre‑login checks on unverified accounts)
-// ---------------------------------------------------------------------------
 
 export async function validateCredentials(data: {
   email: string;
   password: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/validate-credentials', data, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/validate-credentials',
+      data,
+      publicAuthRequestConfig,
+    );
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Invalid credentials' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Invalid credentials');
   }
 }
 
-// ---------------------------------------------------------------------------
-// Profile
-// ---------------------------------------------------------------------------
-
-export async function updateProfile(data: UpdateProfileDto): Promise<AuthResponse> {
+export async function updateProfile(
+  data: UpdateProfileDto,
+): Promise<AuthResponse> {
   try {
     const response = await api.patch('/auth/profile', data);
     return response.data;
-  } catch (error: any) {
-    throw error.response?.data ?? { success: false, message: error.message || 'Failed to update profile' };
+  } catch (error: unknown) {
+    throw toAuthErrorResponse(error, 'Failed to update profile');
   }
 }

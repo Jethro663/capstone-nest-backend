@@ -6,6 +6,7 @@ export interface UsersQuery {
   status?: string;
   page?: number;
   limit?: number;
+  includeStatusCounts?: boolean;
 }
 
 export interface UsersListResponse {
@@ -15,6 +16,12 @@ export interface UsersListResponse {
   limit: number;
   total: number;
   totalPages: number;
+  statusCounts?: {
+    ACTIVE: number;
+    PENDING: number;
+    SUSPENDED: number;
+    DELETED: number;
+  };
 }
 
 export interface ResetUserPasswordResponse {

@@ -30,6 +30,7 @@ import { UserCreatedEvent } from '../../common/events';
 import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
+type UserStatus = (typeof VALID_STATUSES)[number];
 
 @Injectable()
 export class UsersService {
@@ -61,6 +62,7 @@ export class UsersService {
     status?: string;
     page?: number;
     limit?: number;
+    includeStatusCounts?: boolean;
   }) {
     if (filters?.status && !VALID_STATUSES.includes(filters.status as any)) {
       throw new BadRequestException(
@@ -117,13 +119,47 @@ export class UsersService {
     });
 
     const total = Number(totalRow?.total ?? 0);
+    const statusCounts = filters?.includeStatusCounts
+      ? await this.getStatusCounts(filters)
+      : undefined;
     return {
       data,
       total,
       page,
       limit,
       totalPages: Math.max(1, Math.ceil(total / limit)),
+      ...(statusCounts ? { statusCounts } : {}),
     };
+  }
+
+  private async getStatusCounts(filters?: {
+    role?: string;
+    includeStatusCounts?: boolean;
+  }) {
+    const statuses = VALID_STATUSES as readonly UserStatus[];
+    const counts = await Promise.all(
+      statuses.map(async (status) => {
+        const whereConditions: SQL<unknown>[] = [eq(users.status, status)];
+
+        if (filters?.role) {
+          const roleSubquery = this.db
+            .select({ userId: userRoles.userId })
+            .from(userRoles)
+            .innerJoin(roles, eq(userRoles.roleId, roles.id))
+            .where(eq(roles.name, filters.role));
+          whereConditions.push(inArray(users.id, roleSubquery));
+        }
+
+        const [totalRow] = await this.db
+          .select({ total: count() })
+          .from(users)
+          .where(and(...whereConditions));
+
+        return [status, Number(totalRow?.total ?? 0)] as const;
+      }),
+    );
+
+    return Object.fromEntries(counts) as Record<UserStatus, number>;
   }
 
   /**

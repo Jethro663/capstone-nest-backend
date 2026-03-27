@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/utils/cn';
 import { motion } from 'framer-motion';
+import type { AttemptResult } from '@/types/assessment';
 
 interface PreviewModalProps {
   attemptId: string | null;
@@ -20,8 +21,40 @@ interface PreviewModalProps {
   onClose: () => void;
 }
 
+interface PreviewOption {
+  id: string;
+  text: string;
+  isCorrect: boolean;
+}
+
+interface PreviewQuestion {
+  content?: string;
+  points?: number;
+  options?: PreviewOption[];
+}
+
+interface PreviewResponse {
+  id?: string;
+  selectedOptionId?: string;
+  selectedOptionIds?: string[];
+  isCorrect?: boolean;
+  pointsEarned?: number;
+  question?: PreviewQuestion;
+  studentAnswer?: string;
+}
+
+interface PreviewStudent {
+  firstName: string;
+  lastName: string;
+}
+
+type PreviewResult = AttemptResult & {
+  student?: PreviewStudent;
+  responses?: PreviewResponse[];
+};
+
 export function PreviewModal({ attemptId, open, onClose }: PreviewModalProps) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -76,15 +109,16 @@ export function PreviewModal({ attemptId, open, onClose }: PreviewModalProps) {
             )}
 
             {/* Responses */}
-            {responses.map((r: any, i: number) => {
+            {responses.map((r, i: number) => {
               const q = r.question;
               if (!q) return null;
+              const options = q.options ?? [];
               const isCorrect = r.isCorrect === true;
               const isWrong = r.isCorrect === false;
 
               return (
                 <motion.div
-                  key={r.id || i}
+                  key={r.questionId || i}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
@@ -104,9 +138,9 @@ export function PreviewModal({ attemptId, open, onClose }: PreviewModalProps) {
                         </Badge>
                       </div>
 
-                      {q.options?.length > 0 && (
+                      {options.length > 0 && (
                         <div className="space-y-0.5 ml-4">
-                          {q.options.map((opt: any) => {
+                          {options.map((opt) => {
                             const isSelected = opt.id === r.selectedOptionId || (r.selectedOptionIds ?? []).includes(opt.id);
                             return (
                               <div

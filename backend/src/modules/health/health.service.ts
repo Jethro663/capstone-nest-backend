@@ -8,8 +8,23 @@ type DependencyStatus = {
   message?: string;
 };
 
+type ReadinessStatus = {
+  ready: boolean;
+  dependencies: {
+    database: DependencyStatus;
+    redis: DependencyStatus;
+    aiService: DependencyStatus & { degraded?: boolean };
+  };
+  timestamp: string;
+};
+
 @Injectable()
 export class HealthService {
+  private readonly readinessTtlMs = 15_000;
+  private readinessCache: { expiresAt: number; value: ReadinessStatus } | null =
+    null;
+  private readinessPromise: Promise<ReadinessStatus> | null = null;
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly configService: ConfigService,
@@ -98,22 +113,40 @@ export class HealthService {
   }
 
   async getReadiness() {
-    const [database, redis, aiService] = await Promise.all([
-      this.checkDatabase(),
-      this.checkRedis(),
-      this.checkAiService(),
-    ]);
+    const now = Date.now();
+    if (this.readinessCache && this.readinessCache.expiresAt > now) {
+      return this.readinessCache.value;
+    }
 
-    const ready = database.ok && redis.ok && aiService.ok;
+    if (!this.readinessPromise) {
+      this.readinessPromise = (async () => {
+        const [database, redis, aiService] = await Promise.all([
+          this.checkDatabase(),
+          this.checkRedis(),
+          this.checkAiService(),
+        ]);
 
-    return {
-      ready,
-      dependencies: {
-        database,
-        redis,
-        aiService,
-      },
-      timestamp: new Date().toISOString(),
-    };
+        const value: ReadinessStatus = {
+          ready: database.ok && redis.ok && aiService.ok,
+          dependencies: {
+            database,
+            redis,
+            aiService,
+          },
+          timestamp: new Date().toISOString(),
+        };
+
+        this.readinessCache = {
+          value,
+          expiresAt: Date.now() + this.readinessTtlMs,
+        };
+
+        return value;
+      })().finally(() => {
+        this.readinessPromise = null;
+      });
+    }
+
+    return this.readinessPromise;
   }
 }

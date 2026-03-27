@@ -38,7 +38,13 @@ describe('UsersController', () => {
       totalPages: 4,
     });
 
-    const result = await controller.getAllUsers('teacher', 'ACTIVE', 2, 10);
+    const result = await controller.getAllUsers(
+      'teacher',
+      'ACTIVE',
+      2,
+      10,
+      undefined,
+    );
 
     expect(result).toEqual({
       success: true,
@@ -47,6 +53,44 @@ describe('UsersController', () => {
       limit: 10,
       total: 31,
       totalPages: 4,
+    });
+  });
+
+  it('passes includeStatusCounts and returns the counts when requested', async () => {
+    mockUsersService.findAll.mockResolvedValue({
+      data: [],
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 1,
+      statusCounts: {
+        ACTIVE: 4,
+        PENDING: 1,
+        SUSPENDED: 2,
+        DELETED: 3,
+      },
+    });
+
+    const result = await controller.getAllUsers(
+      undefined,
+      undefined,
+      1,
+      20,
+      'true',
+    );
+
+    expect(mockUsersService.findAll).toHaveBeenCalledWith({
+      role: undefined,
+      status: undefined,
+      page: 1,
+      limit: 20,
+      includeStatusCounts: true,
+    });
+    expect(result.statusCounts).toEqual({
+      ACTIVE: 4,
+      PENDING: 1,
+      SUSPENDED: 2,
+      DELETED: 3,
     });
   });
 
