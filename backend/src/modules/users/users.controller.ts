@@ -20,6 +20,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { parseOptionalBoolQuery } from '../../common/utils/parse-optional-bool-query.util';
 
 @ApiBearerAuth('token')
 @Controller('users')
@@ -35,12 +36,17 @@ export class UsersController {
     @Query('status') status?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
+    @Query('includeStatusCounts') includeStatusCountsQuery?: string,
   ) {
     const result = await this.usersService.findAll({
       role,
       status,
       page,
       limit,
+      includeStatusCounts: parseOptionalBoolQuery(
+        includeStatusCountsQuery,
+        'includeStatusCounts',
+      ),
     });
     return {
       success: true,
@@ -49,6 +55,7 @@ export class UsersController {
       limit: result.limit,
       total: result.total,
       totalPages: result.totalPages,
+      ...(result.statusCounts ? { statusCounts: result.statusCounts } : {}),
     };
   }
 

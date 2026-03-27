@@ -6,23 +6,50 @@ import type {
   UpdateExtractionDto,
 } from '@/types/extraction';
 
-function normalizeExtraction(raw: Record<string, any>): Extraction {
+type RawExtraction = Record<string, unknown>;
+
+function readString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function readNullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function readNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' ? value : fallback;
+}
+
+function readNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' ? value : null;
+}
+
+function readBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function normalizeExtraction(raw: RawExtraction): Extraction {
   return {
-    id: raw.id,
-    fileId: raw.fileId ?? raw.file_id,
-    classId: raw.classId ?? raw.class_id,
-    teacherId: raw.teacherId ?? raw.teacher_id,
-    extractionStatus: raw.extractionStatus ?? raw.extraction_status,
-    modelUsed: raw.modelUsed ?? raw.model_used ?? null,
-    errorMessage: raw.errorMessage ?? raw.error_message ?? null,
-    structuredContent: raw.structuredContent ?? raw.structured_content ?? null,
-    isApplied: raw.isApplied ?? raw.is_applied ?? false,
-    progressPercent: raw.progressPercent ?? raw.progress_percent ?? 0,
-    totalChunks: raw.totalChunks ?? raw.total_chunks ?? null,
-    processedChunks: raw.processedChunks ?? raw.processed_chunks ?? 0,
-    createdAt: raw.createdAt ?? raw.created_at,
-    updatedAt: raw.updatedAt ?? raw.updated_at,
-    originalName: raw.originalName ?? raw.original_name ?? null,
+    id: readString(raw.id),
+    fileId: readString(raw.fileId ?? raw.file_id),
+    classId: readString(raw.classId ?? raw.class_id),
+    teacherId: readString(raw.teacherId ?? raw.teacher_id),
+    extractionStatus: readString(
+      raw.extractionStatus ?? raw.extraction_status,
+    ) as Extraction['extractionStatus'],
+    modelUsed: readNullableString(raw.modelUsed ?? raw.model_used),
+    errorMessage: readNullableString(raw.errorMessage ?? raw.error_message),
+    structuredContent: (raw.structuredContent ??
+      raw.structured_content ??
+      null) as Extraction['structuredContent'],
+    isApplied: readBoolean(raw.isApplied ?? raw.is_applied),
+    progressPercent: readNumber(raw.progressPercent ?? raw.progress_percent),
+    totalChunks: readNullableNumber(raw.totalChunks ?? raw.total_chunks),
+    processedChunks: readNumber(raw.processedChunks ?? raw.processed_chunks),
+    createdAt: readString(raw.createdAt ?? raw.created_at),
+    updatedAt: readString(raw.updatedAt ?? raw.updated_at),
+    originalName:
+      readNullableString(raw.originalName ?? raw.original_name) ?? undefined,
   };
 }
 
@@ -63,6 +90,7 @@ export const extractionService = {
     const { data } = await api.get('/ai/extractions', {
       params: { classId },
     });
+
     return {
       ...data,
       data: Array.isArray(data.data) ? data.data.map(normalizeExtraction) : [],
@@ -75,7 +103,7 @@ export const extractionService = {
     const { data } = await api.get(`/ai/extractions/${id}`);
     return {
       ...data,
-      data: normalizeExtraction(data.data),
+      data: normalizeExtraction(data.data as RawExtraction),
     };
   },
 
@@ -86,7 +114,7 @@ export const extractionService = {
     const { data } = await api.patch(`/ai/extractions/${id}`, dto);
     return {
       ...data,
-      data: normalizeExtraction(data.data),
+      data: normalizeExtraction(data.data as RawExtraction),
     };
   },
 

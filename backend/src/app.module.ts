@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { SectionsModule } from './modules/sections/sections.module';
@@ -56,7 +57,7 @@ import ollamaConfig from './config/ollama.config';
     ThrottlerModule.forRoot([
       {
         ttl: 60000, // 60 seconds
-        limit: 30, // global fallback: 30 req / 60 s per IP
+        limit: 300, // global fallback: 300 req / 60 s per authenticated user
       },
     ]),
     ScheduleModule.forRoot(),
@@ -100,7 +101,7 @@ import ollamaConfig from './config/ollama.config';
     },
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard, // Global rate-limit guard
+      useClass: AppThrottlerGuard, // Global rate-limit guard
     },
   ],
 })

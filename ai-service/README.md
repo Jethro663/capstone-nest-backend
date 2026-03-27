@@ -23,6 +23,13 @@ ollama pull nomic-embed-text
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Testing
+
+```bash
+# Stable cross-platform test runner
+python scripts/run_tests.py
+```
+
 ## Environment Variables
 
 | Variable | Default | Description |

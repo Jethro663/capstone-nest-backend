@@ -161,6 +161,38 @@ describe('UsersService', () => {
         service.findAll({ status: 'BROKEN' as any }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('returns statusCounts when includeStatusCounts is enabled', async () => {
+      const countChain = (total: number) => ({
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue([{ total }]),
+      });
+
+      mockDb.select
+        .mockReturnValueOnce(countChain(1))
+        .mockReturnValueOnce(countChain(4))
+        .mockReturnValueOnce(countChain(1))
+        .mockReturnValueOnce(countChain(2))
+        .mockReturnValueOnce(countChain(3));
+      mockDb.query.users.findMany.mockResolvedValue([
+        {
+          ...makeUser({ password: 'secret-hash' }),
+          userRoles: [{ role: { id: 'role-1', name: 'student' } }],
+        },
+      ]);
+
+      const result = await service.findAll({
+        status: 'ACTIVE',
+        includeStatusCounts: true,
+      });
+
+      expect(result.statusCounts).toEqual({
+        ACTIVE: 4,
+        PENDING: 1,
+        SUSPENDED: 2,
+        DELETED: 3,
+      });
+    });
   });
 
   describe('createUser', () => {

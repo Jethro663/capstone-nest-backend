@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity,
@@ -13,22 +13,16 @@ import {
   Users,
   Zap,
 } from 'lucide-react';
-import { analyticsService } from '@/services/analytics-service';
-import { adminService } from '@/services/admin-service';
-import { dashboardService, type AdminDashboardStats } from '@/services/dashboard-service';
+import { adminService, type AdminOverviewResponse } from '@/services/admin-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
 
-type UsageSummary = {
-  activeTeachers: number;
-  activeStudents: number;
-  assessmentSubmissions: number;
-  lessonCompletions: number;
-};
-
-type HealthReadiness = Awaited<ReturnType<typeof adminService.getHealthReadiness>>;
+type AdminOverviewData = AdminOverviewResponse['data'];
+type AdminDashboardStats = AdminOverviewData['stats'];
+type UsageSummary = AdminOverviewData['usageSummary'];
+type HealthReadiness = AdminOverviewData['readiness'];
 
 function formatGrowth(value: number) {
   return value > 0 ? `+ ${value} new this week` : 'No weekly delta';
@@ -196,54 +190,30 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [healthReadiness, setHealthReadiness] = useState<HealthReadiness | null>(null);
-  const interval = 30000;
+  const interval = 60000;
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options?: { force?: boolean }) => {
+    const isInitialLoad = loading && !stats;
+    if (isInitialLoad) {
+      setLoading(true);
+    }
+
     setError(null);
-    const [statsRes, usageRes, readinessRes] = await Promise.allSettled([
-      dashboardService.getAdminStats(),
-      adminService.getUsageSummary(),
-      adminService.getHealthReadiness(),
-      analyticsService.getAdminOverview(),
-    ]);
 
-    let successfulLoads = 0;
-
-    if (statsRes.status === 'fulfilled') {
-      setStats(statsRes.value.data);
-      successfulLoads += 1;
-    }
-
-    if (usageRes.status === 'fulfilled') {
-      setUsageSummary({
-        activeTeachers: usageRes.value.data.activeTeachers,
-        activeStudents: usageRes.value.data.activeStudents,
-        assessmentSubmissions: usageRes.value.data.assessmentSubmissions,
-        lessonCompletions: usageRes.value.data.lessonCompletions,
-      });
-      successfulLoads += 1;
-    }
-
-    if (readinessRes.status === 'fulfilled') {
-      setHealthReadiness(readinessRes.value ?? null);
-      successfulLoads += 1;
-    }
-
-    if (successfulLoads > 0) {
+    try {
+      const overview = await adminService.getOverview({ force: options?.force });
+      setStats(overview.data.stats);
+      setUsageSummary(overview.data.usageSummary);
+      setHealthReadiness(overview.data.readiness);
       setLastUpdated(new Date());
-      setError(null);
-    } else {
+    } catch {
       setError('Dashboard services are temporarily unavailable.');
+    } finally {
+      setLoading(false);
     }
+  }, [loading, stats]);
 
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useAutoRefresh(fetchData, interval, autoRefresh);
+  useAutoRefresh(fetchData, interval, autoRefresh, true);
 
   const totalUsers = (stats?.totalStudents ?? 0) + (stats?.totalTeachers ?? 0) + (stats?.totalAdmins ?? 0);
   const pulseSeries = useMemo(
@@ -279,22 +249,22 @@ export default function AdminDashboardPage() {
   const services = [
     {
       label: 'API Server',
-      status: healthReadiness?.data?.ready ? 'Healthy' : 'Check',
+      status: healthReadiness?.ready ? 'Healthy' : 'Check',
       icon: Shield,
     },
     {
       label: 'Database',
-      status: healthReadiness?.data?.dependencies?.database?.ok ? 'Healthy' : 'Issue',
+      status: healthReadiness?.dependencies?.database?.ok ? 'Healthy' : 'Issue',
       icon: Activity,
     },
     {
       label: 'Redis Cache',
-      status: healthReadiness?.data?.dependencies?.redis?.ok ? 'Healthy' : 'Issue',
+      status: healthReadiness?.dependencies?.redis?.ok ? 'Healthy' : 'Issue',
       icon: Zap,
     },
     {
       label: 'AI Service',
-      status: healthReadiness?.data?.dependencies?.aiService?.ok ? 'Healthy' : 'Offline',
+      status: healthReadiness?.dependencies?.aiService?.ok ? 'Healthy' : 'Offline',
       icon: BookOpen,
     },
   ];
@@ -318,7 +288,7 @@ export default function AdminDashboardPage() {
           </label>
           <Button
             className="rounded-[1rem] border-0 bg-[#364152] px-4 font-bold text-white shadow-none hover:bg-[#465164]"
-            onClick={fetchData}
+            onClick={() => void fetchData({ force: true })}
           >
             <RefreshCcw className="h-4 w-4" />
             Refresh

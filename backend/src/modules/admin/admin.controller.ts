@@ -15,6 +15,17 @@ import type { Response } from 'express';
 export class AdminController {
   constructor(private adminService: AdminService) {}
 
+  @Get('overview')
+  @Roles(RoleName.Admin)
+  async getOverview() {
+    const data = await this.adminService.getDashboardOverview();
+    return {
+      success: true,
+      message: 'Admin overview retrieved successfully.',
+      data,
+    };
+  }
+
   @Get('dashboard/stats')
   @Roles(RoleName.Admin)
   async getDashboardStats() {

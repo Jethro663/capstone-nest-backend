@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "jest.config.cjs",
+    "scripts/**",
+    "test-theme-switching.js",
   ]),
 ]);
 

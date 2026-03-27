@@ -84,18 +84,20 @@ export default function UserManagementPage() {
     try {
       setLoading(true);
       const status = STATUS_MAP[tab];
-      const res = await userService.getAll({ status, limit: 200 });
-      const activeRes = await userService.getAll({ status: STATUS_MAP.active, limit: 1 });
-      const pendingRes = await userService.getAll({ status: STATUS_MAP.pending, limit: 1 });
-      const suspendedRes = await userService.getAll({ status: STATUS_MAP.suspended, limit: 1 });
-      const deletedRes = await userService.getAll({ status: STATUS_MAP.deleted, limit: 1 });
-      setUsers(res.users || []);
-      setStatusCounts({
-        active: activeRes.total,
-        pending: pendingRes.total,
-        suspended: suspendedRes.total,
-        deleted: deletedRes.total,
+      const res = await userService.getAll({
+        status,
+        limit: 200,
+        includeStatusCounts: true,
       });
+      setUsers(res.users || []);
+      if (res.statusCounts) {
+        setStatusCounts({
+          active: res.statusCounts.ACTIVE,
+          pending: res.statusCounts.PENDING,
+          suspended: res.statusCounts.SUSPENDED,
+          deleted: res.statusCounts.DELETED,
+        });
+      }
     } catch {
       toast.error('Failed to load users');
     } finally {

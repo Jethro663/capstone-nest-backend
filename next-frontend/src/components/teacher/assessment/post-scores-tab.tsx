@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,20 @@ const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; ba
   returned: { label: 'Posted', color: 'text-emerald-600', badgeColor: 'bg-emerald-100 text-emerald-700' },
 };
 
+type ExportRow = Record<string, string | number>;
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string }>(error)) {
+    return error.response?.data?.message || error.message || fallback;
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+
+  return fallback;
+}
+
 export function PostScoresTab({ assessmentId, assessment, submissions, onDataChanged }: PostScoresTabProps) {
   const [returnAllOpen, setReturnAllOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
@@ -58,8 +73,8 @@ export function PostScoresTab({ assessmentId, assessment, submissions, onDataCha
       setReturnAllOpen(false);
       setFeedback('');
       onDataChanged();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to post grades');
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error, 'Failed to post grades'));
     } finally {
       setReturning(false);
     }
@@ -68,7 +83,7 @@ export function PostScoresTab({ assessmentId, assessment, submissions, onDataCha
   const handleExportExcel = async () => {
     try {
       const XLSX = await import('xlsx');
-      const rows = allSubmissions.map((s) => ({
+      const rows: ExportRow[] = allSubmissions.map((s) => ({
         'Student Name': `${s.lastName}, ${s.firstName}`,
         'Email': s.email ?? '',
         'Status': STATUS_CONFIG[s.status].label,
@@ -84,7 +99,10 @@ export function PostScoresTab({ assessmentId, assessment, submissions, onDataCha
 
       // Auto-width columns
       const colWidths = Object.keys(rows[0] || {}).map((key) => {
-        const maxLen = Math.max(key.length, ...rows.map((r) => String((r as any)[key]).length));
+        const maxLen = Math.max(
+          key.length,
+          ...rows.map((row) => String(row[key as keyof ExportRow]).length),
+        );
         return { wch: Math.min(maxLen + 2, 40) };
       });
       ws['!cols'] = colWidths;

@@ -4,6 +4,7 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 
 const mockAdminService = {
+  getDashboardOverview: jest.fn(),
   getDashboardStats: jest.fn(),
   getAuditLogs: jest.fn(),
 };
@@ -53,5 +54,30 @@ describe('AdminController', () => {
     await expect(controller.getAuditLogs(undefined, 'abc')).rejects.toThrow(
       BadRequestException,
     );
+  });
+
+  it('wraps the admin overview in the standard success envelope', async () => {
+    mockAdminService.getDashboardOverview.mockResolvedValue({
+      stats: { totalUsers: 12 },
+      usageSummary: { activeTeachers: 3 },
+      analyticsOverview: { totals: { classes: 4 } },
+      readiness: { ready: true },
+      fetchedAt: '2026-03-27T00:00:00.000Z',
+    });
+
+    const result = await controller.getOverview();
+
+    expect(mockAdminService.getDashboardOverview).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      success: true,
+      message: 'Admin overview retrieved successfully.',
+      data: {
+        stats: { totalUsers: 12 },
+        usageSummary: { activeTeachers: 3 },
+        analyticsOverview: { totals: { classes: 4 } },
+        readiness: { ready: true },
+        fetchedAt: '2026-03-27T00:00:00.000Z',
+      },
+    });
   });
 });

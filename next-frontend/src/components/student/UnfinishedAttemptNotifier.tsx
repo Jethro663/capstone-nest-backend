@@ -42,9 +42,14 @@ export function UnfinishedAttemptNotifier() {
 
   // Poll every 30 seconds
   useEffect(() => {
-    fetchAttempts();
+    const timeout = setTimeout(() => {
+      void fetchAttempts();
+    }, 0);
     const interval = setInterval(fetchAttempts, 30_000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [fetchAttempts]);
 
   // Tick every second for countdown display

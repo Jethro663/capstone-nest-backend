@@ -6,18 +6,26 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  Activity,
   LayoutDashboard,
   BookOpen,
   Users,
   Settings,
   LogOut,
   ClipboardList,
+  ClipboardCheck,
   Megaphone,
   FolderOpen,
   User,
   Bot,
   X,
   BarChart3,
+  ChevronLeft,
+  CircleUserRound,
+  History,
+  Layers3,
+  Library,
+  Upload,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
@@ -57,18 +65,18 @@ const teacherNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard/admin', icon: LayoutDashboard },
-  { label: 'Diagnostics', href: '/dashboard/admin/diagnostics', icon: Settings },
+  { label: 'Diagnostics', href: '/dashboard/admin/diagnostics', icon: Activity },
   { label: 'Users', href: '/dashboard/admin/users', icon: Users },
-  { label: 'Sections', href: '/dashboard/admin/sections', icon: FolderOpen },
+  { label: 'Sections', href: '/dashboard/admin/sections', icon: Layers3 },
   { label: 'Classes', href: '/dashboard/admin/classes', icon: BookOpen },
-  { label: 'Nexora Library', href: '/dashboard/library', icon: FolderOpen },
-  { label: 'Roster Import', href: '/dashboard/admin/roster-import', icon: ClipboardList },
+  { label: 'Nexora Library', href: '/dashboard/library', icon: Library },
+  { label: 'Roster Import', href: '/dashboard/admin/roster-import', icon: Upload },
   { label: 'Reports', href: '/dashboard/admin/reports', icon: BarChart3 },
-  { label: 'Evaluations', href: '/dashboard/admin/evaluations', icon: Settings },
+  { label: 'Evaluations', href: '/dashboard/admin/evaluations', icon: ClipboardCheck },
   { label: 'Announcements', href: '/dashboard/admin/announcements', icon: Megaphone },
   { label: 'AI Chatbot', href: '/dashboard/admin/chatbot', icon: Bot },
-  { label: 'Audit Trail', href: '/dashboard/admin/audit', icon: Settings },
-  { label: 'Profile', href: '/dashboard/admin/profile', icon: User },
+  { label: 'Audit Trail', href: '/dashboard/admin/audit', icon: History },
+  { label: 'Profile', href: '/dashboard/admin/profile', icon: CircleUserRound },
 ];
 
 function getNavItems(role: string | null): NavItem[] {
@@ -129,13 +137,20 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
-      <div className={cn('flex h-16 items-center justify-between border-b px-4', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
+      <div
+        className={cn(
+          'flex h-22 items-center justify-between border-b px-4',
+          isStudentRoute && 'border-[var(--student-outline)]',
+          isTeacherRoute && 'border-[var(--teacher-outline)]',
+          isAdminRoute && 'admin-sidebar__header',
+        )}
+      >
         {isAdminRoute ? (
           <div className="admin-sidebar__brand">
             <div className="admin-sidebar__logo">
               <BookOpen className="h-4 w-4" />
             </div>
-            <div>
+            <div className="admin-sidebar__brand-copy">
               <h1 className="admin-sidebar__title">Nexora</h1>
               <p className="admin-sidebar__subtitle">Admin Portal</p>
             </div>
@@ -182,7 +197,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className={cn('h-4 w-4', isAdminRoute && 'admin-sidebar__item-icon')} />
               {item.label}
             </button>
           );
@@ -190,12 +205,17 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       </nav>
 
       {isAdminRoute ? (
-        <div className="admin-sidebar__footer">
+        <div className="admin-sidebar__footer-wrap">
+          <div className="admin-sidebar__section-divider" />
+          <button type="button" className="admin-sidebar__collapse" aria-label="Collapse sidebar">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="admin-sidebar__footer">
           <div className="admin-sidebar__profile">
             <div className="admin-sidebar__avatar">{initials}</div>
             <div className="min-w-0">
               <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">{displayName}</p>
-              <p className="truncate text-xs text-[var(--admin-sidebar-text)]">admin</p>
+              <p className="truncate text-xs text-[var(--admin-sidebar-text)]">Admin</p>
             </div>
           </div>
           <Button
@@ -206,6 +226,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
+          </div>
         </div>
       ) : (
         <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
