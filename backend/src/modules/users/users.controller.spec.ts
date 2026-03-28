@@ -17,6 +17,7 @@ describe('UsersController', () => {
     softDeleteUser: jest.fn(),
     exportUserData: jest.fn(),
     purgeUser: jest.fn(),
+    bulkLifecycleAction: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -126,6 +127,38 @@ describe('UsersController', () => {
       message: 'Password reset successfully',
       userId: 'u1',
       generatedPassword: 'Temp@12345A',
+    });
+  });
+
+  it('bulkLifecycle returns the response envelope with action summary data', async () => {
+    mockUsersService.bulkLifecycleAction.mockResolvedValue({
+      message: '2 users suspended; 1 failed.',
+      data: {
+        action: 'suspend',
+        requested: 3,
+        succeeded: ['u1', 'u2'],
+        failed: [{ userId: 'u3', reason: 'You cannot suspend your own account' }],
+      },
+    });
+
+    const result = await controller.bulkLifecycle(
+      { action: 'suspend', userIds: ['u1', 'u2', 'u3'] },
+      { sub: 'admin-1' },
+    );
+
+    expect(mockUsersService.bulkLifecycleAction).toHaveBeenCalledWith(
+      { action: 'suspend', userIds: ['u1', 'u2', 'u3'] },
+      'admin-1',
+    );
+    expect(result).toEqual({
+      success: true,
+      message: '2 users suspended; 1 failed.',
+      data: {
+        action: 'suspend',
+        requested: 3,
+        succeeded: ['u1', 'u2'],
+        failed: [{ userId: 'u3', reason: 'You cannot suspend your own account' }],
+      },
     });
   });
 });

@@ -19,8 +19,8 @@ import {
   User,
   Bot,
   X,
+  Menu,
   BarChart3,
-  ChevronLeft,
   CircleUserRound,
   History,
   Layers3,
@@ -104,9 +104,11 @@ function getRoleLabel(role: string | null): string {
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
+  isAdminCollapsed?: boolean;
+  onAdminCollapseToggle?: () => void;
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollapseToggle }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { role, user } = useAuth();
@@ -134,6 +136,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         isStudentRoute && 'student-sidebar',
         isTeacherRoute && 'teacher-sidebar',
         isAdminRoute && 'admin-sidebar',
+        isAdminRoute && isAdminCollapsed && 'admin-sidebar--collapsed',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -163,9 +166,30 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </p>
           </div>
         )}
-        <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
-          <X className="h-5 w-5" />
-        </button>
+        {isAdminRoute ? (
+          <div className="admin-sidebar__header-actions">
+            <button
+              type="button"
+              className="admin-sidebar__toggle hidden md:inline-flex"
+              onClick={onAdminCollapseToggle}
+              aria-label="Collapse sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="text-[var(--admin-sidebar-text)] md:hidden"
+              onClick={onClose}
+              aria-label="Close sidebar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <nav className={cn('flex-1 space-y-1 overflow-y-auto p-3', isAdminRoute && 'admin-sidebar__nav')}>
@@ -207,25 +231,22 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {isAdminRoute ? (
         <div className="admin-sidebar__footer-wrap">
           <div className="admin-sidebar__section-divider" />
-          <button type="button" className="admin-sidebar__collapse" aria-label="Collapse sidebar">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
           <div className="admin-sidebar__footer">
-          <div className="admin-sidebar__profile">
-            <div className="admin-sidebar__avatar">{initials}</div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">{displayName}</p>
-              <p className="truncate text-xs text-[var(--admin-sidebar-text)]">Admin</p>
+            <div className="admin-sidebar__profile">
+              <div className="admin-sidebar__avatar">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">{displayName}</p>
+                <p className="truncate text-xs text-[var(--admin-sidebar-text)]">Admin</p>
+              </div>
             </div>
-          </div>
-          <Button
-            variant="ghost"
-            className="admin-sidebar__logout"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+            <Button
+              variant="ghost"
+              className="admin-sidebar__logout"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
           </div>
         </div>
       ) : (

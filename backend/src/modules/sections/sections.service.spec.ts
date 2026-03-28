@@ -818,6 +818,67 @@ describe('SectionsService', () => {
     });
   });
 
+  describe('bulkLifecycleAction', () => {
+    it('aggregates archive successes and failures without aborting the batch', async () => {
+      const archiveSpy = jest
+        .spyOn(service, 'archiveSection')
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new ConflictException('Section is already archived.'))
+        .mockResolvedValueOnce(undefined);
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(
+          makeSection({ isActive: true }),
+        );
+
+      const result = await service.bulkLifecycleAction({
+        action: 'archive',
+        sectionIds: ['section-1', 'section-2', 'section-3'],
+      });
+
+      expect(archiveSpy).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({
+        message: '2 sections archived; 1 failed.',
+        data: {
+          action: 'archive',
+          requested: 3,
+          succeeded: ['section-1', 'section-3'],
+          failed: [
+            { sectionId: 'section-2', reason: 'Section is already archived.' },
+          ],
+        },
+      });
+    });
+
+    it('fails restore for already-active sections without aborting the batch', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeSection({ isActive: false }))
+        .mockResolvedValueOnce(makeSection({ isActive: true }));
+      const restoreSpy = jest
+        .spyOn(service, 'restoreSection')
+        .mockResolvedValueOnce(undefined);
+
+      const result = await service.bulkLifecycleAction({
+        action: 'restore',
+        sectionIds: ['section-1', 'section-2'],
+      });
+
+      expect(restoreSpy).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        message: '1 section restored; 1 failed.',
+        data: {
+          action: 'restore',
+          requested: 2,
+          succeeded: ['section-1'],
+          failed: [
+            { sectionId: 'section-2', reason: 'Section is already active.' },
+          ],
+        },
+      });
+    });
+  });
+
   // =========================================================================
   // getSectionSchedule
   // =========================================================================

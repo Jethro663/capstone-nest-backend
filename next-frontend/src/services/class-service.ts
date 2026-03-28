@@ -23,6 +23,27 @@ export interface ClassesQuery {
   limit?: number;
 }
 
+export type BulkClassLifecycleAction = 'archive' | 'restore' | 'purge';
+
+export interface BulkClassLifecycleDto {
+  action: BulkClassLifecycleAction;
+  classIds: string[];
+}
+
+export interface BulkClassLifecycleResponse {
+  success: boolean;
+  message: string;
+  data: {
+    action: BulkClassLifecycleAction;
+    requested: number;
+    succeeded: string[];
+    failed: Array<{
+      classId: string;
+      reason: string;
+    }>;
+  };
+}
+
 export const classService = {
   /** GET /classes/all — Admin, Teacher */
   async getAll(query?: ClassesQuery): Promise<{ success: boolean; message: string; data: { data: ClassItem[]; total: number; page: number; limit: number } }> {
@@ -125,6 +146,11 @@ export const classService = {
   /** DELETE /classes/:id/purge — Admin only */
   async purge(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/classes/${id}/purge`);
+    return data;
+  },
+
+  async bulkLifecycle(dto: BulkClassLifecycleDto): Promise<BulkClassLifecycleResponse> {
+    const { data } = await api.post('/classes/bulk/lifecycle', dto);
     return data;
   },
 

@@ -9,8 +9,11 @@ import { StudentTutorLauncher } from '@/components/student/StudentTutorLauncher'
 import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemptNotifier';
 import { Loader2 } from 'lucide-react';
 
+const ADMIN_SIDEBAR_STORAGE_KEY = 'nexora.adminSidebarCollapsed';
+
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
   const { loading, isAuthenticated, isProfileIncomplete } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -31,6 +34,32 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     router.replace(!isAuthenticated ? '/login' : '/complete-profile');
   }, [shouldRedirect, isAuthenticated, router]);
 
+  useEffect(() => {
+    const savedState = window.localStorage.getItem(ADMIN_SIDEBAR_STORAGE_KEY);
+
+    if (savedState !== 'true') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setAdminSidebarCollapsed(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  const setPersistedAdminSidebarCollapsed = (collapsed: boolean) => {
+    setAdminSidebarCollapsed(collapsed);
+    window.localStorage.setItem(ADMIN_SIDEBAR_STORAGE_KEY, collapsed ? 'true' : 'false');
+  };
+
+  const handleSidebarToggle = () => {
+    if (isAdminRoute && window.matchMedia('(min-width: 768px)').matches) {
+      setPersistedAdminSidebarCollapsed(!adminSidebarCollapsed);
+      return;
+    }
+
+    setSidebarOpen((open) => !open);
+  };
+
   // Show a loading spinner while auth state is being resolved
   if (loading || shouldRedirect) {
     return (
@@ -50,10 +79,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         />
       )}
 
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        isAdminCollapsed={adminSidebarCollapsed}
+        onAdminCollapseToggle={() => setPersistedAdminSidebarCollapsed(true)}
+      />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <TopBar onMenuToggle={() => setSidebarOpen((o) => !o)} />
+        <TopBar
+          onMenuToggle={handleSidebarToggle}
+          showAdminDesktopMenu={adminSidebarCollapsed}
+        />
         <main
           className={`flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherRoute ? 'teacher-page' : ''} ${isAdminRoute ? 'admin-main p-5 lg:p-8' : ''}`}
         >

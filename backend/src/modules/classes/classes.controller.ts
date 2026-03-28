@@ -26,6 +26,7 @@ import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { UpdateClassPresentationDto } from './DTO/update-class-presentation.dto';
 import { EnrollStudentDto } from './DTO/enroll-student.dto';
+import { BulkClassLifecycleDto } from './DTO/bulk-class-lifecycle.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -318,6 +319,18 @@ export class ClassesController {
       success: true,
       message: 'Class status toggled successfully',
       data: updatedClass,
+    };
+  }
+
+  @Post('bulk/lifecycle')
+  @Roles(RoleName.Admin)
+  async bulkLifecycle(@Body() dto: BulkClassLifecycleDto) {
+    const result = await this.classesService.bulkLifecycleAction(dto);
+
+    return {
+      success: true,
+      message: result.message,
+      data: result.data,
     };
   }
 

@@ -14,6 +14,7 @@ import { SectionsService } from './sections.service';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
+import { BulkSectionLifecycleDto } from './DTO/bulk-section-lifecycle.dto';
 import { Throttle } from '@nestjs/throttler';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -145,6 +146,20 @@ export class SectionsController {
     return {
       success: true,
       message: 'Section archived successfully',
+    };
+  }
+
+  @Post('bulk/lifecycle')
+  @Roles(RoleName.Admin)
+  async bulkLifecycle(
+    @Body() dto: BulkSectionLifecycleDto,
+  ) {
+    const result = await this.sectionsService.bulkLifecycleAction(dto);
+
+    return {
+      success: true,
+      message: result.message,
+      data: result.data,
     };
   }
 

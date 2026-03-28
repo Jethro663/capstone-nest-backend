@@ -15,6 +15,7 @@ import type { Response } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
+import { BulkUserLifecycleDto } from './DTO/bulk-user-lifecycle.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -192,5 +193,23 @@ export class UsersController {
   async purgeUser(@Param('id') id: string, @CurrentUser() admin: any) {
     const result = await this.usersService.purgeUser(id, admin.sub || admin.id);
     return { success: true, ...result };
+  }
+
+  @Post('bulk/lifecycle')
+  @Roles(RoleName.Admin)
+  async bulkLifecycle(
+    @Body() dto: BulkUserLifecycleDto,
+    @CurrentUser() admin: any,
+  ) {
+    const result = await this.usersService.bulkLifecycleAction(
+      dto,
+      admin.sub || admin.id,
+    );
+
+    return {
+      success: true,
+      message: result.message,
+      data: result.data,
+    };
   }
 }

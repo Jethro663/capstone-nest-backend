@@ -6,6 +6,7 @@ import { ClassesService } from './classes.service';
 const mockClassesService = {
   findAll: jest.fn(),
   getStudentsMasterlistForClass: jest.fn(),
+  bulkLifecycleAction: jest.fn(),
 };
 
 describe('ClassesController', () => {
@@ -102,6 +103,40 @@ describe('ClassesController', () => {
           'foo',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('bulkLifecycle', () => {
+    it('returns the response envelope with class bulk summary data', async () => {
+      mockClassesService.bulkLifecycleAction.mockResolvedValue({
+        message: '1 class restored; 1 failed.',
+        data: {
+          action: 'restore',
+          requested: 2,
+          succeeded: ['class-1'],
+          failed: [{ classId: 'class-2', reason: 'Class is already active.' }],
+        },
+      });
+
+      const result = await controller.bulkLifecycle({
+        action: 'restore',
+        classIds: ['class-1', 'class-2'],
+      });
+
+      expect(mockClassesService.bulkLifecycleAction).toHaveBeenCalledWith({
+        action: 'restore',
+        classIds: ['class-1', 'class-2'],
+      });
+      expect(result).toEqual({
+        success: true,
+        message: '1 class restored; 1 failed.',
+        data: {
+          action: 'restore',
+          requested: 2,
+          succeeded: ['class-1'],
+          failed: [{ classId: 'class-2', reason: 'Class is already active.' }],
+        },
+      });
     });
   });
 });

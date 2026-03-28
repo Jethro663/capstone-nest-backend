@@ -2,22 +2,20 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Copy, KeyRound, ShieldCheck, UserCircle2, Users } from 'lucide-react';
+import { Copy, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { userService } from '@/services/user-service';
 import {
   AdminPageShell,
   AdminSectionCard,
-  AdminStatCard,
 } from '@/components/admin/AdminPageShell';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { getRoleName, formatDate } from '@/utils/helpers';
+import { formatDate, getRoleName } from '@/utils/helpers';
 import type { UpdateUserDto, User } from '@/types/user';
 
 type UserFormState = {
@@ -197,14 +195,9 @@ export default function AdminUserDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
-          ))}
-        </div>
-        <Skeleton className="h-[32rem] rounded-[1.7rem]" />
+      <div className="space-y-4">
+        <Skeleton className="h-24 rounded-[1.2rem]" />
+        <Skeleton className="h-[30rem] rounded-[1.2rem]" />
       </div>
     );
   }
@@ -216,73 +209,60 @@ export default function AdminUserDetailPage() {
   return (
     <AdminPageShell
       badge="Admin Users"
-      title={`${form.firstName} ${form.lastName}`}
-      description="User details now live inside a stronger admin profile workspace, with the same edit and reset actions presented in a more readable way."
+      title={`${form.firstName} ${form.lastName}`.trim()}
+      description="Review and update account details in the same compact form layout used for new users."
+      variant="compact-form"
       actions={(
         <>
-          <Button variant="outline" className="admin-button-outline rounded-xl px-4 font-black" onClick={() => router.back()}>
+          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => router.back()}>
             Back
           </Button>
-          <Button variant="outline" className="admin-button-outline rounded-xl px-4 font-black" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
+          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetConfirm(true)} disabled={resetting}>
             <KeyRound className="h-4 w-4" />
             {resetting ? 'Resetting...' : 'Reset Password'}
           </Button>
         </>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Status" value={user.status} caption="Current account state" icon={ShieldCheck} accent="emerald" />
-          <AdminStatCard label="Role" value={role} caption="Primary role assignment" icon={UserCircle2} accent="sky" />
-          <AdminStatCard label="Created" value={user.createdAt ? formatDate(user.createdAt) : 'Unknown'} caption="Account creation date" icon={Users} accent="amber" />
-          <AdminStatCard label="Last Login" value={user.lastLoginAt ? formatDate(String(user.lastLoginAt)) : 'Never'} caption="Most recent sign-in" icon={KeyRound} accent="rose" />
+          <MetaItem label="Status" value={user.status} />
+          <MetaItem label="Role" value={role} />
+          <MetaItem label="Created" value={user.createdAt ? formatDate(user.createdAt) : 'Unknown'} />
+          <MetaItem label="Last login" value={user.lastLoginAt ? formatDate(String(user.lastLoginAt)) : 'Never'} />
         </>
       )}
     >
-      <AdminSectionCard title="Identity Snapshot" description="High-signal account facts stay visible at the top while you manage the details below.">
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="admin-metric">
-            <span>User ID</span>
-            <strong className="break-all">{user.id}</strong>
-          </div>
-          <div className="admin-metric">
-            <span>Status</span>
-            <strong>{user.status}</strong>
-          </div>
-          <div className="admin-metric">
-            <span>Role</span>
-            <strong>{role}</strong>
-          </div>
-        </div>
-      </AdminSectionCard>
-
       <AdminSectionCard
         title="Account Details"
-        description="Core identity, email, and role assignment stay editable here, but the layout now mirrors the upgraded admin workspace."
-        action={(
-          <div className="flex items-center gap-2">
-            <Badge variant={user.status === 'ACTIVE' ? 'default' : 'secondary'}>{user.status}</Badge>
-            <Badge variant="outline">{role}</Badge>
-          </div>
-        )}
+        description="Core identity, email, and role assignment."
+        density="compact"
+        contentClassName="space-y-4"
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <p className="text-xs text-[var(--admin-text-muted)]">
+          User ID:{' '}
+          <span className="font-semibold text-[var(--admin-text-strong)] break-all">
+            {user.id}
+          </span>
+        </p>
+
+        <div className="admin-form-grid admin-form-grid--three">
           <Field label="First Name">
-            <Input value={form.firstName} onChange={(event) => setField('firstName', event.target.value)} className="admin-input" />
+            <Input value={form.firstName} onChange={(event) => setField('firstName', event.target.value)} className="admin-input rounded-lg" />
           </Field>
           <Field label="Middle Name">
-            <Input value={form.middleName} onChange={(event) => setField('middleName', event.target.value)} className="admin-input" />
+            <Input value={form.middleName} onChange={(event) => setField('middleName', event.target.value)} className="admin-input rounded-lg" />
           </Field>
           <Field label="Last Name">
-            <Input value={form.lastName} onChange={(event) => setField('lastName', event.target.value)} className="admin-input" />
+            <Input value={form.lastName} onChange={(event) => setField('lastName', event.target.value)} className="admin-input rounded-lg" />
           </Field>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="admin-form-grid admin-form-grid--two">
           <Field label="Email Address">
-            <Input type="email" value={form.email} onChange={(event) => setField('email', event.target.value)} className="admin-input" />
+            <Input type="email" value={form.email} onChange={(event) => setField('email', event.target.value)} className="admin-input rounded-lg" />
           </Field>
           <Field label="Role">
-            <select value={form.role} onChange={(event) => setField('role', event.target.value as 'student' | 'teacher' | 'admin')} className="admin-select w-full text-sm font-semibold">
+            <select value={form.role} onChange={(event) => setField('role', event.target.value as 'student' | 'teacher' | 'admin')} className="admin-select w-full rounded-lg text-sm font-semibold">
               <option value="student">Student</option>
               <option value="teacher">Teacher</option>
               <option value="admin">Admin</option>
@@ -294,14 +274,16 @@ export default function AdminUserDetailPage() {
       {isStudent ? (
         <AdminSectionCard
           title="Student Profile"
-          description="Student-specific profile fields stay separate, but now sit in the same polished detail workspace."
+          description="Student details stay available in the same compact layout."
+          density="compact"
+          contentClassName="space-y-4"
         >
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="admin-form-grid admin-form-grid--three">
             <Field label="LRN">
-              <Input value={form.lrn} onChange={(event) => setField('lrn', event.target.value)} placeholder="12-digit LRN" className="admin-input" />
+              <Input value={form.lrn} onChange={(event) => setField('lrn', event.target.value)} placeholder="12-digit LRN" className="admin-input rounded-lg" />
             </Field>
             <Field label="Grade Level">
-              <select value={form.gradeLevel} onChange={(event) => setField('gradeLevel', event.target.value)} className="admin-select w-full text-sm font-semibold">
+              <select value={form.gradeLevel} onChange={(event) => setField('gradeLevel', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
                 <option value="">Select grade</option>
                 <option value="7">Grade 7</option>
                 <option value="8">Grade 8</option>
@@ -310,35 +292,33 @@ export default function AdminUserDetailPage() {
               </select>
             </Field>
             <Field label="Date of Birth">
-              <Input type="date" value={form.dateOfBirth} onChange={(event) => setField('dateOfBirth', event.target.value)} className="admin-input" />
+              <Input type="date" value={form.dateOfBirth} onChange={(event) => setField('dateOfBirth', event.target.value)} className="admin-input rounded-lg" />
             </Field>
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="admin-form-grid admin-form-grid--two">
             <Field label="Gender">
-              <select value={form.gender} onChange={(event) => setField('gender', event.target.value)} className="admin-select w-full text-sm font-semibold">
+              <select value={form.gender} onChange={(event) => setField('gender', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
                 <option value="">Select gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
             </Field>
             <Field label="Phone">
-              <Input value={form.phone} onChange={(event) => setField('phone', event.target.value)} className="admin-input" />
+              <Input value={form.phone} onChange={(event) => setField('phone', event.target.value)} className="admin-input rounded-lg" />
             </Field>
           </div>
 
-          <div className="mt-4">
-            <Field label="Address">
-              <Input value={form.address} onChange={(event) => setField('address', event.target.value)} className="admin-input" />
-            </Field>
-          </div>
+          <Field label="Address">
+            <Input value={form.address} onChange={(event) => setField('address', event.target.value)} className="admin-input rounded-lg" />
+          </Field>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <div className="admin-form-grid admin-form-grid--three">
             <Field label="Guardian Name">
-              <Input value={form.familyName} onChange={(event) => setField('familyName', event.target.value)} className="admin-input" />
+              <Input value={form.familyName} onChange={(event) => setField('familyName', event.target.value)} className="admin-input rounded-lg" />
             </Field>
             <Field label="Relationship">
-              <select value={form.familyRelationship} onChange={(event) => setField('familyRelationship', event.target.value)} className="admin-select w-full text-sm font-semibold">
+              <select value={form.familyRelationship} onChange={(event) => setField('familyRelationship', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
                 <option value="">Select relationship</option>
                 <option value="Father">Father</option>
                 <option value="Mother">Mother</option>
@@ -348,31 +328,31 @@ export default function AdminUserDetailPage() {
               </select>
             </Field>
             <Field label="Guardian Contact">
-              <Input value={form.familyContact} onChange={(event) => setField('familyContact', event.target.value)} className="admin-input" />
+              <Input value={form.familyContact} onChange={(event) => setField('familyContact', event.target.value)} className="admin-input rounded-lg" />
             </Field>
           </div>
         </AdminSectionCard>
       ) : null}
 
-      <div className="flex justify-end">
-        <Button className="admin-button-solid rounded-xl px-5 font-black" onClick={handleSave} disabled={saving}>
+      <div className="admin-form-actions">
+        <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
-        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
+        <DialogContent className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
           <DialogHeader>
             <DialogTitle>Reset User Password</DialogTitle>
             <DialogDescription>
-              This will generate a new temporary password for {form.firstName} {form.lastName}. The password will be emailed to the user.
+              Generate a new temporary password for {form.firstName} {form.lastName}. The password will be emailed to the user.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => setShowResetConfirm(false)} disabled={resetting}>
+            <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetConfirm(false)} disabled={resetting}>
               Cancel
             </Button>
-            <Button className="admin-button-solid rounded-xl font-black" onClick={handleResetPassword} disabled={resetting}>
+            <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleResetPassword} disabled={resetting}>
               {resetting ? 'Resetting...' : 'Confirm Reset'}
             </Button>
           </DialogFooter>
@@ -388,22 +368,22 @@ export default function AdminUserDetailPage() {
           }
         }}
       >
-        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
+        <DialogContent className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
           <DialogHeader>
             <DialogTitle>New Temporary Password</DialogTitle>
             <DialogDescription>
               Share this securely. This value is shown once in this admin view.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-[var(--admin-outline)] bg-white/75 p-3">
+          <div className="rounded-lg border border-[var(--admin-outline)] bg-slate-50 p-3">
             <p className="break-all font-mono text-sm">{generatedPassword}</p>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={handleCopyPassword}>
+            <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleCopyPassword}>
               <Copy className="mr-2 h-4 w-4" />
               Copy Password
             </Button>
-            <Button className="admin-button-solid rounded-xl font-black" onClick={() => setShowResetResult(false)}>
+            <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => setShowResetResult(false)}>
               Done
             </Button>
           </DialogFooter>
@@ -421,11 +401,26 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-1">
       <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </Label>
       {children}
+    </div>
+  );
+}
+
+function MetaItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="admin-compact-meta__item">
+      <span className="admin-compact-meta__label">{label}</span>
+      <span>{value}</span>
     </div>
   );
 }

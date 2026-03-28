@@ -26,6 +26,12 @@ import {
 } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
+import {
+  BulkUserLifecycleAction,
+  BulkUserLifecycleDto,
+  BulkUserLifecycleResult,
+  BulkLifecycleFailure,
+} from './DTO/bulk-user-lifecycle.dto';
 import { UserCreatedEvent } from '../../common/events';
 import { PasswordGenerator } from './utils/password-generator';
 
@@ -903,6 +909,37 @@ export class UsersService {
     return { message: 'User permanently purged from the system', userId: id };
   }
 
+  async bulkLifecycleAction(
+    dto: BulkUserLifecycleDto,
+    adminId: string,
+  ): Promise<BulkUserLifecycleResult> {
+    const userIds = [...new Set(dto.userIds)];
+    const succeeded: string[] = [];
+    const failed: BulkLifecycleFailure[] = [];
+
+    for (const userId of userIds) {
+      try {
+        await this.performBulkLifecycleAction(dto.action, userId, adminId);
+        succeeded.push(userId);
+      } catch (error) {
+        failed.push({
+          userId,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: this.buildBulkLifecycleMessage(dto.action, succeeded.length, failed.length),
+      data: {
+        action: dto.action,
+        requested: userIds.length,
+        succeeded,
+        failed,
+      },
+    };
+  }
+
   /**
    * Collect all data related to a user for archival/export.
    */
@@ -1008,5 +1045,56 @@ export class UsersService {
   private toPublicUser<T extends Record<string, any>>(user: T) {
     const { password, ...safeUser } = user;
     return safeUser;
+  }
+
+  private async performBulkLifecycleAction(
+    action: BulkUserLifecycleAction,
+    userId: string,
+    adminId: string,
+  ) {
+    switch (action) {
+      case 'suspend':
+        await this.suspendUser(userId, adminId);
+        return;
+      case 'reactivate':
+        await this.reactivateUser(userId, adminId);
+        return;
+      case 'archive':
+        await this.softDeleteUser(userId, adminId);
+        return;
+      case 'purge':
+        await this.purgeUser(userId, adminId);
+        return;
+    }
+  }
+
+  private buildBulkLifecycleMessage(
+    action: BulkUserLifecycleAction,
+    successCount: number,
+    failureCount: number,
+  ) {
+    const verb = this.getBulkLifecyclePastTense(action);
+    if (failureCount === 0) {
+      return `${successCount} user${successCount === 1 ? '' : 's'} ${verb}.`;
+    }
+
+    if (successCount === 0) {
+      return `No users ${verb}.`;
+    }
+
+    return `${successCount} user${successCount === 1 ? '' : 's'} ${verb}; ${failureCount} failed.`;
+  }
+
+  private getBulkLifecyclePastTense(action: BulkUserLifecycleAction) {
+    switch (action) {
+      case 'suspend':
+        return 'suspended';
+      case 'reactivate':
+        return 'reactivated';
+      case 'archive':
+        return 'archived';
+      case 'purge':
+        return 'purged';
+    }
   }
 }

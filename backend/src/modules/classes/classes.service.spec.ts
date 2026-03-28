@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
   ConflictException,
@@ -618,6 +618,66 @@ describe('ClassesService', () => {
         NotFoundException,
       );
       expect(mockDb.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bulkLifecycleAction', () => {
+    it('aggregates archive successes and failures without aborting the batch', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeClass({ isActive: true }));
+      const toggleSpy = jest
+        .spyOn(service, 'toggleActive')
+        .mockResolvedValueOnce(makeClass({ isActive: false }))
+        .mockRejectedValueOnce(new ConflictException('Class is already archived.'))
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+
+      const result = await service.bulkLifecycleAction({
+        action: 'archive',
+        classIds: ['class-1', 'class-2', 'class-3'],
+      });
+
+      expect(toggleSpy).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({
+        message: '2 classes archived; 1 failed.',
+        data: {
+          action: 'archive',
+          requested: 3,
+          succeeded: ['class-1', 'class-3'],
+          failed: [{ classId: 'class-2', reason: 'Class is already archived.' }],
+        },
+      });
+    });
+
+    it('fails purge for active classes without aborting the batch', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeClass({ isActive: false }))
+        .mockResolvedValueOnce(makeClass({ isActive: true }));
+      const purgeSpy = jest
+        .spyOn(service, 'purge')
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+
+      const result = await service.bulkLifecycleAction({
+        action: 'purge',
+        classIds: ['class-1', 'class-2'],
+      });
+
+      expect(purgeSpy).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        message: '1 class purged; 1 failed.',
+        data: {
+          action: 'purge',
+          requested: 2,
+          succeeded: ['class-1'],
+          failed: [
+            {
+              classId: 'class-2',
+              reason: 'Only archived classes can be permanently deleted. Archive the class first.',
+            },
+          ],
+        },
+      });
     });
   });
 

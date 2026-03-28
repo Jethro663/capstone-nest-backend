@@ -59,6 +59,7 @@ const mockSectionsService = {
   archiveSection: jest.fn(),
   deleteSection: jest.fn(),
   permanentlyDeleteSection: jest.fn(),
+  bulkLifecycleAction: jest.fn(),
 };
 
 // ---------------------------------------------------------------------------
@@ -296,6 +297,40 @@ describe('SectionsController', () => {
       expect(mockSectionsService.archiveSection).toHaveBeenCalledWith(
         SECTION_ID,
       );
+    });
+  });
+
+  describe('bulkLifecycle', () => {
+    it('returns the response envelope with section bulk summary data', async () => {
+      mockSectionsService.bulkLifecycleAction.mockResolvedValue({
+        message: '2 sections archived; 1 failed.',
+        data: {
+          action: 'archive',
+          requested: 3,
+          succeeded: ['s1', 's2'],
+          failed: [{ sectionId: 's3', reason: 'Section is already archived.' }],
+        },
+      });
+
+      const result = await controller.bulkLifecycle({
+        action: 'archive',
+        sectionIds: ['s1', 's2', 's3'],
+      });
+
+      expect(mockSectionsService.bulkLifecycleAction).toHaveBeenCalledWith({
+        action: 'archive',
+        sectionIds: ['s1', 's2', 's3'],
+      });
+      expect(result).toEqual({
+        success: true,
+        message: '2 sections archived; 1 failed.',
+        data: {
+          action: 'archive',
+          requested: 3,
+          succeeded: ['s1', 's2'],
+          failed: [{ sectionId: 's3', reason: 'Section is already archived.' }],
+        },
+      });
     });
   });
 

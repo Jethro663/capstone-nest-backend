@@ -41,6 +41,12 @@ import {
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { ScheduleSlotDto } from './DTO/schedule-slot.dto';
+import {
+  type BulkClassLifecycleAction,
+  type BulkClassLifecycleDto,
+  type BulkClassLifecycleFailure,
+  type BulkClassLifecycleResult,
+} from './DTO/bulk-class-lifecycle.dto';
 import { AuditService } from '../audit/audit.service';
 
 @Injectable()
@@ -519,6 +525,95 @@ export class ClassesService {
     await this.db.delete(classes).where(eq(classes.id, id));
 
     return classRecord;
+  }
+
+  private async performBulkLifecycleAction(
+    action: BulkClassLifecycleAction,
+    classId: string,
+  ) {
+    const classRecord = await this.findById(classId);
+
+    switch (action) {
+      case 'archive':
+        if (!classRecord.isActive) {
+          throw new ConflictException('Class is already archived.');
+        }
+        await this.toggleActive(classId);
+        return;
+      case 'restore':
+        if (classRecord.isActive) {
+          throw new ConflictException('Class is already active.');
+        }
+        await this.toggleActive(classId);
+        return;
+      case 'purge':
+        if (classRecord.isActive) {
+          throw new ConflictException(
+            'Only archived classes can be permanently deleted. Archive the class first.',
+          );
+        }
+        await this.purge(classId);
+        return;
+      default: {
+        throw new BadRequestException(
+          'Unsupported bulk class lifecycle action.',
+        );
+      }
+    }
+  }
+
+  private buildBulkLifecycleMessage(
+    action: BulkClassLifecycleAction,
+    successCount: number,
+    failureCount: number,
+  ) {
+    const verbMap: Record<BulkClassLifecycleAction, string> = {
+      archive: 'archived',
+      restore: 'restored',
+      purge: 'purged',
+    };
+    const noun = successCount === 1 ? 'class' : 'classes';
+    const verb = verbMap[action];
+
+    if (failureCount === 0) {
+      return `${successCount} ${noun} ${verb}.`;
+    }
+
+    return `${successCount} ${noun} ${verb}; ${failureCount} failed.`;
+  }
+
+  async bulkLifecycleAction(
+    dto: BulkClassLifecycleDto,
+  ): Promise<BulkClassLifecycleResult> {
+    const classIds = [...new Set(dto.classIds)];
+    const succeeded: string[] = [];
+    const failed: BulkClassLifecycleFailure[] = [];
+
+    for (const classId of classIds) {
+      try {
+        await this.performBulkLifecycleAction(dto.action, classId);
+        succeeded.push(classId);
+      } catch (error) {
+        failed.push({
+          classId,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: this.buildBulkLifecycleMessage(
+        dto.action,
+        succeeded.length,
+        failed.length,
+      ),
+      data: {
+        action: dto.action,
+        requested: classIds.length,
+        succeeded,
+        failed,
+      },
+    };
   }
 
   /**

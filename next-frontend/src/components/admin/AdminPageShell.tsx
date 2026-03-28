@@ -12,25 +12,31 @@ export function AdminPageShell({
   description,
   actions,
   stats,
+  meta,
   children,
   className,
   icon: Icon = ShieldCheck,
+  variant = 'default',
 }: {
   badge?: string;
   title: string;
   description: string;
   actions?: ReactNode;
   stats?: ReactNode;
+  meta?: ReactNode;
   children: ReactNode;
   className?: string;
   icon?: LucideIcon;
+  variant?: 'default' | 'compact-form';
 }) {
+  const isCompact = variant === 'compact-form';
+
   return (
-    <div className={cn('admin-page space-y-6 pb-6', className)}>
-      <section className="admin-page-header">
-        <div className="admin-page-header__copy">
-          <div className="admin-page-header__icon">
-            <Icon className="h-5 w-5" />
+    <div className={cn('admin-page space-y-6 pb-6', isCompact && 'admin-page--compact', className)}>
+      <section className={cn('admin-page-header', isCompact && 'admin-page-header--compact')}>
+        <div className={cn('admin-page-header__copy', isCompact && 'admin-page-header__copy--compact')}>
+          <div className={cn('admin-page-header__icon', isCompact && 'admin-page-header__icon--compact')}>
+            <Icon className={cn('h-5 w-5', isCompact && 'h-4 w-4')} />
           </div>
           <div className="space-y-1">
             <p className="admin-page-header__eyebrow">{badge}</p>
@@ -38,9 +44,10 @@ export function AdminPageShell({
             <p className="admin-page-header__description">{description}</p>
           </div>
         </div>
-        {actions ? <div className="admin-page-header__actions">{actions}</div> : null}
+        {actions ? <div className={cn('admin-page-header__actions', isCompact && 'admin-page-header__actions--compact')}>{actions}</div> : null}
       </section>
 
+      {meta ? <section className="admin-compact-meta">{meta}</section> : null}
       {stats ? <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{stats}</section> : null}
       {children}
     </div>
@@ -93,6 +100,7 @@ export function AdminSectionCard({
   children,
   className,
   contentClassName,
+  density = 'default',
 }: {
   title: string;
   description?: string;
@@ -100,21 +108,24 @@ export function AdminSectionCard({
   children: ReactNode;
   className?: string;
   contentClassName?: string;
+  density?: 'default' | 'compact';
 }) {
+  const isCompact = density === 'compact';
+
   return (
-    <Card className={cn('admin-section-card overflow-hidden rounded-[1.7rem]', className)}>
-      <CardHeader className="admin-section-card__header pb-4">
+    <Card className={cn('admin-section-card overflow-hidden rounded-[1.7rem]', isCompact && 'admin-section-card--compact rounded-[1.2rem]', className)}>
+      <CardHeader className={cn('admin-section-card__header pb-4', isCompact && 'pb-3')}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-xl font-black tracking-tight text-[var(--admin-text-strong)]">
+            <CardTitle className={cn('text-xl font-black tracking-tight text-[var(--admin-text-strong)]', isCompact && 'text-lg')}>
               {title}
             </CardTitle>
-            {description ? <p className="text-sm text-[var(--admin-text-muted)]">{description}</p> : null}
+            {description ? <p className={cn('text-sm text-[var(--admin-text-muted)]', isCompact && 'text-[0.82rem]')}>{description}</p> : null}
           </div>
           {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
         </div>
       </CardHeader>
-      <CardContent className={cn('p-6', contentClassName)}>{children}</CardContent>
+      <CardContent className={cn('p-6', isCompact && 'p-4 md:p-5', contentClassName)}>{children}</CardContent>
     </Card>
   );
 }

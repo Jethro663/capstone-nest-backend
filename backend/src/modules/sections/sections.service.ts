@@ -23,7 +23,6 @@ import { DatabaseService } from '../../database/database.service';
 import {
   sections,
   classes,
-  classSchedules,
   users,
   enrollments,
   studentProfiles,
@@ -34,6 +33,12 @@ import { toCalendarSlot } from '../../common/utils/schedule.util';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
+import {
+  type BulkSectionLifecycleAction,
+  type BulkSectionLifecycleDto,
+  type BulkSectionLifecycleFailure,
+  type BulkSectionLifecycleResult,
+} from './DTO/bulk-section-lifecycle.dto';
 
 export interface RequestingUser {
   userId: string;
@@ -747,6 +752,95 @@ export class SectionsService {
 
   async deleteSection(id: string) {
     await this.archiveSection(id);
+  }
+
+  private async performBulkLifecycleAction(
+    action: BulkSectionLifecycleAction,
+    sectionId: string,
+  ) {
+    const section = await this.findById(sectionId);
+
+    switch (action) {
+      case 'archive':
+        if (!section.isActive) {
+          throw new ConflictException('Section is already archived.');
+        }
+        await this.archiveSection(sectionId);
+        return;
+      case 'restore':
+        if (section.isActive) {
+          throw new ConflictException('Section is already active.');
+        }
+        await this.restoreSection(sectionId);
+        return;
+      case 'purge':
+        if (section.isActive) {
+          throw new ConflictException(
+            'Only archived sections can be permanently deleted. Archive the section first.',
+          );
+        }
+        await this.permanentlyDeleteSection(sectionId);
+        return;
+      default: {
+        throw new BadRequestException(
+          'Unsupported bulk section lifecycle action.',
+        );
+      }
+    }
+  }
+
+  private buildBulkLifecycleMessage(
+    action: BulkSectionLifecycleAction,
+    successCount: number,
+    failureCount: number,
+  ) {
+    const verbMap: Record<BulkSectionLifecycleAction, string> = {
+      archive: 'archived',
+      restore: 'restored',
+      purge: 'purged',
+    };
+    const noun = successCount === 1 ? 'section' : 'sections';
+    const verb = verbMap[action];
+
+    if (failureCount === 0) {
+      return `${successCount} ${noun} ${verb}.`;
+    }
+
+    return `${successCount} ${noun} ${verb}; ${failureCount} failed.`;
+  }
+
+  async bulkLifecycleAction(
+    dto: BulkSectionLifecycleDto,
+  ): Promise<BulkSectionLifecycleResult> {
+    const sectionIds = [...new Set(dto.sectionIds)];
+    const succeeded: string[] = [];
+    const failed: BulkSectionLifecycleFailure[] = [];
+
+    for (const sectionId of sectionIds) {
+      try {
+        await this.performBulkLifecycleAction(dto.action, sectionId);
+        succeeded.push(sectionId);
+      } catch (error) {
+        failed.push({
+          sectionId,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: this.buildBulkLifecycleMessage(
+        dto.action,
+        succeeded.length,
+        failed.length,
+      ),
+      data: {
+        action: dto.action,
+        requested: sectionIds.length,
+        succeeded,
+        failed,
+      },
+    };
   }
 
   async getStudentProfileForSection(

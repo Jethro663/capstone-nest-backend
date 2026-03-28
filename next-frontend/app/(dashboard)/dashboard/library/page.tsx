@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { fileService } from '@/services/file-service';
 import { classService } from '@/services/class-service';
+import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import {
   TeacherEmptyState,
   TeacherPageShell,
@@ -39,6 +40,7 @@ type LibraryMode = 'private' | 'general';
 
 export default function NexoraLibraryPage() {
   const { role, user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<LibraryMode>('private');
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
@@ -254,7 +256,7 @@ export default function NexoraLibraryPage() {
       await fileService.upload(selectedUpload, {
         scope: mode,
         folderId: currentFolder?.id,
-        classId: uploadClassId || undefined,
+        classId: (isAdmin ? classFilter : uploadClassId) || undefined,
       });
       toast.success('Module uploaded successfully');
       setSelectedUpload(null);
@@ -272,6 +274,281 @@ export default function NexoraLibraryPage() {
 
   if (role !== 'teacher' && role !== 'admin') {
     return <p className="text-sm text-muted-foreground">Nexora Library is available to teachers and admins only.</p>;
+  }
+
+  if (isAdmin) {
+    return (
+      <AdminPageShell
+        badge="Admin Library"
+        title="Nexora Library"
+        description="Manage teaching resources and materials"
+        actions={(
+          <div className="admin-controls">
+            <Button
+              variant="outline"
+              className="admin-button-outline rounded-xl px-4 font-black"
+              onClick={() => setCreateFolderOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              New Folder
+            </Button>
+            <Button
+              className="admin-button-solid rounded-xl px-4 font-black"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-4 w-4" />
+              Upload PDF
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(event) => {
+                setSelectedUpload(event.target.files?.[0] ?? null);
+              }}
+            />
+          </div>
+        )}
+      >
+        <div className="space-y-6">
+          <div className="admin-library-tabs">
+            <button
+              type="button"
+              className={mode === 'private' ? 'admin-library-tab is-active' : 'admin-library-tab'}
+              onClick={() => setMode('private')}
+            >
+              My Library
+            </button>
+            <button
+              type="button"
+              className={mode === 'general' ? 'admin-library-tab is-active' : 'admin-library-tab'}
+              onClick={() => setMode('general')}
+            >
+              General Modules
+            </button>
+          </div>
+
+          <div className="admin-library-filter-row">
+            <div className="admin-library-search">
+              <Search className="h-4 w-4 text-[var(--admin-text-muted)]" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search files..."
+                className="admin-input border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+              />
+            </div>
+            <select
+              value={classFilter}
+              onChange={(event) => setClassFilter(event.target.value)}
+              className="admin-select min-w-[11rem]"
+            >
+              <option value="">All Classes</option>
+              {classes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.subjectCode} - {item.subjectName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <p className="admin-library-breadcrumb">
+            <span>Library</span>
+            <span className="text-[var(--admin-text-muted)]"> / {currentFolder?.name ?? 'All Files'}</span>
+          </p>
+
+          {loading ? (
+            <AdminSectionCard title="Library" description="Loading current folder contents...">
+              <div className="py-12 text-center text-sm text-[var(--admin-text-muted)]">Loading library contents...</div>
+            </AdminSectionCard>
+          ) : (
+            <>
+              <div className="admin-library-folder-grid">
+                {folders.map((folder, index) => {
+                  const folderCount =
+                    typeof (folder as { fileCount?: number }).fileCount === 'number'
+                      ? (folder as { fileCount?: number }).fileCount
+                      : null;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      className="admin-library-folder-card"
+                      onClick={() => setFolderTrail((prev) => [...prev, folder])}
+                    >
+                      <div className={`admin-library-folder-icon color-${index % 4}`}>
+                        <FolderOpen className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-left text-[1.05rem] font-black text-[var(--admin-text-strong)]">{folder.name}</p>
+                        <p className="mt-1 text-left text-sm text-[var(--admin-text-muted)]">
+                          {folderCount === null ? '— files' : `${folderCount} files`}
+                        </p>
+                      </div>
+                      <div
+                        className="admin-library-folder-actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-full p-0"
+                          onClick={() => setRenameState({ type: 'folder', id: folder.id, value: folder.name })}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 rounded-full p-0 text-rose-600"
+                          onClick={() => handleDeleteFolder(folder)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <AdminSectionCard
+                title={`Files (${files.length})`}
+                description={currentFolder ? `Inside ${currentFolder.name}` : 'All files in current library scope.'}
+              >
+                {files.length === 0 ? (
+                  <AdminEmptyState
+                    title="No files in this view"
+                    description="Upload a PDF or change filters to display file records."
+                  />
+                ) : (
+                  <div className="admin-library-file-list">
+                    {files.map((file) => (
+                      <article key={file.id} className="admin-library-file-row">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="admin-library-file-icon">
+                            <FileText className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-black text-[var(--admin-text-strong)]">{file.originalName}</p>
+                            <p className="truncate text-sm text-[var(--admin-text-muted)]">
+                              {(file.sizeBytes / 1_048_576).toFixed(1)} MB • {file.class?.subjectName ?? 'No class'} • {new Date(file.uploadedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={file.scope === 'general' ? 'admin-library-status is-published' : 'admin-library-status'}>
+                            {file.scope === 'general' ? 'Published' : 'Private'}
+                          </span>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handlePreview(file.id)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleDownload(file)}>
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => setRenameState({ type: 'file', id: file.id, value: file.originalName })}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => handleDeleteFile(file)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </AdminSectionCard>
+
+              {selectedUpload ? (
+                <AdminSectionCard title="Ready to Upload" description={`Selected file: ${selectedUpload.name}`} density="compact">
+                  <div className="admin-controls">
+                    <Button
+                      className="admin-button-solid rounded-xl px-4 font-black"
+                      onClick={handleUpload}
+                      disabled={uploading}
+                    >
+                      <Upload className="h-4 w-4" />
+                      {uploading ? 'Uploading...' : 'Upload PDF'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="admin-button-outline rounded-xl px-4 font-black"
+                      onClick={() => {
+                        setSelectedUpload(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </AdminSectionCard>
+              ) : null}
+
+              {folderTrail.length > 0 ? (
+                <Button
+                  variant="outline"
+                  className="admin-button-outline rounded-xl px-4 font-black"
+                  onClick={() => setFolderTrail((prev) => prev.slice(0, -1))}
+                >
+                  <ArrowRight className="h-4 w-4 rotate-180" />
+                  Back to Previous Folder
+                </Button>
+              ) : null}
+            </>
+          )}
+        </div>
+
+        <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
+          <DialogContent className="rounded-2xl border-[var(--admin-outline)] bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black text-[var(--admin-text-strong)]">Create Folder</DialogTitle>
+              <DialogDescription className="text-sm text-[var(--admin-text-muted)]">
+                Create a folder in the current library location.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label className="admin-profile-label">Folder Name</Label>
+              <Input value={newFolderName} onChange={(event) => setNewFolderName(event.target.value)} className="admin-input" />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="admin-button-outline" onClick={() => setCreateFolderOpen(false)}>Cancel</Button>
+              <Button className="admin-button-solid" onClick={handleCreateFolder} disabled={!newFolderName.trim()}>Create Folder</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!renameState} onOpenChange={() => setRenameState(null)}>
+          <DialogContent className="rounded-2xl border-[var(--admin-outline)] bg-white">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black text-[var(--admin-text-strong)]">
+                Rename {renameState?.type === 'folder' ? 'Folder' : 'File'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label className="admin-profile-label">New Name</Label>
+              <Input
+                value={renameState?.value ?? ''}
+                onChange={(event) => setRenameState((prev) => (prev ? { ...prev, value: event.target.value } : prev))}
+                className="admin-input"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="admin-button-outline" onClick={() => setRenameState(null)}>Cancel</Button>
+              <Button className="admin-button-solid" onClick={handleRenameSubmit} disabled={!renameState?.value.trim()}>Save</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+      </AdminPageShell>
+    );
   }
 
   return (

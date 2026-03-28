@@ -14,9 +14,10 @@ import { getProfileRoute } from '@/utils/profile';
 
 interface TopBarProps {
   onMenuToggle: () => void;
+  showAdminDesktopMenu?: boolean;
 }
 
-export function TopBar({ onMenuToggle }: TopBarProps) {
+export function TopBar({ onMenuToggle, showAdminDesktopMenu = false }: TopBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, role } = useAuth();
@@ -41,11 +42,19 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
     return (
       <header className="admin-topbar">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="admin-topbar__menu md:hidden" onClick={onMenuToggle}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={showAdminDesktopMenu ? 'admin-topbar__menu' : 'admin-topbar__menu md:hidden'}
+            onClick={onMenuToggle}
+            aria-label={showAdminDesktopMenu ? 'Expand sidebar' : 'Open sidebar'}
+          >
             <Menu className="h-5 w-5" />
           </Button>
           <div className="admin-topbar__welcome">
-            <p className="admin-topbar__title">Welcome back, {firstName}</p>
+            <p className="admin-topbar__title">
+              👋 Welcome back, <span>{firstName}</span>
+            </p>
           </div>
         </div>
 

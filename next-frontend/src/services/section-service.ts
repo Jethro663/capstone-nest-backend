@@ -87,6 +87,27 @@ export interface SectionCandidate {
   enrolledSectionName?: string | null;
 }
 
+export type BulkSectionLifecycleAction = 'archive' | 'restore' | 'purge';
+
+export interface BulkSectionLifecycleDto {
+  action: BulkSectionLifecycleAction;
+  sectionIds: string[];
+}
+
+export interface BulkSectionLifecycleResponse {
+  success: boolean;
+  message: string;
+  data: {
+    action: BulkSectionLifecycleAction;
+    requested: number;
+    succeeded: string[];
+    failed: Array<{
+      sectionId: string;
+      reason: string;
+    }>;
+  };
+}
+
 export const sectionService = {
   /** GET /sections/all — Admin, Teacher */
   async getAll(query?: SectionsQuery): Promise<SectionsListResponse> {
@@ -138,6 +159,11 @@ export const sectionService = {
   /** DELETE /sections/permanent/:id — Admin only (hard) */
   async permanentDelete(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/sections/permanent/${id}`);
+    return data;
+  },
+
+  async bulkLifecycle(dto: BulkSectionLifecycleDto): Promise<BulkSectionLifecycleResponse> {
+    const { data } = await api.post('/sections/bulk/lifecycle', dto);
     return data;
   },
 
