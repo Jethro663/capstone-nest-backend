@@ -2,13 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  PencilLine,
-  School,
-  UserPlus,
-  Users,
-} from 'lucide-react';
+import { ArrowLeft, School, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -20,15 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import SectionForm, {
-  type SectionFormValues,
-} from '@/components/admin/SectionForm';
-import {
-  AdminEmptyState,
-  AdminPageShell,
-  AdminSectionCard,
-  AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+import SectionForm, { type SectionFormValues } from '@/components/admin/SectionForm';
+import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { sectionService, type RosterStudent } from '@/services/section-service';
 import { userService } from '@/services/user-service';
 import { getCurrentToFutureSchoolYears } from '@/lib/school-year';
@@ -57,6 +44,13 @@ export default function EditSectionPage() {
   const [removing, setRemoving] = useState(false);
 
   const schoolYears = useMemo(() => getCurrentToFutureSchoolYears(4), []);
+  const availableSchoolYears = useMemo(() => {
+    if (!section?.schoolYear || schoolYears.includes(section.schoolYear)) {
+      return schoolYears;
+    }
+
+    return [section.schoolYear, ...schoolYears];
+  }, [schoolYears, section?.schoolYear]);
 
   const initialValues = useMemo<SectionFormValues>(() => {
     return {
@@ -157,12 +151,9 @@ export default function EditSectionPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
-        </div>
-        <Skeleton className="h-[30rem] rounded-[1.7rem]" />
-        <Skeleton className="h-[28rem] rounded-[1.7rem]" />
+        <Skeleton className="h-28 rounded-[1.25rem]" />
+        <Skeleton className="h-[24rem] rounded-[1.35rem]" />
+        <Skeleton className="h-[24rem] rounded-[1.35rem]" />
       </div>
     );
   }
@@ -175,7 +166,9 @@ export default function EditSectionPage() {
     <AdminPageShell
       badge="Admin Sections"
       title={`Edit ${section.name}`}
-      description="Update section settings and manage the roster from a clearer admin surface that keeps the essentials visible without changing the underlying workflow."
+      description="Update section settings and manage the roster from a tighter admin workspace."
+      icon={School}
+      variant="compact-form"
       actions={(
         <>
           <Button
@@ -195,23 +188,36 @@ export default function EditSectionPage() {
           </Button>
         </>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Grade Level" value={`Grade ${section.gradeLevel}`} caption="Current section placement" icon={School} accent="emerald" />
-          <AdminStatCard label="Enrolled" value={roster.length} caption={`Capacity ${section.capacity || '—'} students`} icon={Users} accent="sky" />
-          <AdminStatCard label="Selected" value={selectedStudentIds.length} caption="Students marked for bulk action" icon={PencilLine} accent="amber" />
-          <AdminStatCard label="School Year" value={section.schoolYear || '—'} caption="Academic cycle assigned to this section" icon={School} accent="rose" />
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Grade Level</span>
+            Grade {section.gradeLevel}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Enrolled</span>
+            {roster.length} / {section.capacity || '-'}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Selected</span>
+            {selectedStudentIds.length}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">School Year</span>
+            {section.schoolYear || '-'}
+          </div>
         </>
       )}
     >
       <AdminSectionCard
         title="Section Information"
-        description="The same editable fields now sit inside a calmer, more guided form shell."
+        description="Adjust the section basics without the extra visual weight."
+        density="compact"
       >
         <SectionForm
           initialValues={initialValues}
           teachers={teachers}
-          schoolYears={schoolYears}
+          schoolYears={availableSchoolYears}
           saving={saving}
           submitLabel="Save Changes"
           onSubmit={handleSave}
@@ -221,7 +227,8 @@ export default function EditSectionPage() {
 
       <AdminSectionCard
         title={`Students (${roster.length})`}
-        description="Manage the roster with clearer selection controls and a stronger table shell."
+        description="Manage roster members and bulk actions from the same page."
+        density="compact"
         action={(
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" className="admin-button-outline rounded-xl font-black" onClick={handleToggleAll}>

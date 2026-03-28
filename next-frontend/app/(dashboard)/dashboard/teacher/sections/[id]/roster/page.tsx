@@ -111,14 +111,14 @@ export default function SectionRosterPage() {
           />
           <TeacherStatCard
             label="Grade Level"
-            value={section?.gradeLevel || 'â€”'}
+            value={section?.gradeLevel || 'N/A'}
             caption={section?.name || 'Section not set'}
             icon={GraduationCap}
             accent="teal"
           />
           <TeacherStatCard
             label="School Year"
-            value={section?.schoolYear || 'â€”'}
+            value={section?.schoolYear || 'N/A'}
             caption="Active section cycle"
             icon={CalendarRange}
             accent="amber"
@@ -146,7 +146,7 @@ export default function SectionRosterPage() {
                   {section?.name || 'Section'}
                 </p>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                  Grade {section?.gradeLevel || 'â€”'} â€¢ {section?.schoolYear || 'School year not set'}
+                  Grade {section?.gradeLevel || 'N/A'} | {section?.schoolYear || 'School year not set'}
                 </p>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
                   Use this roster hub to keep student movement, section timing, and profile access easy to scan from one place.
@@ -255,8 +255,8 @@ export default function SectionRosterPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-[var(--teacher-text-muted)]">{student.email || 'N/A'}</TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.lrn || 'â€”'}</TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.gradeLevel || 'â€”'}</TableCell>
+                    <TableCell className="text-[var(--teacher-text-muted)]">{student.lrn || 'N/A'}</TableCell>
+                    <TableCell className="text-[var(--teacher-text-muted)]">{student.gradeLevel || 'N/A'}</TableCell>
                     <TableCell
                       className="text-right"
                       onClick={(event) => event.stopPropagation()}

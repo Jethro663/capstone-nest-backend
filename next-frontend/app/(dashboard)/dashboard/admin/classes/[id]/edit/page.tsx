@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, BookOpenCheck, CalendarRange, School2 } from 'lucide-react';
+import { ArrowLeft, School2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
-import {
-  AdminPageShell,
-  AdminSectionCard,
-  AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
@@ -48,6 +44,13 @@ export default function EditClassPage() {
   }, []);
 
   const defaultSchoolYear = schoolYears[0] || '';
+  const availableSchoolYears = useMemo(() => {
+    if (!classItem?.schoolYear || schoolYears.includes(classItem.schoolYear)) {
+      return schoolYears;
+    }
+
+    return [classItem.schoolYear, ...schoolYears];
+  }, [classItem?.schoolYear, schoolYears]);
 
   const initialValues = useMemo<ClassFormValues>(() => {
     if (!classItem) return createEmptyClassForm(defaultSchoolYear);
@@ -117,11 +120,8 @@ export default function EditClassPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
-        </div>
-        <Skeleton className="h-[38rem] rounded-[1.7rem]" />
+        <Skeleton className="h-28 rounded-[1.25rem]" />
+        <Skeleton className="h-[34rem] rounded-[1.35rem]" />
       </div>
     );
   }
@@ -132,7 +132,9 @@ export default function EditClassPage() {
     <AdminPageShell
       badge="Admin Classes"
       title={`Edit ${classItem.subjectName}`}
-      description="Refine subject, assignment, and schedule details from a more polished admin editing surface without changing the underlying class logic."
+      description="Update the class assignment and timetable from a simpler admin editing surface."
+      icon={School2}
+      variant="compact-form"
       actions={(
         <Button
           variant="outline"
@@ -143,23 +145,33 @@ export default function EditClassPage() {
           Back to Classes
         </Button>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Subject Code" value={classItem.subjectCode || '—'} caption="Current class identifier" icon={BookOpenCheck} accent="emerald" />
-          <AdminStatCard label="Grade Level" value={`Grade ${classItem.subjectGradeLevel || '—'}`} caption="Assigned learning level" icon={School2} accent="sky" />
-          <AdminStatCard label="School Year" value={classItem.schoolYear || '—'} caption="Academic cycle for this class" icon={CalendarRange} accent="amber" />
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Subject Code</span>
+            {classItem.subjectCode || '-'}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Grade Level</span>
+            Grade {classItem.subjectGradeLevel || '-'}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">School Year</span>
+            {classItem.schoolYear || '-'}
+          </div>
         </>
       )}
     >
       <AdminSectionCard
         title={`${classItem.subjectName} (${classItem.subjectCode})`}
-        description="The edit form keeps the same fields and validation, now presented in a calmer and more engaging admin workspace."
+        description="Keep the class details up to date without the oversized cards around the form."
+        density="compact"
       >
         <ClassForm
           initialValues={initialValues}
           sections={sections}
           teachers={teachers}
-          schoolYears={schoolYears}
+          schoolYears={availableSchoolYears}
           saving={saving}
           submitLabel="Save Changes"
           onSubmit={handleSubmit}

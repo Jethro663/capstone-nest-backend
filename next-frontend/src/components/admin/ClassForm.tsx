@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,7 +27,7 @@ const SUBJECTS = [
 ] as const;
 
 const SELECT_CLS =
-  'admin-select flex h-12 w-full rounded-2xl px-4 py-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
+  'admin-select flex h-10 w-full rounded-xl px-3.5 py-2 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
 
 export type ClassFormValues = {
   subjectName: string;
@@ -116,6 +116,15 @@ export default function ClassForm({
   const filteredSections = form.subjectGradeLevel
     ? sections.filter((s) => s.gradeLevel === form.subjectGradeLevel)
     : [];
+  const subjectOptions = useMemo(() => {
+    const currentSubject = form.subjectName.trim();
+
+    if (!currentSubject || SUBJECTS.includes(currentSubject as (typeof SUBJECTS)[number])) {
+      return [...SUBJECTS];
+    }
+
+    return [currentSubject, ...SUBJECTS];
+  }, [form.subjectName]);
 
   // ─── Schedule readiness ─────────────────────────────────────────────────────
   const isScheduleReady = Boolean(
@@ -206,13 +215,13 @@ export default function ClassForm({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="admin-filter-shell space-y-2 rounded-[1.35rem] px-4 py-4">
-        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] px-4 py-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
           Class Setup
         </p>
-        <p className="text-sm leading-6 text-[var(--admin-text-muted)]">
-          Set the subject, section, teacher, and schedule in one cleaner admin flow before publishing the class.
+        <p className="flex-1 text-sm leading-5 text-[var(--admin-text-muted)]">
+          Keep the teaching assignment and schedule in one view, with the required details visible first and the scheduler right below.
         </p>
       </div>
 
@@ -224,7 +233,7 @@ export default function ClassForm({
             className={SELECT_CLS}
           >
             <option value="">Select subject</option>
-            {SUBJECTS.map((subject) => (
+            {subjectOptions.map((subject) => (
               <option key={subject} value={subject}>
                 {subject}
               </option>
@@ -236,7 +245,7 @@ export default function ClassForm({
             value={form.subjectCode}
             onChange={(event) => setField('subjectCode', event.target.value)}
             placeholder="e.g. MATH-7"
-            className="admin-input h-12 rounded-2xl"
+            className="admin-input h-10 rounded-xl"
           />
         </Field>
       </div>
@@ -315,37 +324,51 @@ export default function ClassForm({
           value={form.room}
           onChange={(event) => setField('room', event.target.value)}
           placeholder="e.g. Room 201"
-          className="admin-input h-12 rounded-2xl"
+          className="admin-input h-10 rounded-xl"
         />
       </Field>
 
-      <ScheduleCalendarCreator
-        value={form.schedules}
-        onChange={(schedules) =>
-          setForm((current) => ({ ...current, schedules }))
-        }
-        existingSlots={existingSlots}
-        disabled={!isScheduleReady || loadingSection}
-      />
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm font-black text-[var(--admin-text-strong)]">Schedule</p>
+            <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
+              Pick the timetable after the subject, grade level, section, and school year are set.
+            </p>
+          </div>
+          <div className="admin-chip">
+            {loadingSection ? 'Checking section schedule...' : `${form.schedules.length} slot${form.schedules.length === 1 ? '' : 's'} selected`}
+          </div>
+        </div>
 
-      <div className="admin-filter-shell flex flex-col gap-3 rounded-[1.35rem] border-t-0 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <ScheduleCalendarCreator
+          value={form.schedules}
+          onChange={(schedules) =>
+            setForm((current) => ({ ...current, schedules }))
+          }
+          existingSlots={existingSlots}
+          disabled={!isScheduleReady || loadingSection}
+        />
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-[var(--admin-outline)] pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-black text-[var(--admin-text-strong)]">Ready to save?</p>
-          <p className="text-xs text-[var(--admin-text-muted)]">
-            Double-check the section, teacher, and schedule before confirming this class setup.
+          <p className="text-sm font-black text-[var(--admin-text-strong)]">Save Class</p>
+          <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
+            Double-check the section, teacher, and schedule before saving.
           </p>
         </div>
         <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button
-          className="admin-button-solid rounded-xl font-black"
-          onClick={handleSubmit}
-          disabled={saving || !form.subjectName || !form.subjectCode.trim() || !form.subjectGradeLevel}
-        >
-          {saving ? 'Saving...' : submitLabel}
-        </Button>
+          <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            className="admin-button-solid rounded-xl font-black"
+            onClick={handleSubmit}
+            disabled={saving || !form.subjectName || !form.subjectCode.trim() || !form.subjectGradeLevel}
+          >
+            {saving ? 'Saving...' : submitLabel}
+          </Button>
         </div>
       </div>
     </div>

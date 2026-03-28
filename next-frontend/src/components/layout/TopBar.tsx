@@ -5,11 +5,18 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChevronDown, Menu } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { logoutAction } from '@/lib/auth-actions';
 import { getProfileRoute } from '@/utils/profile';
 
 interface TopBarProps {
@@ -53,7 +60,7 @@ export function TopBar({ onMenuToggle, showAdminDesktopMenu = false }: TopBarPro
           </Button>
           <div className="admin-topbar__welcome">
             <p className="admin-topbar__title">
-              👋 Welcome back, <span>{firstName}</span>
+              Welcome back, <span>{firstName}</span>
             </p>
           </div>
         </div>
@@ -73,21 +80,43 @@ export function TopBar({ onMenuToggle, showAdminDesktopMenu = false }: TopBarPro
             </div>
           </button>
 
-          <button
-            type="button"
-            onClick={() => router.push(profileHref)}
-            className="admin-topbar__profile"
-          >
-            <Avatar className="h-9 w-9 border border-[#f5d4d4]">
-              {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
-              <AvatarFallback className="admin-topbar__profile-avatar">{initials}</AvatarFallback>
-            </Avatar>
-            <span className="admin-topbar__profile-copy">
-              <span className="admin-topbar__profile-name">{displayName}</span>
-              <span className="admin-topbar__profile-role">Admin Portal</span>
-            </span>
-            <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="admin-topbar__profile"
+                aria-label="Open profile menu"
+              >
+                <Avatar className="h-9 w-9 border border-[#f5d4d4]">
+                  {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                  <AvatarFallback className="admin-topbar__profile-avatar">{initials}</AvatarFallback>
+                </Avatar>
+                <span className="admin-topbar__profile-copy">
+                  <span className="admin-topbar__profile-name">{displayName}</span>
+                  <span className="admin-topbar__profile-role">Admin Portal</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:bg-slate-50 focus:text-slate-900"
+                onSelect={() => router.push(profileHref)}
+              >
+                <User className="mr-2 h-4 w-4" />
+                My Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
+                onSelect={() => {
+                  void logoutAction();
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
     );

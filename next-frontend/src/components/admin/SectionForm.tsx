@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import type { User } from '@/types/user';
 
 const SELECT_CLS =
-  'admin-select flex h-12 w-full rounded-2xl px-4 py-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
+  'admin-select flex h-10 w-full rounded-xl px-3.5 py-2 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50';
 
 export type SectionFormValues = {
   name: string;
@@ -64,13 +64,13 @@ export default function SectionForm({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="admin-filter-shell space-y-2 rounded-[1.35rem] px-4 py-4">
-        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] px-4 py-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[var(--admin-text-muted)]">
           Section Setup
         </p>
-        <p className="text-sm leading-6 text-[var(--admin-text-muted)]">
-          Keep the essentials together so admins can create or update sections quickly without losing context.
+        <p className="flex-1 text-sm leading-5 text-[var(--admin-text-muted)]">
+          Start with the section identity, then set capacity and adviser. Everything stays visible without the oversized framing.
         </p>
       </div>
 
@@ -80,7 +80,7 @@ export default function SectionForm({
           value={form.name}
           onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
           placeholder="e.g. Kamia"
-          className="admin-input h-12 rounded-2xl"
+          className="admin-input h-10 rounded-xl"
         />
       </div>
 
@@ -135,7 +135,7 @@ export default function SectionForm({
                 capacity: Number(event.target.value) || 0,
               }))
             }
-            className="admin-input h-12 rounded-2xl"
+            className="admin-input h-10 rounded-xl"
           />
         </div>
 
@@ -145,7 +145,7 @@ export default function SectionForm({
             value={form.roomNumber}
             onChange={(event) => setForm((current) => ({ ...current, roomNumber: event.target.value }))}
             placeholder="e.g. 201"
-            className="admin-input h-12 rounded-2xl"
+            className="admin-input h-10 rounded-xl"
           />
         </div>
       </div>
@@ -166,24 +166,24 @@ export default function SectionForm({
         </select>
       </div>
 
-      <div className="admin-filter-shell flex flex-col gap-3 rounded-[1.35rem] border-t-0 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 border-t border-[var(--admin-outline)] pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <p className="text-sm font-black text-[var(--admin-text-strong)]">Ready to save?</p>
-          <p className="text-xs text-[var(--admin-text-muted)]">
-            Review the section name, year, adviser, and capacity before confirming.
+          <p className="text-sm font-black text-[var(--admin-text-strong)]">Save Section</p>
+          <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
+            Confirm the name, year, capacity, and room before saving.
           </p>
         </div>
         <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button
-          className="admin-button-solid rounded-xl font-black"
-          onClick={handleSubmit}
-          disabled={saving || !form.name.trim() || !form.schoolYear || form.capacity < 1}
-        >
-          {saving ? 'Saving...' : submitLabel}
-        </Button>
+          <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            className="admin-button-solid rounded-xl font-black"
+            onClick={handleSubmit}
+            disabled={saving || !form.name.trim() || !form.schoolYear || form.capacity < 1}
+          >
+            {saving ? 'Saving...' : submitLabel}
+          </Button>
         </div>
       </div>
     </div>

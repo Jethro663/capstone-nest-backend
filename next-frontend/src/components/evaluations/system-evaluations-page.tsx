@@ -17,6 +17,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  AdminEmptyState,
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
+import {
   TeacherEmptyState,
   TeacherPageShell,
   TeacherSectionCard,
@@ -55,15 +61,16 @@ function formatModuleName(value: string): string {
 interface SystemEvaluationsPageProps {
   heading: string;
   description: string;
+  variant?: 'teacher' | 'admin';
 }
 
 export function SystemEvaluationsPage({
   heading,
   description,
+  variant = 'teacher',
 }: SystemEvaluationsPageProps) {
-  const [targetModule, setTargetModule] = useState<'' | SystemEvaluationTargetModule>(
-    '',
-  );
+  const isAdmin = variant === 'admin';
+  const [targetModule, setTargetModule] = useState<'' | SystemEvaluationTargetModule>('');
   const [rows, setRows] = useState<SystemEvaluationRow[]>([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -123,144 +130,179 @@ export function SystemEvaluationsPage({
     );
   }
 
-  return (
+  const content = (
+    <>
+      {isAdmin ? (
+        <AdminSectionCard
+          title="Evaluation Filters"
+          description="Narrow responses by module to compare experience quality across systems."
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={targetModule}
+              onChange={(event) => setTargetModule(event.target.value as '' | SystemEvaluationTargetModule)}
+              className="admin-select min-w-[240px] text-sm"
+            >
+              {MODULE_OPTIONS.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="admin-pill px-4 py-2 text-sm font-semibold">
+              {count} evaluation{count === 1 ? '' : 's'}
+            </div>
+          </div>
+        </AdminSectionCard>
+      ) : (
+        <TeacherSectionCard
+          title="Evaluation Filters"
+          description="Narrow responses by module to compare experience quality across systems."
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={targetModule}
+              onChange={(event) => setTargetModule(event.target.value as '' | SystemEvaluationTargetModule)}
+              className="teacher-select min-w-[240px] text-sm"
+            >
+              {MODULE_OPTIONS.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="teacher-soft-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--teacher-text-strong)]">
+              {count} evaluation{count === 1 ? '' : 's'}
+            </div>
+          </div>
+        </TeacherSectionCard>
+      )}
+
+      {isAdmin ? (
+        <AdminSectionCard
+          title="Evaluation Results"
+          description="A richer view of what learners and staff are saying about each platform area."
+        >
+          {rows.length === 0 ? (
+            <AdminEmptyState
+              title="No evaluation responses found"
+              description="Try another module filter or wait for new responses to come in."
+            />
+          ) : (
+            <div className="admin-table-shell">
+              <Table>
+                <TableHeader className="admin-table-head">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Module</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Submitter</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Usability</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Functionality</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Performance</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Satisfaction</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Feedback</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--admin-text-muted)]">Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="[&_tr:last-child]:border-0">
+                  {rows.map((row) => (
+                    <TableRow key={row.id} className="admin-table-row">
+                      <TableCell className="text-[13px] font-semibold text-[var(--admin-text-strong)]">{formatModuleName(row.targetModule)}</TableCell>
+                      <TableCell className="text-[13px] font-medium text-[var(--admin-text-strong)]">{formatSubmitter(row)}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.usabilityScore}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.functionalityScore}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.performanceScore}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{row.satisfactionScore}</TableCell>
+                      <TableCell className="max-w-[280px] text-[13px] text-[var(--admin-text-strong)]">
+                        <span className="line-clamp-2">{row.feedback?.trim() || 'No written feedback'}</span>
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--admin-text-strong)]">{new Date(row.createdAt).toLocaleString('en-US')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </AdminSectionCard>
+      ) : (
+        <TeacherSectionCard
+          title="Evaluation Results"
+          description="A richer view of what learners and staff are saying about each platform area."
+        >
+          {rows.length === 0 ? (
+            <TeacherEmptyState
+              title="No evaluation responses found"
+              description="Try another module filter or wait for new responses to come in."
+            />
+          ) : (
+            <div className="teacher-table-shell">
+              <Table>
+                <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Module</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Submitter</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Usability</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Functionality</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Performance</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Satisfaction</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Feedback</TableHead>
+                    <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="[&_tr:last-child]:border-0">
+                  {rows.map((row) => (
+                    <TableRow key={row.id} className="teacher-table-row border-white/10">
+                      <TableCell className="text-[13px] font-semibold text-[var(--teacher-text-strong)]">{formatModuleName(row.targetModule)}</TableCell>
+                      <TableCell className="text-[13px] font-medium text-[var(--teacher-text-strong)]">{formatSubmitter(row)}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.usabilityScore}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.functionalityScore}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.performanceScore}</TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{row.satisfactionScore}</TableCell>
+                      <TableCell className="max-w-[280px] text-[13px] text-[var(--teacher-text-strong)]">
+                        <span className="line-clamp-2">{row.feedback?.trim() || 'No written feedback'}</span>
+                      </TableCell>
+                      <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">{new Date(row.createdAt).toLocaleString('en-US')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TeacherSectionCard>
+      )}
+    </>
+  );
+
+  return isAdmin ? (
+    <AdminPageShell
+      badge="Admin Evaluations"
+      title={heading}
+      description={description}
+      stats={
+        <>
+          <AdminStatCard label="Responses" value={count} caption="Captured evaluation entries" icon={MessageSquareQuote} accent="sky" />
+          <AdminStatCard label="Avg Satisfaction" value={averageScores.satisfaction} caption="Overall sentiment score" icon={Star} accent="amber" />
+          <AdminStatCard label="Avg Usability" value={averageScores.usability} caption="Ease-of-use pulse" icon={Gauge} accent="violet" />
+          <AdminStatCard label="Detailed Feedback" value={averageScores.feedback} caption="Written comments included" icon={SlidersHorizontal} accent="rose" />
+        </>
+      }
+    >
+      {content}
+    </AdminPageShell>
+  ) : (
     <TeacherPageShell
       badge="Feedback Intelligence"
       title={heading}
       description={description}
       stats={
         <>
-          <TeacherStatCard
-            label="Responses"
-            value={count}
-            caption="Captured evaluation entries"
-            icon={MessageSquareQuote}
-            accent="sky"
-          />
-          <TeacherStatCard
-            label="Avg Satisfaction"
-            value={averageScores.satisfaction}
-            caption="Overall sentiment score"
-            icon={Star}
-            accent="amber"
-          />
-          <TeacherStatCard
-            label="Avg Usability"
-            value={averageScores.usability}
-            caption="Ease-of-use pulse"
-            icon={Gauge}
-            accent="teal"
-          />
-          <TeacherStatCard
-            label="Detailed Feedback"
-            value={averageScores.feedback}
-            caption="Written comments included"
-            icon={SlidersHorizontal}
-            accent="rose"
-          />
+          <TeacherStatCard label="Responses" value={count} caption="Captured evaluation entries" icon={MessageSquareQuote} accent="sky" />
+          <TeacherStatCard label="Avg Satisfaction" value={averageScores.satisfaction} caption="Overall sentiment score" icon={Star} accent="amber" />
+          <TeacherStatCard label="Avg Usability" value={averageScores.usability} caption="Ease-of-use pulse" icon={Gauge} accent="teal" />
+          <TeacherStatCard label="Detailed Feedback" value={averageScores.feedback} caption="Written comments included" icon={SlidersHorizontal} accent="rose" />
         </>
       }
     >
-      <TeacherSectionCard
-        title="Evaluation Filters"
-        description="Narrow responses by module to compare experience quality across systems."
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={targetModule}
-            onChange={(event) =>
-              setTargetModule(event.target.value as '' | SystemEvaluationTargetModule)
-            }
-            className="teacher-select min-w-[240px] text-sm"
-          >
-            {MODULE_OPTIONS.map((option) => (
-              <option key={option.label} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <div className="teacher-soft-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--teacher-text-strong)]">
-            {count} evaluation{count === 1 ? '' : 's'}
-          </div>
-        </div>
-      </TeacherSectionCard>
-
-      <TeacherSectionCard
-        title="Evaluation Results"
-        description="A richer view of what learners and staff are saying about each platform area."
-      >
-        {rows.length === 0 ? (
-          <TeacherEmptyState
-            title="No evaluation responses found"
-            description="Try another module filter or wait for new responses to come in."
-          />
-        ) : (
-          <div className="teacher-table-shell">
-            <Table>
-              <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                <TableRow className="border-white/10 hover:bg-transparent">
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Module
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Submitter
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Usability
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Functionality
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Performance
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Satisfaction
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Feedback
-                  </TableHead>
-                  <TableHead className="text-[11px] font-black uppercase tracking-[0.22em] text-[var(--teacher-text-muted)]">
-                    Created
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="[&_tr:last-child]:border-0">
-                {rows.map((row) => (
-                  <TableRow key={row.id} className="teacher-table-row border-white/10">
-                    <TableCell className="text-[13px] font-semibold text-[var(--teacher-text-strong)]">
-                      {formatModuleName(row.targetModule)}
-                    </TableCell>
-                    <TableCell className="text-[13px] font-medium text-[var(--teacher-text-strong)]">
-                      {formatSubmitter(row)}
-                    </TableCell>
-                    <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
-                      {row.usabilityScore}
-                    </TableCell>
-                    <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
-                      {row.functionalityScore}
-                    </TableCell>
-                    <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
-                      {row.performanceScore}
-                    </TableCell>
-                    <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
-                      {row.satisfactionScore}
-                    </TableCell>
-                    <TableCell className="max-w-[280px] text-[13px] text-[var(--teacher-text-strong)]">
-                      <span className="line-clamp-2">
-                        {row.feedback?.trim() || 'No written feedback'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-[13px] text-[var(--teacher-text-strong)]">
-                      {new Date(row.createdAt).toLocaleString('en-US')}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </TeacherSectionCard>
+      {content}
     </TeacherPageShell>
   );
 }

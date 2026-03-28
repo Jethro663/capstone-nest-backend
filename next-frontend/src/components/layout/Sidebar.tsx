@@ -101,6 +101,19 @@ function getRoleLabel(role: string | null): string {
   }
 }
 
+function isNavItemActive(pathname: string, href: string): boolean {
+  const isDashboardRoot =
+    href === '/dashboard/admin' ||
+    href === '/dashboard/teacher' ||
+    href === '/dashboard/student';
+
+  if (isDashboardRoot) {
+    return pathname === href;
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
@@ -194,7 +207,7 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
 
       <nav className={cn('flex-1 space-y-1 overflow-y-auto p-3', isAdminRoute && 'admin-sidebar__nav')}>
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/');
+          const active = isNavItemActive(pathname, item.href);
           return (
             <button
               key={item.href}

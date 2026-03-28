@@ -10,7 +10,6 @@ import {
   AdminEmptyState,
   AdminPageShell,
   AdminSectionCard,
-  AdminStatCard,
 } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -171,11 +170,14 @@ export default function NotificationsPage() {
   }
 
   if (isAdmin) {
+    const unreadItems = items.filter((notification) => !notification.isRead).length;
+    const readItems = items.length - unreadItems;
+
     return (
       <AdminPageShell
         badge="Admin Notifications"
         title="Notifications"
-        description="Track unread alerts, workflow events, and platform updates from the admin inbox."
+        description="Review alerts, announcements, and system activity from one cleaner admin inbox."
         actions={(
           <div className="admin-controls">
             <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => void refreshAll()}>
@@ -193,83 +195,121 @@ export default function NotificationsPage() {
             </Button>
           </div>
         )}
-        stats={(
+        meta={(
           <>
-            <AdminStatCard label="Unread" value={unreadCount} caption="Current unread badge count" icon={Bell} accent="emerald" />
-            <AdminStatCard label="Visible" value={items.length} caption={`On page ${page}`} icon={Filter} accent="sky" />
-            <AdminStatCard label="Pages" value={totalPages} caption="Available notification pages" icon={RefreshCcw} accent="amber" />
-            <AdminStatCard label="View" value={filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : 'Read'} caption="Current filter state" icon={CheckCheck} accent="rose" />
+            <div className="admin-compact-meta__item">
+              <span className="admin-compact-meta__label">Unread</span>
+              {unreadCount} pending
+            </div>
+            <div className="admin-compact-meta__item">
+              <span className="admin-compact-meta__label">Visible</span>
+              {items.length} on this page
+            </div>
+            <div className="admin-compact-meta__item">
+              <span className="admin-compact-meta__label">View</span>
+              {filter === 'all' ? 'All updates' : filter === 'unread' ? 'Unread only' : 'Read only'}
+            </div>
+            <div className="admin-compact-meta__item">
+              <span className="admin-compact-meta__label">Pages</span>
+              {page} / {Math.max(totalPages, 1)}
+            </div>
           </>
         )}
       >
         <AdminSectionCard
-          title="Notification Views"
-          description="Switch between unread states and refresh the inbox without leaving the admin shell."
+          title="Inbox"
+          description="Filter the inbox, scan the latest entries, and clear unread notices without moving between stacked cards."
+          density="compact"
+          contentClassName="space-y-5"
         >
-          <div className="admin-controls">
-            {(['all', 'unread', 'read'] as const).map((value) => (
-              <Button
-                key={value}
-                type="button"
-                size="sm"
-                variant="outline"
-                className={filter === value ? 'admin-button-solid rounded-xl font-black' : 'admin-button-outline rounded-xl font-black'}
-                onClick={() => setFilter(value)}
-              >
-                <Filter className="mr-2 h-4 w-4" />
-                {value === 'all' ? 'All' : value === 'unread' ? 'Unread' : 'Read'}
-              </Button>
-            ))}
-          </div>
-        </AdminSectionCard>
+          <div className="admin-notifications-toolbar">
+            <div className="admin-notifications-filters">
+              {(['all', 'unread', 'read'] as const).map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className={filter === value ? 'admin-button-solid rounded-xl font-black' : 'admin-button-outline rounded-xl font-black'}
+                  onClick={() => setFilter(value)}
+                >
+                  <Filter className="mr-2 h-4 w-4" />
+                  {value === 'all' ? 'All' : value === 'unread' ? 'Unread' : 'Read'}
+                </Button>
+              ))}
+            </div>
 
-        <AdminSectionCard
-          title="Recent Notifications"
-          description={`${items.length} visible notification(s) in the current admin inbox view.`}
-        >
+            <div className="admin-notifications-summary">
+              <div className="admin-notifications-summary__item">
+                <span className="admin-notifications-summary__label">Unread</span>
+                <strong>{unreadItems}</strong>
+              </div>
+              <div className="admin-notifications-summary__item">
+                <span className="admin-notifications-summary__label">Read</span>
+                <strong>{readItems}</strong>
+              </div>
+              <div className="admin-notifications-summary__item">
+                <span className="admin-notifications-summary__label">Page</span>
+                <strong>{page}</strong>
+              </div>
+            </div>
+          </div>
+
           {items.length === 0 ? (
             <AdminEmptyState
-              title="No notifications yet"
-              description="System alerts, announcements, and workflow events will appear here."
+              title="No notifications in this view"
+              description="System alerts, announcements, and workflow events will appear here once they match the selected filter."
             />
           ) : (
-            <div className="space-y-3">
+            <div className="admin-notification-list">
               {items.map((notification) => (
-                <Card
+                <article
                   key={notification.id}
-                  className={`admin-section-card overflow-hidden border-[var(--admin-outline)] ${notification.isRead ? 'opacity-75' : ''}`}
+                  className={`admin-notification-row ${notification.isRead ? 'admin-notification-row--read' : 'admin-notification-row--unread'}`}
                 >
-                  <CardContent className="flex flex-col gap-3 p-5 md:flex-row md:items-start md:justify-between">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-black text-[var(--admin-text-strong)]">{notification.title}</p>
-                        <span className="admin-pill">
-                          {notification.isRead ? 'Read' : 'New'}
-                        </span>
+                  <div className="admin-notification-row__icon">
+                    <Bell className="h-4 w-4" />
+                  </div>
+
+                  <div className="admin-notification-row__body">
+                    <div className="admin-notification-row__head">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="admin-notification-row__title">{notification.title}</p>
+                          <span className={`admin-notification-row__status ${notification.isRead ? 'is-read' : 'is-unread'}`}>
+                            {notification.isRead ? 'Read' : 'Unread'}
+                          </span>
+                          <span className="admin-notification-row__type">
+                            {notification.type.replaceAll('_', ' ')}
+                          </span>
+                        </div>
+                        <p className="admin-notification-row__message">{notification.message}</p>
                       </div>
-                      <p className="text-sm text-[var(--admin-text-muted)]">{notification.message}</p>
-                      <p className="text-xs text-[var(--admin-text-muted)]">
-                        {new Date(notification.createdAt).toLocaleString()}
-                      </p>
+
+                      {!notification.isRead ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="admin-button-outline rounded-xl font-black"
+                          onClick={() => void handleMarkRead(notification.id)}
+                        >
+                          Mark Read
+                        </Button>
+                      ) : null}
                     </div>
-                    {!notification.isRead ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="admin-button-outline rounded-xl font-black"
-                        onClick={() => void handleMarkRead(notification.id)}
-                      >
-                        Mark Read
-                      </Button>
-                    ) : null}
-                  </CardContent>
-                </Card>
+
+                    <div className="admin-notification-row__meta">
+                      <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                      {notification.readAt ? <span>Read {new Date(notification.readAt).toLocaleString()}</span> : null}
+                    </div>
+                  </div>
+                </article>
               ))}
             </div>
           )}
 
-          <div className="mt-4 flex items-center justify-end gap-2">
+          <div className="admin-notifications-pagination">
             <Button
               type="button"
               variant="outline"

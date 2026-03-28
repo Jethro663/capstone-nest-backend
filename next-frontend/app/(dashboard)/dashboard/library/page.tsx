@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
@@ -37,6 +37,16 @@ import type { ClassItem } from '@/types/class';
 import type { LibraryFolder, UploadedFile } from '@/types/file';
 
 type LibraryMode = 'private' | 'general';
+
+function handleFolderCardKeyDown(
+  event: KeyboardEvent<HTMLDivElement>,
+  onActivate: () => void,
+) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    onActivate();
+  }
+}
 
 export default function NexoraLibraryPage() {
   const { role, user } = useAuth();
@@ -371,11 +381,17 @@ export default function NexoraLibraryPage() {
                       ? (folder as { fileCount?: number }).fileCount
                       : null;
                   return (
-                    <button
+                    <div
                       key={folder.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       className="admin-library-folder-card"
                       onClick={() => setFolderTrail((prev) => [...prev, folder])}
+                      onKeyDown={(event) =>
+                        handleFolderCardKeyDown(event, () =>
+                          setFolderTrail((prev) => [...prev, folder]),
+                        )
+                      }
                     >
                       <div className={`admin-library-folder-icon color-${index % 4}`}>
                         <FolderOpen className="h-5 w-5" />
@@ -409,7 +425,7 @@ export default function NexoraLibraryPage() {
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

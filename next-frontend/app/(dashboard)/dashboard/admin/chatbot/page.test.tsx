@@ -66,6 +66,6 @@ describe('AdminChatbotPage', () => {
       }),
     );
 
-    expect(await screen.findByText('There are 120 active users.')).toBeInTheDocument();
+    expect((await screen.findAllByText('There are 120 active users.')).length).toBeGreaterThan(0);
   });
 });

@@ -399,7 +399,7 @@ export default function TeacherClassDetailPage() {
   const handleCreateAssessment = async () => {
     try {
       const res = await assessmentService.create({ title: 'Untitled Assessment', classId });
-      toast.success('Assessment created â€” redirecting to editor');
+      toast.success('Assessment created - redirecting to editor');
       router.push(`/dashboard/teacher/assessments/${res.data.id}/edit`);
     } catch {
       toast.error('Failed to create assessment');
@@ -586,10 +586,10 @@ export default function TeacherClassDetailPage() {
       )}
       stats={(
         <>
-          <TeacherStatCard label="Section" value={classItem.section?.name || 'Unassigned'} caption={`Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'â€”'}`} icon={GraduationCap} accent="sky" />
+          <TeacherStatCard label="Section" value={classItem.section?.name || 'Unassigned'} caption={`Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'N/A'}`} icon={GraduationCap} accent="sky" />
           <TeacherStatCard label="Students" value={enrollments.length} caption="Currently enrolled learners" icon={Users} accent="teal" />
           <TeacherStatCard label="Assessments" value={assessments.length} caption="Across active and draft work" icon={BookOpen} accent="amber" />
-          <TeacherStatCard label="School Year" value={classItem.schoolYear || 'â€”'} caption="Current class cycle" icon={CalendarRange} accent="rose" />
+          <TeacherStatCard label="School Year" value={classItem.schoolYear || 'N/A'} caption="Current class cycle" icon={CalendarRange} accent="rose" />
         </>
       )}
     >
@@ -610,7 +610,7 @@ export default function TeacherClassDetailPage() {
                     {classItem.subjectName} ({classItem.subjectCode})
                   </p>
                   <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                    {classItem.section?.name || 'Section not set'} â€¢ Grade {classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'â€”'} â€¢ {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'Teacher not assigned'}
+                    {classItem.section?.name || 'Section not set'} | Grade {classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'N/A'} | {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'Teacher not assigned'}
                   </p>
                   <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
                     Use this subject hub to keep the learning flow clear for students while you manage sequencing, assessments, announcements, and workbook records from one place.
@@ -1040,7 +1040,7 @@ export default function TeacherClassDetailPage() {
                     <option value="">Select from Nexora Library</option>
                     {libraryFiles.map((file) => (
                       <option key={file.id} value={file.id}>
-                        {file.originalName} {file.scope === 'general' ? 'â€¢ General' : 'â€¢ My Library'}
+                        {file.originalName} {file.scope === 'general' ? '| General' : '| My Library'}
                       </option>
                     ))}
                   </select>
@@ -1101,7 +1101,7 @@ export default function TeacherClassDetailPage() {
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {ext.structuredContent?.lessons?.length ?? 0} lesson(s) â€¢ {new Date(ext.createdAt).toLocaleString()}
+                          {ext.structuredContent?.lessons?.length ?? 0} lesson(s) | {new Date(ext.createdAt).toLocaleString()}
                         </p>
                         {ext.errorMessage && (
                           <p className="text-sm text-red-600">{ext.errorMessage}</p>
@@ -1409,7 +1409,7 @@ export default function TeacherClassDetailPage() {
                       </TableCell>
  
                       <TableCell className="text-muted-foreground">{e.student?.email}</TableCell>
-                      <TableCell className="text-muted-foreground">{e.student?.lrn || 'â€”'}</TableCell>
+                      <TableCell className="text-muted-foreground">{e.student?.lrn || 'N/A'}</TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-2">
                           <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/${e.studentId}`)}>
@@ -1444,7 +1444,7 @@ export default function TeacherClassDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Assessment Modal removed â€” create-and-redirect flow instead */}
+      {/* Create Assessment Modal removed - create-and-redirect flow instead */}
 
       {/* Create Announcement Modal */}
       <Dialog
