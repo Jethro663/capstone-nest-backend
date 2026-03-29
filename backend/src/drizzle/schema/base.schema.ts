@@ -92,6 +92,11 @@ export const feedbackLevelEnum = pgEnum('feedback_level', [
 ]);
 
 export const fileScopeEnum = pgEnum('file_scope', ['private', 'general']);
+export const moduleItemTypeEnum = pgEnum('module_item_type', [
+  'lesson',
+  'assessment',
+  'file',
+]);
 
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
@@ -639,6 +644,132 @@ export const archivedUsers = pgTable(
   }),
 );
 
+export const classModules = pgTable(
+  'class_modules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    order: integer('order').notNull().default(0),
+    isVisible: boolean('is_visible').notNull().default(true),
+    isLocked: boolean('is_locked').notNull().default(false),
+    teacherNotes: text('teacher_notes'),
+    themeKind: text('theme_kind').notNull().default('gradient'),
+    gradientId: text('gradient_id').notNull().default('oceanic-blue'),
+    coverImageUrl: text('cover_image_url'),
+    imagePositionX: integer('image_position_x').notNull().default(50),
+    imagePositionY: integer('image_position_y').notNull().default(50),
+    imageScale: integer('image_scale').notNull().default(120),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    classIdIdx: index('class_modules_class_id_idx').on(table.classId),
+    classOrderIdx: index('class_modules_class_order_idx').on(
+      table.classId,
+      table.order,
+    ),
+    classTitleUnique: unique('class_modules_class_title_unique').on(
+      table.classId,
+      table.title,
+    ),
+  }),
+);
+
+export const moduleSections = pgTable(
+  'module_sections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    moduleId: uuid('module_id')
+      .notNull()
+      .references(() => classModules.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    description: text('description'),
+    order: integer('order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    moduleIdIdx: index('module_sections_module_id_idx').on(table.moduleId),
+    moduleOrderIdx: index('module_sections_module_order_idx').on(
+      table.moduleId,
+      table.order,
+    ),
+  }),
+);
+
+export const moduleItems = pgTable(
+  'module_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    moduleSectionId: uuid('module_section_id')
+      .notNull()
+      .references(() => moduleSections.id, { onDelete: 'cascade' }),
+    itemType: moduleItemTypeEnum('item_type').notNull(),
+    lessonId: uuid('lesson_id').references(() => lessons.id, {
+      onDelete: 'cascade',
+    }),
+    assessmentId: uuid('assessment_id').references(() => assessments.id, {
+      onDelete: 'cascade',
+    }),
+    fileId: uuid('file_id'),
+    order: integer('order').notNull().default(0),
+    isVisible: boolean('is_visible').notNull().default(true),
+    isRequired: boolean('is_required').notNull().default(false),
+    isGiven: boolean('is_given').notNull().default(true),
+    metadata: json('metadata'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    sectionIdIdx: index('module_items_section_id_idx').on(table.moduleSectionId),
+    sectionOrderIdx: index('module_items_section_order_idx').on(
+      table.moduleSectionId,
+      table.order,
+    ),
+    lessonIdIdx: index('module_items_lesson_id_idx').on(table.lessonId),
+    assessmentIdIdx: index('module_items_assessment_id_idx').on(
+      table.assessmentId,
+    ),
+    fileIdIdx: index('module_items_file_id_idx').on(table.fileId),
+    uniqueLessonItem: unique('module_items_lesson_id_unique').on(table.lessonId),
+    uniqueAssessmentItem: unique('module_items_assessment_id_unique').on(
+      table.assessmentId,
+    ),
+    uniqueFileItem: unique('module_items_file_id_unique').on(table.fileId),
+  }),
+);
+
+export const moduleGradingScaleEntries = pgTable(
+  'module_grading_scale_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    moduleId: uuid('module_id')
+      .notNull()
+      .references(() => classModules.id, { onDelete: 'cascade' }),
+    letter: varchar('letter', { length: 8 }).notNull(),
+    label: text('label').notNull(),
+    minScore: integer('min_score').notNull(),
+    maxScore: integer('max_score').notNull(),
+    description: text('description'),
+    order: integer('order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    moduleIdIdx: index('module_grading_scale_entries_module_id_idx').on(
+      table.moduleId,
+    ),
+    moduleOrderIdx: index('module_grading_scale_entries_module_order_idx').on(
+      table.moduleId,
+      table.order,
+    ),
+  }),
+);
+
 // ==========================================
 // 6. RELATIONS
 // ==========================================
@@ -720,6 +851,7 @@ export const classesRelations = relations(classes, ({ one, many }) => ({
   enrollments: many(enrollments),
   lessons: many(lessons),
   assessments: many(assessments),
+  modules: many(classModules),
 }));
 
 export const classSchedulesRelations = relations(classSchedules, ({ one }) => ({
@@ -758,6 +890,7 @@ export const lessonsRelations = relations(lessons, ({ one, many }) => ({
   }),
   contentBlocks: many(lessonContentBlocks),
   completions: many(lessonCompletions),
+  moduleItems: many(moduleItems),
 }));
 
 export const lessonContentBlocksRelations = relations(
@@ -791,7 +924,56 @@ export const assessmentsRelations = relations(assessments, ({ one, many }) => ({
   }),
   questions: many(assessmentQuestions),
   attempts: many(assessmentAttempts),
+  moduleItems: many(moduleItems),
 }));
+
+export const classModulesRelations = relations(
+  classModules,
+  ({ one, many }) => ({
+    class: one(classes, {
+      fields: [classModules.classId],
+      references: [classes.id],
+    }),
+    sections: many(moduleSections),
+    gradingScaleEntries: many(moduleGradingScaleEntries),
+  }),
+);
+
+export const moduleSectionsRelations = relations(
+  moduleSections,
+  ({ one, many }) => ({
+    module: one(classModules, {
+      fields: [moduleSections.moduleId],
+      references: [classModules.id],
+    }),
+    items: many(moduleItems),
+  }),
+);
+
+export const moduleItemsRelations = relations(moduleItems, ({ one }) => ({
+  section: one(moduleSections, {
+    fields: [moduleItems.moduleSectionId],
+    references: [moduleSections.id],
+  }),
+  lesson: one(lessons, {
+    fields: [moduleItems.lessonId],
+    references: [lessons.id],
+  }),
+  assessment: one(assessments, {
+    fields: [moduleItems.assessmentId],
+    references: [assessments.id],
+  }),
+}));
+
+export const moduleGradingScaleEntriesRelations = relations(
+  moduleGradingScaleEntries,
+  ({ one }) => ({
+    module: one(classModules, {
+      fields: [moduleGradingScaleEntries.moduleId],
+      references: [classModules.id],
+    }),
+  }),
+);
 
 export const assessmentQuestionsRelations = relations(
   assessmentQuestions,

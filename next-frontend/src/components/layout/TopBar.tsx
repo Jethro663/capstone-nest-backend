@@ -22,9 +22,14 @@ import { getProfileRoute } from '@/utils/profile';
 interface TopBarProps {
   onMenuToggle: () => void;
   showAdminDesktopMenu?: boolean;
+  showTeacherDesktopMenu?: boolean;
 }
 
-export function TopBar({ onMenuToggle, showAdminDesktopMenu = false }: TopBarProps) {
+export function TopBar({
+  onMenuToggle,
+  showAdminDesktopMenu = false,
+  showTeacherDesktopMenu = false,
+}: TopBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, role } = useAuth();
@@ -122,6 +127,79 @@ export function TopBar({ onMenuToggle, showAdminDesktopMenu = false }: TopBarPro
     );
   }
 
+  if (isTeacherRoute) {
+    return (
+      <header className="teacher-topbar-shell">
+        <div className="teacher-topbar-shell__left">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={showTeacherDesktopMenu ? 'teacher-topbar-shell__menu' : 'teacher-topbar-shell__menu md:hidden'}
+            onClick={onMenuToggle}
+            aria-label={showTeacherDesktopMenu ? 'Expand sidebar' : 'Open sidebar'}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <p className="teacher-topbar-shell__welcome">
+            Welcome back, <strong>{firstName}</strong>
+          </p>
+        </div>
+
+        <div className="teacher-topbar-shell__actions">
+          <button
+            type="button"
+            className="teacher-topbar-shell__notif"
+            onClick={() => router.push('/dashboard/notifications')}
+            title="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 ? (
+              <span className="teacher-topbar-shell__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            ) : null}
+          </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="teacher-topbar-shell__profile"
+                aria-label="Open profile menu"
+              >
+                <Avatar className="h-10 w-10 border border-[#f5d4d4]">
+                  {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                  <AvatarFallback className="teacher-topbar-shell__avatar">{initials}</AvatarFallback>
+                </Avatar>
+                <span className="teacher-topbar-shell__profile-copy">
+                  <span className="teacher-topbar-shell__name">{displayName}</span>
+                  <span className="teacher-topbar-shell__role">Teacher Portal</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:bg-slate-50 focus:text-slate-900"
+                onSelect={() => router.push(profileHref)}
+              >
+                <User className="mr-2 h-4 w-4" />
+                My Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
+                onSelect={() => {
+                  void logoutAction();
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className={`flex h-16 items-center justify-between border-b px-4 ${isStudentRoute ? 'student-topbar' : isTeacherRoute ? 'teacher-topbar' : 'bg-white'}`}>
       <div className="flex items-center gap-3">
@@ -152,18 +230,41 @@ export function TopBar({ onMenuToggle, showAdminDesktopMenu = false }: TopBarPro
 
         <div className={`mx-2 h-6 w-px ${isStudentRoute ? 'student-divider' : isTeacherRoute ? 'teacher-divider' : 'bg-slate-200'}`} />
 
-        <button
-          onClick={() => router.push(profileHref)}
-          className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-[var(--student-accent-soft)]' : isTeacherRoute ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
-        >
-          <Avatar className="h-8 w-8">
-            {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
-            <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]' : isTeacherRoute ? 'bg-[var(--teacher-outline-strong)] text-[var(--teacher-text-strong)]' : 'bg-primary/10 text-primary'}`}>
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <span className={`hidden text-sm font-medium md:block ${isStudentRoute ? 'text-[var(--student-text-strong)]' : isTeacherRoute ? 'text-[var(--teacher-text-strong)]' : 'text-slate-700'}`}>Profile</span>
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-[var(--student-accent-soft)]' : isTeacherRoute ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
+            >
+              <Avatar className="h-8 w-8">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]' : isTeacherRoute ? 'bg-[var(--teacher-outline-strong)] text-[var(--teacher-text-strong)]' : 'bg-primary/10 text-primary'}`}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <span className={`hidden text-sm font-medium md:block ${isStudentRoute ? 'text-[var(--student-text-strong)]' : isTeacherRoute ? 'text-[var(--teacher-text-strong)]' : 'text-slate-700'}`}>Profile</span>
+              <ChevronDown className={`hidden h-4 w-4 md:block ${isTeacherRoute ? 'text-[var(--teacher-text-muted)]' : 'text-slate-500'}`} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
+            <DropdownMenuItem
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:bg-slate-50 focus:text-slate-900"
+              onSelect={() => router.push(profileHref)}
+            >
+              <User className="mr-2 h-4 w-4" />
+              My Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
+              onSelect={() => {
+                void logoutAction();
+              }}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

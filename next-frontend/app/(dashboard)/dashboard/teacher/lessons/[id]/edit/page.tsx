@@ -23,17 +23,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { toast } from 'sonner';
 import {
   TeacherPageShell,
   TeacherSectionCard,
   TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
-import { cn } from '@/utils/cn';
+import { plainTextToRichHtml } from '@/lib/rich-text';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
 
 const BLOCK_TYPES = [
@@ -120,6 +121,13 @@ function getBlockUrlValue(content: ContentBlock['content']): string {
   return '';
 }
 
+function normalizeRichValue(input?: string | null) {
+  const text = (input || '').trim();
+  if (!text) return '';
+  if (/<[a-z][\s\S]*>/i.test(text)) return text;
+  return plainTextToRichHtml(text);
+}
+
 export default function LessonEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -143,7 +151,7 @@ export default function LessonEditorPage() {
       const res = await lessonService.getById(lessonId);
       setLesson(res.data);
       setTitle(res.data.title);
-      setDescription(res.data.description || '');
+      setDescription(normalizeRichValue(res.data.description));
       setBlocks((res.data.contentBlocks || []).sort((a, b) => a.order - b.order));
     } catch {
       toast.error('Failed to load lesson');
@@ -283,7 +291,12 @@ export default function LessonEditorPage() {
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Description</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="teacher-input min-h-[132px] rounded-2xl" />
+              <RichTextEditor
+                value={description}
+                onChange={setDescription}
+                minHeight={190}
+                placeholder="Write lesson context, goals, and what students should expect in this lesson."
+              />
             </div>
             <div className="flex justify-end">
               <Button onClick={handleSaveDetails} disabled={saving} className="teacher-button-solid rounded-xl font-black">
@@ -433,7 +446,12 @@ function BlockEditor({
   return (
     <div className="space-y-3">
       {block.type === 'text' || block.type === 'question' ? (
-        <Textarea value={value} onChange={(e) => setValue(e.target.value)} rows={5} className="teacher-input rounded-2xl" />
+        <RichTextEditor
+          value={value}
+          onChange={setValue}
+          minHeight={200}
+          placeholder={block.type === 'question' ? 'Write your prompt...' : 'Write lesson content...'}
+        />
       ) : (
         <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Enter ${block.type} URL...`} className="teacher-input h-12 rounded-2xl" />
       )}
@@ -450,13 +468,29 @@ function BlockPreview({ block }: { block: ContentBlock }) {
 
   switch (block.type) {
     case 'text':
-      return <p className={cn(baseClass, 'whitespace-pre-wrap')}>{getBlockTextValue(block.content) || 'Empty text block'}</p>;
+      return (
+        <div className={baseClass}>
+          {getBlockTextValue(block.content).trim() ? (
+            <RichTextRenderer html={normalizeRichValue(getBlockTextValue(block.content))} />
+          ) : (
+            'Empty text block'
+          )}
+        </div>
+      );
     case 'image':
       return <p className={baseClass}>Image URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
     case 'video':
       return <p className={baseClass}>Video URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
     case 'question':
-      return <p className={cn(baseClass, 'whitespace-pre-wrap')}>{getBlockTextValue(block.content) || 'Empty question block'}</p>;
+      return (
+        <div className={baseClass}>
+          {getBlockTextValue(block.content).trim() ? (
+            <RichTextRenderer html={normalizeRichValue(getBlockTextValue(block.content))} />
+          ) : (
+            'Empty question block'
+          )}
+        </div>
+      );
     case 'file':
       return <p className={baseClass}>File link: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
     case 'divider':

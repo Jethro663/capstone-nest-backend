@@ -50,10 +50,10 @@ const studentNav: NavItem[] = [
 ];
 
 const teacherNav: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard/teacher', icon: LayoutDashboard },
   { label: 'My Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
   { label: 'Nexora Library', href: '/dashboard/library', icon: FolderOpen },
   { label: 'My Sections', href: '/dashboard/teacher/sections', icon: Users },
+  { label: 'Calendar', href: '/dashboard/teacher/calendar', icon: Activity },
   { label: 'Class Record', href: '/dashboard/teacher/class-record', icon: ClipboardList },
   { label: 'Reports', href: '/dashboard/teacher/reports', icon: BarChart3 },
   { label: 'Interventions', href: '/dashboard/teacher/interventions', icon: Users },
@@ -119,9 +119,18 @@ interface SidebarProps {
   onClose?: () => void;
   isAdminCollapsed?: boolean;
   onAdminCollapseToggle?: () => void;
+  isTeacherCollapsed?: boolean;
+  onTeacherCollapseToggle?: () => void;
 }
 
-export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollapseToggle }: SidebarProps) {
+export function Sidebar({
+  open,
+  onClose,
+  isAdminCollapsed = false,
+  onAdminCollapseToggle,
+  isTeacherCollapsed = false,
+  onTeacherCollapseToggle,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { role, user } = useAuth();
@@ -147,9 +156,10 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-200 md:static md:translate-x-0',
         isStudentRoute && 'student-sidebar',
-        isTeacherRoute && 'teacher-sidebar',
+        isTeacherRoute && 'teacher-sidebar teacher-sidebar-shell',
         isAdminRoute && 'admin-sidebar',
         isAdminRoute && isAdminCollapsed && 'admin-sidebar--collapsed',
+        isTeacherRoute && isTeacherCollapsed && 'teacher-sidebar--collapsed',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -169,6 +179,16 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
             <div className="admin-sidebar__brand-copy">
               <h1 className="admin-sidebar__title">Nexora</h1>
               <p className="admin-sidebar__subtitle">Admin Portal</p>
+            </div>
+          </div>
+        ) : isTeacherRoute ? (
+          <div className="teacher-sidebar__brand">
+            <div className="teacher-sidebar__logo">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <div className="teacher-sidebar__brand-copy">
+              <h1 className="teacher-sidebar__title">Nexora</h1>
+              <p className="teacher-sidebar__subtitle">Teacher Portal</p>
             </div>
           </div>
         ) : (
@@ -198,6 +218,25 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
               <X className="h-5 w-5" />
             </button>
           </div>
+        ) : isTeacherRoute ? (
+          <div className="admin-sidebar__header-actions">
+            <button
+              type="button"
+              className="admin-sidebar__toggle hidden md:inline-flex"
+              onClick={onTeacherCollapseToggle}
+              aria-label="Collapse sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="text-[var(--teacher-text-muted)] md:hidden"
+              onClick={onClose}
+              aria-label="Close sidebar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         ) : (
           <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
             <X className="h-5 w-5" />
@@ -205,7 +244,13 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
         )}
       </div>
 
-      <nav className={cn('flex-1 space-y-1 overflow-y-auto p-3', isAdminRoute && 'admin-sidebar__nav')}>
+      <nav
+        className={cn(
+          'flex-1 space-y-1 overflow-y-auto p-3',
+          isAdminRoute && 'admin-sidebar__nav',
+          isTeacherRoute && 'teacher-sidebar__nav',
+        )}
+      >
         {items.map((item) => {
           const active = isNavItemActive(pathname, item.href);
           return (
@@ -221,20 +266,26 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
                   ? isStudentRoute
                     ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]'
                     : isTeacherRoute
-                      ? 'bg-white/10 text-[var(--teacher-text-strong)]'
+                      ? 'teacher-sidebar__item teacher-sidebar__item--active'
                     : isAdminRoute
                       ? 'admin-sidebar__item admin-sidebar__item--active'
                       : 'bg-primary/10 text-primary'
                   : isStudentRoute
                     ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]'
                     : isTeacherRoute
-                      ? 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-[var(--teacher-text-strong)]'
+                      ? 'teacher-sidebar__item'
                     : isAdminRoute
                       ? 'admin-sidebar__item'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              <item.icon className={cn('h-4 w-4', isAdminRoute && 'admin-sidebar__item-icon')} />
+              <item.icon
+                className={cn(
+                  'h-4 w-4',
+                  isAdminRoute && 'admin-sidebar__item-icon',
+                  isTeacherRoute && 'teacher-sidebar__item-icon',
+                )}
+              />
               {item.label}
             </button>
           );
@@ -255,6 +306,27 @@ export function Sidebar({ open, onClose, isAdminCollapsed = false, onAdminCollap
             <Button
               variant="ghost"
               className="admin-sidebar__logout"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
+      ) : isTeacherRoute ? (
+        <div className="teacher-sidebar__footer-wrap">
+          <div className="teacher-sidebar__section-divider" />
+          <div className="teacher-sidebar__footer">
+            <div className="teacher-sidebar__profile">
+              <div className="teacher-sidebar__avatar">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">{displayName}</p>
+                <p className="truncate text-xs text-[#8ea0bc]">Teacher</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="teacher-sidebar__logout"
               onClick={handleLogout}
             >
               <LogOut className="h-4 w-4" />

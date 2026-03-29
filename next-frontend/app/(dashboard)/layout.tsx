@@ -10,10 +10,12 @@ import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemp
 import { Loader2 } from 'lucide-react';
 
 const ADMIN_SIDEBAR_STORAGE_KEY = 'nexora.adminSidebarCollapsed';
+const TEACHER_SIDEBAR_STORAGE_KEY = 'nexora.teacherSidebarCollapsed';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
+  const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] = useState(false);
   const { loading, isAuthenticated, isProfileIncomplete } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -46,14 +48,36 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    const savedState = window.localStorage.getItem(TEACHER_SIDEBAR_STORAGE_KEY);
+
+    if (savedState !== 'true') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setTeacherSidebarCollapsed(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   const setPersistedAdminSidebarCollapsed = (collapsed: boolean) => {
     setAdminSidebarCollapsed(collapsed);
     window.localStorage.setItem(ADMIN_SIDEBAR_STORAGE_KEY, collapsed ? 'true' : 'false');
   };
 
+  const setPersistedTeacherSidebarCollapsed = (collapsed: boolean) => {
+    setTeacherSidebarCollapsed(collapsed);
+    window.localStorage.setItem(TEACHER_SIDEBAR_STORAGE_KEY, collapsed ? 'true' : 'false');
+  };
+
   const handleSidebarToggle = () => {
     if (isAdminRoute && window.matchMedia('(min-width: 768px)').matches) {
       setPersistedAdminSidebarCollapsed(!adminSidebarCollapsed);
+      return;
+    }
+
+    if (isTeacherRoute && window.matchMedia('(min-width: 768px)').matches) {
+      setPersistedTeacherSidebarCollapsed(!teacherSidebarCollapsed);
       return;
     }
 
@@ -84,12 +108,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         onClose={() => setSidebarOpen(false)}
         isAdminCollapsed={adminSidebarCollapsed}
         onAdminCollapseToggle={() => setPersistedAdminSidebarCollapsed(true)}
+        isTeacherCollapsed={teacherSidebarCollapsed}
+        onTeacherCollapseToggle={() => setPersistedTeacherSidebarCollapsed(true)}
       />
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar
           onMenuToggle={handleSidebarToggle}
           showAdminDesktopMenu={adminSidebarCollapsed}
+          showTeacherDesktopMenu={teacherSidebarCollapsed}
         />
         <main
           className={`flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherRoute ? 'teacher-page' : ''} ${isAdminRoute ? 'admin-main p-5 lg:p-8' : ''}`}
