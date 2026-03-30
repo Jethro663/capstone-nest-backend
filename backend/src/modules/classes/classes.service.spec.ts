@@ -1,4 +1,4 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
 import {
   NotFoundException,
   ConflictException,
@@ -102,6 +102,12 @@ describe('ClassesService', () => {
       enrollments: { findFirst: jest.fn(), findMany: jest.fn() },
       lessons: { findMany: jest.fn() },
       assessments: { findMany: jest.fn() },
+      classRecords: { findMany: jest.fn() },
+      classRecordCategories: { findMany: jest.fn() },
+      classRecordItems: { findMany: jest.fn() },
+      classRecordScores: { findMany: jest.fn() },
+      classRecordFinalGrades: { findFirst: jest.fn() },
+      assessmentAttempts: { findMany: jest.fn() },
     },
     select: jest.fn(),
     insert: jest.fn(),
@@ -118,6 +124,12 @@ describe('ClassesService', () => {
     mockAuditService.log.mockResolvedValue(undefined);
     mockDb.query.classVisibilityPreferences.findMany.mockResolvedValue([]);
     mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue(null);
+    mockDb.query.classRecords.findMany.mockResolvedValue([]);
+    mockDb.query.classRecordCategories.findMany.mockResolvedValue([]);
+    mockDb.query.classRecordItems.findMany.mockResolvedValue([]);
+    mockDb.query.classRecordScores.findMany.mockResolvedValue([]);
+    mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
+    mockDb.query.assessmentAttempts.findMany.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -621,6 +633,66 @@ describe('ClassesService', () => {
     });
   });
 
+  describe('bulkLifecycleAction', () => {
+    it('aggregates archive successes and failures without aborting the batch', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeClass({ isActive: true }));
+      const toggleSpy = jest
+        .spyOn(service, 'toggleActive')
+        .mockResolvedValueOnce(makeClass({ isActive: false }))
+        .mockRejectedValueOnce(new ConflictException('Class is already archived.'))
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+
+      const result = await service.bulkLifecycleAction({
+        action: 'archive',
+        classIds: ['class-1', 'class-2', 'class-3'],
+      });
+
+      expect(toggleSpy).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({
+        message: '2 classes archived; 1 failed.',
+        data: {
+          action: 'archive',
+          requested: 3,
+          succeeded: ['class-1', 'class-3'],
+          failed: [{ classId: 'class-2', reason: 'Class is already archived.' }],
+        },
+      });
+    });
+
+    it('fails purge for active classes without aborting the batch', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeClass({ isActive: false }))
+        .mockResolvedValueOnce(makeClass({ isActive: true }));
+      const purgeSpy = jest
+        .spyOn(service, 'purge')
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+
+      const result = await service.bulkLifecycleAction({
+        action: 'purge',
+        classIds: ['class-1', 'class-2'],
+      });
+
+      expect(purgeSpy).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        message: '1 class purged; 1 failed.',
+        data: {
+          action: 'purge',
+          requested: 2,
+          succeeded: ['class-1'],
+          failed: [
+            {
+              classId: 'class-2',
+              reason: 'Only archived classes can be permanently deleted. Archive the class first.',
+            },
+          ],
+        },
+      });
+    });
+  });
+
   // =========================================================================
   // getClassesByTeacher
   // =========================================================================
@@ -922,6 +994,255 @@ describe('ClassesService', () => {
       const result = await service.getCandidates(CLASS_ID);
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+  // getStudentOverviewForClass
+  // =========================================================================
+
+  describe('getStudentOverviewForClass', () => {
+    it('builds standing and history buckets with student-centric status rules', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({
+          section: {
+            id: SECTION_ID,
+            name: 'Rizal',
+            gradeLevel: '10',
+            schoolYear: SCHOOL_YEAR,
+          },
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-10',
+        }),
+      );
+      mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enroll-1' });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        firstName: 'Jamie',
+        middleName: null,
+        lastName: 'Cruz',
+        email: 'jcruz@nexora.edu',
+        status: 'ACTIVE',
+        profile: {
+          lrn: '789012',
+          dateOfBirth: null,
+          gender: null,
+          phone: null,
+          address: null,
+          gradeLevel: '10',
+          familyName: null,
+          familyRelationship: null,
+          familyContact: null,
+          profilePicture: null,
+        },
+      });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Rizal',
+        gradeLevel: '10',
+        schoolYear: SCHOOL_YEAR,
+        roomNumber: '101',
+        adviser: null,
+      });
+      mockDb.query.classRecords.findMany.mockResolvedValue([
+        {
+          id: 'record-q1',
+          gradingPeriod: 'q1',
+          updatedAt: new Date('2026-03-01'),
+          createdAt: new Date('2026-02-01'),
+        },
+      ]);
+      mockDb.query.classRecordCategories.findMany.mockResolvedValue([
+        { id: 'cat-ww', name: 'Written Works', weightPercentage: '30' },
+        { id: 'cat-pt', name: 'Performance Tasks', weightPercentage: '50' },
+        { id: 'cat-qa', name: 'Quarterly Assessment', weightPercentage: '20' },
+      ]);
+      mockDb.query.classRecordItems.findMany.mockResolvedValue([
+        { id: 'item-ww', categoryId: 'cat-ww', maxScore: '100' },
+        { id: 'item-pt', categoryId: 'cat-pt', maxScore: '100' },
+        { id: 'item-qa', categoryId: 'cat-qa', maxScore: '100' },
+      ]);
+      mockDb.query.classRecordScores.findMany.mockResolvedValue([
+        { classRecordItemId: 'item-ww', score: '85' },
+        { classRecordItemId: 'item-pt', score: '93' },
+        { classRecordItemId: 'item-qa', score: '88' },
+      ]);
+      mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
+      mockDb.query.assessments.findMany.mockResolvedValue([
+        {
+          id: 'a-finished',
+          title: 'Algebra Quiz 1',
+          type: 'quiz',
+          dueDate: '2026-03-25T00:00:00.000Z',
+          totalPoints: 100,
+        },
+        {
+          id: 'a-late',
+          title: 'Midterm Exam',
+          type: 'quarterly_assessment',
+          dueDate: '2026-03-15T00:00:00.000Z',
+          totalPoints: 100,
+        },
+        {
+          id: 'a-pending',
+          title: 'Group Project',
+          type: 'project',
+          dueDate: '2026-04-10T00:00:00.000Z',
+          totalPoints: 100,
+        },
+      ]);
+      mockDb.query.assessmentAttempts.findMany.mockResolvedValue([
+        {
+          id: 'attempt-1',
+          assessmentId: 'a-finished',
+          isSubmitted: true,
+          isReturned: false,
+          submittedAt: '2026-03-14T08:00:00.000Z',
+          returnedAt: null,
+          score: 90,
+          directScore: null,
+          passed: true,
+        },
+        {
+          id: 'attempt-2',
+          assessmentId: 'a-late',
+          isSubmitted: true,
+          isReturned: true,
+          submittedAt: '2026-03-16T09:00:00.000Z',
+          returnedAt: '2026-03-17T00:00:00.000Z',
+          score: 88,
+          directScore: null,
+          passed: true,
+        },
+      ]);
+
+      const result = await service.getStudentOverviewForClass(
+        CLASS_ID,
+        STUDENT_ID,
+        TEACHER_ID,
+        ['teacher'],
+      );
+
+      expect(result.classInfo.sectionLabel).toBe('Grade 10 - Rizal');
+      expect(result.standing).toEqual({
+        gradingPeriod: 'q1',
+        overallGradePercent: 89.6,
+        components: {
+          writtenWorkPercent: 85,
+          performanceTaskPercent: 93,
+          quarterlyExamPercent: 88,
+        },
+      });
+      expect(result.history.finished).toHaveLength(1);
+      expect(result.history.late).toHaveLength(1);
+      expect(result.history.pending).toHaveLength(1);
+      expect(result.history.late[0]).toEqual(
+        expect.objectContaining({
+          assessmentId: 'a-late',
+          status: 'late',
+          isLate: true,
+        }),
+      );
+      expect(result.history.pending[0]).toEqual(
+        expect.objectContaining({
+          assessmentId: 'a-pending',
+          status: 'not_started',
+        }),
+      );
+    });
+
+    it('throws ForbiddenException when non-owner teacher requests overview', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+
+      await expect(
+        service.getStudentOverviewForClass(
+          CLASS_ID,
+          STUDENT_ID,
+          'teacher-uuid-2',
+          ['teacher'],
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws NotFoundException when student is not enrolled in class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getStudentOverviewForClass(
+          CLASS_ID,
+          STUDENT_ID,
+          TEACHER_ID,
+          ['teacher'],
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('falls back to the latest record that has computable standing data', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enroll-1' });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        firstName: 'Jamie',
+        middleName: null,
+        lastName: 'Cruz',
+        email: 'jcruz@nexora.edu',
+        status: 'ACTIVE',
+        profile: null,
+      });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Rizal',
+        gradeLevel: '10',
+        schoolYear: SCHOOL_YEAR,
+        roomNumber: null,
+        adviser: null,
+      });
+      mockDb.query.classRecords.findMany.mockResolvedValue([
+        {
+          id: 'record-empty',
+          gradingPeriod: 'q2',
+          updatedAt: new Date('2026-04-01'),
+          createdAt: new Date('2026-03-01'),
+        },
+        {
+          id: 'record-computable',
+          gradingPeriod: 'q1',
+          updatedAt: new Date('2026-03-01'),
+          createdAt: new Date('2026-02-01'),
+        },
+      ]);
+      mockDb.query.classRecordCategories.findMany
+        .mockResolvedValueOnce([
+          { id: 'cat-empty', name: 'Written Works', weightPercentage: '30' },
+        ])
+        .mockResolvedValueOnce([
+          { id: 'cat-ww', name: 'Written Works', weightPercentage: '100' },
+        ]);
+      mockDb.query.classRecordItems.findMany
+        .mockResolvedValueOnce([
+          { id: 'item-empty', categoryId: 'cat-empty', maxScore: '0' },
+        ])
+        .mockResolvedValueOnce([
+          { id: 'item-ww', categoryId: 'cat-ww', maxScore: '100' },
+        ]);
+      mockDb.query.classRecordScores.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          { classRecordItemId: 'item-ww', score: '92' },
+        ]);
+      mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
+      mockDb.query.assessments.findMany.mockResolvedValue([]);
+
+      const result = await service.getStudentOverviewForClass(
+        CLASS_ID,
+        STUDENT_ID,
+        TEACHER_ID,
+        ['teacher'],
+      );
+
+      expect(result.standing.gradingPeriod).toBe('q1');
+      expect(result.standing.overallGradePercent).toBe(92);
     });
   });
 

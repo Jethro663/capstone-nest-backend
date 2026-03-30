@@ -22,9 +22,15 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import {
   assessments,
+  assessmentAttempts,
   classSchedules,
   classVisibilityPreferences,
   classes,
+  classRecordCategories,
+  classRecordFinalGrades,
+  classRecordItems,
+  classRecordScores,
+  classRecords,
   sections,
   users,
   userRoles,
@@ -41,7 +47,24 @@ import {
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { ScheduleSlotDto } from './DTO/schedule-slot.dto';
+import {
+  type BulkClassLifecycleAction,
+  type BulkClassLifecycleDto,
+  type BulkClassLifecycleFailure,
+  type BulkClassLifecycleResult,
+} from './DTO/bulk-class-lifecycle.dto';
 import { AuditService } from '../audit/audit.service';
+
+type StandingComponentKey =
+  | 'writtenWorkPercent'
+  | 'performanceTaskPercent'
+  | 'quarterlyExamPercent';
+
+interface StandingSnapshot {
+  gradingPeriod: string;
+  overallGradePercent: number;
+  components: Record<StandingComponentKey, number | null>;
+}
 
 @Injectable()
 export class ClassesService {
@@ -521,6 +544,95 @@ export class ClassesService {
     return classRecord;
   }
 
+  private async performBulkLifecycleAction(
+    action: BulkClassLifecycleAction,
+    classId: string,
+  ) {
+    const classRecord = await this.findById(classId);
+
+    switch (action) {
+      case 'archive':
+        if (!classRecord.isActive) {
+          throw new ConflictException('Class is already archived.');
+        }
+        await this.toggleActive(classId);
+        return;
+      case 'restore':
+        if (classRecord.isActive) {
+          throw new ConflictException('Class is already active.');
+        }
+        await this.toggleActive(classId);
+        return;
+      case 'purge':
+        if (classRecord.isActive) {
+          throw new ConflictException(
+            'Only archived classes can be permanently deleted. Archive the class first.',
+          );
+        }
+        await this.purge(classId);
+        return;
+      default: {
+        throw new BadRequestException(
+          'Unsupported bulk class lifecycle action.',
+        );
+      }
+    }
+  }
+
+  private buildBulkLifecycleMessage(
+    action: BulkClassLifecycleAction,
+    successCount: number,
+    failureCount: number,
+  ) {
+    const verbMap: Record<BulkClassLifecycleAction, string> = {
+      archive: 'archived',
+      restore: 'restored',
+      purge: 'purged',
+    };
+    const noun = successCount === 1 ? 'class' : 'classes';
+    const verb = verbMap[action];
+
+    if (failureCount === 0) {
+      return `${successCount} ${noun} ${verb}.`;
+    }
+
+    return `${successCount} ${noun} ${verb}; ${failureCount} failed.`;
+  }
+
+  async bulkLifecycleAction(
+    dto: BulkClassLifecycleDto,
+  ): Promise<BulkClassLifecycleResult> {
+    const classIds = [...new Set(dto.classIds)];
+    const succeeded: string[] = [];
+    const failed: BulkClassLifecycleFailure[] = [];
+
+    for (const classId of classIds) {
+      try {
+        await this.performBulkLifecycleAction(dto.action, classId);
+        succeeded.push(classId);
+      } catch (error) {
+        failed.push({
+          classId,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: this.buildBulkLifecycleMessage(
+        dto.action,
+        succeeded.length,
+        failed.length,
+      ),
+      data: {
+        action: dto.action,
+        requested: classIds.length,
+        succeeded,
+        failed,
+      },
+    };
+  }
+
   /**
    * Get classes by teacher ID
    * Ownership enforced: a teacher may only view their own classes unless they are an admin.
@@ -817,6 +929,307 @@ export class ClassesService {
     return classEnrollments;
   }
 
+  private normalizeStandingCategory(name: string): StandingComponentKey | null {
+    const normalized = name.toLowerCase();
+    if (normalized.includes('written')) return 'writtenWorkPercent';
+    if (normalized.includes('performance')) return 'performanceTaskPercent';
+    if (normalized.includes('quarter')) return 'quarterlyExamPercent';
+    return null;
+  }
+
+  private roundToOne(value: number): number {
+    return Math.round(value * 10) / 10;
+  }
+
+  private async getLatestStandingSnapshot(
+    classId: string,
+    studentId: string,
+  ): Promise<StandingSnapshot | null> {
+    const records = await this.db.query.classRecords.findMany({
+      where: eq(classRecords.classId, classId),
+      columns: {
+        id: true,
+        gradingPeriod: true,
+        updatedAt: true,
+        createdAt: true,
+      },
+      orderBy: [desc(classRecords.updatedAt), desc(classRecords.createdAt)],
+    });
+
+    for (const record of records) {
+      const [categories, items, finalGrade] = await Promise.all([
+        this.db.query.classRecordCategories.findMany({
+          where: eq(classRecordCategories.classRecordId, record.id),
+          columns: {
+            id: true,
+            name: true,
+            weightPercentage: true,
+          },
+        }),
+        this.db.query.classRecordItems.findMany({
+          where: eq(classRecordItems.classRecordId, record.id),
+          columns: {
+            id: true,
+            categoryId: true,
+            maxScore: true,
+          },
+        }),
+        this.db.query.classRecordFinalGrades.findFirst({
+          where: and(
+            eq(classRecordFinalGrades.classRecordId, record.id),
+            eq(classRecordFinalGrades.studentId, studentId),
+          ),
+          columns: {
+            finalPercentage: true,
+          },
+        }),
+      ]);
+
+      if (categories.length === 0) continue;
+
+      const itemIds = items.map((item) => item.id);
+      const scores =
+        itemIds.length > 0
+          ? await this.db.query.classRecordScores.findMany({
+              where: and(
+                eq(classRecordScores.studentId, studentId),
+                inArray(classRecordScores.classRecordItemId, itemIds),
+              ),
+              columns: {
+                classRecordItemId: true,
+                score: true,
+              },
+            })
+          : [];
+
+      const scoreByItemId = new Map(
+        scores.map((score) => [score.classRecordItemId, Number(score.score)]),
+      );
+
+      const componentTotals: Record<
+        StandingComponentKey,
+        { raw: number; hps: number }
+      > = {
+        writtenWorkPercent: { raw: 0, hps: 0 },
+        performanceTaskPercent: { raw: 0, hps: 0 },
+        quarterlyExamPercent: { raw: 0, hps: 0 },
+      };
+
+      let weightedInitialGrade = 0;
+      let hasComputableCategory = false;
+
+      for (const category of categories) {
+        const key = this.normalizeStandingCategory(category.name);
+        if (!key) continue;
+
+        const categoryItems = items.filter(
+          (item) => item.categoryId === category.id,
+        );
+
+        let totalRaw = 0;
+        let totalHps = 0;
+
+        for (const item of categoryItems) {
+          const maxScore = Number(item.maxScore);
+          if (Number.isNaN(maxScore) || maxScore <= 0) continue;
+          totalHps += maxScore;
+          totalRaw += scoreByItemId.get(item.id) ?? 0;
+        }
+
+        if (totalHps > 0) {
+          hasComputableCategory = true;
+          const percentage = (totalRaw / totalHps) * 100;
+          const weight = Number(category.weightPercentage);
+          weightedInitialGrade += percentage * (weight / 100);
+          componentTotals[key] = { raw: totalRaw, hps: totalHps };
+        }
+      }
+
+      const components: Record<StandingComponentKey, number | null> = {
+        writtenWorkPercent:
+          componentTotals.writtenWorkPercent.hps > 0
+            ? this.roundToOne(
+                (componentTotals.writtenWorkPercent.raw /
+                  componentTotals.writtenWorkPercent.hps) *
+                  100,
+              )
+            : null,
+        performanceTaskPercent:
+          componentTotals.performanceTaskPercent.hps > 0
+            ? this.roundToOne(
+                (componentTotals.performanceTaskPercent.raw /
+                  componentTotals.performanceTaskPercent.hps) *
+                  100,
+              )
+            : null,
+        quarterlyExamPercent:
+          componentTotals.quarterlyExamPercent.hps > 0
+            ? this.roundToOne(
+                (componentTotals.quarterlyExamPercent.raw /
+                  componentTotals.quarterlyExamPercent.hps) *
+                  100,
+              )
+            : null,
+      };
+
+      if (!hasComputableCategory && !finalGrade) {
+        continue;
+      }
+
+      const overallGradePercent = finalGrade
+        ? this.roundToOne(Number(finalGrade.finalPercentage))
+        : this.roundToOne(weightedInitialGrade);
+
+      return {
+        gradingPeriod: record.gradingPeriod,
+        overallGradePercent,
+        components,
+      };
+    }
+
+    return null;
+  }
+
+  private async getAssessmentHistoryByStatus(classId: string, studentId: string) {
+    const classAssessments = await this.db.query.assessments.findMany({
+      where: eq(assessments.classId, classId),
+      columns: {
+        id: true,
+        title: true,
+        type: true,
+        dueDate: true,
+        totalPoints: true,
+      },
+      orderBy: [desc(assessments.dueDate), desc(assessments.createdAt)],
+    });
+
+    if (classAssessments.length === 0) {
+      return {
+        finished: [],
+        late: [],
+        pending: [],
+      };
+    }
+
+    const assessmentIds = classAssessments.map((assessment) => assessment.id);
+    const attempts = await this.db.query.assessmentAttempts.findMany({
+      where: and(
+        eq(assessmentAttempts.studentId, studentId),
+        inArray(assessmentAttempts.assessmentId, assessmentIds),
+      ),
+      columns: {
+        id: true,
+        assessmentId: true,
+        isSubmitted: true,
+        isReturned: true,
+        submittedAt: true,
+        returnedAt: true,
+        score: true,
+        directScore: true,
+        passed: true,
+      },
+      orderBy: [desc(assessmentAttempts.submittedAt), desc(assessmentAttempts.createdAt)],
+    });
+
+    const attemptsByAssessment = new Map<string, typeof attempts>();
+    for (const attempt of attempts) {
+      const bucket = attemptsByAssessment.get(attempt.assessmentId) ?? [];
+      bucket.push(attempt);
+      attemptsByAssessment.set(attempt.assessmentId, bucket);
+    }
+
+    const history = {
+      finished: [] as any[],
+      late: [] as any[],
+      pending: [] as any[],
+    };
+
+    for (const assessment of classAssessments) {
+      const assessmentAttemptsForStudent =
+        attemptsByAssessment.get(assessment.id) ?? [];
+      const submittedAttempts = assessmentAttemptsForStudent
+        .filter((attempt) => attempt.isSubmitted)
+        .sort((left, right) => {
+          const leftTs = left.submittedAt
+            ? new Date(left.submittedAt).getTime()
+            : 0;
+          const rightTs = right.submittedAt
+            ? new Date(right.submittedAt).getTime()
+            : 0;
+          return rightTs - leftTs;
+        });
+      const latestSubmitted = submittedAttempts[0] ?? null;
+      const hasInProgress = assessmentAttemptsForStudent.some(
+        (attempt) => !attempt.isSubmitted,
+      );
+
+      if (!latestSubmitted) {
+        history.pending.push({
+          assessmentId: assessment.id,
+          title: assessment.title,
+          type: assessment.type,
+          dueDate: assessment.dueDate,
+          status: hasInProgress ? 'in_progress' : 'not_started',
+          statusLabel: hasInProgress ? 'In Progress' : 'Not Started',
+          submittedAt: null,
+          returnedAt: null,
+          isLate: false,
+          lateByMinutes: 0,
+          score: null,
+          directScore: null,
+          totalPoints: assessment.totalPoints,
+          passed: null,
+          isReturned: false,
+        });
+        continue;
+      }
+
+      const dueDate = assessment.dueDate ? new Date(assessment.dueDate) : null;
+      const submittedAt = latestSubmitted.submittedAt
+        ? new Date(latestSubmitted.submittedAt)
+        : null;
+      const isLate = Boolean(
+        dueDate &&
+          submittedAt &&
+          submittedAt.getTime() > dueDate.getTime(),
+      );
+      const lateByMinutes =
+        isLate && dueDate && submittedAt
+          ? Math.ceil((submittedAt.getTime() - dueDate.getTime()) / 60000)
+          : 0;
+
+      const item = {
+        assessmentId: assessment.id,
+        title: assessment.title,
+        type: assessment.type,
+        dueDate: assessment.dueDate,
+        status: isLate ? 'late' : 'finished',
+        statusLabel: isLate
+          ? 'Late'
+          : latestSubmitted.isReturned
+            ? 'Returned'
+            : 'Submitted',
+        submittedAt: latestSubmitted.submittedAt,
+        returnedAt: latestSubmitted.returnedAt,
+        isLate,
+        lateByMinutes,
+        score: latestSubmitted.score,
+        directScore: latestSubmitted.directScore,
+        totalPoints: assessment.totalPoints,
+        passed: latestSubmitted.passed,
+        isReturned: latestSubmitted.isReturned,
+      };
+
+      if (isLate) {
+        history.late.push(item);
+      } else {
+        history.finished.push(item);
+      }
+    }
+
+    return history;
+  }
+
   async getStudentProfileForClass(
     classId: string,
     studentId: string,
@@ -908,6 +1321,55 @@ export class ClassesService {
             adviser: sectionRecord.adviser ?? null,
           }
         : null,
+    };
+  }
+
+  async getStudentOverviewForClass(
+    classId: string,
+    studentId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    const profileData = await this.getStudentProfileForClass(
+      classId,
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
+
+    const [standingSnapshot, history] = await Promise.all([
+      this.getLatestStandingSnapshot(classId, studentId),
+      this.getAssessmentHistoryByStatus(classId, studentId),
+    ]);
+
+    const section = profileData.section;
+    const sectionLabel = section
+      ? `Grade ${section.gradeLevel} - ${section.name}`
+      : '--';
+
+    return {
+      classInfo: {
+        ...profileData.classInfo,
+        sectionLabel,
+      },
+      student: profileData.student,
+      section,
+      standing: standingSnapshot
+        ? {
+            gradingPeriod: standingSnapshot.gradingPeriod,
+            overallGradePercent: standingSnapshot.overallGradePercent,
+            components: standingSnapshot.components,
+          }
+        : {
+            gradingPeriod: null,
+            overallGradePercent: null,
+            components: {
+              writtenWorkPercent: null,
+              performanceTaskPercent: null,
+              quarterlyExamPercent: null,
+            },
+          },
+      history,
     };
   }
 

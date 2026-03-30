@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Info, Lock, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { Info, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,6 @@ import {
 import {
   AdminPageShell,
   AdminSectionCard,
-  AdminStatCard,
 } from '@/components/admin/AdminPageShell';
 import { userService } from '@/services/user-service';
 import { profileService } from '@/services/profile-service';
@@ -224,52 +223,51 @@ export default function AdminCreateUserPage() {
     <AdminPageShell
       badge="Admin Users"
       title="Create User"
-      description="This account creation flow keeps the same validation and onboarding behavior, but now lives inside a friendlier admin setup surface with clearer sections and role-aware cues."
+      description="Add a new user with the same validation and onboarding flow, but in a tighter form layout that is easier to scan."
+      variant="compact-form"
       actions={(
         <Button
           variant="outline"
-          className="admin-button-outline rounded-xl px-4 font-black"
+          className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold"
           onClick={() => router.push('/dashboard/admin/users')}
           disabled={loading}
         >
           Back to Users
         </Button>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Role" value={formData.role} caption="The selected account type" icon={ShieldCheck} accent="emerald" />
-          <AdminStatCard label="Validation" value={isFormValid ? 'Ready' : 'In Progress'} caption="Updates live as the form fills in" icon={UserPlus} accent="sky" />
-          <AdminStatCard label="Student Fields" value={isStudent ? 'Enabled' : 'Locked'} caption="LRN and grade level only show for student accounts" icon={Users} accent="amber" />
-          <AdminStatCard label="Teacher Fields" value={isTeacher ? 'Enabled' : 'Locked'} caption="Employee ID and contact apply to teacher accounts" icon={Lock} accent="rose" />
+          <MetaItem label="Role" value={formData.role} />
+          <MetaItem label="Validation" value={isFormValid ? 'Ready' : 'In progress'} />
         </>
       )}
     >
       <AdminSectionCard
         title="Account Details"
-        description="Core identity, email, and role selection come first, with role-aware inputs activated only when needed."
+        description="Core identity, email, and role selection come first."
+        density="compact"
+        contentClassName="space-y-4"
       >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="admin-form-grid admin-form-grid--three">
           <FieldWrapper label="First Name" error={errors.firstName}>
-            <Input value={formData.firstName} maxLength={30} disabled={loading} placeholder="John" onChange={(e) => handleFieldChange('firstName', e.target.value)} className={errors.firstName ? 'border-red-500' : 'admin-input'} />
+            <Input value={formData.firstName} maxLength={30} disabled={loading} placeholder="John" onChange={(e) => handleFieldChange('firstName', e.target.value)} className={errors.firstName ? 'border-red-500' : 'admin-input rounded-lg'} />
           </FieldWrapper>
           <FieldWrapper label="Middle Name" error={errors.middleName}>
-            <Input value={formData.middleName} maxLength={30} disabled={loading} placeholder="Quincy (optional)" onChange={(e) => handleFieldChange('middleName', e.target.value)} className={errors.middleName ? 'border-red-500' : 'admin-input'} />
+            <Input value={formData.middleName} maxLength={30} disabled={loading} placeholder="Quincy (optional)" onChange={(e) => handleFieldChange('middleName', e.target.value)} className={errors.middleName ? 'border-red-500' : 'admin-input rounded-lg'} />
           </FieldWrapper>
           <FieldWrapper label="Last Name" error={errors.lastName}>
-            <Input value={formData.lastName} maxLength={30} disabled={loading} placeholder="Doe" onChange={(e) => handleFieldChange('lastName', e.target.value)} className={errors.lastName ? 'border-red-500' : 'admin-input'} />
+            <Input value={formData.lastName} maxLength={30} disabled={loading} placeholder="Doe" onChange={(e) => handleFieldChange('lastName', e.target.value)} className={errors.lastName ? 'border-red-500' : 'admin-input rounded-lg'} />
           </FieldWrapper>
         </div>
 
-        <div className="mt-4">
-          <FieldWrapper label="Email Address" error={errors.email}>
-            <Input type="email" value={formData.email} maxLength={100} disabled={loading} placeholder="john.doe@gmail.com" onChange={(e) => handleFieldChange('email', e.target.value)} className={errors.email ? 'border-red-500' : 'admin-input'} />
-          </FieldWrapper>
-        </div>
+        <FieldWrapper label="Email Address" error={errors.email}>
+          <Input type="email" value={formData.email} maxLength={100} disabled={loading} placeholder="john.doe@gmail.com" onChange={(e) => handleFieldChange('email', e.target.value)} className={errors.email ? 'border-red-500' : 'admin-input rounded-lg'} />
+        </FieldWrapper>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="admin-form-grid admin-form-grid--three">
           <FieldWrapper label="User Role">
             <Select value={formData.role} disabled={loading} onValueChange={(v) => handleFieldChange('role', v as UserRole)}>
-              <SelectTrigger className="admin-input">
+              <SelectTrigger className="admin-input rounded-lg">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -288,7 +286,7 @@ export default function AdminCreateUserPage() {
                 disabled={!isStudent || loading}
                 placeholder={isStudent ? '12-digit LRN' : 'N/A'}
                 onChange={(e) => handleFieldChange('studentId', e.target.value)}
-                className={!isStudent ? 'admin-input cursor-not-allowed bg-muted pr-8 text-muted-foreground' : errors.studentId ? 'border-red-500' : 'admin-input'}
+                className={!isStudent ? 'admin-input cursor-not-allowed rounded-lg bg-muted pr-8 text-muted-foreground' : errors.studentId ? 'border-red-500' : 'admin-input rounded-lg'}
               />
               {!isStudent ? <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" /> : null}
             </div>
@@ -296,7 +294,7 @@ export default function AdminCreateUserPage() {
 
           <FieldWrapper label="Grade Level" error={isStudent ? errors.gradeLevel : undefined}>
             <Select value={isStudent ? formData.gradeLevel : ''} disabled={!isStudent || loading} onValueChange={(v) => handleFieldChange('gradeLevel', v)}>
-              <SelectTrigger className={isStudent && errors.gradeLevel ? 'border-red-500' : 'admin-input'}>
+              <SelectTrigger className={isStudent && errors.gradeLevel ? 'border-red-500' : 'admin-input rounded-lg'}>
                 <SelectValue placeholder={isStudent ? 'Select grade' : 'N/A'} />
               </SelectTrigger>
               <SelectContent>
@@ -312,9 +310,11 @@ export default function AdminCreateUserPage() {
 
       <AdminSectionCard
         title="Role-Specific Details"
-        description="Teacher-only fields stay visible but softly locked until the selected role activates them."
+        description="Teacher fields stay available here when the selected role needs them."
+        density="compact"
+        contentClassName="space-y-4"
       >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="admin-form-grid admin-form-grid--two">
           <FieldWrapper label="Teacher Employee ID" error={isTeacher ? errors.employeeId : undefined}>
             <div className="relative">
               <Input
@@ -323,7 +323,7 @@ export default function AdminCreateUserPage() {
                 disabled={!isTeacher || loading}
                 placeholder={isTeacher ? 'e.g. TCH-2026-001' : 'N/A'}
                 onChange={(e) => handleFieldChange('employeeId', e.target.value)}
-                className={!isTeacher ? 'admin-input cursor-not-allowed bg-muted pr-8 text-muted-foreground' : errors.employeeId ? 'border-red-500' : 'admin-input'}
+                className={!isTeacher ? 'admin-input cursor-not-allowed rounded-lg bg-muted pr-8 text-muted-foreground' : errors.employeeId ? 'border-red-500' : 'admin-input rounded-lg'}
               />
               {!isTeacher ? <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" /> : null}
             </div>
@@ -336,27 +336,27 @@ export default function AdminCreateUserPage() {
                 disabled={!isTeacher || loading}
                 placeholder={isTeacher ? '09171234567 or +639171234567' : 'N/A'}
                 onChange={(e) => handleFieldChange('contactNumber', e.target.value)}
-                className={!isTeacher ? 'admin-input cursor-not-allowed bg-muted pr-8 text-muted-foreground' : errors.contactNumber ? 'border-red-500' : 'admin-input'}
+                className={!isTeacher ? 'admin-input cursor-not-allowed rounded-lg bg-muted pr-8 text-muted-foreground' : errors.contactNumber ? 'border-red-500' : 'admin-input rounded-lg'}
               />
               {!isTeacher ? <Lock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" /> : null}
             </div>
           </FieldWrapper>
         </div>
 
-        <div className="mt-5 admin-filter-shell flex items-start gap-3 text-sm text-[var(--admin-text-muted)]">
+        <div className="admin-inline-note">
           <Info size={16} className="mt-0.5 shrink-0 text-[var(--admin-accent)]" />
           <div>
-            <p className="font-semibold text-[var(--admin-text-strong)]">OTP Onboarding Enabled</p>
+            <p className="admin-inline-note__title">OTP onboarding enabled</p>
             <p>The user receives a verification email with OTP and sets their password after verifying email.</p>
           </div>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => router.push('/dashboard/admin/users')} disabled={loading}>
+        <div className="admin-form-actions">
+          <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={() => router.push('/dashboard/admin/users')} disabled={loading}>
             Cancel
           </Button>
-          <Button className="admin-button-solid rounded-xl font-black" onClick={handleSubmit} disabled={loading || !isFormValid}>
-            {loading ? 'Creating…' : 'Create User'}
+          <Button className="admin-button-solid h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleSubmit} disabled={loading || !isFormValid}>
+            {loading ? 'Creating...' : 'Create User'}
           </Button>
         </div>
       </AdminSectionCard>
@@ -378,6 +378,21 @@ function FieldWrapper({
       <Label className="text-xs font-semibold uppercase tracking-wide">{label}</Label>
       {children}
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
+    </div>
+  );
+}
+
+function MetaItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="admin-compact-meta__item">
+      <span className="admin-compact-meta__label">{label}</span>
+      <span>{value}</span>
     </div>
   );
 }

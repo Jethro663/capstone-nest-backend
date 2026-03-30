@@ -1,0 +1,509 @@
+.teacher-add-students {
+  display: grid;
+  gap: 1rem;
+  padding-bottom: 5.5rem;
+}
+
+.teacher-add-students__workspace {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid #dfe6f0;
+  border-radius: 0.7rem;
+  background: #f4f7fb;
+  overflow: hidden;
+}
+
+.teacher-add-students__hero {
+  background: linear-gradient(102deg, #0b1733 0%, #11233f 55%, #1a2f4e 100%);
+  padding: 0.95rem 1rem 1.05rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.teacher-add-students__back {
+  border: 0;
+  width: fit-content;
+  background: transparent;
+  color: #9ab0d0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: color 0.18s ease;
+}
+
+.teacher-add-students__back:hover,
+.teacher-add-students__back:focus-visible {
+  color: #d2dff0;
+}
+
+.teacher-add-students__hero-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.teacher-add-students__hero-icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 1rem;
+  background: #e70012;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 14px 24px -18px rgba(231, 0, 18, 0.52);
+}
+
+.teacher-add-students__hero-copy h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.teacher-add-students__hero-copy p {
+  margin: 0.36rem 0 0;
+  color: #9cb4d7;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.teacher-add-students__panel {
+  margin: 0 1rem 1rem;
+  border: 1px solid #dce5f2;
+  border-radius: 0.95rem;
+  background: #fff;
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.35);
+  padding: 0.84rem;
+  display: grid;
+  gap: 0.74rem;
+}
+
+.teacher-add-students__toolbar {
+  display: grid;
+  gap: 0.62rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.teacher-add-students__search {
+  border: 1px solid #dce5f2;
+  border-radius: 999px;
+  background: #fff;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0 0.88rem;
+  color: #8094b2;
+}
+
+.teacher-add-students__search input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #304966;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.teacher-add-students__search input::placeholder {
+  color: #8ea2be;
+}
+
+.teacher-add-students__select-all {
+  border: 1px solid #dce5f2;
+  border-radius: 999px;
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.48rem;
+  color: #38597f;
+  font-size: 0.94rem;
+  font-weight: 700;
+  background: #fff;
+}
+
+.teacher-add-students__select-all input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #e70012;
+}
+
+.teacher-add-students__segments {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  border: 1px solid #dce5f2;
+  border-radius: 999px;
+  background: #f8fbff;
+  width: fit-content;
+  padding: 0.24rem;
+}
+
+.teacher-add-students__segment-btn {
+  border: 0;
+  border-radius: 999px;
+  min-height: 2rem;
+  background: transparent;
+  color: #5e7698;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.28rem 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.teacher-add-students__segment-btn span {
+  border-radius: 999px;
+  padding: 0.12rem 0.38rem;
+  font-size: 0.72rem;
+  background: #e9f1ff;
+  color: #3d6291;
+}
+
+.teacher-add-students__segment-btn[data-active='true'] {
+  background: #e70012;
+  color: #fff;
+}
+
+.teacher-add-students__segment-btn[data-active='true'] span {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.teacher-add-students__table-wrap {
+  border: 1px solid #dce5f2;
+  border-radius: 0.86rem;
+  background: #fff;
+  overflow: auto;
+}
+
+.teacher-add-students__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 46rem;
+}
+
+.teacher-add-students__table th,
+.teacher-add-students__table td {
+  text-align: left;
+  border-bottom: 1px solid #e6edf6;
+  padding: 0.56rem 0.68rem;
+}
+
+.teacher-add-students__table th {
+  color: #5f7798;
+  font-size: 0.74rem;
+  font-weight: 700;
+  background: #f8fbff;
+}
+
+.teacher-add-students__table td {
+  color: #304966;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.teacher-add-students__table tr[data-selected='true'] {
+  background: #f2f7ff;
+}
+
+.teacher-add-students__table tr[data-status='available']:hover {
+  background: #f7faff;
+}
+
+.teacher-add-students__check-col {
+  width: 2.1rem;
+  text-align: center !important;
+}
+
+.teacher-add-students__action-col {
+  width: 8.8rem;
+  text-align: right !important;
+}
+
+.teacher-add-students__check-col input {
+  width: 0.92rem;
+  height: 0.92rem;
+  accent-color: #e70012;
+}
+
+.teacher-add-students__student-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.56rem;
+}
+
+.teacher-add-students__student-link {
+  border: 0;
+  background: transparent;
+  color: #0f2340;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+  text-decoration: none;
+}
+
+.teacher-add-students__student-link:hover,
+.teacher-add-students__student-link:focus-visible {
+  text-decoration: underline;
+}
+
+.teacher-add-students__view-profile-btn {
+  border: 1px solid #dce5f2;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #3d5f8e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  min-height: 1.9rem;
+  padding: 0 0.56rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  transition: border-color 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+}
+
+.teacher-add-students__view-profile-btn:hover,
+.teacher-add-students__view-profile-btn:focus-visible {
+  border-color: #b6cae5;
+  color: #173a67;
+  background: #eff6ff;
+}
+
+.teacher-add-students__badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 0.22rem 0.52rem;
+}
+
+.teacher-add-students__badge--ok {
+  background: #ebf9ef;
+  color: #0b8f53;
+  border: 1px solid #a8e4bf;
+}
+
+.teacher-add-students__badge--warn {
+  background: #fff3f5;
+  color: #b52434;
+  border: 1px solid #f3c4cc;
+}
+
+.teacher-add-students__empty {
+  min-height: 7.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cfdaea;
+  background: #f8fbff;
+  color: #6d84a5;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.6rem;
+}
+
+.teacher-add-students__footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.62rem;
+}
+
+.teacher-add-students__footer-row p {
+  margin: 0;
+  color: #6f86a8;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.teacher-add-students__pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.teacher-add-students__sticky-actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  border-top: 1px solid #dce5f2;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+
+.teacher-add-students__sticky-inner {
+  max-width: calc(100vw - 2rem);
+  margin: 0 auto;
+  min-height: 4rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.56rem;
+}
+
+.teacher-add-students__profile-modal {
+  max-width: 32rem;
+  border-color: #dbe5f2;
+  box-shadow: 0 28px 44px -34px rgba(15, 23, 42, 0.48);
+  animation-duration: 220ms !important;
+}
+
+.teacher-add-students__profile-card {
+  border: 1px solid #dce5f2;
+  border-radius: 0.9rem;
+  background: #f8fbff;
+  padding: 0.86rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.teacher-add-students__profile-main {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.teacher-add-students__profile-avatar {
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid #dce5f2;
+}
+
+.teacher-add-students__profile-name {
+  margin: 0;
+  color: #0f2340;
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+
+.teacher-add-students__profile-email {
+  margin: 0.18rem 0 0;
+  color: #567093;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.teacher-add-students__profile-grid {
+  margin: 0;
+  display: grid;
+  gap: 0.64rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.teacher-add-students__profile-grid dt {
+  color: #6780a2;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.teacher-add-students__profile-grid dd {
+  color: #264567;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin: 0.22rem 0 0;
+  line-height: 1.45;
+}
+
+.teacher-add-students__profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.teacher-add-students__soft-enter {
+  opacity: 0;
+  animation: teacher-add-students-fade-up 0.32s ease forwards;
+  animation-delay: var(--enter-delay, 0ms);
+}
+
+@keyframes teacher-add-students-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 840px) {
+  .teacher-add-students {
+    padding-bottom: 6.6rem;
+  }
+
+  .teacher-add-students__hero-copy h1 {
+    font-size: 1.6rem;
+  }
+
+  .teacher-add-students__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-add-students__segments {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .teacher-add-students__segment-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .teacher-add-students__sticky-inner {
+    max-width: none;
+    padding: 0 0.8rem;
+  }
+}
+
+@media (max-width: 680px) {
+  .teacher-add-students__hero-row {
+    align-items: flex-start;
+  }
+
+  .teacher-add-students__footer-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .teacher-add-students__profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-add-students__profile-actions {
+    flex-direction: column-reverse;
+  }
+
+  .teacher-add-students__profile-actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teacher-add-students__soft-enter {
+    animation: none;
+    opacity: 1;
+  }
+
+  .teacher-add-students__segment-btn,
+  .teacher-add-students__back,
+  .teacher-add-students__student-link,
+  .teacher-add-students__view-profile-btn,
+  .teacher-add-students__table tr {
+    transition: none;
+  }
+}

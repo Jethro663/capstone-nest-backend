@@ -518,6 +518,41 @@ describe('UsersService', () => {
     });
   });
 
+  describe('bulkLifecycleAction', () => {
+    it('aggregates successes and failures without aborting the batch', async () => {
+      const suspendSpy = jest
+        .spyOn(service, 'suspendUser')
+        .mockResolvedValueOnce({
+          message: 'User suspended successfully',
+          userId: 'user-1',
+        })
+        .mockRejectedValueOnce(new BadRequestException('Cannot suspend a deleted user'))
+        .mockResolvedValueOnce({
+          message: 'User suspended successfully',
+          userId: 'user-3',
+        });
+
+      const result = await service.bulkLifecycleAction(
+        {
+          action: 'suspend',
+          userIds: ['user-1', 'user-2', 'user-3'],
+        },
+        'admin-1',
+      );
+
+      expect(suspendSpy).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({
+        message: '2 users suspended; 1 failed.',
+        data: {
+          action: 'suspend',
+          requested: 3,
+          succeeded: ['user-1', 'user-3'],
+          failed: [{ userId: 'user-2', reason: 'Cannot suspend a deleted user' }],
+        },
+      });
+    });
+  });
+
   describe('findPublicById', () => {
     it('never returns password', async () => {
       jest

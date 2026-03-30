@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { SectionsController } from './sections.controller';
+import { SectionsController, SectionsPublicController } from './sections.controller';
 import { SectionsService } from './sections.service';
 import { DatabaseModule } from '../../database/database.module';
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [SectionsController],
+  controllers: [SectionsController, SectionsPublicController],
   providers: [SectionsService],
   exports: [SectionsService],
 })

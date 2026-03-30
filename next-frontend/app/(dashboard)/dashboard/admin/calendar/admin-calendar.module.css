@@ -1,0 +1,202 @@
+.layout {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.yearSwitcher {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8e3f0;
+  border-radius: 999px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.yearSwitcher button {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #4f678a;
+}
+
+.yearSwitcher button:disabled {
+  color: #9db0ca;
+  cursor: not-allowed;
+}
+
+.yearSwitcher select {
+  border: 0;
+  border-left: 1px solid #d8e3f0;
+  border-right: 1px solid #d8e3f0;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.formGrid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.field select {
+  border: 1px solid var(--admin-outline);
+  border-radius: 0.7rem;
+  min-height: 2.3rem;
+  padding: 0 0.7rem;
+  background: #ffffff;
+  font-size: 0.82rem;
+  color: var(--admin-text-strong);
+}
+
+.fieldCheckbox {
+  display: flex;
+  align-items: flex-end;
+}
+
+.fieldCheckbox label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--admin-text-strong);
+}
+
+.fieldWide {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.emptyState {
+  border: 1px dashed #cfdbec;
+  border-radius: 0.85rem;
+  background: #f8fbff;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #5c7699;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.eventList {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.eventCard {
+  border: 1px solid #dce6f3;
+  background: #ffffff;
+  border-radius: 0.82rem;
+  padding: 0.62rem;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.eventTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.eventType {
+  width: fit-content;
+  border-radius: 999px;
+  background: #e4edf9;
+  color: #315f9f;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.44rem;
+}
+
+.eventSpan {
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: #627c9f;
+}
+
+.eventCard h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #123056;
+}
+
+.eventMeta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #657f9f;
+  font-weight: 700;
+}
+
+.eventDescription {
+  margin: 0.1rem 0 0;
+  font-size: 0.75rem;
+  color: #6d86a7;
+  line-height: 1.35;
+}
+
+.eventActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.2rem;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .formGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fieldWide {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .yearSwitcher {
+    width: 100%;
+  }
+
+  .yearSwitcher select {
+    flex: 1;
+  }
+}
+

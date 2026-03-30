@@ -1,19 +1,44 @@
-﻿'use client';
+'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarRange, GraduationCap, UserPlus, Users } from 'lucide-react';
-import { sectionService, type RosterStudent } from '@/services/section-service';
+import {
+  ArrowLeft,
+  CalendarDays,
+  GraduationCap,
+  Trash2,
+  User,
+  UserPlus,
+  Users,
+} from 'lucide-react';
+import {
+  sectionService,
+  type RosterStudent,
+} from '@/services/section-service';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
-import { SectionScheduleViewer } from '@/components/shared/SectionScheduleViewer';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { TeacherEmptyState, TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
- 
 import type { Section } from '@/types/section';
+import './roster-workspace.css';
+
+function getEnterStyle(delayMs: number): CSSProperties {
+  const enterDelayVar = '--enter-delay' as const;
+  return { [enterDelayVar]: `${delayMs}ms` } as CSSProperties;
+}
+
+function getInitials(firstName?: string | null, lastName?: string | null) {
+  const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase();
+  return initials || 'ST';
+}
+
+function formatAdviserName(section: Section | null) {
+  if (!section?.adviser) return 'Unassigned';
+  const name = `${section.adviser.firstName ?? ''} ${section.adviser.lastName ?? ''}`.trim();
+  return name || 'Unassigned';
+}
 
 export default function SectionRosterPage() {
   const params = useParams();
@@ -23,6 +48,9 @@ export default function SectionRosterPage() {
   const [section, setSection] = useState<Section | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busyStudentIds, setBusyStudentIds] = useState<string[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [removingSelected, setRemovingSelected] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -31,263 +59,325 @@ export default function SectionRosterPage() {
         sectionService.getById(sectionId),
         sectionService.getRoster(sectionId),
       ]);
+
       setSection(sectionRes.data);
       setRoster(rosterRes.data || []);
-    } catch {
-      // fail
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to load section roster.'));
+      setSection(null);
+      setRoster([]);
     } finally {
       setLoading(false);
     }
   }, [sectionId]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
 
   const dedupedRoster = useMemo(() => {
     const seen = new Set<string>();
     return roster.filter((student) => {
-      if (seen.has(student.id)) {
-        return false;
-      }
+      if (seen.has(student.id)) return false;
       seen.add(student.id);
       return true;
     });
   }, [roster]);
 
-  const getInitials = (firstName?: string | null, lastName?: string | null) => {
-    return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || 'ST';
+  useEffect(() => {
+    const visibleIds = new Set(dedupedRoster.map((student) => student.id));
+    setSelectedStudentIds((current) => current.filter((id) => visibleIds.has(id)));
+  }, [dedupedRoster]);
+
+  const allVisibleSelected =
+    dedupedRoster.length > 0 &&
+    dedupedRoster.every((student) => selectedStudentIds.includes(student.id));
+
+  const adviserName = formatAdviserName(section);
+
+  const handleRowOpen = (studentId: string) => {
+    router.push(`/dashboard/teacher/sections/${sectionId}/students/${studentId}`);
+  };
+
+  const handleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedStudentIds([]);
+      return;
+    }
+    setSelectedStudentIds(dedupedRoster.map((student) => student.id));
+  };
+
+  const handleSelectStudent = (studentId: string) => {
+    setSelectedStudentIds((current) =>
+      current.includes(studentId)
+        ? current.filter((id) => id !== studentId)
+        : [...current, studentId],
+    );
   };
 
   const handleRemoveStudent = async (studentId: string) => {
+    setBusyStudentIds((current) => [...current, studentId]);
     try {
       await sectionService.removeStudent(sectionId, studentId);
       setRoster((current) => current.filter((student) => student.id !== studentId));
-      toast.success('Student removed from section');
+      setSelectedStudentIds((current) => current.filter((id) => id !== studentId));
+      toast.success('Student removed from section.');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to remove student'));
+      toast.error(getApiErrorMessage(error, 'Failed to remove student.'));
+    } finally {
+      setBusyStudentIds((current) => current.filter((id) => id !== studentId));
+    }
+  };
+
+  const handleRemoveSelected = async () => {
+    if (selectedStudentIds.length === 0) return;
+    const selectedRows = dedupedRoster.filter((student) =>
+      selectedStudentIds.includes(student.id),
+    );
+    if (selectedRows.length === 0) return;
+
+    setRemovingSelected(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedRows.map((student) =>
+          sectionService.removeStudent(sectionId, student.id),
+        ),
+      );
+
+      const successfulIds: string[] = [];
+      const failedIds: string[] = [];
+
+      results.forEach((result, index) => {
+        const id = selectedRows[index]?.id;
+        if (!id) return;
+        if (result.status === 'fulfilled') successfulIds.push(id);
+        else failedIds.push(id);
+      });
+
+      if (successfulIds.length > 0) {
+        setRoster((current) =>
+          current.filter((student) => !successfulIds.includes(student.id)),
+        );
+      }
+
+      setSelectedStudentIds(failedIds);
+
+      if (failedIds.length === 0) {
+        toast.success(`Removed ${successfulIds.length} student(s).`);
+      } else if (successfulIds.length === 0) {
+        toast.error(`Unable to remove ${failedIds.length} selected student(s).`);
+      } else {
+        toast.success(
+          `Removed ${successfulIds.length} student(s). ${failedIds.length} could not be removed.`,
+        );
+      }
+    } finally {
+      setRemovingSelected(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-64 rounded-lg" />
+      <div className="space-y-4">
+        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-20 rounded-xl" />
+        <Skeleton className="h-[22rem] rounded-xl" />
       </div>
     );
   }
 
   return (
-    <TeacherPageShell
-      badge="Section Roster"
-      title={`${section?.name || 'Section'} Roster`}
-      description="Keep your class list, meeting rhythm, and student access in one clearer section workspace."
-      actions={(
-        <>
-          <Button variant="outline" size="sm" onClick={() => router.back()} className="teacher-button-outline rounded-xl font-black">
+    <div className="teacher-section-roster">
+      <section className="teacher-section-roster__workspace">
+        <header
+          className="teacher-section-roster__hero teacher-section-roster__soft-enter"
+          style={getEnterStyle(0)}
+        >
+          <button
+            type="button"
+            className="teacher-section-roster__back"
+            onClick={() => router.push('/dashboard/teacher/sections')}
+          >
             <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <Button
-            size="sm"
-            className="teacher-button-solid rounded-xl font-black"
-            onClick={() => router.push(`/dashboard/teacher/sections/${sectionId}/students/add`)}
-          >
-            <UserPlus className="h-4 w-4" />
-            Add Students
-          </Button>
-        </>
- 
-      )}
-      stats={(
-        <>
-          <TeacherStatCard
-            label="Learners"
-            value={dedupedRoster.length}
-            caption="Students currently on the roster"
-            icon={Users}
-            accent="sky"
-          />
-          <TeacherStatCard
-            label="Grade Level"
-            value={section?.gradeLevel || 'â€”'}
-            caption={section?.name || 'Section not set'}
-            icon={GraduationCap}
-            accent="teal"
-          />
-          <TeacherStatCard
-            label="School Year"
-            value={section?.schoolYear || 'â€”'}
-            caption="Active section cycle"
-            icon={CalendarRange}
-            accent="amber"
-          />
-          <TeacherStatCard
-            label="Roster Status"
-            value={dedupedRoster.length > 0 ? 'Active' : 'Empty'}
-            caption={dedupedRoster.length > 0 ? 'Students are ready to manage' : 'Add students to begin'}
-            icon={Users}
-            accent="rose"
-          />
-        </>
-      )}
-    >
-      <TeacherSectionCard
-        title="Roster Snapshot"
-        description="A friendlier section overview so you can scan the schedule and roster without bouncing between plain tables."
-      >
-        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="teacher-dashboard-spotlight">
-            <div className="space-y-3">
-              <div className="teacher-dashboard-chip">Section Overview</div>
-              <div className="space-y-2">
-                <p className="text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]">
-                  {section?.name || 'Section'}
-                </p>
-                <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                  Grade {section?.gradeLevel || 'â€”'} â€¢ {section?.schoolYear || 'School year not set'}
-                </p>
-                <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                  Use this roster hub to keep student movement, section timing, and profile access easy to scan from one place.
-                </p>
-              </div>
+            My Sections
+          </button>
+
+          <div className="teacher-section-roster__hero-row">
+            <div className="teacher-section-roster__hero-copy">
+              <h1>{section?.name || 'Section'}</h1>
+              <p>
+                Grade {section?.gradeLevel || 'N/A'} - {section?.schoolYear || 'N/A'}
+              </p>
             </div>
+
+            <Button
+              type="button"
+              className="teacher-section-roster__add"
+              onClick={() =>
+                router.push(`/dashboard/teacher/sections/${sectionId}/students/add`)
+              }
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Students
+            </Button>
+          </div>
+        </header>
+
+        <section
+          className="teacher-section-roster__stats teacher-section-roster__soft-enter"
+          style={getEnterStyle(55)}
+        >
+          <article className="teacher-section-roster__stat-card">
+            <Users className="h-4 w-4" />
+            <strong>{dedupedRoster.length}</strong>
+            <span>Students</span>
+          </article>
+          <article className="teacher-section-roster__stat-card">
+            <GraduationCap className="h-4 w-4" />
+            <strong>Grade {section?.gradeLevel || 'N/A'}</strong>
+            <span>Grade Level</span>
+          </article>
+          <article className="teacher-section-roster__stat-card">
+            <CalendarDays className="h-4 w-4" />
+            <strong>{section?.schoolYear || 'N/A'}</strong>
+            <span>School Year</span>
+          </article>
+          <article className="teacher-section-roster__stat-card">
+            <User className="h-4 w-4" />
+            <strong>{adviserName}</strong>
+            <span>Adviser</span>
+          </article>
+        </section>
+
+        <section
+          className="teacher-section-roster__panel teacher-section-roster__soft-enter"
+          style={getEnterStyle(95)}
+        >
+          <div className="teacher-section-roster__schedule-compact">
+            <SectionScheduleViewer sectionId={sectionId} theme="teacher" chrome="flat" />
+          </div>
+        </section>
+
+        <section
+          className="teacher-section-roster__panel teacher-section-roster__soft-enter"
+          style={getEnterStyle(130)}
+        >
+          <div className="teacher-section-roster__panel-head">
+            <h2>
+              Student Roster <span>({dedupedRoster.length})</span>
+            </h2>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <div className="teacher-dashboard-mini-panel">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Roster Count</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{dedupedRoster.length}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Unique learners enrolled in this section</p>
-              </div>
-            </div>
-            <div className="teacher-dashboard-mini-panel">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Student Profiles</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">Open</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Tap any row to open the student detail view</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </TeacherSectionCard>
-
-      <TeacherSectionCard
-        title="Section Schedule"
-        description="The schedule grid below now uses the same timing math as the hour labels, so each class block lines up with the correct time row."
-      >
-        <SectionScheduleViewer sectionId={sectionId} theme="teacher" />
-      </TeacherSectionCard>
-
-      <TeacherSectionCard
-        title="Student Roster"
-        description={`${dedupedRoster.length} learner${dedupedRoster.length === 1 ? '' : 's'} in this section`}
-        action={(
-          <Button
-            size="sm"
-            className="teacher-button-solid rounded-xl font-black"
-            onClick={() => router.push(`/dashboard/teacher/sections/${sectionId}/students/add`)}
-          >
-            <UserPlus className="h-4 w-4" />
-            Add Students
-          </Button>
-        )}
-      >
-        {dedupedRoster.length === 0 ? (
-          <TeacherEmptyState
-            title="No students in this section yet"
-            description="Add students to start building the roster and unlock the section flow for this class group."
-            action={(
+          {selectedStudentIds.length > 0 ? (
+            <div className="teacher-section-roster__selection-bar">
+              <strong>{selectedStudentIds.length} selected</strong>
               <Button
-                size="sm"
-                className="teacher-button-solid rounded-xl font-black"
-                onClick={() => router.push(`/dashboard/teacher/sections/${sectionId}/students/add`)}
+                type="button"
+                variant="outline"
+                className="teacher-section-roster__remove-selected"
+                onClick={() => void handleRemoveSelected()}
+                disabled={removingSelected}
               >
-                <UserPlus className="h-4 w-4" />
-                Add Students
+                <Trash2 className="h-4 w-4" />
+                {removingSelected ? 'Removing...' : 'Remove Selected'}
               </Button>
-            )}
-          />
-        ) : (
-          <div className="teacher-table-shell">
-            <Table>
-              <TableHeader>
-                <TableRow className="teacher-table-head hover:bg-transparent">
-                  <TableHead className="text-[var(--teacher-text-muted)]">#</TableHead>
-                  <TableHead className="text-[var(--teacher-text-muted)]">Student</TableHead>
-                  <TableHead className="text-[var(--teacher-text-muted)]">Email</TableHead>
-                  <TableHead className="text-[var(--teacher-text-muted)]">LRN</TableHead>
-                  <TableHead className="text-[var(--teacher-text-muted)]">Grade</TableHead>
-                  <TableHead className="text-right text-[var(--teacher-text-muted)]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dedupedRoster.map((student, index) => (
-                  <TableRow
-                    key={student.id}
-                    className="teacher-table-row cursor-pointer border-[var(--teacher-outline)] transition"
-                    onClick={() =>
-                      router.push(`/dashboard/teacher/sections/${sectionId}/students/${student.id}`)
-                    }
-                  >
-                    <TableCell className="font-medium text-[var(--teacher-text-strong)]">{index + 1}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3 text-left">
-                        <Avatar className="h-9 w-9 border border-[var(--teacher-outline)]">
-                          {student.profilePicture ? (
-                            <AvatarImage
-                              src={student.profilePicture}
-                              alt={`${student.firstName || ''} ${student.lastName || ''}`.trim()}
-                            />
-                          ) : null}
-                          <AvatarFallback className="bg-[var(--teacher-surface-soft)] text-[var(--teacher-text-strong)]">
-                            {getInitials(student.firstName, student.lastName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="space-y-0.5">
-                          <p className="font-semibold text-[var(--teacher-text-strong)]">
-                            {student.firstName} {student.lastName}
-                          </p>
-                          <p className="text-xs text-[var(--teacher-text-muted)]">Open student profile</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.email || 'N/A'}</TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.lrn || 'â€”'}</TableCell>
-                    <TableCell className="text-[var(--teacher-text-muted)]">{student.gradeLevel || 'â€”'}</TableCell>
-                    <TableCell
-                      className="text-right"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="inline-flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="teacher-button-outline rounded-xl font-black"
-                          onClick={() => router.push(`/dashboard/teacher/sections/${sectionId}/students/${student.id}`)}
+            </div>
+          ) : null}
+
+          {dedupedRoster.length === 0 ? (
+            <div className="teacher-section-roster__empty">
+              No students enrolled in this section yet.
+            </div>
+          ) : (
+            <div className="teacher-section-roster__table-wrap">
+              <table className="teacher-section-roster__table">
+                <thead>
+                  <tr>
+                    <th className="teacher-section-roster__checkbox-cell">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={handleSelectAllVisible}
+                        aria-label="Select all students"
+                      />
+                    </th>
+                    <th>Student</th>
+                    <th>Email</th>
+                    <th>LRN</th>
+                    <th>Grade</th>
+                    <th className="teacher-section-roster__actions-head">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dedupedRoster.map((student) => {
+                    const studentName =
+                      `${student.firstName || ''} ${student.lastName || ''}`.trim() ||
+                      'Unnamed Student';
+                    const isBusy = busyStudentIds.includes(student.id);
+                    const isSelected = selectedStudentIds.includes(student.id);
+
+                    return (
+                      <tr
+                        key={student.id}
+                        className="teacher-section-roster__row"
+                        data-selected={isSelected}
+                        onClick={() => handleRowOpen(student.id)}
+                      >
+                        <td
+                          className="teacher-section-roster__checkbox-cell"
+                          onClick={(event) => event.stopPropagation()}
                         >
-                          View Profile
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="teacher-button-danger rounded-xl font-black"
-                          onClick={() => handleRemoveStudent(student.id)}
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectStudent(student.id)}
+                            aria-label={`Select ${studentName}`}
+                          />
+                        </td>
+                        <td>
+                          <div className="teacher-section-roster__student">
+                            <Avatar className="h-8 w-8 border border-[var(--teacher-outline)]">
+                              {student.profilePicture ? (
+                                <AvatarImage src={student.profilePicture} alt={studentName} />
+                              ) : null}
+                              <AvatarFallback>
+                                {getInitials(student.firstName, student.lastName)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <strong>{studentName}</strong>
+                              <span>Open profile</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{student.email || 'N/A'}</td>
+                        <td>{student.lrn || 'N/A'}</td>
+                        <td>{student.gradeLevel || 'N/A'}</td>
+                        <td
+                          className="teacher-section-roster__actions-cell"
+                          onClick={(event) => event.stopPropagation()}
                         >
-                          Remove
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </TeacherSectionCard>
-    </TeacherPageShell>
+                          <button
+                            type="button"
+                            className="teacher-section-roster__remove-icon"
+                            onClick={() => void handleRemoveStudent(student.id)}
+                            disabled={isBusy}
+                            aria-label={`Remove ${studentName}`}
+                            title="Remove student"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </section>
+    </div>
   );
 }
-

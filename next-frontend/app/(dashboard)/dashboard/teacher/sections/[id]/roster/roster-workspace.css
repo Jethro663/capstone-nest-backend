@@ -1,0 +1,373 @@
+.teacher-section-roster {
+  display: grid;
+}
+
+.teacher-section-roster__workspace {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid #dfe6f0;
+  border-radius: 0.62rem;
+  background: #f4f7fb;
+  overflow: hidden;
+}
+
+.teacher-section-roster__hero {
+  background: linear-gradient(100deg, #0c1834 0%, #122544 55%, #1a2d4d 100%);
+  padding: 0.9rem 1rem 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.teacher-section-roster__back {
+  border: 0;
+  width: fit-content;
+  background: transparent;
+  color: #9ab0d0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.teacher-section-roster__back:hover {
+  color: #c7d6ea;
+}
+
+.teacher-section-roster__hero-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.teacher-section-roster__hero-copy h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+}
+
+.teacher-section-roster__hero-copy p {
+  margin: 0.38rem 0 0;
+  color: #9cb4d7;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.teacher-section-roster__add {
+  border: 0;
+  min-height: 2.5rem;
+  border-radius: 999px;
+  background: #e70012;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding-inline: 0.95rem;
+}
+
+.teacher-section-roster__add:hover {
+  background: #cf000f;
+}
+
+.teacher-section-roster__stats {
+  padding: 0 1rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.62rem;
+}
+
+.teacher-section-roster__stat-card {
+  border: 1px solid #dce5f2;
+  border-radius: 0.8rem;
+  background: #ffffff;
+  min-height: 6rem;
+  padding: 0.72rem;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.22rem;
+  color: #5f7798;
+  box-shadow: 0 10px 22px -24px rgba(15, 23, 42, 0.45);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.teacher-section-roster__stat-card:hover,
+.teacher-section-roster__stat-card:focus-within {
+  border-color: #c8d7ea;
+  box-shadow: 0 16px 30px -24px rgba(15, 23, 42, 0.5);
+  transform: translateY(-1px);
+}
+
+.teacher-section-roster__stat-card strong {
+  color: #0f2340;
+  font-size: 1.65rem;
+  font-weight: 800;
+  line-height: 1.1;
+  max-width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.teacher-section-roster__stat-card span {
+  color: #7f95b5;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.teacher-section-roster__panel {
+  margin: 0 1rem;
+  border: 1px solid #dce5f2;
+  border-radius: 0.95rem;
+  background: #ffffff;
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.34);
+  display: grid;
+  gap: 0.62rem;
+  padding: 0.78rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.teacher-section-roster__panel:hover,
+.teacher-section-roster__panel:focus-within {
+  border-color: #c9d9ec;
+  box-shadow: 0 18px 28px -24px rgba(15, 23, 42, 0.44);
+  transform: translateY(-1px);
+}
+
+.teacher-section-roster__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.teacher-section-roster__panel-head h2 {
+  margin: 0;
+  color: #0f2340;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.teacher-section-roster__panel-head h2 span {
+  color: #728cb0;
+  font-weight: 700;
+}
+
+.teacher-section-roster__schedule-compact {
+  max-width: 58rem;
+  width: 100%;
+  margin-inline: auto;
+}
+
+.teacher-section-roster__schedule-compact > div {
+  gap: 0.45rem !important;
+}
+
+.teacher-section-roster__selection-bar {
+  border: 1px solid #dce5f2;
+  border-radius: 0.75rem;
+  background: #f8fbff;
+  min-height: 2.65rem;
+  padding: 0.38rem 0.52rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.teacher-section-roster__selection-bar strong {
+  color: #4f678b;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.teacher-section-roster__remove-selected {
+  border-radius: 999px;
+}
+
+.teacher-section-roster__table-wrap {
+  border: 1px solid #dce5f2;
+  border-radius: 0.8rem;
+  background: #ffffff;
+  overflow: auto;
+}
+
+.teacher-section-roster__table {
+  width: 100%;
+  min-width: 44rem;
+  border-collapse: collapse;
+}
+
+.teacher-section-roster__table th,
+.teacher-section-roster__table td {
+  text-align: left;
+  border-bottom: 1px solid #e6edf6;
+  padding: 0.62rem 0.68rem;
+}
+
+.teacher-section-roster__table th {
+  color: #5f7798;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.teacher-section-roster__table td {
+  color: #304966;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.teacher-section-roster__checkbox-cell {
+  width: 2.1rem;
+  text-align: center !important;
+}
+
+.teacher-section-roster__checkbox-cell input {
+  width: 0.92rem;
+  height: 0.92rem;
+  accent-color: #e70012;
+}
+
+.teacher-section-roster__row {
+  cursor: pointer;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+.teacher-section-roster__row:hover {
+  background: #f6f9ff;
+  transform: translateY(-1px);
+}
+
+.teacher-section-roster__row[data-selected='true'] {
+  background: #f2f7ff;
+}
+
+.teacher-section-roster__student {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.52rem;
+}
+
+.teacher-section-roster__student strong {
+  display: block;
+  color: #0f2340;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.teacher-section-roster__student span {
+  display: block;
+  margin-top: 0.08rem;
+  color: #7f95b5;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.teacher-section-roster__actions-head,
+.teacher-section-roster__actions-cell {
+  text-align: right !important;
+}
+
+.teacher-section-roster__remove-icon {
+  border: 1px solid #dce5f2;
+  width: 1.95rem;
+  height: 1.95rem;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #5f7798;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.teacher-section-roster__remove-icon:hover {
+  border-color: #efbcc3;
+  background: #ffedf0;
+  color: #bc2232;
+}
+
+.teacher-section-roster__remove-icon:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.teacher-section-roster__empty {
+  border: 1px dashed #cfdaea;
+  border-radius: 0.72rem;
+  background: #f8fbff;
+  color: #6d84a5;
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-height: 4.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.7rem;
+}
+
+.teacher-section-roster__soft-enter {
+  animation: teacher-section-roster-soft-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+
+@keyframes teacher-section-roster-soft-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 980px) {
+  .teacher-section-roster__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .teacher-section-roster__hero-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .teacher-section-roster__hero-copy h1 {
+    font-size: 1.56rem;
+  }
+
+  .teacher-section-roster__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-section-roster__selection-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teacher-section-roster__soft-enter {
+    animation: none;
+  }
+
+  .teacher-section-roster__panel,
+  .teacher-section-roster__stat-card,
+  .teacher-section-roster__row {
+    transition: none;
+  }
+
+  .teacher-section-roster__panel:hover,
+  .teacher-section-roster__stat-card:hover,
+  .teacher-section-roster__row:hover {
+    transform: none;
+  }
+}

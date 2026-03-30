@@ -1,0 +1,243 @@
+.teacher-assessment-detail {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.teacher-assessment-detail__hero {
+  border: 1px solid #dce5f2;
+  border-radius: 0.95rem;
+  background: linear-gradient(105deg, #0f1f3a 0%, #172a49 58%, #1d3458 100%);
+  color: #f8fbff;
+  padding: 0.85rem 0.95rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.teacher-assessment-detail__hero-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.teacher-assessment-detail__back {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-decoration: none;
+  color: #aac0de;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.teacher-assessment-detail__back:hover {
+  color: #d8e7f8;
+}
+
+.teacher-assessment-detail__hero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.52rem;
+  line-height: 1.14;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.teacher-assessment-detail__badges {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  flex-wrap: wrap;
+}
+
+.teacher-assessment-detail__badge {
+  border-color: rgba(223, 233, 245, 0.24);
+  background: rgba(11, 22, 39, 0.33);
+  color: #d8e8fb;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.teacher-assessment-detail__badge--published {
+  border: 1px solid #94d8b4;
+  background: rgba(16, 130, 71, 0.2);
+  color: #cbffdd;
+}
+
+.teacher-assessment-detail__badge--draft {
+  border: 1px solid #efc69f;
+  background: rgba(167, 90, 20, 0.22);
+  color: #ffe3c2;
+}
+
+.teacher-assessment-detail__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.teacher-assessment-detail__btn {
+  min-height: 2.2rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding-inline: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+}
+
+.teacher-assessment-detail__btn--outline {
+  border: 1px solid #d0dced;
+  background: #f7faff;
+  color: #415f86;
+}
+
+.teacher-assessment-detail__btn--outline:hover {
+  border-color: #bccde5;
+  background: #eff5fe;
+}
+
+.teacher-assessment-detail__btn--solid {
+  border: 0;
+  background: #e70012;
+  color: #fff;
+}
+
+.teacher-assessment-detail__btn--solid:hover {
+  background: #cf0010;
+}
+
+.teacher-assessment-detail__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.teacher-assessment-detail__stat {
+  border: 1px solid #dce5f2;
+  border-radius: 0.84rem;
+  background: #fff;
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.34);
+  padding: 0.58rem 0.65rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.teacher-assessment-detail__stat p {
+  margin: 0;
+  color: #6f87a8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.teacher-assessment-detail__stat strong {
+  display: block;
+  margin-top: 0.24rem;
+  color: #112844;
+  font-size: 1.28rem;
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+.teacher-assessment-detail__stat span {
+  display: block;
+  margin-top: 0.18rem;
+  color: #8095b3;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.teacher-assessment-detail__stat svg {
+  color: #5c789f;
+}
+
+.teacher-assessment-detail__tabs {
+  display: grid;
+  gap: 0.66rem;
+}
+
+.teacher-assessment-detail__tabs-list {
+  width: fit-content;
+  border: 1px solid #d3deec;
+  border-radius: 999px;
+  background: #f5f8fd;
+  padding: 0.18rem;
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.teacher-assessment-detail__tab-trigger {
+  border-radius: 999px;
+  min-height: 2rem;
+  padding-inline: 0.72rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #5f789b;
+}
+
+.teacher-assessment-detail__tab-trigger[data-state='active'] {
+  background: #fff;
+  color: #17375f;
+  box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.65);
+}
+
+.teacher-assessment-detail__tab-panel {
+  margin: 0;
+  border: 1px solid #dce5f2;
+  border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.34);
+  padding: 0.74rem;
+}
+
+.teacher-assessment-detail--empty {
+  align-content: start;
+}
+
+.teacher-assessment-detail__empty {
+  border: 1px solid #dce5f2;
+  border-radius: 0.9rem;
+  background: #fff;
+  color: #637da1;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 0.85rem;
+}
+
+@media (max-width: 1180px) {
+  .teacher-assessment-detail__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .teacher-assessment-detail__hero {
+    padding: 0.72rem;
+  }
+
+  .teacher-assessment-detail__hero h1 {
+    font-size: 1.24rem;
+  }
+
+  .teacher-assessment-detail__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-assessment-detail__tabs-list {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

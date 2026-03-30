@@ -1,0 +1,558 @@
+.page {
+  display: grid;
+  gap: 0.9rem;
+  animation: fade-in 220ms ease;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.95rem 1rem;
+  border-radius: 0.95rem;
+  border: 1px solid #d9e2ef;
+  background: linear-gradient(180deg, #0f1f3f 0%, #13264a 100%);
+  color: #e7eef9;
+}
+
+.heroIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 0.85rem;
+  background: #ff0011;
+  color: #ffffff;
+  box-shadow: 0 18px 26px -18px rgba(255, 0, 17, 0.85);
+}
+
+.heroEyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9db0cd;
+}
+
+.heroTitle {
+  margin: 0.1rem 0 0;
+  font-size: 1.38rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+
+.heroText {
+  margin: 0.2rem 0 0;
+  font-size: 0.83rem;
+  color: #b6c5dc;
+}
+
+.toolbar {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid #dce5f3;
+  background: #ffffff;
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+}
+
+.modeSwitch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid #d9e3f0;
+  border-radius: 0.72rem;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.modeSwitch button {
+  border: 0;
+  background: #f7faff;
+  color: #5f7598;
+  font-size: 0.8rem;
+  font-weight: 700;
+  min-height: 2.2rem;
+  padding: 0 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.modeSwitch button[data-active='true'] {
+  background: #0f1f3f;
+  color: #ffffff;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.yearSwitcher {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8e3f0;
+  border-radius: 999px;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.yearSwitcher button {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #4f678a;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.yearSwitcher button:hover:not(:disabled) {
+  background: #eaf1fb;
+}
+
+.yearSwitcher button:disabled {
+  color: #9db0ca;
+  cursor: not-allowed;
+}
+
+.yearSwitcher select {
+  border: 0;
+  border-left: 1px solid #d8e3f0;
+  border-right: 1px solid #d8e3f0;
+  background: transparent;
+  color: #243653;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  min-height: 2rem;
+  padding: 0 0.6rem;
+}
+
+.classFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  border: 1px solid #d8e3f0;
+  border-radius: 999px;
+  background: #f8fbff;
+  padding: 0 0.6rem;
+  color: #4f678a;
+  min-height: 2rem;
+}
+
+.classFilter select {
+  border: 0;
+  background: transparent;
+  min-height: 1.8rem;
+  color: #243653;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding-right: 0.2rem;
+}
+
+.calendarLayout {
+  display: grid;
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.calendarPanel {
+  border: 1px solid #dce5f2;
+  background: #ffffff;
+  border-radius: 0.95rem;
+  overflow: hidden;
+}
+
+.calendarHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  border-bottom: 1px solid #e2eaf5;
+  padding: 0.75rem 0.85rem;
+}
+
+.calendarHead h2 {
+  margin: 0;
+  font-size: 1.06rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #13294a;
+}
+
+.calendarHead button {
+  border: 1px solid #d5e0ef;
+  background: #f8fbff;
+  color: #4f678a;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid #e2eaf5;
+}
+
+.weekdays span {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #7b90af;
+  padding: 0.55rem 0.35rem;
+}
+
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.dayCell {
+  border: 0;
+  border-right: 1px solid #edf2f9;
+  border-bottom: 1px solid #edf2f9;
+  background: #ffffff;
+  text-align: left;
+  min-height: 5.2rem;
+  padding: 0.42rem 0.43rem;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 0.24rem;
+  align-content: start;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.dayCell:nth-child(7n) {
+  border-right: 0;
+}
+
+.dayCell[data-in-month='false'] {
+  background: #fafcff;
+}
+
+.dayCell[data-selected='true'] {
+  background: #f1f6ff;
+  box-shadow: inset 0 0 0 1px #bed3f4;
+}
+
+.dayCell[data-today='true'] {
+  box-shadow: inset 0 0 0 1px #ff0011;
+}
+
+.dayCell:hover {
+  background: #f6faff;
+}
+
+.dayNumber {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #2a3f5f;
+  line-height: 1;
+}
+
+.dayCount {
+  font-size: 0.63rem;
+  font-weight: 700;
+  color: #748cae;
+  min-height: 0.85rem;
+}
+
+.markers {
+  min-height: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.16rem;
+  margin-top: auto;
+}
+
+.markers i {
+  width: 0.33rem;
+  height: 0.33rem;
+  border-radius: 999px;
+  display: inline-flex;
+}
+
+.detailRail {
+  border: 1px solid #dce5f2;
+  background: #ffffff;
+  border-radius: 0.95rem;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 30rem;
+  max-height: 42rem;
+}
+
+.dayDetailHeader {
+  border-bottom: 1px solid #e2eaf5;
+  padding: 0.75rem 0.8rem;
+}
+
+.dayDetailHeader h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #122b4f;
+}
+
+.contextLabel {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #6e85a7;
+}
+
+.dayDetailBody {
+  overflow: auto;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.emptyText {
+  margin: 0.2rem;
+  font-size: 0.8rem;
+  color: #6f86a8;
+}
+
+.dayItem {
+  border: 1px solid #e0e9f7;
+  background: #fbfdff;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.52rem;
+  display: grid;
+  gap: 0.24rem;
+  animation: fade-in-up 180ms ease;
+}
+
+.dayItem h4 {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #16335a;
+}
+
+.dayItemMeta {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  color: #5a7499;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.dayItemLocation {
+  margin: 0;
+  color: #4b6589;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.dayItemDescription {
+  margin: 0;
+  color: #6a84a7;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.kindChip {
+  width: fit-content;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.23rem 0.42rem;
+}
+
+.kindAssessment {
+  background: #ffe5e7;
+  color: #c81f34;
+}
+
+.kindSchoolEvent {
+  background: #dce9ff;
+  color: #2a5fb6;
+}
+
+.kindHoliday {
+  background: #e8edf6;
+  color: #516787;
+}
+
+.kindAnnouncement {
+  background: #fff2dc;
+  color: #b97510;
+}
+
+.kindSchedule {
+  background: #e9f7ec;
+  color: #2e8b4d;
+}
+
+.upcomingLayout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.68rem;
+}
+
+.upcomingCard {
+  border: 1px solid #dce5f3;
+  background: #ffffff;
+  border-radius: 0.84rem;
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.34rem;
+  animation: fade-in-up 220ms ease both;
+}
+
+.upcomingCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.48rem;
+}
+
+.upcomingDate {
+  font-size: 0.67rem;
+  color: #667f9f;
+  font-weight: 700;
+}
+
+.upcomingCard h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #14315a;
+}
+
+.upcomingMeta {
+  margin: 0;
+  font-size: 0.71rem;
+  font-weight: 700;
+  color: #637c9f;
+}
+
+.upcomingLocation {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #3f5e88;
+}
+
+.upcomingDescription {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #6d86a8;
+  line-height: 1.34;
+}
+
+.emptyUpcoming {
+  border: 1px dashed #cbdaef;
+  border-radius: 0.84rem;
+  background: #f8fbff;
+  padding: 1rem;
+  grid-column: 1 / -1;
+}
+
+.emptyUpcoming h3 {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: #15315b;
+}
+
+.emptyUpcoming p {
+  margin: 0.24rem 0 0;
+  font-size: 0.78rem;
+  color: #6c84a6;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 1080px) {
+  .calendarLayout {
+    grid-template-columns: minmax(0, 1fr) 23rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .heroIcon {
+    width: 2.6rem;
+    height: 2.6rem;
+  }
+
+  .heroTitle {
+    font-size: 1.12rem;
+  }
+
+  .toolbar {
+    padding: 0.6rem;
+  }
+
+  .filters {
+    width: 100%;
+  }
+
+  .yearSwitcher,
+  .classFilter {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .yearSwitcher select,
+  .classFilter select {
+    width: 100%;
+  }
+
+  .dayCell {
+    min-height: 4.4rem;
+  }
+
+  .detailRail {
+    min-height: 20rem;
+    max-height: none;
+  }
+}
+

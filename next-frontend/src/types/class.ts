@@ -142,3 +142,50 @@ export interface TeacherClassStudentProfile {
     } | null;
   } | null;
 }
+
+export interface TeacherStudentAssessmentHistoryItem {
+  assessmentId: string;
+  title: string;
+  type: string;
+  dueDate?: string | null;
+  status:
+    | 'finished'
+    | 'late'
+    | 'not_started'
+    | 'in_progress';
+  statusLabel: string;
+  submittedAt?: string | null;
+  returnedAt?: string | null;
+  isLate: boolean;
+  lateByMinutes: number;
+  score?: number | null;
+  directScore?: number | null;
+  totalPoints?: number | null;
+  passed?: boolean | null;
+  isReturned: boolean;
+}
+
+export interface TeacherClassStudentOverview {
+  classInfo: {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    sectionLabel: string;
+  };
+  student: TeacherClassStudentProfile['student'];
+  section: TeacherClassStudentProfile['section'];
+  standing: {
+    gradingPeriod: string | null;
+    overallGradePercent: number | null;
+    components: {
+      writtenWorkPercent: number | null;
+      performanceTaskPercent: number | null;
+      quarterlyExamPercent: number | null;
+    };
+  };
+  history: {
+    finished: TeacherStudentAssessmentHistoryItem[];
+    late: TeacherStudentAssessmentHistoryItem[];
+    pending: TeacherStudentAssessmentHistoryItem[];
+  };
+}

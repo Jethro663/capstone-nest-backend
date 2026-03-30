@@ -5,18 +5,31 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChevronDown, Menu } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { logoutAction } from '@/lib/auth-actions';
 import { getProfileRoute } from '@/utils/profile';
 
 interface TopBarProps {
   onMenuToggle: () => void;
+  showAdminDesktopMenu?: boolean;
+  showTeacherDesktopMenu?: boolean;
 }
 
-export function TopBar({ onMenuToggle }: TopBarProps) {
+export function TopBar({
+  onMenuToggle,
+  showAdminDesktopMenu = false,
+  showTeacherDesktopMenu = false,
+}: TopBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, role } = useAuth();
@@ -41,11 +54,19 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
     return (
       <header className="admin-topbar">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="admin-topbar__menu md:hidden" onClick={onMenuToggle}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={showAdminDesktopMenu ? 'admin-topbar__menu' : 'admin-topbar__menu md:hidden'}
+            onClick={onMenuToggle}
+            aria-label={showAdminDesktopMenu ? 'Expand sidebar' : 'Open sidebar'}
+          >
             <Menu className="h-5 w-5" />
           </Button>
           <div className="admin-topbar__welcome">
-            <p className="admin-topbar__title">Welcome back, {firstName}</p>
+            <p className="admin-topbar__title">
+              Welcome back, <span>{firstName}</span>
+            </p>
           </div>
         </div>
 
@@ -64,21 +85,116 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
             </div>
           </button>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="admin-topbar__profile"
+                aria-label="Open profile menu"
+              >
+                <Avatar className="h-9 w-9 border border-[#f5d4d4]">
+                  {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                  <AvatarFallback className="admin-topbar__profile-avatar">{initials}</AvatarFallback>
+                </Avatar>
+                <span className="admin-topbar__profile-copy">
+                  <span className="admin-topbar__profile-name">{displayName}</span>
+                  <span className="admin-topbar__profile-role">Admin Portal</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:bg-slate-50 focus:text-slate-900"
+                onSelect={() => router.push(profileHref)}
+              >
+                <User className="mr-2 h-4 w-4" />
+                My Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
+                onSelect={() => {
+                  void logoutAction();
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+    );
+  }
+
+  if (isTeacherRoute) {
+    return (
+      <header className="teacher-topbar-shell">
+        <div className="teacher-topbar-shell__left">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={showTeacherDesktopMenu ? 'teacher-topbar-shell__menu' : 'teacher-topbar-shell__menu md:hidden'}
+            onClick={onMenuToggle}
+            aria-label={showTeacherDesktopMenu ? 'Expand sidebar' : 'Open sidebar'}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <p className="teacher-topbar-shell__welcome">
+            <span aria-hidden="true">👋</span> Welcome back, <strong>{firstName}</strong>
+          </p>
+        </div>
+
+        <div className="teacher-topbar-shell__actions">
           <button
             type="button"
-            onClick={() => router.push(profileHref)}
-            className="admin-topbar__profile"
+            className="teacher-topbar-shell__notif"
+            onClick={() => router.push('/dashboard/notifications')}
+            title="Notifications"
           >
-            <Avatar className="h-9 w-9 border border-[#f5d4d4]">
-              {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
-              <AvatarFallback className="admin-topbar__profile-avatar">{initials}</AvatarFallback>
-            </Avatar>
-            <span className="admin-topbar__profile-copy">
-              <span className="admin-topbar__profile-name">{displayName}</span>
-              <span className="admin-topbar__profile-role">Admin Portal</span>
-            </span>
-            <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 ? (
+              <span className="teacher-topbar-shell__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            ) : null}
           </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="teacher-topbar-shell__profile"
+                aria-label="Open profile menu"
+              >
+                <Avatar className="h-10 w-10 border border-[#f5d4d4]">
+                  {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                  <AvatarFallback className="teacher-topbar-shell__avatar">{initials}</AvatarFallback>
+                </Avatar>
+                <span className="teacher-topbar-shell__profile-copy">
+                  <span className="teacher-topbar-shell__name">{displayName}</span>
+                  <span className="teacher-topbar-shell__role">Teacher Portal</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:bg-slate-50 focus:text-slate-900"
+                onSelect={() => router.push(profileHref)}
+              >
+                <User className="mr-2 h-4 w-4" />
+                My Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
+                onSelect={() => {
+                  void logoutAction();
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
     );
@@ -114,18 +230,41 @@ export function TopBar({ onMenuToggle }: TopBarProps) {
 
         <div className={`mx-2 h-6 w-px ${isStudentRoute ? 'student-divider' : isTeacherRoute ? 'teacher-divider' : 'bg-slate-200'}`} />
 
-        <button
-          onClick={() => router.push(profileHref)}
-          className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-[var(--student-accent-soft)]' : isTeacherRoute ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
-        >
-          <Avatar className="h-8 w-8">
-            {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
-            <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]' : isTeacherRoute ? 'bg-[var(--teacher-outline-strong)] text-[var(--teacher-text-strong)]' : 'bg-primary/10 text-primary'}`}>
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <span className={`hidden text-sm font-medium md:block ${isStudentRoute ? 'text-[var(--student-text-strong)]' : isTeacherRoute ? 'text-[var(--teacher-text-strong)]' : 'text-slate-700'}`}>Profile</span>
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isStudentRoute ? 'hover:bg-[var(--student-accent-soft)]' : isTeacherRoute ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
+            >
+              <Avatar className="h-8 w-8">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className={`text-xs font-medium ${isStudentRoute ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]' : isTeacherRoute ? 'bg-[var(--teacher-outline-strong)] text-[var(--teacher-text-strong)]' : 'bg-primary/10 text-primary'}`}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <span className={`hidden text-sm font-medium md:block ${isStudentRoute ? 'text-[var(--student-text-strong)]' : isTeacherRoute ? 'text-[var(--teacher-text-strong)]' : 'text-slate-700'}`}>Profile</span>
+              <ChevronDown className={`hidden h-4 w-4 md:block ${isTeacherRoute ? 'text-[var(--teacher-text-muted)]' : 'text-slate-500'}`} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
+            <DropdownMenuItem
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 focus:bg-slate-50 focus:text-slate-900"
+              onSelect={() => router.push(profileHref)}
+            >
+              <User className="mr-2 h-4 w-4" />
+              My Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="rounded-lg px-3 py-2 text-sm font-semibold text-rose-600 focus:bg-rose-50 focus:text-rose-700"
+              onSelect={() => {
+                void logoutAction();
+              }}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

@@ -2,17 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, BookOpenCheck, School, Sparkles } from 'lucide-react';
+import { ArrowLeft, School } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import SectionForm, {
   createEmptySectionForm,
   type SectionFormValues,
 } from '@/components/admin/SectionForm';
-import {
-  AdminPageShell,
-  AdminSectionCard,
-  AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
@@ -72,11 +68,8 @@ export default function CreateSectionPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
-        </div>
-        <Skeleton className="h-[36rem] rounded-[1.7rem]" />
+        <Skeleton className="h-28 rounded-[1.25rem]" />
+        <Skeleton className="h-[32rem] rounded-[1.35rem]" />
       </div>
     );
   }
@@ -85,7 +78,9 @@ export default function CreateSectionPage() {
     <AdminPageShell
       badge="Admin Sections"
       title="Create Section"
-      description="Set up a new section with a clearer, more welcoming admin flow so the important details are easy to review before launch."
+      description="Set up a section from a simpler admin form where the key details are visible right away."
+      icon={School}
+      variant="compact-form"
       actions={(
         <Button
           variant="outline"
@@ -96,17 +91,27 @@ export default function CreateSectionPage() {
           Back to Sections
         </Button>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Advisers Ready" value={teachers.length} caption="Teachers available for assignment" icon={School} accent="emerald" />
-          <AdminStatCard label="School Year" value={schoolYears[0] || '—'} caption="Default year for the new section" icon={BookOpenCheck} accent="sky" />
-          <AdminStatCard label="Default Capacity" value={initialValues.capacity} caption="Starting seat count before adjustment" icon={Sparkles} accent="amber" />
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Advisers</span>
+            {teachers.length}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">School Year</span>
+            {schoolYears[0] || '-'}
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Capacity</span>
+            {initialValues.capacity} seats
+          </div>
         </>
       )}
     >
       <AdminSectionCard
         title="Section Details"
-        description="The setup stays the same logically, but the layout now gives the core details a calmer, more guided surface."
+        description="Enter the section basics and save when everything looks right."
+        density="compact"
       >
         <SectionForm
           initialValues={initialValues}

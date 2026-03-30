@@ -23,7 +23,7 @@ import { DatabaseService } from '../../database/database.service';
 import {
   sections,
   classes,
-  classSchedules,
+  sectionVisibilityPreferences,
   users,
   enrollments,
   studentProfiles,
@@ -34,11 +34,19 @@ import { toCalendarSlot } from '../../common/utils/schedule.util';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
+import {
+  type BulkSectionLifecycleAction,
+  type BulkSectionLifecycleDto,
+  type BulkSectionLifecycleFailure,
+  type BulkSectionLifecycleResult,
+} from './DTO/bulk-section-lifecycle.dto';
 
 export interface RequestingUser {
   userId: string;
   roles: string[];
 }
+
+export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
 
 @Injectable()
 export class SectionsService {
@@ -70,6 +78,51 @@ export class SectionsService {
     }
   }
 
+  private ensureTeacherCanAccessSection(
+    sectionRecord: { adviserId: string | null },
+    teacherId: string,
+  ) {
+    if (sectionRecord.adviserId !== teacherId) {
+      throw new ForbiddenException('You do not have access to this section');
+    }
+  }
+
+  private async getHiddenSectionIdsForUser(userId: string, sectionIds: string[]) {
+    if (!userId || sectionIds.length === 0) return new Set<string>();
+
+    const preferences = await this.db.query.sectionVisibilityPreferences.findMany({
+      where: and(
+        eq(sectionVisibilityPreferences.userId, userId),
+        inArray(sectionVisibilityPreferences.sectionId, sectionIds),
+        eq(sectionVisibilityPreferences.isHidden, true),
+      ),
+      columns: {
+        sectionId: true,
+      },
+    });
+
+    return new Set(preferences.map((preference) => preference.sectionId));
+  }
+
+  private applySectionVisibilityFilter(
+    sectionList: Array<{ id: string; isActive: boolean }>,
+    hiddenSectionIds: Set<string>,
+    status: SectionVisibilityStatus = 'all',
+  ) {
+    return sectionList
+      .map((sectionRecord) => ({
+        ...sectionRecord,
+        isHidden: hiddenSectionIds.has(sectionRecord.id),
+      }))
+      .filter((sectionRecord) => {
+        if (status === 'hidden') return sectionRecord.isHidden;
+        if (sectionRecord.isHidden) return false;
+        if (status === 'active') return sectionRecord.isActive;
+        if (status === 'archived') return !sectionRecord.isActive;
+        return true;
+      });
+  }
+
   // ─── findAll ──────────────────────────────────────────────────────────────
 
   async findAll(filters?: {
@@ -80,7 +133,10 @@ export class SectionsService {
     page?: number;
     limit?: number;
     adviserId?: string;
+    requesterId?: string;
+    status?: SectionVisibilityStatus;
   }) {
+    const status = filters?.status ?? 'all';
     const page = filters?.page || 1;
     const limit = Math.min(filters?.limit || 50, 100);
     const offset = (page - 1) * limit;
@@ -91,7 +147,14 @@ export class SectionsService {
       whereConditions.push(eq(sections.gradeLevel, filters.gradeLevel));
     if (filters?.schoolYear)
       whereConditions.push(eq(sections.schoolYear, filters.schoolYear));
-    if (filters?.isActive !== undefined)
+    if (status === 'active') whereConditions.push(eq(sections.isActive, true));
+    if (status === 'archived')
+      whereConditions.push(eq(sections.isActive, false));
+    if (
+      status !== 'active' &&
+      status !== 'archived' &&
+      filters?.isActive !== undefined
+    )
       whereConditions.push(eq(sections.isActive, filters.isActive));
     if (filters?.adviserId)
       whereConditions.push(eq(sections.adviserId, filters.adviserId));
@@ -152,17 +215,27 @@ export class SectionsService {
     }
 
     const total = Number(totalResult[0]?.total ?? 0);
-
-    return {
-      data: sectionsList.map((section) => ({
+    const hiddenSectionIds = await this.getHiddenSectionIdsForUser(
+      filters?.requesterId ?? '',
+      sectionsList.map((section) => section.id),
+    );
+    const data = this.applySectionVisibilityFilter(
+      sectionsList.map((section) => ({
         ...section,
         studentCount: studentCountsBySection.get(section.id) ?? 0,
       })),
+      hiddenSectionIds,
+      status,
+    );
+
+    return {
+      data,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: status === 'hidden' ? data.length : total,
+        totalPages:
+          status === 'hidden' ? Math.ceil(data.length / limit) : Math.ceil(total / limit),
       },
     };
   }
@@ -715,6 +788,82 @@ export class SectionsService {
 
   // ─── archiveSection / restoreSection ─────────────────────────────────────
 
+  async updatePresentation(
+    id: string,
+    presentation: { cardBannerUrl?: string | null },
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    const sectionRecord = await this.findById(id);
+
+    if (
+      requesterId &&
+      requesterRoles &&
+      requesterRoles.includes('teacher') &&
+      !requesterRoles.includes('admin')
+    ) {
+      this.ensureTeacherCanAccessSection(sectionRecord, requesterId);
+    }
+
+    const payload: { cardBannerUrl?: string | null; updatedAt: Date } = {
+      updatedAt: new Date(),
+    };
+    if (presentation.cardBannerUrl !== undefined) {
+      payload.cardBannerUrl = presentation.cardBannerUrl;
+    }
+
+    await this.db.update(sections).set(payload).where(eq(sections.id, id));
+
+    return this.findById(
+      id,
+      requesterId
+        ? { userId: requesterId, roles: requesterRoles ?? [] }
+        : undefined,
+    );
+  }
+
+  async setSectionHiddenState(
+    sectionId: string,
+    userId: string,
+    userRoles: string[],
+    hidden: boolean,
+  ) {
+    const sectionRecord = await this.findById(sectionId);
+
+    if (userRoles.includes('teacher') && !userRoles.includes('admin')) {
+      this.ensureTeacherCanAccessSection(sectionRecord, userId);
+    }
+
+    const existingPreference =
+      await this.db.query.sectionVisibilityPreferences.findFirst({
+        where: and(
+          eq(sectionVisibilityPreferences.sectionId, sectionId),
+          eq(sectionVisibilityPreferences.userId, userId),
+        ),
+      });
+
+    if (existingPreference) {
+      await this.db
+        .update(sectionVisibilityPreferences)
+        .set({
+          isHidden: hidden,
+          updatedAt: new Date(),
+        })
+        .where(eq(sectionVisibilityPreferences.id, existingPreference.id));
+    } else {
+      await this.db.insert(sectionVisibilityPreferences).values({
+        sectionId,
+        userId,
+        isHidden: hidden,
+      });
+    }
+
+    return {
+      sectionId,
+      isHidden: hidden,
+    };
+  }
+
   async archiveSection(id: string) {
     await this.findById(id);
 
@@ -747,6 +896,95 @@ export class SectionsService {
 
   async deleteSection(id: string) {
     await this.archiveSection(id);
+  }
+
+  private async performBulkLifecycleAction(
+    action: BulkSectionLifecycleAction,
+    sectionId: string,
+  ) {
+    const section = await this.findById(sectionId);
+
+    switch (action) {
+      case 'archive':
+        if (!section.isActive) {
+          throw new ConflictException('Section is already archived.');
+        }
+        await this.archiveSection(sectionId);
+        return;
+      case 'restore':
+        if (section.isActive) {
+          throw new ConflictException('Section is already active.');
+        }
+        await this.restoreSection(sectionId);
+        return;
+      case 'purge':
+        if (section.isActive) {
+          throw new ConflictException(
+            'Only archived sections can be permanently deleted. Archive the section first.',
+          );
+        }
+        await this.permanentlyDeleteSection(sectionId);
+        return;
+      default: {
+        throw new BadRequestException(
+          'Unsupported bulk section lifecycle action.',
+        );
+      }
+    }
+  }
+
+  private buildBulkLifecycleMessage(
+    action: BulkSectionLifecycleAction,
+    successCount: number,
+    failureCount: number,
+  ) {
+    const verbMap: Record<BulkSectionLifecycleAction, string> = {
+      archive: 'archived',
+      restore: 'restored',
+      purge: 'purged',
+    };
+    const noun = successCount === 1 ? 'section' : 'sections';
+    const verb = verbMap[action];
+
+    if (failureCount === 0) {
+      return `${successCount} ${noun} ${verb}.`;
+    }
+
+    return `${successCount} ${noun} ${verb}; ${failureCount} failed.`;
+  }
+
+  async bulkLifecycleAction(
+    dto: BulkSectionLifecycleDto,
+  ): Promise<BulkSectionLifecycleResult> {
+    const sectionIds = [...new Set(dto.sectionIds)];
+    const succeeded: string[] = [];
+    const failed: BulkSectionLifecycleFailure[] = [];
+
+    for (const sectionId of sectionIds) {
+      try {
+        await this.performBulkLifecycleAction(dto.action, sectionId);
+        succeeded.push(sectionId);
+      } catch (error) {
+        failed.push({
+          sectionId,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
+    return {
+      message: this.buildBulkLifecycleMessage(
+        dto.action,
+        succeeded.length,
+        failed.length,
+      ),
+      data: {
+        action: dto.action,
+        requested: sectionIds.length,
+        succeeded,
+        failed,
+      },
+    };
   }
 
   async getStudentProfileForSection(

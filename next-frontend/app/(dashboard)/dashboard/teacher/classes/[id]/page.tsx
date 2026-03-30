@@ -1,1475 +1,1981 @@
-﻿'use client';
+'use client';
 
-import { Fragment, useEffect, useState, useCallback, useMemo } from 'react';
- 
-import { useParams, useRouter } from 'next/navigation';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import Link from 'next/link';
-import { aiService } from '@/services/ai-service';
-import { classService } from '@/services/class-service';
-import { lessonService } from '@/services/lesson-service';
-import { assessmentService } from '@/services/assessment-service';
-import { announcementService } from '@/services/announcement-service';
-import { extractionService } from '@/services/extraction-service';
-import { fileService } from '@/services/file-service';
-import { useAuth } from '@/providers/AuthProvider';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import { motion } from 'framer-motion';
-import { LayoutGrid, List, ArrowUpDown, GripVertical, ChevronLeft, ChevronRight, ArrowLeft, BookOpen, CalendarRange, GraduationCap, Users, PencilLine, Rocket, Sparkles, Target, ClipboardList } from 'lucide-react';
- 
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  BookOpen,
+  BookText,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Eye,
+  FileSpreadsheet,
+  Grid2X2,
+  GripVertical,
+  LayoutPanelTop,
+  Megaphone,
+  Palette,
+  Plus,
+  Radar,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { getApiErrorMessage } from '@/lib/api-error';
-import type { CreateAnnouncementDto, UpdateAnnouncementDto } from '@/types/announcement';
-import { getDescription } from '@/utils/helpers';
-import { cn } from '@/utils/cn';
+import { classService } from '@/services/class-service';
+import { moduleService } from '@/services/module-service';
+import { announcementService } from '@/services/announcement-service';
+import { assessmentService } from '@/services/assessment-service';
+import { extractionService } from '@/services/extraction-service';
+import { classRecordService } from '@/services/class-record-service';
+import { fileService } from '@/services/file-service';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
-import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
- 
-import type { ClassItem, Enrollment } from '@/types/class';
-import type { Lesson } from '@/types/lesson';
-import type { Assessment } from '@/types/assessment';
+import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
 import type { Announcement } from '@/types/announcement';
+import type { Assessment } from '@/types/assessment';
+import type { ClassItem } from '@/types/class';
+import type { ClassRecord } from '@/types/class-record';
 import type { Extraction } from '@/types/extraction';
-import type { UploadedFile } from '@/types/file';
-const ASSESSMENT_CATEGORIES: Array<{
-  value: 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts';
-  label: string;
-}> = [
-  { value: 'written_work', label: 'Written Works' },
-  { value: 'performance_task', label: 'Performance Tasks' },
-  { value: 'quarterly_assessment', label: 'Quarterly Assessment' },
-  { value: 'drafts', label: 'Drafts' },
+import type { ClassModule } from '@/types/module';
+import './workspace.css';
+
+type WorkspaceTab = 'modules' | 'assignments' | 'extraction' | 'announcements' | 'class-record' | 'students' | 'calendar';
+type AssignmentFilter = 'all' | 'written' | 'performance' | 'quarterly' | 'discussion' | 'drafts';
+type CalendarKind = 'assessment' | 'event' | 'holiday';
+type CalendarViewMode = 'calendar' | 'upcoming';
+type ModuleViewMode = 'wide' | 'compact';
+type ModuleThemeKind = 'gradient' | 'image';
+
+interface ModulePresentationDraft {
+  themeKind: ModuleThemeKind;
+  gradientId: string;
+  coverImageUrl: string | null;
+  imagePositionX: number;
+  imagePositionY: number;
+  imageScale: number;
+}
+
+interface StudentRow {
+  enrollmentId: string;
+  studentId: string;
+  initials: string;
+  fullName: string;
+  email: string;
+  lrn: string;
+  gradePercent: number | null;
+}
+
+interface CalendarEventItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  date: Date;
+  kind: CalendarKind;
+}
+
+const CLASS_TABS: Array<{ key: WorkspaceTab; label: string; icon: typeof BookOpen }> = [
+  { key: 'modules', label: 'Modules', icon: BookOpen },
+  { key: 'assignments', label: 'Assignments', icon: ClipboardList },
+  { key: 'extraction', label: 'Extraction', icon: Radar },
+  { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'class-record', label: 'Class Record', icon: FileSpreadsheet },
+  { key: 'students', label: 'Students', icon: Users },
+  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
 ];
 
-const LESSON_PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
-type LessonStatusFilter = 'all' | 'published' | 'draft';
+const ASSIGNMENT_FILTERS: Array<{ key: AssignmentFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'written', label: 'Written Work' },
+  { key: 'performance', label: 'Performance Task' },
+  { key: 'quarterly', label: 'Quarterly Assessment' },
+  { key: 'discussion', label: 'Discussion' },
+  { key: 'drafts', label: 'Drafts' },
+];
 
-function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
-  const nextItems = [...items];
-  const [moved] = nextItems.splice(fromIndex, 1);
-  nextItems.splice(toIndex, 0, moved);
-  return nextItems;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const STORAGE_KEY_MODULES_VIEW = 'teacher-class-detail-modules-view-v1';
+const STORAGE_KEY_CALENDAR_VIEW = 'teacher-class-detail-calendar-view-v1';
+const DEFAULT_MODULE_GRADIENT = 'oceanic-blue';
+const MODULE_STOCK_IMAGES = [
+  '/images/modules/module-stock-board.svg',
+  '/images/modules/module-stock-library.svg',
+  '/images/modules/module-stock-science.svg',
+] as const;
+const MODULE_GRADIENT_OPTIONS = [
+  { id: 'oceanic-blue', label: 'Oceanic Blue', background: 'linear-gradient(135deg, #2b4fdd 0%, #3c62f0 100%)' },
+  { id: 'emerald-wave', label: 'Emerald Wave', background: 'linear-gradient(135deg, #089f79 0%, #10b78f 100%)' },
+  { id: 'violet-burst', label: 'Violet Burst', background: 'linear-gradient(135deg, #7f22f0 0%, #9a44f6 100%)' },
+  { id: 'sunset-orange', label: 'Sunset Orange', background: 'linear-gradient(135deg, #d76a1f 0%, #f08d2d 100%)' },
+  { id: 'rose-dusk', label: 'Rose Dusk', background: 'linear-gradient(135deg, #d42756 0%, #ef5f87 100%)' },
+  { id: 'slate-night', label: 'Slate Night', background: 'linear-gradient(135deg, #1d304f 0%, #2e4a73 100%)' },
+] as const;
+
+function normalizeModulesOrder(modules: ClassModule[]) {
+  return modules.map((module, index) => ({ ...module, order: index + 1 }));
 }
- 
+
+function toTimestamp(value?: string) {
+  if (!value) return 0;
+  const ts = new Date(value).getTime();
+  return Number.isNaN(ts) ? 0 : ts;
+}
+
+function isWorkspaceTab(value: string | null): value is WorkspaceTab {
+  return (
+    value === 'modules' ||
+    value === 'assignments' ||
+    value === 'extraction' ||
+    value === 'announcements' ||
+    value === 'class-record' ||
+    value === 'students' ||
+    value === 'calendar'
+  );
+}
+
+function formatDateYmd(value?: string | null) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toISOString().slice(0, 10);
+}
+
+function formatEventBadgeDate(date: Date) {
+  return {
+    day: String(date.getDate()),
+    month: date.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+  };
+}
+
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getMonthStart(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function summarizeModule(module: ClassModule) {
+  const lessons = module.sections.reduce(
+    (sum, section) => sum + section.items.filter((item) => item.itemType === 'lesson').length,
+    0,
+  );
+  const assessments = module.sections.reduce(
+    (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
+    0,
+  );
+  return { lessons, assessments };
+}
+
+function deriveAssignmentFilter(assessment: Assessment): AssignmentFilter {
+  const title = assessment.title.toLowerCase();
+  const type = assessment.type.toLowerCase();
+  if (!assessment.isPublished) return 'drafts';
+  if (title.includes('project') || title.includes('performance')) return 'performance';
+  if (title.includes('quarter') || title.includes('exam')) return 'quarterly';
+  if (title.includes('discussion')) return 'discussion';
+  if (type.includes('assignment') || type.includes('file_upload')) return 'written';
+  return 'written';
+}
+
+function assignmentTagLabel(filter: AssignmentFilter) {
+  if (filter === 'written') return 'Written Work';
+  if (filter === 'performance') return 'Performance Task';
+  if (filter === 'quarterly') return 'Quarterly Assessment';
+  if (filter === 'discussion') return 'Discussion';
+  return 'Assessment';
+}
+
+function inferCalendarKindFromAnnouncement(announcement: Announcement): CalendarKind {
+  const content = `${announcement.title} ${announcement.content}`.toLowerCase();
+  if (content.includes('quiz') || content.includes('exam') || content.includes('assessment')) return 'assessment';
+  if (content.includes('holiday') || content.includes('break')) return 'holiday';
+  return 'event';
+}
+
+function gradeTone(value: number | null) {
+  if (value === null) return 'neutral';
+  if (value >= 85) return 'good';
+  if (value >= 75) return 'warn';
+  return 'bad';
+}
+
+function safeInitials(firstName?: string, lastName?: string) {
+  const a = (firstName || '').trim().charAt(0);
+  const b = (lastName || '').trim().charAt(0);
+  return `${a}${b}`.toUpperCase() || 'NA';
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  return (
+    (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+    fallback
+  );
+}
+
+function normalizeModulePresentation(module: ClassModule): ModulePresentationDraft {
+  const gradientId =
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === module.gradientId)?.id ||
+    DEFAULT_MODULE_GRADIENT;
+
+  const coverImageUrl = module.coverImageUrl || null;
+  const themeKind: ModuleThemeKind =
+    module.themeKind === 'image' && coverImageUrl ? 'image' : 'gradient';
+
+  const clamp = (value: number | undefined, min: number, max: number, fallback: number) =>
+    typeof value === 'number' ? Math.min(Math.max(value, min), max) : fallback;
+
+  return {
+    themeKind,
+    gradientId,
+    coverImageUrl,
+    imagePositionX: clamp(module.imagePositionX, 0, 100, 50),
+    imagePositionY: clamp(module.imagePositionY, 0, 100, 50),
+    imageScale: clamp(module.imageScale, 100, 220, 120),
+  };
+}
+
+function announcementContentToHtml(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) return '';
+  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
+  return plainTextToRichHtml(trimmed);
+}
 
 export default function TeacherClassDetailPage() {
-  const params = useParams();
   const router = useRouter();
-  const classId = params.id as string;
-  const { role } = useAuth();
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const classIdParam = params.id;
+  const classId = Array.isArray(classIdParam) ? classIdParam[0] : (classIdParam as string) || '';
+  const isClassIdValid = UUID_PATTERN.test(classId);
+  const modulesViewStorageKey = `${STORAGE_KEY_MODULES_VIEW}:${isClassIdValid ? classId : 'invalid'}`;
+  const calendarViewStorageKey = `${STORAGE_KEY_CALENDAR_VIEW}:${isClassIdValid ? classId : 'invalid'}`;
+  const viewParam = searchParams.get('view');
+  const activeTab = isWorkspaceTab(viewParam) ? viewParam : 'modules';
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [modules, setModules] = useState<ClassModule[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [finalGradeByStudentId, setFinalGradeByStudentId] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
-  // Modal states
-  const [showCreateLesson, setShowCreateLesson] = useState(false);
-  const [showCreateAnnouncement, setShowCreateAnnouncement] = useState(false);
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [showAddModuleModal, setShowAddModuleModal] = useState(false);
+  const [newModuleTitle, setNewModuleTitle] = useState('');
+  const [newModuleDescription, setNewModuleDescription] = useState('');
+  const [creatingModule, setCreatingModule] = useState(false);
+  const [busyModuleId, setBusyModuleId] = useState<string | null>(null);
+  const [modulesViewMode, setModulesViewMode] = useState<ModuleViewMode>('wide');
+  const [modulesViewLoaded, setModulesViewLoaded] = useState(false);
+  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>('upcoming');
+  const [calendarViewLoaded, setCalendarViewLoaded] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => getMonthStart(new Date()));
+  const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState<string | null>(null);
+  const [selectedModuleIds, setSelectedModuleIds] = useState<string[]>([]);
+  const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
+  const [dropTargetModuleId, setDropTargetModuleId] = useState<string | null>(null);
+  const [isReorderingModules, setIsReorderingModules] = useState(false);
+  const [customizingModuleId, setCustomizingModuleId] = useState<string | null>(null);
+  const [moduleDraft, setModuleDraft] = useState<ModulePresentationDraft>({
+    themeKind: 'gradient',
+    gradientId: DEFAULT_MODULE_GRADIENT,
+    coverImageUrl: null,
+    imagePositionX: 50,
+    imagePositionY: 50,
+    imageScale: 120,
+  });
+  const [savingModuleDesign, setSavingModuleDesign] = useState(false);
+  const [uploadingModuleCover, setUploadingModuleCover] = useState(false);
 
-  // Extract module states
-  const [extractFile, setExtractFile] = useState<File | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [libraryFiles, setLibraryFiles] = useState<UploadedFile[]>([]);
-  const [selectedLibraryFileId, setSelectedLibraryFileId] = useState('');
-  const [reindexing, setReindexing] = useState(false);
- 
-  // Form states
-  const [lessonTitle, setLessonTitle] = useState('');
-  const [lessonDesc, setLessonDesc] = useState('');
-  const [annTitle, setAnnTitle] = useState('');
-  const [annContent, setAnnContent] = useState('');
-  const [activeTab, setActiveTab] = useState('lessons');
-  const [assessmentCategoryTab, setAssessmentCategoryTab] = useState<'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts'>('written_work');
-  const [assessmentViewMode, setAssessmentViewMode] = useState<'list' | 'grid'>('list');
-  const [assessmentSortOrder, setAssessmentSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
-  const [lessonStatusFilter, setLessonStatusFilter] = useState<LessonStatusFilter>('all');
-  const [bulkLessonAction, setBulkLessonAction] = useState<'selecting-all' | 'publish' | 'unpublish' | 'delete' | null>(null);
-  const [lessonPageSize, setLessonPageSize] = useState(LESSON_PAGE_SIZE_OPTIONS[0]);
-  const [lessonPage, setLessonPage] = useState(1);
-  const [draggedLessonId, setDraggedLessonId] = useState<string | null>(null);
-  const [savingLessonOrder, setSavingLessonOrder] = useState(false);
+  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('all');
+  const [busyAssessmentId, setBusyAssessmentId] = useState<string | null>(null);
+  const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
+
+  const [uploadingExtraction, setUploadingExtraction] = useState(false);
+  const extractionInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementContent, setAnnouncementContent] = useState<string>('');
+  const [announcementPinned, setAnnouncementPinned] = useState(false);
+  const [creatingAnnouncement, setCreatingAnnouncement] = useState(false);
+  const [busyAnnouncementId, setBusyAnnouncementId] = useState<string | null>(null);
+
+  const [busyEnrollmentId, setBusyEnrollmentId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
-  const classRecordState = useTeacherClassRecord(classId);
+  const classRecordState = useTeacherClassRecord(isClassIdValid ? classId : undefined);
 
-  const categorizedAssessments = useMemo(() => {
-    const filtered = assessments.filter((assessment) => {
-      if (assessmentCategoryTab === 'drafts') {
-        return !assessment.classRecordCategory || !assessment.isPublished;
-      }
-      return assessment.classRecordCategory === assessmentCategoryTab;
-    });
-
-    const withDate = filtered
-      .map((assessment) => ({
-        assessment,
-        dueTs: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
-      }))
-      .sort((a, b) => {
-        if (a.dueTs === b.dueTs) {
-          return new Date(b.assessment.createdAt ?? 0).getTime() - new Date(a.assessment.createdAt ?? 0).getTime();
-        }
-        return assessmentSortOrder === 'asc' ? a.dueTs - b.dueTs : b.dueTs - a.dueTs;
-      })
-      .map((entry) => entry.assessment);
-
-    return withDate.reduce<Record<string, Assessment[]>>((groups, assessment) => {
-      const key = assessment.dueDate
-        ? new Date(assessment.dueDate).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
-        : 'No due date';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(assessment);
-      return groups;
-    }, {});
-  }, [assessments, assessmentCategoryTab, assessmentSortOrder]);
-
-  const sortedLessons = useMemo(
-    () => [...lessons].sort((a, b) => a.order - b.order),
-    [lessons],
-  );
-
-  const filteredLessons = useMemo(() => {
-    return sortedLessons.filter((lesson) => {
-      if (lessonStatusFilter === 'published') {
-        return !lesson.isDraft;
-      }
-      if (lessonStatusFilter === 'draft') {
-        return lesson.isDraft;
-      }
-      return true;
-    });
-  }, [lessonStatusFilter, sortedLessons]);
-
-  const lessonTotal = filteredLessons.length;
-  const lessonTotalPages = Math.max(1, Math.ceil(lessonTotal / lessonPageSize));
-  const pagedLessons = filteredLessons.slice(
-    (lessonPage - 1) * lessonPageSize,
-    lessonPage * lessonPageSize,
-  );
-
-  const selectedLessonIdSet = useMemo(
-    () => new Set(selectedLessonIds),
-    [selectedLessonIds],
-  );
-
-  const allVisibleLessonsSelected =
-    pagedLessons.length > 0 &&
-    pagedLessons.every((lesson) => selectedLessonIdSet.has(lesson.id));
-
-  const canReorderLessons =
-    lessonStatusFilter === 'all' && sortedLessons.length > 1;
-  const lessonOrderDirty = lessons.some((lesson, index) => lesson.order !== index + 1);
- 
-
-  const publishedLessonCount = lessons.filter((lesson) => !lesson.isDraft).length;
-  const draftLessonCount = lessons.filter((lesson) => lesson.isDraft).length;
-  const completedAssessmentCount = assessments.filter((assessment) => assessment.isPublished).length;
-
-  const handleLessonPageChange = (nextPage: number) => {
-    setLessonPage(Math.min(Math.max(nextPage, 1), lessonTotalPages));
-  };
-
-  const handleLessonStatusFilterChange = (nextFilter: LessonStatusFilter) => {
-    setLessonStatusFilter(nextFilter);
-    setLessonPage(1);
-    setSelectedLessonIds([]);
-  };
-
-  const handleLessonPageSizeChange = (nextSize: string) => {
-    const parsed = Number(nextSize);
-    setLessonPageSize(Number.isFinite(parsed) && parsed > 0 ? parsed : LESSON_PAGE_SIZE_OPTIONS[0]);
-    setLessonPage(1);
-  };
-
-  const toggleLessonSelection = (lessonId: string) => {
-    setSelectedLessonIds((current) => (
-      current.includes(lessonId)
-        ? current.filter((id) => id !== lessonId)
-        : [...current, lessonId]
-    ));
-  };
-
-  const handleSelectAllFilteredLessons = async () => {
-    setBulkLessonAction('selecting-all');
-    try {
-      setSelectedLessonIds((current) => {
-        const pageIds = pagedLessons.map((lesson) => lesson.id);
-        const everySelected = pageIds.every((id) => current.includes(id));
-        if (everySelected) {
-          return current.filter((id) => !pageIds.includes(id));
-        }
-        return Array.from(new Set([...current, ...pageIds]));
-      });
-    } finally {
-      setBulkLessonAction(null);
-    }
-  };
-
-  const handleSelectVisibleLessons = () => {
-    const pageIds = pagedLessons.map((lesson) => lesson.id);
-    setSelectedLessonIds((current) => {
-      const everySelected = pageIds.every((id) => current.includes(id));
-      if (everySelected) {
-        return current.filter((id) => !pageIds.includes(id));
-      }
-      return Array.from(new Set([...current, ...pageIds]));
-    });
-  };
-
-  const clearLessonSelection = () => {
-    setSelectedLessonIds([]);
-  };
-
-  const handleBulkLessonDraftState = async (markDraft: boolean) => {
-    if (selectedLessonIds.length === 0) return;
-    setBulkLessonAction(markDraft ? 'unpublish' : 'publish');
-    try {
-      await Promise.all(selectedLessonIds.map((lessonId) => lessonService.update(lessonId, { isDraft: markDraft })));
-      setLessons((current) => current.map((lesson) => (
-        selectedLessonIds.includes(lesson.id) ? { ...lesson, isDraft: markDraft } : lesson
-      )));
-      toast.success(markDraft ? 'Selected lessons moved to draft' : 'Selected lessons published');
-      setSelectedLessonIds([]);
-    } catch {
-      toast.error(markDraft ? 'Failed to unpublish selected lessons' : 'Failed to publish selected lessons');
-    } finally {
-      setBulkLessonAction(null);
-    }
-  };
-
-  const handleBulkDeleteLessons = () => {
-    if (selectedLessonIds.length === 0) return;
-    setConfirmation({
-      title: 'Delete selected lessons?',
-      description: 'All selected lessons will be removed from this class permanently.',
-      confirmLabel: `Delete ${selectedLessonIds.length} Lesson${selectedLessonIds.length === 1 ? '' : 's'}`,
-      tone: 'danger',
-      onConfirm: async () => {
-        setBulkLessonAction('delete');
-        try {
-          await Promise.all(selectedLessonIds.map((lessonId) => lessonService.delete(lessonId)));
-          setLessons((current) => current.filter((lesson) => !selectedLessonIds.includes(lesson.id)));
-          setSelectedLessonIds([]);
-          toast.success('Selected lessons deleted');
-        } catch {
-          toast.error('Failed to delete selected lessons');
-        } finally {
-          setBulkLessonAction(null);
-        }
-      },
-    });
-  };
-
-  const handlePublishLesson = async (lessonId: string) => {
-    try {
-      await lessonService.update(lessonId, { isDraft: false });
-      setLessons((current) => current.map((lesson) => (
-        lesson.id === lessonId ? { ...lesson, isDraft: false } : lesson
-      )));
-      toast.success('Lesson published');
-    } catch {
-      toast.error('Failed to publish lesson');
-    }
-  };
-
-  const handleLessonDragStart = (lessonId: string) => {
-    if (!canReorderLessons) return;
-    setDraggedLessonId(lessonId);
-  };
-
-  const handleLessonDrop = (targetLessonId: string) => {
-    if (!draggedLessonId || !canReorderLessons || draggedLessonId === targetLessonId) {
-      setDraggedLessonId(null);
+  const fetchData = useCallback(async () => {
+    if (!isClassIdValid) {
+      setClassItem(null);
+      setModules([]);
+      setAssessments([]);
+      setExtractions([]);
+      setAnnouncements([]);
+      setFinalGradeByStudentId({});
+      setLoading(false);
       return;
     }
 
-    setLessons((current) => {
-      const sourceIndex = current.findIndex((lesson) => lesson.id === draggedLessonId);
-      const targetIndex = current.findIndex((lesson) => lesson.id === targetLessonId);
-      if (sourceIndex === -1 || targetIndex === -1) {
-        return current;
-      }
-      return moveItem(current, sourceIndex, targetIndex).map((lesson, index) => ({
-        ...lesson,
-        order: index + 1,
-      }));
-    });
-    setDraggedLessonId(null);
-  };
-
-  const handleResetLessonOrder = () => {
-    setLessons((current) => [...current].sort((a, b) => a.order - b.order));
-    setDraggedLessonId(null);
-  };
-
-  const handleSaveLessonOrder = async () => {
-    setSavingLessonOrder(true);
-    try {
-      toast.success('Lesson order updated');
-    } finally {
-      setSavingLessonOrder(false);
-    }
-  };
-
-  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [classRes, lessonsRes, assessmentsRes, enrollmentsRes, announcementsRes, extractionsRes, libraryRes] = await Promise.all([
+      const [
+        classRes,
+        modulesRes,
+        assessmentsRes,
+        extractionsRes,
+        announcementsRes,
+        classRecordsRes,
+        enrollmentsRes,
+      ] = await Promise.all([
         classService.getById(classId),
-        lessonService.getByClass(classId),
-        assessmentService.getByClass(classId),
-        classService.getEnrollments(classId),
-        announcementService.getByClass(classId).catch(() => ({ data: [] as Announcement[] })),
+        moduleService.getByClass(classId).catch(() => ({ data: [] as ClassModule[] })),
+        assessmentService.getByClass(classId, { page: 1, limit: 100, status: 'all' }).catch(() => ({ data: [] as Assessment[] })),
         extractionService.listByClass(classId).catch(() => ({ data: [] as Extraction[] })),
-        fileService.getAll().catch(() => ({ data: [] as UploadedFile[] })),
+        announcementService.getByClass(classId, { limit: 50 }).catch(() => ({ data: [] as Announcement[] })),
+        classRecordService.getByClass(classId).catch(() => ({ data: [] as ClassRecord[] })),
+        classService.getEnrollments(classId).catch(() => ({ data: [] as ClassItem['enrollments'] })),
       ]);
-      setClassItem(classRes.data);
-      setLessons(lessonsRes.data || []);
-      setAssessments(assessmentsRes.data || []);
-      setEnrollments(enrollmentsRes.data || []);
-      setAnnouncements(Array.isArray(announcementsRes.data) ? announcementsRes.data : []);
-      setExtractions(Array.isArray(extractionsRes.data) ? extractionsRes.data : []);
-      setLibraryFiles(Array.isArray(libraryRes.data) ? libraryRes.data : []);
+
+      const enrolled = enrollmentsRes.data || classRes.data.enrollments || [];
+      setClassItem({ ...classRes.data, enrollments: enrolled });
+      setModules((modulesRes.data || []).slice().sort((a, b) => a.order - b.order));
+      setAssessments((assessmentsRes.data || []).slice().sort((a, b) => {
+        const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return bTs - aTs;
+      }));
+      setExtractions((extractionsRes.data || []).slice().sort((a, b) => {
+        const aTs = new Date(a.createdAt || 0).getTime();
+        const bTs = new Date(b.createdAt || 0).getTime();
+        return bTs - aTs;
+      }));
+      setAnnouncements((announcementsRes.data || []).slice().sort((a, b) => {
+        const aTs = new Date(a.createdAt || 0).getTime();
+        const bTs = new Date(b.createdAt || 0).getTime();
+        return bTs - aTs;
+      }));
+
+      const records = (classRecordsRes.data || []).slice().sort((left, right) => {
+        const leftTs = Math.max(toTimestamp(left.updatedAt), toTimestamp(left.createdAt));
+        const rightTs = Math.max(toTimestamp(right.updatedAt), toTimestamp(right.createdAt));
+        return rightTs - leftTs;
+      });
+      const prioritizedRecord =
+        records.find((record) => record.status === 'finalized') ??
+        records.find((record) => record.status === 'draft') ??
+        null;
+
+      if (!prioritizedRecord?.id) {
+        setFinalGradeByStudentId({});
+      } else {
+        const finalGradesRes = await classRecordService
+          .getFinalGrades(prioritizedRecord.id)
+          .catch(() => ({ data: [] as { studentId: string; finalPercentage: number }[] }));
+        const gradeMap = Object.fromEntries(
+          (finalGradesRes.data || []).map((grade) => [grade.studentId, grade.finalPercentage]),
+        );
+        setFinalGradeByStudentId(gradeMap);
+      }
     } catch {
-      toast.error('Failed to load class details');
+      setClassItem(null);
+      setModules([]);
+      setAssessments([]);
+      setExtractions([]);
+      setAnnouncements([]);
+      setFinalGradeByStudentId({});
     } finally {
       setLoading(false);
     }
-  }, [classId]);
+  }, [classId, isClassIdValid]);
 
   useEffect(() => {
-    fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId]);
+    void fetchData();
+  }, [fetchData]);
 
-  const handleCreateLesson = async () => {
-    if (!lessonTitle.trim()) return;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(modulesViewStorageKey);
+    if (raw === 'wide' || raw === 'compact') {
+      setModulesViewMode(raw);
+    } else {
+      setModulesViewMode('wide');
+    }
+    setModulesViewLoaded(true);
+  }, [modulesViewStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !modulesViewLoaded) return;
+    window.localStorage.setItem(modulesViewStorageKey, modulesViewMode);
+  }, [modulesViewLoaded, modulesViewMode, modulesViewStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem(calendarViewStorageKey);
+    if (raw === 'calendar' || raw === 'upcoming') {
+      setCalendarViewMode(raw);
+    } else {
+      setCalendarViewMode('upcoming');
+    }
+    setCalendarViewLoaded(true);
+  }, [calendarViewStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !calendarViewLoaded) return;
+    window.localStorage.setItem(calendarViewStorageKey, calendarViewMode);
+  }, [calendarViewLoaded, calendarViewMode, calendarViewStorageKey]);
+
+  useEffect(() => {
+    const moduleIdSet = new Set(modules.map((module) => module.id));
+    setSelectedModuleIds((current) => current.filter((id) => moduleIdSet.has(id)));
+  }, [modules]);
+
+  const scheduleLine = useMemo(() => {
+    const schedule = classItem?.schedules?.[0];
+    if (!schedule) return 'Schedule TBA';
+    const days = schedule.days.join('/');
+    return `${days} ${schedule.startTime}-${schedule.endTime}`;
+  }, [classItem]);
+
+  const classInfoLine = useMemo(() => {
+    const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel;
+    const sectionName = classItem?.section?.name?.trim() || 'Section';
+    const hasGradeInName = gradeLevel
+      ? sectionName.toLowerCase().includes(`grade ${String(gradeLevel).toLowerCase()}`)
+      : false;
+    const sectionLabel = gradeLevel
+      ? hasGradeInName
+        ? sectionName
+        : `Grade ${gradeLevel} - ${sectionName}`
+      : sectionName;
+    return `${sectionLabel} - ${scheduleLine}${classItem?.room ? ` - Room ${classItem.room}` : ''}`;
+  }, [classItem?.room, classItem?.section?.gradeLevel, classItem?.section?.name, classItem?.subjectGradeLevel, scheduleLine]);
+
+  const studentRows = useMemo<StudentRow[]>(() => {
+    const enrollments = classItem?.enrollments || [];
+    return enrollments.map((enrollment) => {
+      const firstName = enrollment.student?.firstName?.trim() || '';
+      const lastName = enrollment.student?.lastName?.trim() || '';
+      const fullName = `${firstName} ${lastName}`.trim() || 'Unnamed Student';
+      const profileLrn = enrollment.student?.profile?.lrn || '';
+      const lrn = enrollment.student?.lrn || profileLrn || '--';
+      return {
+        enrollmentId: enrollment.id,
+        studentId: enrollment.studentId,
+        initials: safeInitials(firstName, lastName),
+        fullName,
+        email: enrollment.student?.email || '--',
+        lrn,
+        gradePercent: finalGradeByStudentId[enrollment.studentId] ?? null,
+      };
+    });
+  }, [classItem?.enrollments, finalGradeByStudentId]);
+
+  const filteredAssignments = useMemo(() => {
+    if (assignmentFilter === 'all') return assessments;
+    return assessments.filter((assessment) => deriveAssignmentFilter(assessment) === assignmentFilter);
+  }, [assignmentFilter, assessments]);
+
+  useEffect(() => {
+    const assessmentIdSet = new Set(filteredAssignments.map((assessment) => assessment.id));
+    setSelectedAssessmentIds((current) => current.filter((id) => assessmentIdSet.has(id)));
+  }, [filteredAssignments]);
+
+  const calendarItems = useMemo<CalendarEventItem[]>(() => {
+    const fromAssessments = assessments
+      .filter((assessment) => Boolean(assessment.dueDate))
+      .map((assessment) => ({
+        id: `assessment-${assessment.id}`,
+        title: assessment.title,
+        subtitle: classItem?.subjectName || 'Assessment',
+        date: new Date(assessment.dueDate as string),
+        kind: 'assessment' as CalendarKind,
+      }))
+      .filter((item) => !Number.isNaN(item.date.getTime()));
+
+    const fromAnnouncements = announcements
+      .map((announcement) => ({
+        id: `announcement-${announcement.id}`,
+        title: announcement.title,
+        subtitle: classItem?.subjectName || 'Class Event',
+        date: new Date(announcement.scheduledAt || announcement.createdAt || ''),
+        kind: inferCalendarKindFromAnnouncement(announcement),
+      }))
+      .filter((item) => !Number.isNaN(item.date.getTime()));
+
+    return [...fromAssessments, ...fromAnnouncements]
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 12);
+  }, [announcements, assessments, classItem?.subjectName]);
+
+  const calendarEventMap = useMemo(() => {
+    const map = new Map<string, CalendarEventItem[]>();
+    calendarItems.forEach((event) => {
+      const key = formatDateKey(event.date);
+      const current = map.get(key) || [];
+      current.push(event);
+      map.set(key, current);
+    });
+    return map;
+  }, [calendarItems]);
+
+  useEffect(() => {
+    if (calendarItems.length === 0) {
+      setSelectedCalendarDateKey(null);
+      return;
+    }
+
+    const monthEvent = calendarItems.find(
+      (event) =>
+        event.date.getFullYear() === calendarMonth.getFullYear() &&
+        event.date.getMonth() === calendarMonth.getMonth(),
+    );
+    const fallback = monthEvent || calendarItems[0];
+    const nextKey = formatDateKey(fallback.date);
+    setSelectedCalendarDateKey((current) => current || nextKey);
+  }, [calendarItems, calendarMonth]);
+
+  const calendarGridDays = useMemo(() => {
+    const monthStart = getMonthStart(calendarMonth);
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+    const firstWeekday = monthStart.getDay();
+    const daysInMonth = monthEnd.getDate();
+    const prevMonthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth(), 0);
+    const prevMonthDays = prevMonthEnd.getDate();
+
+    const cells: Array<{ date: Date; key: string; inMonth: boolean; events: CalendarEventItem[] }> = [];
+
+    for (let i = firstWeekday - 1; i >= 0; i -= 1) {
+      const date = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, prevMonthDays - i);
+      const key = formatDateKey(date);
+      cells.push({
+        date,
+        key,
+        inMonth: false,
+        events: calendarEventMap.get(key) || [],
+      });
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+      const key = formatDateKey(date);
+      cells.push({
+        date,
+        key,
+        inMonth: true,
+        events: calendarEventMap.get(key) || [],
+      });
+    }
+
+    while (cells.length % 7 !== 0) {
+      const offset = cells.length - (firstWeekday + daysInMonth);
+      const date = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, offset + 1);
+      const key = formatDateKey(date);
+      cells.push({
+        date,
+        key,
+        inMonth: false,
+        events: calendarEventMap.get(key) || [],
+      });
+    }
+
+    return cells;
+  }, [calendarEventMap, calendarMonth]);
+
+  const selectedCalendarEvents = useMemo(() => {
+    if (!selectedCalendarDateKey) return [];
+    return calendarEventMap.get(selectedCalendarDateKey) || [];
+  }, [calendarEventMap, selectedCalendarDateKey]);
+
+  const moduleTone = (index: number) => {
+    const tones = ['blue', 'green', 'violet', 'orange', 'rose', 'slate'] as const;
+    return tones[index % tones.length];
+  };
+  const getModuleGradient = (gradientId?: string) =>
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)?.background ||
+    MODULE_GRADIENT_OPTIONS[0].background;
+
+  const allModulesSelected = modules.length > 0 && selectedModuleIds.length === modules.length;
+  const allFilteredAssessmentsSelected =
+    filteredAssignments.length > 0 && selectedAssessmentIds.length === filteredAssignments.length;
+
+  const handleCreateModule = async () => {
+    if (creatingModule) return;
+    const title = newModuleTitle.trim();
+    if (!title) {
+      toast.error('Module title is required');
+      return;
+    }
+    if (title.length > 120) {
+      toast.error('Module title is too long');
+      return;
+    }
     try {
-      await lessonService.create({ title: lessonTitle, description: lessonDesc, classId });
-      toast.success('Lesson created');
-      setShowCreateLesson(false);
-      setLessonTitle('');
-      setLessonDesc('');
-      const res = await lessonService.getByClass(classId);
-      setLessons(res.data || []);
-    } catch {
-      toast.error('Failed to create lesson');
+      setCreatingModule(true);
+      await moduleService.create({
+        classId,
+        title,
+        description: newModuleDescription.trim() || undefined,
+      });
+      toast.success('Module created');
+      setShowAddModuleModal(false);
+      setNewModuleTitle('');
+      setNewModuleDescription('');
+      await fetchData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to create module'));
+    } finally {
+      setCreatingModule(false);
     }
   };
 
-  const handleDeleteLesson = (lesson: Lesson) => {
+  const toggleModuleSelection = (moduleId: string) => {
+    setSelectedModuleIds((current) =>
+      current.includes(moduleId) ? current.filter((id) => id !== moduleId) : [...current, moduleId],
+    );
+  };
+
+  const toggleSelectAllModules = () => {
+    setSelectedModuleIds(allModulesSelected ? [] : modules.map((module) => module.id));
+  };
+
+  const applyModuleReorder = async (nextModules: ClassModule[]) => {
+    const previousModules = modules;
+    const normalized = normalizeModulesOrder(nextModules);
+    setModules(normalized);
+    try {
+      setIsReorderingModules(true);
+      await moduleService.reorderByClass(
+        classId,
+        normalized.map((module) => ({ id: module.id, order: module.order })),
+      );
+      toast.success('Module order updated');
+    } catch (error) {
+      setModules(previousModules);
+      toast.error(getApiErrorMessage(error, 'Failed to save module order'));
+    } finally {
+      setIsReorderingModules(false);
+    }
+  };
+
+  const handleModuleDragStart = (event: ReactDragEvent<HTMLButtonElement>, moduleId: string) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', moduleId);
+    setDraggingModuleId(moduleId);
+  };
+
+  const handleModuleDragOver = (event: ReactDragEvent<HTMLElement>, moduleId: string) => {
+    if (!draggingModuleId || draggingModuleId === moduleId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTargetModuleId(moduleId);
+  };
+
+  const handleModuleDrop = async (event: ReactDragEvent<HTMLElement>, targetModuleId: string) => {
+    event.preventDefault();
+    const sourceModuleId = draggingModuleId || event.dataTransfer.getData('text/plain');
+    setDropTargetModuleId(null);
+    setDraggingModuleId(null);
+
+    if (!sourceModuleId || sourceModuleId === targetModuleId) return;
+
+    const sourceIndex = modules.findIndex((module) => module.id === sourceModuleId);
+    const targetIndex = modules.findIndex((module) => module.id === targetModuleId);
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+
+    const reordered = modules.slice();
+    const [moved] = reordered.splice(sourceIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    await applyModuleReorder(reordered);
+  };
+
+  const handleModuleDragEnd = () => {
+    setDraggingModuleId(null);
+    setDropTargetModuleId(null);
+  };
+
+  const performDeleteModule = async (moduleId: string) => {
+    if (busyModuleId) return;
+    try {
+      setBusyModuleId(moduleId);
+      await moduleService.delete(moduleId);
+      setModules((current) => current.filter((module) => module.id !== moduleId));
+      setSelectedModuleIds((current) => current.filter((id) => id !== moduleId));
+      toast.success('Module deleted');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete module'));
+    } finally {
+      setBusyModuleId(null);
+    }
+  };
+
+  const handleDeleteModule = (moduleId: string) => {
     setConfirmation({
-      title: 'Delete lesson?',
-      description: 'This lesson and its class visibility will be removed permanently.',
-      confirmLabel: 'Delete Lesson',
+      title: 'Delete Module',
+      description: 'This will permanently remove the module and all of its organization details.',
+      confirmLabel: 'Delete Module',
       tone: 'danger',
-      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{lesson.title}</p>,
+      details: 'This action cannot be undone.',
+      onConfirm: () => performDeleteModule(moduleId),
+    });
+  };
+
+  const handleBulkDeleteModules = () => {
+    if (selectedModuleIds.length === 0) return;
+    const idsToDelete = selectedModuleIds.slice();
+    setConfirmation({
+      title: `Delete ${idsToDelete.length} Modules`,
+      description: 'Selected modules will be permanently deleted.',
+      confirmLabel: 'Delete Selected',
+      tone: 'danger',
+      details: `You are deleting ${idsToDelete.length} module(s). This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          await lessonService.delete(lesson.id);
-          toast.success('Lesson deleted');
-          setLessons((prev) => prev.filter((entry) => entry.id !== lesson.id));
-        } catch {
-          toast.error('Failed to delete lesson');
+          await Promise.all(idsToDelete.map((moduleId) => moduleService.delete(moduleId)));
+          setModules((current) => current.filter((module) => !idsToDelete.includes(module.id)));
+          setSelectedModuleIds([]);
+          toast.success(`${idsToDelete.length} module(s) deleted`);
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, 'Failed to delete selected modules'));
         }
       },
     });
+  };
+
+  const openModuleDesignDialog = (module: ClassModule) => {
+    setCustomizingModuleId(module.id);
+    setModuleDraft(normalizeModulePresentation(module));
+  };
+
+  const handleUploadModuleCover = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !customizingModuleId) return;
+
+    try {
+      setUploadingModuleCover(true);
+      const response = await moduleService.uploadCover(customizingModuleId, file);
+      const nextCover = response.data.coverImageUrl;
+      setModuleDraft((current) => ({
+        ...current,
+        themeKind: 'image',
+        coverImageUrl: nextCover,
+      }));
+      setModules((current) =>
+        current.map((module) => (module.id === customizingModuleId ? response.data.module : module)),
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to upload cover image'));
+    } finally {
+      setUploadingModuleCover(false);
+    }
+  };
+
+  const handleSaveModuleDesign = async () => {
+    if (!customizingModuleId || savingModuleDesign) return;
+    try {
+      setSavingModuleDesign(true);
+      const response = await moduleService.update(customizingModuleId, {
+        themeKind: moduleDraft.themeKind,
+        gradientId: moduleDraft.gradientId,
+        coverImageUrl: moduleDraft.coverImageUrl,
+        imagePositionX: moduleDraft.imagePositionX,
+        imagePositionY: moduleDraft.imagePositionY,
+        imageScale: moduleDraft.imageScale,
+      });
+      setModules((current) =>
+        current.map((module) =>
+          module.id === customizingModuleId ? response.data : module,
+        ),
+      );
+      setCustomizingModuleId(null);
+      toast.success('Module design updated');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to update module design'));
+    } finally {
+      setSavingModuleDesign(false);
+    }
   };
 
   const handleCreateAssessment = async () => {
+    if (creatingAssessment) return;
     try {
-      const res = await assessmentService.create({ title: 'Untitled Assessment', classId });
-      toast.success('Assessment created â€” redirecting to editor');
-      router.push(`/dashboard/teacher/assessments/${res.data.id}/edit`);
-    } catch {
-      toast.error('Failed to create assessment');
+      setCreatingAssessment(true);
+      const response = await assessmentService.create({
+        title: 'Untitled Assessment',
+        classId,
+      });
+      toast.success('Assessment created');
+      router.push(`/dashboard/teacher/assessments/${response.data.id}/edit`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to create assessment'));
+    } finally {
+      setCreatingAssessment(false);
     }
   };
 
-  const handleDeleteAssessment = (assessment: Assessment) => {
+  const toggleAssessmentSelection = (assessmentId: string) => {
+    setSelectedAssessmentIds((current) =>
+      current.includes(assessmentId) ? current.filter((id) => id !== assessmentId) : [...current, assessmentId],
+    );
+  };
+
+  const toggleSelectAllFilteredAssessments = () => {
+    setSelectedAssessmentIds(
+      allFilteredAssessmentsSelected ? [] : filteredAssignments.map((assessment) => assessment.id),
+    );
+  };
+
+  const performDeleteAssessment = async (assessmentId: string) => {
+    if (busyAssessmentId) return;
+    try {
+      setBusyAssessmentId(assessmentId);
+      await assessmentService.delete(assessmentId);
+      setAssessments((current) => current.filter((assessment) => assessment.id !== assessmentId));
+      setSelectedAssessmentIds((current) => current.filter((id) => id !== assessmentId));
+      await fetchData();
+      toast.success('Assessment deleted');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete assessment'));
+    } finally {
+      setBusyAssessmentId(null);
+    }
+  };
+
+  const handleDeleteAssessment = (assessmentId: string) => {
     setConfirmation({
-      title: 'Delete assessment?',
-      description: 'This removes the assessment from the class and deletes its current draft state.',
-      confirmLabel: 'Delete Assessment',
+      title: 'Delete Assignment',
+      description: 'This assignment will be permanently deleted.',
+      confirmLabel: 'Delete Assignment',
       tone: 'danger',
-      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{assessment.title}</p>,
-      onConfirm: async () => {
-        try {
-          await assessmentService.delete(assessment.id);
-          toast.success('Assessment deleted');
-          setAssessments((prev) => prev.filter((entry) => entry.id !== assessment.id));
-        } catch {
-          toast.error('Failed to delete assessment');
-        }
-      },
+      details: 'This action cannot be undone.',
+      onConfirm: () => performDeleteAssessment(assessmentId),
     });
   };
 
-  const handleRemoveStudent = (enrollment: Enrollment) => {
-    const studentName = `${enrollment.student?.firstName ?? ''} ${enrollment.student?.lastName ?? ''}`.trim() || 'Selected student';
+  const handleBulkDeleteAssessments = () => {
+    if (selectedAssessmentIds.length === 0) return;
+    const idsToDelete = selectedAssessmentIds.slice();
     setConfirmation({
-      title: 'Remove student from class?',
-      description: 'This unenrolls the student from the class roster.',
-      confirmLabel: 'Remove Student',
+      title: `Delete ${idsToDelete.length} Assignments`,
+      description: 'Selected assignments will be permanently deleted.',
+      confirmLabel: 'Delete Selected',
       tone: 'danger',
-      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{studentName}</p>,
+      details: `You are deleting ${idsToDelete.length} assignment(s). This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          await classService.unenrollStudent(classId, enrollment.studentId);
-          toast.success('Student removed');
-          setEnrollments((prev) => prev.filter((entry) => entry.studentId !== enrollment.studentId));
-        } catch {
-          toast.error('Failed to remove student');
-        }
-      },
-    });
-  };
-
-  const resetAnnouncementComposer = () => {
-    setEditingAnnouncement(null);
-    setAnnTitle('');
-    setAnnContent('');
-  };
-
-  const handleEditAnnouncement = (announcement: Announcement) => {
-    setEditingAnnouncement(announcement);
-    setAnnTitle(announcement.title);
-    setAnnContent(announcement.content);
-    setShowCreateAnnouncement(true);
-  };
-
-  const handleDeleteAnnouncement = (announcement: Announcement) => {
-    setConfirmation({
-      title: 'Delete announcement?',
-      description: 'This announcement will be removed for everyone in the class.',
-      confirmLabel: 'Delete Announcement',
-      tone: 'danger',
-      details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{announcement.title}</p>,
-      onConfirm: async () => {
-        try {
-          await announcementService.delete(classId, announcement.id);
-          setAnnouncements((prev) => prev.filter((entry) => entry.id !== announcement.id));
-          toast.success('Announcement deleted');
+          await Promise.all(idsToDelete.map((assessmentId) => assessmentService.delete(assessmentId)));
+          setAssessments((current) => current.filter((assessment) => !idsToDelete.includes(assessment.id)));
+          setSelectedAssessmentIds([]);
+          await fetchData();
+          toast.success(`${idsToDelete.length} assignment(s) deleted`);
         } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Failed to delete announcement'));
+          toast.error(getApiErrorMessage(error, 'Failed to delete selected assignments'));
         }
       },
     });
+  };
+
+  const handleAssignmentCardClick = useCallback(
+    (event: ReactMouseEvent<HTMLElement>, assessmentId: string) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('a,button,input,textarea,select,label,[role="button"],[role="link"]')) {
+        return;
+      }
+      router.push(`/dashboard/teacher/assessments/${assessmentId}`);
+    },
+    [router],
+  );
+
+  const renderSelectionCheckbox = ({
+    checked,
+    onChange,
+    ariaLabel,
+  }: {
+    checked: boolean;
+    onChange: () => void;
+    ariaLabel: string;
+  }) => (
+    <input
+      type="checkbox"
+      className="teacher-class-workspace__check"
+      checked={checked}
+      onChange={onChange}
+      aria-label={ariaLabel}
+    />
+  );
+
+  const handleExtractionSelect = () => {
+    extractionInputRef.current?.click();
+  };
+
+  const handleExtractionFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || uploadingExtraction) return;
+    try {
+      setUploadingExtraction(true);
+      const uploadRes = await fileService.upload(file, { classId, scope: 'private' });
+      await extractionService.extractModule({ fileId: uploadRes.data.id });
+      toast.success('Extraction started');
+      await fetchData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to start extraction'));
+    } finally {
+      setUploadingExtraction(false);
+    }
   };
 
   const handleCreateAnnouncement = async () => {
-    if (!annTitle.trim() || !annContent.trim()) return;
+    const safeContent = sanitizeRichTextHtml(announcementContent).trim();
+    if (!announcementTitle.trim() || !safeContent || creatingAnnouncement) return;
     try {
-      if (editingAnnouncement) {
-        const payload: UpdateAnnouncementDto = {
-          title: annTitle.trim(),
-          content: annContent.trim(),
-          isPinned: editingAnnouncement.isPinned ?? false,
-        };
-        await announcementService.update(classId, editingAnnouncement.id, payload);
-        toast.success('Announcement updated');
-      } else {
-        const payload: CreateAnnouncementDto = {
-          title: annTitle.trim(),
-          content: annContent.trim(),
-          isPinned: false,
-        };
-        await announcementService.create(classId, payload);
-        toast.success('Announcement created');
-      }
-      setShowCreateAnnouncement(false);
-      resetAnnouncementComposer();
-      const res = await announcementService.getByClass(classId);
-      setAnnouncements(Array.isArray(res.data) ? res.data : []);
+      setCreatingAnnouncement(true);
+      await announcementService.create(classId, {
+        title: announcementTitle.trim(),
+        content: safeContent,
+        isPinned: announcementPinned,
+      });
+      setAnnouncementTitle('');
+      setAnnouncementContent('');
+      setAnnouncementPinned(false);
+      setShowAnnouncementForm(false);
+      toast.success('Announcement posted');
+      await fetchData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, editingAnnouncement ? 'Failed to update announcement' : 'Failed to create announcement'));
-    }
-  };
-
-  // â”€â”€ Class Record handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
- 
-  const queueExtraction = async (fileId: string) => {
-    setExtracting(true);
-    try {
-      const extractRes = await extractionService.extractModule({ fileId });
-      toast.success('Extraction queued! Redirecting to review page...');
-      setExtractFile(null);
-      setSelectedLibraryFileId('');
-      router.push(`/dashboard/teacher/extractions/${extractRes.data.extractionId}`);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      const msg =
-        axiosErr?.response?.data?.message ||
-        (err instanceof Error ? err.message : null) ||
-        'Failed to start extraction';
-      toast.error(msg);
+      toast.error(getApiErrorMessage(error, 'Failed to post announcement'));
     } finally {
-      setExtracting(false);
+      setCreatingAnnouncement(false);
     }
   };
 
-  const handleExtractModule = async () => {
-    if (!extractFile) return;
-    setExtracting(true);
+  const performDeleteAnnouncement = async (announcementId: string) => {
+    if (busyAnnouncementId) return;
     try {
-      const uploadRes = await fileService.upload(extractFile, { classId });
-      setLibraryFiles((prev) => [uploadRes.data, ...prev]);
-      await queueExtraction(uploadRes.data.id);
-    } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { message?: string } } };
-      toast.error(
-        axiosErr?.response?.data?.message ||
-          (err instanceof Error ? err.message : null) ||
-          'Failed to start extraction',
+      setBusyAnnouncementId(announcementId);
+      await announcementService.delete(classId, announcementId);
+      setAnnouncements((current) => current.filter((announcement) => announcement.id !== announcementId));
+      toast.success('Announcement deleted');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete announcement'));
+    } finally {
+      setBusyAnnouncementId(null);
+    }
+  };
+
+  const handleDeleteAnnouncement = (announcementId: string) => {
+    setConfirmation({
+      title: 'Delete Announcement',
+      description: 'This announcement will be permanently removed from the class feed.',
+      confirmLabel: 'Delete Announcement',
+      tone: 'danger',
+      details: 'This action cannot be undone.',
+      onConfirm: () => performDeleteAnnouncement(announcementId),
+    });
+  };
+
+  const performRemoveStudent = async (enrollmentId: string, studentId: string) => {
+    if (busyEnrollmentId) return;
+    try {
+      setBusyEnrollmentId(enrollmentId);
+      await classService.unenrollStudent(classId, studentId);
+      setClassItem((current) =>
+        current
+          ? {
+              ...current,
+              enrollments: (current.enrollments || []).filter((enrollment) => enrollment.id !== enrollmentId),
+            }
+          : current,
       );
-      setExtracting(false);
+      toast.success('Student removed');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to remove student'));
+    } finally {
+      setBusyEnrollmentId(null);
     }
   };
 
-  const handleReindexClass = async () => {
-    setReindexing(true);
-    try {
-      const res = await aiService.reindexClass(classId);
-      toast.success(`Indexed ${res.data.chunksIndexed} content chunk(s)`);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to reindex class content'));
-    } finally {
-      setReindexing(false);
-    }
+  const handleRemoveStudent = (enrollmentId: string, studentId: string) => {
+    setConfirmation({
+      title: 'Remove Student',
+      description: 'This student will be removed from the class roster.',
+      confirmLabel: 'Remove Student',
+      tone: 'danger',
+      details: 'Class enrollment and module access for this class will be removed.',
+      onConfirm: () => performRemoveStudent(enrollmentId, studentId),
+    });
   };
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-64 rounded-lg" />
+      <div className="space-y-4">
+        <Skeleton className="h-44 rounded-xl" />
+        <Skeleton className="h-12 rounded-xl" />
+        <Skeleton className="h-[34rem] rounded-xl" />
       </div>
     );
   }
 
-  if (!classItem) return <p className="text-muted-foreground">Class not found.</p>;
+  if (!classItem) {
+    return (
+      <section className="teacher-class-workspace__not-found">
+        <p>{isClassIdValid ? 'Class not found.' : 'Invalid class link.'}</p>
+        <Link href="/dashboard/teacher/classes">Back to Classes</Link>
+      </section>
+    );
+  }
 
   return (
-    <>
-    <TeacherPageShell
-      className={role === 'admin' ? 'theme-admin-bridge' : undefined}
-      badge="Class Workspace"
-      title={`${classItem.subjectName} (${classItem.subjectCode})`}
-      description={`Manage lessons, assessments, announcements, records, and roster details from a clearer workspace for ${classItem.section?.name || 'this class'}.`}
-      actions={(
-        <Button variant="outline" size="sm" onClick={() => router.back()} className="teacher-button-outline rounded-xl font-black">
+    <div className="teacher-class-workspace">
+      <header className="teacher-class-workspace__hero">
+        <Link href="/dashboard/teacher/classes" className="teacher-class-workspace__back">
           <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
-      )}
-      stats={(
-        <>
-          <TeacherStatCard label="Section" value={classItem.section?.name || 'Unassigned'} caption={`Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'â€”'}`} icon={GraduationCap} accent="sky" />
-          <TeacherStatCard label="Students" value={enrollments.length} caption="Currently enrolled learners" icon={Users} accent="teal" />
-          <TeacherStatCard label="Assessments" value={assessments.length} caption="Across active and draft work" icon={BookOpen} accent="amber" />
-          <TeacherStatCard label="School Year" value={classItem.schoolYear || 'â€”'} caption="Current class cycle" icon={CalendarRange} accent="rose" />
-        </>
-      )}
-    >
-      <TeacherSectionCard
-        title="Subject Space"
-        description="A more welcoming class overview so you can orient quickly before diving into lessons, assessments, and records."
-      >
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="teacher-dashboard-spotlight">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-3">
-                <div className="teacher-dashboard-chip">
-                  <Sparkles className="h-4 w-4" />
-                  Active Subject
-                </div>
-                <div className="space-y-2">
-                  <p className="text-3xl font-black tracking-tight text-[var(--teacher-text-strong)]">
-                    {classItem.subjectName} ({classItem.subjectCode})
-                  </p>
-                  <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                    {classItem.section?.name || 'Section not set'} â€¢ Grade {classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'â€”'} â€¢ {classItem.teacher ? `${classItem.teacher.firstName} ${classItem.teacher.lastName}` : 'Teacher not assigned'}
-                  </p>
-                  <p className="max-w-2xl text-sm leading-6 text-[var(--teacher-text-muted)]">
-                    Use this subject hub to keep the learning flow clear for students while you manage sequencing, assessments, announcements, and workbook records from one place.
-                  </p>
-                </div>
-              </div>
-              <div className="grid min-w-[220px] grid-cols-3 gap-3 text-right">
-                <div className="teacher-dashboard-metric">
-                  <span>Lessons</span>
-                  <strong>{lessonTotal}</strong>
-                </div>
-                <div className="teacher-dashboard-metric">
-                  <span>Students</span>
-                  <strong>{enrollments.length}</strong>
-                </div>
-                <div className="teacher-dashboard-metric">
-                  <span>Assessments</span>
-                  <strong>{assessments.length}</strong>
-                </div>
-              </div>
-            </div>
+          Back to Classes
+        </Link>
+        <div className="teacher-class-workspace__hero-row">
+          <div className="teacher-class-workspace__hero-icon">
+            <BookOpen className="h-5 w-5" />
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            <div className="teacher-dashboard-mini-panel">
-              <div className="teacher-dashboard-mini-panel__icon bg-sky-500/15 text-sky-300">
-                <BookOpen className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Published Lessons</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{publishedLessonCount}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Ready for student access</p>
-              </div>
-            </div>
-            <div className="teacher-dashboard-mini-panel">
-              <div className="teacher-dashboard-mini-panel__icon bg-amber-400/15 text-amber-200">
-                <ClipboardList className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Draft Lessons</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{draftLessonCount}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Still waiting for review</p>
-              </div>
-            </div>
-            <div className="teacher-dashboard-mini-panel">
-              <div className="teacher-dashboard-mini-panel__icon bg-emerald-500/15 text-emerald-200">
-                <Target className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Live Assessments</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{completedAssessmentCount}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Published for this subject</p>
-              </div>
+          <div className="teacher-class-workspace__hero-copy">
+            <h1>{classItem.subjectName}</h1>
+            <p>{classInfoLine}</p>
+            <div className="teacher-class-workspace__hero-meta">
+              <span>{studentRows.length} students</span>
+              <span>{modules.length} modules</span>
             </div>
           </div>
         </div>
-      </TeacherSectionCard>
+      </header>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TeacherSectionCard
-          title="Class Areas"
-          description="Move between learning content, assessment tools, announcements, records, and roster details from one cleaner navigation surface."
-          className="bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))]"
-          contentClassName="pt-5"
-        >
-          <TabsList className="teacher-tab-list h-auto flex-wrap justify-start">
-            <TabsTrigger value="lessons" className="teacher-tab rounded-xl px-4 font-black">Lessons</TabsTrigger>
-            <TabsTrigger value="assessments" className="teacher-tab rounded-xl px-4 font-black">Assessments</TabsTrigger>
-            <TabsTrigger value="extraction" className="teacher-tab rounded-xl px-4 font-black">Lesson Creator</TabsTrigger>
-            <TabsTrigger value="announcements" className="teacher-tab rounded-xl px-4 font-black">Announcements</TabsTrigger>
-            <TabsTrigger value="class-record" className="teacher-tab rounded-xl px-4 font-black">Class Record</TabsTrigger>
-            <TabsTrigger value="students" className="teacher-tab rounded-xl px-4 font-black">Students</TabsTrigger>
-          </TabsList>
-        </TeacherSectionCard>
+      <nav className="teacher-class-workspace__tabs">
+        {CLASS_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <Link
+              key={tab.key}
+              href={`/dashboard/teacher/classes/${classId}?view=${tab.key}`}
+              className="teacher-class-workspace__tab"
+              data-active={isActive}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
 
-        {/* Lessons Tab */}
-        <TabsContent value="lessons" className="space-y-4 mt-4">
-          <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-            <CardContent className="space-y-4 p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-[var(--teacher-text-strong)]">
-                    {lessonTotal} lesson{lessonTotal === 1 ? '' : 's'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Bulk publish, unpublish, delete, and drag lessons into a cleaner sequence.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={lessonStatusFilter}
-                    onChange={(e) =>
-                      handleLessonStatusFilterChange(e.target.value as LessonStatusFilter)
-                    }
-                    className="teacher-select h-9 rounded-md px-3 text-sm"
-                  >
-                    <option value="all">All lessons</option>
-                    <option value="draft">Draft only</option>
-                    <option value="published">Published only</option>
-                  </select>
-                  <select
-                    value={String(lessonPageSize)}
-                    onChange={(e) => handleLessonPageSizeChange(e.target.value)}
-                    className="teacher-select h-9 rounded-md px-3 text-sm"
-                  >
-                    {LESSON_PAGE_SIZE_OPTIONS.map((size) => (
-                      <option key={size} value={size}>
-                        {size} / page
-                      </option>
-                    ))}
-                  </select>
-                  <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setShowCreateLesson(true)}>+ New Lesson</Button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 rounded-xl border border-dashed border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-3">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={handleSelectVisibleLessons}
-                      disabled={sortedLessons.length === 0}
-                    >
-                      {allVisibleLessonsSelected ? 'Clear Page' : 'Select Page'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={handleSelectAllFilteredLessons}
-                      disabled={lessonTotal === 0 || bulkLessonAction === 'selecting-all'}
-                    >
-                      {bulkLessonAction === 'selecting-all' ? 'Selecting...' : 'Select All Filtered'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={clearLessonSelection}
-                      disabled={selectedLessonIds.length === 0}
-                    >
-                      Clear Selection
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      className="teacher-button-solid rounded-xl font-black"
-                      onClick={() => handleBulkLessonDraftState(false)}
-                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
-                    >
-                      {bulkLessonAction === 'publish' ? 'Publishing...' : 'Publish Selected'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={() => handleBulkLessonDraftState(true)}
-                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
-                    >
-                      {bulkLessonAction === 'unpublish' ? 'Unpublishing...' : 'Unpublish Selected'}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="teacher-button-danger rounded-xl font-black"
-                      onClick={handleBulkDeleteLessons}
-                      disabled={selectedLessonIds.length === 0 || bulkLessonAction !== null}
-                    >
-                      {bulkLessonAction === 'delete' ? 'Deleting...' : 'Delete Selected'}
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
-                  <span>
-                    {selectedLessonIds.length} selected across {lessonTotal} filtered lesson
-                    {lessonTotal === 1 ? '' : 's'}.
-                  </span>
-                  <span>
-                    Reordering is available in <strong>All lessons</strong> view so the saved sequence stays global.
-                  </span>
-                </div>
-              </div>
-
-              {canReorderLessons && (
-                <div className="flex flex-col gap-3 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-3 lg:flex-row lg:items-center lg:justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Drag lessons by the handle to change the order shown to students.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={handleResetLessonOrder}
-                      disabled={!lessonOrderDirty || savingLessonOrder}
-                    >
-                      Reset Order
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="teacher-button-solid rounded-xl font-black"
-                      onClick={handleSaveLessonOrder}
-                      disabled={!lessonOrderDirty || savingLessonOrder}
-                    >
-                      {savingLessonOrder ? 'Saving...' : 'Save Order'}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="teacher-dashboard-mini-panel">
-              <div className="teacher-dashboard-mini-panel__icon bg-sky-500/15 text-sky-300">
-                <BookOpen className="h-4 w-4" />
-              </div>
+      <section className="teacher-class-workspace__body">
+        {activeTab === 'modules' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">In View</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{sortedLessons.length}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Lessons matching the current filter</p>
+                <h2 className="teacher-class-workspace__section-title">Course Modules</h2>
+                <p>{modules.length} modules</p>
+              </div>
+              <div className="teacher-class-workspace__head-actions">
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__solid"
+                  onClick={() => setShowAddModuleModal(true)}
+                  disabled={creatingModule}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Module
+                </Button>
+                <div className="teacher-class-workspace__view-toggle" role="group" aria-label="Module view style">
+                  <button
+                    type="button"
+                    data-active={modulesViewMode === 'wide'}
+                    onClick={() => setModulesViewMode('wide')}
+                    aria-label="Wide list view"
+                    title="Wide list view"
+                  >
+                    <LayoutPanelTop className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    data-active={modulesViewMode === 'compact'}
+                    onClick={() => setModulesViewMode('compact')}
+                    aria-label="Compact card view"
+                    title="Compact card view"
+                  >
+                    <Grid2X2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <Button type="button" className="teacher-class-workspace__outline" onClick={toggleSelectAllModules}>
+                  {allModulesSelected ? 'Clear Selection' : 'Select All'}
+                </Button>
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"
+                  disabled={selectedModuleIds.length === 0}
+                  onClick={handleBulkDeleteModules}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Selected
+                </Button>
               </div>
             </div>
-            <div className="teacher-dashboard-mini-panel">
-              <div className="teacher-dashboard-mini-panel__icon bg-emerald-500/15 text-emerald-200">
-                <Rocket className="h-4 w-4" />
-              </div>
+            <div
+              className={
+                modulesViewMode === 'compact'
+                  ? 'teacher-class-workspace__modules-grid teacher-class-workspace__modules-grid--compact'
+                  : 'teacher-class-workspace__modules-grid teacher-class-workspace__modules-grid--wide'
+              }
+            >
+              {modules.map((module, index) => {
+                const summary = summarizeModule(module);
+                const isSelected = selectedModuleIds.includes(module.id);
+                const mediaSource =
+                  module.coverImageUrl || MODULE_STOCK_IMAGES[index % MODULE_STOCK_IMAGES.length];
+                const gradientBackground = getModuleGradient(module.gradientId);
+                const imagePositionX = module.imagePositionX ?? 50;
+                const imagePositionY = module.imagePositionY ?? 50;
+                const imageScale = module.imageScale ?? 120;
+                return (
+                  <article
+                    key={module.id}
+                    className="teacher-class-workspace__module-card"
+                    data-tone={moduleTone(index)}
+                    data-selected={isSelected}
+                    data-dragging={draggingModuleId === module.id}
+                    data-drop-target={dropTargetModuleId === module.id}
+                    onDragOver={(event) => handleModuleDragOver(event, module.id)}
+                    onDrop={(event) => void handleModuleDrop(event, module.id)}
+                  >
+                    <div className="teacher-class-workspace__module-leading">
+                      {renderSelectionCheckbox({
+                        checked: isSelected,
+                        onChange: () => toggleModuleSelection(module.id),
+                        ariaLabel: `Select ${module.title}`,
+                      })}
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__module-drag"
+                        draggable
+                        onDragStart={(event) => handleModuleDragStart(event, module.id)}
+                        onDragEnd={handleModuleDragEnd}
+                        disabled={isReorderingModules}
+                        aria-label={`Drag ${module.title} to reorder`}
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <Link
+                      href={`/dashboard/teacher/classes/${classId}/modules/${module.id}`}
+                      className="teacher-class-workspace__module-main-link"
+                    >
+                      <div className="teacher-class-workspace__module-media-wrap">
+                        <div
+                          className="teacher-class-workspace__module-media"
+                          style={{
+                            backgroundImage: `linear-gradient(120deg, rgba(8, 23, 44, 0.26), rgba(8, 23, 44, 0.12)), url(${mediaSource})`,
+                            backgroundSize: `${imageScale}%`,
+                            backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundColor: '#f1f5fb',
+                          }}
+                        >
+                          <div
+                            className="teacher-class-workspace__module-media-gradient"
+                            style={{ background: gradientBackground }}
+                          />
+                        </div>
+                      </div>
+                      <header>
+                        <div className="teacher-class-workspace__module-index">{index + 1}</div>
+                        <div className="teacher-class-workspace__module-copy">
+                          <h3>{module.title}</h3>
+                          <p>{module.description || 'Add a short module description.'}</p>
+                        </div>
+                      </header>
+                      <div className="teacher-class-workspace__module-stats">
+                        <article>
+                          <BookText className="h-3.5 w-3.5" />
+                          <strong>{summary.lessons}</strong>
+                          <span>Lessons</span>
+                        </article>
+                        <article>
+                          <ClipboardList className="h-3.5 w-3.5" />
+                          <strong>{summary.assessments}</strong>
+                          <span>Assessments</span>
+                        </article>
+                      </div>
+                    </Link>
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__ghost-icon"
+                      onClick={() => openModuleDesignDialog(module)}
+                      aria-label="Customize module design"
+                      title="Customize module design"
+                    >
+                      <Palette className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__ghost-icon"
+                      onClick={() => handleDeleteModule(module.id)}
+                      disabled={busyModuleId === module.id}
+                      aria-label="Delete module"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </article>
+                );
+              })}
+              {modules.length === 0 ? (
+                <div className="teacher-class-workspace__empty">No modules yet.</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'assignments' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Selection</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{selectedLessonIds.length}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Lessons selected for bulk actions</p>
+                <h2>Assignments</h2>
+                <p>{filteredAssignments.length} assignments</p>
+              </div>
+              <div className="teacher-class-workspace__head-actions">
+                <Link href={`/dashboard/teacher/classes/${classId}/ai-draft`} className="teacher-class-workspace__outline">
+                  AI Draft
+                </Link>
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__solid"
+                  onClick={() => void handleCreateAssessment()}
+                  disabled={creatingAssessment}
+                >
+                  <Plus className="h-4 w-4" />
+                  New Assignment
+                </Button>
               </div>
             </div>
-            <div className="teacher-dashboard-mini-panel">
-              <div className="teacher-dashboard-mini-panel__icon bg-amber-400/15 text-amber-200">
-                <ArrowUpDown className="h-4 w-4" />
-              </div>
+
+            <div className="teacher-class-workspace__chips">
+              {ASSIGNMENT_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  data-active={assignmentFilter === filter.key}
+                  onClick={() => setAssignmentFilter(filter.key)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="teacher-class-workspace__selection-bar">
+              <label>
+                {renderSelectionCheckbox({
+                  checked: allFilteredAssessmentsSelected,
+                  onChange: toggleSelectAllFilteredAssessments,
+                  ariaLabel: 'Select all filtered assignments',
+                })}
+                <span>Select All (Filtered)</span>
+              </label>
+              {selectedAssessmentIds.length > 0 ? (
+                <div className="teacher-class-workspace__selection-actions">
+                  <span>{selectedAssessmentIds.length} selected</span>
+                  <Button type="button" className="teacher-class-workspace__outline" onClick={() => setSelectedAssessmentIds([])}>
+                    Clear
+                  </Button>
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"
+                    onClick={handleBulkDeleteAssessments}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Selected
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="teacher-class-workspace__stack">
+              {filteredAssignments.map((assessment) => {
+                const filter = deriveAssignmentFilter(assessment);
+                const isSelected = selectedAssessmentIds.includes(assessment.id);
+                return (
+                  <article key={assessment.id} className="teacher-class-workspace__assignment-card" data-selected={isSelected}>
+                    <div
+                      className="teacher-class-workspace__assignment-main"
+                      onClick={(event) => handleAssignmentCardClick(event, assessment.id)}
+                    >
+                      {renderSelectionCheckbox({
+                        checked: isSelected,
+                        onChange: () => toggleAssessmentSelection(assessment.id),
+                        ariaLabel: `Select ${assessment.title}`,
+                      })}
+                      <Link
+                        href={`/dashboard/teacher/assessments/${assessment.id}`}
+                        className="teacher-class-workspace__assignment-link"
+                      >
+                        <div className="teacher-class-workspace__assignment-icon">
+                          <ClipboardList className="h-4 w-4" />
+                        </div>
+                        <div className="teacher-class-workspace__assignment-copy">
+                          <div className="teacher-class-workspace__assignment-tags">
+                            <span>{assignmentTagLabel(filter)}</span>
+                            <span data-status={assessment.isPublished ? 'published' : 'draft'}>
+                              {assessment.isPublished ? 'Published' : 'Draft'}
+                            </span>
+                          </div>
+                          <h3>{assessment.title}</h3>
+                          <p>
+                            {(assessment.questions?.length ?? 0)} questions - {assessment.totalPoints ?? 0} pts - Due {formatDateYmd(assessment.dueDate)}
+                          </p>
+                        </div>
+                      </Link>
+                    </div>
+                    <div className="teacher-class-workspace__assignment-actions">
+                      <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
+                        Edit
+                      </Link>
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__ghost-icon"
+                        onClick={() => handleDeleteAssessment(assessment.id)}
+                        disabled={busyAssessmentId === assessment.id}
+                        aria-label="Delete assessment"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+              {filteredAssignments.length === 0 ? (
+                <div className="teacher-class-workspace__empty">No assignments in this filter.</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'extraction' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">Reorder Mode</p>
-                <p className="mt-2 text-2xl font-black text-[var(--teacher-text-strong)]">{canReorderLessons ? 'On' : 'Off'}</p>
-                <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">Available in the all-lessons view</p>
+                <h2>AI Extractions</h2>
+                <p>Upload a PDF to extract lesson content using AI.</p>
+              </div>
+            </div>
+            <div className="teacher-class-workspace__extract-wrap">
+              <button
+                type="button"
+                className="teacher-class-workspace__extract-dropzone"
+                onClick={handleExtractionSelect}
+                disabled={uploadingExtraction}
+              >
+                <Radar className="h-6 w-6" />
+                <strong>{uploadingExtraction ? 'Uploading PDF...' : 'Drop a PDF here to extract module'}</strong>
+                <span>or click to browse</span>
+              </button>
+              <input
+                ref={extractionInputRef}
+                type="file"
+                accept="application/pdf"
+                onChange={(event) => void handleExtractionFile(event)}
+                hidden
+              />
+              <div className="teacher-class-workspace__stack">
+                {extractions.map((extraction) => (
+                  <article key={extraction.id} className="teacher-class-workspace__extract-item">
+                    <div>
+                      <h3>{extraction.structuredContent?.title || extraction.originalName || 'PDF Extraction'}</h3>
+                      <p>{formatDateYmd(extraction.createdAt)}</p>
+                    </div>
+                    <div className="teacher-class-workspace__extract-item-actions">
+                      <span data-status={extraction.extractionStatus}>{extraction.extractionStatus}</span>
+                      <Link href={`/dashboard/teacher/extractions/${extraction.id}`} className="teacher-class-workspace__outline">
+                        <Eye className="h-4 w-4" />
+                        View
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+                {extractions.length === 0 ? (
+                  <div className="teacher-class-workspace__empty">No extraction history yet.</div>
+                ) : null}
               </div>
             </div>
           </div>
+        ) : null}
 
-          {sortedLessons.length === 0 ? (
-            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-              <CardContent className="p-8 text-center text-muted-foreground">
-                No lessons in this view yet.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid gap-4 xl:grid-cols-2">
-                {pagedLessons.map((lesson, index) => (
-                  <Card
-                    key={lesson.id}
-                    className={cn(
-                      'relative overflow-hidden border border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:shadow-[0_34px_64px_-34px_rgba(148,11,26,0.28)]',
-                      selectedLessonIdSet.has(lesson.id) && 'ring-2 ring-[var(--teacher-accent)]/35',
-                      draggedLessonId === lesson.id && 'opacity-70',
-                    )}
-                    draggable={canReorderLessons}
-                    onDragStart={() => handleLessonDragStart(lesson.id)}
-                    onDragEnd={() => setDraggedLessonId(null)}
-                    onDragOver={(event) => {
-                      if (canReorderLessons) event.preventDefault();
-                    }}
-                    onDrop={() => handleLessonDrop(lesson.id)}
+        {activeTab === 'announcements' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
+              <div>
+                <h2>Announcements</h2>
+                <p>{announcements.length} posts</p>
+              </div>
+              <Button
+                type="button"
+                className="teacher-class-workspace__solid"
+                onClick={() => setShowAnnouncementForm((current) => !current)}
+              >
+                <Plus className="h-4 w-4" />
+                New Announcement
+              </Button>
+            </div>
+
+            {showAnnouncementForm ? (
+              <div className="teacher-class-workspace__announcement-form">
+                <Input
+                  value={announcementTitle}
+                  onChange={(event) => setAnnouncementTitle(event.target.value)}
+                  placeholder="Announcement title"
+                />
+                <RichTextEditor
+                  value={announcementContent}
+                  onChange={setAnnouncementContent}
+                  placeholder="Write announcement content..."
+                  minHeight={160}
+                />
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={announcementPinned}
+                    onChange={(event) => setAnnouncementPinned(event.target.checked)}
+                  />
+                  Pin this announcement
+                </label>
+                <div className="teacher-class-workspace__head-actions">
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__solid"
+                    onClick={() => void handleCreateAnnouncement()}
+                    disabled={creatingAnnouncement}
                   >
-                    <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-[var(--teacher-accent)]/10 blur-3xl opacity-80" />
-                    <CardContent className="relative space-y-4 p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedLessonIdSet.has(lesson.id)}
-                            onChange={() => toggleLessonSelection(lesson.id)}
-                            className="mt-1 h-4 w-4 rounded border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)]"
-                          />
+                    Post Announcement
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowAnnouncementForm(false);
+                      setAnnouncementTitle('');
+                      setAnnouncementContent('');
+                      setAnnouncementPinned(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="teacher-class-workspace__stack">
+              {announcements.map((announcement) => (
+                <article
+                  key={announcement.id}
+                  className="teacher-class-workspace__announcement-card"
+                  data-pinned={announcement.isPinned}
+                >
+                  <div>
+                    {announcement.isPinned ? <span className="teacher-class-workspace__pin">Pinned</span> : null}
+                    <h3>{announcement.title}</h3>
+                    <RichTextRenderer
+                      html={announcementContentToHtml(announcement.content)}
+                      className="teacher-class-workspace__announcement-rich"
+                    />
+                    <small>{formatDateYmd(announcement.createdAt)}</small>
+                  </div>
+                  <button
+                    type="button"
+                    className="teacher-class-workspace__ghost-icon"
+                    onClick={() => void handleDeleteAnnouncement(announcement.id)}
+                    disabled={busyAnnouncementId === announcement.id}
+                    aria-label="Delete announcement"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </article>
+              ))}
+              {announcements.length === 0 ? (
+                <div className="teacher-class-workspace__empty">No announcements yet.</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'class-record' ? (
+          <div className="teacher-class-workspace__panel teacher-class-workspace__panel--record">
+            <div className="teacher-class-workspace__record-scroll">
+              <TeacherClassRecordWorkbook
+                state={classRecordState}
+                emptyMessage="No class record exists yet for this class. Create a quarter workbook to begin."
+                className="teacher-class-workspace__record-embed"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'students' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
+              <div>
+                <h2>Students ({studentRows.length})</h2>
+              </div>
+              <Link href={`/dashboard/teacher/classes/${classId}/students/add`} className="teacher-class-workspace__solid">
+                <Plus className="h-4 w-4" />
+                Add Student
+              </Link>
+            </div>
+            <div className="teacher-class-workspace__table-wrap">
+              <table className="teacher-class-workspace__table">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Email</th>
+                    <th>LRN</th>
+                    <th>Grade %</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentRows.map((student) => (
+                    <tr key={student.enrollmentId} className="teacher-class-workspace__table-row teacher-class-workspace__table-row--clickable">
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          <div className="teacher-class-workspace__student-cell">
+                            <span className="teacher-class-workspace__avatar">{student.initials}</span>
+                            <strong>{student.fullName}</strong>
+                          </div>
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          {student.email}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          {student.lrn}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          <div className="teacher-class-workspace__grade">
+                            <div className="teacher-class-workspace__grade-track">
+                              <div
+                                data-tone={gradeTone(student.gradePercent)}
+                                style={{ width: `${Math.max(0, Math.min(100, student.gradePercent ?? 0))}%` }}
+                              />
+                            </div>
+                            <span>{student.gradePercent !== null ? `${student.gradePercent.toFixed(1)}%` : '--'}</span>
+                          </div>
+                        </Link>
+                      </td>
+                      <td>
+                        <div className="teacher-class-workspace__table-actions">
                           <button
                             type="button"
-                            className={cn(
-                              'mt-0.5 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-2 text-[var(--teacher-text-muted)] shadow-sm transition',
-                              canReorderLessons
-                                ? 'cursor-grab hover:border-[var(--teacher-accent)]/35 hover:bg-[var(--teacher-accent)]/10 hover:text-[var(--teacher-text-strong)] active:cursor-grabbing'
-                                : 'cursor-not-allowed opacity-50',
-                            )}
-                            disabled={!canReorderLessons}
-                            onMouseDown={() => handleLessonDragStart(lesson.id)}
-                            aria-label={`Reorder ${lesson.title}`}
-                          >
-                            <GripVertical className="h-4 w-4" />
-                          </button>
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="inline-flex rounded-full bg-[var(--teacher-accent)]/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[var(--teacher-accent-strong)]">
-                                Lesson {((lessonPage - 1) * lessonPageSize) + index + 1}
-                              </span>
-                              <Badge variant={lesson.isDraft ? 'secondary' : 'default'} className={lesson.isDraft ? 'border border-amber-400/30 bg-amber-50 text-amber-700' : 'border border-emerald-400/30 bg-emerald-50 text-emerald-700'}>
-                                {lesson.isDraft ? 'Draft' : 'Published'}
-                              </Badge>
-                            </div>
-                            <p className="text-lg font-black tracking-tight text-[var(--teacher-text-strong)]">{lesson.title}</p>
-                            <p className="line-clamp-3 text-sm leading-6 text-[var(--teacher-text-muted)]">
-                              {getDescription(lesson.description)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[var(--teacher-text-muted)]">
-                        <span className="rounded-full border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-1">
-                          Order #{lesson.order}
-                        </span>
-                        <span className="rounded-full border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-1">
-                          {lesson.contentBlocks?.length ?? 0} block{(lesson.contentBlocks?.length ?? 0) === 1 ? '' : 's'}
-                        </span>
-                        <span className="rounded-full border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-1">
-                          {lesson.isDraft ? 'Needs publishing' : 'Visible to students'}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                        <p className="text-sm text-[var(--teacher-text-muted)]">
-                          {lesson.isDraft
-                            ? 'Review the content, then publish when this lesson is ready for students.'
-                            : 'Students can already access this lesson from their subject space.'}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {!lesson.isDraft ? null : (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              className="teacher-button-solid rounded-xl font-black"
-                              onClick={() => handlePublishLesson(lesson.id)}
-                              disabled={bulkLessonAction !== null}
-                            >
-                              <Rocket className="mr-1 h-3.5 w-3.5" />
-                              Publish
-                            </Button>
-                          )}
-                          <Link
-                            href={`/dashboard/teacher/lessons/${lesson.id}/edit`}
-                            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 text-sm font-black text-[var(--teacher-text-strong)] shadow-[0_16px_38px_-24px_rgba(2,6,23,0.45)] transition hover:border-[var(--teacher-accent)]/35 hover:bg-[var(--teacher-accent)]/10 hover:text-[var(--teacher-text-strong)]"
-                          >
-                            <PencilLine className="h-3.5 w-3.5" />
-                            Edit Lesson
-                          </Link>
-                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteLesson(lesson)}>Delete</Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-                <CardContent className="flex flex-col items-start gap-3 p-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {lessonPage} of {lessonTotalPages}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={() => handleLessonPageChange(lessonPage - 1)}
-                      disabled={lessonPage <= 1}
-                    >
-                      <ChevronLeft className="mr-1 h-4 w-4" />
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="teacher-button-outline rounded-xl font-black"
-                      onClick={() => handleLessonPageChange(lessonPage + 1)}
-                      disabled={lessonPage >= lessonTotalPages}
-                    >
-                      Next
-                      <ChevronRight className="ml-1 h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
- 
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="extraction" className="mt-4">
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
-          >
-            <Card className="overflow-hidden border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))]">
-              <CardHeader>
-                <CardTitle className="text-xl">Extraction Workspace</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Upload a new PDF for this class or reuse one from Nexora Library. Completed extractions stay here for review and lesson drafting.
-                </p>
-              </CardHeader>
-              <CardContent className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-3 rounded-2xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-4">
-                  <Label>Upload a fresh module PDF</Label>
-                  <Input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setExtractFile(e.target.files?.[0] || null)}
-                  />
-                  <Button className="teacher-button-solid rounded-xl font-black" onClick={handleExtractModule} disabled={!extractFile || extracting}>
-                    {extracting ? 'Uploading & Extracting...' : 'Start New Extraction'}
-                  </Button>
-                </div>
-                <div className="space-y-3 rounded-2xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-4">
-                  <Label>Pick an existing library PDF</Label>
-                  <select
-                    value={selectedLibraryFileId}
-                    onChange={(e) => setSelectedLibraryFileId(e.target.value)}
-                    className="teacher-select h-10 w-full rounded-md px-3 text-sm"
-                  >
-                    <option value="">Select from Nexora Library</option>
-                    {libraryFiles.map((file) => (
-                      <option key={file.id} value={file.id}>
-                        {file.originalName} {file.scope === 'general' ? 'â€¢ General' : 'â€¢ My Library'}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    variant="outline"
-                    className="teacher-button-outline rounded-xl font-black"
-                    onClick={() => selectedLibraryFileId && queueExtraction(selectedLibraryFileId)}
-                    disabled={!selectedLibraryFileId || extracting}
-                  >
-                    Use Selected PDF
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="teacher-button-outline rounded-xl font-black"
-                    onClick={handleReindexClass}
-                    disabled={reindexing}
-                  >
-                    {reindexing ? 'Reindexing...' : 'Reindex Class AI Content'}
-                  </Button>
- 
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-base font-semibold">Extraction Queue</p>
-                  <p className="text-sm text-muted-foreground">
-                    {extractions.length} extraction run(s) for this class
-                  </p>
-                </div>
-              </div>
-
-              {extractions.length === 0 ? (
-                <Card>
-                  <CardContent className="p-6 text-center text-muted-foreground">
-                    No extraction history yet. Start with a PDF upload or choose a library file above.
-                  </CardContent>
-                </Card>
-              ) : (
-                extractions.map((ext) => (
-                  <Card key={ext.id} className="border-slate-200 shadow-sm">
-                    <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={
-                            ext.extractionStatus === 'completed' || ext.extractionStatus === 'applied'
-                              ? 'default'
-                              : ext.extractionStatus === 'failed'
-                                ? 'destructive'
-                                : 'secondary'
-                          }>
-                            {ext.extractionStatus}
-                          </Badge>
-                          <span className="text-sm font-medium">
-                            {ext.originalName || ext.structuredContent?.title || 'PDF extraction'}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {ext.structuredContent?.lessons?.length ?? 0} lesson(s) â€¢ {new Date(ext.createdAt).toLocaleString()}
-                        </p>
-                        {ext.errorMessage && (
-                          <p className="text-sm text-red-600">{ext.errorMessage}</p>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/extractions/${ext.id}`)}>
-                          Review
-                        </Button>
-                        {!ext.isApplied && ext.extractionStatus !== 'applied' && (
-                          <Button
-                            variant="ghost"
-                            className="teacher-button-danger rounded-xl font-black"
-                            onClick={() => {
-                              setConfirmation({
-                                title: 'Delete extraction run?',
-                                description: 'This removes the extraction record and its review state from this class.',
-                                confirmLabel: 'Delete Extraction',
-                                tone: 'danger',
-                                details: <p className="text-sm font-black text-[var(--teacher-text-strong)]">{ext.originalName || ext.structuredContent?.title || 'PDF extraction'}</p>,
-                                onConfirm: async () => {
-                                  try {
-                                    await extractionService.delete(ext.id);
-                                    setExtractions((prev) => prev.filter((entry) => entry.id !== ext.id));
-                                    toast.success('Extraction deleted');
-                                  } catch (error) {
-                                    toast.error(getApiErrorMessage(error, 'Failed to delete extraction'));
-                                  }
-                                },
-                              });
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleRemoveStudent(student.enrollmentId, student.studentId);
                             }}
+                            disabled={busyEnrollmentId === student.enrollmentId}
+                            aria-label="Remove student"
                           >
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
-            </div>
-          </motion.div>
-        </TabsContent>
-
-        {/* Assessments Tab */}
-        <TabsContent value="assessments" className="space-y-4 mt-4">
-          <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-            <CardContent className="p-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">{assessments.length} assessments</p>
-                <div className="flex items-center gap-2">
-                  <div className="inline-flex rounded-md border p-0.5">
-                    <Button
-                      size="sm"
-                      variant={assessmentViewMode === 'list' ? 'default' : 'ghost'}
-                      className={cn('h-8 rounded-xl font-black', assessmentViewMode === 'list' ? 'teacher-button-solid' : 'teacher-button-outline')}
-                      onClick={() => setAssessmentViewMode('list')}
-                    >
-                      <List className="mr-1 h-4 w-4" /> List
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={assessmentViewMode === 'grid' ? 'default' : 'ghost'}
-                      className={cn('h-8 rounded-xl font-black', assessmentViewMode === 'grid' ? 'teacher-button-solid' : 'teacher-button-outline')}
-                      onClick={() => setAssessmentViewMode('grid')}
-                    >
-                      <LayoutGrid className="mr-1 h-4 w-4" /> Grid
-                    </Button>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="teacher-button-outline h-8 rounded-xl font-black"
-                    onClick={() => setAssessmentSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-                  >
-                    <ArrowUpDown className="mr-1 h-4 w-4" />
-                    {assessmentSortOrder === 'asc' ? 'Date: Nearest' : 'Date: Latest'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="teacher-button-outline rounded-xl font-black"
-                    onClick={() => {
-                      router.push(`/dashboard/teacher/classes/${classId}/ai-draft`);
-                    }}
-                  >
-                    AI Draft Quiz
-                  </Button>
-                  <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={handleCreateAssessment}>+ New Assessment</Button>
-                </div>
-              </div>
-
-              <Tabs value={assessmentCategoryTab} onValueChange={(value) => setAssessmentCategoryTab(value as 'written_work' | 'performance_task' | 'quarterly_assessment' | 'drafts')}>
-                <TabsList className="teacher-tab-list h-auto grid w-full grid-cols-2 gap-2 rounded-2xl p-2 sm:grid-cols-4">
-                  {ASSESSMENT_CATEGORIES.map((category) => (
-                    <TabsTrigger key={category.value} value={category.value} className="teacher-tab min-h-[44px] rounded-xl px-3 text-center font-black leading-tight">
-                      {category.label}
-                    </TabsTrigger>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </TabsList>
-              </Tabs>
-            </CardContent>
-          </Card>
+                </tbody>
+              </table>
+              {studentRows.length === 0 ? (
+                <div className="teacher-class-workspace__empty">No students enrolled.</div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
-          {Object.keys(categorizedAssessments).length === 0 ? (
-            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-              <CardContent className="p-6 text-center text-muted-foreground">
-                No assessments in this category yet.
-              </CardContent>
-            </Card>
- 
-          ) : (
-            <div className="space-y-5">
-              {Object.entries(categorizedAssessments).map(([groupLabel, groupedAssessments]) => (
-                <section key={groupLabel} className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--teacher-text-strong)]">{groupLabel}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {groupedAssessments.length} assessment{groupedAssessments.length === 1 ? '' : 's'}
-                      </p>
-                    </div>
+        {activeTab === 'calendar' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
+              <div>
+                <h2>Class Calendar</h2>
+                <p>Upcoming events and assessments for {classItem.subjectName}</p>
+              </div>
+              <div className="teacher-class-workspace__head-actions">
+                <div className="teacher-class-workspace__view-toggle" role="group" aria-label="Calendar view">
+                  <button
+                    type="button"
+                    data-active={calendarViewMode === 'calendar'}
+                    onClick={() => setCalendarViewMode('calendar')}
+                    aria-label="Calendar grid view"
+                    title="Calendar"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    data-active={calendarViewMode === 'upcoming'}
+                    onClick={() => setCalendarViewMode('upcoming')}
+                    aria-label="Upcoming list view"
+                    title="Upcoming"
+                  >
+                    <LayoutPanelTop className="h-4 w-4" />
+                  </button>
+                </div>
+                <Link href={`/dashboard/teacher/calendar?classId=${classId}`} className="teacher-class-workspace__outline">
+                  <CalendarDays className="h-4 w-4" />
+                  Full Calendar
+                </Link>
+              </div>
+            </div>
+            {calendarViewMode === 'upcoming' ? (
+              <div className="teacher-class-workspace__stack">
+                {calendarItems.map((event) => {
+                  const badge = formatEventBadgeDate(event.date);
+                  return (
+                    <article key={event.id} className="teacher-class-workspace__calendar-item" data-kind={event.kind}>
+                      <div className="teacher-class-workspace__calendar-date">
+                        <strong>{badge.day}</strong>
+                        <span>{badge.month}</span>
+                      </div>
+                      <div className="teacher-class-workspace__calendar-copy">
+                        <h3>{event.title}</h3>
+                        <p>{event.subtitle}</p>
+                      </div>
+                      <span className="teacher-class-workspace__calendar-kind">{event.kind}</span>
+                    </article>
+                  );
+                })}
+                {calendarItems.length === 0 ? (
+                  <div className="teacher-class-workspace__empty">No upcoming events.</div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="teacher-class-workspace__calendar-board">
+                <div className="teacher-class-workspace__calendar-grid-wrap">
+                  <div className="teacher-class-workspace__calendar-grid-head">
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__ghost-icon"
+                      onClick={() => setCalendarMonth((current) => getMonthStart(new Date(current.getFullYear(), current.getMonth() - 1, 1)))}
+                      aria-label="Previous month"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <strong>
+                      {calendarMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+                    </strong>
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__ghost-icon"
+                      onClick={() => setCalendarMonth((current) => getMonthStart(new Date(current.getFullYear(), current.getMonth() + 1, 1)))}
+                      aria-label="Next month"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
-
-                  <div className={assessmentViewMode === 'grid' ? 'grid gap-3 md:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}>
-                    {groupedAssessments.map((assessment, index) => {
-                      const categoryStyle = assessment.classRecordCategory === 'written_work'
-                        ? 'border-l-4 border-l-blue-500'
-                        : assessment.classRecordCategory === 'performance_task'
-                          ? 'border-l-4 border-l-emerald-500'
-                          : 'border-l-4 border-l-violet-500';
-                      const isPastDue = Boolean(assessment.dueDate && new Date(assessment.dueDate) < new Date());
-
+                  <div className="teacher-class-workspace__calendar-grid-weekdays">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => (
+                      <span key={weekday}>{weekday}</span>
+                    ))}
+                  </div>
+                  <div className="teacher-class-workspace__calendar-grid">
+                    {calendarGridDays.map((cell) => {
+                      const isSelected = selectedCalendarDateKey === cell.key;
                       return (
-                        <motion.div
-                          key={assessment.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.04, duration: 0.2 }}
+                        <button
+                          key={cell.key}
+                          type="button"
+                          className="teacher-class-workspace__calendar-cell"
+                          data-in-month={cell.inMonth}
+                          data-selected={isSelected}
+                          onClick={() => setSelectedCalendarDateKey(cell.key)}
                         >
-                          <Card className={`group ${categoryStyle} border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] transition-shadow hover:shadow-md`}>
-                            <CardContent className="space-y-3 p-4">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <p className="truncate font-semibold leading-tight">{assessment.title}</p>
-                                  <p className="mt-1 text-xs capitalize text-muted-foreground">{assessment.type.replace(/_/g, ' ')}</p>
-                                </div>
-                                <Badge variant={assessment.isPublished ? 'default' : 'secondary'}>
-                                  {assessment.isPublished ? 'Published' : 'Draft'}
-                                </Badge>
-                              </div>
-
-                              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                                <span className="capitalize font-medium">{assessment.type.replace(/_/g, ' ')}</span>
-                                <span>{assessment.totalPoints} pts</span>
-                                <span>Passing: {assessment.passingScore}%</span>
-                                <span>{assessment.questions?.length ?? 0} questions</span>
-                                {assessment.dueDate && (
-                                  <span className={isPastDue ? 'font-medium text-red-500' : ''}>
-                                    {isPastDue ? 'Past due' : 'Due'}: {new Date(assessment.dueDate).toLocaleDateString()}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2 pt-1">
-                                <Link href={`/dashboard/teacher/assessments/${assessment.id}`}>
-                                  <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">View</Button>
-                                </Link>
-                                <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`}>
-                                  <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black">Edit</Button>
-                                </Link>
-                                <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleDeleteAssessment(assessment)}>
-                                  Delete
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </motion.div>
+                          <strong>{cell.date.getDate()}</strong>
+                          {cell.events.length > 0 ? (
+                            <span>{cell.events.length} event{cell.events.length === 1 ? '' : 's'}</span>
+                          ) : null}
+                        </button>
                       );
                     })}
                   </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </TabsContent>
+                </div>
+                <div className="teacher-class-workspace__calendar-selected">
+                  <h3>
+                    {selectedCalendarDateKey
+                      ? new Date(`${selectedCalendarDateKey}T00:00:00`).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      : 'Select a date'}
+                  </h3>
+                  <div className="teacher-class-workspace__stack">
+                    {selectedCalendarEvents.length > 0 ? (
+                      selectedCalendarEvents.map((event) => (
+                        <article key={event.id} className="teacher-class-workspace__calendar-item" data-kind={event.kind}>
+                          <div className="teacher-class-workspace__calendar-date">
+                            <strong>{event.date.getDate()}</strong>
+                            <span>{event.date.toLocaleString('en-US', { month: 'short' }).toUpperCase()}</span>
+                          </div>
+                          <div className="teacher-class-workspace__calendar-copy">
+                            <h3>{event.title}</h3>
+                            <p>{event.subtitle}</p>
+                          </div>
+                          <span className="teacher-class-workspace__calendar-kind">{event.kind}</span>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="teacher-class-workspace__empty">No events for this date.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </section>
 
-        {/* Announcements Tab */}
-        <TabsContent value="announcements" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{announcements.length} announcements</p>
+      <Dialog open={showAddModuleModal} onOpenChange={setShowAddModuleModal}>
+        <DialogContent className="teacher-module-modal">
+          <DialogHeader>
+            <DialogTitle>Add Module</DialogTitle>
+            <DialogDescription>
+              Create a module title and brief description. You can refine sections and items after creation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="teacher-module-modal__fields">
+            <div>
+              <label htmlFor="new-module-title">Title</label>
+              <Input
+                id="new-module-title"
+                value={newModuleTitle}
+                onChange={(event) => setNewModuleTitle(event.target.value)}
+                placeholder="Module title"
+                maxLength={120}
+              />
+            </div>
+            <div>
+              <label htmlFor="new-module-description">Description</label>
+              <textarea
+                id="new-module-description"
+                className="teacher-module-modal__textarea"
+                value={newModuleDescription}
+                onChange={(event) => setNewModuleDescription(event.target.value)}
+                placeholder="What should students learn in this module?"
+                rows={4}
+              />
+            </div>
+            <button
+              type="button"
+              className="teacher-class-workspace__outline teacher-module-modal__template"
+              onClick={() => toast.info('Quick templates will be available in a later update.')}
+            >
+              Quick Template
+            </button>
+          </div>
+          <DialogFooter>
             <Button
-              size="sm"
-              className="teacher-button-solid rounded-xl font-black"
+              type="button"
+              variant="outline"
               onClick={() => {
-                resetAnnouncementComposer();
-                setShowCreateAnnouncement(true);
+                setShowAddModuleModal(false);
+                setNewModuleTitle('');
+                setNewModuleDescription('');
               }}
             >
-              + New Announcement
+              Cancel
             </Button>
-          </div>
-          {announcements.length === 0 ? (
-            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]"><CardContent className="p-6 text-center text-muted-foreground">No announcements yet.</CardContent></Card>
-          ) : (
-            <div className="space-y-3">
-              {announcements.map((ann) => (
-                <Card key={ann.id} className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-[var(--teacher-text-strong)]">{ann.title}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">{ann.content}</p>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2">
-                        {ann.isPinned ? <Badge variant="secondary">Pinned</Badge> : null}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="teacher-button-outline rounded-xl font-black"
-                          onClick={() => handleEditAnnouncement(ann)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="teacher-button-danger rounded-xl font-black"
-                          onClick={() => handleDeleteAnnouncement(ann)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {new Date(ann.createdAt!).toLocaleDateString()}
-                    </p>
-                  </CardContent>
-                </Card>
+            <Button type="button" className="teacher-class-workspace__solid" onClick={() => void handleCreateModule()} disabled={creatingModule}>
+              {creatingModule ? 'Creating...' : 'Create Module'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(customizingModuleId)} onOpenChange={(open) => !open && setCustomizingModuleId(null)}>
+        <DialogContent className="teacher-module-modal teacher-module-modal--design">
+          <DialogHeader>
+            <DialogTitle>Customize Module Design</DialogTitle>
+            <DialogDescription>
+              Choose the module surface style and media placement. Changes are saved per module.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="teacher-module-modal__fields">
+            <div className="teacher-module-modal__theme-toggle" role="group" aria-label="Module theme mode">
+              <button
+                type="button"
+                data-active={moduleDraft.themeKind === 'gradient'}
+                onClick={() => setModuleDraft((current) => ({ ...current, themeKind: 'gradient' }))}
+              >
+                Gradient
+              </button>
+              <button
+                type="button"
+                data-active={moduleDraft.themeKind === 'image'}
+                onClick={() =>
+                  setModuleDraft((current) => ({
+                    ...current,
+                    themeKind: current.coverImageUrl ? 'image' : 'gradient',
+                  }))
+                }
+              >
+                Image
+              </button>
+            </div>
+
+            <div className="teacher-module-modal__palette">
+              {MODULE_GRADIENT_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  data-active={moduleDraft.gradientId === option.id}
+                  onClick={() => setModuleDraft((current) => ({ ...current, gradientId: option.id }))}
+                  aria-label={option.label}
+                  title={option.label}
+                  style={{ background: option.background }}
+                />
               ))}
             </div>
-          )}
-        </TabsContent>
 
-        {/* Class Record Tab */}
-        <TabsContent value="class-record" className="space-y-4 mt-4">
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-4"
-          >
-            <TeacherClassRecordWorkbook
-              state={classRecordState}
-              emptyMessage="No class record exists for this class yet. Generate a quarter workbook to begin."
-            />
-          </motion.div>
-        </TabsContent>
+            <div className="teacher-module-modal__stock-grid">
+              {MODULE_STOCK_IMAGES.map((imageUrl) => (
+                <button
+                  key={imageUrl}
+                  type="button"
+                  data-active={moduleDraft.coverImageUrl === imageUrl}
+                  onClick={() =>
+                    setModuleDraft((current) => ({
+                      ...current,
+                      themeKind: 'image',
+                      coverImageUrl: imageUrl,
+                    }))
+                  }
+                  style={{
+                    backgroundImage: `url(${imageUrl})`,
+                  }}
+                  aria-label="Use stock image"
+                />
+              ))}
+            </div>
 
-        {/* Students Tab */}
-        <TabsContent value="students" className="space-y-4 mt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{enrollments.length} students</p>
-            <Button size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/add`)}>+ Add Student</Button>
- 
-          </div>
-          {enrollments.length === 0 ? (
-            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]"><CardContent className="p-6 text-center text-muted-foreground">No students enrolled.</CardContent></Card>
-          ) : (
-            <Card className="border-[var(--teacher-outline)] bg-[linear-gradient(180deg,var(--teacher-surface),var(--teacher-surface-soft))] shadow-[var(--teacher-shadow)]">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-[var(--teacher-outline)]">
-                    <TableHead>Student</TableHead>
- 
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>LRN</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {enrollments.map((e) => (
-                    <TableRow key={e.id} className="border-[var(--teacher-outline)]">
-                      <TableCell>
-                        <Avatar className="h-8 w-8">
-                          {e.student?.profile?.profilePicture ? (
-                            <AvatarImage
-                              src={e.student.profile.profilePicture}
-                              alt={`${e.student?.firstName || ''} ${e.student?.lastName || ''}`.trim()}
-                            />
-                          ) : null}
-                          <AvatarFallback>
-                            {`${e.student?.firstName?.[0] || ''}${e.student?.lastName?.[0] || ''}`.toUpperCase() || 'S'}
-                          </AvatarFallback>
-                        </Avatar>
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          href={`/dashboard/teacher/classes/${classId}/students/${e.studentId}`}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {e.student?.firstName} {e.student?.lastName}
-                        </Link>
-                      </TableCell>
- 
-                      <TableCell className="text-muted-foreground">{e.student?.email}</TableCell>
-                      <TableCell className="text-muted-foreground">{e.student?.lrn || 'â€”'}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-2">
-                          <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.push(`/dashboard/teacher/classes/${classId}/students/${e.studentId}`)}>
-                            View Profile
-                          </Button>
-                          <Button variant="destructive" size="sm" className="teacher-button-danger rounded-xl font-black" onClick={() => handleRemoveStudent(e)}>Remove</Button>
-                        </div>
- 
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
-        </TabsContent>
-      </Tabs>
-    </TeacherPageShell>
+            <div className="teacher-module-modal__upload">
+              <label htmlFor="module-cover-upload">
+                {uploadingModuleCover ? 'Uploading cover...' : 'Upload custom image'}
+              </label>
+              <input
+                id="module-cover-upload"
+                type="file"
+                accept="image/*"
+                onChange={(event) => void handleUploadModuleCover(event)}
+                disabled={uploadingModuleCover}
+              />
+            </div>
 
-      {/* Create Lesson Modal */}
-      <Dialog open={showCreateLesson} onOpenChange={setShowCreateLesson}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create Lesson</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Title</Label><Input value={lessonTitle} onChange={(e) => setLessonTitle(e.target.value)} placeholder="Lesson title" /></div>
-            <div><Label>Description (optional)</Label><Textarea value={lessonDesc} onChange={(e) => setLessonDesc(e.target.value)} placeholder="Brief description" /></div>
+            <div className="teacher-module-modal__sliders">
+              <label>
+                X Position
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={moduleDraft.imagePositionX}
+                  onChange={(event) =>
+                    setModuleDraft((current) => ({
+                      ...current,
+                      imagePositionX: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Y Position
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={moduleDraft.imagePositionY}
+                  onChange={(event) =>
+                    setModuleDraft((current) => ({
+                      ...current,
+                      imagePositionY: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Zoom
+                <input
+                  type="range"
+                  min={100}
+                  max={220}
+                  value={moduleDraft.imageScale}
+                  onChange={(event) =>
+                    setModuleDraft((current) => ({
+                      ...current,
+                      imageScale: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowCreateLesson(false)}>Cancel</Button>
-            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleCreateLesson} disabled={!lessonTitle.trim()}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Assessment Modal removed â€” create-and-redirect flow instead */}
-
-      {/* Create Announcement Modal */}
-      <Dialog
-        open={showCreateAnnouncement}
-        onOpenChange={(open) => {
-          setShowCreateAnnouncement(open);
-          if (!open) resetAnnouncementComposer();
-        }}
-      >
-        <DialogContent>
-          <DialogHeader><DialogTitle>{editingAnnouncement ? 'Edit Announcement' : 'Create Announcement'}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Title</Label><Input value={annTitle} onChange={(e) => setAnnTitle(e.target.value)} placeholder="Announcement title" /></div>
-            <div><Label>Content</Label><Textarea value={annContent} onChange={(e) => setAnnContent(e.target.value)} placeholder="Announcement content" /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" className="teacher-button-outline rounded-xl font-black" onClick={() => setShowCreateAnnouncement(false)}>Cancel</Button>
-            <Button className="teacher-button-solid rounded-xl font-black" onClick={handleCreateAnnouncement} disabled={!annTitle.trim() || !annContent.trim()}>
-              {editingAnnouncement ? 'Save Changes' : 'Create'}
+            <Button type="button" variant="outline" onClick={() => setCustomizingModuleId(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="teacher-class-workspace__solid"
+              onClick={() => void handleSaveModuleDesign()}
+              disabled={savingModuleDesign}
+            >
+              {savingModuleDesign ? 'Saving...' : 'Save Design'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
-    </>
+    </div>
   );
 }
-

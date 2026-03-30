@@ -7,3 +7,4 @@ export * from './ai-mentor.schema';
 export * from './performance.schema';
 export * from './lxp.schema';
 export * from './rag.schema';
+export * from './school-events.schema';

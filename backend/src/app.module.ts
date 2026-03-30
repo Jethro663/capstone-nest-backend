@@ -35,6 +35,8 @@ import { AuditModule } from './modules/audit/audit.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { RagModule } from './modules/rag/rag.module';
+import { ContentModulesModule } from './modules/content-modules/content-modules.module';
+import { SchoolEventsModule } from './modules/school-events/school-events.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
@@ -89,6 +91,8 @@ import ollamaConfig from './config/ollama.config';
     ReportsModule,
     AnalyticsModule,
     RagModule,
+    ContentModulesModule,
+    SchoolEventsModule,
   ],
   providers: [
     {

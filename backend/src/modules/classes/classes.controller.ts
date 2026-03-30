@@ -26,6 +26,7 @@ import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { UpdateClassPresentationDto } from './DTO/update-class-presentation.dto';
 import { EnrollStudentDto } from './DTO/enroll-student.dto';
+import { BulkClassLifecycleDto } from './DTO/bulk-class-lifecycle.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -321,6 +322,18 @@ export class ClassesController {
     };
   }
 
+  @Post('bulk/lifecycle')
+  @Roles(RoleName.Admin)
+  async bulkLifecycle(@Body() dto: BulkClassLifecycleDto) {
+    const result = await this.classesService.bulkLifecycleAction(dto);
+
+    return {
+      success: true,
+      message: result.message,
+      data: result.data,
+    };
+  }
+
   /**
    * Permanently purge an archived class and all related cascade data
    * Admin only
@@ -420,6 +433,31 @@ export class ClassesController {
     return {
       success: true,
       message: 'Student profile retrieved successfully',
+      data,
+    };
+  }
+
+  /**
+   * Get a student overview in class context.
+   * Teacher (owner of class) and Admin can access.
+   */
+  @Get(':classId/students/:studentId/overview')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getStudentOverviewForClass(
+    @Param('classId') classId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.classesService.getStudentOverviewForClass(
+      classId,
+      studentId,
+      user?.userId,
+      user?.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Student overview retrieved successfully',
       data,
     };
   }

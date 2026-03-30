@@ -1,13 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Download, Eye, Filter, Trash2, UserPlus, UserX, RotateCcw } from 'lucide-react';
-import { userService } from '@/services/user-service';
+import { ChevronDown, Download, Filter, Trash2, UserPlus, UserX, RotateCcw } from 'lucide-react';
+import {
+  type BulkUserLifecycleAction,
+  userService,
+} from '@/services/user-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { ConfirmationDialog, type ConfirmationDialogConfig, type ConfirmationTone } from '@/components/shared/ConfirmationDialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,12 +21,29 @@ import type { User } from '@/types/user';
 import { getRoleName } from '@/utils/helpers';
 
 type StatusTab = 'active' | 'pending' | 'suspended' | 'deleted';
+type RoleFilter = 'all' | 'student' | 'teacher' | 'admin';
+
+interface BulkActionOption {
+  action: BulkUserLifecycleAction;
+  label: string;
+  confirmLabel: string;
+  title: string;
+  description: string;
+  tone: ConfirmationTone;
+}
 
 const STATUS_MAP: Record<StatusTab, string> = {
   active: 'ACTIVE',
   pending: 'PENDING',
   suspended: 'SUSPENDED',
   deleted: 'DELETED',
+};
+
+const ROLE_FILTER_LABELS: Record<RoleFilter, string> = {
+  all: 'All roles',
+  student: 'Students',
+  teacher: 'Teachers',
+  admin: 'Admins',
 };
 
 function formatDate(value?: string) {
@@ -49,22 +69,94 @@ function getRoleTone(role: string) {
   }
 }
 
-function getStatusTone(tab: StatusTab) {
-  switch (tab) {
-    case 'pending':
+function getStatusTone(status?: string) {
+  switch (status) {
+    case 'PENDING':
       return 'admin-status-pill admin-status-pill--pending';
-    case 'suspended':
+    case 'SUSPENDED':
       return 'admin-status-pill admin-status-pill--suspended';
-    case 'deleted':
+    case 'DELETED':
       return 'admin-status-pill admin-status-pill--archived';
     default:
       return 'admin-status-pill admin-status-pill--active';
   }
 }
 
+function getStatusLabel(status?: string) {
+  switch (status) {
+    case 'PENDING':
+      return 'Pending';
+    case 'SUSPENDED':
+      return 'Suspended';
+    case 'DELETED':
+      return 'Deleted';
+    default:
+      return 'Active';
+  }
+}
+
+function getBulkActions(tab: StatusTab): BulkActionOption[] {
+  switch (tab) {
+    case 'suspended':
+      return [
+        {
+          action: 'reactivate',
+          label: 'Reactivate selected',
+          confirmLabel: 'Reactivate users',
+          title: 'Reactivate selected users?',
+          description: 'Selected suspended accounts will regain access immediately.',
+          tone: 'default',
+        },
+        {
+          action: 'archive',
+          label: 'Archive selected',
+          confirmLabel: 'Archive users',
+          title: 'Archive selected users?',
+          description: 'Selected suspended accounts will move to deleted status and can still be purged later.',
+          tone: 'danger',
+        },
+      ];
+    case 'deleted':
+      return [
+        {
+          action: 'purge',
+          label: 'Purge selected',
+          confirmLabel: 'Purge users',
+          title: 'Permanently delete selected users?',
+          description: 'This permanently removes the selected deleted accounts from the system.',
+          tone: 'danger',
+        },
+      ];
+    default:
+      return [
+        {
+          action: 'suspend',
+          label: 'Suspend selected',
+          confirmLabel: 'Suspend users',
+          title: 'Suspend selected users?',
+          description: 'Selected active or pending accounts will lose login access but remain restorable.',
+          tone: 'danger',
+        },
+      ];
+  }
+}
+
+function getBulkResultMessage(actionLabel: string, successCount: number, failureCount: number) {
+  if (failureCount === 0) {
+    return `${actionLabel} completed for ${successCount} user${successCount === 1 ? '' : 's'}.`;
+  }
+
+  if (successCount === 0) {
+    return `${actionLabel} failed for all selected users.`;
+  }
+
+  return `${actionLabel} completed for ${successCount} user${successCount === 1 ? '' : 's'}; ${failureCount} failed.`;
+}
+
 export default function UserManagementPage() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
+  const hasLoadedRef = useRef(false);
   const [users, setUsers] = useState<User[]>([]);
   const [statusCounts, setStatusCounts] = useState<Record<StatusTab, number>>({
     active: 0,
@@ -72,41 +164,57 @@ export default function UserManagementPage() {
     suspended: 0,
     deleted: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [tab, setTab] = useState<StatusTab>('active');
   const [search, setSearch] = useState('');
-  const [showSuspend, setShowSuspend] = useState<User | null>(null);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showPurge, setShowPurge] = useState<User | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const status = STATUS_MAP[tab];
-      const res = await userService.getAll({
-        status,
-        limit: 200,
-        includeStatusCounts: true,
-      });
-      setUsers(res.users || []);
-      if (res.statusCounts) {
-        setStatusCounts({
-          active: res.statusCounts.ACTIVE,
-          pending: res.statusCounts.PENDING,
-          suspended: res.statusCounts.SUSPENDED,
-          deleted: res.statusCounts.DELETED,
+  const fetchUsers = useCallback(
+    async (mode: 'initial' | 'table') => {
+      try {
+        if (mode === 'initial') {
+          setInitialLoading(true);
+        } else {
+          setTableLoading(true);
+        }
+
+        const res = await userService.getAll({
+          status: STATUS_MAP[tab],
+          role: roleFilter === 'all' ? undefined : roleFilter,
+          limit: 100,
+          includeStatusCounts: true,
         });
+        setUsers(res.users || []);
+        if (res.statusCounts) {
+          setStatusCounts({
+            active: res.statusCounts.ACTIVE,
+            pending: res.statusCounts.PENDING,
+            suspended: res.statusCounts.SUSPENDED,
+            deleted: res.statusCounts.DELETED,
+          });
+        }
+      } catch {
+        toast.error('Failed to load users');
+      } finally {
+        if (mode === 'initial') {
+          setInitialLoading(false);
+        } else {
+          setTableLoading(false);
+        }
       }
-    } catch {
-      toast.error('Failed to load users');
-    } finally {
-      setLoading(false);
-    }
-  }, [tab]);
+    },
+    [roleFilter, tab],
+  );
 
   useEffect(() => {
-    fetchUsers();
+    const mode = hasLoadedRef.current ? 'table' : 'initial';
+    hasLoadedRef.current = true;
+    void fetchUsers(mode);
   }, [fetchUsers]);
 
   const filtered = useMemo(() => {
@@ -123,33 +231,84 @@ export default function UserManagementPage() {
     });
   }, [search, users]);
 
-  const handleSuspend = async () => {
-    if (!showSuspend) return;
-    try {
-      await userService.suspend(showSuspend.id);
-      toast.success('User suspended');
-      setShowSuspend(null);
-      fetchUsers();
-    } catch {
-      toast.error('Failed to suspend user');
-    }
+  const selectableVisibleIds = useMemo(
+    () =>
+      filtered
+        .filter((entry) => currentUser?.id !== entry.id)
+        .map((entry) => entry.id),
+    [currentUser?.id, filtered],
+  );
+
+  useEffect(() => {
+    const visibleSet = new Set(selectableVisibleIds);
+    setSelectedUserIds((current) => current.filter((id) => visibleSet.has(id)));
+  }, [selectableVisibleIds]);
+
+  const allVisibleSelected =
+    selectableVisibleIds.length > 0 &&
+    selectableVisibleIds.every((id) => selectedUserIds.includes(id));
+
+  const bulkActions = useMemo(() => getBulkActions(tab), [tab]);
+
+  const selectedUsers = useMemo(
+    () => filtered.filter((entry) => selectedUserIds.includes(entry.id)),
+    [filtered, selectedUserIds],
+  );
+
+  const refreshTable = useCallback(async () => {
+    await fetchUsers('table');
+  }, [fetchUsers]);
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId],
+    );
+  };
+
+  const handleSelectAllVisible = () => {
+    setSelectedUserIds(allVisibleSelected ? [] : selectableVisibleIds);
+  };
+
+  const handleSuspendPrompt = (user: User) => {
+    setConfirmation({
+      title: 'Suspend user?',
+      description: 'The user will lose login access but all account data will stay intact.',
+      confirmLabel: 'Suspend user',
+      tone: 'danger',
+      details: (
+        <p className="text-sm font-black text-[var(--student-text-strong)]">
+          {user.firstName} {user.lastName}
+        </p>
+      ),
+      onConfirm: async () => {
+        try {
+          await userService.suspend(user.id);
+          toast.success('User suspended');
+          await refreshTable();
+        } catch {
+          toast.error('Failed to suspend user');
+        }
+      },
+    });
   };
 
   const handleReactivate = async (id: string) => {
     try {
       await userService.reactivate(id);
       toast.success('User reactivated');
-      fetchUsers();
+      await refreshTable();
     } catch {
-      toast.error('Failed to reactivate');
+      toast.error('Failed to reactivate user');
     }
   };
 
-  const handleSoftDelete = (user: User) => {
+  const handleArchivePrompt = (user: User) => {
     setConfirmation({
       title: 'Archive user account?',
-      description: 'The user will lose login access but can still be restored or purged later.',
-      confirmLabel: 'Archive User',
+      description: 'The user will move to deleted status and can still be purged later.',
+      confirmLabel: 'Archive user',
       tone: 'danger',
       details: (
         <p className="text-sm font-black text-[var(--student-text-strong)]">
@@ -160,9 +319,9 @@ export default function UserManagementPage() {
         try {
           await userService.softDelete(user.id);
           toast.success('User archived');
-          fetchUsers();
+          await refreshTable();
         } catch {
-          toast.error('Failed to archive');
+          toast.error('Failed to archive user');
         }
       },
     });
@@ -172,14 +331,14 @@ export default function UserManagementPage() {
     try {
       const blob = await userService.exportUser(id);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `user-data-${id}.json`;
-      a.click();
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `user-data-${id}.json`;
+      link.click();
       URL.revokeObjectURL(url);
       toast.success('User data exported');
     } catch {
-      toast.error('Failed to export');
+      toast.error('Failed to export user data');
     }
   };
 
@@ -190,15 +349,66 @@ export default function UserManagementPage() {
       toast.error('Name does not match');
       return;
     }
+
     try {
       await userService.purge(showPurge.id);
       toast.success('User permanently deleted');
       setShowPurge(null);
       setPurgeConfirmName('');
-      fetchUsers();
+      await refreshTable();
     } catch {
-      toast.error('Failed to purge');
+      toast.error('Failed to purge user');
     }
+  };
+
+  const handleBulkAction = async (option: BulkActionOption) => {
+    if (selectedUserIds.length === 0) return;
+
+    try {
+      const result = await userService.bulkLifecycle({
+        action: option.action,
+        userIds: selectedUserIds,
+      });
+      const successCount = result.data.succeeded.length;
+      const failureCount = result.data.failed.length;
+      const toastMessage = getBulkResultMessage(option.label, successCount, failureCount);
+
+      if (successCount > 0) {
+        toast.success(toastMessage);
+      } else {
+        toast.error(toastMessage);
+      }
+
+      if (failureCount > 0) {
+        toast.error(result.data.failed[0]?.reason ?? 'Some selected users could not be updated.');
+      }
+
+      setSelectedUserIds([]);
+      await refreshTable();
+    } catch {
+      toast.error(`Failed to ${option.label.toLowerCase()}`);
+    }
+  };
+
+  const openBulkConfirmation = (option: BulkActionOption) => {
+    setConfirmation({
+      title: option.title,
+      description: option.description,
+      confirmLabel: option.confirmLabel,
+      tone: option.tone,
+      details: (
+        <div className="space-y-2 text-sm text-[var(--student-text-strong)]">
+          <p className="font-black">{selectedUserIds.length} selected</p>
+          <p className="text-[var(--student-text-muted)]">
+            {selectedUsers.slice(0, 3).map((user) => `${user.firstName} ${user.lastName}`).join(', ')}
+            {selectedUsers.length > 3 ? ` and ${selectedUsers.length - 3} more` : ''}
+          </p>
+        </div>
+      ),
+      onConfirm: async () => {
+        await handleBulkAction(option);
+      },
+    });
   };
 
   const handleExportVisible = () => {
@@ -221,7 +431,7 @@ export default function UserManagementPage() {
     toast.success('Visible users exported');
   };
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-24 rounded-none" />
@@ -247,7 +457,7 @@ export default function UserManagementPage() {
       )}
     >
       <AdminSectionCard title="Account Directory" contentClassName="space-y-5">
-        <Tabs value={tab} onValueChange={(value) => { setTab(value as StatusTab); setSearch(''); }} className="space-y-5">
+        <Tabs value={tab} onValueChange={(value) => setTab(value as StatusTab)} className="space-y-5">
           <TabsList className="admin-tab-list h-auto flex-wrap justify-start">
             <TabsTrigger value="active" className="admin-tab">
               Active <span className="admin-segment-count">{statusCounts.active}</span>
@@ -273,10 +483,22 @@ export default function UserManagementPage() {
               />
             </div>
             <div className="admin-controls">
-              <Button variant="outline" size="sm" className="admin-button-outline rounded-[1rem] px-4 font-bold">
-                <Filter className="h-4 w-4" />
-                Filter
-              </Button>
+              <div className="relative">
+                <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+                <select
+                  aria-label="Filter users by role"
+                  value={roleFilter}
+                  onChange={(event) => setRoleFilter(event.target.value as RoleFilter)}
+                  className="admin-select min-w-[11rem] appearance-none rounded-[1rem] py-2 pl-9 pr-10 text-sm font-bold text-[#6f83a3]"
+                >
+                  {Object.entries(ROLE_FILTER_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -289,16 +511,56 @@ export default function UserManagementPage() {
             </div>
           </div>
 
+          {filtered.length > 0 ? (
+            <div className="admin-bulk-bar">
+              <div className="admin-controls">
+                <span className="admin-pill">
+                  {selectedUserIds.length} selected
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="admin-button-outline rounded-[1rem] px-4 font-bold"
+                  onClick={handleSelectAllVisible}
+                  disabled={selectableVisibleIds.length === 0}
+                >
+                  {allVisibleSelected ? 'Clear visible selection' : 'Select all visible'}
+                </Button>
+                {roleFilter !== 'all' ? (
+                  <span className="admin-filter-badge">Filtered by {ROLE_FILTER_LABELS[roleFilter]}</span>
+                ) : null}
+              </div>
+              <div className="admin-controls">
+                {bulkActions.map((option) => (
+                  <Button
+                    key={option.action}
+                    type="button"
+                    variant={option.tone === 'danger' ? 'destructive' : 'outline'}
+                    size="sm"
+                    className={option.tone === 'danger' ? 'rounded-[1rem] px-4 font-bold' : 'admin-button-outline rounded-[1rem] px-4 font-bold'}
+                    onClick={() => openBulkConfirmation(option)}
+                    disabled={selectedUserIds.length === 0}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {filtered.length === 0 ? (
             <AdminEmptyState
               title="No users found"
-              description="Try another status view or a different search query."
+              description="Try another status view, role filter, or search query."
             />
           ) : (
-            <div className="admin-table-shell">
+            <div className={`admin-table-shell${tableLoading ? ' admin-table-shell--loading' : ''}`}>
+              {tableLoading ? <div className="admin-table-loading">Refreshing users...</div> : null}
               <Table>
                 <TableHeader className="admin-table-head">
                   <TableRow>
+                    <TableHead className="w-[6rem]">Select</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
@@ -312,90 +574,102 @@ export default function UserManagementPage() {
                     const primaryRole = getRoleName(entry.roles?.[0]).toLowerCase();
                     const lastLogin = entry.lastLoginAt ?? entry.updatedAt ?? entry.createdAt;
                     const isSelf = currentUser?.id === entry.id;
+                    const isSelected = selectedUserIds.includes(entry.id);
+                    const profilePath = `/dashboard/admin/users/${entry.id}`;
 
                     return (
                       <TableRow
                         key={entry.id}
                         className="border-t border-[var(--admin-outline)] hover:bg-[#fbfcfe]"
                       >
-                        <TableCell>
-                          <button
-                            type="button"
-                            className="flex items-center gap-3 text-left"
-                            onClick={() => router.push(`/dashboard/admin/users/${entry.id}`)}
-                          >
+                        <TableCell onClick={(event) => event.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            role="checkbox"
+                            aria-label={`Select ${entry.firstName} ${entry.lastName}`}
+                            className="admin-row-checkbox"
+                            checked={isSelected}
+                            disabled={isSelf}
+                            onChange={() => toggleUserSelection(entry.id)}
+                          />
+                        </TableCell>
+                        <TableCell
+                          className="admin-table-row-link"
+                          onClick={() => router.push(profilePath)}
+                        >
+                          <div className="flex items-center gap-3 text-left">
                             <span className="admin-avatar-chip">{getInitials(entry)}</span>
                             <span className="font-semibold text-[var(--admin-text-strong)]">
                               {entry.firstName} {entry.lastName}
                               {isSelf ? <span className="ml-2 text-xs font-bold text-[#9aaed0]">(You)</span> : null}
                             </span>
-                          </button>
+                          </div>
                         </TableCell>
-                        <TableCell className="text-[#7890b3]">{entry.email}</TableCell>
-                        <TableCell>
+                        <TableCell className="admin-table-row-link text-[#7890b3]" onClick={() => router.push(profilePath)}>
+                          {entry.email}
+                        </TableCell>
+                        <TableCell className="admin-table-row-link" onClick={() => router.push(profilePath)}>
                           <span className={getRoleTone(primaryRole)}>{primaryRole}</span>
                         </TableCell>
-                        <TableCell>
-                          <span className={getStatusTone(tab)}>
-                            {tab === 'deleted' ? 'Deleted' : tab === 'suspended' ? 'Suspended' : tab === 'pending' ? 'Pending' : 'Active'}
-                          </span>
+                        <TableCell className="admin-table-row-link" onClick={() => router.push(profilePath)}>
+                          <span className={getStatusTone(entry.status)}>{getStatusLabel(entry.status)}</span>
                         </TableCell>
-                        <TableCell className="text-[#9aaed0]">{formatDate(lastLogin)}</TableCell>
-                        <TableCell>
+                        <TableCell className="admin-table-row-link text-[#9aaed0]" onClick={() => router.push(profilePath)}>
+                          {formatDate(lastLogin)}
+                        </TableCell>
+                        <TableCell onClick={(event) => event.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              className="admin-icon-button"
-                              onClick={() => router.push(`/dashboard/admin/users/${entry.id}`)}
-                              title="View user"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-
                             {tab === 'suspended' ? (
-                              <button
-                                type="button"
-                                className="admin-icon-button"
-                                onClick={() => handleReactivate(entry.id)}
-                                title="Reactivate user"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="admin-icon-button"
+                                  onClick={() => handleReactivate(entry.id)}
+                                  title="Reactivate user"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-icon-button"
+                                  onClick={() => handleArchivePrompt(entry)}
+                                  title="Archive user"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
                             ) : tab === 'deleted' ? (
-                              <button
-                                type="button"
-                                className="admin-icon-button"
-                                onClick={() => handleExport(entry.id)}
-                                title="Export user"
-                              >
-                                <Download className="h-4 w-4" />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="admin-icon-button"
+                                  onClick={() => handleExport(entry.id)}
+                                  title="Export user"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-icon-button"
+                                  onClick={() => {
+                                    setShowPurge(entry);
+                                    setPurgeConfirmName('');
+                                  }}
+                                  title="Purge user"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </>
                             ) : !isSelf ? (
                               <button
                                 type="button"
                                 className="admin-icon-button"
-                                onClick={() => setShowSuspend(entry)}
+                                onClick={() => handleSuspendPrompt(entry)}
                                 title="Suspend user"
                               >
                                 <UserX className="h-4 w-4" />
                               </button>
                             ) : null}
-
-                            <button
-                              type="button"
-                              className="admin-icon-button"
-                              onClick={() => {
-                                if (tab === 'deleted') {
-                                  setShowPurge(entry);
-                                  setPurgeConfirmName('');
-                                } else {
-                                  handleSoftDelete(entry);
-                                }
-                              }}
-                              title={tab === 'deleted' ? 'Purge user' : 'Archive user'}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -407,29 +681,6 @@ export default function UserManagementPage() {
           )}
         </Tabs>
       </AdminSectionCard>
-
-      <Dialog open={!!showSuspend} onOpenChange={() => setShowSuspend(null)}>
-        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-amber-700">Suspend User</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to suspend <strong>{showSuspend?.firstName} {showSuspend?.lastName}</strong>?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p>The user will:</p>
-            <ul className="list-disc space-y-1 pl-5">
-              <li>Lose login access</li>
-              <li>Keep their existing data</li>
-              <li>Remain restorable later</li>
-            </ul>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => setShowSuspend(null)}>Cancel</Button>
-            <Button variant="destructive" className="rounded-xl font-black" onClick={handleSuspend}>Suspend</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={!!showPurge} onOpenChange={() => setShowPurge(null)}>
         <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">

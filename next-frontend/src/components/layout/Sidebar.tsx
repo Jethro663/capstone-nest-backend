@@ -19,13 +19,14 @@ import {
   User,
   Bot,
   X,
+  Menu,
   BarChart3,
-  ChevronLeft,
   CircleUserRound,
   History,
   Layers3,
   Library,
   Upload,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
@@ -50,10 +51,10 @@ const studentNav: NavItem[] = [
 ];
 
 const teacherNav: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard/teacher', icon: LayoutDashboard },
   { label: 'My Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
-  { label: 'Nexora Library', href: '/dashboard/library', icon: FolderOpen },
+  { label: 'Nexora Library', href: '/dashboard/teacher/library', icon: FolderOpen },
   { label: 'My Sections', href: '/dashboard/teacher/sections', icon: Users },
+  { label: 'Calendar', href: '/dashboard/teacher/calendar', icon: Activity },
   { label: 'Class Record', href: '/dashboard/teacher/class-record', icon: ClipboardList },
   { label: 'Reports', href: '/dashboard/teacher/reports', icon: BarChart3 },
   { label: 'Interventions', href: '/dashboard/teacher/interventions', icon: Users },
@@ -69,7 +70,8 @@ const adminNav: NavItem[] = [
   { label: 'Users', href: '/dashboard/admin/users', icon: Users },
   { label: 'Sections', href: '/dashboard/admin/sections', icon: Layers3 },
   { label: 'Classes', href: '/dashboard/admin/classes', icon: BookOpen },
-  { label: 'Nexora Library', href: '/dashboard/library', icon: Library },
+  { label: 'Calendar', href: '/dashboard/admin/calendar', icon: CalendarDays },
+  { label: 'Nexora Library', href: '/dashboard/admin/library', icon: Library },
   { label: 'Roster Import', href: '/dashboard/admin/roster-import', icon: Upload },
   { label: 'Reports', href: '/dashboard/admin/reports', icon: BarChart3 },
   { label: 'Evaluations', href: '/dashboard/admin/evaluations', icon: ClipboardCheck },
@@ -101,12 +103,36 @@ function getRoleLabel(role: string | null): string {
   }
 }
 
+function isNavItemActive(pathname: string, href: string): boolean {
+  const isDashboardRoot =
+    href === '/dashboard/admin' ||
+    href === '/dashboard/teacher' ||
+    href === '/dashboard/student';
+
+  if (isDashboardRoot) {
+    return pathname === href;
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
+  isAdminCollapsed?: boolean;
+  onAdminCollapseToggle?: () => void;
+  isTeacherCollapsed?: boolean;
+  onTeacherCollapseToggle?: () => void;
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({
+  open,
+  onClose,
+  isAdminCollapsed = false,
+  onAdminCollapseToggle,
+  isTeacherCollapsed = false,
+  onTeacherCollapseToggle,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { role, user } = useAuth();
@@ -132,8 +158,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-200 md:static md:translate-x-0',
         isStudentRoute && 'student-sidebar',
-        isTeacherRoute && 'teacher-sidebar',
+        isTeacherRoute && 'teacher-sidebar teacher-sidebar-shell',
         isAdminRoute && 'admin-sidebar',
+        isAdminRoute && isAdminCollapsed && 'admin-sidebar--collapsed',
+        isTeacherRoute && isTeacherCollapsed && 'teacher-sidebar--collapsed',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -155,6 +183,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               <p className="admin-sidebar__subtitle">Admin Portal</p>
             </div>
           </div>
+        ) : isTeacherRoute ? (
+          <div className="teacher-sidebar__brand">
+            <div className="teacher-sidebar__logo">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <div className="teacher-sidebar__brand-copy">
+              <h1 className="teacher-sidebar__title">Nexora</h1>
+              <p className="teacher-sidebar__subtitle">Teacher Portal</p>
+            </div>
+          </div>
         ) : (
           <div>
             <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]', isTeacherRoute && 'text-[var(--teacher-text-strong)]')}>Nexora</h1>
@@ -163,14 +201,60 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </p>
           </div>
         )}
-        <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
-          <X className="h-5 w-5" />
-        </button>
+        {isAdminRoute ? (
+          <div className="admin-sidebar__header-actions">
+            <button
+              type="button"
+              className="admin-sidebar__toggle hidden md:inline-flex"
+              onClick={onAdminCollapseToggle}
+              aria-label="Collapse sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="text-[var(--admin-sidebar-text)] md:hidden"
+              onClick={onClose}
+              aria-label="Close sidebar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        ) : isTeacherRoute ? (
+          <div className="admin-sidebar__header-actions">
+            <button
+              type="button"
+              className="admin-sidebar__toggle hidden md:inline-flex"
+              onClick={onTeacherCollapseToggle}
+              aria-label="Collapse sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="text-[var(--teacher-text-muted)] md:hidden"
+              onClick={onClose}
+              aria-label="Close sidebar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
-      <nav className={cn('flex-1 space-y-1 overflow-y-auto p-3', isAdminRoute && 'admin-sidebar__nav')}>
+      <nav
+        className={cn(
+          'flex-1 space-y-1 overflow-y-auto p-3',
+          isAdminRoute && 'admin-sidebar__nav',
+          isTeacherRoute && 'teacher-sidebar__nav',
+        )}
+      >
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/');
+          const active = isNavItemActive(pathname, item.href);
           return (
             <button
               key={item.href}
@@ -184,20 +268,26 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   ? isStudentRoute
                     ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]'
                     : isTeacherRoute
-                      ? 'bg-white/10 text-[var(--teacher-text-strong)]'
+                      ? 'teacher-sidebar__item teacher-sidebar__item--active'
                     : isAdminRoute
                       ? 'admin-sidebar__item admin-sidebar__item--active'
                       : 'bg-primary/10 text-primary'
                   : isStudentRoute
                     ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]'
                     : isTeacherRoute
-                      ? 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-[var(--teacher-text-strong)]'
+                      ? 'teacher-sidebar__item'
                     : isAdminRoute
                       ? 'admin-sidebar__item'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              <item.icon className={cn('h-4 w-4', isAdminRoute && 'admin-sidebar__item-icon')} />
+              <item.icon
+                className={cn(
+                  'h-4 w-4',
+                  isAdminRoute && 'admin-sidebar__item-icon',
+                  isTeacherRoute && 'teacher-sidebar__item-icon',
+                )}
+              />
               {item.label}
             </button>
           );
@@ -207,25 +297,43 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       {isAdminRoute ? (
         <div className="admin-sidebar__footer-wrap">
           <div className="admin-sidebar__section-divider" />
-          <button type="button" className="admin-sidebar__collapse" aria-label="Collapse sidebar">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
           <div className="admin-sidebar__footer">
-          <div className="admin-sidebar__profile">
-            <div className="admin-sidebar__avatar">{initials}</div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">{displayName}</p>
-              <p className="truncate text-xs text-[var(--admin-sidebar-text)]">Admin</p>
+            <div className="admin-sidebar__profile">
+              <div className="admin-sidebar__avatar">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">{displayName}</p>
+                <p className="truncate text-xs text-[var(--admin-sidebar-text)]">Admin</p>
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              className="admin-sidebar__logout"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            className="admin-sidebar__logout"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
+        </div>
+      ) : isTeacherRoute ? (
+        <div className="teacher-sidebar__footer-wrap">
+          <div className="teacher-sidebar__section-divider" />
+          <div className="teacher-sidebar__footer">
+            <div className="teacher-sidebar__profile">
+              <div className="teacher-sidebar__avatar">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">{displayName}</p>
+                <p className="truncate text-xs text-[#8ea0bc]">Teacher</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="teacher-sidebar__logout"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
           </div>
         </div>
       ) : (

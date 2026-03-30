@@ -1,33 +1,49 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { sectionService, type TeacherSectionStudentProfile } from '@/services/section-service';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  BookOpenText,
+  ClipboardCheck,
+  IdCard,
+  UserRound,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { sectionService, type TeacherSectionStudentProfile } from '@/services/section-service';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import './student-profile.css';
 
 function formatDate(value?: string | null) {
-  if (!value) return '—';
+  if (!value) return '--';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString();
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm">{value || '—'}</p>
-    </div>
-  );
+function formatName(firstName?: string | null, lastName?: string | null) {
+  const first = firstName?.trim() ?? '';
+  const last = lastName?.trim() ?? '';
+  return `${first} ${last}`.trim() || '--';
+}
+
+function prettifyStatus(status?: string | null) {
+  if (!status) return '--';
+  return status
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 export default function TeacherSectionStudentProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const sectionId = params.id as string;
   const studentId = params.studentId as string;
 
@@ -59,107 +75,190 @@ export default function TeacherSectionStudentProfilePage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-9 w-28" />
-        <Skeleton className="h-36 rounded-xl" />
-        <Skeleton className="h-60 rounded-xl" />
+        <Skeleton className="h-36 rounded-2xl" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-28 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-52 rounded-2xl" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-56 rounded-2xl" />
+        </div>
       </div>
     );
   }
 
   if (!profileData) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          ← Back
-        </Button>
-        <Card>
-          <CardContent className="p-6 text-muted-foreground">Student profile not found.</CardContent>
-        </Card>
+      <div className="teacher-student-profile__error">
+        <h2>Student profile is unavailable</h2>
+        <Link href={`/dashboard/teacher/sections/${sectionId}/roster`}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Section Roster
+        </Link>
       </div>
     );
   }
 
-  const studentName = `${profileData.student.firstName || ''} ${profileData.student.lastName || ''}`.trim();
+  const studentName = formatName(profileData.student.firstName, profileData.student.lastName);
+  const adviserName = profileData.section?.adviser
+    ? formatName(profileData.section.adviser.firstName, profileData.section.adviser.lastName)
+    : '--';
+  const profile = profileData.student.profile;
 
   return (
-    <div className="space-y-6">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => router.push(`/dashboard/teacher/sections/${sectionId}/roster`)}
-      >
-        ← Back to Section Roster
-      </Button>
+    <div className="teacher-student-profile">
+      <section className="teacher-student-profile__hero teacher-student-profile__reveal">
+        <Link
+          href={`/dashboard/teacher/sections/${sectionId}/roster`}
+          className="teacher-student-profile__back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Section Roster
+        </Link>
+        <div className="teacher-student-profile__hero-row">
+          <div className="teacher-student-profile__hero-avatar">{initials}</div>
+          <div>
+            <h1>{studentName}</h1>
+            <p>{profileData.sectionInfo.name}</p>
+          </div>
+          <div className="teacher-student-profile__status-pill">
+            {prettifyStatus(profileData.student.status)}
+          </div>
+        </div>
+      </section>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 border">
-              {profileData.student.profile?.profilePicture ? (
-                <AvatarImage src={profileData.student.profile.profilePicture} alt={studentName} />
+      <section className="teacher-student-profile__stats teacher-student-profile__reveal teacher-student-profile__reveal--delay-1">
+        <article>
+          <BookOpenText className="h-5 w-5" />
+          <strong>{profileData.sectionInfo.gradeLevel || '--'}</strong>
+          <span>Grade Level</span>
+        </article>
+        <article>
+          <IdCard className="h-5 w-5" />
+          <strong>{profile?.lrn || '--'}</strong>
+          <span>LRN</span>
+        </article>
+        <article>
+          <ClipboardCheck className="h-5 w-5" />
+          <strong>{profileData.sectionInfo.schoolYear || '--'}</strong>
+          <span>School Year</span>
+        </article>
+        <article>
+          <UserRound className="h-5 w-5" />
+          <strong>{profileData.section?.roomNumber || '--'}</strong>
+          <span>Room</span>
+        </article>
+      </section>
+
+      <section className="teacher-student-profile__panel teacher-student-profile__reveal teacher-student-profile__reveal--delay-2">
+        <header>
+          <h2>Student Information</h2>
+        </header>
+        <div className="teacher-student-profile__student-info">
+          <div className="teacher-student-profile__student-profile">
+            <Avatar className="h-18 w-18">
+              {profile?.profilePicture ? (
+                <AvatarImage src={profile.profilePicture} alt={studentName} />
               ) : null}
-              <AvatarFallback className="text-lg font-semibold">{initials}</AvatarFallback>
+              <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl font-bold">{studentName || 'Student Profile'}</h1>
-              <p className="text-sm text-muted-foreground">{profileData.student.email}</p>
-              <p className="text-sm text-muted-foreground">{profileData.sectionInfo.name}</p>
+              <p>{studentName}</p>
+              <small>{profileData.student.email}</small>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="teacher-student-profile__info-grid">
+            <article>
+              <small>First Name</small>
+              <p>{profileData.student.firstName || '--'}</p>
+            </article>
+            <article>
+              <small>Middle Name</small>
+              <p>{profileData.student.middleName || '--'}</p>
+            </article>
+            <article>
+              <small>Last Name</small>
+              <p>{profileData.student.lastName || '--'}</p>
+            </article>
+            <article>
+              <small>Email Address</small>
+              <p>{profileData.student.email || '--'}</p>
+            </article>
+            <article>
+              <small>Date of Birth</small>
+              <p>{formatDate(profile?.dateOfBirth)}</p>
+            </article>
+            <article>
+              <small>Gender</small>
+              <p>{profile?.gender || '--'}</p>
+            </article>
+            <article>
+              <small>Contact Number</small>
+              <p>{profile?.phone || '--'}</p>
+            </article>
+            <article>
+              <small>Address</small>
+              <p>{profile?.address || '--'}</p>
+            </article>
+          </div>
+        </div>
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Student Information</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InfoRow label="First Name" value={profileData.student.firstName} />
-            <InfoRow label="Middle Name" value={profileData.student.middleName} />
-            <InfoRow label="Last Name" value={profileData.student.lastName} />
-            <InfoRow label="LRN" value={profileData.student.profile?.lrn} />
-            <InfoRow label="Grade Level" value={profileData.student.profile?.gradeLevel} />
-            <InfoRow label="Date of Birth" value={formatDate(profileData.student.profile?.dateOfBirth)} />
-            <InfoRow label="Gender" value={profileData.student.profile?.gender} />
-            <InfoRow label="Contact Number" value={profileData.student.profile?.phone} />
-            <div className="sm:col-span-2">
-              <InfoRow label="Address" value={profileData.student.profile?.address} />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="teacher-student-profile__panel-grid teacher-student-profile__reveal teacher-student-profile__reveal--delay-3">
+        <section className="teacher-student-profile__panel">
+          <header>
+            <h2>Section and Adviser</h2>
+          </header>
+          <div className="teacher-student-profile__info-grid">
+            <article>
+              <small>Section</small>
+              <p>{profileData.section?.name || '--'}</p>
+            </article>
+            <article>
+              <small>Grade Level</small>
+              <p>{profileData.section?.gradeLevel || '--'}</p>
+            </article>
+            <article>
+              <small>School Year</small>
+              <p>{profileData.section?.schoolYear || '--'}</p>
+            </article>
+            <article>
+              <small>Room</small>
+              <p>{profileData.section?.roomNumber || '--'}</p>
+            </article>
+            <article>
+              <small>Adviser</small>
+              <p>{adviserName}</p>
+            </article>
+            <article>
+              <small>Adviser Email</small>
+              <p>{profileData.section?.adviser?.email || '--'}</p>
+            </article>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Section & Adviser</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InfoRow label="Section" value={profileData.section?.name} />
-            <InfoRow label="Grade Level" value={profileData.section?.gradeLevel} />
-            <InfoRow label="School Year" value={profileData.section?.schoolYear} />
-            <InfoRow label="Room" value={profileData.section?.roomNumber || '—'} />
-            <InfoRow
-              label="Adviser"
-              value={
-                profileData.section?.adviser
-                  ? `${profileData.section.adviser.firstName || ''} ${profileData.section.adviser.lastName || ''}`.trim()
-                  : '—'
-              }
-            />
-            <InfoRow label="Adviser Email" value={profileData.section?.adviser?.email} />
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Emergency Contact</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <InfoRow label="Guardian Name" value={profileData.student.profile?.familyName} />
-            <InfoRow label="Relationship" value={profileData.student.profile?.familyRelationship} />
-            <InfoRow label="Contact Number" value={profileData.student.profile?.familyContact} />
-          </CardContent>
-        </Card>
+        <section className="teacher-student-profile__panel">
+          <header>
+            <h2>Emergency Contact</h2>
+          </header>
+          <div className="teacher-student-profile__info-grid">
+            <article>
+              <small>Guardian Name</small>
+              <p>{profile?.familyName || '--'}</p>
+            </article>
+            <article>
+              <small>Relationship</small>
+              <p>{profile?.familyRelationship || '--'}</p>
+            </article>
+            <article>
+              <small>Contact Number</small>
+              <p>{profile?.familyContact || '--'}</p>
+            </article>
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -3,13 +3,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, ChevronRight, Clock3, FileText, FolderOpen, Megaphone, Sparkles, Target } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronRight, Clock3, Download, FileText, FolderOpen, Megaphone, Sparkles, Target } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
+import { moduleService } from '@/services/module-service';
 import { fileService } from '@/services/file-service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,7 @@ import type { ClassItem } from '@/types/class';
 import type { Lesson, LessonCompletion } from '@/types/lesson';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
-import type { UploadedFile } from '@/types/file';
+import type { ClassModule } from '@/types/module';
 
 const LESSONS_PAGE_SIZE = 6;
 const ASSESSMENTS_PAGE_SIZE = 6;
@@ -49,11 +50,10 @@ export default function StudentClassDetailPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [attempts, setAttempts] = useState<Record<string, AssessmentAttempt[]>>({});
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [modules, setModules] = useState<UploadedFile[]>([]);
+  const [modules, setModules] = useState<ClassModule[]>([]);
   const [modulesLoading, setModulesLoading] = useState(false);
-  const [modulesTotalPages, setModulesTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>('lessons');
+  const [activeTab, setActiveTab] = useState<TabKey>('modules');
   const [lessonFilter, setLessonFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [lessonSort, setLessonSort] = useState<'asc' | 'desc'>('asc');
   const [lessonPage, setLessonPage] = useState(1);
@@ -105,21 +105,30 @@ export default function StudentClassDetailPage() {
   const fetchModules = useCallback(async () => {
     try {
       setModulesLoading(true);
-      const response = await fileService.getAll({
-        classId,
-        search: moduleSearch || undefined,
-        page: modulePage,
-        limit: MODULES_PAGE_SIZE,
-      });
+      const response = await moduleService.getByClass(classId);
       setModules(response.data || []);
-      setModulesTotalPages(response.totalPages || 1);
     } catch {
       setModules([]);
-      setModulesTotalPages(1);
     } finally {
       setModulesLoading(false);
     }
-  }, [classId, modulePage, moduleSearch]);
+  }, [classId]);
+
+  const handleModuleFileDownload = useCallback(async (fileId: string, filename: string) => {
+    try {
+      const blob = await fileService.download(fileId);
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename || 'resource';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch {
+      // silent fail
+    }
+  }, []);
 
   useEffect(() => {
     void fetchData();
@@ -142,6 +151,26 @@ export default function StudentClassDetailPage() {
   useEffect(() => {
     setModulePage(1);
   }, [moduleSearch]);
+
+  const filteredModules = useMemo(() => {
+    const needle = moduleSearch.trim().toLowerCase();
+    if (!needle) return modules;
+
+    return modules.filter((entry) => {
+      const titleMatch = entry.title.toLowerCase().includes(needle);
+      const descriptionMatch = (entry.description || '').toLowerCase().includes(needle);
+      return titleMatch || descriptionMatch;
+    });
+  }, [moduleSearch, modules]);
+
+  const modulePageItems = filteredModules.slice(
+    (modulePage - 1) * MODULES_PAGE_SIZE,
+    modulePage * MODULES_PAGE_SIZE,
+  );
+  const modulesTotalPages = Math.max(
+    Math.ceil(filteredModules.length / MODULES_PAGE_SIZE),
+    1,
+  );
 
   const filteredLessons = useMemo(() => {
     const filtered = lessons.filter((lesson) => {
@@ -541,7 +570,7 @@ export default function StudentClassDetailPage() {
         <div className="space-y-4">
           <StudentSectionHeader
             title="Modules"
-            subtitle="Class-scoped uploaded files from your teacher"
+            subtitle="Structured class modules from your teacher"
             action={(
               <div className="w-full max-w-sm">
                 <Input
@@ -558,34 +587,150 @@ export default function StudentClassDetailPage() {
               <Skeleton className="h-24 rounded-3xl" />
               <Skeleton className="h-24 rounded-3xl" />
             </div>
-          ) : modules.length === 0 ? (
+          ) : filteredModules.length === 0 ? (
             <StudentEmptyState
-              title="No modules found"
-              description="Your teacher has not uploaded class files for this module view yet."
+              title={modules.length === 0 ? 'No modules found' : 'No modules match your search'}
+              description={
+                modules.length === 0
+                  ? 'Your teacher has not published class modules yet.'
+                  : 'Try another search term to find a module.'
+              }
               icon={<FolderOpen className="h-5 w-5" />}
             />
           ) : (
             <div className="space-y-3">
-              {modules.map((moduleFile) => (
-                <StudentActionCard key={moduleFile.id}>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-[var(--student-text-strong)]">{moduleFile.originalName}</p>
-                      <p className="text-xs student-muted-text">
-                        {(moduleFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB â€¢ {moduleFile.mimeType}
-                      </p>
+              {modulePageItems.map((moduleEntry) => {
+                const totalItems = moduleEntry.sections.reduce(
+                  (sum, section) => sum + section.items.length,
+                  0,
+                );
+
+                return (
+                  <StudentActionCard key={moduleEntry.id}>
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-[var(--student-text-strong)]">{moduleEntry.title}</p>
+                          <p className="text-xs student-muted-text">
+                            {moduleEntry.description || 'No description yet.'}
+                          </p>
+                        </div>
+                        <StudentStatusChip tone={moduleEntry.isLocked ? 'warning' : 'success'}>
+                          {moduleEntry.isLocked ? 'Locked' : 'Open'}
+                        </StudentStatusChip>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                        <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
+                          {moduleEntry.sections.length} section(s)
+                        </span>
+                        <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
+                          {totalItems} item(s)
+                        </span>
+                      </div>
+
+                      {moduleEntry.isLocked ? (
+                        <p className="text-sm student-muted-text">
+                          This module is currently locked by your teacher.
+                        </p>
+                      ) : moduleEntry.sections.length === 0 ? (
+                        <p className="text-sm student-muted-text">No sections available yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {moduleEntry.sections.map((section) => (
+                            <div
+                              key={section.id}
+                              className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-[var(--student-text-strong)]">
+                                  {section.title}
+                                </p>
+                                <span className="rounded-full border border-[var(--student-outline)] bg-white px-2 py-0.5 text-[11px] font-semibold student-muted-text">
+                                  {section.items.length} item(s)
+                                </span>
+                              </div>
+                              {section.description ? (
+                                <p className="mt-1 text-xs student-muted-text">{section.description}</p>
+                              ) : null}
+                              {section.items.length === 0 ? (
+                                <p className="mt-2 text-xs student-muted-text">No items in this section.</p>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {section.items.map((item) => {
+                                    const itemTitle =
+                                      item.itemType === 'lesson'
+                                        ? item.lesson?.title || 'Untitled lesson'
+                                        : item.itemType === 'assessment'
+                                          ? item.assessment?.title || 'Untitled assessment'
+                                          : item.file?.originalName || 'File resource';
+
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--student-outline)] bg-white px-3 py-2"
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium text-[var(--student-text-strong)]">
+                                            {itemTitle}
+                                          </p>
+                                          <p className="text-[11px] uppercase tracking-[0.08em] student-muted-text">
+                                            {item.itemType}
+                                            {item.isRequired ? ' - required' : ''}
+                                          </p>
+                                        </div>
+                                        <div className="shrink-0">
+                                          {item.itemType === 'lesson' && item.lessonId ? (
+                                            <Link
+                                              href={`/dashboard/student/lessons/${item.lessonId}?classId=${classId}`}
+                                              className="inline-flex items-center gap-1 rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2 py-1 text-xs font-semibold text-[var(--student-text-strong)]"
+                                            >
+                                              Open
+                                              <ChevronRight className="h-3 w-3" />
+                                            </Link>
+                                          ) : item.itemType === 'assessment' && item.assessmentId ? (
+                                            <Link
+                                              href={`/dashboard/student/assessments/${item.assessmentId}?classId=${classId}`}
+                                              className="inline-flex items-center gap-1 rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2 py-1 text-xs font-semibold text-[var(--student-text-strong)]"
+                                            >
+                                              Open
+                                              <ChevronRight className="h-3 w-3" />
+                                            </Link>
+                                          ) : item.itemType === 'file' && item.fileId ? (
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="outline"
+                                              className="student-button-outline h-8 px-2 text-xs"
+                                              onClick={() =>
+                                                void handleModuleFileDownload(
+                                                  item.fileId as string,
+                                                  item.file?.originalName || 'resource',
+                                                )
+                                              }
+                                            >
+                                              <Download className="mr-1 h-3 w-3" />
+                                              Download
+                                            </Button>
+                                          ) : (
+                                            <span className="rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2 py-1 text-xs font-semibold student-muted-text">
+                                              Unavailable
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <Button type="button" className="student-button-outline" onClick={async () => {
-                      const blob = await fileService.download(moduleFile.id);
-                      const objectUrl = window.URL.createObjectURL(blob);
-                      window.open(objectUrl, '_blank', 'noopener,noreferrer');
-                      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000);
-                    }}>
-                      Open File
-                    </Button>
-                  </div>
-                </StudentActionCard>
-              ))}
+                  </StudentActionCard>
+                );
+              })}
             </div>
           )}
 

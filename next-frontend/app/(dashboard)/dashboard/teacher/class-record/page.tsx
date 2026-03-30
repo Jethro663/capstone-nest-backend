@@ -1,56 +1,66 @@
 ﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
-  BookMarked,
-  ClipboardCheck,
-  Layers3,
-  Sparkles,
-  Users,
+  Download,
+  FileSpreadsheet,
+  RefreshCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
-import {
-  TeacherPageShell,
-  TeacherSectionCard,
-  TeacherStatCard,
-} from '@/components/teacher/TeacherPageShell';
 import { dashboardService } from '@/services/dashboard-service';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import type { ClassItem } from '@/types/class';
- 
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-      ?.message || fallback
-  );
-}
+import type { GradingPeriod } from '@/utils/constants';
+import { cn } from '@/utils/cn';
 
 export default function ClassRecordPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedClassId = searchParams.get('classId') || '';
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState(preselectedClassId);
   const [loading, setLoading] = useState(true);
- 
 
   const classRecordState = useTeacherClassRecord(selectedClassId || undefined);
   const selectedClass = useMemo(
     () => classes.find((classItem) => classItem.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
+  const selectedRecord = classRecordState.selectedRecord;
+  const spreadsheet = classRecordState.spreadsheet;
 
-  const workbookCount = classRecordState.classRecords.length;
-  const learnerCount = classRecordState.spreadsheet?.students.length ?? 0;
-  const selectedQuarter = classRecordState.selectedRecord?.gradingPeriod ?? 'No quarter selected';
-  const statusLabel = classRecordState.selectedRecord?.status
-    ? `${classRecordState.selectedRecord.status[0].toUpperCase()}${classRecordState.selectedRecord.status.slice(1)}`
+  const sectionLabel = selectedClass
+    ? `${selectedClass.section?.gradeLevel ? `Grade ${selectedClass.section.gradeLevel}` : 'Grade level not set'} - ${selectedClass.section?.name || 'Section not set'}`
+    : 'Grade and section will appear here';
+
+  const quarterMap: Partial<Record<GradingPeriod, (typeof classRecordState.classRecords)[number]>> = {};
+  for (const record of classRecordState.classRecords) {
+    quarterMap[record.gradingPeriod] = record;
+  }
+
+  const categoryBadges = useMemo(() => {
+    if (!spreadsheet) return [];
+
+    const tones = [
+      'bg-sky-100 text-sky-700',
+      'bg-amber-100 text-amber-700',
+      'bg-violet-100 text-violet-700',
+    ];
+
+    return spreadsheet.categories.slice(0, 3).map((category, index) => ({
+      key: category.id,
+      text: `${category.name}: ${Math.round(category.weight)}%`,
+      tone: tones[index] || 'bg-slate-100 text-slate-700',
+    }));
+  }, [spreadsheet]);
+
+  const selectedQuarter = selectedRecord?.gradingPeriod || 'No quarter selected';
+  const statusLabel = selectedRecord?.status
+    ? `${selectedRecord.status[0].toUpperCase()}${selectedRecord.status.slice(1)}`
     : 'Waiting';
 
   useEffect(() => {
@@ -68,132 +78,166 @@ export default function ClassRecordPage() {
     void fetchClasses();
   }, []);
 
- 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-32 rounded-[1.5rem]" />
-          ))}
-        </div>
-        <Skeleton className="h-48 rounded-[1.7rem]" />
+      <div className="space-y-4">
+        <Skeleton className="h-32 rounded-2xl" />
+        <Skeleton className="h-20 rounded-xl" />
+        <Skeleton className="h-[30rem] rounded-2xl" />
       </div>
     );
   }
 
+  const handleQuarterSelect = async (quarter: GradingPeriod) => {
+    const quarterRecord = quarterMap[quarter];
+    if (quarterRecord) {
+      classRecordState.setSelectedRecordId(quarterRecord.id);
+      return;
+    }
+
+    await classRecordState.generateQuarter(quarter);
+  };
+
   return (
-    <TeacherPageShell
-      className="teacher-class-record-page"
-      badge="Teacher Class Record"
-      title="Class Record Workspace"
-      description="The workbook already handles the grading work well, so this landing area now helps you orient faster, pick the right class, and step into the quarter record with less visual friction."
-      actions={(
-        <>
-          <Button
-            variant="outline"
-            className="teacher-button-outline rounded-xl px-4 font-black"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <div className="teacher-dashboard-chip">
-            <Sparkles className="h-4 w-4" />
-            DepEd-inspired workbook flow
-          </div>
-        </>
-      )}
-      stats={(
-        <>
-          <TeacherStatCard
-            label="Assigned Classes"
-            value={classes.length}
-            caption="Available for workbook selection"
-            icon={Layers3}
-            accent="sky"
-          />
-          <TeacherStatCard
-            label="Workbooks"
-            value={workbookCount}
-            caption={selectedClass ? `For ${selectedClass.subjectName}` : 'Choose a class to load records'}
-            icon={BookMarked}
-            accent="teal"
-          />
-          <TeacherStatCard
-            label="Selected Quarter"
-            value={selectedQuarter}
-            caption={`Status: ${statusLabel}`}
-            icon={ClipboardCheck}
-            accent="amber"
-          />
-          <TeacherStatCard
-            label="Learners"
-            value={learnerCount}
-            caption={selectedClass ? 'Shown in the open workbook' : 'Will appear after class selection'}
-            icon={Users}
-            accent="rose"
-          />
-        </>
-      )}
-    >
-      <TeacherSectionCard
-        title="Open a Class Workbook"
-        description="Pick a class first, then continue directly into its quarter workbook, live scores, and grading controls."
+    <div className="teacher-class-record-page space-y-4 pb-4">
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
+        className="overflow-hidden rounded-2xl border border-[#1d345f] bg-[#12254a] px-5 py-6 text-white shadow-[0_16px_34px_-28px_rgba(15,23,42,0.66)] md:px-7"
       >
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-2">
-            <label className="text-xs font-black uppercase tracking-[0.24em] text-[var(--teacher-text-muted)]">
-              Select Class
-            </label>
-            <select
-              value={selectedClassId}
-              onChange={(event) => setSelectedClassId(event.target.value)}
-              className="teacher-select min-h-[3.25rem] w-full text-sm font-semibold"
-            >
-              <option value="">Choose a class record workbook...</option>
-              {classes.map((classItem) => (
-                <option key={classItem.id} value={classItem.id}>
-                  {classItem.subjectName} - {classItem.section?.name}
-                </option>
-              ))}
-            </select>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="mt-0.5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ef233c]">
+              <FileSpreadsheet className="h-6 w-6" />
+            </div>
+            <div className="space-y-0.5">
+              <h1 className="text-[2.05rem] font-bold leading-tight tracking-tight">Class Record</h1>
+              <p className="text-base text-slate-200/90">
+                Grading workbook for your classes
+              </p>
+            </div>
           </div>
 
-          <div className="teacher-dashboard-mini-panel border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.92),rgba(30,41,59,0.88))] shadow-[0_24px_54px_-36px_rgba(2,6,23,0.72)]">
-            <div className="teacher-dashboard-mini-panel__icon bg-white/6 text-white">
-              <BookMarked className="h-4 w-4" />
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
-                Workbook Focus
-              </p>
-              <p className="text-sm font-bold text-[var(--teacher-text-strong)]">
-                {selectedClass
-                  ? `${selectedClass.subjectName} â€¢ ${selectedClass.section?.name || 'Section not set'}`
-                  : 'Choose a class to open its quarter record'}
-              </p>
-              <p className="text-sm text-[var(--teacher-text-muted)]">
-                {selectedClassId
-                  ? 'Once selected, the workbook below stays exactly the same and opens with its current record state.'
-                  : 'This landing section is only a visual refresh. The actual class record workbook behavior remains unchanged.'}
-              </p>
-            </div>
+          <Button
+            type="button"
+            onClick={() => void classRecordState.exportSpreadsheet()}
+            disabled={!selectedRecord || !spreadsheet}
+            className="h-10 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white shadow-none transition-colors hover:bg-white/20"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </div>
+      </motion.section>
+
+      <motion.section
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, delay: 0.03, ease: 'easeOut' }}
+        className="rounded-xl border border-[#dce4f0] bg-[#f3f6fb] px-4 py-4 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.35)] md:px-6"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedClassId}
+            onChange={(event) => setSelectedClassId(event.target.value)}
+            className="h-11 min-w-[17rem] max-w-full rounded-xl border border-[#cfd9e8] bg-white px-3 text-sm font-medium text-slate-700 outline-none transition-shadow focus:border-[#8ea4c7] focus:shadow-[0_0_0_3px_rgba(59,130,246,0.14)]"
+          >
+            <option value="">Choose a class record workbook...</option>
+            {classes.map((classItem) => (
+              <option key={classItem.id} value={classItem.id}>
+                {classItem.subjectName} - {classItem.section?.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="inline-flex items-center rounded-xl border border-[#d6deeb] bg-[#e8edf5] p-1">
+            {classRecordState.quarters.map((quarter) => {
+              const quarterRecord = quarterMap[quarter];
+              const isActive = selectedRecord?.gradingPeriod === quarter;
+              const isLoadingQuarter = classRecordState.generating && !quarterRecord;
+
+              return (
+                <button
+                  key={quarter}
+                  type="button"
+                  onClick={() => void handleQuarterSelect(quarter)}
+                  disabled={isLoadingQuarter}
+                  className={cn(
+                    'min-w-12 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors',
+                    isActive
+                      ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.12)]'
+                      : 'text-[#617089] hover:text-slate-800',
+                  )}
+                >
+                  {isLoadingQuarter ? '...' : quarter}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void classRecordState.refresh()}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#cfd9e8] bg-white px-3 text-sm font-semibold text-[#4a617f] transition-colors hover:bg-slate-50"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Refresh
+          </button>
+        </div>
+      </motion.section>
+
+      <motion.section
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, delay: 0.06, ease: 'easeOut' }}
+        className="rounded-2xl border border-[#dce5f2] bg-white p-4 shadow-[0_14px_30px_-24px_rgba(15,23,42,0.38)] md:p-6"
+      >
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[2.05rem] font-semibold tracking-tight text-[#0d2345]">
+              {selectedClass?.subjectName || 'Class workbook'}
+            </h2>
+            <p className="mt-1 text-[1.45rem] font-normal text-[#7388a8]">
+              {sectionLabel}
+              {selectedQuarter !== 'No quarter selected' ? ` · ${selectedQuarter}` : ''}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {categoryBadges.length ? (
+              categoryBadges.map((badge) => (
+                <span
+                  key={badge.key}
+                  className={cn(
+                    'rounded-full px-4 py-1.5 text-sm font-medium',
+                    badge.tone,
+                  )}
+                >
+                  {badge.text}
+                </span>
+              ))
+            ) : (
+              <span className="rounded-full bg-slate-100 px-4 py-1.5 text-sm font-medium text-slate-600">
+                Status: {statusLabel}
+              </span>
+            )}
           </div>
         </div>
-      </TeacherSectionCard>
 
-      <TeacherClassRecordWorkbook
-        state={classRecordState}
-        emptyMessage={
-          selectedClassId
-            ? 'No class record exists for this class yet. Create a quarter workbook to begin.'
-            : 'Choose a class first to open its workbook.'
-        }
-      />
-    </TeacherPageShell>
- 
+        <TeacherClassRecordWorkbook
+          state={classRecordState}
+          className={cn(
+            '[&>div:first-child]:hidden',
+            selectedRecord && '[&>div:nth-child(2)]:hidden',
+          )}
+          emptyMessage={
+            selectedClassId
+              ? 'No class record exists for this class yet. Create a quarter workbook to begin.'
+              : 'Choose a class first to open its workbook.'
+          }
+        />
+      </motion.section>
+    </div>
   );
 }
-

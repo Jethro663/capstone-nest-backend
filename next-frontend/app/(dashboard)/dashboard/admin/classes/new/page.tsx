@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, BookOpenCheck, CalendarRange, School2 } from 'lucide-react';
+import { ArrowLeft, School2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
-import {
-  AdminPageShell,
-  AdminSectionCard,
-  AdminStatCard,
-} from '@/components/admin/AdminPageShell';
+import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
@@ -82,11 +78,8 @@ export default function CreateClassPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-56 rounded-[1.9rem]" />
-        <div className="grid gap-4 md:grid-cols-3">
-          {[1, 2, 3].map((item) => <Skeleton key={item} className="h-32 rounded-[1.5rem]" />)}
-        </div>
-        <Skeleton className="h-[38rem] rounded-[1.7rem]" />
+        <Skeleton className="h-28 rounded-[1.25rem]" />
+        <Skeleton className="h-[34rem] rounded-[1.35rem]" />
       </div>
     );
   }
@@ -95,7 +88,9 @@ export default function CreateClassPage() {
     <AdminPageShell
       badge="Admin Classes"
       title="Create Class"
-      description="Launch a new class from a more polished setup flow that keeps assignment, scheduling, and school-year details easy to review."
+      description="Create a class from a tighter setup flow with the assignment and schedule in one clear workspace."
+      icon={School2}
+      variant="compact-form"
       actions={(
         <Button
           variant="outline"
@@ -106,17 +101,27 @@ export default function CreateClassPage() {
           Back to Classes
         </Button>
       )}
-      stats={(
+      meta={(
         <>
-          <AdminStatCard label="Sections Ready" value={sections.length} caption="Available section assignments" icon={School2} accent="emerald" />
-          <AdminStatCard label="Teachers Ready" value={teachers.length} caption="Eligible teacher assignments" icon={BookOpenCheck} accent="sky" />
-          <AdminStatCard label="School Year" value={schoolYears[0] || '—'} caption="Default academic cycle for this class" icon={CalendarRange} accent="amber" />
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Sections</span>
+            {sections.length} available
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">Teachers</span>
+            {teachers.length} ready
+          </div>
+          <div className="admin-compact-meta__item">
+            <span className="admin-compact-meta__label">School Year</span>
+            {schoolYears[0] || '-'}
+          </div>
         </>
       )}
     >
       <AdminSectionCard
         title="Class Details"
-        description="The create flow keeps the same logic, now presented inside a stronger admin workspace shell."
+        description="Set the subject, assignment, and timetable without the oversized dashboard framing."
+        density="compact"
       >
         <ClassForm
           initialValues={initialValues}

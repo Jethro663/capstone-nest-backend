@@ -9,6 +9,7 @@ import type {
   StudentMasterlistItem,
   StudentMasterlistQuery,
   TeacherClassStudentProfile,
+  TeacherClassStudentOverview,
 } from '@/types/class';
 import type { User } from '@/types/user';
 
@@ -21,6 +22,27 @@ export interface ClassesQuery {
   search?: string;
   page?: number;
   limit?: number;
+}
+
+export type BulkClassLifecycleAction = 'archive' | 'restore' | 'purge';
+
+export interface BulkClassLifecycleDto {
+  action: BulkClassLifecycleAction;
+  classIds: string[];
+}
+
+export interface BulkClassLifecycleResponse {
+  success: boolean;
+  message: string;
+  data: {
+    action: BulkClassLifecycleAction;
+    requested: number;
+    succeeded: string[];
+    failed: Array<{
+      classId: string;
+      reason: string;
+    }>;
+  };
 }
 
 export const classService = {
@@ -128,6 +150,11 @@ export const classService = {
     return data;
   },
 
+  async bulkLifecycle(dto: BulkClassLifecycleDto): Promise<BulkClassLifecycleResponse> {
+    const { data } = await api.post('/classes/bulk/lifecycle', dto);
+    return data;
+  },
+
   async hide(id: string): Promise<{ success: boolean; message: string; data: { classId: string; isHidden: boolean } }> {
     const { data } = await api.patch(`/classes/${id}/hide`);
     return data;
@@ -182,6 +209,17 @@ export const classService = {
   ): Promise<{ success: boolean; message: string; data: TeacherClassStudentProfile }> {
     const { data } = await api.get(
       `/classes/${classId}/students/${studentId}/profile`,
+    );
+    return data;
+  },
+
+  /** GET /classes/:classId/students/:studentId/overview — Admin, Teacher */
+  async getStudentOverviewForClass(
+    classId: string,
+    studentId: string,
+  ): Promise<{ success: boolean; message: string; data: TeacherClassStudentOverview }> {
+    const { data } = await api.get(
+      `/classes/${classId}/students/${studentId}/overview`,
     );
     return data;
   },
