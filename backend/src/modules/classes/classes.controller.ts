@@ -438,6 +438,31 @@ export class ClassesController {
   }
 
   /**
+   * Get a student overview in class context.
+   * Teacher (owner of class) and Admin can access.
+   */
+  @Get(':classId/students/:studentId/overview')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getStudentOverviewForClass(
+    @Param('classId') classId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.classesService.getStudentOverviewForClass(
+      classId,
+      studentId,
+      user?.userId,
+      user?.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Student overview retrieved successfully',
+      data,
+    };
+  }
+
+  /**
    * Get paginated student masterlist for class enrollment.
    * Teacher (owner of class) and Admin can access.
    */

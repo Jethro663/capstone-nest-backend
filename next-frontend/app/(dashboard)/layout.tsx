@@ -7,7 +7,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { StudentTutorLauncher } from '@/components/student/StudentTutorLauncher';
 import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemptNotifier';
-import { Loader2 } from 'lucide-react';
+import { AppOrbitLoader } from '@/components/shared/AppOrbitLoader';
+import { resolveLoaderVariant } from '@/utils/loader-variant';
 
 const ADMIN_SIDEBAR_STORAGE_KEY = 'nexora.adminSidebarCollapsed';
 const TEACHER_SIDEBAR_STORAGE_KEY = 'nexora.teacherSidebarCollapsed';
@@ -20,6 +21,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const shouldRedirect = !loading && (!isAuthenticated || isProfileIncomplete);
+  const loaderVariant = resolveLoaderVariant(pathname);
   const isStudentRoute = pathname.startsWith('/dashboard/student');
   const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
   const isAdminRoute = pathname.startsWith('/dashboard') && !isStudentRoute && !isTeacherRoute;
@@ -84,13 +86,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     setSidebarOpen((open) => !open);
   };
 
-  // Show a loading spinner while auth state is being resolved
   if (loading || shouldRedirect) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <AppOrbitLoader variant={loaderVariant} />;
   }
 
   return (

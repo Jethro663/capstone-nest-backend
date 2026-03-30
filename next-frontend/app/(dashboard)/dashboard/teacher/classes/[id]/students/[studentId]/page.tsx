@@ -1,165 +1,318 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { classService } from '@/services/class-service';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { TeacherClassStudentProfile } from '@/types/class';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  BookOpenText,
+  ClipboardCheck,
+  IdCard,
+  LineChart,
+  Medal,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { classService } from '@/services/class-service';
+import type {
+  TeacherClassStudentOverview,
+  TeacherStudentAssessmentHistoryItem,
+} from '@/types/class';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import './student-overview.css';
 
-function formatDate(value?: string | null) {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString();
+function formatFullName(data: TeacherClassStudentOverview | null) {
+  const first = data?.student.firstName?.trim() ?? '';
+  const last = data?.student.lastName?.trim() ?? '';
+  return `${first} ${last}`.trim() || 'Student';
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+function formatInitials(data: TeacherClassStudentOverview | null) {
+  const first = data?.student.firstName?.trim().charAt(0) ?? '';
+  const last = data?.student.lastName?.trim().charAt(0) ?? '';
+  return `${first}${last}`.toUpperCase() || 'ST';
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '--';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '--';
+  return parsed.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function toPercent(value: number | null | undefined) {
+  if (typeof value !== 'number') return '--';
+  return `${value.toFixed(1)}%`;
+}
+
+function prettifyStatus(status?: string | null) {
+  if (!status) return '--';
+  return status
+    .toLowerCase()
+    .split('_')
+    .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+    .join(' ');
+}
+
+function HistorySection({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: TeacherStudentAssessmentHistoryItem[];
+  tone: 'finished' | 'late' | 'pending';
+}) {
   return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="text-sm">{value || '—'}</p>
-    </div>
+    <section className="teacher-student-overview__history-group">
+      <header>
+        <h3>{title}</h3>
+        <span>{items.length}</span>
+      </header>
+      {items.length === 0 ? (
+        <div className="teacher-student-overview__empty-row">No records.</div>
+      ) : (
+        <div className="teacher-student-overview__history-list">
+          {items.map((item) => (
+            <article
+              key={`${tone}-${item.assessmentId}`}
+              className="teacher-student-overview__history-item"
+            >
+              <div>
+                <p>{item.title}</p>
+                <small>
+                  {item.type.replace(/_/g, ' ')} · Due {formatDate(item.dueDate)}
+                </small>
+              </div>
+              <div className="teacher-student-overview__history-meta">
+                <span data-tone={tone}>{item.statusLabel}</span>
+                <small>
+                  {item.submittedAt
+                    ? `Submitted ${formatDate(item.submittedAt)}`
+                    : 'Not submitted'}
+                </small>
+                <strong>
+                  {item.score !== null && item.score !== undefined
+                    ? `${item.score}/${item.totalPoints ?? '--'}`
+                    : '--'}
+                </strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
 export default function TeacherStudentProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const classId = params.id as string;
   const studentId = params.studentId as string;
 
   const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState<TeacherClassStudentProfile | null>(null);
+  const [overview, setOverview] = useState<TeacherClassStudentOverview | null>(
+    null,
+  );
 
-  const fetchData = useCallback(async () => {
+  const loadOverview = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await classService.getStudentProfileForClass(classId, studentId);
-      setProfileData(res.data);
+      const response = await classService.getStudentOverviewForClass(
+        classId,
+        studentId,
+      );
+      setOverview(response.data);
     } catch {
-      toast.error('Failed to load student profile');
+      toast.error('Failed to load student overview');
+      setOverview(null);
     } finally {
       setLoading(false);
     }
   }, [classId, studentId]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    void loadOverview();
+  }, [loadOverview]);
 
-  const initials = useMemo(() => {
-    const first = profileData?.student.firstName?.[0] ?? '';
-    const last = profileData?.student.lastName?.[0] ?? '';
-    return `${first}${last}`.toUpperCase() || 'S';
-  }, [profileData]);
+  const fullName = useMemo(() => formatFullName(overview), [overview]);
+  const initials = useMemo(() => formatInitials(overview), [overview]);
+  const profile = overview?.student.profile;
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-9 w-28" />
-        <Skeleton className="h-36 rounded-xl" />
-        <Skeleton className="h-60 rounded-xl" />
+        <Skeleton className="h-36 rounded-2xl" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-28 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-44 rounded-2xl" />
+        <Skeleton className="h-60 rounded-2xl" />
       </div>
     );
   }
 
-  if (!profileData) {
+  if (!overview) {
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          ← Back
-        </Button>
-        <Card>
-          <CardContent className="p-6 text-muted-foreground">Student profile not found.</CardContent>
-        </Card>
+      <div className="teacher-student-overview__error">
+        <h2>Student overview is unavailable</h2>
+        <Link href={`/dashboard/teacher/classes/${classId}?view=students`}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Students
+        </Link>
       </div>
     );
   }
-
-  const studentName = `${profileData.student.firstName || ''} ${profileData.student.lastName || ''}`.trim();
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)}>
-        ← Back to Class
-      </Button>
+    <div className="teacher-student-overview">
+      <section className="teacher-student-overview__hero">
+        <Link
+          href={`/dashboard/teacher/classes/${classId}?view=students`}
+          className="teacher-student-overview__back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Class
+        </Link>
+        <div className="teacher-student-overview__hero-row">
+          <div className="teacher-student-overview__hero-avatar">{initials}</div>
+          <div>
+            <h1>{fullName}</h1>
+            <p>{overview.classInfo.sectionLabel}</p>
+          </div>
+          <div className="teacher-student-overview__status-pill">
+            {prettifyStatus(overview.student.status)}
+          </div>
+        </div>
+      </section>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 border">
-              {profileData.student.profile?.profilePicture ? (
-                <AvatarImage src={profileData.student.profile.profilePicture} alt={studentName} />
+      <section className="teacher-student-overview__stats">
+        <article>
+          <LineChart className="h-5 w-5" />
+          <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
+          <span>Current Grade</span>
+        </article>
+        <article>
+          <BookOpenText className="h-5 w-5" />
+          <strong>{overview.classInfo.sectionLabel.replace(/^Grade\s+\d+\s+-\s+/i, '')}</strong>
+          <span>Section</span>
+        </article>
+        <article>
+          <IdCard className="h-5 w-5" />
+          <strong>{profile?.lrn || '--'}</strong>
+          <span>LRN</span>
+        </article>
+        <article>
+          <ClipboardCheck className="h-5 w-5" />
+          <strong>{prettifyStatus(overview.student.status)}</strong>
+          <span>Status</span>
+        </article>
+      </section>
+
+      <section className="teacher-student-overview__panel">
+        <header>
+          <h2>Student Information</h2>
+        </header>
+        <div className="teacher-student-overview__student-info">
+          <div className="teacher-student-overview__student-profile">
+            <Avatar className="h-18 w-18">
+              {profile?.profilePicture ? (
+                <AvatarImage src={profile.profilePicture} alt={fullName} />
               ) : null}
-              <AvatarFallback className="text-lg font-semibold">{initials}</AvatarFallback>
+              <AvatarFallback>{initials}</AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-2xl font-bold">{studentName || 'Student Profile'}</h1>
-              <p className="text-sm text-muted-foreground">{profileData.student.email}</p>
-              <p className="text-sm text-muted-foreground">
-                {profileData.classInfo.subjectName} ({profileData.classInfo.subjectCode})
-              </p>
+              <p>{fullName}</p>
+              <small>{overview.student.email}</small>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <div className="teacher-student-overview__info-grid">
+            <article>
+              <small>Full Name</small>
+              <p>{fullName}</p>
+            </article>
+            <article>
+              <small>Email Address</small>
+              <p>{overview.student.email}</p>
+            </article>
+            <article>
+              <small>LRN</small>
+              <p>{profile?.lrn || '--'}</p>
+            </article>
+            <article>
+              <small>Section</small>
+              <p>{overview.classInfo.sectionLabel}</p>
+            </article>
+          </div>
+        </div>
+      </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Student Information</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InfoRow label="First Name" value={profileData.student.firstName} />
-            <InfoRow label="Middle Name" value={profileData.student.middleName} />
-            <InfoRow label="Last Name" value={profileData.student.lastName} />
-            <InfoRow label="LRN" value={profileData.student.profile?.lrn} />
-            <InfoRow label="Grade Level" value={profileData.student.profile?.gradeLevel} />
-            <InfoRow label="Date of Birth" value={formatDate(profileData.student.profile?.dateOfBirth)} />
-            <InfoRow label="Gender" value={profileData.student.profile?.gender} />
-            <InfoRow label="Contact Number" value={profileData.student.profile?.phone} />
-            <div className="sm:col-span-2">
-              <InfoRow label="Address" value={profileData.student.profile?.address} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Section & Adviser</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <InfoRow label="Section" value={profileData.section?.name} />
-            <InfoRow label="Grade Level" value={profileData.section?.gradeLevel} />
-            <InfoRow label="School Year" value={profileData.section?.schoolYear} />
-            <InfoRow label="Room" value={profileData.section?.roomNumber || '—'} />
-            <InfoRow
-              label="Adviser"
-              value={
-                profileData.section?.adviser
-                  ? `${profileData.section.adviser.firstName || ''} ${profileData.section.adviser.lastName || ''}`.trim()
-                  : '—'
-              }
+      <section className="teacher-student-overview__panel">
+        <header>
+          <h2>Academic Standing</h2>
+          <small>
+            {overview.standing.gradingPeriod
+              ? `Period: ${overview.standing.gradingPeriod.toUpperCase()}`
+              : 'No grading period data'}
+          </small>
+        </header>
+        <div className="teacher-student-overview__overall">
+          <div>
+            <span>Overall Grade</span>
+            <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
+          </div>
+          <div className="teacher-student-overview__overall-track">
+            <div
+              style={{
+                width: `${Math.max(
+                  0,
+                  Math.min(100, overview.standing.overallGradePercent ?? 0),
+                )}%`,
+              }}
             />
-            <InfoRow label="Adviser Email" value={profileData.section?.adviser?.email} />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+        <div className="teacher-student-overview__components">
+          <article>
+            <span>Written Work</span>
+            <strong>{toPercent(overview.standing.components.writtenWorkPercent)}</strong>
+          </article>
+          <article>
+            <span>Performance Task</span>
+            <strong>{toPercent(overview.standing.components.performanceTaskPercent)}</strong>
+          </article>
+          <article>
+            <span>Quarterly Exam</span>
+            <strong>{toPercent(overview.standing.components.quarterlyExamPercent)}</strong>
+          </article>
+        </div>
+      </section>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Emergency Contact</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <InfoRow label="Guardian Name" value={profileData.student.profile?.familyName} />
-            <InfoRow label="Relationship" value={profileData.student.profile?.familyRelationship} />
-            <InfoRow label="Contact Number" value={profileData.student.profile?.familyContact} />
-          </CardContent>
-        </Card>
-      </div>
+      <section className="teacher-student-overview__panel">
+        <header className="teacher-student-overview__history-heading">
+          <h2>Assessment History</h2>
+          <Medal className="h-5 w-5" />
+        </header>
+        <div className="teacher-student-overview__history-grid">
+          <HistorySection
+            title="Finished"
+            items={overview.history.finished}
+            tone="finished"
+          />
+          <HistorySection title="Late" items={overview.history.late} tone="late" />
+          <HistorySection
+            title="Pending / Not Started"
+            items={overview.history.pending}
+            tone="pending"
+          />
+        </div>
+      </section>
     </div>
   );
 }

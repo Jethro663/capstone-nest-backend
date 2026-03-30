@@ -7,6 +7,7 @@ const mockClassesService = {
   findAll: jest.fn(),
   getStudentsMasterlistForClass: jest.fn(),
   bulkLifecycleAction: jest.fn(),
+  getStudentOverviewForClass: jest.fn(),
 };
 
 describe('ClassesController', () => {
@@ -136,6 +137,65 @@ describe('ClassesController', () => {
           succeeded: ['class-1'],
           failed: [{ classId: 'class-2', reason: 'Class is already active.' }],
         },
+      });
+    });
+  });
+
+  describe('getStudentOverviewForClass', () => {
+    it('returns the standard success envelope for overview payload', async () => {
+      mockClassesService.getStudentOverviewForClass.mockResolvedValue({
+        classInfo: {
+          id: 'class-1',
+          subjectName: 'Math',
+          subjectCode: 'MATH-10',
+          sectionLabel: 'Grade 10 - Rizal',
+        },
+        student: {
+          id: 'student-1',
+          firstName: 'Jamie',
+          lastName: 'Cruz',
+          email: 'jcruz@nexora.edu',
+          status: 'ACTIVE',
+          profile: null,
+        },
+        section: null,
+        standing: {
+          gradingPeriod: 'q1',
+          overallGradePercent: 90.5,
+          components: {
+            writtenWorkPercent: 85,
+            performanceTaskPercent: 93,
+            quarterlyExamPercent: 88,
+          },
+        },
+        history: {
+          finished: [],
+          late: [],
+          pending: [],
+        },
+      });
+
+      const result = await controller.getStudentOverviewForClass(
+        'class-1',
+        'student-1',
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(mockClassesService.getStudentOverviewForClass).toHaveBeenCalledWith(
+        'class-1',
+        'student-1',
+        'teacher-1',
+        ['teacher'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Student overview retrieved successfully',
+        data: expect.objectContaining({
+          classInfo: expect.any(Object),
+          student: expect.any(Object),
+          standing: expect.any(Object),
+          history: expect.any(Object),
+        }),
       });
     });
   });

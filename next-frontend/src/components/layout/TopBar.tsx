@@ -141,7 +141,7 @@ export function TopBar({
             <Menu className="h-5 w-5" />
           </Button>
           <p className="teacher-topbar-shell__welcome">
-            Welcome back, <strong>{firstName}</strong>
+            <span aria-hidden="true">👋</span> Welcome back, <strong>{firstName}</strong>
           </p>
         </div>
 

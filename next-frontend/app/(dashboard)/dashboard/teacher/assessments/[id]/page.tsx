@@ -1,25 +1,24 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { ArrowLeft, BarChart3, ClipboardCheck, PenSquare, Users } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
 import type {
   Assessment,
-  SubmissionsResponse,
   AssessmentStats,
   QuestionAnalyticsResponse,
+  SubmissionsResponse,
 } from '@/types/assessment';
 import { ResponsesTab } from '@/components/teacher/assessment/responses-tab';
-import { ReviewTab } from './_components/review-tab';
 import { PostScoresTab } from '@/components/teacher/assessment/post-scores-tab';
-import { TeacherPageShell, TeacherSectionCard, TeacherStatCard } from '@/components/teacher/TeacherPageShell';
+import { ReviewTab } from './_components/review-tab';
+import './assessment-detail.css';
 
 const CATEGORY_LABELS: Record<string, string> = {
   written_work: 'Written Work',
@@ -27,15 +26,15 @@ const CATEGORY_LABELS: Record<string, string> = {
   quarterly_assessment: 'Quarterly Assessment',
 };
 
-const tabVariants = {
-  hidden: { opacity: 0, y: 8 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' as const } },
-  exit: { opacity: 0, y: -8, transition: { duration: 0.15 } },
-};
+function formatDate(value?: string) {
+  if (!value) return 'No due date';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'No due date';
+  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 export default function TeacherAssessmentDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const assessmentId = params.id as string;
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
@@ -66,160 +65,180 @@ export default function TeacherAssessmentDetailPage() {
   }, [assessmentId]);
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, [fetchData]);
+
+  const summary = submissions?.summary;
+
+  const backHref = assessment?.classId
+    ? `/dashboard/teacher/classes/${assessment.classId}?view=assignments`
+    : '/dashboard/teacher/assessments';
+
+  const statItems = useMemo(
+    () => [
+      {
+        label: 'Students',
+        value: String(summary?.total ?? 0),
+        caption: 'Assigned learners',
+        icon: Users,
+      },
+      {
+        label: 'Completion',
+        value: `${stats?.completionRate ?? 0}%`,
+        caption: 'Finished attempts',
+        icon: ClipboardCheck,
+      },
+      {
+        label: 'Average Score',
+        value: `${stats?.averageScore ?? 0}%`,
+        caption: 'Current average',
+        icon: BarChart3,
+      },
+      {
+        label: 'Pending Review',
+        value: String(summary?.turnedIn ?? 0),
+        caption: 'Waiting for scoring',
+        icon: PenSquare,
+      },
+    ],
+    [stats?.averageScore, stats?.completionRate, summary?.total, summary?.turnedIn],
+  );
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6 py-6 px-4">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-24 rounded-lg" />
-        <Skeleton className="h-12 w-96" />
-        <Skeleton className="h-[400px] rounded-lg" />
+      <div className="teacher-assessment-detail">
+        <div className="teacher-assessment-detail__hero">
+          <Skeleton className="h-7 w-44 rounded-full" />
+          <Skeleton className="h-11 w-80 rounded-xl" />
+          <Skeleton className="h-5 w-64 rounded-lg" />
+        </div>
+        <div className="teacher-assessment-detail__stats">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-24 rounded-2xl" />
+          ))}
+        </div>
+        <Skeleton className="h-12 w-96 rounded-xl" />
+        <Skeleton className="h-[460px] rounded-2xl" />
       </div>
     );
   }
 
   if (!assessment) {
-    return <p className="text-muted-foreground p-6">Assessment not found.</p>;
+    return (
+      <div className="teacher-assessment-detail teacher-assessment-detail--empty">
+        <Link href="/dashboard/teacher/assessments" className="teacher-assessment-detail__btn teacher-assessment-detail__btn--outline">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Assessments
+        </Link>
+        <div className="teacher-assessment-detail__empty">Assessment not found.</div>
+      </div>
+    );
   }
 
-  const summary = submissions?.summary;
-
   return (
-    <TeacherPageShell
-      badge="Assessment Review"
-      title={assessment.title}
-      description="Track submissions, review answers, and post outcomes from a cleaner teacher assessment workspace."
-      actions={(
-        <>
-          <Button variant="outline" size="sm" className="teacher-button-outline rounded-xl font-black" onClick={() => router.back()}>
+    <div className="teacher-assessment-detail">
+      <header className="teacher-assessment-detail__hero">
+        <div className="teacher-assessment-detail__hero-main">
+          <Link href={backHref} className="teacher-assessment-detail__back">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Assignments
+          </Link>
+          <h1>{assessment.title}</h1>
+          <div className="teacher-assessment-detail__badges">
+            <Badge variant="outline" className="teacher-assessment-detail__badge">
+              {assessment.type}
+            </Badge>
+            {assessment.classRecordCategory ? (
+              <Badge variant="outline" className="teacher-assessment-detail__badge">
+                {CATEGORY_LABELS[assessment.classRecordCategory] ?? assessment.classRecordCategory}
+              </Badge>
+            ) : null}
+            {assessment.quarter ? (
+              <Badge variant="outline" className="teacher-assessment-detail__badge">
+                {assessment.quarter}
+              </Badge>
+            ) : null}
+            <Badge
+              className={
+                assessment.isPublished
+                  ? 'teacher-assessment-detail__badge teacher-assessment-detail__badge--published'
+                  : 'teacher-assessment-detail__badge teacher-assessment-detail__badge--draft'
+              }
+            >
+              {assessment.isPublished ? 'Published' : 'Draft'}
+            </Badge>
+            <Badge variant="outline" className="teacher-assessment-detail__badge">
+              Due: {formatDate(assessment.dueDate)}
+            </Badge>
+          </div>
+        </div>
+        <div className="teacher-assessment-detail__actions">
+          <Link href={backHref} className="teacher-assessment-detail__btn teacher-assessment-detail__btn--outline">
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="teacher-button-solid rounded-xl font-black"
-            onClick={() => router.push(`/dashboard/teacher/assessments/${assessmentId}/edit`)}
+          </Link>
+          <Link
+            href={`/dashboard/teacher/assessments/${assessmentId}/edit`}
+            className="teacher-assessment-detail__btn teacher-assessment-detail__btn--solid"
           >
             <PenSquare className="h-4 w-4" />
             Edit Assessment
-          </Button>
-        </>
-      )}
-      stats={(
-        <>
-          <TeacherStatCard label="Students" value={summary?.total ?? 0} caption="Learners included in this assessment" icon={Users} accent="sky" />
-          <TeacherStatCard label="Completion" value={`${stats?.completionRate ?? 0}%`} caption="Attempts completed or submitted" icon={ClipboardCheck} accent="teal" />
-          <TeacherStatCard label="Average Score" value={`${stats?.averageScore ?? 0}%`} caption="Current performance snapshot" icon={BarChart3} accent="amber" />
-          <TeacherStatCard label="Pending Review" value={summary?.turnedIn ?? 0} caption={assessment.isPublished ? 'Published assessment' : 'Draft assessment'} icon={PenSquare} accent="rose" />
-        </>
-      )}
-    >
-      <TeacherSectionCard
-        title="Assessment Snapshot"
-        description="Key assessment metadata stays visible here while you move between response review and posting scores."
-      >
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4"
-        >
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-            <Badge variant="outline" className="capitalize border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-[var(--teacher-text-strong)]">{assessment.type}</Badge>
-            {assessment.classRecordCategory && (
-              <Badge variant="secondary" className="border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-[var(--teacher-text-strong)]">
-                {CATEGORY_LABELS[assessment.classRecordCategory] ?? assessment.classRecordCategory}
-              </Badge>
-            )}
-            {assessment.quarter && <Badge variant="secondary" className="border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-[var(--teacher-text-strong)]">{assessment.quarter}</Badge>}
-            <Badge variant={assessment.isPublished ? 'default' : 'secondary'} className={assessment.isPublished ? 'border border-emerald-400/30 bg-emerald-400/12 text-emerald-100' : 'border border-amber-400/30 bg-amber-400/12 text-amber-100'}>
-              {assessment.isPublished ? 'Published' : 'Draft'}
-            </Badge>
-          </div>
-        </motion.div>
-      </TeacherSectionCard>
+          </Link>
+        </div>
+      </header>
 
-      <TeacherSectionCard
-        title="Assessment Insights"
-        description="A calmer overview of engagement and performance before you drill down into tabs."
-      >
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4 xl:grid-cols-5">
-            {[
-              { value: summary?.total ?? 0, label: 'Students', color: 'text-[var(--teacher-text-strong)]' },
-              { value: `${stats?.completionRate ?? 0}%`, label: 'Completion', color: 'text-sky-200' },
-              { value: `${stats?.averageScore ?? 0}%`, label: 'Avg Score', color: 'text-emerald-200' },
-              { value: `${stats?.passRate ?? 0}%`, label: 'Pass Rate', color: 'text-violet-200' },
-              { value: summary?.turnedIn ?? 0, label: 'Pending Review', color: 'text-amber-200' },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.15 + i * 0.05 }}
-                className="teacher-dashboard-mini-panel"
-              >
-                <p className={`text-2xl font-black ${stat.color}`}>{stat.value}</p>
-                <p className="text-xs text-[var(--teacher-text-muted)]">{stat.label}</p>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      </TeacherSectionCard>
+      <section className="teacher-assessment-detail__stats">
+        {statItems.map((item) => (
+          <article key={item.label} className="teacher-assessment-detail__stat">
+            <div>
+              <p>{item.label}</p>
+              <strong>{item.value}</strong>
+              <span>{item.caption}</span>
+            </div>
+            <item.icon className="h-5 w-5" />
+          </article>
+        ))}
+      </section>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="teacher-tab-list grid w-full max-w-md grid-cols-3">
-          <TabsTrigger className="teacher-tab rounded-xl font-black" value="responses">Responses</TabsTrigger>
-          <TabsTrigger className="teacher-tab rounded-xl font-black" value="review">Review Answers</TabsTrigger>
-          <TabsTrigger className="teacher-tab rounded-xl font-black" value="scores">Post Scores</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="teacher-assessment-detail__tabs">
+        <TabsList className="teacher-assessment-detail__tabs-list">
+          <TabsTrigger value="responses" className="teacher-assessment-detail__tab-trigger">
+            Responses
+          </TabsTrigger>
+          <TabsTrigger value="review" className="teacher-assessment-detail__tab-trigger">
+            Review Answers
+          </TabsTrigger>
+          <TabsTrigger value="scores" className="teacher-assessment-detail__tab-trigger">
+            Post Scores
+          </TabsTrigger>
         </TabsList>
 
-        <AnimatePresence mode="wait">
-          {activeTab === 'responses' && (
-            <TabsContent value="responses" forceMount>
-              <motion.div key="responses" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                <ResponsesTab
-                  assessment={assessment}
-                  stats={stats}
-                  analytics={analytics}
-                  submissions={submissions}
-                />
-              </motion.div>
-            </TabsContent>
-          )}
+        <TabsContent value="responses" className="teacher-assessment-detail__tab-panel">
+          <ResponsesTab
+            assessment={assessment}
+            stats={stats}
+            analytics={analytics}
+            submissions={submissions}
+          />
+        </TabsContent>
 
-          {activeTab === 'review' && (
-            <TabsContent value="review" forceMount>
-              <motion.div key="review" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                <ReviewTab
-                  assessmentId={assessmentId}
-                  submissions={submissions}
-                  onGradeReturned={fetchData}
-                />
-              </motion.div>
-            </TabsContent>
-          )}
+        <TabsContent value="review" className="teacher-assessment-detail__tab-panel">
+          <ReviewTab
+            assessmentId={assessmentId}
+            submissions={submissions}
+            onGradeReturned={fetchData}
+          />
+        </TabsContent>
 
-          {activeTab === 'scores' && (
-            <TabsContent value="scores" forceMount>
-              <motion.div key="scores" variants={tabVariants} initial="hidden" animate="visible" exit="exit">
-                <PostScoresTab
-                  assessmentId={assessmentId}
-                  assessment={assessment}
-                  submissions={submissions}
-                  onDataChanged={fetchData}
-                />
-              </motion.div>
-            </TabsContent>
-          )}
-        </AnimatePresence>
+        <TabsContent value="scores" className="teacher-assessment-detail__tab-panel">
+          <PostScoresTab
+            assessmentId={assessmentId}
+            assessment={assessment}
+            submissions={submissions}
+            onDataChanged={fetchData}
+          />
+        </TabsContent>
       </Tabs>
-    </TeacherPageShell>
+    </div>
   );
 }

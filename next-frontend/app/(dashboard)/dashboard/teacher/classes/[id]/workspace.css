@@ -529,7 +529,26 @@
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
+  flex: 1;
   min-width: 0;
+  cursor: pointer;
+}
+
+.teacher-class-workspace__assignment-link {
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  border-radius: 0.72rem;
+  padding: 0.12rem;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.teacher-class-workspace__assignment-link:hover {
+  background: #f4f8ff;
+  transform: translateY(-1px);
 }
 
 .teacher-class-workspace__assignment-icon {
@@ -763,6 +782,29 @@
   text-align: left;
   border-bottom: 1px solid #e6edf6;
   padding: 0.66rem 0.75rem;
+}
+
+.teacher-class-workspace__table-row {
+  transition: background-color 0.16s ease;
+}
+
+.teacher-class-workspace__table-row--clickable {
+  cursor: pointer;
+}
+
+.teacher-class-workspace__table-row--clickable:hover {
+  background: #f6f9ff;
+}
+
+.teacher-class-workspace__table-row--clickable:focus-visible {
+  outline: 2px solid #86a6d8;
+  outline-offset: -2px;
+}
+
+.teacher-class-workspace__row-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
 }
 
 .teacher-class-workspace__table th {
@@ -1037,8 +1079,9 @@
   border-radius: 0.95rem;
   background: #fff;
   padding: 0.68rem;
-  min-width: max-content;
   width: 100%;
+  min-width: 0;
+  zoom: 0.76;
 }
 
 .teacher-class-workspace__panel--record {

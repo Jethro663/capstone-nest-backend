@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import AnimatedLoginWrapper from '@/components/auth/AnimatedLoginWrapper';
+import { AppOrbitLoader } from '@/components/shared/AppOrbitLoader';
 
 export const metadata = {
   title: 'Sign In - Nexora',
@@ -8,7 +9,7 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-[80vh] flex items-center justify-center">Loading…</div>}>
+    <Suspense fallback={<AppOrbitLoader variant="calm" />}>
       <AnimatedLoginWrapper />
     </Suspense>
   );

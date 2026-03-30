@@ -50,6 +50,8 @@ const makePaginatedResult = (items: any[] = [makeSection()], total = 1) => ({
 const mockSectionsService = {
   findAll: jest.fn(),
   findById: jest.fn(),
+  updatePresentation: jest.fn(),
+  setSectionHiddenState: jest.fn(),
   getRoster: jest.fn(),
   getCandidates: jest.fn(),
   addStudentsToSection: jest.fn(),
@@ -157,10 +159,12 @@ describe('SectionsController', () => {
     it('passes the currentUser.userId as adviserId filter', async () => {
       mockSectionsService.findAll.mockResolvedValue(makePaginatedResult());
 
-      await controller.getMySections(TEACHER_USER);
+      await controller.getMySections(undefined, TEACHER_USER);
 
       expect(mockSectionsService.findAll).toHaveBeenCalledWith({
         adviserId: TEACHER_USER.userId,
+        requesterId: TEACHER_USER.userId,
+        status: 'all',
       });
     });
 
@@ -168,9 +172,14 @@ describe('SectionsController', () => {
       const paginated = makePaginatedResult();
       mockSectionsService.findAll.mockResolvedValue(paginated);
 
-      const result = await controller.getMySections(TEACHER_USER);
+      const result = await controller.getMySections('hidden', TEACHER_USER);
 
       expect(result).toEqual({ success: true, ...paginated });
+      expect(mockSectionsService.findAll).toHaveBeenCalledWith({
+        adviserId: TEACHER_USER.userId,
+        requesterId: TEACHER_USER.userId,
+        status: 'hidden',
+      });
     });
   });
 
@@ -280,6 +289,46 @@ describe('SectionsController', () => {
     });
   });
 
+  describe('updateSectionPresentation', () => {
+    it('returns success message and updated section payload', async () => {
+      const updated = makeSection({ cardBannerUrl: '/api/sections/banners/a.png' });
+      mockSectionsService.updatePresentation.mockResolvedValue(updated);
+
+      const result = await controller.updateSectionPresentation(
+        SECTION_ID,
+        { cardBannerUrl: '/api/sections/banners/a.png' },
+        TEACHER_USER,
+      );
+
+      expect(mockSectionsService.updatePresentation).toHaveBeenCalledWith(
+        SECTION_ID,
+        { cardBannerUrl: '/api/sections/banners/a.png' },
+        TEACHER_USER.userId,
+        TEACHER_USER.roles,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Section presentation updated successfully',
+        data: updated,
+      });
+    });
+  });
+
+  describe('uploadSectionBanner', () => {
+    it('returns validation message when no file is provided', async () => {
+      const result = await controller.uploadSectionBanner(
+        SECTION_ID,
+        undefined as unknown as Express.Multer.File,
+        TEACHER_USER,
+      );
+
+      expect(result).toEqual({
+        success: false,
+        message: 'Image upload is required',
+      });
+    });
+  });
+
   // =========================================================================
   // deleteSection
   // =========================================================================
@@ -330,6 +379,48 @@ describe('SectionsController', () => {
           succeeded: ['s1', 's2'],
           failed: [{ sectionId: 's3', reason: 'Section is already archived.' }],
         },
+      });
+    });
+  });
+
+  describe('hideSection / unhideSection', () => {
+    it('returns hide response envelope', async () => {
+      mockSectionsService.setSectionHiddenState.mockResolvedValue({
+        sectionId: SECTION_ID,
+        isHidden: true,
+      });
+
+      const result = await controller.hideSection(SECTION_ID, TEACHER_USER);
+      expect(mockSectionsService.setSectionHiddenState).toHaveBeenCalledWith(
+        SECTION_ID,
+        TEACHER_USER.userId,
+        TEACHER_USER.roles,
+        true,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Section hidden successfully',
+        data: { sectionId: SECTION_ID, isHidden: true },
+      });
+    });
+
+    it('returns unhide response envelope', async () => {
+      mockSectionsService.setSectionHiddenState.mockResolvedValue({
+        sectionId: SECTION_ID,
+        isHidden: false,
+      });
+
+      const result = await controller.unhideSection(SECTION_ID, TEACHER_USER);
+      expect(mockSectionsService.setSectionHiddenState).toHaveBeenCalledWith(
+        SECTION_ID,
+        TEACHER_USER.userId,
+        TEACHER_USER.roles,
+        false,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Section restored successfully',
+        data: { sectionId: SECTION_ID, isHidden: false },
       });
     });
   });

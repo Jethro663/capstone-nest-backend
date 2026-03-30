@@ -33,6 +33,43 @@ export interface RosterStudent {
   profilePicture?: string;
 }
 
+export interface SectionScheduleSlot {
+  id: string;
+  days: string[];
+  startTime: string;
+  endTime: string;
+  daysExpanded: string[];
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
+}
+
+export interface SectionScheduleClassEntry {
+  classId: string;
+  subjectName: string;
+  subjectCode: string;
+  room: string;
+  isActive: boolean;
+  teacher: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  } | null;
+  schedules: SectionScheduleSlot[];
+}
+
+export interface SectionSchedulePayload {
+  section: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+    schoolYear: string;
+    roomNumber?: string | null;
+  };
+  classes: SectionScheduleClassEntry[];
+}
+
 export interface TeacherSectionStudentProfile {
   sectionInfo: {
     id: string;
@@ -108,6 +145,8 @@ export interface BulkSectionLifecycleResponse {
   };
 }
 
+export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
+
 export const sectionService = {
   /** GET /sections/all — Admin, Teacher */
   async getAll(query?: SectionsQuery): Promise<SectionsListResponse> {
@@ -116,8 +155,12 @@ export const sectionService = {
   },
 
   /** GET /sections/my — Admin, Teacher */
-  async getMy(): Promise<{ success: boolean; data: Section[] }> {
-    const { data } = await api.get('/sections/my');
+  async getMy(
+    status: SectionVisibilityStatus = 'all',
+  ): Promise<{ success: boolean; data: Section[]; pagination?: SectionsListResponse['pagination'] }> {
+    const { data } = await api.get('/sections/my', {
+      params: { status },
+    });
     return data;
   },
 
@@ -136,6 +179,35 @@ export const sectionService = {
   /** PUT /sections/update/:id — Admin only */
   async update(id: string, dto: UpdateSectionDto): Promise<{ success: boolean; message: string; data: Section }> {
     const { data } = await api.put(`/sections/update/${id}`, dto);
+    return data;
+  },
+
+  /** PATCH /sections/:id/presentation â€” Teacher, Admin */
+  async updatePresentation(
+    id: string,
+    dto: { cardBannerUrl?: string | null },
+  ): Promise<{ success: boolean; message: string; data: Section }> {
+    const { data } = await api.patch(`/sections/${id}/presentation`, dto);
+    return data;
+  },
+
+  /** POST /sections/:id/banner â€” Teacher, Admin */
+  async uploadBanner(
+    id: string,
+    file: File,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      cardBannerUrl: string;
+      section: Section;
+    };
+  }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const { data } = await api.post(`/sections/${id}/banner`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return data;
   },
 
@@ -164,6 +236,16 @@ export const sectionService = {
 
   async bulkLifecycle(dto: BulkSectionLifecycleDto): Promise<BulkSectionLifecycleResponse> {
     const { data } = await api.post('/sections/bulk/lifecycle', dto);
+    return data;
+  },
+
+  async hide(id: string): Promise<{ success: boolean; message: string; data: { sectionId: string; isHidden: boolean } }> {
+    const { data } = await api.patch(`/sections/${id}/hide`);
+    return data;
+  },
+
+  async unhide(id: string): Promise<{ success: boolean; message: string; data: { sectionId: string; isHidden: boolean } }> {
+    const { data } = await api.patch(`/sections/${id}/unhide`);
     return data;
   },
 
@@ -201,7 +283,7 @@ export const sectionService = {
   },
 
   /** GET /sections/:id/schedule — All roles */
-  async getSchedule(id: string): Promise<{ success: boolean; data: unknown }> {
+  async getSchedule(id: string): Promise<{ success: boolean; data: SectionSchedulePayload }> {
     const { data } = await api.get(`/sections/${id}/schedule`);
     return data;
   },

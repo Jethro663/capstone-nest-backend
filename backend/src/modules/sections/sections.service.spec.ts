@@ -109,6 +109,7 @@ describe('SectionsService', () => {
   const mockDb: any = {
     query: {
       sections: { findFirst: jest.fn(), findMany: jest.fn() },
+      sectionVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findMany: jest.fn() },
       users: { findFirst: jest.fn() },
       enrollments: { findFirst: jest.fn(), findMany: jest.fn() },
@@ -260,6 +261,27 @@ describe('SectionsService', () => {
       const result = await service.findAll({ limit: 10 });
 
       expect(result.pagination.totalPages).toBe(6); // ceil(55/10)
+    });
+
+    it('returns hidden-only results when status=hidden and requester has hidden preferences', async () => {
+      const row = makeSection();
+      mockDb.query.sections.findMany.mockResolvedValue([row]);
+      mockDb.query.sectionVisibilityPreferences.findMany.mockResolvedValue([
+        { sectionId: SECTION_ID },
+      ]);
+      mockDb.select
+        .mockReturnValueOnce(makeSelectChain([{ total: 1 }]))
+        .mockReturnValueOnce(
+          makeSelectChain([{ sectionId: SECTION_ID, studentCount: 1 }]),
+        );
+
+      const result = await service.findAll({
+        status: 'hidden',
+        requesterId: ADVISER_ID,
+      });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({ id: SECTION_ID, isHidden: true });
     });
   });
 
@@ -711,6 +733,106 @@ describe('SectionsService', () => {
       await expect(
         service.updateSection('nonexistent-id', { name: 'X' }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('updatePresentation', () => {
+    it('updates cardBannerUrl for adviser teacher and returns refreshed section', async () => {
+      mockDb.query.sections.findFirst
+        .mockResolvedValueOnce(makeSection({ adviserId: ADVISER_ID }))
+        .mockResolvedValueOnce(
+          makeSection({
+            adviserId: ADVISER_ID,
+            cardBannerUrl: '/api/sections/banners/new.png',
+          }),
+        );
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      const result = await service.updatePresentation(
+        SECTION_ID,
+        { cardBannerUrl: '/api/sections/banners/new.png' },
+        ADVISER_ID,
+        ['teacher'],
+      );
+
+      expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({
+        id: SECTION_ID,
+        cardBannerUrl: '/api/sections/banners/new.png',
+      });
+    });
+
+    it('throws ForbiddenException when non-adviser teacher updates presentation', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
+
+      await expect(
+        service.updatePresentation(
+          SECTION_ID,
+          { cardBannerUrl: '/api/sections/banners/new.png' },
+          OTHER_TEACHER.userId,
+          OTHER_TEACHER.roles,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('setSectionHiddenState', () => {
+    it('creates a visibility preference row when none exists', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
+      mockDb.query.sectionVisibilityPreferences.findFirst.mockResolvedValue(null);
+      mockDb.insert.mockReturnValue(makeInsertChain([]));
+
+      const result = await service.setSectionHiddenState(
+        SECTION_ID,
+        ADVISER_ID,
+        ['teacher'],
+        true,
+      );
+
+      expect(mockDb.insert).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ sectionId: SECTION_ID, isHidden: true });
+    });
+
+    it('updates existing visibility preference row when present', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
+      mockDb.query.sectionVisibilityPreferences.findFirst.mockResolvedValue({
+        id: 'pref-1',
+        sectionId: SECTION_ID,
+        userId: ADVISER_ID,
+        isHidden: true,
+      });
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      const result = await service.setSectionHiddenState(
+        SECTION_ID,
+        ADVISER_ID,
+        ['teacher'],
+        false,
+      );
+
+      expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ sectionId: SECTION_ID, isHidden: false });
+    });
+
+    it('throws ForbiddenException when non-adviser teacher toggles visibility', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ adviserId: ADVISER_ID }),
+      );
+
+      await expect(
+        service.setSectionHiddenState(
+          SECTION_ID,
+          OTHER_TEACHER.userId,
+          OTHER_TEACHER.roles,
+          true,
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

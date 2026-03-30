@@ -189,6 +189,7 @@ export const sections = pgTable(
     schoolYear: text('school_year').notNull(), // e.g., "2024-2025"
     capacity: integer('capacity').notNull().default(40),
     roomNumber: text('room_number'),
+    cardBannerUrl: text('card_banner_url'),
 
     adviserId: uuid('adviser_id').references(() => users.id, {
       onDelete: 'set null',
@@ -1086,6 +1087,31 @@ export const classVisibilityPreferences = pgTable(
   }),
 );
 
+export const sectionVisibilityPreferences = pgTable(
+  'section_visibility_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    sectionId: uuid('section_id')
+      .notNull()
+      .references(() => sections.id, { onDelete: 'cascade' }),
+    isHidden: boolean('is_hidden').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('section_visibility_preferences_user_idx').on(table.userId),
+    sectionIdx: index('section_visibility_preferences_section_idx').on(
+      table.sectionId,
+    ),
+    uniquePreference: unique(
+      'section_visibility_preferences_user_section_unique',
+    ).on(table.userId, table.sectionId),
+  }),
+);
+
 export const libraryFolders = pgTable(
   'library_folders',
   {
@@ -1132,6 +1158,20 @@ export const classVisibilityPreferencesRelations = relations(
     class: one(classes, {
       fields: [classVisibilityPreferences.classId],
       references: [classes.id],
+    }),
+  }),
+);
+
+export const sectionVisibilityPreferencesRelations = relations(
+  sectionVisibilityPreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [sectionVisibilityPreferences.userId],
+      references: [users.id],
+    }),
+    section: one(sections, {
+      fields: [sectionVisibilityPreferences.sectionId],
+      references: [sections.id],
     }),
   }),
 );

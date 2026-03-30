@@ -9,6 +9,7 @@ import type {
   StudentMasterlistItem,
   StudentMasterlistQuery,
   TeacherClassStudentProfile,
+  TeacherClassStudentOverview,
 } from '@/types/class';
 import type { User } from '@/types/user';
 
@@ -208,6 +209,17 @@ export const classService = {
   ): Promise<{ success: boolean; message: string; data: TeacherClassStudentProfile }> {
     const { data } = await api.get(
       `/classes/${classId}/students/${studentId}/profile`,
+    );
+    return data;
+  },
+
+  /** GET /classes/:classId/students/:studentId/overview — Admin, Teacher */
+  async getStudentOverviewForClass(
+    classId: string,
+    studentId: string,
+  ): Promise<{ success: boolean; message: string; data: TeacherClassStudentOverview }> {
+    const { data } = await api.get(
+      `/classes/${classId}/students/${studentId}/overview`,
     );
     return data;
   },

@@ -1,6 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -891,6 +900,17 @@ export default function TeacherClassDetailPage() {
     });
   };
 
+  const handleAssignmentCardClick = useCallback(
+    (event: ReactMouseEvent<HTMLElement>, assessmentId: string) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('a,button,input,textarea,select,label,[role="button"],[role="link"]')) {
+        return;
+      }
+      router.push(`/dashboard/teacher/assessments/${assessmentId}`);
+    },
+    [router],
+  );
+
   const renderSelectionCheckbox = ({
     checked,
     onChange,
@@ -1305,33 +1325,37 @@ export default function TeacherClassDetailPage() {
                 const isSelected = selectedAssessmentIds.includes(assessment.id);
                 return (
                   <article key={assessment.id} className="teacher-class-workspace__assignment-card" data-selected={isSelected}>
-                    <div className="teacher-class-workspace__assignment-main">
+                    <div
+                      className="teacher-class-workspace__assignment-main"
+                      onClick={(event) => handleAssignmentCardClick(event, assessment.id)}
+                    >
                       {renderSelectionCheckbox({
                         checked: isSelected,
                         onChange: () => toggleAssessmentSelection(assessment.id),
                         ariaLabel: `Select ${assessment.title}`,
                       })}
-                      <div className="teacher-class-workspace__assignment-icon">
-                        <ClipboardList className="h-4 w-4" />
-                      </div>
-                      <div className="teacher-class-workspace__assignment-copy">
-                        <div className="teacher-class-workspace__assignment-tags">
-                          <span>{assignmentTagLabel(filter)}</span>
-                          <span data-status={assessment.isPublished ? 'published' : 'draft'}>
-                            {assessment.isPublished ? 'Published' : 'Draft'}
-                          </span>
+                      <Link
+                        href={`/dashboard/teacher/assessments/${assessment.id}`}
+                        className="teacher-class-workspace__assignment-link"
+                      >
+                        <div className="teacher-class-workspace__assignment-icon">
+                          <ClipboardList className="h-4 w-4" />
                         </div>
-                        <h3>{assessment.title}</h3>
-                        <p>
-                          {(assessment.questions?.length ?? 0)} questions - {assessment.totalPoints ?? 0} pts - Due {formatDateYmd(assessment.dueDate)}
-                        </p>
-                      </div>
+                        <div className="teacher-class-workspace__assignment-copy">
+                          <div className="teacher-class-workspace__assignment-tags">
+                            <span>{assignmentTagLabel(filter)}</span>
+                            <span data-status={assessment.isPublished ? 'published' : 'draft'}>
+                              {assessment.isPublished ? 'Published' : 'Draft'}
+                            </span>
+                          </div>
+                          <h3>{assessment.title}</h3>
+                          <p>
+                            {(assessment.questions?.length ?? 0)} questions - {assessment.totalPoints ?? 0} pts - Due {formatDateYmd(assessment.dueDate)}
+                          </p>
+                        </div>
+                      </Link>
                     </div>
                     <div className="teacher-class-workspace__assignment-actions">
-                      <Link href={`/dashboard/teacher/assessments/${assessment.id}`} className="teacher-class-workspace__outline">
-                        <Eye className="h-4 w-4" />
-                        View
-                      </Link>
                       <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
                         Edit
                       </Link>
@@ -1538,34 +1562,58 @@ export default function TeacherClassDetailPage() {
                 </thead>
                 <tbody>
                   {studentRows.map((student) => (
-                    <tr key={student.enrollmentId}>
+                    <tr key={student.enrollmentId} className="teacher-class-workspace__table-row teacher-class-workspace__table-row--clickable">
                       <td>
-                        <div className="teacher-class-workspace__student-cell">
-                          <span className="teacher-class-workspace__avatar">{student.initials}</span>
-                          <strong>{student.fullName}</strong>
-                        </div>
-                      </td>
-                      <td>{student.email}</td>
-                      <td>{student.lrn}</td>
-                      <td>
-                        <div className="teacher-class-workspace__grade">
-                          <div className="teacher-class-workspace__grade-track">
-                            <div
-                              data-tone={gradeTone(student.gradePercent)}
-                              style={{ width: `${Math.max(0, Math.min(100, student.gradePercent ?? 0))}%` }}
-                            />
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          <div className="teacher-class-workspace__student-cell">
+                            <span className="teacher-class-workspace__avatar">{student.initials}</span>
+                            <strong>{student.fullName}</strong>
                           </div>
-                          <span>{student.gradePercent !== null ? `${student.gradePercent.toFixed(1)}%` : '--'}</span>
-                        </div>
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          {student.email}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          {student.lrn}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link
+                          href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
+                          className="teacher-class-workspace__row-link"
+                        >
+                          <div className="teacher-class-workspace__grade">
+                            <div className="teacher-class-workspace__grade-track">
+                              <div
+                                data-tone={gradeTone(student.gradePercent)}
+                                style={{ width: `${Math.max(0, Math.min(100, student.gradePercent ?? 0))}%` }}
+                              />
+                            </div>
+                            <span>{student.gradePercent !== null ? `${student.gradePercent.toFixed(1)}%` : '--'}</span>
+                          </div>
+                        </Link>
                       </td>
                       <td>
                         <div className="teacher-class-workspace__table-actions">
-                          <Link href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
                           <button
                             type="button"
-                            onClick={() => void handleRemoveStudent(student.enrollmentId, student.studentId)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleRemoveStudent(student.enrollmentId, student.studentId);
+                            }}
                             disabled={busyEnrollmentId === student.enrollmentId}
                             aria-label="Remove student"
                           >

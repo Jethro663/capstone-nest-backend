@@ -26,6 +26,7 @@ import {
   Layers3,
   Library,
   Upload,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
@@ -51,7 +52,7 @@ const studentNav: NavItem[] = [
 
 const teacherNav: NavItem[] = [
   { label: 'My Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
-  { label: 'Nexora Library', href: '/dashboard/library', icon: FolderOpen },
+  { label: 'Nexora Library', href: '/dashboard/teacher/library', icon: FolderOpen },
   { label: 'My Sections', href: '/dashboard/teacher/sections', icon: Users },
   { label: 'Calendar', href: '/dashboard/teacher/calendar', icon: Activity },
   { label: 'Class Record', href: '/dashboard/teacher/class-record', icon: ClipboardList },
@@ -69,7 +70,8 @@ const adminNav: NavItem[] = [
   { label: 'Users', href: '/dashboard/admin/users', icon: Users },
   { label: 'Sections', href: '/dashboard/admin/sections', icon: Layers3 },
   { label: 'Classes', href: '/dashboard/admin/classes', icon: BookOpen },
-  { label: 'Nexora Library', href: '/dashboard/library', icon: Library },
+  { label: 'Calendar', href: '/dashboard/admin/calendar', icon: CalendarDays },
+  { label: 'Nexora Library', href: '/dashboard/admin/library', icon: Library },
   { label: 'Roster Import', href: '/dashboard/admin/roster-import', icon: Upload },
   { label: 'Reports', href: '/dashboard/admin/reports', icon: BarChart3 },
   { label: 'Evaluations', href: '/dashboard/admin/evaluations', icon: ClipboardCheck },
