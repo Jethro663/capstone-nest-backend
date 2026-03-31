@@ -24,6 +24,8 @@ import {
   assessments,
   assessmentAttempts,
   classSchedules,
+  studentClassPresentationPreferences,
+  studentCourseViewPreferences,
   classVisibilityPreferences,
   classes,
   classRecordCategories,
@@ -39,6 +41,14 @@ import {
   studentProfiles,
   lessons,
 } from '../../drizzle/schema';
+import {
+  type StudentPresentationMode,
+  STUDENT_PRESENTATION_MODES,
+} from './DTO/update-student-class-presentation.dto';
+import {
+  type StudentCourseViewMode,
+  STUDENT_COURSE_VIEW_MODES,
+} from './DTO/update-student-course-view.dto';
 import { normalizeGradeLevel } from '../../common/utils/grade-level.util';
 import {
   toCalendarSlot,
@@ -66,6 +76,12 @@ interface StandingSnapshot {
   components: Record<StandingComponentKey, number | null>;
 }
 
+const STUDENT_STYLE_TOKEN_OPTIONS = {
+  solid: ['solid-blue', 'solid-green', 'solid-violet'],
+  gradient: ['gradient-blue', 'gradient-green', 'gradient-violet'],
+  preset: ['preset-blue', 'preset-green', 'preset-violet'],
+} as const satisfies Record<StudentPresentationMode, readonly string[]>;
+
 @Injectable()
 export class ClassesService {
   constructor(
@@ -75,6 +91,94 @@ export class ClassesService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private assertStudentPreferenceReadAccess(
+    studentId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    if (!requesterId || !requesterRoles || requesterRoles.length === 0) {
+      throw new ForbiddenException('Unable to verify student preference access');
+    }
+
+    if (requesterRoles.includes('student') && requesterId !== studentId) {
+      throw new ForbiddenException(
+        'You can only view your own course preferences',
+      );
+    }
+  }
+
+  private assertStudentPreferenceWriteAccess(
+    requesterId: string,
+    requesterRoles: string[],
+  ) {
+    if (!requesterRoles.includes('student')) {
+      throw new ForbiddenException(
+        'Only students can update student course preferences',
+      );
+    }
+
+    if (!requesterId) {
+      throw new ForbiddenException(
+        'Unable to verify student preference ownership',
+      );
+    }
+  }
+
+  private ensureValidStudentStylePreference(
+    styleMode: StudentPresentationMode,
+    styleToken: string,
+  ) {
+    if (!STUDENT_PRESENTATION_MODES.includes(styleMode)) {
+      throw new BadRequestException('Unsupported student presentation mode');
+    }
+
+    const allowed = STUDENT_STYLE_TOKEN_OPTIONS[styleMode];
+    if (!(allowed as readonly string[]).includes(styleToken)) {
+      throw new BadRequestException(
+        `styleToken must be one of: ${allowed.join(', ')}`,
+      );
+    }
+  }
+
+  private async ensureStudentEnrollment(
+    classId: string,
+    studentId: string,
+    message = 'You can only manage preferences for your enrolled classes',
+  ) {
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: {
+        id: true,
+      },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException(message);
+    }
+  }
+
+  private async getEnrolledClassIds(studentId: string) {
+    const studentEnrollments = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { classId: true },
+    });
+
+    return [
+      ...new Set(
+        studentEnrollments
+          .map((entry) => entry.classId)
+          .filter((classId): classId is string => Boolean(classId)),
+      ),
+    ];
   }
 
   private ensureTeacherCanAccessClass(
@@ -811,6 +915,128 @@ export class ClassesService {
       hiddenClassIds,
       status,
     );
+  }
+
+  async getStudentClassPresentationPreferences(
+    studentId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+    const classIds = await this.getEnrolledClassIds(studentId);
+    if (classIds.length === 0) return [];
+
+    return this.db.query.studentClassPresentationPreferences.findMany({
+      where: and(
+        eq(studentClassPresentationPreferences.userId, studentId),
+        inArray(studentClassPresentationPreferences.classId, classIds),
+      ),
+      columns: {
+        classId: true,
+        styleMode: true,
+        styleToken: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateStudentClassPresentationPreference(
+    classId: string,
+    requesterId: string,
+    requesterRoles: string[],
+    presentation: { styleMode: StudentPresentationMode; styleToken: string },
+  ) {
+    this.assertStudentPreferenceWriteAccess(requesterId, requesterRoles);
+    await this.ensureStudentEnrollment(classId, requesterId);
+    this.ensureValidStudentStylePreference(
+      presentation.styleMode,
+      presentation.styleToken,
+    );
+
+    const existingPreference =
+      await this.db.query.studentClassPresentationPreferences.findFirst({
+        where: and(
+          eq(studentClassPresentationPreferences.classId, classId),
+          eq(studentClassPresentationPreferences.userId, requesterId),
+        ),
+      });
+
+    if (existingPreference) {
+      await this.db
+        .update(studentClassPresentationPreferences)
+        .set({
+          styleMode: presentation.styleMode,
+          styleToken: presentation.styleToken,
+          updatedAt: new Date(),
+        })
+        .where(eq(studentClassPresentationPreferences.id, existingPreference.id));
+    } else {
+      await this.db.insert(studentClassPresentationPreferences).values({
+        classId,
+        userId: requesterId,
+        styleMode: presentation.styleMode,
+        styleToken: presentation.styleToken,
+      });
+    }
+
+    return {
+      classId,
+      styleMode: presentation.styleMode,
+      styleToken: presentation.styleToken,
+    };
+  }
+
+  async getStudentCourseViewPreference(
+    studentId: string,
+    requesterId?: string,
+    requesterRoles?: string[],
+  ) {
+    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+    const preference = await this.db.query.studentCourseViewPreferences.findFirst({
+      where: eq(studentCourseViewPreferences.userId, studentId),
+      columns: {
+        viewMode: true,
+      },
+    });
+
+    return {
+      viewMode: preference?.viewMode ?? ('card' as StudentCourseViewMode),
+    };
+  }
+
+  async setStudentCourseViewPreference(
+    studentId: string,
+    requesterId: string,
+    requesterRoles: string[],
+    viewMode: StudentCourseViewMode,
+  ) {
+    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+
+    if (!STUDENT_COURSE_VIEW_MODES.includes(viewMode)) {
+      throw new BadRequestException('Unsupported student course view mode');
+    }
+
+    const existing =
+      await this.db.query.studentCourseViewPreferences.findFirst({
+        where: eq(studentCourseViewPreferences.userId, studentId),
+      });
+
+    if (existing) {
+      await this.db
+        .update(studentCourseViewPreferences)
+        .set({
+          viewMode,
+          updatedAt: new Date(),
+        })
+        .where(eq(studentCourseViewPreferences.id, existing.id));
+    } else {
+      await this.db.insert(studentCourseViewPreferences).values({
+        userId: studentId,
+        viewMode,
+      });
+    }
+
+    return { viewMode };
   }
 
   async setClassHiddenState(

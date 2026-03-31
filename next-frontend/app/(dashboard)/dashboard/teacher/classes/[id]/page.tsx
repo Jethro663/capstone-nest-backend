@@ -44,6 +44,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
@@ -1049,47 +1050,33 @@ export default function TeacherClassDetailPage() {
     );
   }
 
+  const workspaceTabs = CLASS_TABS.map((tab) => ({
+    key: tab.key,
+    label: tab.label,
+    href: `/dashboard/teacher/classes/${classId}?view=${tab.key}`,
+    icon: tab.icon,
+    active: activeTab === tab.key,
+  }));
+
   return (
-    <div className="teacher-class-workspace">
-      <header className="teacher-class-workspace__hero">
-        <Link href="/dashboard/teacher/classes" className="teacher-class-workspace__back">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Classes
-        </Link>
-        <div className="teacher-class-workspace__hero-row">
-          <div className="teacher-class-workspace__hero-icon">
-            <BookOpen className="h-5 w-5" />
-          </div>
-          <div className="teacher-class-workspace__hero-copy">
-            <h1>{classItem.subjectName}</h1>
-            <p>{classInfoLine}</p>
-            <div className="teacher-class-workspace__hero-meta">
-              <span>{studentRows.length} students</span>
-              <span>{modules.length} modules</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <nav className="teacher-class-workspace__tabs">
-        {CLASS_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.key;
-          return (
-            <Link
-              key={tab.key}
-              href={`/dashboard/teacher/classes/${classId}?view=${tab.key}`}
-              className="teacher-class-workspace__tab"
-              data-active={isActive}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <section className="teacher-class-workspace__body">
+    <div className="teacher-class-workspace-wrap">
+      <ClassWorkspaceShell
+        backHref="/dashboard/teacher/classes"
+        backLabel={
+          <>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Classes
+          </>
+        }
+        icon={<BookOpen className="h-5 w-5" />}
+        title={classItem.subjectName}
+        subtitle={classInfoLine}
+        metaItems={[
+          { key: 'students', label: `${studentRows.length} students` },
+          { key: 'modules', label: `${modules.length} modules` },
+        ]}
+        tabs={workspaceTabs}
+      >
         {activeTab === 'modules' ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
@@ -1773,7 +1760,7 @@ export default function TeacherClassDetailPage() {
             )}
           </div>
         ) : null}
-      </section>
+      </ClassWorkspaceShell>
 
       <Dialog open={showAddModuleModal} onOpenChange={setShowAddModuleModal}>
         <DialogContent className="teacher-module-modal">

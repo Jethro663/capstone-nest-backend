@@ -32,6 +32,17 @@ import { classService } from '@/services/class-service';
 import { announcementService } from '@/services/announcement-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CourseSurfaceCard } from '@/components/class/CourseSurfaceCard';
+import {
+  GRADIENT_OPTIONS,
+  createDefaultCustomization,
+  getFallbackGradient,
+  getGradientOption,
+  getHeroStyle,
+  normalizeCustomization,
+  type CardViewMode,
+  type ClassCardCustomization,
+} from '@/components/class/class-card-theme';
 import {
   Dialog,
   DialogContent,
@@ -44,163 +55,13 @@ import type { Announcement } from '@/types/announcement';
 import type { ClassItem, ClassVisibilityStatus } from '@/types/class';
 
 type TeacherHomeTab = 'dashboard' | 'news' | 'welcome';
-type CardViewMode = 'card' | 'wide';
 type EventTag = 'assessment' | 'event' | 'holiday';
-type CardThemeKind = 'gradient' | 'image';
-type CardGradientId =
-  | 'oceanic-blue'
-  | 'emerald-wave'
-  | 'violet-burst'
-  | 'sunset-orange'
-  | 'rose-dusk'
-  | 'slate-night';
-
-interface ClassCardCustomization {
-  themeKind: CardThemeKind;
-  gradientId: CardGradientId;
-  imageUrl: string | null;
-  imagePositionX: number;
-  imagePositionY: number;
-  imageScale: number;
-}
-
-interface GradientOption {
-  id: CardGradientId;
-  label: string;
-  background: string;
-  accent: string;
-  buttonTint: string;
-}
 
 const STORAGE_KEY_CUSTOMIZE = 'teacher-class-card-customize-v2';
 const STORAGE_KEY_VIEW = 'teacher-class-view-mode-v1';
 
-const GRADIENT_OPTIONS: GradientOption[] = [
-  {
-    id: 'oceanic-blue',
-    label: 'Oceanic Blue',
-    background: 'linear-gradient(135deg, #2c4fdd 0%, #3d63f1 100%)',
-    accent: '#3557e4',
-    buttonTint: 'rgba(24, 46, 172, 0.92)',
-  },
-  {
-    id: 'emerald-wave',
-    label: 'Emerald Wave',
-    background: 'linear-gradient(135deg, #069f77 0%, #11b68d 100%)',
-    accent: '#0fa37f',
-    buttonTint: 'rgba(6, 110, 86, 0.92)',
-  },
-  {
-    id: 'violet-burst',
-    label: 'Violet Burst',
-    background: 'linear-gradient(135deg, #7f22f0 0%, #9944f5 100%)',
-    accent: '#8f31f2',
-    buttonTint: 'rgba(89, 24, 160, 0.92)',
-  },
-  {
-    id: 'sunset-orange',
-    label: 'Sunset Orange',
-    background: 'linear-gradient(135deg, #d66a1e 0%, #f08d2d 100%)',
-    accent: '#e07e26',
-    buttonTint: 'rgba(130, 64, 18, 0.9)',
-  },
-  {
-    id: 'rose-dusk',
-    label: 'Rose Dusk',
-    background: 'linear-gradient(135deg, #d42756 0%, #ef5f87 100%)',
-    accent: '#df3f6b',
-    buttonTint: 'rgba(123, 22, 56, 0.9)',
-  },
-  {
-    id: 'slate-night',
-    label: 'Slate Night',
-    background: 'linear-gradient(135deg, #1d304f 0%, #2e4a73 100%)',
-    accent: '#2a446a',
-    buttonTint: 'rgba(10, 23, 44, 0.9)',
-  },
-];
-
 const TAG_ORDER: EventTag[] = ['assessment', 'event', 'holiday'];
 const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-function getFallbackGradient(index: number): CardGradientId {
-  const fallbackByIndex: CardGradientId[] = ['oceanic-blue', 'emerald-wave', 'violet-burst'];
-  return fallbackByIndex[index % fallbackByIndex.length];
-}
-
-function createDefaultCustomization(gradientId: CardGradientId): ClassCardCustomization {
-  return {
-    themeKind: 'gradient',
-    gradientId,
-    imageUrl: null,
-    imagePositionX: 50,
-    imagePositionY: 50,
-    imageScale: 120,
-  };
-}
-
-function getGradientOption(gradientId: CardGradientId): GradientOption {
-  return GRADIENT_OPTIONS.find((option) => option.id === gradientId) ?? GRADIENT_OPTIONS[0];
-}
-
-function toCardGradientId(value: unknown, fallback: CardGradientId): CardGradientId {
-  if (typeof value !== 'string') return fallback;
-  return (GRADIENT_OPTIONS.find((option) => option.id === value)?.id ?? fallback) as CardGradientId;
-}
-
-function parseLegacyToneToGradient(value: unknown, fallback: CardGradientId): CardGradientId {
-  if (value === 'blue') return 'oceanic-blue';
-  if (value === 'green') return 'emerald-wave';
-  if (value === 'violet') return 'violet-burst';
-  return fallback;
-}
-
-function normalizeCustomization(rawValue: unknown, fallbackGradient: CardGradientId): ClassCardCustomization {
-  if (!rawValue || typeof rawValue !== 'object') {
-    return createDefaultCustomization(fallbackGradient);
-  }
-
-  const value = rawValue as Partial<ClassCardCustomization> & { tone?: string };
-  const gradientId =
-    typeof value.gradientId === 'string'
-      ? toCardGradientId(value.gradientId, fallbackGradient)
-      : parseLegacyToneToGradient(value.tone, fallbackGradient);
-
-  const normalizedImageUrl =
-    typeof value.imageUrl === 'string' && !value.imageUrl.startsWith('data:')
-      ? value.imageUrl
-      : null;
-  const themeKind: CardThemeKind =
-    value.themeKind === 'image' && typeof normalizedImageUrl === 'string' && normalizedImageUrl.length > 0
-      ? 'image'
-      : 'gradient';
-
-  const x = typeof value.imagePositionX === 'number' ? Math.min(Math.max(value.imagePositionX, 0), 100) : 50;
-  const y = typeof value.imagePositionY === 'number' ? Math.min(Math.max(value.imagePositionY, 0), 100) : 50;
-  const scale = typeof value.imageScale === 'number' ? Math.min(Math.max(value.imageScale, 100), 220) : 120;
-
-  return {
-    themeKind,
-    gradientId,
-    imageUrl: normalizedImageUrl,
-    imagePositionX: x,
-    imagePositionY: y,
-    imageScale: scale,
-  };
-}
-
-function getHeroStyle(customization: ClassCardCustomization): CSSProperties {
-  const gradient = getGradientOption(customization.gradientId).background;
-  if (customization.themeKind === 'image' && customization.imageUrl) {
-    return {
-      backgroundImage: `linear-gradient(120deg, rgba(8, 23, 44, 0.34), rgba(8, 23, 44, 0.12)), url(${customization.imageUrl})`,
-      backgroundSize: `${customization.imageScale}%`,
-      backgroundPosition: `${customization.imagePositionX}% ${customization.imagePositionY}%`,
-      backgroundRepeat: 'no-repeat',
-    };
-  }
-  return { background: gradient };
-}
 
 function formatScheduleLine(classItem: ClassItem) {
   const schedule = classItem.schedules?.[0];
@@ -631,20 +492,58 @@ export default function TeacherClassesPage() {
               const taskCount = classItem.schedules?.length ?? 0;
               const rosterPercent = maxStudents > 0 ? Math.round((students / maxStudents) * 100) : 0;
               const isMenuOpen = openCardMenuId === classItem.id;
+              const actions = [
+                {
+                  href: `/dashboard/teacher/assessments?classId=${classItem.id}`,
+                  icon: NotebookPen,
+                  label: 'Assignments',
+                },
+                {
+                  href: `/dashboard/teacher/announcements?classId=${classItem.id}`,
+                  icon: Bell,
+                  label: 'Notify',
+                },
+                {
+                  href: `/dashboard/teacher/classes/${classItem.id}/students/add`,
+                  icon: Users,
+                  label: 'Students',
+                },
+                {
+                  href: `/dashboard/teacher/class-record?classId=${classItem.id}`,
+                  icon: ClipboardList,
+                  label: 'Record',
+                },
+                {
+                  href: `/dashboard/teacher/calendar?classId=${classItem.id}`,
+                  icon: CalendarDays,
+                  label: 'Calendar',
+                },
+              ] as const;
 
               return (
-                <article
+                <CourseSurfaceCard
                   key={classItem.id}
                   className="teacher-home-card"
                   data-theme-kind={theme.themeKind}
-                  role="link"
                   tabIndex={0}
                   aria-label={`Open ${classItem.subjectName} class`}
+                  animateDelayMs={Math.min(index, 10) * 45}
                   onClick={(event) => handleClassCardClick(event, classItem.id)}
                   onKeyDown={(event) => handleClassCardKeyDown(event, classItem.id)}
                   style={{ cursor: 'pointer' }}
-                >
-                  <div className="teacher-home-card__hero" style={heroStyle}>
+                  heroStyle={heroStyle}
+                  heroMeta={formatScheduleLine(classItem)}
+                  title={classItem.subjectName}
+                  subtitle={`Grade ${classItem.section?.gradeLevel ?? classItem.subjectGradeLevel ?? 'TBA'} - ${classItem.section?.name ?? 'Section not set'}`}
+                  statusLabel={classItem.isActive ? 'Active' : 'Archived'}
+                  stats={[
+                    { value: students, label: 'Lessons' },
+                    { value: taskCount, label: 'Tasks' },
+                  ]}
+                  progressPercent={rosterPercent}
+                  progressColor={gradient.accent}
+                  actions={actions}
+                  heroControl={(
                     <div
                       className="teacher-home-card__menu"
                       data-class-card-menu
@@ -670,7 +569,9 @@ export default function TeacherClassesPage() {
                               : gradient.buttonTint,
                         }}
                         onClick={() =>
-                          setOpenCardMenuId((current) => (current === classItem.id ? null : classItem.id))
+                          setOpenCardMenuId((current) =>
+                            current === classItem.id ? null : classItem.id,
+                          )
                         }
                       >
                         <MoreHorizontal className="h-3.5 w-3.5" />
@@ -693,9 +594,12 @@ export default function TeacherClassesPage() {
                           gap: '0.18rem',
                           opacity: isMenuOpen ? 1 : 0,
                           pointerEvents: isMenuOpen ? 'auto' : 'none',
-                          transform: isMenuOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.98)',
+                          transform: isMenuOpen
+                            ? 'translateY(0) scale(1)'
+                            : 'translateY(-6px) scale(0.98)',
                           transformOrigin: 'top right',
-                          transition: 'opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)',
+                          transition:
+                            'opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)',
                         }}
                       >
                         <button
@@ -735,75 +639,20 @@ export default function TeacherClassesPage() {
                             fontWeight: 600,
                             display: 'inline-flex',
                             alignItems: 'center',
-                            opacity: updatingVisibilityClassId === classItem.id ? 0.58 : 1,
+                            opacity:
+                              updatingVisibilityClassId === classItem.id
+                                ? 0.58
+                                : 1,
                           }}
                         >
-                          {status === 'hidden' || classItem.isHidden ? 'Unhide class' : 'Hide class'}
+                          {status === 'hidden' || classItem.isHidden
+                            ? 'Unhide class'
+                            : 'Hide class'}
                         </button>
                       </div>
                     </div>
-                    <p>{formatScheduleLine(classItem)}</p>
-                  </div>
-
-                  <div className="teacher-home-card__body">
-                    <div className="teacher-home-card__title-row">
-                      <div>
-                        <h3>{classItem.subjectName}</h3>
-                        <p>
-                          Grade {classItem.section?.gradeLevel ?? classItem.subjectGradeLevel ?? 'TBA'} -{' '}
-                          {classItem.section?.name ?? 'Section not set'}
-                        </p>
-                      </div>
-                      <span className="teacher-home-card__state">
-                        {classItem.isActive ? 'Active' : 'Archived'}
-                      </span>
-                    </div>
-
-                    <div className="teacher-home-card__stats">
-                      <article>
-                        <strong>{students}</strong>
-                        <span>Lessons</span>
-                      </article>
-                      <article>
-                        <strong>{taskCount}</strong>
-                        <span>Tasks</span>
-                      </article>
-                    </div>
-
-                    <div className="teacher-home-card__progress">
-                      <div className="teacher-home-card__progress-head">
-                        <span>Completion</span>
-                        <strong>{rosterPercent}%</strong>
-                      </div>
-                      <div className="teacher-home-card__progress-track">
-                        <div style={{ width: `${rosterPercent}%`, background: gradient.accent }} />
-                      </div>
-                    </div>
-
-                    <div className="teacher-home-card__actions">
-                      <Link href={`/dashboard/teacher/assessments?classId=${classItem.id}`}>
-                        <NotebookPen className="h-4 w-4" />
-                        Assignments
-                      </Link>
-                      <Link href={`/dashboard/teacher/announcements?classId=${classItem.id}`}>
-                        <Bell className="h-4 w-4" />
-                        Notify
-                      </Link>
-                      <Link href={`/dashboard/teacher/classes/${classItem.id}/students/add`}>
-                        <Users className="h-4 w-4" />
-                        Students
-                      </Link>
-                      <Link href={`/dashboard/teacher/class-record?classId=${classItem.id}`}>
-                        <ClipboardList className="h-4 w-4" />
-                        Record
-                      </Link>
-                      <Link href={`/dashboard/teacher/calendar?classId=${classItem.id}`}>
-                        <CalendarDays className="h-4 w-4" />
-                        Calendar
-                      </Link>
-                    </div>
-                  </div>
-                </article>
+                  )}
+                />
               );
             })
           )}

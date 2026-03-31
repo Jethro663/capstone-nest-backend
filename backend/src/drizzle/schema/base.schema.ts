@@ -97,6 +97,14 @@ export const moduleItemTypeEnum = pgEnum('module_item_type', [
   'assessment',
   'file',
 ]);
+export const studentPresentationModeEnum = pgEnum(
+  'student_presentation_mode',
+  ['solid', 'gradient', 'preset'],
+);
+export const studentCourseViewModeEnum = pgEnum(
+  'student_course_view_mode',
+  ['card', 'wide'],
+);
 
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
@@ -783,6 +791,12 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   auditLogs: many(auditLogs),
   lessonCompletions: many(lessonCompletions),
   assessmentAttempts: many(assessmentAttempts),
+  classVisibilityPreferences: many(classVisibilityPreferences),
+  studentClassPresentationPreferences: many(studentClassPresentationPreferences),
+  studentCourseViewPreference: one(studentCourseViewPreferences, {
+    fields: [users.id],
+    references: [studentCourseViewPreferences.userId],
+  }),
   // Keep the property name `profile` for compatibility but point to student_profiles
   profile: one(studentProfiles, {
     fields: [users.id],
@@ -853,6 +867,8 @@ export const classesRelations = relations(classes, ({ one, many }) => ({
   lessons: many(lessons),
   assessments: many(assessments),
   modules: many(classModules),
+  visibilityPreferences: many(classVisibilityPreferences),
+  studentPresentationPreferences: many(studentClassPresentationPreferences),
 }));
 
 export const classSchedulesRelations = relations(classSchedules, ({ one }) => ({
@@ -1087,6 +1103,55 @@ export const classVisibilityPreferences = pgTable(
   }),
 );
 
+export const studentClassPresentationPreferences = pgTable(
+  'student_class_presentation_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    styleMode: studentPresentationModeEnum('style_mode')
+      .notNull()
+      .default('gradient'),
+    styleToken: text('style_token').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('student_class_presentation_preferences_user_idx').on(
+      table.userId,
+    ),
+    classIdx: index('student_class_presentation_preferences_class_idx').on(
+      table.classId,
+    ),
+    uniquePreference: unique(
+      'student_class_presentation_preferences_user_class_unique',
+    ).on(table.userId, table.classId),
+  }),
+);
+
+export const studentCourseViewPreferences = pgTable(
+  'student_course_view_preferences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    viewMode: studentCourseViewModeEnum('view_mode').notNull().default('card'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index('student_course_view_preferences_user_idx').on(table.userId),
+    uniqueUserPreference: unique(
+      'student_course_view_preferences_user_unique',
+    ).on(table.userId),
+  }),
+);
+
 export const sectionVisibilityPreferences = pgTable(
   'section_visibility_preferences',
   {
@@ -1158,6 +1223,30 @@ export const classVisibilityPreferencesRelations = relations(
     class: one(classes, {
       fields: [classVisibilityPreferences.classId],
       references: [classes.id],
+    }),
+  }),
+);
+
+export const studentClassPresentationPreferencesRelations = relations(
+  studentClassPresentationPreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [studentClassPresentationPreferences.userId],
+      references: [users.id],
+    }),
+    class: one(classes, {
+      fields: [studentClassPresentationPreferences.classId],
+      references: [classes.id],
+    }),
+  }),
+);
+
+export const studentCourseViewPreferencesRelations = relations(
+  studentCourseViewPreferences,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [studentCourseViewPreferences.userId],
+      references: [users.id],
     }),
   }),
 );

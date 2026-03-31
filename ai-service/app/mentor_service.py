@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .config import settings
 from .media_utils import normalize_attachment_images, resolve_backend_upload_path
 from .retrieval_service import similarity_search
 from .schemas import RequestUser
@@ -55,6 +56,16 @@ def _normalize_options(options: Any) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             return []
     return options if isinstance(options, list) else []
+
+
+def _is_chunk_grounded(chunk: dict[str, Any]) -> bool:
+    score_breakdown = chunk.get("scoreBreakdown") or {}
+    final_score = float(score_breakdown.get("final") or 0.0)
+    semantic_score = float(score_breakdown.get("semantic") or 0.0)
+    return (
+        final_score >= settings.retrieval_min_final_score
+        and semantic_score >= settings.retrieval_min_semantic_score
+    )
 
 
 async def explain_mistake(
@@ -188,11 +199,14 @@ async def explain_mistake(
         reference_assessment_id=str(row["assessment_id"]),
         reference_question_id=question_id,
     )
+    grounded_chunks = [chunk for chunk in chunks if _is_chunk_grounded(chunk)]
+    selected_chunks = grounded_chunks or chunks[:1]
+    grounding_status = "grounded" if grounded_chunks else "insufficient"
 
     context_blocks = []
     citations = []
     seen_citations = set()
-    for chunk in chunks:
+    for chunk in selected_chunks:
         metadata = chunk.get("metadataJson") or {}
         label = metadata.get("lessonTitle") or metadata.get("assessmentTitle") or chunk["sourceType"]
         context_blocks.append(f"[{label}] {chunk['chunkText']}")
@@ -217,6 +231,63 @@ async def explain_mistake(
             continue
         seen_citations.add(citation_key)
         citations.append(citation)
+    if grounding_status == "insufficient":
+        safe_reply = (
+            "I need more matching lesson evidence before I can explain this confidently.\n\n"
+            "Please open the related lesson and share the exact step where the confusion started so I can guide you accurately.\n\n"
+            "Ja's Study Tip: When a solution feels off, compare each step against one trusted class example."
+        )
+        await db.execute(
+            sa_text(
+                """
+                INSERT INTO ai_interaction_logs (
+                  user_id,
+                  session_type,
+                  input_text,
+                  output_text,
+                  model_used,
+                  response_time_ms,
+                  session_id,
+                  context_metadata
+                )
+                VALUES (
+                  :userId,
+                  'mistake_explanation',
+                  :inputText,
+                  :outputText,
+                  :modelUsed,
+                  :responseTimeMs,
+                  :sessionId,
+                  :contextMetadata
+                )
+                """
+            ).bindparams(bindparam("contextMetadata", type_=postgresql.JSONB)),
+            {
+                "userId": user.id,
+                "inputText": (message or row["question_content"])[:2000],
+                "outputText": safe_reply[:5000],
+                "modelUsed": "grounding-guardrail",
+                "responseTimeMs": 0,
+                "sessionId": str(uuid.uuid4()),
+                "contextMetadata": {
+                    "attemptId": attempt_id,
+                    "assessmentId": str(row["assessment_id"]),
+                    "questionId": question_id,
+                    "classId": str(row["class_id"]),
+                    "citations": citations,
+                    "groundingStatus": "insufficient",
+                },
+            },
+        )
+        await db.commit()
+        return {
+            "reply": safe_reply,
+            "citations": citations,
+            "analysisPacket": {},
+            "suggestedNext": None,
+            "modelUsed": "grounding-guardrail",
+            "groundingStatus": "insufficient",
+        }
 
     analysis_packet = await _build_mistake_analysis_packet(
         question_content=row["question_content"],
@@ -347,6 +418,7 @@ Citations:
             task_name,
             images=prepared_images,
         ),
+        "groundingStatus": grounding_status,
     }
 
 

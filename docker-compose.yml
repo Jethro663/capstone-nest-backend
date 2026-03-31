@@ -92,6 +92,10 @@ services:
     ports:
       - "3000:3000"
     environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-CHANGE_ME_DB_PASSWORD}@postgres:5432/capstone
+      JWT_SECRET: ${JWT_SECRET:-local_dev_jwt_secret_32_chars_min}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local_dev_refresh_secret_32ch}
+      OTP_PEPPER: ${OTP_PEPPER:-local_dev_otp_pepper_32_chars}
       RUN_DB_MIGRATIONS: ${RUN_DB_MIGRATIONS:-true}
       RUN_DB_SEED: ${RUN_DB_SEED:-false}
     volumes:
@@ -104,7 +108,11 @@ services:
       ai-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/ready > /dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3000/api/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -120,6 +128,8 @@ services:
     restart: unless-stopped
     env_file:
       - ./ai-service/.env.docker
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-CHANGE_ME_DB_PASSWORD}@postgres:5432/capstone
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
@@ -128,7 +138,11 @@ services:
       ollama:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/ready > /dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/ready', timeout=5).getcode() < 500 else 1)\"",
+        ]
       interval: 15s
       timeout: 10s
       retries: 20
@@ -146,7 +160,7 @@ services:
       - PORT=3001
       - HOSTNAME=0.0.0.0
     ports:
-      - "3001:3001"
+      - "${FRONTEND_PORT:-3001}:3001"
     depends_on:
       backend:
         condition: service_healthy

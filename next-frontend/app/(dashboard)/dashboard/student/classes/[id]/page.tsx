@@ -1,772 +1,855 @@
-﻿'use client';
+'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, ChevronRight, Clock3, Download, FileText, FolderOpen, Megaphone, Sparkles, Target } from 'lucide-react';
-import { motion, useReducedMotion } from 'framer-motion';
-
+import { useParams, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeft,
+  BookOpen,
+  CalendarDays,
+  ClipboardList,
+  Clock3,
+  FileSpreadsheet,
+  FolderOpen,
+  Megaphone,
+  School,
+  Users,
+} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
-import { lessonService } from '@/services/lesson-service';
+import { moduleService } from '@/services/module-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
-import { moduleService } from '@/services/module-service';
-import { fileService } from '@/services/file-service';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { schoolEventService } from '@/services/school-event-service';
+import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  StudentActionCard,
-  StudentEmptyState,
-  StudentSectionHeader,
-  StudentStatusChip,
-} from '@/components/student/student-primitives';
-import { getMotionProps } from '@/components/student/student-motion';
-import { getDescription } from '@/utils/helpers';
-import type { ClassItem } from '@/types/class';
-import type { Lesson, LessonCompletion } from '@/types/lesson';
+import './student-class-detail.css';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
+import type { ClassItem } from '@/types/class';
 import type { ClassModule } from '@/types/module';
+import type { SchoolEvent } from '@/types/school-event';
+import { getTeacherName } from '@/utils/helpers';
 
-const LESSONS_PAGE_SIZE = 6;
-const ASSESSMENTS_PAGE_SIZE = 6;
-const MODULES_PAGE_SIZE = 8;
+type StudentClassTab =
+  | 'modules'
+  | 'assignments'
+  | 'announcements'
+  | 'classmates'
+  | 'grades'
+  | 'calendar';
+type AssignmentCategory =
+  | 'all'
+  | 'written_work'
+  | 'performance_task'
+  | 'quarterly_assessment'
+  | 'discussion';
+type CalendarKind = 'assessment' | 'event' | 'holiday';
 
-type AssessmentBucket = 'all' | 'upcoming' | 'past_due' | 'completed';
-type TabKey = 'lessons' | 'assessments' | 'announcements' | 'modules';
+interface AssignmentRow {
+  assessment: Assessment;
+  category: Exclude<AssignmentCategory, 'all'>;
+}
+
+interface GradeRow {
+  id: string;
+  title: string;
+  categoryLabel: string;
+  scoreText: string;
+  percentText: string;
+  dateText: string;
+  isPending: boolean;
+}
+
+interface CalendarRow {
+  id: string;
+  kind: CalendarKind;
+  date: Date;
+  title: string;
+  subtitle: string;
+}
+
+const TABS: Array<{ key: StudentClassTab; label: string; icon: typeof FolderOpen }> = [
+  { key: 'modules', label: 'Modules', icon: FolderOpen },
+  { key: 'assignments', label: 'Assignments', icon: ClipboardList },
+  { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'classmates', label: 'Classmates', icon: Users },
+  { key: 'grades', label: 'Grades', icon: FileSpreadsheet },
+  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
+];
+
+const ASSIGNMENT_FILTERS: Array<{ key: AssignmentCategory; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'written_work', label: 'Written Work' },
+  { key: 'performance_task', label: 'Performance Task' },
+  { key: 'quarterly_assessment', label: 'Quarterly Assessment' },
+  { key: 'discussion', label: 'Discussion' },
+];
+
+const moduleToneByIndex = ['blue', 'green', 'violet'] as const;
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 6 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.2,
+    },
+  },
+};
+
+function isStudentClassTab(value: string | null): value is StudentClassTab {
+  return (
+    value === 'modules' ||
+    value === 'assignments' ||
+    value === 'announcements' ||
+    value === 'classmates' ||
+    value === 'grades' ||
+    value === 'calendar'
+  );
+}
+
+function getClassId(raw: string | string[] | undefined) {
+  if (!raw) return '';
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
+function formatScheduleLabel(classItem: ClassItem | null) {
+  const schedule = classItem?.schedules?.[0];
+  if (!schedule) return 'Schedule TBA';
+  const start = formatTime(schedule.startTime);
+  const end = formatTime(schedule.endTime);
+  return `${schedule.days.join('/')} ${start}-${end}`;
+}
+
+function formatTime(value: string) {
+  const [rawHours = '0', rawMinutes = '0'] = value.split(':');
+  const hours = Number.parseInt(rawHours, 10);
+  const minutes = Number.parseInt(rawMinutes, 10);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
+  const meridiem = hours >= 12 ? 'PM' : 'AM';
+  const normalizedHours = hours % 12 || 12;
+  return `${normalizedHours}:${String(minutes).padStart(2, '0')} ${meridiem}`;
+}
+
+function formatClassLine(classItem: ClassItem | null) {
+  const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || '--';
+  const sectionName = classItem?.section?.name || 'Section';
+  const teacherName = getTeacherName(classItem?.teacher);
+  return `Grade ${gradeLevel} - ${sectionName} · ${teacherName}`;
+}
+
+function summarizeModule(moduleEntry: ClassModule) {
+  return moduleEntry.sections.reduce(
+    (acc, section) => {
+      for (const item of section.items) {
+        if (item.itemType === 'lesson') acc.lessons += 1;
+        if (item.itemType === 'assessment') acc.assessments += 1;
+      }
+      return acc;
+    },
+    { lessons: 0, assessments: 0 },
+  );
+}
+
+function resolveAssignmentCategory(assessment: Assessment): Exclude<AssignmentCategory, 'all'> {
+  const type = assessment.type.toLowerCase();
+  const title = assessment.title.toLowerCase();
+  const description = (assessment.description || '').toLowerCase();
+  const text = `${title} ${description}`;
+  if (text.includes('discussion')) return 'discussion';
+  if (text.includes('project') || text.includes('performance')) return 'performance_task';
+  if (text.includes('quarter') || text.includes('exam') || type.includes('quarter')) {
+    return 'quarterly_assessment';
+  }
+  if (type.includes('discussion')) return 'discussion';
+  if (type.includes('performance')) return 'performance_task';
+  if (type.includes('quarter')) return 'quarterly_assessment';
+  return 'written_work';
+}
+
+function assignmentCategoryLabel(category: Exclude<AssignmentCategory, 'all'>) {
+  if (category === 'written_work') return 'Written Work';
+  if (category === 'performance_task') return 'Performance Task';
+  if (category === 'quarterly_assessment') return 'Quarterly Assessment';
+  return 'Discussion';
+}
+
+function parseDate(dateString?: string | null) {
+  if (!dateString) return null;
+  const parsed = new Date(dateString);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function sortByDateAsc<T>(items: T[], resolver: (item: T) => Date | null) {
+  return [...items].sort((left, right) => {
+    const leftDate = resolver(left);
+    const rightDate = resolver(right);
+    if (!leftDate && !rightDate) return 0;
+    if (!leftDate) return 1;
+    if (!rightDate) return -1;
+    return leftDate.getTime() - rightDate.getTime();
+  });
+}
+
+function formatDateLong(value: Date | null) {
+  if (!value) return '--';
+  return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatCalendarDay(value: Date) {
+  return {
+    day: String(value.getDate()),
+    month: value.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+  };
+}
+
+function getEnrollmentRows(classItem: ClassItem | null) {
+  const rows = classItem?.enrollments || [];
+  const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || '--';
+  const sectionName = classItem?.section?.name || 'Section';
+  const sectionLabel = `Grade ${gradeLevel} - ${sectionName}`;
+  return rows.map((enrollment) => {
+    const firstName = enrollment.student?.firstName || '';
+    const lastName = enrollment.student?.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim() || 'Unnamed student';
+    return {
+      id: enrollment.id,
+      fullName,
+      email: enrollment.student?.email || '--',
+      section: sectionLabel,
+      initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'NA',
+    };
+  });
+}
+
+function getLatestSubmittedAttempt(attempts: AssessmentAttempt[]) {
+  const submitted = attempts.filter((attempt) => attempt.isSubmitted);
+  if (submitted.length === 0) return null;
+  return [...submitted].sort((left, right) => {
+    const leftTs = new Date(left.submittedAt || left.updatedAt || left.createdAt || 0).getTime();
+    const rightTs = new Date(right.submittedAt || right.updatedAt || right.createdAt || 0).getTime();
+    return rightTs - leftTs;
+  })[0];
+}
+
+function getScoreTone(percent: number) {
+  if (percent >= 90) return 'outstanding';
+  if (percent >= 80) return 'good';
+  if (percent >= 70) return 'fair';
+  return 'at-risk';
+}
+
+function getOpenModuleHref(moduleEntry: ClassModule, classId: string) {
+  if (moduleEntry.isLocked) return null;
+  for (const section of moduleEntry.sections) {
+    for (const item of section.items) {
+      if (item.itemType === 'lesson' && item.lessonId) {
+        return `/dashboard/student/lessons/${item.lessonId}?classId=${classId}`;
+      }
+      if (item.itemType === 'assessment' && item.assessmentId) {
+        return `/dashboard/student/assessments/${item.assessmentId}?classId=${classId}`;
+      }
+    }
+  }
+  return `/dashboard/student/classes/${classId}?view=modules`;
+}
 
 export default function StudentClassDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const classId = params.id as string;
-  const reduceMotion = useReducedMotion();
-  const motionProps = getMotionProps(!!reduceMotion);
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
 
-  const [classItem, setClassItem] = useState<ClassItem | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [completions, setCompletions] = useState<Record<string, boolean>>({});
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [attempts, setAttempts] = useState<Record<string, AssessmentAttempt[]>>({});
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [modules, setModules] = useState<ClassModule[]>([]);
-  const [modulesLoading, setModulesLoading] = useState(false);
+  const classId = getClassId(params.id as string | string[] | undefined);
+  const currentTab = isStudentClassTab(searchParams.get('view'))
+    ? (searchParams.get('view') as StudentClassTab)
+    : 'modules';
+
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>('modules');
-  const [lessonFilter, setLessonFilter] = useState<'all' | 'completed' | 'pending'>('all');
-  const [lessonSort, setLessonSort] = useState<'asc' | 'desc'>('asc');
-  const [lessonPage, setLessonPage] = useState(1);
-  const [assessmentBucket, setAssessmentBucket] = useState<AssessmentBucket>('all');
-  const [assessmentPage, setAssessmentPage] = useState(1);
-  const [moduleSearch, setModuleSearch] = useState('');
-  const [modulePage, setModulePage] = useState(1);
+  const [classItem, setClassItem] = useState<ClassItem | null>(null);
+  const [modules, setModules] = useState<ClassModule[]>([]);
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
+  const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
+  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('all');
 
-  const fetchData = useCallback(async () => {
+  const fetchPageData = useCallback(async () => {
+    if (!classId) {
+      setClassItem(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const [classRes, lessonsRes, completedRes, assessmentsRes, announcementsRes] = await Promise.all([
-        classService.getById(classId),
-        lessonService.getByClass(classId),
-        lessonService.getCompletedByClass(classId).catch(() => ({ data: [] as LessonCompletion[] })),
-        assessmentService.getByClass(classId),
-        announcementService.getByClass(classId).catch(() => ({ data: [] as Announcement[] })),
-      ]);
 
-      setClassItem(classRes.data);
-      setLessons(lessonsRes.data || []);
-      setAssessments(assessmentsRes.data || []);
-      setAnnouncements(Array.isArray(announcementsRes.data) ? announcementsRes.data : []);
+      const classResponse = await classService.getById(classId);
+      const classData = classResponse.data;
 
-      const completionMap: Record<string, boolean> = {};
-      (completedRes.data || []).forEach((c) => {
-        completionMap[c.lessonId] = c.completed;
-      });
-      setCompletions(completionMap);
+      const [modulesResponse, assessmentsResponse, announcementsResponse, schoolEventsResponse] =
+        await Promise.all([
+          moduleService.getByClass(classId).catch(() => ({ data: [] as ClassModule[] })),
+          assessmentService
+            .getByClass(classId, { page: 1, limit: 100, status: 'all' })
+            .catch(() => ({ data: [] as Assessment[] })),
+          announcementService
+            .getByClass(classId, { limit: 50 })
+            .catch(() => ({ data: [] as Announcement[] })),
+          schoolEventService
+            .getAll({ schoolYear: classData.schoolYear })
+            .catch(() => ({ data: [] as SchoolEvent[] })),
+        ]);
 
-      const published = (assessmentsRes.data || []).filter((a) => a.isPublished);
-      const attemptResults = await Promise.all(
-        published.map((a) =>
-          assessmentService.getStudentAttempts(a.id).catch(() => ({ data: [] as AssessmentAttempt[] })),
-        ),
+      let enrichedClass: ClassItem = classData;
+      if ((!classData.enrollments || classData.enrollments.length === 0) && user?.id) {
+        const studentClasses = await classService
+          .getByStudent(user.id, 'all')
+          .catch(() => ({ data: [] as ClassItem[] }));
+        const matched = (studentClasses.data || []).find((entry) => entry.id === classId);
+        if (matched?.enrollments?.length) {
+          enrichedClass = { ...classData, enrollments: matched.enrollments };
+        }
+      }
+
+      const publishedAssessments = (assessmentsResponse.data || []).filter((entry) => entry.isPublished);
+      const attemptsEntries = await Promise.all(
+        publishedAssessments.map(async (entry) => {
+          const response = await assessmentService
+            .getStudentAttempts(entry.id)
+            .catch(() => ({ data: [] as AssessmentAttempt[] }));
+          return [entry.id, response.data || []] as const;
+        }),
       );
-      const attemptsMap: Record<string, AssessmentAttempt[]> = {};
-      published.forEach((a, i) => {
-        attemptsMap[a.id] = attemptResults[i].data || [];
-      });
-      setAttempts(attemptsMap);
+
+      setClassItem(enrichedClass);
+      setModules(sortByDateAsc(modulesResponse.data || [], () => null).sort((a, b) => a.order - b.order));
+      setAssessments(publishedAssessments);
+      setAnnouncements(
+        [...(announcementsResponse.data || [])].sort((left, right) => {
+          if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
+          const leftTs = new Date(left.createdAt || 0).getTime();
+          const rightTs = new Date(right.createdAt || 0).getTime();
+          return rightTs - leftTs;
+        }),
+      );
+      setSchoolEvents(schoolEventsResponse.data || []);
+      setAttemptsByAssessment(Object.fromEntries(attemptsEntries));
     } catch {
-      // fail silently
+      setClassItem(null);
+      setModules([]);
+      setAssessments([]);
+      setAnnouncements([]);
+      setSchoolEvents([]);
+      setAttemptsByAssessment({});
     } finally {
       setLoading(false);
     }
-  }, [classId]);
-
-  const fetchModules = useCallback(async () => {
-    try {
-      setModulesLoading(true);
-      const response = await moduleService.getByClass(classId);
-      setModules(response.data || []);
-    } catch {
-      setModules([]);
-    } finally {
-      setModulesLoading(false);
-    }
-  }, [classId]);
-
-  const handleModuleFileDownload = useCallback(async (fileId: string, filename: string) => {
-    try {
-      const blob = await fileService.download(fileId);
-      const objectUrl = window.URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = filename || 'resource';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(objectUrl);
-    } catch {
-      // silent fail
-    }
-  }, []);
+  }, [classId, user?.id]);
 
   useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+    void fetchPageData();
+  }, [fetchPageData]);
 
-  useEffect(() => {
-    if (activeTab === 'modules') {
-      void fetchModules();
-    }
-  }, [activeTab, fetchModules]);
-
-  useEffect(() => {
-    setLessonPage(1);
-  }, [lessonFilter, lessonSort]);
-
-  useEffect(() => {
-    setAssessmentPage(1);
-  }, [assessmentBucket]);
-
-  useEffect(() => {
-    setModulePage(1);
-  }, [moduleSearch]);
-
-  const filteredModules = useMemo(() => {
-    const needle = moduleSearch.trim().toLowerCase();
-    if (!needle) return modules;
-
-    return modules.filter((entry) => {
-      const titleMatch = entry.title.toLowerCase().includes(needle);
-      const descriptionMatch = (entry.description || '').toLowerCase().includes(needle);
-      return titleMatch || descriptionMatch;
-    });
-  }, [moduleSearch, modules]);
-
-  const modulePageItems = filteredModules.slice(
-    (modulePage - 1) * MODULES_PAGE_SIZE,
-    modulePage * MODULES_PAGE_SIZE,
-  );
-  const modulesTotalPages = Math.max(
-    Math.ceil(filteredModules.length / MODULES_PAGE_SIZE),
-    1,
+  const workspaceTabs = useMemo(
+    () =>
+      TABS.map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        href: `/dashboard/student/classes/${classId}?view=${entry.key}`,
+        icon: entry.icon,
+        active: currentTab === entry.key,
+      })),
+    [classId, currentTab],
   );
 
-  const filteredLessons = useMemo(() => {
-    const filtered = lessons.filter((lesson) => {
-      if (lessonFilter === 'completed') return completions[lesson.id];
-      if (lessonFilter === 'pending') return !completions[lesson.id];
-      return true;
-    });
+  const assignmentRows = useMemo<AssignmentRow[]>(() => {
+    const rows = assessments.map((assessment) => ({
+      assessment,
+      category: resolveAssignmentCategory(assessment),
+    }));
+    if (assignmentFilter === 'all') return rows;
+    return rows.filter((entry) => entry.category === assignmentFilter);
+  }, [assessments, assignmentFilter]);
 
-    return [...filtered].sort((a, b) => (
-      lessonSort === 'asc' ? a.order - b.order : b.order - a.order
-    ));
-  }, [completions, lessonFilter, lessonSort, lessons]);
-
-  const lessonPageItems = filteredLessons.slice(
-    (lessonPage - 1) * LESSONS_PAGE_SIZE,
-    lessonPage * LESSONS_PAGE_SIZE,
-  );
-  const lessonTotalPages = Math.max(Math.ceil(filteredLessons.length / LESSONS_PAGE_SIZE), 1);
-
-  const assessmentCards = useMemo(() => {
+  const gradeRows = useMemo<GradeRow[]>(() => {
     return assessments.map((assessment) => {
-      const myAttempts = attempts[assessment.id] || [];
-      const latestAttempt = myAttempts[0] || null;
-      const hasCompletedAttempt = myAttempts.some((attempt) => attempt.isSubmitted);
-      const isPastDue = Boolean(assessment.dueDate && new Date(assessment.dueDate) < new Date());
-      const bucket: AssessmentBucket = hasCompletedAttempt
-        ? 'completed'
-        : isPastDue
-          ? 'past_due'
-          : 'upcoming';
+      const category = resolveAssignmentCategory(assessment);
+      const attempts = attemptsByAssessment[assessment.id] || [];
+      const latestSubmitted = getLatestSubmittedAttempt(attempts);
+      const possiblePoints = latestSubmitted?.totalPoints ?? assessment.totalPoints ?? 0;
+      const score = typeof latestSubmitted?.score === 'number' ? latestSubmitted.score : null;
+      const percent =
+        score !== null && possiblePoints > 0 ? Math.round((score / possiblePoints) * 100) : null;
+      const submittedDate = parseDate(latestSubmitted?.submittedAt || latestSubmitted?.updatedAt);
 
       return {
-        assessment,
-        latestAttempt,
-        bucket,
+        id: assessment.id,
+        title: assessment.title,
+        categoryLabel: assignmentCategoryLabel(category),
+        scoreText: score === null ? 'Pending' : `${score}/${possiblePoints || '--'}`,
+        percentText: score === null || percent === null ? '' : `(${percent}%)`,
+        dateText: score === null ? formatDateLong(parseDate(assessment.dueDate)) : formatDateLong(submittedDate),
+        isPending: score === null,
       };
-    }).filter((entry) => assessmentBucket === 'all' || entry.bucket === assessmentBucket);
-  }, [assessmentBucket, assessments, attempts]);
+    });
+  }, [assessments, attemptsByAssessment]);
 
-  const assessmentPageItems = assessmentCards.slice(
-    (assessmentPage - 1) * ASSESSMENTS_PAGE_SIZE,
-    assessmentPage * ASSESSMENTS_PAGE_SIZE,
-  );
-  const assessmentTotalPages = Math.max(
-    Math.ceil(assessmentCards.length / ASSESSMENTS_PAGE_SIZE),
-    1,
-  );
-  const completedLessonCount = Object.values(completions).filter(Boolean).length;
-  const lessonCompletionRate = lessons.length ? Math.round((completedLessonCount / lessons.length) * 100) : 0;
-  const pendingLessonCount = Math.max(lessons.length - completedLessonCount, 0);
-  const upcomingAssessmentCount = assessmentCards.filter((entry) => entry.bucket === 'upcoming').length;
- 
+  const gradeSummary = useMemo(() => {
+    const scoredRows = assessments
+      .map((assessment) => {
+        const attempts = attemptsByAssessment[assessment.id] || [];
+        const latestSubmitted = getLatestSubmittedAttempt(attempts);
+        const possible = latestSubmitted?.totalPoints ?? assessment.totalPoints ?? 0;
+        const earned = typeof latestSubmitted?.score === 'number' ? latestSubmitted.score : null;
+        if (earned === null || possible <= 0) return null;
+        return { earned, possible };
+      })
+      .filter((entry): entry is { earned: number; possible: number } => entry !== null);
+
+    const earnedTotal = scoredRows.reduce((sum, row) => sum + row.earned, 0);
+    const possibleTotal = scoredRows.reduce((sum, row) => sum + row.possible, 0);
+    const percent = possibleTotal > 0 ? Math.round((earnedTotal / possibleTotal) * 100) : 0;
+    const tone = getScoreTone(percent);
+
+    return {
+      earnedTotal,
+      possibleTotal,
+      percent,
+      tone,
+      label:
+        tone === 'outstanding'
+          ? 'Outstanding'
+          : tone === 'good'
+            ? 'Good Standing'
+            : tone === 'fair'
+              ? 'Needs Attention'
+              : 'At Risk',
+      helper:
+        tone === 'outstanding'
+          ? 'On track'
+          : tone === 'good'
+            ? 'Stable progress'
+            : tone === 'fair'
+              ? 'Review upcoming assessments'
+              : 'Immediate intervention needed',
+    };
+  }, [assessments, attemptsByAssessment]);
+
+  const calendarRows = useMemo<CalendarRow[]>(() => {
+    const rows: CalendarRow[] = [];
+
+    for (const assessment of assessments) {
+      const date = parseDate(assessment.dueDate);
+      if (!date) continue;
+      rows.push({
+        id: `assessment-${assessment.id}`,
+        kind: 'assessment',
+        date,
+        title: assessment.title,
+        subtitle: classItem?.subjectName || 'Assessment',
+      });
+    }
+
+    for (const event of schoolEvents) {
+      const date = parseDate(event.startsAt);
+      if (!date) continue;
+      rows.push({
+        id: `event-${event.id}`,
+        kind: event.eventType === 'holiday_break' ? 'holiday' : 'event',
+        date,
+        title: event.title,
+        subtitle: event.location || 'All',
+      });
+    }
+
+    return rows.sort((left, right) => left.date.getTime() - right.date.getTime());
+  }, [assessments, classItem?.subjectName, schoolEvents]);
+
+  const classmateRows = useMemo(() => getEnrollmentRows(classItem), [classItem]);
+  const scheduleLabel = useMemo(() => formatScheduleLabel(classItem), [classItem]);
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-12 w-72 rounded-xl" />
-        <Skeleton className="h-10 w-full rounded-xl" />
-        <Skeleton className="h-80 rounded-2xl" />
+      <div className="student-class-workspace-loading">
+        <Skeleton className="h-44 rounded-xl" />
+        <Skeleton className="h-14 rounded-xl" />
+        <Skeleton className="h-20 rounded-xl" />
+        <Skeleton className="h-20 rounded-xl" />
+        <Skeleton className="h-20 rounded-xl" />
       </div>
     );
   }
 
   if (!classItem) {
-    return <p className="text-muted-foreground">Class not found.</p>;
+    return (
+      <section className="teacher-class-workspace__not-found">
+        <p>Class not found.</p>
+        <Link href="/dashboard/student/courses">Back to Courses</Link>
+      </section>
+    );
   }
 
   return (
-    <div className="student-page space-y-6 rounded-3xl p-1">
-      <Button variant="ghost" size="sm" onClick={() => router.back()} className="w-fit text-red-700 hover:bg-red-50">
-        <ArrowLeft className="mr-1 h-4 w-4" />
-        Back
-      </Button>
+    <ClassWorkspaceShell
+      className="student-class-workspace"
+      backHref="/dashboard/student/courses"
+      backLabel={
+        <>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Courses
+        </>
+      }
+      icon={<BookOpen className="h-5 w-5" />}
+      title={classItem.subjectName || classItem.className || 'Class'}
+      subtitle={formatClassLine(classItem)}
+      metaItems={[
+        {
+          key: 'schedule',
+          icon: <Clock3 className="h-3.5 w-3.5" />,
+          label: scheduleLabel,
+        },
+        {
+          key: 'room',
+          icon: <School className="h-3.5 w-3.5" />,
+          label: classItem.room ? `Room ${classItem.room}` : 'Room TBA',
+        },
+        {
+          key: 'modules',
+          icon: <FolderOpen className="h-3.5 w-3.5" />,
+          label: `${modules.length} module${modules.length === 1 ? '' : 's'}`,
+        },
+      ]}
+      tabs={workspaceTabs}
+    >
+      {currentTab === 'modules' ? (
+        <motion.section
+          className="student-class-panel"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <header className="student-class-panel__head">
+            <h2>Course Modules</h2>
+            <p>{modules.length} modules available</p>
+          </header>
 
-      <StudentActionCard className="relative overflow-hidden border-0 bg-[linear-gradient(135deg,var(--student-accent)_0%,color-mix(in_srgb,var(--student-accent)_68%,white)_100%)] text-[var(--student-accent-contrast)] shadow-[var(--student-shadow-hover)]">
-        <div className="absolute right-[-2rem] top-[-1rem] h-28 w-28 rounded-full bg-white/18 blur-2xl" />
-        <div className="absolute bottom-[-2rem] left-[-1rem] h-24 w-24 rounded-full bg-white/14 blur-2xl" />
-        <div className="relative space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-black/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-[var(--student-text-strong)]">
-                <Sparkles className="h-3.5 w-3.5" />
-                Subject Space
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-extrabold tracking-tight text-[var(--student-text-strong)]">{classItem.subjectName || classItem.className || 'Class'}</h1>
-                <p className="max-w-2xl text-sm font-medium text-[color:color-mix(in_srgb,var(--student-text-muted)_92%,var(--student-text-strong)_8%)]">
-                  {`${classItem.section?.name || 'Section'} • Grade ${classItem.section?.gradeLevel || classItem.subjectGradeLevel || 'TBA'}`}
-                </p>
-                <p className="max-w-2xl text-sm text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">
-                  Keep moving through lessons, check what is still pending, and jump back into the next part of this class without digging through a plain list.
-                </p>
-              </div>
-            </div>
-            <div className="grid min-w-[220px] grid-cols-3 gap-2 text-right text-xs font-semibold text-[var(--student-text-strong)]">
-              <div className="rounded-2xl border border-black/10 bg-white/35 px-3 py-3">
-                <p className="text-lg font-extrabold">{lessons.length}</p>
-                <p className="text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">Lessons</p>
-              </div>
-              <div className="rounded-2xl border border-black/10 bg-white/35 px-3 py-3">
-                <p className="text-lg font-extrabold">{completedLessonCount}</p>
-                <p className="text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">Done</p>
-              </div>
-              <div className="rounded-2xl border border-black/10 bg-white/35 px-3 py-3">
-                <p className="text-lg font-extrabold">{assessments.length}</p>
-                <p className="text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">Assessments</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-[1.4rem] border border-black/10 bg-white/35 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[color:color-mix(in_srgb,var(--student-text-muted)_92%,var(--student-text-strong)_8%)]">Progress</p>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{lessonCompletionRate}%</p>
-              <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">Lesson completion so far</p>
-            </div>
-            <div className="rounded-[1.4rem] border border-black/10 bg-white/35 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[color:color-mix(in_srgb,var(--student-text-muted)_92%,var(--student-text-strong)_8%)]">Still Pending</p>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{pendingLessonCount}</p>
-              <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">Lessons waiting for your next visit</p>
-            </div>
-            <div className="rounded-[1.4rem] border border-black/10 bg-white/35 px-4 py-4">
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[color:color-mix(in_srgb,var(--student-text-muted)_92%,var(--student-text-strong)_8%)]">Upcoming Tasks</p>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{upcomingAssessmentCount}</p>
-              <p className="mt-1 text-sm text-[color:color-mix(in_srgb,var(--student-text-muted)_94%,var(--student-text-strong)_6%)]">Assessments likely needing attention next</p>
-            </div>
-          </div>
-        </div>
-      </StudentActionCard>
-
-      <StudentActionCard className="student-panel-hover border border-[var(--student-outline)] bg-[var(--student-glass)]">
-        <div className="flex flex-wrap gap-2">
-          {([
-            ['lessons', 'Lessons'],
-            ['assessments', 'Assessments'],
-            ['announcements', 'Announcements'],
-            ['modules', 'Modules'],
-          ] as Array<[TabKey, string]>).map(([value, label]) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant={activeTab === value ? 'default' : 'outline'}
-              className={activeTab === value ? 'student-button-solid rounded-xl' : 'student-button-outline rounded-xl'}
-              onClick={() => setActiveTab(value)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-      </StudentActionCard>
-
-      {activeTab === 'lessons' && (
-        <div className="space-y-4">
-          <StudentSectionHeader
-            title="Lessons"
-            subtitle={`${filteredLessons.length} lesson${filteredLessons.length === 1 ? '' : 's'} in view. Pick up where you left off or jump ahead when you feel ready.`}
-            action={(
-              <div className="flex flex-wrap gap-2">
-                {(['all', 'completed', 'pending'] as const).map((value) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    size="sm"
-                    variant={lessonFilter === value ? 'default' : 'outline'}
-                    className={lessonFilter === value ? 'student-button-solid' : 'student-button-outline'}
-                    onClick={() => setLessonFilter(value)}
-                  >
-                    {value === 'all' ? 'All' : value === 'completed' ? 'Completed' : 'Pending'}
-                  </Button>
-                ))}
-                <Button type="button" size="sm" variant="outline" className="student-button-outline" onClick={() => setLessonSort((current) => current === 'asc' ? 'desc' : 'asc')}>
-                  Order: {lessonSort === 'asc' ? 'Ascending' : 'Descending'}
-                </Button>
-              </div>
-            )}
-          />
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <StudentActionCard className="student-panel-hover border border-[var(--student-outline)] bg-[var(--student-glass)]">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-[var(--student-accent-soft)] p-3 text-[var(--student-accent)]">
-                  <BookOpen className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] student-muted-text">In View</p>
-                  <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{filteredLessons.length}</p>
-                  <p className="mt-1 text-sm student-muted-text">Lessons matching your current filter</p>
-                </div>
-              </div>
-            </StudentActionCard>
-            <StudentActionCard className="student-panel-hover border border-[var(--student-outline)] bg-[var(--student-glass)]">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-[var(--student-success-bg)] p-3 text-[var(--student-success-text)]">
-                  <Target className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] student-muted-text">Completed</p>
-                  <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{completedLessonCount}</p>
-                  <p className="mt-1 text-sm student-muted-text">Lessons you have already finished</p>
-                </div>
-              </div>
-            </StudentActionCard>
-            <StudentActionCard className="student-panel-hover border border-[var(--student-outline)] bg-[var(--student-glass)]">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-[var(--student-accent-soft)] p-3 text-[var(--student-accent)]">
-                  <Clock3 className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] student-muted-text">Current Page</p>
-                  <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{lessonPage}</p>
-                  <p className="mt-1 text-sm student-muted-text">Page {lessonPage} of {lessonTotalPages}</p>
-                </div>
-              </div>
-            </StudentActionCard>
-          </div>
-
-          {lessonPageItems.length === 0 ? (
-            <StudentEmptyState
-              title="No lessons in this view"
-              description="Try a different lesson filter or come back after your teacher publishes more content."
-              icon={<BookOpen className="h-5 w-5" />}
-            />
+          {modules.length === 0 ? (
+            <div className="teacher-class-workspace__empty">No modules available yet.</div>
           ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {lessonPageItems.map((lesson, index) => (
-                <StudentActionCard key={lesson.id} className="student-panel-hover relative overflow-hidden border border-[var(--student-outline)] bg-[linear-gradient(180deg,var(--student-surface)_0%,var(--student-elevated)_100%)]">
-                  <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-[var(--student-accent-soft)] blur-3xl opacity-70" />
-                  <div className="relative space-y-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="inline-flex rounded-full bg-[var(--student-accent-soft)] px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[var(--student-accent)]">
-                            Lesson {((lessonPage - 1) * LESSONS_PAGE_SIZE) + index + 1}
-                          </span>
-                          <StudentStatusChip tone={completions[lesson.id] ? 'success' : 'warning'}>
-                            {completions[lesson.id] ? 'Completed' : 'Pending'}
-                          </StudentStatusChip>
-                        </div>
-                        <p className="text-lg font-bold tracking-tight text-[var(--student-text-strong)]">{lesson.title}</p>
-                        <p className="line-clamp-3 text-sm leading-6 student-muted-text">{getDescription(lesson.description)}</p>
+            <div className="student-class-modules-grid">
+              {modules.map((moduleEntry, index) => {
+                const summary = summarizeModule(moduleEntry);
+                const openHref = getOpenModuleHref(moduleEntry, classId);
+                return (
+                  <motion.article
+                    key={moduleEntry.id}
+                    className="student-class-module-card"
+                    data-tone={moduleToneByIndex[index % moduleToneByIndex.length]}
+                    data-locked={moduleEntry.isLocked}
+                    variants={staggerItem}
+                  >
+                    <header>
+                      <span className="student-class-module-card__index">{index + 1}</span>
+                      <div>
+                        <h3>{moduleEntry.title}</h3>
+                        <p>{moduleEntry.description || 'Extended learning and higher-order thinking activities.'}</p>
                       </div>
+                    </header>
+
+                    <div className="student-class-module-card__stats">
+                      <article>
+                        <strong>{summary.lessons}</strong>
+                        <span>Lessons</span>
+                      </article>
+                      <article>
+                        <strong>{summary.assessments}</strong>
+                        <span>Assessments</span>
+                      </article>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-                      <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                        Order #{lesson.order}
-                      </span>
-                      <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                        {completions[lesson.id] ? 'Ready for review' : 'Ready to continue'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm student-muted-text">
-                        {completions[lesson.id]
-                          ? 'You can revisit this lesson anytime.'
-                          : 'Open this lesson to keep your streak going.'}
-                      </p>
-                      <Link
-                        href={`/dashboard/student/lessons/${lesson.id}?classId=${classId}`}
-                        className="inline-flex items-center gap-2 rounded-xl bg-[var(--student-text-strong)] px-4 py-2 text-sm font-black text-[var(--student-accent-contrast)] shadow-[var(--student-shadow)] transition hover:bg-[var(--student-accent)] hover:text-[var(--student-accent-contrast)]"
+                    <footer>
+                      <span
+                        className={
+                          moduleEntry.isLocked
+                            ? 'student-class-chip student-class-chip--locked'
+                            : 'student-class-chip student-class-chip--open'
+                        }
                       >
-                        {completions[lesson.id] ? 'Review Lesson' : 'Open Lesson'}
-                        <ChevronRight className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  </div>
-                </StudentActionCard>
-              ))}
-            </div>
-          )}
-
-          <Pagination page={lessonPage} totalPages={lessonTotalPages} onPageChange={setLessonPage} align="start" />
-        </div>
-      )}
-
-      {activeTab === 'assessments' && (
-        <div className="space-y-4">
-          <StudentSectionHeader
-            title="Assessments"
-            subtitle={`${assessmentCards.length} assessment${assessmentCards.length === 1 ? '' : 's'} in this bucket`}
-            action={(
-              <div className="flex flex-wrap gap-2">
-                {(['all', 'upcoming', 'past_due', 'completed'] as const).map((value) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    size="sm"
-                    variant={assessmentBucket === value ? 'default' : 'outline'}
-                    className={assessmentBucket === value ? 'student-button-solid' : 'student-button-outline'}
-                    onClick={() => setAssessmentBucket(value)}
-                  >
-                    {value === 'all'
-                      ? 'All'
-                      : value === 'upcoming'
-                        ? 'Upcoming'
-                        : value === 'past_due'
-                          ? 'Past Due'
-                          : 'Completed'}
-                  </Button>
-                ))}
-              </div>
-            )}
-          />
-          {assessmentPageItems.length === 0 ? (
-            <StudentEmptyState
-              title="No assessments in this view"
-              description="Try another bucket or wait for your teacher to publish more work."
-              icon={<FileText className="h-5 w-5" />}
-            />
-          ) : (
-            <motion.div {...motionProps.container} className="space-y-3">
-              {assessmentPageItems.map(({ assessment, latestAttempt, bucket }) => {
-                const isCompleted = bucket === 'completed';
-                const isPastDue = bucket === 'past_due';
-                const statusTone = isCompleted
-                  ? latestAttempt?.passed ? 'success' : 'danger'
-                  : isPastDue
-                    ? 'danger'
-                    : 'warning';
-
-                return (
-                  <motion.div key={assessment.id} {...motionProps.item}>
-                    <Link href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}>
-                      <StudentActionCard>
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-slate-900">{assessment.title}</p>
-                            <p className="line-clamp-1 text-sm student-muted-text">{getDescription(assessment.description)}</p>
-                          </div>
-                          <StudentStatusChip tone={statusTone}>
-                            {isCompleted
-                              ? latestAttempt?.passed
-                                ? `Passed • ${latestAttempt.score}/${latestAttempt.totalPoints}`
-                                : `Needs Improvement • ${latestAttempt?.score ?? 0}/${latestAttempt?.totalPoints ?? assessment.totalPoints}`
-                              : isPastDue
-                                ? 'Past Due'
-                                : 'Upcoming'}
-                          </StudentStatusChip>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
-                          <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                            {assessment.type.replace(/_/g, ' ')}
-                          </span>
-                          <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                            {assessment.totalPoints} points
-                          </span>
-                          <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                            Due {assessment.dueDate ? new Date(assessment.dueDate).toLocaleDateString() : 'anytime'}
-                          </span>
-                        </div>
-                      </StudentActionCard>
-                    </Link>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
-          )}
-          <Pagination
-            page={assessmentPage}
-            totalPages={assessmentTotalPages}
-            onPageChange={setAssessmentPage}
-            align="start"
-          />
-        </div>
-      )}
- 
-      {activeTab === 'announcements' && (
-        <div className="mt-4 space-y-3">
-          <StudentSectionHeader title="Announcements" subtitle={`${announcements.length} update(s)`} />
-          {announcements.length === 0 ? (
-            <StudentEmptyState title="No announcements" description="Class updates from your teacher will appear here." icon={<Megaphone className="h-5 w-5" />} />
-          ) : (
-            <motion.div {...motionProps.container} className="space-y-3">
-              {announcements.map((ann) => (
-                <motion.div key={ann.id} {...motionProps.item}>
-                  <StudentActionCard>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{ann.title}</p>
-                      {ann.isPinned && <StudentStatusChip tone="warning">Pinned</StudentStatusChip>}
-                    </div>
-                    <p className="mt-2 text-sm student-muted-text">{ann.content}</p>
-                    <p className="mt-2 text-xs student-muted-text">
-                      {ann.author?.firstName} {ann.author?.lastName} • {new Date(ann.createdAt!).toLocaleDateString()}
-                    </p>
-                  </StudentActionCard>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'modules' && (
-        <div className="space-y-4">
-          <StudentSectionHeader
-            title="Modules"
-            subtitle="Structured class modules from your teacher"
-            action={(
-              <div className="w-full max-w-sm">
-                <Input
-                  value={moduleSearch}
-                  onChange={(event) => setModuleSearch(event.target.value)}
-                  placeholder="Search modules"
-                />
-              </div>
-            )}
-          />
-
-          {modulesLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-24 rounded-3xl" />
-              <Skeleton className="h-24 rounded-3xl" />
-            </div>
-          ) : filteredModules.length === 0 ? (
-            <StudentEmptyState
-              title={modules.length === 0 ? 'No modules found' : 'No modules match your search'}
-              description={
-                modules.length === 0
-                  ? 'Your teacher has not published class modules yet.'
-                  : 'Try another search term to find a module.'
-              }
-              icon={<FolderOpen className="h-5 w-5" />}
-            />
-          ) : (
-            <div className="space-y-3">
-              {modulePageItems.map((moduleEntry) => {
-                const totalItems = moduleEntry.sections.reduce(
-                  (sum, section) => sum + section.items.length,
-                  0,
-                );
-
-                return (
-                  <StudentActionCard key={moduleEntry.id}>
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-[var(--student-text-strong)]">{moduleEntry.title}</p>
-                          <p className="text-xs student-muted-text">
-                            {moduleEntry.description || 'No description yet.'}
-                          </p>
-                        </div>
-                        <StudentStatusChip tone={moduleEntry.isLocked ? 'warning' : 'success'}>
-                          {moduleEntry.isLocked ? 'Locked' : 'Open'}
-                        </StudentStatusChip>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-                        <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                          {moduleEntry.sections.length} section(s)
-                        </span>
-                        <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 student-muted-text">
-                          {totalItems} item(s)
-                        </span>
-                      </div>
-
-                      {moduleEntry.isLocked ? (
-                        <p className="text-sm student-muted-text">
-                          This module is currently locked by your teacher.
-                        </p>
-                      ) : moduleEntry.sections.length === 0 ? (
-                        <p className="text-sm student-muted-text">No sections available yet.</p>
+                        {moduleEntry.isLocked ? 'Locked' : 'Available'}
+                      </span>
+                      {moduleEntry.isLocked || !openHref ? (
+                        <span className="student-class-module-card__cta muted">Locked</span>
                       ) : (
-                        <div className="space-y-2">
-                          {moduleEntry.sections.map((section) => (
-                            <div
-                              key={section.id}
-                              className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-[var(--student-text-strong)]">
-                                  {section.title}
-                                </p>
-                                <span className="rounded-full border border-[var(--student-outline)] bg-white px-2 py-0.5 text-[11px] font-semibold student-muted-text">
-                                  {section.items.length} item(s)
-                                </span>
-                              </div>
-                              {section.description ? (
-                                <p className="mt-1 text-xs student-muted-text">{section.description}</p>
-                              ) : null}
-                              {section.items.length === 0 ? (
-                                <p className="mt-2 text-xs student-muted-text">No items in this section.</p>
-                              ) : (
-                                <div className="mt-2 space-y-2">
-                                  {section.items.map((item) => {
-                                    const itemTitle =
-                                      item.itemType === 'lesson'
-                                        ? item.lesson?.title || 'Untitled lesson'
-                                        : item.itemType === 'assessment'
-                                          ? item.assessment?.title || 'Untitled assessment'
-                                          : item.file?.originalName || 'File resource';
-
-                                    return (
-                                      <div
-                                        key={item.id}
-                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--student-outline)] bg-white px-3 py-2"
-                                      >
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-medium text-[var(--student-text-strong)]">
-                                            {itemTitle}
-                                          </p>
-                                          <p className="text-[11px] uppercase tracking-[0.08em] student-muted-text">
-                                            {item.itemType}
-                                            {item.isRequired ? ' - required' : ''}
-                                          </p>
-                                        </div>
-                                        <div className="shrink-0">
-                                          {item.itemType === 'lesson' && item.lessonId ? (
-                                            <Link
-                                              href={`/dashboard/student/lessons/${item.lessonId}?classId=${classId}`}
-                                              className="inline-flex items-center gap-1 rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2 py-1 text-xs font-semibold text-[var(--student-text-strong)]"
-                                            >
-                                              Open
-                                              <ChevronRight className="h-3 w-3" />
-                                            </Link>
-                                          ) : item.itemType === 'assessment' && item.assessmentId ? (
-                                            <Link
-                                              href={`/dashboard/student/assessments/${item.assessmentId}?classId=${classId}`}
-                                              className="inline-flex items-center gap-1 rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2 py-1 text-xs font-semibold text-[var(--student-text-strong)]"
-                                            >
-                                              Open
-                                              <ChevronRight className="h-3 w-3" />
-                                            </Link>
-                                          ) : item.itemType === 'file' && item.fileId ? (
-                                            <Button
-                                              type="button"
-                                              size="sm"
-                                              variant="outline"
-                                              className="student-button-outline h-8 px-2 text-xs"
-                                              onClick={() =>
-                                                void handleModuleFileDownload(
-                                                  item.fileId as string,
-                                                  item.file?.originalName || 'resource',
-                                                )
-                                              }
-                                            >
-                                              <Download className="mr-1 h-3 w-3" />
-                                              Download
-                                            </Button>
-                                          ) : (
-                                            <span className="rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2 py-1 text-xs font-semibold student-muted-text">
-                                              Unavailable
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                        <Link className="student-class-module-card__cta" href={openHref}>
+                          Open
+                        </Link>
                       )}
-                    </div>
-                  </StudentActionCard>
+                    </footer>
+                  </motion.article>
                 );
               })}
             </div>
           )}
+        </motion.section>
+      ) : null}
 
-          <Pagination page={modulePage} totalPages={modulesTotalPages} onPageChange={setModulePage} />
-        </div>
-      )}
-    </div>
+      {currentTab === 'assignments' ? (
+        <motion.section
+          className="student-class-panel"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <header className="student-class-panel__head">
+            <h2>Assignments</h2>
+            <p>{assignmentRows.length} assignments</p>
+          </header>
+
+          <div className="student-class-filters">
+            {ASSIGNMENT_FILTERS.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                data-active={assignmentFilter === filter.key}
+                onClick={() => setAssignmentFilter(filter.key)}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+
+          {assignmentRows.length === 0 ? (
+            <div className="teacher-class-workspace__empty">No assignments for this filter.</div>
+          ) : (
+            <div className="student-class-stack">
+              {assignmentRows.map(({ assessment, category }) => (
+                <motion.article key={assessment.id} className="student-class-assignment-row" variants={staggerItem}>
+                  <div className="student-class-assignment-row__icon">
+                    <ClipboardList className="h-5 w-5" />
+                  </div>
+                  <div className="student-class-assignment-row__main">
+                    <div className="student-class-assignment-row__chips">
+                      <span data-type={category}>{assignmentCategoryLabel(category)}</span>
+                      <span data-status="published">Published</span>
+                    </div>
+                    <h3>{assessment.title}</h3>
+                    <p>
+                      Due {formatDateLong(parseDate(assessment.dueDate))} · {assessment.totalPoints ?? 0} pts
+                    </p>
+                  </div>
+                  <Link
+                    href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}
+                    className="student-class-assignment-row__take"
+                  >
+                    Take
+                  </Link>
+                </motion.article>
+              ))}
+            </div>
+          )}
+        </motion.section>
+      ) : null}
+
+      {currentTab === 'announcements' ? (
+        <motion.section
+          className="student-class-panel"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <header className="student-class-panel__head">
+            <h2>Announcements</h2>
+          </header>
+
+          {announcements.length === 0 ? (
+            <div className="teacher-class-workspace__empty">No announcements yet.</div>
+          ) : (
+            <div className="student-class-stack">
+              {announcements.map((entry) => (
+                <motion.article
+                  key={entry.id}
+                  className="student-class-announcement-card"
+                  data-pinned={entry.isPinned}
+                  variants={staggerItem}
+                >
+                  {entry.isPinned ? <span className="student-class-announcement-card__pin">Pinned</span> : null}
+                  <h3>{entry.title}</h3>
+                  <p>{entry.content}</p>
+                  <small>
+                    {entry.author?.firstName} {entry.author?.lastName} ·{' '}
+                    {formatDateLong(parseDate(entry.createdAt || null))}
+                  </small>
+                </motion.article>
+              ))}
+            </div>
+          )}
+        </motion.section>
+      ) : null}
+
+      {currentTab === 'classmates' ? (
+        <motion.section className="student-class-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <header className="student-class-panel__head">
+            <h2>Classmates</h2>
+            <p>{classmateRows.length} students in {classItem.section?.name || 'this class'}</p>
+          </header>
+
+          <div className="student-class-table-wrap">
+            <table className="student-class-table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Email</th>
+                  <th>Section</th>
+                </tr>
+              </thead>
+              <tbody>
+                {classmateRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      <div className="student-class-student-cell">
+                        <span>{row.initials}</span>
+                        <strong>{row.fullName}</strong>
+                      </div>
+                    </td>
+                    <td>{row.email}</td>
+                    <td>{row.section}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {classmateRows.length === 0 ? (
+              <div className="teacher-class-workspace__empty">No classmates found.</div>
+            ) : null}
+          </div>
+        </motion.section>
+      ) : null}
+
+      {currentTab === 'grades' ? (
+        <motion.section className="student-class-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <header className="student-class-panel__head">
+            <h2>My Grades</h2>
+            <p>Grade breakdown for {classItem.subjectName}</p>
+          </header>
+
+          <article className="student-class-grade-summary" data-tone={gradeSummary.tone}>
+            <div className="student-class-grade-summary__ring-wrap">
+              <svg viewBox="0 0 42 42" className="student-class-grade-summary__ring" aria-hidden="true">
+                <circle cx="21" cy="21" r="15.915" />
+                <motion.circle
+                  cx="21"
+                  cy="21"
+                  r="15.915"
+                  initial={{ strokeDasharray: '0 100' }}
+                  animate={{ strokeDasharray: `${gradeSummary.percent} 100` }}
+                  transition={{ duration: 0.45, ease: 'easeOut' }}
+                />
+              </svg>
+              <strong>{gradeSummary.percent}%</strong>
+            </div>
+            <div className="student-class-grade-summary__copy">
+              <h3>{gradeSummary.label}</h3>
+              <p>
+                {Math.round(gradeSummary.earnedTotal)} / {Math.round(gradeSummary.possibleTotal)} total points
+                earned
+              </p>
+              <span>{gradeSummary.helper}</span>
+            </div>
+          </article>
+
+          <div className="student-class-table-wrap">
+            <table className="student-class-table student-class-table--grades">
+              <thead>
+                <tr>
+                  <th>Assessment</th>
+                  <th>Category</th>
+                  <th>Score</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gradeRows.map((row) => (
+                  <tr key={row.id} data-pending={row.isPending}>
+                    <td>{row.title}</td>
+                    <td>
+                      <span className="student-class-grade-tag">{row.categoryLabel}</span>
+                    </td>
+                    <td>
+                      <strong>{row.scoreText}</strong>
+                      {row.percentText ? <span>{row.percentText}</span> : null}
+                    </td>
+                    <td>{row.dateText}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {gradeRows.length === 0 ? (
+              <div className="teacher-class-workspace__empty">No grade records yet.</div>
+            ) : null}
+          </div>
+        </motion.section>
+      ) : null}
+
+      {currentTab === 'calendar' ? (
+        <motion.section
+          className="student-class-panel"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <header className="student-class-panel__head">
+            <h2>Class Calendar</h2>
+            <p>Upcoming events and due dates for {classItem.subjectName}</p>
+          </header>
+
+          {calendarRows.length === 0 ? (
+            <div className="teacher-class-workspace__empty">No upcoming events.</div>
+          ) : (
+            <div className="student-class-stack">
+              {calendarRows.map((entry) => {
+                const dayBadge = formatCalendarDay(entry.date);
+                return (
+                  <motion.article
+                    key={entry.id}
+                    className="student-class-calendar-row"
+                    data-kind={entry.kind}
+                    variants={staggerItem}
+                  >
+                    <div className="student-class-calendar-row__date">
+                      <strong>{dayBadge.day}</strong>
+                      <span>{dayBadge.month}</span>
+                    </div>
+                    <div className="student-class-calendar-row__copy">
+                      <h3>{entry.title}</h3>
+                      <p>{entry.subtitle}</p>
+                    </div>
+                    <span className="student-class-calendar-row__kind">
+                      {entry.kind === 'assessment'
+                        ? 'Assessment'
+                        : entry.kind === 'holiday'
+                          ? 'Holiday'
+                          : 'Event'}
+                    </span>
+                  </motion.article>
+                );
+              })}
+            </div>
+          )}
+        </motion.section>
+      ) : null}
+    </ClassWorkspaceShell>
   );
 }
-
-function Pagination({
-  page,
-  totalPages,
-  onPageChange,
-  align = 'end',
-}: {
-  page: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-  align?: 'start' | 'end';
-}) {
-  if (totalPages <= 1) return null;
-
-  return (
-    <div className={align === 'start' ? 'flex items-center justify-start gap-2' : 'flex items-center justify-end gap-2'}>
-      <Button type="button" size="sm" variant="outline" className="student-button-outline" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-        Previous
-      </Button>
-      <span className="text-sm student-muted-text">
-        Page {page} of {totalPages}
-      </span>
-      <Button type="button" size="sm" variant="outline" className="student-button-outline" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-        Next
-      </Button>
- 
-    </div>
-  );
-}
-

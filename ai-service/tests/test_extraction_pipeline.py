@@ -62,6 +62,9 @@ class ExtractionPipelineTests(unittest.TestCase):
 
         self.assertEqual(len(merged["lessons"]), 2)
         self.assertIn("duplicated display titles", " ".join(merged["audit"]["warnings"]).lower())
+        self.assertIn("qualityGate", merged["audit"])
+        self.assertIn("reviewRequired", merged["audit"])
+        self.assertIn("confidenceBreakdown", merged["audit"])
         first_block = merged["lessons"][0]["blocks"][0]
         self.assertEqual(first_block["metadata"]["sectionId"], "chunk-01-section-01-intro")
 

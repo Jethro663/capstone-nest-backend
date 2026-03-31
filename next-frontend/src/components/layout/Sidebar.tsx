@@ -123,6 +123,8 @@ interface SidebarProps {
   onAdminCollapseToggle?: () => void;
   isTeacherCollapsed?: boolean;
   onTeacherCollapseToggle?: () => void;
+  isStudentCollapsed?: boolean;
+  onStudentCollapseToggle?: () => void;
 }
 
 export function Sidebar({
@@ -132,6 +134,8 @@ export function Sidebar({
   onAdminCollapseToggle,
   isTeacherCollapsed = false,
   onTeacherCollapseToggle,
+  isStudentCollapsed = false,
+  onStudentCollapseToggle,
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -144,10 +148,10 @@ export function Sidebar({
   const isAdminRoute = role === 'admin' && !isStudentRoute && !isTeacherRoute;
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName ?? ''}`.trim()
-    : user?.email ?? 'Admin User';
+    : user?.email ?? 'User';
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase()
-    : 'A';
+    : 'U';
 
   const handleLogout = async () => {
     await logoutAction();
@@ -158,10 +162,12 @@ export function Sidebar({
       className={cn(
         'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-200 md:static md:translate-x-0',
         isStudentRoute && 'student-sidebar',
+        isStudentRoute && 'student-sidebar-shell',
         isTeacherRoute && 'teacher-sidebar teacher-sidebar-shell',
         isAdminRoute && 'admin-sidebar',
         isAdminRoute && isAdminCollapsed && 'admin-sidebar--collapsed',
         isTeacherRoute && isTeacherCollapsed && 'teacher-sidebar--collapsed',
+        isStudentRoute && isStudentCollapsed && 'student-sidebar--collapsed',
         open ? 'translate-x-0' : '-translate-x-full',
       )}
     >
@@ -193,10 +199,20 @@ export function Sidebar({
               <p className="teacher-sidebar__subtitle">Teacher Portal</p>
             </div>
           </div>
+        ) : isStudentRoute ? (
+          <div className="student-sidebar__brand">
+            <div className="student-sidebar__logo">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <div className="student-sidebar__brand-copy">
+              <h1 className="student-sidebar__title">Nexora</h1>
+              <p className="student-sidebar__subtitle">Student Portal</p>
+            </div>
+          </div>
         ) : (
           <div>
-            <h1 className={cn('text-xl font-bold text-primary', isStudentRoute && 'text-[var(--student-accent)]', isTeacherRoute && 'text-[var(--teacher-text-strong)]')}>Nexora</h1>
-            <p className={cn('text-xs text-muted-foreground', isStudentRoute && 'text-[var(--student-text-muted)]', isTeacherRoute && 'text-[var(--teacher-text-muted)]')}>
+            <h1 className={cn('text-xl font-bold text-primary', isTeacherRoute && 'text-[var(--teacher-text-strong)]')}>Nexora</h1>
+            <p className={cn('text-xs text-muted-foreground', isTeacherRoute && 'text-[var(--teacher-text-muted)]')}>
               {getRoleLabel(role)}
             </p>
           </div>
@@ -239,6 +255,25 @@ export function Sidebar({
               <X className="h-5 w-5" />
             </button>
           </div>
+        ) : isStudentRoute ? (
+          <div className="admin-sidebar__header-actions">
+            <button
+              type="button"
+              className="admin-sidebar__toggle hidden md:inline-flex"
+              onClick={onStudentCollapseToggle}
+              aria-label="Collapse sidebar"
+            >
+              <Menu className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="text-[#8ea0bc] md:hidden"
+              onClick={onClose}
+              aria-label="Close sidebar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         ) : (
           <button className={cn('md:hidden', isTeacherRoute && 'text-[var(--teacher-text-muted)]')} onClick={onClose}>
             <X className="h-5 w-5" />
@@ -266,14 +301,14 @@ export function Sidebar({
                 'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 active
                   ? isStudentRoute
-                    ? 'bg-[var(--student-accent-soft)] text-[var(--student-accent)]'
+                    ? 'student-sidebar__item student-sidebar__item--active'
                     : isTeacherRoute
                       ? 'teacher-sidebar__item teacher-sidebar__item--active'
                     : isAdminRoute
                       ? 'admin-sidebar__item admin-sidebar__item--active'
                       : 'bg-primary/10 text-primary'
                   : isStudentRoute
-                    ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]'
+                    ? 'student-sidebar__item'
                     : isTeacherRoute
                       ? 'teacher-sidebar__item'
                     : isAdminRoute
@@ -286,6 +321,7 @@ export function Sidebar({
                   'h-4 w-4',
                   isAdminRoute && 'admin-sidebar__item-icon',
                   isTeacherRoute && 'teacher-sidebar__item-icon',
+                  isStudentRoute && 'student-sidebar__item-icon',
                 )}
               />
               {item.label}
@@ -336,13 +372,33 @@ export function Sidebar({
             </Button>
           </div>
         </div>
+      ) : isStudentRoute ? (
+        <div className="student-sidebar__footer-wrap">
+          <div className="student-sidebar__section-divider" />
+          <div className="student-sidebar__footer">
+            <div className="student-sidebar__profile">
+              <div className="student-sidebar__avatar">{initials}</div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">{displayName}</p>
+                <p className="truncate text-xs text-[#8ea0bc]">Student</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              className="student-sidebar__logout"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        </div>
       ) : (
-        <div className={cn('border-t p-3', isStudentRoute && 'border-[var(--student-outline)]', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
+        <div className={cn('border-t p-3', isTeacherRoute && 'border-[var(--teacher-outline)]')}>
           <Button
             variant="ghost"
             className={cn(
               'w-full justify-start gap-3 text-muted-foreground hover:text-destructive',
-              isStudentRoute && 'text-[var(--student-text-muted)] hover:bg-[var(--student-accent-soft)] hover:text-[var(--student-accent)]',
               isTeacherRoute && 'text-[var(--teacher-text-muted)] hover:bg-white/8 hover:text-rose-200',
             )}
             onClick={handleLogout}

@@ -5,6 +5,10 @@ import { ClassesService } from './classes.service';
 
 const mockClassesService = {
   findAll: jest.fn(),
+  getStudentClassPresentationPreferences: jest.fn(),
+  updateStudentClassPresentationPreference: jest.fn(),
+  getStudentCourseViewPreference: jest.fn(),
+  setStudentCourseViewPreference: jest.fn(),
   getStudentsMasterlistForClass: jest.fn(),
   bulkLifecycleAction: jest.fn(),
   getStudentOverviewForClass: jest.fn(),
@@ -104,6 +108,64 @@ describe('ClassesController', () => {
           'foo',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('student preferences endpoints', () => {
+    it('returns student class presentation preferences with success envelope', async () => {
+      mockClassesService.getStudentClassPresentationPreferences.mockResolvedValue(
+        [
+          {
+            classId: 'class-1',
+            styleMode: 'gradient',
+            styleToken: 'gradient-blue',
+          },
+        ],
+      );
+
+      const result = await controller.getStudentClassPresentationPreferences(
+        'student-1',
+        { userId: 'student-1', roles: ['student'] },
+      );
+
+      expect(
+        mockClassesService.getStudentClassPresentationPreferences,
+      ).toHaveBeenCalledWith('student-1', 'student-1', ['student']);
+      expect(result).toEqual({
+        success: true,
+        message: 'Student class presentation preferences retrieved successfully',
+        data: [
+          {
+            classId: 'class-1',
+            styleMode: 'gradient',
+            styleToken: 'gradient-blue',
+          },
+        ],
+      });
+    });
+
+    it('updates student course view preference with success envelope', async () => {
+      mockClassesService.setStudentCourseViewPreference.mockResolvedValue({
+        viewMode: 'wide',
+      });
+
+      const result = await controller.setStudentCourseViewPreference(
+        'student-1',
+        { viewMode: 'wide' },
+        { userId: 'student-1', roles: ['student'] },
+      );
+
+      expect(mockClassesService.setStudentCourseViewPreference).toHaveBeenCalledWith(
+        'student-1',
+        'student-1',
+        ['student'],
+        'wide',
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Student course view preference updated successfully',
+        data: { viewMode: 'wide' },
+      });
     });
   });
 
