@@ -96,6 +96,11 @@ describe('ClassesService', () => {
     query: {
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
       classVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
+      studentClassPresentationPreferences: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
+      studentCourseViewPreferences: { findFirst: jest.fn() },
       classSchedules: { findFirst: jest.fn(), findMany: jest.fn() },
       sections: { findFirst: jest.fn() },
       users: { findFirst: jest.fn() },
@@ -124,6 +129,13 @@ describe('ClassesService', () => {
     mockAuditService.log.mockResolvedValue(undefined);
     mockDb.query.classVisibilityPreferences.findMany.mockResolvedValue([]);
     mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue(null);
+    mockDb.query.studentClassPresentationPreferences.findMany.mockResolvedValue(
+      [],
+    );
+    mockDb.query.studentClassPresentationPreferences.findFirst.mockResolvedValue(
+      null,
+    );
+    mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
     mockDb.query.classRecords.findMany.mockResolvedValue([]);
     mockDb.query.classRecordCategories.findMany.mockResolvedValue([]);
     mockDb.query.classRecordItems.findMany.mockResolvedValue([]);
@@ -1243,6 +1255,103 @@ describe('ClassesService', () => {
 
       expect(result.standing.gradingPeriod).toBe('q1');
       expect(result.standing.overallGradePercent).toBe(92);
+    });
+  });
+
+  // =========================================================================
+  // student preferences
+  // =========================================================================
+
+  describe('student presentation preferences', () => {
+    it('returns enrolled-class presentation preferences for the requested student', async () => {
+      mockDb.query.enrollments.findMany.mockResolvedValue([
+        { classId: 'class-1' },
+        { classId: 'class-2' },
+      ]);
+      mockDb.query.studentClassPresentationPreferences.findMany.mockResolvedValue(
+        [
+          {
+            classId: 'class-1',
+            styleMode: 'gradient',
+            styleToken: 'gradient-blue',
+            updatedAt: new Date('2026-03-30'),
+          },
+        ],
+      );
+
+      const result = await service.getStudentClassPresentationPreferences(
+        STUDENT_ID,
+        STUDENT_ID,
+        ['student'],
+      );
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          classId: 'class-1',
+          styleMode: 'gradient',
+          styleToken: 'gradient-blue',
+        }),
+      ]);
+    });
+
+    it('rejects student preference writes when requester is not a student', async () => {
+      await expect(
+        service.updateStudentClassPresentationPreference(
+          CLASS_ID,
+          'teacher-uuid',
+          ['teacher'],
+          { styleMode: 'gradient', styleToken: 'gradient-blue' },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('upserts student preference when requester is enrolled', async () => {
+      mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enroll-1' });
+      mockDb.query.studentClassPresentationPreferences.findFirst.mockResolvedValue(
+        null,
+      );
+      mockDb.insert.mockReturnValue(makeInsertChain([{ id: 'pref-1' }]));
+
+      const result = await service.updateStudentClassPresentationPreference(
+        CLASS_ID,
+        STUDENT_ID,
+        ['student'],
+        { styleMode: 'solid', styleToken: 'solid-blue' },
+      );
+
+      expect(result).toEqual({
+        classId: CLASS_ID,
+        styleMode: 'solid',
+        styleToken: 'solid-blue',
+      });
+    });
+  });
+
+  describe('student course view preference', () => {
+    it('returns card as the default view mode when no row exists', async () => {
+      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
+
+      const result = await service.getStudentCourseViewPreference(
+        STUDENT_ID,
+        STUDENT_ID,
+        ['student'],
+      );
+
+      expect(result).toEqual({ viewMode: 'card' });
+    });
+
+    it('stores student course view preference with upsert semantics', async () => {
+      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
+      mockDb.insert.mockReturnValue(makeInsertChain([{ id: 'view-pref-1' }]));
+
+      const result = await service.setStudentCourseViewPreference(
+        STUDENT_ID,
+        STUDENT_ID,
+        ['student'],
+        'wide',
+      );
+
+      expect(result).toEqual({ viewMode: 'wide' });
     });
   });
 

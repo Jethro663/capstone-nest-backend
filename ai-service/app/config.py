@@ -26,6 +26,38 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     ai_service_shared_secret: str = ""
     ai_degraded_allowed: bool = False
+    retrieval_min_final_score: float = Field(
+        default=2.2,
+        validation_alias="RETRIEVAL_MIN_FINAL_SCORE",
+    )
+    retrieval_min_semantic_score: float = Field(
+        default=0.2,
+        validation_alias="RETRIEVAL_MIN_SEMANTIC_SCORE",
+    )
+    retrieval_min_distinct_sources: int = Field(
+        default=1,
+        validation_alias="RETRIEVAL_MIN_DISTINCT_SOURCES",
+    )
+    ai_cloud_fallback_enabled: bool = Field(
+        default=False,
+        validation_alias="AI_CLOUD_FALLBACK_ENABLED",
+    )
+    ai_cloud_fallback_provider: str = Field(
+        default="openai",
+        validation_alias="AI_CLOUD_FALLBACK_PROVIDER",
+    )
+    ai_cloud_fallback_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias="AI_CLOUD_FALLBACK_MODEL",
+    )
+    ai_cloud_fallback_api_key: str = Field(
+        default="",
+        validation_alias="AI_CLOUD_FALLBACK_API_KEY",
+    )
+    ai_cloud_fallback_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        validation_alias="AI_CLOUD_FALLBACK_BASE_URL",
+    )
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

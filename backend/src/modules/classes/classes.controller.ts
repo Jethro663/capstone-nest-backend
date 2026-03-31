@@ -25,6 +25,8 @@ import { ClassesService } from './classes.service';
 import { CreateClassDto } from './DTO/create-class.dto';
 import { UpdateClassDto } from './DTO/update-class.dto';
 import { UpdateClassPresentationDto } from './DTO/update-class-presentation.dto';
+import { UpdateStudentClassPresentationDto } from './DTO/update-student-class-presentation.dto';
+import { UpdateStudentCourseViewDto } from './DTO/update-student-course-view.dto';
 import { EnrollStudentDto } from './DTO/enroll-student.dto';
 import { BulkClassLifecycleDto } from './DTO/bulk-class-lifecycle.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -197,6 +199,87 @@ export class ClassesController {
       success: true,
       message: 'Classes retrieved successfully',
       data: classes,
+    };
+  }
+
+  @Get('student/:studentId/preferences/presentation')
+  @Roles(RoleName.Admin, RoleName.Student)
+  async getStudentClassPresentationPreferences(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const preferences =
+      await this.classesService.getStudentClassPresentationPreferences(
+        studentId,
+        user?.userId,
+        user?.roles,
+      );
+
+    return {
+      success: true,
+      message: 'Student class presentation preferences retrieved successfully',
+      data: preferences,
+    };
+  }
+
+  @Put(':id/student-presentation')
+  @Roles(RoleName.Student)
+  async updateStudentClassPresentation(
+    @Param('id') id: string,
+    @Body() dto: UpdateStudentClassPresentationDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.classesService.updateStudentClassPresentationPreference(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+      dto,
+    );
+
+    return {
+      success: true,
+      message: 'Student class presentation updated successfully',
+      data,
+    };
+  }
+
+  @Get('student/:studentId/preferences/view')
+  @Roles(RoleName.Admin, RoleName.Student)
+  async getStudentCourseViewPreference(
+    @Param('studentId') studentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.classesService.getStudentCourseViewPreference(
+      studentId,
+      user?.userId,
+      user?.roles,
+    );
+
+    return {
+      success: true,
+      message: 'Student course view preference retrieved successfully',
+      data,
+    };
+  }
+
+  @Put('student/:studentId/preferences/view')
+  @Roles(RoleName.Admin, RoleName.Student)
+  async setStudentCourseViewPreference(
+    @Param('studentId') studentId: string,
+    @Body() dto: UpdateStudentCourseViewDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.classesService.setStudentCourseViewPreference(
+      studentId,
+      user?.userId,
+      user?.roles,
+      dto.viewMode,
+    );
+
+    return {
+      success: true,
+      message: 'Student course view preference updated successfully',
+      data,
     };
   }
 

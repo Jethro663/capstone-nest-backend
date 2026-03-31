@@ -1,10 +1,5 @@
-import { SystemEvaluationsPage } from '@/components/evaluations/system-evaluations-page';
+import { TeacherEvaluationsFigmaPage } from '@/components/teacher/TeacherEvaluationsFigmaPage';
 
 export default function TeacherEvaluationsPage() {
-  return (
-    <SystemEvaluationsPage
-      heading="System Evaluations"
-      description="Review submitted LMS/LXP evaluation responses from teachers and students."
-    />
-  );
+  return <TeacherEvaluationsFigmaPage />;
 }

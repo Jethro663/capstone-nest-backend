@@ -374,7 +374,21 @@ def _section_to_lesson(section: dict[str, Any]) -> dict[str, Any]:
 
 def _merge_structured_chunks(structured_chunks: list[dict[str, Any]]) -> dict[str, Any]:
     if not structured_chunks:
-        return {"title": "Extracted Module", "description": "", "lessons": [], "audit": {}}
+        return {
+            "title": "Extracted Module",
+            "description": "",
+            "lessons": [],
+            "audit": {
+                "qualityGate": "fail",
+                "reviewRequired": True,
+                "confidenceBreakdown": {
+                    "overallConfidence": 0.0,
+                    "warningCount": 1,
+                    "sectionCount": 0,
+                },
+                "repairNotes": ["No structured sections were produced from extracted chunks."],
+            },
+        }
 
     merged_lessons: list[dict[str, Any]] = []
     lesson_lookup: dict[str, dict[str, Any]] = {}
@@ -417,6 +431,20 @@ def _merge_structured_chunks(structured_chunks: list[dict[str, Any]]) -> dict[st
         sum(confidence_values) / len(confidence_values),
         4,
     ) if confidence_values else 0.0
+    warning_count = len(warnings)
+    quality_gate = "pass"
+    if len(merged_lessons) == 0 or overall_confidence < 0.45:
+        quality_gate = "fail"
+    elif overall_confidence < 0.78 or warning_count > 0:
+        quality_gate = "warn"
+    review_required = quality_gate != "pass"
+    repair_notes: list[str] = []
+    if quality_gate == "fail":
+        repair_notes.append("Extraction quality is too low; rerun extraction or review source PDF formatting.")
+    elif quality_gate == "warn":
+        repair_notes.append("Teacher review is recommended before applying this extraction.")
+    if warning_count > 0:
+        repair_notes.extend(warnings[:3])
 
     normalized_lessons = [
         {
@@ -437,6 +465,18 @@ def _merge_structured_chunks(structured_chunks: list[dict[str, Any]]) -> dict[st
             "warnings": warnings,
             "sourceMethods": sorted(source_methods),
             "sectionCount": len(merged_lessons),
+            "qualityGate": quality_gate,
+            "reviewRequired": review_required,
+            "confidenceBreakdown": {
+                "overallConfidence": overall_confidence,
+                "warningCount": warning_count,
+                "sectionCount": len(merged_lessons),
+                "averageBlocksPerSection": round(
+                    sum(len(lesson["blocks"]) for lesson in merged_lessons) / max(len(merged_lessons), 1),
+                    4,
+                ),
+            },
+            "repairNotes": repair_notes,
         },
     }
 
@@ -518,13 +558,32 @@ async def run_extraction(
             )
             parsed = _parse_json_object(raw)
             audit = parsed.get("audit") or {}
+            overall_confidence = float(audit.get("overallConfidence") or 0.62)
+            warnings = list(audit.get("warnings") or [])
+            quality_gate = "pass"
+            if overall_confidence < 0.45:
+                quality_gate = "fail"
+            elif overall_confidence < 0.78 or warnings:
+                quality_gate = "warn"
             audit.update(
                 {
                     "pipelineVersion": "2.0",
                     "visionPages": len(vision_images),
                     "sourceMethods": ["vision"],
-                    "overallConfidence": float(audit.get("overallConfidence") or 0.62),
-                    "warnings": list(audit.get("warnings") or []),
+                    "overallConfidence": overall_confidence,
+                    "warnings": warnings,
+                    "qualityGate": quality_gate,
+                    "reviewRequired": quality_gate != "pass",
+                    "confidenceBreakdown": {
+                        "overallConfidence": overall_confidence,
+                        "warningCount": len(warnings),
+                        "sectionCount": len(parsed.get("lessons") or []),
+                    },
+                    "repairNotes": (
+                        ["Teacher review is recommended before applying this extraction."]
+                        if quality_gate != "pass"
+                        else []
+                    ),
                 }
             )
             parsed["audit"] = audit
@@ -663,6 +722,27 @@ async def run_extraction(
             final_result["audit"]["warnings"].append("Overall extraction confidence is low; teacher review is strongly recommended.")
         if len(final_result.get("lessons", [])) == 0:
             final_result["audit"]["warnings"].append("No lessons were produced from the extraction.")
+        final_result["audit"]["qualityGate"] = (
+            "fail"
+            if len(final_result.get("lessons", [])) == 0 or final_result["audit"]["overallConfidence"] < 0.45
+            else "warn"
+            if final_result["audit"]["overallConfidence"] < 0.78 or len(final_result["audit"]["warnings"]) > 0
+            else "pass"
+        )
+        final_result["audit"]["reviewRequired"] = final_result["audit"]["qualityGate"] != "pass"
+        final_result["audit"]["confidenceBreakdown"] = {
+            "overallConfidence": float(final_result["audit"]["overallConfidence"]),
+            "warningCount": len(final_result["audit"]["warnings"]),
+            "sectionCount": len(final_result.get("lessons", [])),
+            "sanitizationWarningCount": len(sanitization.warnings),
+            "chunkWarningCount": len(chunk_warnings),
+        }
+        final_result["audit"]["repairNotes"] = (
+            ["Teacher review is recommended before applying this extraction."]
+            + list(final_result["audit"]["warnings"][:3])
+            if final_result["audit"]["reviewRequired"]
+            else []
+        )
 
         validation = validate_extraction_output(final_result)
         if validation.errors:

@@ -11,7 +11,9 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .config import settings
 from .media_utils import normalize_attachment_images
+from .objective_grading import ObjectiveVerdict, evaluate_objective_answer
 from .retrieval_service import similarity_search
 from .schemas import RequestUser, TutorRecommendationDto
 
@@ -141,6 +143,105 @@ def _clip_text(value: str | None, max_len: int) -> str:
     if len(text) <= max_len:
         return text
     return f"{text[: max_len - 3].rstrip()}..."
+
+
+def _is_chunk_grounded(chunk: dict[str, Any]) -> bool:
+    score_breakdown = chunk.get("scoreBreakdown") or {}
+    final_score = float(score_breakdown.get("final") or 0.0)
+    semantic_score = float(score_breakdown.get("semantic") or 0.0)
+    return (
+        final_score >= settings.retrieval_min_final_score
+        and semantic_score >= settings.retrieval_min_semantic_score
+    )
+
+
+def _grounding_status_from_chunks(chunks: list[dict[str, Any]]) -> str:
+    if not chunks:
+        return "insufficient"
+    distinct_sources = {
+        chunk.get("sourceReference") or chunk.get("id")
+        for chunk in chunks
+    }
+    if len(distinct_sources) < settings.retrieval_min_distinct_sources:
+        return "insufficient"
+    return "grounded"
+
+
+def _compose_low_grounding_reply(topic: str) -> str:
+    safe_topic = topic.strip() or "this topic"
+    return (
+        "I need a bit more class evidence before I can confidently judge this.\n\n"
+        f"For now, review the latest lesson notes on {safe_topic} and share one specific step you're unsure about.\n\n"
+        "Ja's Study Tip: When evidence is limited, write the rule first, then test it with one small example."
+    )
+
+
+def _apply_deterministic_override(
+    *,
+    questions: list[dict[str, Any]],
+    answers: list[str],
+    llm_results: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], str, float]:
+    result_map = {
+        str(item.get("questionId")): dict(item)
+        for item in llm_results
+        if isinstance(item, dict) and item.get("questionId")
+    }
+    merged_results: list[dict[str, Any]] = []
+    deterministic_hits = 0
+    total_confidence = 0.0
+
+    for idx, question in enumerate(questions):
+        question_id = str(question.get("id") or f"q{idx + 1}")
+        llm_item = result_map.get(
+            question_id,
+            {
+                "questionId": question_id,
+                "decision": "partially_correct",
+                "isCorrectEnough": False,
+                "feedback": "Please explain your answer with one more specific detail.",
+            },
+        )
+        student_answer = answers[idx] if idx < len(answers) else ""
+        verdict: ObjectiveVerdict = evaluate_objective_answer(
+            question_text=str(question.get("question") or ""),
+            expected_answer=str(question.get("expectedAnswer") or ""),
+            student_answer=student_answer,
+        )
+        if verdict.is_objective:
+            deterministic_hits += 1
+            if verdict.is_correct:
+                llm_item["decision"] = "correct_enough"
+                llm_item["isCorrectEnough"] = True
+                llm_item["feedback"] = (
+                    llm_item.get("feedback")
+                    or "Correct. Your answer matches the objective expectation."
+                )
+            elif verdict.confidence >= 0.9:
+                llm_item["decision"] = "unsupported"
+                llm_item["isCorrectEnough"] = False
+                llm_item["feedback"] = (
+                    "Your answer does not match the objective value expected for this question."
+                )
+            llm_item["verdictSource"] = "deterministic"
+            llm_item["confidence"] = round(verdict.confidence, 4)
+            total_confidence += verdict.confidence
+        else:
+            llm_item["verdictSource"] = "llm"
+            llm_item["confidence"] = 0.65
+            total_confidence += 0.65
+        llm_item["questionId"] = question_id
+        merged_results.append(llm_item)
+
+    if deterministic_hits == len(questions) and questions:
+        verdict_source = "deterministic"
+    elif deterministic_hits > 0:
+        verdict_source = "hybrid"
+    else:
+        verdict_source = "llm"
+
+    average_confidence = round(total_confidence / max(len(merged_results), 1), 4)
+    return merged_results, verdict_source, average_confidence
 
 
 def _fallback_tutor_plan(recommendation: dict[str, Any]) -> dict[str, Any]:
@@ -304,6 +405,7 @@ async def start_student_tutor_session(
         "lessonBody": generated["lessonBody"],
         "questions": generated["questions"],
         "citations": context_bundle["citations"],
+        "groundingStatus": context_bundle.get("groundingStatus", "grounded"),
         "round": 1,
         "completed": False,
         "messageType": "session_start",
@@ -327,6 +429,7 @@ async def start_student_tutor_session(
         "questions": generated["questions"],
         "tutorPlan": generated.get("plan") or {},
         "citations": context_bundle["citations"],
+        "groundingStatus": context_bundle.get("groundingStatus", "grounded"),
     }
 
 
@@ -347,6 +450,33 @@ async def continue_student_tutor_session(
         lesson_id=state["recommendation"].get("lessonId"),
         assessment_id=state["recommendation"].get("assessmentId"),
     )
+    if context_bundle.get("groundingStatus") == "insufficient":
+        reply = _compose_low_grounding_reply(state["recommendation"]["title"])
+        next_state = {
+            **state,
+            "citations": context_bundle["citations"],
+            "messageType": "follow_up",
+            "groundingStatus": "insufficient",
+            "attachmentCount": len(prepared_images),
+        }
+        await _log_tutor_turn(
+            db,
+            user_id=user.id,
+            session_id=session_id,
+            input_text=message,
+            output_text=reply,
+            context_metadata=next_state,
+            model_used="grounding-guardrail",
+        )
+        return {
+            "sessionId": session_id,
+            "stage": next_state["stage"],
+            "completed": bool(next_state.get("completed")),
+            "message": reply,
+            "questions": next_state.get("questions") or [],
+            "citations": context_bundle["citations"],
+            "groundingStatus": "insufficient",
+        }
     prompt = f"""
 Class: {state['classLabel']}
 Current focus: {state['recommendation']['title']}
@@ -380,6 +510,7 @@ Respond as Ja with a concise tutoring reply. If the student asks for the direct 
     next_state = {
         **state,
         "citations": context_bundle["citations"],
+        "groundingStatus": context_bundle.get("groundingStatus", "grounded"),
         "messageType": "follow_up",
         "attachmentCount": len(prepared_images),
     }
@@ -401,6 +532,7 @@ Respond as Ja with a concise tutoring reply. If the student asks for the direct 
         "message": reply,
         "questions": next_state.get("questions") or [],
         "citations": context_bundle["citations"],
+        "groundingStatus": next_state["groundingStatus"],
     }
 
 
@@ -417,6 +549,13 @@ async def submit_student_tutor_answers(
     if not questions:
         raise HTTPException(400, "This tutor session has no active practice questions")
     prepared_images = normalize_attachment_images(attachments)
+    context_bundle = await _build_context_bundle(
+        db,
+        class_id=state["classId"],
+        focus_text=state["recommendation"]["focusText"],
+        lesson_id=state["recommendation"].get("lessonId"),
+        assessment_id=state["recommendation"].get("assessmentId"),
+    )
 
     evaluation = await _evaluate_answers(
         class_label=state["classLabel"],
@@ -425,6 +564,7 @@ async def submit_student_tutor_answers(
         questions=questions,
         answers=answers,
         attachments=prepared_images,
+        grounding_status=context_bundle.get("groundingStatus", "grounded"),
     )
 
     completed = evaluation.get("overallVerdict") == "pass"
@@ -434,6 +574,7 @@ async def submit_student_tutor_answers(
         "stage": "completed" if completed else "practice",
         "round": int(state.get("round") or 1) + 1,
         "messageType": "answer_evaluation",
+        "groundingStatus": context_bundle.get("groundingStatus", "grounded"),
         "attachmentCount": len(prepared_images),
     }
     if completed:
@@ -466,6 +607,10 @@ async def submit_student_tutor_answers(
         "results": evaluation.get("results") or [],
         "questions": next_state.get("questions") or [],
         "retryLesson": evaluation.get("retryLesson"),
+        "gradingMode": evaluation.get("gradingMode", "hybrid"),
+        "verdictSource": evaluation.get("verdictSource", "llm"),
+        "confidence": float(evaluation.get("confidence") or 0.6),
+        "groundingStatus": evaluation.get("groundingStatus", next_state["groundingStatus"]),
     }
 
 
@@ -836,9 +981,12 @@ async def _build_context_bundle(
         )
     except Exception:
         chunks = []
+    grounded_chunks = [chunk for chunk in chunks if _is_chunk_grounded(chunk)]
+    selected_chunks = grounded_chunks or chunks[:1]
+    grounding_status = _grounding_status_from_chunks(grounded_chunks)
     context_blocks = []
     citations = []
-    for chunk in chunks:
+    for chunk in selected_chunks:
         metadata = chunk.get("metadataJson") or {}
         label = metadata.get("lessonTitle") or metadata.get("assessmentTitle") or chunk["sourceType"]
         context_blocks.append(f"[{label}] {chunk['chunkText']}")
@@ -862,6 +1010,7 @@ async def _build_context_bundle(
         "classLabel": class_label,
         "contextBlocks": context_blocks,
         "citations": citations,
+        "groundingStatus": grounding_status,
     }
 
 
@@ -980,6 +1129,7 @@ async def _evaluate_answers(
     questions: list[dict[str, Any]],
     answers: list[str],
     attachments: list[dict[str, Any]] | None = None,
+    grounding_status: str = "grounded",
 ) -> dict[str, Any]:
     prompt = f"""
 Evaluate a student's tutoring answers.
@@ -1041,7 +1191,25 @@ Rules:
     parsed = _safe_json_loads(raw)
     if parsed.get("overallVerdict") not in {"pass", "retry"}:
         raise HTTPException(502, "Tutor evaluation returned an invalid verdict")
-    if parsed.get("overallVerdict") == "retry" and len(parsed.get("nextQuestions") or []) != 3:
+    merged_results, verdict_source, average_confidence = _apply_deterministic_override(
+        questions=questions,
+        answers=answers,
+        llm_results=list(parsed.get("results") or []),
+    )
+    for result in merged_results:
+        result["groundingStatus"] = grounding_status
+
+    correct_count = sum(1 for item in merged_results if item.get("isCorrectEnough"))
+    pass_threshold = 2 if len(questions) >= 2 else 1
+    parsed["overallVerdict"] = "pass" if correct_count >= pass_threshold else "retry"
+    parsed["results"] = merged_results
+    parsed["gradingMode"] = "hybrid"
+    parsed["verdictSource"] = verdict_source
+    parsed["confidence"] = average_confidence
+    parsed["groundingStatus"] = grounding_status
+    if parsed["overallVerdict"] == "pass":
+        parsed["nextQuestions"] = []
+    elif len(parsed.get("nextQuestions") or []) != 3:
         raise HTTPException(502, "Tutor evaluation did not return three retry questions")
     return parsed
 

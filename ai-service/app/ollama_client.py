@@ -10,6 +10,7 @@ from typing import Any, Literal, TypedDict
 import httpx
 from fastapi import HTTPException
 
+from . import cloud_fallback
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -174,14 +175,17 @@ async def generate(
         }
         if response_format is not None:
             payload["format"] = response_format
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url}/api/chat",
-                json=payload,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-            return body.get("message", {}).get("content", "")
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    f"{settings.ollama_base_url}/api/chat",
+                    json=payload,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                return body.get("message", {}).get("content", "")
+        except Exception:
+            raise
 
     payload = {
         "model": model,
@@ -196,13 +200,31 @@ async def generate(
     if response_format is not None:
         payload["format"] = response_format
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            f"{settings.ollama_base_url}/api/generate",
-            json=payload,
-        )
-        resp.raise_for_status()
-        return resp.json()["response"]
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json=payload,
+            )
+            resp.raise_for_status()
+            return resp.json()["response"]
+    except Exception as err:
+        if images:
+            raise
+        try:
+            fallback_text = await cloud_fallback.generate_text(
+                prompt=prompt,
+                system=system,
+                response_format=response_format,
+                temperature=options.get("temperature", 0.0),
+                timeout=min(timeout, 60),
+            )
+            if fallback_text:
+                logger.warning("Using cloud fallback for task=%s after Ollama failure: %s", task, err)
+                return fallback_text
+        except Exception:
+            pass
+        raise
 
 
 async def chat(
@@ -224,14 +246,33 @@ async def chat(
     }
     if response_format is not None:
         payload["format"] = response_format
-    async with httpx.AsyncClient(timeout=_resolve_timeout(task)) as client:
-        resp = await client.post(
-            f"{settings.ollama_base_url}/api/chat",
-            json=payload,
+    try:
+        async with httpx.AsyncClient(timeout=_resolve_timeout(task)) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/chat",
+                json=payload,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            return body.get("message", {}).get("content", "")
+    except Exception as err:
+        merged_prompt = "\n\n".join(
+            str(item.get("content", "")).strip() for item in messages if item.get("content")
         )
-        resp.raise_for_status()
-        body = resp.json()
-        return body.get("message", {}).get("content", "")
+        try:
+            fallback_text = await cloud_fallback.generate_text(
+                prompt=merged_prompt,
+                system=None,
+                response_format=response_format,
+                temperature=float(payload["options"].get("temperature", 0.0)),
+                timeout=min(_resolve_timeout(task), 60),
+            )
+            if fallback_text:
+                logger.warning("Using cloud fallback for chat task=%s after Ollama failure: %s", task, err)
+                return fallback_text
+        except Exception:
+            pass
+        raise
 
 
 async def embed(texts: list[str]) -> list[list[float]]:

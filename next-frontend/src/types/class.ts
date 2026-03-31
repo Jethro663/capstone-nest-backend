@@ -72,6 +72,16 @@ export interface Enrollment {
   student?: { id: string; firstName?: string; lastName?: string; email?: string; lrn?: string; profile?: { lrn?: string; profilePicture?: string } };
 }
 
+export type StudentClassPresentationMode = 'solid' | 'gradient' | 'preset';
+export type StudentCourseViewMode = 'card' | 'wide';
+
+export interface StudentClassPresentationPreference {
+  classId: string;
+  styleMode: StudentClassPresentationMode;
+  styleToken: string;
+  updatedAt?: string;
+}
+
 export interface StudentMasterlistSection {
   id: string;
   name: string;

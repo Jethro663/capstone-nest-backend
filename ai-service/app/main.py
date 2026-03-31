@@ -77,6 +77,68 @@ def _set_ai_job_runtime(job_id: str, **values: Any) -> None:
     runtime["updatedAt"] = datetime.now(timezone.utc).isoformat()
 
 
+async def _persist_ai_job_runtime(
+    db: AsyncSession,
+    *,
+    job_id: str,
+    runtime_patch: dict[str, Any],
+) -> dict[str, Any]:
+    row = await db.execute(
+        sa_text("SELECT source_filters FROM ai_generation_jobs WHERE id = :jobId"),
+        {"jobId": job_id},
+    )
+    existing = row.mappings().first()
+    source_filters = dict(existing["source_filters"] or {}) if existing else {}
+    runtime = dict(source_filters.get("runtime") or {})
+    runtime.update(runtime_patch)
+    runtime["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    source_filters["runtime"] = runtime
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET source_filters = :sourceFilters, updated_at = NOW()
+            WHERE id = :jobId
+            """
+        ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+        {
+            "jobId": job_id,
+            "sourceFilters": source_filters,
+        },
+    )
+    await db.commit()
+    return runtime
+
+
+async def _record_ai_job_runtime(
+    db: AsyncSession,
+    *,
+    job_id: str,
+    **values: Any,
+) -> None:
+    _set_ai_job_runtime(job_id, **values)
+    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=values)
+
+
+async def _run_with_retries(
+    operation,
+    *,
+    max_attempts: int = 3,
+    delay_seconds: float = 1.0,
+) -> Any:
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await operation(attempt)
+        except Exception as err:  # pragma: no cover - controlled by callers
+            last_error = err
+            if attempt >= max_attempts:
+                break
+            await asyncio.sleep(delay_seconds * (2 ** (attempt - 1)))
+    assert last_error is not None
+    raise last_error
+
+
 def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) -> int:
     if runtime and isinstance(runtime.get("progressPercent"), int):
         return max(0, min(100, runtime["progressPercent"]))
@@ -131,6 +193,16 @@ async def _create_ai_generation_job(
         job_id,
         progressPercent=5,
         statusMessage="Queued",
+        retryState={"attempt": 0, "maxAttempts": 3},
+    )
+    await _persist_ai_job_runtime(
+        db,
+        job_id=job_id,
+        runtime_patch={
+            "progressPercent": 5,
+            "statusMessage": "Queued",
+            "retryState": {"attempt": 0, "maxAttempts": 3},
+        },
     )
     return job_id
 
@@ -191,7 +263,13 @@ async def _load_ai_job_context(
         if assessment_id is not None:
             assessment_id = str(assessment_id)
 
-    return dict(record), AI_JOB_RUNTIME.get(job_id), assessment_id
+    db_runtime = {}
+    source_filters = record.get("source_filters") or {}
+    if isinstance(source_filters, dict):
+        db_runtime = source_filters.get("runtime") or {}
+    memory_runtime = AI_JOB_RUNTIME.get(job_id) or {}
+    merged_runtime = {**db_runtime, **memory_runtime} if (db_runtime or memory_runtime) else None
+    return dict(record), merged_runtime, assessment_id
 
 
 async def _run_quiz_generation_job(
@@ -201,19 +279,32 @@ async def _run_quiz_generation_job(
 ) -> None:
     async with AsyncSessionLocal() as bg_db:
         try:
-            _set_ai_job_runtime(
-                job_id,
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
                 progressPercent=20,
                 statusMessage="Planning quiz blueprint",
+                retryState={"attempt": 1, "maxAttempts": 3},
             )
-            result = await generate_quiz_draft(
+
+            async def _operation(attempt: int) -> dict[str, Any]:
+                await _record_ai_job_runtime(
+                    bg_db,
+                    job_id=job_id,
+                    retryState={"attempt": attempt, "maxAttempts": 3},
+                    statusMessage=f"Generating quiz draft (attempt {attempt}/3)",
+                )
+                return await generate_quiz_draft(
+                    bg_db,
+                    user,
+                    body,
+                    existing_job_id=job_id,
+                )
+
+            result = await _run_with_retries(_operation, max_attempts=3, delay_seconds=1.5)
+            await _record_ai_job_runtime(
                 bg_db,
-                user,
-                body,
-                existing_job_id=job_id,
-            )
-            _set_ai_job_runtime(
-                job_id,
+                job_id=job_id,
                 progressPercent=85,
                 statusMessage=(
                     "Generating questions from fallback blueprint"
@@ -222,8 +313,9 @@ async def _run_quiz_generation_job(
                 ),
             )
             indexing = await reindex_class_content(bg_db, body.class_id)
-            _set_ai_job_runtime(
-                job_id,
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
                 progressPercent=100,
                 statusMessage="Draft ready for teacher review",
                 resultSummary={
@@ -251,8 +343,9 @@ async def _run_quiz_generation_job(
                 },
             )
             await bg_db.commit()
-            _set_ai_job_runtime(
-                job_id,
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
@@ -268,20 +361,33 @@ async def _run_intervention_generation_job(
 ) -> None:
     async with AsyncSessionLocal() as bg_db:
         try:
-            _set_ai_job_runtime(
-                job_id,
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
                 progressPercent=20,
                 statusMessage="Collecting intervention evidence",
+                retryState={"attempt": 1, "maxAttempts": 3},
             )
-            result = await recommend_intervention_case(
+
+            async def _operation(attempt: int) -> dict[str, Any]:
+                await _record_ai_job_runtime(
+                    bg_db,
+                    job_id=job_id,
+                    retryState={"attempt": attempt, "maxAttempts": 3},
+                    statusMessage=f"Generating intervention recommendation (attempt {attempt}/3)",
+                )
+                return await recommend_intervention_case(
+                    bg_db,
+                    user,
+                    case_id=case_id,
+                    note=note,
+                    existing_job_id=job_id,
+                )
+
+            result = await _run_with_retries(_operation, max_attempts=3, delay_seconds=1.5)
+            await _record_ai_job_runtime(
                 bg_db,
-                user,
-                case_id=case_id,
-                note=note,
-                existing_job_id=job_id,
-            )
-            _set_ai_job_runtime(
-                job_id,
+                job_id=job_id,
                 progressPercent=100,
                 statusMessage="Recommendation ready for teacher review",
                 resultSummary={
@@ -307,8 +413,9 @@ async def _run_intervention_generation_job(
                 },
             )
             await bg_db.commit()
-            _set_ai_job_runtime(
-                job_id,
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
@@ -928,7 +1035,7 @@ async def get_extraction_status(
         sa_text(
             "SELECT id, extraction_status, progress_percent, total_chunks, "
             "processed_chunks, error_message, model_used, is_applied, "
-            "updated_at, teacher_id "
+            "updated_at, teacher_id, structured_content "
             "FROM extracted_modules WHERE id = :id"
         ),
         {"id": extraction_id},
@@ -940,6 +1047,13 @@ async def get_extraction_status(
     is_admin = "admin" in user.roles
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
+    structured_content = extraction.get("structured_content") or {}
+    if isinstance(structured_content, str):
+        try:
+            structured_content = json.loads(structured_content)
+        except json.JSONDecodeError:
+            structured_content = {}
+    audit = structured_content.get("audit") or {}
 
     return {
         "success": True,
@@ -954,6 +1068,10 @@ async def get_extraction_status(
             "modelUsed": extraction["model_used"],
             "isApplied": extraction["is_applied"],
             "updatedAt": str(extraction["updated_at"]) if extraction["updated_at"] else None,
+            "qualityGate": audit.get("qualityGate"),
+            "reviewRequired": bool(audit.get("reviewRequired")),
+            "confidenceBreakdown": audit.get("confidenceBreakdown") or {},
+            "repairNotes": audit.get("repairNotes") or [],
         },
     }
 
@@ -975,7 +1093,7 @@ async def list_extractions(
             "SELECT e.id, e.class_id, e.teacher_id, e.extraction_status, "
             "e.progress_percent, e.total_chunks, e.processed_chunks, "
             "e.error_message, e.model_used, e.is_applied, e.created_at, "
-            "e.updated_at, f.id AS file_id, f.original_name, f.mime_type, "
+            "e.updated_at, e.structured_content, f.id AS file_id, f.original_name, f.mime_type, "
             "f.size_bytes "
             "FROM extracted_modules e "
             "LEFT JOIN uploaded_files f ON e.file_id = f.id "
@@ -988,7 +1106,7 @@ async def list_extractions(
             "SELECT e.id, e.class_id, e.teacher_id, e.extraction_status, "
             "e.progress_percent, e.total_chunks, e.processed_chunks, "
             "e.error_message, e.model_used, e.is_applied, e.created_at, "
-            "e.updated_at, f.id AS file_id, f.original_name, f.mime_type, "
+            "e.updated_at, e.structured_content, f.id AS file_id, f.original_name, f.mime_type, "
             "f.size_bytes "
             "FROM extracted_modules e "
             "LEFT JOIN uploaded_files f ON e.file_id = f.id "
@@ -998,7 +1116,21 @@ async def list_extractions(
         params = {"classId": class_id, "teacherId": user.id}
 
     rows = await db.execute(sa_text(query), params)
-    data = [dict(r) for r in rows.mappings()]
+    data = []
+    for row in rows.mappings():
+        item = dict(row)
+        structured_content = item.get("structured_content") or {}
+        if isinstance(structured_content, str):
+            try:
+                structured_content = json.loads(structured_content)
+            except json.JSONDecodeError:
+                structured_content = {}
+        audit = structured_content.get("audit") or {}
+        item["qualityGate"] = audit.get("qualityGate")
+        item["reviewRequired"] = bool(audit.get("reviewRequired"))
+        item["confidenceBreakdown"] = audit.get("confidenceBreakdown") or {}
+        item["repairNotes"] = audit.get("repairNotes") or []
+        data.append(item)
 
     return {
         "success": True,
@@ -1034,11 +1166,23 @@ async def get_extraction(
     is_admin = "admin" in user.roles
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
+    extraction_data = dict(extraction)
+    structured_content = extraction_data.get("structured_content") or {}
+    if isinstance(structured_content, str):
+        try:
+            structured_content = json.loads(structured_content)
+        except json.JSONDecodeError:
+            structured_content = {}
+    audit = structured_content.get("audit") or {}
+    extraction_data["qualityGate"] = audit.get("qualityGate")
+    extraction_data["reviewRequired"] = bool(audit.get("reviewRequired"))
+    extraction_data["confidenceBreakdown"] = audit.get("confidenceBreakdown") or {}
+    extraction_data["repairNotes"] = audit.get("repairNotes") or []
 
     return {
         "success": True,
         "message": "Extraction details",
-        "data": dict(extraction),
+        "data": extraction_data,
     }
 
 
@@ -1472,6 +1616,7 @@ async def get_teacher_ai_job_status(
             "progressPercent": _runtime_progress_for_status(job["status"], runtime),
             "statusMessage": runtime.get("statusMessage") if runtime else None,
             "errorMessage": job["error_message"] or (runtime.get("errorMessage") if runtime else None),
+            "retryState": runtime.get("retryState") if runtime else None,
             "outputId": str(job["output_id"]) if job["output_id"] else None,
             "assessmentId": assessment_id,
             "updatedAt": str(job["updated_at"]) if job["updated_at"] else None,
@@ -1513,6 +1658,7 @@ async def get_teacher_ai_job_result(
                 "outputId": str(job["output_id"]),
                 "assessmentId": assessment_id,
                 "updatedAt": str(job["updated_at"]) if job["updated_at"] else None,
+                "retryState": runtime.get("retryState") if runtime else None,
             },
             "result": {
                 "outputId": str(job["output_id"]),

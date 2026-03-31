@@ -1,0 +1,23 @@
+[
+  {
+    "name": "negative_one_power_four",
+    "question": "What is -1 multiplied by itself 4 times?",
+    "expectedAnswer": "1",
+    "studentAnswer": "1",
+    "expectCorrect": true
+  },
+  {
+    "name": "fraction_equivalence",
+    "question": "Simplify the fraction",
+    "expectedAnswer": "1/2",
+    "studentAnswer": "2/4",
+    "expectCorrect": true
+  },
+  {
+    "name": "incorrect_numeric_value",
+    "question": "What is 6 x 7?",
+    "expectedAnswer": "42",
+    "studentAnswer": "41",
+    "expectCorrect": false
+  }
+]

@@ -44,6 +44,11 @@ class StudentTutorServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["overallVerdict"], "pass")
         self.assertEqual(result["results"][0]["decision"], "correct_enough")
+        self.assertEqual(result["gradingMode"], "hybrid")
+        self.assertIn(result["verdictSource"], {"llm", "deterministic", "hybrid"})
+        self.assertGreaterEqual(result["confidence"], 0.0)
+        self.assertLessEqual(result["confidence"], 1.0)
+        self.assertIn(result["groundingStatus"], {"grounded", "insufficient"})
         mocked_generate.assert_awaited_once()
         _, kwargs = mocked_generate.await_args
         self.assertEqual(kwargs["task"], "grading")
@@ -98,6 +103,51 @@ class StudentTutorServiceTests(unittest.IsolatedAsyncioTestCase):
         _, kwargs = mocked_generate.await_args
         self.assertEqual(kwargs["task"], "vision_explanation")
         self.assertEqual(len(kwargs["images"]), 1)
+
+    async def test_evaluate_answers_deterministic_override_for_objective_math(self) -> None:
+        mocked_response = """
+        {
+          "overallVerdict": "retry",
+          "encouragement": "Try once more.",
+          "retryLesson": "Review powers with negative numbers.",
+          "results": [
+            {
+              "questionId": "q1",
+              "decision": "unsupported",
+              "isCorrectEnough": false,
+              "feedback": "This does not match the expected answer."
+            }
+          ],
+          "nextQuestions": [
+            {"id": "q1b", "question": "Prompt 1", "expectedAnswer": "A", "hint": "H1"},
+            {"id": "q2b", "question": "Prompt 2", "expectedAnswer": "B", "hint": "H2"},
+            {"id": "q3b", "question": "Prompt 3", "expectedAnswer": "C", "hint": "H3"}
+          ]
+        }
+        """
+        with patch.object(
+            student_tutor_service.ollama_client,
+            "generate",
+            AsyncMock(return_value=mocked_response),
+        ):
+            result = await student_tutor_service._evaluate_answers(
+                class_label="Math",
+                recommendation={"title": "Integer powers"},
+                lesson_body="Any even power of -1 is 1.",
+                questions=[
+                    {
+                        "id": "q1",
+                        "question": "What is -1 multiplied by itself 4 times?",
+                        "expectedAnswer": "1",
+                        "hint": "Consider parity of the exponent.",
+                    }
+                ],
+                answers=["1"],
+            )
+
+        self.assertEqual(result["overallVerdict"], "pass")
+        self.assertEqual(result["results"][0]["decision"], "correct_enough")
+        self.assertEqual(result["verdictSource"], "deterministic")
 
 
 if __name__ == "__main__":

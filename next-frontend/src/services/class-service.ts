@@ -8,6 +8,9 @@ import type {
   EnrollStudentDto,
   StudentMasterlistItem,
   StudentMasterlistQuery,
+  StudentClassPresentationPreference,
+  StudentClassPresentationMode,
+  StudentCourseViewMode,
   TeacherClassStudentProfile,
   TeacherClassStudentOverview,
 } from '@/types/class';
@@ -83,6 +86,46 @@ export const classService = {
     const { data } = await api.get(`/classes/student/${studentId}`, {
       params: { status },
     });
+    return data;
+  },
+
+  async getStudentPresentationPreferences(
+    studentId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: StudentClassPresentationPreference[];
+  }> {
+    const { data } = await api.get(
+      `/classes/student/${studentId}/preferences/presentation`,
+    );
+    return data;
+  },
+
+  async updateStudentPresentation(
+    classId: string,
+    dto: { styleMode: StudentClassPresentationMode; styleToken: string },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: StudentClassPresentationPreference;
+  }> {
+    const { data } = await api.put(`/classes/${classId}/student-presentation`, dto);
+    return data;
+  },
+
+  async getStudentCourseViewPreference(
+    studentId: string,
+  ): Promise<{ success: boolean; message: string; data: { viewMode: StudentCourseViewMode } }> {
+    const { data } = await api.get(`/classes/student/${studentId}/preferences/view`);
+    return data;
+  },
+
+  async setStudentCourseViewPreference(
+    studentId: string,
+    viewMode: StudentCourseViewMode,
+  ): Promise<{ success: boolean; message: string; data: { viewMode: StudentCourseViewMode } }> {
+    const { data } = await api.put(`/classes/student/${studentId}/preferences/view`, { viewMode });
     return data;
   },
 
