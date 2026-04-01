@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
+import { DatabaseService } from '../../database/database.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -31,6 +32,12 @@ const ADMIN_USER = {
 // ---------------------------------------------------------------------------
 
 const mockProxy = { forward: jest.fn() };
+const mockDb = {
+  query: {
+    enrollments: { findMany: jest.fn() },
+    classModules: { findMany: jest.fn() },
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Test suite
@@ -41,10 +48,17 @@ describe('AiMentorController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDb.query.enrollments.findMany.mockReset();
+    mockDb.query.classModules.findMany.mockReset();
+    mockDb.query.enrollments.findMany.mockResolvedValue([]);
+    mockDb.query.classModules.findMany.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiMentorController],
-      providers: [{ provide: AiProxyService, useValue: mockProxy }],
+      providers: [
+        { provide: AiProxyService, useValue: mockProxy },
+        { provide: DatabaseService, useValue: { db: mockDb } },
+      ],
     }).compile();
 
     controller = module.get<AiMentorController>(AiMentorController);
@@ -298,6 +312,69 @@ describe('AiMentorController', () => {
         dto,
       );
       expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+  });
+
+  describe('student tutor visibility filtering', () => {
+    it('filters hidden recommendations from bootstrap payload', async () => {
+      mockDb.query.enrollments.findMany.mockResolvedValue([{ classId: CLASS_ID }]);
+      mockDb.query.classModules.findMany.mockResolvedValue([
+        {
+          id: 'module-1',
+          classId: CLASS_ID,
+          isVisible: true,
+          isLocked: false,
+          sections: [
+            {
+              items: [
+                {
+                  itemType: 'lesson',
+                  isVisible: true,
+                  isGiven: true,
+                  lessonId: '11111111-1111-1111-1111-111111111112',
+                  assessmentId: null,
+                  fileId: null,
+                  lesson: { id: '11111111-1111-1111-1111-111111111112', isDraft: false },
+                  assessment: null,
+                },
+              ],
+            },
+          ],
+        },
+      ]);
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: {
+          recommendations: [
+            {
+              id: 'allowed',
+              title: 'Allowed',
+              reason: 'ok',
+              focusText: 'focus',
+              lessonId: '11111111-1111-1111-1111-111111111112',
+            },
+            {
+              id: 'hidden',
+              title: 'Hidden',
+              reason: 'nope',
+              focusText: 'focus',
+              lessonId: '11111111-1111-1111-1111-111111111113',
+            },
+          ],
+          recentLessons: [],
+          recentAttempts: [],
+          history: [],
+          classes: [],
+        },
+      });
+
+      const result = await controller.studentTutorBootstrap(
+        { classId: CLASS_ID } as any,
+        STUDENT_USER,
+      );
+
+      expect((result as any).data.recommendations).toHaveLength(1);
+      expect((result as any).data.recommendations[0].id).toBe('allowed');
     });
   });
 

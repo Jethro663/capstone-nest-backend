@@ -4,13 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, max } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, max, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
+  assessmentAttempts,
   assessments,
   classModules,
   classes,
   enrollments,
+  lessonCompletions,
   lessons,
   moduleGradingScaleEntries,
   moduleItems,
@@ -253,6 +255,205 @@ export class ContentModulesService {
     }
   }
 
+  private normalizeItemMetadataForAttach(dto: AttachModuleItemDto) {
+    if (dto.points !== undefined && dto.itemType !== ModuleItemType.Lesson) {
+      throw new BadRequestException('points is only supported for lesson module items');
+    }
+
+    if (dto.itemType === ModuleItemType.File) {
+      return {
+        ...(dto.metadata ?? {}),
+        fileSubtype:
+          (dto.metadata as Record<string, unknown> | undefined)?.fileSubtype ??
+          'pdf',
+      };
+    }
+
+    if (dto.itemType !== ModuleItemType.Lesson) {
+      return dto.metadata ?? null;
+    }
+
+    const merged = {
+      ...(dto.metadata ?? {}),
+      ...(dto.points !== undefined ? { points: dto.points } : {}),
+    };
+    return Object.keys(merged).length > 0 ? merged : null;
+  }
+
+  private normalizeItemMetadataForUpdate(
+    currentItem: { itemType: 'lesson' | 'assessment' | 'file'; metadata: unknown },
+    dto: UpdateModuleItemDto,
+  ) {
+    if (dto.points !== undefined && currentItem.itemType !== ModuleItemType.Lesson) {
+      throw new BadRequestException('points is only supported for lesson module items');
+    }
+
+    if (dto.metadata === undefined && dto.points === undefined) {
+      return undefined;
+    }
+
+    const existingMetadata =
+      currentItem.metadata && typeof currentItem.metadata === 'object'
+        ? (currentItem.metadata as Record<string, unknown>)
+        : {};
+
+    if (currentItem.itemType === ModuleItemType.File) {
+      const merged = {
+        ...existingMetadata,
+        ...(dto.metadata ?? {}),
+      };
+      if (!('fileSubtype' in merged)) {
+        merged.fileSubtype = 'pdf';
+      }
+      return merged;
+    }
+
+    const merged = {
+      ...existingMetadata,
+      ...(dto.metadata ?? {}),
+      ...(dto.points !== undefined ? { points: dto.points } : {}),
+    };
+    return Object.keys(merged).length > 0 ? merged : null;
+  }
+
+  private isItemVisibleToStudent(item: {
+    isVisible: boolean;
+    itemType: 'lesson' | 'assessment' | 'file';
+    isGiven: boolean;
+    lesson?: { isDraft: boolean } | null;
+    assessment?: { isPublished: boolean | null } | null;
+    fileId?: string | null;
+  }) {
+    if (!item.isVisible) return false;
+    if (item.itemType === ModuleItemType.Lesson) {
+      return Boolean(item.lesson && !item.lesson.isDraft);
+    }
+    if (item.itemType === ModuleItemType.Assessment) {
+      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+    }
+    return Boolean(item.fileId);
+  }
+
+  private async getStudentCompletionSets(
+    studentId: string,
+    lessonIds: string[],
+    assessmentIds: string[],
+  ) {
+    const completedLessonIds = new Set<string>();
+    const completedAssessmentIds = new Set<string>();
+
+    if (lessonIds.length > 0) {
+      const completions = await this.db.query.lessonCompletions.findMany({
+        where: and(
+          eq(lessonCompletions.studentId, studentId),
+          inArray(lessonCompletions.lessonId, lessonIds),
+        ),
+        columns: {
+          lessonId: true,
+        },
+      });
+      completions.forEach((entry) => completedLessonIds.add(entry.lessonId));
+    }
+
+    if (assessmentIds.length > 0) {
+      const attempts = await this.db.query.assessmentAttempts.findMany({
+        where: and(
+          eq(assessmentAttempts.studentId, studentId),
+          inArray(assessmentAttempts.assessmentId, assessmentIds),
+          or(
+            eq(assessmentAttempts.isSubmitted, true),
+            isNotNull(assessmentAttempts.submittedAt),
+          ),
+        ),
+        columns: {
+          assessmentId: true,
+        },
+      });
+      attempts.forEach((entry) => completedAssessmentIds.add(entry.assessmentId));
+    }
+
+    return { completedLessonIds, completedAssessmentIds };
+  }
+
+  private decorateStudentModule(
+    module: any,
+    completedLessonIds: Set<string>,
+    completedAssessmentIds: Set<string>,
+  ) {
+    if (module.isLocked) {
+      return {
+        ...module,
+        completed: false,
+        requiredVisibleCount: 0,
+        requiredCompletedCount: 0,
+        progressPercent: 0,
+        sections: [],
+      };
+    }
+
+    let requiredVisibleCount = 0;
+    let requiredCompletedCount = 0;
+
+    const sections = module.sections.map((section: any) => {
+      const items = section.items
+        .filter((item: any) => this.isItemVisibleToStudent(item))
+        .map((item: any) => {
+          const completed =
+            item.itemType === ModuleItemType.Lesson && item.lessonId
+              ? completedLessonIds.has(item.lessonId)
+              : item.itemType === ModuleItemType.Assessment && item.assessmentId
+                ? completedAssessmentIds.has(item.assessmentId)
+                : false;
+
+          const countsTowardRequirement =
+            item.isRequired &&
+            (item.itemType === ModuleItemType.Lesson ||
+              item.itemType === ModuleItemType.Assessment);
+
+          if (countsTowardRequirement) {
+            requiredVisibleCount += 1;
+            if (completed) {
+              requiredCompletedCount += 1;
+            }
+          }
+
+          return {
+            ...item,
+            accessible: true,
+            completed,
+            lessonPoints:
+              item.itemType === ModuleItemType.Lesson &&
+              item.metadata &&
+              typeof item.metadata === 'object' &&
+              typeof (item.metadata as Record<string, unknown>).points === 'number'
+                ? Number((item.metadata as Record<string, unknown>).points)
+                : 0,
+          };
+        });
+
+      return {
+        ...section,
+        items,
+      };
+    });
+
+    const completed =
+      requiredVisibleCount === 0 || requiredVisibleCount === requiredCompletedCount;
+    const progressPercent =
+      requiredVisibleCount === 0
+        ? 100
+        : Math.round((requiredCompletedCount / requiredVisibleCount) * 100);
+
+    return {
+      ...module,
+      sections,
+      completed,
+      requiredVisibleCount,
+      requiredCompletedCount,
+      progressPercent,
+    };
+  }
+
   async getModulesByClass(classId: string, userId: string, userRoles: string[]) {
     const classRecord = await this.assertClassReadAccess(classId, userId, userRoles);
     const studentMode = this.hasRole(userRoles, RoleName.Student);
@@ -283,28 +484,57 @@ export class ContentModulesService {
 
     if (!studentMode) return hydratedModules;
 
-    return hydratedModules
-      .filter((module) => module.isVisible)
-      .map((module) => ({
-        ...module,
-        sections: module.sections.map((section) => ({
-          ...section,
-          items: module.isLocked
-            ? []
-            : section.items.filter((item) => {
-                if (!item.isVisible) return false;
-                if (item.itemType === ModuleItemType.Lesson) {
-                  return Boolean(item.lesson && !item.lesson.isDraft);
-                }
-                if (item.itemType === ModuleItemType.Assessment) {
-                  return Boolean(
-                    item.assessment && item.assessment.isPublished && item.isGiven,
-                  );
-                }
-                return Boolean(item.fileId);
-              }),
-        })),
-      }));
+    const visibleModules = hydratedModules.filter((module) => module.isVisible);
+
+    const lessonIds = visibleModules.flatMap((module) =>
+      module.isLocked
+        ? []
+        : module.sections.flatMap((section) =>
+            section.items
+              .filter((item) => this.isItemVisibleToStudent(item))
+              .filter((item) => item.itemType === ModuleItemType.Lesson && Boolean(item.lessonId))
+              .map((item) => item.lessonId as string),
+          ),
+    );
+    const assessmentIds = visibleModules.flatMap((module) =>
+      module.isLocked
+        ? []
+        : module.sections.flatMap((section) =>
+            section.items
+              .filter((item) => this.isItemVisibleToStudent(item))
+              .filter(
+                (item) =>
+                  item.itemType === ModuleItemType.Assessment &&
+                  Boolean(item.assessmentId),
+              )
+              .map((item) => item.assessmentId as string),
+          ),
+    );
+
+    const { completedLessonIds, completedAssessmentIds } =
+      await this.getStudentCompletionSets(
+        userId,
+        Array.from(new Set(lessonIds)),
+        Array.from(new Set(assessmentIds)),
+      );
+
+    return visibleModules.map((module) =>
+      this.decorateStudentModule(module, completedLessonIds, completedAssessmentIds),
+    );
+  }
+
+  async getModuleByClass(
+    classId: string,
+    moduleId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const modules = await this.getModulesByClass(classId, userId, userRoles);
+    const module = modules.find((entry) => entry.id === moduleId);
+    if (!module) {
+      throw new NotFoundException(`Module with ID "${moduleId}" not found`);
+    }
+    return module;
   }
 
   async createModule(dto: CreateModuleDto, userId: string, userRoles: string[]) {
@@ -647,15 +877,7 @@ export class ContentModulesService {
       .from(moduleItems)
       .where(eq(moduleItems.moduleSectionId, sectionId));
     const nextOrder = (maxOrderResult[0]?.maxOrder ?? 0) + 1;
-    const normalizedMetadata =
-      dto.itemType === ModuleItemType.File
-        ? {
-            ...(dto.metadata ?? {}),
-            fileSubtype:
-              (dto.metadata as Record<string, unknown> | undefined)?.fileSubtype ??
-              'pdf',
-          }
-        : dto.metadata ?? null;
+    const normalizedMetadata = this.normalizeItemMetadataForAttach(dto);
 
     const [item] = await this.db
       .insert(moduleItems)
@@ -693,6 +915,8 @@ export class ContentModulesService {
     const item = await this.getModuleContextFromItem(itemId);
     await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
 
+    const normalizedMetadata = this.normalizeItemMetadataForUpdate(item, dto);
+
     await this.db
       .update(moduleItems)
       .set({
@@ -700,7 +924,7 @@ export class ContentModulesService {
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
         ...(dto.isRequired !== undefined ? { isRequired: dto.isRequired } : {}),
         ...(dto.isGiven !== undefined ? { isGiven: dto.isGiven } : {}),
-        ...(dto.metadata !== undefined ? { metadata: dto.metadata } : {}),
+        ...(normalizedMetadata !== undefined ? { metadata: normalizedMetadata } : {}),
         updatedAt: new Date(),
       })
       .where(eq(moduleItems.id, itemId));

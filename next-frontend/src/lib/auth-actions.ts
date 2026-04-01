@@ -67,7 +67,7 @@ export async function loginAction(formData: {
   }
 }
 
-export async function logoutAction() {
+export async function logoutAction(reason?: string) {
   try {
     await authService.logout();
   } catch {
@@ -75,10 +75,13 @@ export async function logoutAction() {
   }
 
   clearAccessToken();
-  window.location.href = '/login';
+  const target = reason
+    ? `/login?reason=${encodeURIComponent(reason)}`
+    : '/login';
+  window.location.href = target;
 }
 
-export async function logoutAllAction() {
+export async function logoutAllAction(reason?: string) {
   try {
     await authService.logoutAll();
   } catch {
@@ -86,7 +89,10 @@ export async function logoutAllAction() {
   }
 
   clearAccessToken();
-  window.location.href = '/login';
+  const target = reason
+    ? `/login?reason=${encodeURIComponent(reason)}`
+    : '/login';
+  window.location.href = target;
 }
 
 export async function getCurrentUserAction() {

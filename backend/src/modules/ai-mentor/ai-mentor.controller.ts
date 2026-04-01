@@ -1,5 +1,6 @@
 import {
   Controller,
+  ForbiddenException,
   Get,
   Post,
   Patch,
@@ -42,6 +43,12 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { DatabaseService } from '../../database/database.service';
+import {
+  classModules,
+  enrollments,
+} from '../../drizzle/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 
 @ApiTags('AI Mentor')
 @ApiBearerAuth('token')
@@ -50,7 +57,180 @@ import { Public } from '../auth/decorators/public.decorator';
 export class AiMentorController {
   private readonly logger = new Logger(AiMentorController.name);
 
-  constructor(private readonly proxy: AiProxyService) {}
+  constructor(
+    private readonly proxy: AiProxyService,
+    private readonly databaseService: DatabaseService,
+  ) {}
+
+  private get db() {
+    return this.databaseService.db;
+  }
+
+  private isTutorItemVisible(item: {
+    itemType: 'lesson' | 'assessment' | 'file';
+    isVisible: boolean;
+    isGiven: boolean;
+    lesson?: { isDraft: boolean } | null;
+    assessment?: { isPublished: boolean | null } | null;
+    fileId?: string | null;
+  }) {
+    if (!item.isVisible) return false;
+    if (item.itemType === 'lesson') {
+      return Boolean(item.lesson && !item.lesson.isDraft);
+    }
+    if (item.itemType === 'assessment') {
+      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+    }
+    return Boolean(item.fileId);
+  }
+
+  private unwrapEnvelope(payload: unknown) {
+    if (payload && typeof payload === 'object' && 'data' in payload) {
+      return {
+        isEnvelope: true,
+        envelope: payload as Record<string, unknown>,
+        data: (payload as { data: unknown }).data,
+      };
+    }
+    return { isEnvelope: false, envelope: null, data: payload };
+  }
+
+  private isAllowedRecommendation(
+    recommendation: { lessonId?: string | null; assessmentId?: string | null } | null | undefined,
+    allowedLessonIds: Set<string>,
+    allowedAssessmentIds: Set<string>,
+  ) {
+    if (!recommendation) return false;
+    if (
+      recommendation.lessonId &&
+      !allowedLessonIds.has(recommendation.lessonId)
+    ) {
+      return false;
+    }
+    if (
+      recommendation.assessmentId &&
+      !allowedAssessmentIds.has(recommendation.assessmentId)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private sanitizeTutorCitations(
+    citations: unknown,
+    allowedLessonIds: Set<string>,
+    allowedAssessmentIds: Set<string>,
+  ) {
+    if (!Array.isArray(citations)) return [];
+    return citations.filter((entry) =>
+      this.isAllowedRecommendation(
+        entry as { lessonId?: string | null; assessmentId?: string | null },
+        allowedLessonIds,
+        allowedAssessmentIds,
+      ),
+    );
+  }
+
+  private async getAllowedTutorSourceIds(studentId: string, classId?: string) {
+    const enrollmentRows = await this.db.query.enrollments.findMany({
+      where: classId
+        ? and(
+            eq(enrollments.studentId, studentId),
+            eq(enrollments.classId, classId),
+          )
+        : eq(enrollments.studentId, studentId),
+      columns: {
+        classId: true,
+      },
+    });
+
+    const classIds = Array.from(
+      new Set(
+        enrollmentRows
+          .map((row) => row.classId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    if (classIds.length === 0) {
+      return { allowedLessonIds: new Set<string>(), allowedAssessmentIds: new Set<string>() };
+    }
+
+    const modules = await this.db.query.classModules.findMany({
+      where: and(
+        inArray(classModules.classId, classIds),
+        eq(classModules.isVisible, true),
+      ),
+      with: {
+        sections: {
+          with: {
+            items: {
+              columns: {
+                itemType: true,
+                isVisible: true,
+                isGiven: true,
+                lessonId: true,
+                assessmentId: true,
+                fileId: true,
+              },
+              with: {
+                lesson: {
+                  columns: {
+                    id: true,
+                    isDraft: true,
+                  },
+                },
+                assessment: {
+                  columns: {
+                    id: true,
+                    isPublished: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const allowedLessonIds = new Set<string>();
+    const allowedAssessmentIds = new Set<string>();
+
+    modules.forEach((module) => {
+      if (module.isLocked) return;
+      module.sections.forEach((section) => {
+        section.items.forEach((item) => {
+          if (!this.isTutorItemVisible(item as typeof item & { fileId?: string | null })) {
+            return;
+          }
+          if (item.itemType === 'lesson' && item.lessonId) {
+            allowedLessonIds.add(item.lessonId);
+          }
+          if (item.itemType === 'assessment' && item.assessmentId) {
+            allowedAssessmentIds.add(item.assessmentId);
+          }
+        });
+      });
+    });
+
+    return { allowedLessonIds, allowedAssessmentIds };
+  }
+
+  private async resolveTutorSessionClassId(
+    sessionId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const sessionPayload = await this.proxy.forward(
+      'GET',
+      `/student/tutor/session/${sessionId}`,
+      user,
+    );
+    const unwrapped = this.unwrapEnvelope(sessionPayload);
+    if (!unwrapped.data || typeof unwrapped.data !== 'object') return undefined;
+    const rawData = unwrapped.data as Record<string, unknown>;
+    if (!rawData.state || typeof rawData.state !== 'object') return undefined;
+    const state = rawData.state as Record<string, unknown>;
+    return typeof state.classId === 'string' ? state.classId : undefined;
+  }
 
   // ─── JAKIPIR Chat ──────────────────────────────────────────────────────
 
@@ -93,7 +273,57 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     const suffix = query.classId ? `?classId=${query.classId}` : '';
-    return this.proxy.forward('GET', `/student/tutor/bootstrap${suffix}`, user);
+    const payload = await this.proxy.forward(
+      'GET',
+      `/student/tutor/bootstrap${suffix}`,
+      user,
+    );
+    const { allowedLessonIds, allowedAssessmentIds } =
+      await this.getAllowedTutorSourceIds(user.id, query.classId);
+    const unwrapped = this.unwrapEnvelope(payload);
+    const rawData =
+      (unwrapped.data && typeof unwrapped.data === 'object'
+        ? (unwrapped.data as Record<string, unknown>)
+        : {}) ?? {};
+
+    const sanitizedData = {
+      ...rawData,
+      recentLessons: Array.isArray(rawData.recentLessons)
+        ? rawData.recentLessons.filter((entry) =>
+            this.isAllowedRecommendation(
+              entry as { lessonId?: string | null; assessmentId?: string | null },
+              allowedLessonIds,
+              allowedAssessmentIds,
+            ),
+          )
+        : [],
+      recentAttempts: Array.isArray(rawData.recentAttempts)
+        ? rawData.recentAttempts.filter((entry) =>
+            this.isAllowedRecommendation(
+              entry as { lessonId?: string | null; assessmentId?: string | null },
+              allowedLessonIds,
+              allowedAssessmentIds,
+            ),
+          )
+        : [],
+      recommendations: Array.isArray(rawData.recommendations)
+        ? rawData.recommendations.filter((entry) =>
+            this.isAllowedRecommendation(
+              entry as { lessonId?: string | null; assessmentId?: string | null },
+              allowedLessonIds,
+              allowedAssessmentIds,
+            ),
+          )
+        : [],
+    };
+
+    if (!unwrapped.isEnvelope || !unwrapped.envelope) {
+      return sanitizedData;
+    }
+    return {
+      ...unwrapped.envelope,
+      data: sanitizedData,
+    };
   }
 
   @Post('student/tutor/session')
@@ -103,7 +333,60 @@ export class AiMentorController {
     @Body() dto: StudentTutorStartDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/student/tutor/session', user, dto);
+    const { allowedLessonIds, allowedAssessmentIds } =
+      await this.getAllowedTutorSourceIds(user.id, dto.classId);
+
+    if (
+      !this.isAllowedRecommendation(
+        dto.recommendation,
+        allowedLessonIds,
+        allowedAssessmentIds,
+      )
+    ) {
+      throw new ForbiddenException(
+        'Selected tutor recommendation is no longer available to the student.',
+      );
+    }
+
+    const payload = await this.proxy.forward(
+      'POST',
+      '/student/tutor/session',
+      user,
+      dto,
+    );
+    const unwrapped = this.unwrapEnvelope(payload);
+    const rawData =
+      (unwrapped.data && typeof unwrapped.data === 'object'
+        ? (unwrapped.data as Record<string, unknown>)
+        : {}) ?? {};
+
+    const sanitizedData = {
+      ...rawData,
+      recommendation:
+        this.isAllowedRecommendation(
+          rawData.recommendation as {
+            lessonId?: string | null;
+            assessmentId?: string | null;
+          },
+          allowedLessonIds,
+          allowedAssessmentIds,
+        ) || !rawData.recommendation
+          ? rawData.recommendation
+          : null,
+      citations: this.sanitizeTutorCitations(
+        rawData.citations,
+        allowedLessonIds,
+        allowedAssessmentIds,
+      ),
+    };
+
+    if (!unwrapped.isEnvelope || !unwrapped.envelope) {
+      return sanitizedData;
+    }
+    return {
+      ...unwrapped.envelope,
+      data: sanitizedData,
+    };
   }
 
   @Get('student/tutor/session/:sessionId')
@@ -113,7 +396,62 @@ export class AiMentorController {
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/student/tutor/session/${sessionId}`, user);
+    const payload = await this.proxy.forward(
+      'GET',
+      `/student/tutor/session/${sessionId}`,
+      user,
+    );
+    const unwrapped = this.unwrapEnvelope(payload);
+    const rawData =
+      (unwrapped.data && typeof unwrapped.data === 'object'
+        ? (unwrapped.data as Record<string, unknown>)
+        : {}) ?? {};
+
+    const sessionState =
+      rawData.state && typeof rawData.state === 'object'
+        ? (rawData.state as Record<string, unknown>)
+        : null;
+    const classId =
+      typeof sessionState?.classId === 'string' ? sessionState.classId : undefined;
+    if (!classId) return payload;
+
+    const { allowedLessonIds, allowedAssessmentIds } =
+      await this.getAllowedTutorSourceIds(user.id, classId);
+
+    const sanitizedState = sessionState
+      ? {
+          ...sessionState,
+          recommendation:
+            this.isAllowedRecommendation(
+              sessionState.recommendation as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
+              allowedLessonIds,
+              allowedAssessmentIds,
+            ) || !sessionState.recommendation
+              ? sessionState.recommendation
+              : null,
+          citations: this.sanitizeTutorCitations(
+            sessionState.citations,
+            allowedLessonIds,
+            allowedAssessmentIds,
+          ),
+        }
+      : null;
+
+    const sanitizedData = {
+      ...rawData,
+      state: sanitizedState,
+    };
+
+    if (!unwrapped.isEnvelope || !unwrapped.envelope) {
+      return sanitizedData;
+    }
+    return {
+      ...unwrapped.envelope,
+      data: sanitizedData,
+    };
   }
 
   @Post('student/tutor/session/:sessionId/message')
@@ -124,12 +462,39 @@ export class AiMentorController {
     @Body() dto: StudentTutorMessageDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward(
+    const payload = await this.proxy.forward(
       'POST',
       `/student/tutor/session/${sessionId}/message`,
       user,
       dto,
     );
+    const unwrapped = this.unwrapEnvelope(payload);
+    const rawData =
+      (unwrapped.data && typeof unwrapped.data === 'object'
+        ? (unwrapped.data as Record<string, unknown>)
+        : {}) ?? {};
+    const classId = await this.resolveTutorSessionClassId(sessionId, user);
+    if (!classId) return payload;
+
+    const { allowedLessonIds, allowedAssessmentIds } =
+      await this.getAllowedTutorSourceIds(user.id, classId);
+
+    const sanitizedData = {
+      ...rawData,
+      citations: this.sanitizeTutorCitations(
+        rawData.citations,
+        allowedLessonIds,
+        allowedAssessmentIds,
+      ),
+    };
+
+    if (!unwrapped.isEnvelope || !unwrapped.envelope) {
+      return sanitizedData;
+    }
+    return {
+      ...unwrapped.envelope,
+      data: sanitizedData,
+    };
   }
 
   @Post('student/tutor/session/:sessionId/answers')
@@ -140,12 +505,39 @@ export class AiMentorController {
     @Body() dto: StudentTutorAnswersDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward(
+    const payload = await this.proxy.forward(
       'POST',
       `/student/tutor/session/${sessionId}/answers`,
       user,
       dto,
     );
+    const unwrapped = this.unwrapEnvelope(payload);
+    const rawData =
+      (unwrapped.data && typeof unwrapped.data === 'object'
+        ? (unwrapped.data as Record<string, unknown>)
+        : {}) ?? {};
+    const classId = await this.resolveTutorSessionClassId(sessionId, user);
+    if (!classId) return payload;
+
+    const { allowedLessonIds, allowedAssessmentIds } =
+      await this.getAllowedTutorSourceIds(user.id, classId);
+
+    const sanitizedData = {
+      ...rawData,
+      citations: this.sanitizeTutorCitations(
+        rawData.citations,
+        allowedLessonIds,
+        allowedAssessmentIds,
+      ),
+    };
+
+    if (!unwrapped.isEnvelope || !unwrapped.envelope) {
+      return sanitizedData;
+    }
+    return {
+      ...unwrapped.envelope,
+      data: sanitizedData,
+    };
   }
 
   // ─── Health check ─────────────────────────────────────────────────────

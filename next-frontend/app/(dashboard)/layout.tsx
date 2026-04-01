@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -9,6 +9,11 @@ import { StudentTutorLauncher } from '@/components/student/StudentTutorLauncher'
 import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemptNotifier';
 import { AppOrbitLoader } from '@/components/shared/AppOrbitLoader';
 import { resolveLoaderVariant } from '@/utils/loader-variant';
+import { logoutAction } from '@/lib/auth-actions';
+import {
+  isDashboardRolePathAllowed,
+  normalizeDashboardRole,
+} from '@/lib/dashboard-route-access';
 
 const ADMIN_SIDEBAR_STORAGE_KEY = 'nexora.adminSidebarCollapsed';
 const TEACHER_SIDEBAR_STORAGE_KEY = 'nexora.teacherSidebarCollapsed';
@@ -19,19 +24,26 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
   const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] = useState(false);
   const [studentSidebarCollapsed, setStudentSidebarCollapsed] = useState(false);
-  const { loading, isAuthenticated, isProfileIncomplete } = useAuth();
+  const hasTriggeredMismatchLogoutRef = useRef(false);
+  const { loading, isAuthenticated, isProfileIncomplete, role } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const normalizedRole = normalizeDashboardRole(role);
   const shouldRedirect = !loading && (!isAuthenticated || isProfileIncomplete);
+  const shouldHandleRoleMismatch =
+    !loading &&
+    isAuthenticated &&
+    !isProfileIncomplete &&
+    !isDashboardRolePathAllowed(pathname, normalizedRole);
   const loaderVariant = resolveLoaderVariant(pathname);
-  const isStudentRoute = pathname.startsWith('/dashboard/student');
-  const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
-  const isAdminRoute = pathname.startsWith('/dashboard') && !isStudentRoute && !isTeacherRoute;
-  const shellClass = isStudentRoute
+  const isStudentShell = normalizedRole === 'student';
+  const isTeacherShell = normalizedRole === 'teacher';
+  const isAdminShell = normalizedRole === 'admin';
+  const shellClass = isStudentShell
     ? 'student-shell'
-    : isTeacherRoute
+    : isTeacherShell
       ? 'teacher-shell'
-      : isAdminRoute
+      : isAdminShell
         ? 'admin-dashboard-shell'
         : 'bg-slate-50';
 
@@ -39,6 +51,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     if (!shouldRedirect) return;
     router.replace(!isAuthenticated ? '/login' : '/complete-profile');
   }, [shouldRedirect, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!shouldHandleRoleMismatch) return;
+    if (hasTriggeredMismatchLogoutRef.current) return;
+
+    hasTriggeredMismatchLogoutRef.current = true;
+    void logoutAction('role-mismatch');
+  }, [shouldHandleRoleMismatch]);
 
   useEffect(() => {
     const savedState = window.localStorage.getItem(ADMIN_SIDEBAR_STORAGE_KEY);
@@ -92,17 +112,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   const handleSidebarToggle = () => {
-    if (isAdminRoute && window.matchMedia('(min-width: 768px)').matches) {
+    if (isAdminShell && window.matchMedia('(min-width: 768px)').matches) {
       setPersistedAdminSidebarCollapsed(!adminSidebarCollapsed);
       return;
     }
 
-    if (isTeacherRoute && window.matchMedia('(min-width: 768px)').matches) {
+    if (isTeacherShell && window.matchMedia('(min-width: 768px)').matches) {
       setPersistedTeacherSidebarCollapsed(!teacherSidebarCollapsed);
       return;
     }
 
-    if (isStudentRoute && window.matchMedia('(min-width: 768px)').matches) {
+    if (isStudentShell && window.matchMedia('(min-width: 768px)').matches) {
       setPersistedStudentSidebarCollapsed(!studentSidebarCollapsed);
       return;
     }
@@ -110,7 +130,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     setSidebarOpen((open) => !open);
   };
 
-  if (loading || shouldRedirect) {
+  if (loading || shouldRedirect || shouldHandleRoleMismatch) {
     return <AppOrbitLoader variant={loaderVariant} />;
   }
 
@@ -127,6 +147,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        shellRole={normalizedRole}
         isAdminCollapsed={adminSidebarCollapsed}
         onAdminCollapseToggle={() => setPersistedAdminSidebarCollapsed(true)}
         isTeacherCollapsed={teacherSidebarCollapsed}
@@ -138,12 +159,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar
           onMenuToggle={handleSidebarToggle}
+          shellRole={normalizedRole}
           showAdminDesktopMenu={adminSidebarCollapsed}
           showTeacherDesktopMenu={teacherSidebarCollapsed}
           showStudentDesktopMenu={studentSidebarCollapsed}
         />
         <main
-          className={`flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherRoute ? 'teacher-page' : ''} ${isAdminRoute ? 'admin-main p-5 lg:p-8' : ''}`}
+          className={`flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherShell ? 'teacher-page' : ''} ${isAdminShell ? 'admin-main p-5 lg:p-8' : ''}`}
         >
           {children}
         </main>

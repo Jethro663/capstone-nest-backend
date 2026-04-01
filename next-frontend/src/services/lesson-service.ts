@@ -11,6 +11,7 @@ import type {
   BulkLessonDraftStateDto,
   BulkLessonIdsDto,
   LessonCompletion,
+  LessonCompleteResponseData,
   LessonsResponse,
   LessonListQuery,
 } from '@/types/lesson';
@@ -116,7 +117,7 @@ export const lessonService = {
   /** POST /lessons/:lessonId/complete — Student */
   async complete(
     lessonId: string,
-  ): Promise<{ success: boolean; message: string; data: { completed: boolean; completedAt?: string } }> {
+  ): Promise<{ success: boolean; message: string; data: LessonCompleteResponseData }> {
     const { data } = await api.post(`/lessons/${lessonId}/complete`);
     return data;
   },

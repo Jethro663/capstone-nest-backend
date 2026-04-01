@@ -445,6 +445,27 @@
   accent-color: #e70012;
 }
 
+.teacher-module-detail__points-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #627a9e;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.teacher-module-detail__points-field input {
+  width: 4.4rem;
+  min-height: 2rem;
+  border: 1px solid #d4dfed;
+  border-radius: 0.56rem;
+  background: #fff;
+  color: #102542;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding-inline: 0.45rem;
+}
+
 .teacher-module-detail__section-footer {
   display: flex;
   align-items: center;

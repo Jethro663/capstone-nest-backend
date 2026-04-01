@@ -1,9 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import DashboardLayout from './layout';
 
 const replaceMock = jest.fn();
 const usePathnameMock = jest.fn();
 const useAuthMock = jest.fn();
+const logoutActionMock = jest.fn();
 
 jest.mock('next/navigation', () => ({
   usePathname: () => usePathnameMock(),
@@ -14,6 +15,10 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('@/providers/AuthProvider', () => ({
   useAuth: () => useAuthMock(),
+}));
+
+jest.mock('@/lib/auth-actions', () => ({
+  logoutAction: () => logoutActionMock(),
 }));
 
 jest.mock('@/components/layout/Sidebar', () => ({
@@ -45,6 +50,7 @@ describe('DashboardLayout loading behavior', () => {
       loading: true,
       isAuthenticated: false,
       isProfileIncomplete: false,
+      role: null,
     });
   });
 
@@ -65,3 +71,66 @@ describe('DashboardLayout loading behavior', () => {
   });
 });
 
+describe('DashboardLayout role-path enforcement', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useAuthMock.mockReturnValue({
+      loading: false,
+      isAuthenticated: true,
+      isProfileIncomplete: false,
+      role: 'student',
+    });
+  });
+
+  it('forces logout when a student enters teacher routes', async () => {
+    usePathnameMock.mockReturnValue('/dashboard/teacher/classes');
+
+    render(<DashboardLayout><div>content</div></DashboardLayout>);
+
+    expect(screen.getByTestId('app-orbit-loader')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(logoutActionMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('forces logout when a teacher enters student routes', async () => {
+    useAuthMock.mockReturnValue({
+      loading: false,
+      isAuthenticated: true,
+      isProfileIncomplete: false,
+      role: 'teacher',
+    });
+    usePathnameMock.mockReturnValue('/dashboard/student/courses');
+
+    render(<DashboardLayout><div>content</div></DashboardLayout>);
+
+    expect(screen.getByTestId('app-orbit-loader')).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(logoutActionMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not logout on matching role-scoped routes', () => {
+    usePathnameMock.mockReturnValue('/dashboard/student/courses');
+
+    render(<DashboardLayout><div>content</div></DashboardLayout>);
+
+    expect(logoutActionMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('sidebar')).toBeInTheDocument();
+    expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('does not logout on shared dashboard routes', () => {
+    usePathnameMock.mockReturnValue('/dashboard/notifications');
+
+    render(<DashboardLayout><div>content</div></DashboardLayout>);
+
+    expect(logoutActionMock).not.toHaveBeenCalled();
+    expect(screen.getByTestId('sidebar')).toBeInTheDocument();
+    expect(screen.getByText('content')).toBeInTheDocument();
+  });
+});

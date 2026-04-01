@@ -4,7 +4,7 @@
 
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Bell, ChevronDown, LogOut, Menu, Moon, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
@@ -18,9 +18,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { logoutAction } from '@/lib/auth-actions';
 import { getProfileRoute } from '@/utils/profile';
+import {
+  normalizeDashboardRole,
+  type DashboardRole,
+} from '@/lib/dashboard-route-access';
 
 interface TopBarProps {
   onMenuToggle: () => void;
+  shellRole?: DashboardRole | null;
   showAdminDesktopMenu?: boolean;
   showTeacherDesktopMenu?: boolean;
   showStudentDesktopMenu?: boolean;
@@ -28,17 +33,18 @@ interface TopBarProps {
 
 export function TopBar({
   onMenuToggle,
+  shellRole = null,
   showAdminDesktopMenu = false,
   showTeacherDesktopMenu = false,
   showStudentDesktopMenu = false,
 }: TopBarProps) {
   const router = useRouter();
-  const pathname = usePathname();
   const { user, role } = useAuth();
   const { unreadCount } = useNotifications();
-  const isStudentRoute = pathname.startsWith('/dashboard/student');
-  const isTeacherRoute = pathname.startsWith('/dashboard/teacher');
-  const isAdminRoute = pathname.startsWith('/dashboard') && !isStudentRoute && !isTeacherRoute;
+  const effectiveRole = shellRole ?? normalizeDashboardRole(role);
+  const isStudentShell = effectiveRole === 'student';
+  const isTeacherShell = effectiveRole === 'teacher';
+  const isAdminShell = effectiveRole === 'admin';
   const firstName = user?.firstName ?? 'Admin';
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName ?? ''}`.trim()
@@ -50,9 +56,9 @@ export function TopBar({
     user?.profile?.profilePicture ??
     user?.teacherProfile?.profilePicture ??
     user?.profilePicture;
-  const profileHref = getProfileRoute(role);
+  const profileHref = getProfileRoute(effectiveRole);
 
-  if (isAdminRoute) {
+  if (isAdminShell) {
     return (
       <header className="admin-topbar">
         <div className="flex items-center gap-3">
@@ -129,7 +135,7 @@ export function TopBar({
     );
   }
 
-  if (isTeacherRoute) {
+  if (isTeacherShell) {
     return (
       <header className="teacher-topbar-shell">
         <div className="teacher-topbar-shell__left">
@@ -202,7 +208,7 @@ export function TopBar({
     );
   }
 
-  if (isStudentRoute) {
+  if (isStudentShell) {
     return (
       <header className="student-topbar-shell">
         <div className="student-topbar-shell__left">
@@ -285,13 +291,13 @@ export function TopBar({
   }
 
   return (
-    <header className={`flex h-16 items-center justify-between border-b px-4 ${isTeacherRoute ? 'teacher-topbar' : 'bg-white'}`}>
+    <header className={`flex h-16 items-center justify-between border-b px-4 ${isTeacherShell ? 'teacher-topbar' : 'bg-white'}`}>
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className={`md:hidden ${isTeacherRoute ? 'text-[var(--teacher-text-muted)] hover:bg-white/10 hover:text-[var(--teacher-text-strong)]' : ''}`} onClick={onMenuToggle}>
+        <Button variant="ghost" size="icon" className={`md:hidden ${isTeacherShell ? 'text-[var(--teacher-text-muted)] hover:bg-white/10 hover:text-[var(--teacher-text-strong)]' : ''}`} onClick={onMenuToggle}>
           <Menu className="h-5 w-5" />
         </Button>
-        <span className={`hidden text-sm sm:block ${isTeacherRoute ? 'text-[var(--teacher-text-muted)]' : 'text-muted-foreground'}`}>
-          Welcome, <span className={`font-medium ${isTeacherRoute ? 'text-[var(--teacher-text-strong)]' : 'text-slate-900'}`}>{displayName}</span>
+        <span className={`hidden text-sm sm:block ${isTeacherShell ? 'text-[var(--teacher-text-muted)]' : 'text-muted-foreground'}`}>
+          Welcome, <span className={`font-medium ${isTeacherShell ? 'text-[var(--teacher-text-strong)]' : 'text-slate-900'}`}>{displayName}</span>
         </span>
       </div>
 
@@ -302,7 +308,7 @@ export function TopBar({
           onClick={() => router.push('/dashboard/notifications')}
           title="Notifications"
           className={
-            isTeacherRoute
+            isTeacherShell
                 ? 'text-[var(--teacher-text-muted)] hover:bg-white/10 hover:text-[var(--teacher-text-strong)]'
                 : undefined
           }
@@ -310,22 +316,22 @@ export function TopBar({
           <Bell className="h-5 w-5" />
         </Button>
 
-        <div className={`mx-2 h-6 w-px ${isTeacherRoute ? 'teacher-divider' : 'bg-slate-200'}`} />
+        <div className={`mx-2 h-6 w-px ${isTeacherShell ? 'teacher-divider' : 'bg-slate-200'}`} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isTeacherRoute ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
+              className={`flex items-center gap-2 rounded-xl px-2 py-1 transition-colors ${isTeacherShell ? 'hover:bg-white/10' : 'hover:bg-slate-100'}`}
             >
               <Avatar className="h-8 w-8">
                 {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
-                <AvatarFallback className={`text-xs font-medium ${isTeacherRoute ? 'bg-[var(--teacher-outline-strong)] text-[var(--teacher-text-strong)]' : 'bg-primary/10 text-primary'}`}>
+                <AvatarFallback className={`text-xs font-medium ${isTeacherShell ? 'bg-[var(--teacher-outline-strong)] text-[var(--teacher-text-strong)]' : 'bg-primary/10 text-primary'}`}>
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <span className={`hidden text-sm font-medium md:block ${isTeacherRoute ? 'text-[var(--teacher-text-strong)]' : 'text-slate-700'}`}>Profile</span>
-              <ChevronDown className={`hidden h-4 w-4 md:block ${isTeacherRoute ? 'text-[var(--teacher-text-muted)]' : 'text-slate-500'}`} />
+              <span className={`hidden text-sm font-medium md:block ${isTeacherShell ? 'text-[var(--teacher-text-strong)]' : 'text-slate-700'}`}>Profile</span>
+              <ChevronDown className={`hidden h-4 w-4 md:block ${isTeacherShell ? 'text-[var(--teacher-text-muted)]' : 'text-slate-500'}`} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
