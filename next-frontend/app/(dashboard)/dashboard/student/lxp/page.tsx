@@ -1,7 +1,5 @@
-'use client';
+import { redirect } from "next/navigation";
 
-import StudentLxpExperience from '@/components/student/lxp/StudentLxpExperience';
-
-export default function StudentLxpPage() {
-  return <StudentLxpExperience />;
+export default function StudentLxpRedirectPage() {
+  redirect("/dashboard/student/ja");
 }

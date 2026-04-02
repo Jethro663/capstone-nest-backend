@@ -38,6 +38,14 @@ from .student_tutor_service import (
     start_student_tutor_session,
     submit_student_tutor_answers,
 )
+from .ja_practice_service import (
+    bootstrap_ja_ask,
+    bootstrap_ja_practice,
+    bootstrap_ja_review,
+    generate_ja_ask_response,
+    generate_ja_practice_session_packet,
+    generate_ja_review_session_packet,
+)
 from .schemas import (
     ApplyExtractionRequest,
     ChatRequest,
@@ -49,6 +57,9 @@ from .schemas import (
     StudentTutorAnswerRequest,
     StudentTutorMessageRequest,
     StudentTutorStartRequest,
+    JaPracticeGenerateRequest,
+    JaAskResponseRequest,
+    JaReviewGenerateRequest,
     UpdateExtractionRequest,
 )
 
@@ -647,7 +658,125 @@ async def mentor_explain(
 
 
 # ---------------------------------------------------------------------------
-# Student Tutor
+# JA Practice
+# ---------------------------------------------------------------------------
+
+
+@app.get("/student/ja/practice/bootstrap")
+async def ja_practice_bootstrap(
+    class_id: str | None = Query(None, alias="classId"),
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await bootstrap_ja_practice(db, user, class_id=class_id)
+    return {
+        "success": True,
+        "message": "JA practice bootstrap loaded",
+        "data": data,
+    }
+
+
+@app.post("/student/ja/practice/sessions/generate")
+async def ja_practice_generate(
+    body: JaPracticeGenerateRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await generate_ja_practice_session_packet(
+        db,
+        user=user,
+        class_id=body.class_id,
+        question_count=max(1, min(20, body.question_count)),
+        recommendation=body.recommendation,
+        allowed_lesson_ids=body.allowed_lesson_ids,
+        allowed_assessment_ids=body.allowed_assessment_ids,
+    )
+    return {
+        "success": True,
+        "message": "JA practice session packet generated",
+        "data": data,
+    }
+
+
+@app.get("/student/ja/ask/bootstrap")
+async def ja_ask_bootstrap(
+    class_id: str | None = Query(None, alias="classId"),
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await bootstrap_ja_ask(db, user, class_id=class_id)
+    return {
+        "success": True,
+        "message": "JA Ask bootstrap loaded",
+        "data": data,
+    }
+
+
+@app.post("/student/ja/ask/respond")
+async def ja_ask_respond(
+    body: JaAskResponseRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await generate_ja_ask_response(
+        db,
+        user=user,
+        class_id=body.class_id,
+        thread_id=body.thread_id,
+        message=body.message,
+        quick_action=body.quick_action,
+        history=[
+            {"role": entry.role, "content": entry.content}
+            for entry in (body.history or [])
+        ],
+        allowed_lesson_ids=body.allowed_lesson_ids,
+        allowed_assessment_ids=body.allowed_assessment_ids,
+    )
+    return {
+        "success": True,
+        "message": "JA Ask response generated",
+        "data": data,
+    }
+
+
+@app.get("/student/ja/review/bootstrap")
+async def ja_review_bootstrap(
+    class_id: str | None = Query(None, alias="classId"),
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await bootstrap_ja_review(db, user, class_id=class_id)
+    return {
+        "success": True,
+        "message": "JA Review bootstrap loaded",
+        "data": data,
+    }
+
+
+@app.post("/student/ja/review/sessions/generate")
+async def ja_review_generate(
+    body: JaReviewGenerateRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await generate_ja_review_session_packet(
+        db,
+        user=user,
+        class_id=body.class_id,
+        attempt_id=body.attempt_id,
+        question_count=max(5, min(20, body.question_count)),
+        allowed_lesson_ids=body.allowed_lesson_ids,
+        allowed_assessment_ids=body.allowed_assessment_ids,
+    )
+    return {
+        "success": True,
+        "message": "JA Review session packet generated",
+        "data": data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Student Tutor (legacy compatibility)
 # ---------------------------------------------------------------------------
 
 

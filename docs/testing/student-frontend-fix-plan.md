@@ -1,8 +1,8 @@
-# Teacher Frontend Fix Plan
+# Student Frontend Fix Plan
 
 ## Summary
 
-- Target role: `teacher`
+- Target role: `student`
 - Issues to address: `0`
 - This plan is derived from the latest audit evidence and stops before code changes.
 

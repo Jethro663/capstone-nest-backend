@@ -25,7 +25,8 @@ export class AiProxyService {
       this.config.get<string>('AI_SERVICE_TIMEOUT_EXTRACTION_MS') || '300000',
       10,
     );
-    this.sharedSecret = this.config.get<string>('AI_SERVICE_SHARED_SECRET') || '';
+    this.sharedSecret =
+      this.config.get<string>('AI_SERVICE_SHARED_SECRET') || '';
     this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
   }
 
@@ -33,7 +34,8 @@ export class AiProxyService {
     if (
       path === '/chat' ||
       path.startsWith('/mentor/') ||
-      path.startsWith('/student/tutor')
+      path.startsWith('/student/tutor') ||
+      path.startsWith('/student/ja/')
     ) {
       return this.chatTimeoutMs;
     }

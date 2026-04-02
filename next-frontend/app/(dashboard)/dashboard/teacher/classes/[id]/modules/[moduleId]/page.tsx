@@ -830,6 +830,7 @@ export default function TeacherModuleDetailPage() {
                 <Button
                   type="button"
                   className="teacher-module-detail__primary"
+                  data-priority="primary"
                   onClick={() => void handleCreateSection()}
                   disabled={creatingSection}
                 >
@@ -874,6 +875,7 @@ export default function TeacherModuleDetailPage() {
                             type="button"
                             size="sm"
                             className="teacher-module-detail__primary"
+                            data-priority="primary"
                             onClick={() => void handleSaveSectionTitle(section.id)}
                             disabled={savingSectionEdit}
                           >
@@ -904,7 +906,7 @@ export default function TeacherModuleDetailPage() {
                       <ActionTooltip label="Delete section">
                         <button
                           type="button"
-                          className="teacher-module-detail__ghost"
+                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
                           onClick={() => confirmDeleteSection(section.id)}
                           aria-label="Delete section"
                         >
@@ -997,7 +999,7 @@ export default function TeacherModuleDetailPage() {
                                 </div>
                               )}
                               <div className="teacher-module-detail__item-controls">
-                                <label>
+                                <label className="teacher-module-detail__control-toggle">
                                   <input
                                     type="checkbox"
                                     checked={item.isRequired}
@@ -1008,7 +1010,7 @@ export default function TeacherModuleDetailPage() {
                                   />
                                   Required
                                 </label>
-                                <label>
+                                <label className="teacher-module-detail__control-toggle">
                                   <input
                                     type="checkbox"
                                     checked={!item.isVisible}
@@ -1020,7 +1022,7 @@ export default function TeacherModuleDetailPage() {
                                   Hide
                                 </label>
                                 {item.itemType === 'assessment' ? (
-                                  <label>
+                                  <label className="teacher-module-detail__control-toggle">
                                     <input
                                       type="checkbox"
                                       checked={item.isGiven}
@@ -1052,7 +1054,7 @@ export default function TeacherModuleDetailPage() {
                                 <ActionTooltip label="Remove item from section">
                                   <button
                                     type="button"
-                                    className="teacher-module-detail__ghost"
+                                    className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
                                     onClick={() => confirmDetachItem(item.id)}
                                     aria-label="Remove item"
                                   >
@@ -1071,6 +1073,7 @@ export default function TeacherModuleDetailPage() {
                     <button
                       type="button"
                       className="teacher-module-detail__outline"
+                      data-priority="section-add"
                       onClick={() =>
                         setAttachState({
                           open: true,
@@ -1193,6 +1196,7 @@ export default function TeacherModuleDetailPage() {
                 <Button
                   type="button"
                   className="teacher-module-detail__primary"
+                  data-priority="primary"
                   onClick={() => void handleSaveNotes()}
                   disabled={savingNotes}
                 >
@@ -1216,6 +1220,7 @@ export default function TeacherModuleDetailPage() {
               <button
                 type="button"
                 className="teacher-module-detail__outline"
+                data-priority="secondary"
                 onClick={() =>
                   setGradingRows((current) => [
                     ...current,
@@ -1301,7 +1306,7 @@ export default function TeacherModuleDetailPage() {
                       <td>
                         <button
                           type="button"
-                          className="teacher-module-detail__ghost"
+                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
                           onClick={() =>
                             setGradingRows((current) =>
                               current.length > 1 ? current.filter((entry) => entry.id !== row.id) : current,
@@ -1322,6 +1327,7 @@ export default function TeacherModuleDetailPage() {
               <Button
                 type="button"
                 className="teacher-module-detail__primary"
+                data-priority="primary"
                 onClick={() => void handleSaveScale()}
                 disabled={savingScale}
               >
@@ -1509,6 +1515,7 @@ export default function TeacherModuleDetailPage() {
             <Button
               type="button"
               className="teacher-module-detail__primary"
+              data-priority="primary"
               onClick={() => void handleAttachItem()}
               disabled={!canSubmitAttach || attachingItem || !attachState.itemType}
             >

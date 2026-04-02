@@ -14,6 +14,7 @@ import {
 import { performanceService } from '@/services/performance-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { StudentOwnPerformanceSummary } from '@/types/performance';
+import './student-performance.css';
 
 type TrendSubject = {
   key: string;
@@ -33,7 +34,7 @@ type SubjectRow = {
 };
 
 const SUBJECT_PRIORITY = ['math', 'science', 'english'];
-const TREND_COLORS = ['#ef4444', '#3b82f6', '#16a34a'];
+const TREND_COLORS = ['var(--sp-trend-1)', 'var(--sp-trend-2)', 'var(--sp-trend-3)'];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -117,17 +118,24 @@ function getTier(score: number | null, isAtRisk: boolean) {
 }
 
 function tierFillClass(tier: string): string {
-  if (tier === 'danger') return 'bg-[#ef4444]';
-  if (tier === 'warning') return 'bg-[#eab308]';
-  if (tier === 'success') return 'bg-[#22c55e]';
-  return 'bg-[#94a3b8]';
+  if (tier === 'danger') return 'sp-tier-fill-danger';
+  if (tier === 'warning') return 'sp-tier-fill-warning';
+  if (tier === 'success') return 'sp-tier-fill-success';
+  return 'sp-tier-fill-neutral';
 }
 
 function deltaClass(delta: number | null): string {
-  if (delta === null) return 'text-[#94a3b8]';
-  if (delta > 0) return 'text-[#16a34a]';
-  if (delta < 0) return 'text-[#ef4444]';
-  return 'text-[#94a3b8]';
+  if (delta === null) return 'sp-delta-neutral';
+  if (delta > 0) return 'sp-delta-positive';
+  if (delta < 0) return 'sp-delta-negative';
+  return 'sp-delta-neutral';
+}
+
+function scoreClass(tier: string): string {
+  if (tier === 'danger') return 'sp-score-danger';
+  if (tier === 'warning') return 'sp-score-warning';
+  if (tier === 'success') return 'sp-score-success';
+  return 'sp-score-neutral';
 }
 
 function MotionCard({
@@ -149,7 +157,7 @@ function MotionCard({
       transition={
         reducedMotion
           ? undefined
-          : { duration: 0.22, delay: index * 0.04, ease: 'easeOut' }
+          : { duration: 0.16, delay: index * 0.025, ease: 'easeOut' }
       }
     >
       {children}
@@ -159,12 +167,12 @@ function MotionCard({
 
 function LocalEmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed border-[#d6deea] bg-[#f8fbff] p-8 text-center">
-      <div className="mb-4 rounded-2xl bg-white p-4 text-[#7a8ea9] shadow-sm">
+    <div className="sp-empty-state">
+      <div className="sp-empty-state__icon">
         <Inbox className="h-8 w-8" />
       </div>
-      <h3 className="text-lg font-bold text-[#0f172a]">{title}</h3>
-      <p className="mt-2 max-w-md text-sm text-[#5f7392]">{description}</p>
+      <h3 className="sp-empty-state__title">{title}</h3>
+      <p className="sp-empty-state__description">{description}</p>
     </div>
   );
 }
@@ -207,10 +215,10 @@ function SubjectOverviewRadar({
   });
 
   return (
-    <div className="flex items-center justify-center py-2">
+    <div className="sp-radar-wrap">
       <motion.svg
         viewBox={`0 0 ${size} ${size}`}
-        className="h-[300px] w-full max-w-[360px]"
+        className="sp-radar-svg"
         initial={reducedMotion ? false : { opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={
@@ -230,7 +238,7 @@ function SubjectOverviewRadar({
               key={`ring-${levelIndex}`}
               points={ringPoints.join(' ')}
               fill="none"
-              stroke="#e4eaf3"
+              stroke="var(--sp-grid-line)"
               strokeWidth={1}
             />
           );
@@ -247,7 +255,7 @@ function SubjectOverviewRadar({
               y1={center}
               x2={x}
               y2={y}
-              stroke="#e4eaf3"
+              stroke="var(--sp-grid-line)"
               strokeWidth={1}
             />
           );
@@ -255,8 +263,8 @@ function SubjectOverviewRadar({
 
         <polygon
           points={dataPoints.join(' ')}
-          fill="rgba(239, 68, 68, 0.16)"
-          stroke="#ef4444"
+          fill="var(--sp-radar-fill)"
+          stroke="var(--sp-radar-stroke)"
           strokeWidth={2}
         />
 
@@ -273,7 +281,7 @@ function SubjectOverviewRadar({
                   : 'middle'
             }
             dominantBaseline="middle"
-            className="fill-[#7f93b0] text-[11px] font-medium"
+            className="sp-radar-label"
           >
             {label.label}
           </text>
@@ -309,32 +317,32 @@ function QuarterlyTrendChart({
   const toHeight = (value: number) => `${((clamp(value, 60, 100) - 60) / 40) * 100}%`;
 
   return (
-    <div className="space-y-4">
-      <div className="relative h-[260px] rounded-xl border border-[#e7edf6] bg-white px-10 pb-8 pt-5">
-        <div className="absolute inset-y-5 left-4 flex flex-col justify-between text-xs text-[#8a9bb5]">
+    <div className="sp-trend">
+      <div className="sp-trend__chart">
+        <div className="sp-trend__ticks">
           {yTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
         </div>
 
-        <div className="absolute inset-x-10 inset-y-5">
+        <div className="sp-trend__grid">
           {yTicks.map((tick) => (
             <div
               key={`grid-${tick}`}
-              className="absolute left-0 right-0 border-t border-dashed border-[#edf2f8]"
+              className="sp-trend__grid-line"
               style={{ bottom: toHeight(tick) }}
             />
           ))}
         </div>
 
-        <div className="relative z-10 grid h-full grid-cols-3 items-end gap-6">
+        <div className="sp-trend__columns">
           {quarters.map((quarter, quarterIndex) => (
-            <div key={quarter.label} className="flex flex-col items-center gap-2">
-              <div className="flex h-full w-full items-end justify-center gap-1.5">
+            <div key={quarter.label} className="sp-trend__quarter">
+              <div className="sp-trend__bars">
                 {subjects.map((subject, subjectIndex) => (
                   <motion.div
                     key={`${quarter.label}-${subject.key}`}
-                    className="w-9 rounded-t-md"
+                    className="sp-trend__bar"
                     style={{
                       backgroundColor: TREND_COLORS[subjectIndex] || '#94a3b8',
                       height: toHeight(subject[quarter.key]),
@@ -345,25 +353,25 @@ function QuarterlyTrendChart({
                       reducedMotion
                         ? undefined
                         : {
-                            duration: 0.3,
+                            duration: 0.24,
                             ease: 'easeOut',
-                            delay: 0.08 + quarterIndex * 0.06 + subjectIndex * 0.04,
+                            delay: 0.06 + quarterIndex * 0.045 + subjectIndex * 0.03,
                           }
                     }
                   />
                 ))}
               </div>
-              <span className="text-sm font-medium text-[#7c8faa]">{quarter.label}</span>
+              <span className="sp-trend__quarter-label">{quarter.label}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-4">
+      <div className="sp-trend__legend">
         {subjects.map((subject, index) => (
-          <div key={subject.key} className="flex items-center gap-2 text-sm font-medium text-[#4f6688]">
+          <div key={subject.key} className="sp-trend__legend-item">
             <span
-              className="inline-flex h-3 w-3 rounded-sm"
+              className="sp-trend__legend-dot"
               style={{ backgroundColor: TREND_COLORS[index] || '#94a3b8' }}
             />
             {subject.label}
@@ -477,59 +485,59 @@ export default function StudentPerformancePage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[1400px] space-y-4 px-4 pb-6 pt-2 md:px-6 lg:px-8">
-        <Skeleton className="h-28 rounded-xl" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="student-performance-page student-performance-loading">
+        <Skeleton className="h-24 rounded-lg" />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-28 rounded-xl" />
+            <Skeleton key={item} className="h-24 rounded-lg" />
           ))}
         </div>
-        <Skeleton className="h-24 rounded-xl" />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Skeleton className="h-[360px] rounded-xl" />
-          <Skeleton className="h-[360px] rounded-xl" />
+        <Skeleton className="h-20 rounded-lg" />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <Skeleton className="h-[340px] rounded-lg" />
+          <Skeleton className="h-[340px] rounded-lg" />
         </div>
-        <Skeleton className="h-[300px] rounded-xl" />
+        <Skeleton className="h-[280px] rounded-lg" />
       </div>
     );
   }
 
   return (
     <motion.div
-      className="mx-auto max-w-[1400px] space-y-4 px-4 pb-6 pt-2 text-[#0f172a] md:px-6 lg:px-8"
+      className="student-performance-page"
       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={reduceMotion ? undefined : { duration: 0.22, ease: 'easeOut' }}
+      transition={reduceMotion ? undefined : { duration: 0.16, ease: 'easeOut' }}
     >
       <MotionCard
         index={0}
         reducedMotion={Boolean(reduceMotion)}
-        className="rounded-xl border border-[#1f3557] bg-gradient-to-r from-[#0b1c3a] to-[#152b4b] px-5 py-5 text-white md:px-6 md:py-6"
+        className="sp-hero"
       >
-        <div className="flex items-center gap-3 md:gap-4">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#ff0011] text-white shadow-lg shadow-[#88020a]/35 md:h-12 md:w-12">
+        <div className="sp-hero__row">
+          <div className="sp-hero__icon">
             <LineChart className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-3xl font-semibold leading-none sm:text-4xl">Performance</h1>
-            <p className="mt-1.5 text-base font-normal text-[#b4c7e4] sm:text-xl">
+            <h1 className="sp-hero__title">Performance</h1>
+            <p className="sp-hero__subtitle">
               Track your academic standing
             </p>
           </div>
         </div>
       </MotionCard>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="sp-kpi-grid">
         <MotionCard index={1} reducedMotion={Boolean(reduceMotion)}>
-          <div className="rounded-xl border border-[#d7e2f0] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-            <div className="flex items-start justify-between gap-3">
+          <div className="sp-kpi-card">
+            <div className="sp-kpi-card__head">
               <div>
-                <p className="text-sm font-semibold text-[#46658d] md:text-base">Blended Average</p>
-                <p className="mt-2 text-3xl font-semibold leading-none text-[#2563eb] md:text-4xl">
+                <p className="sp-kpi-card__label">Blended Average</p>
+                <p className="sp-kpi-card__value sp-kpi-card__value--info">
                   {toPercent(averageBlendedScore)}
                 </p>
               </div>
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#dbeafe] text-[#2563eb] md:h-12 md:w-12">
+              <div className="sp-kpi-card__icon sp-kpi-card__icon--info">
                 <ChartNoAxesCombined className="h-5 w-5" />
               </div>
             </div>
@@ -537,24 +545,22 @@ export default function StudentPerformancePage() {
         </MotionCard>
 
         <MotionCard index={2} reducedMotion={Boolean(reduceMotion)}>
-          <div className="rounded-xl border border-[#dce9df] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-            <div className="flex items-start justify-between gap-3">
+          <div className="sp-kpi-card">
+            <div className="sp-kpi-card__head">
               <div>
-                <p className="text-sm font-semibold text-[#46658d] md:text-base">Status</p>
+                <p className="sp-kpi-card__label">Status</p>
                 <p
-                  className={`mt-2 text-3xl font-semibold leading-none md:text-4xl ${
-                    statusSafe ? 'text-[#16a34a]' : 'text-[#ef4444]'
+                  className={`sp-kpi-card__value ${
+                    statusSafe ? 'sp-kpi-card__value--success' : 'sp-kpi-card__value--danger'
                   }`}
                 >
                   {statusSafe ? 'Safe' : 'Needs Attention'}
                 </p>
               </div>
               <div
-                className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl ${
-                  statusSafe
-                    ? 'bg-[#dcfce7] text-[#16a34a]'
-                    : 'bg-[#fee2e2] text-[#ef4444]'
-                } md:h-12 md:w-12 h-11 w-11 rounded-xl`}
+                className={`sp-kpi-card__icon ${
+                  statusSafe ? 'sp-kpi-card__icon--success' : 'sp-kpi-card__icon--danger'
+                }`}
               >
                 {statusSafe ? (
                   <CheckCircle2 className="h-5 w-5" />
@@ -567,15 +573,15 @@ export default function StudentPerformancePage() {
         </MotionCard>
 
         <MotionCard index={3} reducedMotion={Boolean(reduceMotion)}>
-          <div className="rounded-xl border border-[#f3dfc7] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-            <div className="flex items-start justify-between gap-3">
+          <div className="sp-kpi-card">
+            <div className="sp-kpi-card__head">
               <div>
-                <p className="text-sm font-semibold text-[#46658d] md:text-base">At-Risk Subjects</p>
-                <p className="mt-2 text-3xl font-semibold leading-none text-[#ea580c] md:text-4xl">
+                <p className="sp-kpi-card__label">At-Risk Subjects</p>
+                <p className="sp-kpi-card__value sp-kpi-card__value--warning">
                   {atRiskCount}
                 </p>
               </div>
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#ffedd5] text-[#ea580c] md:h-12 md:w-12">
+              <div className="sp-kpi-card__icon sp-kpi-card__icon--warning">
                 <AlertTriangle className="h-5 w-5" />
               </div>
             </div>
@@ -583,15 +589,15 @@ export default function StudentPerformancePage() {
         </MotionCard>
 
         <MotionCard index={4} reducedMotion={Boolean(reduceMotion)}>
-          <div className="rounded-xl border border-[#eadff7] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-            <div className="flex items-start justify-between gap-3">
+          <div className="sp-kpi-card">
+            <div className="sp-kpi-card__head">
               <div>
-                <p className="text-sm font-semibold text-[#46658d] md:text-base">Last Synced</p>
-                <p className="mt-2 text-3xl font-semibold leading-none text-[#7c3aed] md:text-4xl">
+                <p className="sp-kpi-card__label">Last Synced</p>
+                <p className="sp-kpi-card__value sp-kpi-card__value--accent">
                   {lastSyncedLabel}
                 </p>
               </div>
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-[#f3e8ff] text-[#7c3aed] md:h-12 md:w-12">
+              <div className="sp-kpi-card__icon sp-kpi-card__icon--accent">
                 <Clock3 className="h-5 w-5" />
               </div>
             </div>
@@ -601,14 +607,14 @@ export default function StudentPerformancePage() {
 
       {atRiskCount > 0 && (
         <MotionCard index={5} reducedMotion={Boolean(reduceMotion)}>
-          <div className="rounded-xl border border-[#fecaca] bg-[#fff3f3] px-4 py-3 text-[#b91c1c] md:px-5 md:py-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="sp-alert">
+            <div className="sp-alert__row">
+              <AlertCircle className="sp-alert__icon" />
               <div>
-                <p className="text-base font-semibold leading-tight md:text-lg">
+                <p className="sp-alert__title">
                   You have {atRiskCount} subject(s) that need attention
                 </p>
-                <p className="mt-1 text-sm md:text-base">
+                <p className="sp-alert__body">
                   {firstAtRisk ? `${getSubjectLabel(firstAtRisk)} - ` : ''}
                   Consider reviewing your lessons or reaching out to your teacher.
                 </p>
@@ -618,35 +624,35 @@ export default function StudentPerformancePage() {
         </MotionCard>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="sp-section-grid">
         <MotionCard index={6} reducedMotion={Boolean(reduceMotion)}>
-          <section className="rounded-xl border border-[#dbe4f1] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-            <h2 className="text-xl font-semibold text-[#0f172a] md:text-2xl">Subject Overview</h2>
+          <section className="sp-section">
+            <h2 className="sp-section__title">Subject Overview</h2>
             <SubjectOverviewRadar subjects={radarSubjects} reducedMotion={Boolean(reduceMotion)} />
           </section>
         </MotionCard>
 
         <MotionCard index={7} reducedMotion={Boolean(reduceMotion)}>
-          <section className="rounded-xl border border-[#dbe4f1] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-            <h2 className="text-xl font-semibold text-[#0f172a] md:text-2xl">Quarterly Trend</h2>
+          <section className="sp-section">
+            <h2 className="sp-section__title">Quarterly Trend</h2>
             <QuarterlyTrendChart subjects={trendSubjects} reducedMotion={Boolean(reduceMotion)} />
           </section>
         </MotionCard>
       </div>
 
       <MotionCard index={8} reducedMotion={Boolean(reduceMotion)}>
-        <section className="rounded-xl border border-[#dbe4f1] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.06)]">
-          <h2 className="text-xl font-semibold text-[#0f172a] md:text-2xl">Subject Breakdown</h2>
+        <section className="sp-section">
+          <h2 className="sp-section__title">Subject Breakdown</h2>
 
           {subjectRows.length === 0 ? (
-            <div className="mt-4">
+            <div className="mt-3">
               <LocalEmptyState
                 title="No performance data yet"
                 description="Your assessments have not been graded yet. Once your teacher enters scores, your analytics will appear here."
               />
             </div>
           ) : (
-            <div className="mt-4 space-y-4">
+            <div className="sp-breakdown-list">
               {subjectRows.map((row, index) => {
                 const tier = getTier(row.score, row.isAtRisk);
                 const scoreValue = row.score === null ? '--' : `${Math.round(row.score)}%`;
@@ -658,63 +664,51 @@ export default function StudentPerformancePage() {
                 return (
                   <motion.article
                     key={row.key}
-                    className="space-y-2"
+                    className="sp-breakdown-row"
                     initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={
                       reduceMotion
                         ? undefined
                         : {
-                            duration: 0.2,
-                            delay: 0.08 + index * 0.03,
+                            duration: 0.16,
+                            delay: 0.04 + index * 0.02,
                             ease: 'easeOut',
                           }
                     }
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-lg font-semibold text-[#0f172a] md:text-xl">{row.label}</h3>
+                    <div className="sp-breakdown-row__top">
+                      <div className="sp-breakdown-row__head">
+                        <h3 className="sp-breakdown-row__title">{row.label}</h3>
                         {row.isAtRisk ? (
-                          <span className="rounded-full border border-[#fecaca] bg-[#fff1f2] px-3 py-1 text-sm font-semibold text-[#dc2626]">
+                          <span className="sp-status-pill sp-status-pill--danger">
                             At Risk
                           </span>
                         ) : null}
                         {showFailing ? (
-                          <span className="rounded-full border border-[#facc15] bg-[#fef9c3] px-3 py-1 text-sm font-semibold text-[#ca8a04]">
+                          <span className="sp-status-pill sp-status-pill--warning">
                             Failing
                           </span>
                         ) : null}
                       </div>
-                      <div className="flex items-center gap-4">
-                        <p className={`text-sm font-semibold md:text-base ${deltaClass(row.delta)}`}>{deltaText}</p>
-                        <p
-                          className={`text-lg font-semibold md:text-xl ${
-                            tier === 'danger'
-                              ? 'text-[#ef4444]'
-                              : tier === 'warning'
-                                ? 'text-[#ca8a04]'
-                                : tier === 'success'
-                                  ? 'text-[#16a34a]'
-                                  : 'text-[#64748b]'
-                          }`}
-                        >
-                          {scoreValue}
-                        </p>
+                      <div className="sp-breakdown-row__values">
+                        <p className={`sp-breakdown-row__delta ${deltaClass(row.delta)}`}>{deltaText}</p>
+                        <p className={`sp-breakdown-row__score ${scoreClass(tier)}`}>{scoreValue}</p>
                       </div>
                     </div>
 
-                    <div className="h-3 overflow-hidden rounded-full bg-[#e8edf5]">
+                    <div className="sp-breakdown-row__track">
                       <motion.div
-                        className={`h-full rounded-full ${tierFillClass(tier)}`}
+                        className={`sp-breakdown-row__fill ${tierFillClass(tier)}`}
                         initial={reduceMotion ? false : { width: 0 }}
                         animate={{ width: progressWidth }}
                         transition={
                           reduceMotion
                             ? undefined
                             : {
-                                duration: 0.36,
+                                duration: 0.24,
                                 ease: 'easeOut',
-                                delay: 0.1 + index * 0.03,
+                                delay: 0.06 + index * 0.02,
                               }
                         }
                       />
@@ -735,10 +729,10 @@ export default function StudentPerformancePage() {
       ) : null}
 
       {latestSyncDate ? (
-        <p className="text-right text-xs text-[#8fa1bc]">Last sync detail: {formatDateTime(latestSyncDate)}</p>
+        <p className="sp-meta-text">Last sync detail: {formatDateTime(latestSyncDate)}</p>
       ) : null}
 
-      <p className="text-right text-xs text-[#8fa1bc]">Threshold target: {threshold}%</p>
+      <p className="sp-meta-text">Threshold target: {threshold}%</p>
     </motion.div>
   );
 }

@@ -146,6 +146,52 @@ class StudentTutorAnswerRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class JaPracticeGenerateRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    question_count: int = Field(default=10, alias="questionCount")
+    recommendation: TutorRecommendationDto | None = None
+    allowed_lesson_ids: list[str] | None = Field(default=None, alias="allowedLessonIds")
+    allowed_assessment_ids: list[str] | None = Field(
+        default=None,
+        alias="allowedAssessmentIds",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class JaAskHistoryMessageDto(BaseModel):
+    role: str
+    content: str
+
+
+class JaAskResponseRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    thread_id: str = Field(..., alias="threadId")
+    message: str = Field(..., min_length=1, max_length=2000)
+    quick_action: str | None = Field(default=None, alias="quickAction")
+    history: list[JaAskHistoryMessageDto] | None = None
+    allowed_lesson_ids: list[str] | None = Field(default=None, alias="allowedLessonIds")
+    allowed_assessment_ids: list[str] | None = Field(
+        default=None,
+        alias="allowedAssessmentIds",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class JaReviewGenerateRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    attempt_id: str = Field(..., alias="attemptId")
+    question_count: int = Field(default=10, alias="questionCount")
+    allowed_lesson_ids: list[str] | None = Field(default=None, alias="allowedLessonIds")
+    allowed_assessment_ids: list[str] | None = Field(
+        default=None,
+        alias="allowedAssessmentIds",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 # ---------------------------------------------------------------------------
 # Auth context (passed from NestJS proxy via headers)
 # ---------------------------------------------------------------------------

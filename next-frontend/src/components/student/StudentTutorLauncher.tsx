@@ -1,16 +1,16 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { Bot, MessageCircle, Sparkles, X } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from "react";
+import { Bot, MessageCircle, Sparkles, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 
 export function StudentTutorLauncher() {
   const pathname = usePathname();
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const isStudentRoute = pathname.startsWith('/dashboard/student');
-  const isChatbotPage = pathname.startsWith('/dashboard/student/chatbot');
+  const isStudentRoute = pathname.startsWith("/dashboard/student");
+  const isJaPage = pathname.startsWith("/dashboard/student/ja");
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -22,30 +22,34 @@ export function StudentTutorLauncher() {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setExpanded(false);
       }
     };
 
-    window.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [expanded]);
 
-  if (!isStudentRoute || isChatbotPage) {
+  if (!isStudentRoute || isJaPage) {
     return null;
   }
 
   return (
     <div
       ref={containerRef}
-      className={`student-tutor-launcher${expanded ? ' is-expanded' : ''}`}
+      className={`student-tutor-launcher${expanded ? " is-expanded" : ""}`}
     >
       {expanded ? (
-        <div className="student-tutor-launcher__panel" role="dialog" aria-label="AI Tutor launcher">
+        <div
+          className="student-tutor-launcher__panel"
+          role="dialog"
+          aria-label="AI Tutor launcher"
+        >
           <div className="student-tutor-launcher__panel-head">
             <span>
               <Sparkles className="h-3.5 w-3.5" />
@@ -63,10 +67,10 @@ export function StudentTutorLauncher() {
           <button
             type="button"
             className="student-tutor-launcher__open"
-            onClick={() => router.push('/dashboard/student/chatbot')}
+            onClick={() => router.push("/dashboard/student/ja")}
           >
             <MessageCircle className="h-4 w-4" />
-            Open AI Tutor
+            Open JA
           </button>
         </div>
       ) : null}
@@ -75,7 +79,9 @@ export function StudentTutorLauncher() {
         type="button"
         className="student-tutor-launcher__bubble"
         onClick={() => setExpanded((value) => !value)}
-        aria-label={expanded ? 'Collapse AI tutor launcher' : 'Expand AI tutor launcher'}
+        aria-label={
+          expanded ? "Collapse AI tutor launcher" : "Expand AI tutor launcher"
+        }
       >
         <span className="student-tutor-launcher__ring" aria-hidden="true" />
         <span className="student-tutor-launcher__robot">

@@ -633,7 +633,7 @@ export default function StudentModuleDetailPage() {
                           <span className="student-module-view__item-icon">
                             <Icon className="h-5 w-5" />
                           </span>
-                          <div>
+                          <div className="student-module-view__item-copy">
                             <div className="student-module-view__chips">
                               {item.isRequired ? (
                                 <span className="student-module-view__chip student-module-view__chip--required">
@@ -708,7 +708,7 @@ export default function StudentModuleDetailPage() {
                   variant="ghost"
                   size="sm"
                   onClick={openOverview}
-                  className="w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+                  className="student-module-view__back-inline w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
                 >
                   <ArrowLeft className="mr-1 h-4 w-4" />
                   Back to Module
@@ -757,7 +757,7 @@ export default function StudentModuleDetailPage() {
                     )}
                   </div>
                   <Button
-                    className="student-button-solid"
+                    className="student-button-solid student-module-view__complete-button"
                     disabled={!lessonCompleted && (bottomReachedAt === null || countdownLeft > 0 || completingLesson)}
                     onClick={() => void completeLesson()}
                   >
@@ -782,13 +782,13 @@ export default function StudentModuleDetailPage() {
                   variant="ghost"
                   size="sm"
                   onClick={openOverview}
-                  className="w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+                  className="student-module-view__back-inline w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
                 >
                   <ArrowLeft className="mr-1 h-4 w-4" />
                   Back to Module
                 </Button>
 
-                <article className="student-module-view__assessment-card">
+                <article className="student-module-view__assessment-card student-module-view__assessment-card--snapshot">
                   <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Assessment Snapshot</h2>
                   <div className="student-module-view__assessment-grid">
                     <article>
@@ -815,7 +815,7 @@ export default function StudentModuleDetailPage() {
                   ) : null}
                 </article>
 
-                <article className="student-module-view__assessment-card">
+                <article className="student-module-view__assessment-card student-module-view__assessment-card--attempts">
                   <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Attempts</h2>
                   <div className="mt-3 space-y-2">
                     {submittedAttempts.length === 0 ? (
@@ -848,7 +848,7 @@ export default function StudentModuleDetailPage() {
                       ))
                     )}
                   </div>
-                  <div className="student-module-view__attempt-actions mt-4">
+                  <div className="student-module-view__attempt-actions student-module-view__attempt-actions--summary mt-4">
                     <button
                       type="button"
                       data-variant="primary"
