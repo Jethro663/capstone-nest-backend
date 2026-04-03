@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { eq, and, inArray, count, desc } from 'drizzle-orm';
+import { eq, and, inArray, count, desc, isNotNull, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   lessons,
@@ -12,6 +12,11 @@ import {
   classes,
   lessonCompletions,
   users,
+  moduleItems,
+  moduleSections,
+  classModules,
+  assessments,
+  assessmentAttempts,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
@@ -734,6 +739,151 @@ export class LessonsService {
   // Student progress
   // ---------------------------------------------------------------------------
 
+  private isModuleItemVisibleToStudent(item: {
+    isVisible: boolean;
+    itemType: 'lesson' | 'assessment' | 'file';
+    isGiven: boolean;
+    lesson?: { isDraft: boolean } | null;
+    assessment?: { isPublished: boolean | null } | null;
+    fileId?: string | null;
+  }) {
+    if (!item.isVisible) return false;
+    if (item.itemType === 'lesson') {
+      return Boolean(item.lesson && !item.lesson.isDraft);
+    }
+    if (item.itemType === 'assessment') {
+      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+    }
+    return Boolean(item.fileId);
+  }
+
+  private extractLessonPoints(metadata: unknown) {
+    if (!metadata || typeof metadata !== 'object') return 0;
+    const rawPoints = (metadata as Record<string, unknown>).points;
+    if (typeof rawPoints !== 'number') return 0;
+    if (!Number.isFinite(rawPoints) || rawPoints < 0) return 0;
+    return Math.trunc(rawPoints);
+  }
+
+  private async buildModuleProgressForStudent(moduleId: string, studentId: string) {
+    const module = await this.db.query.classModules.findFirst({
+      where: eq(classModules.id, moduleId),
+      with: {
+        sections: {
+          orderBy: (sectionTable, { asc: byAsc }) => [byAsc(sectionTable.order)],
+          with: {
+            items: {
+              orderBy: (itemTable, { asc: byAsc }) => [byAsc(itemTable.order)],
+              with: {
+                lesson: {
+                  columns: {
+                    id: true,
+                    isDraft: true,
+                  },
+                },
+                assessment: {
+                  columns: {
+                    id: true,
+                    isPublished: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!module || !module.isVisible || module.isLocked) {
+      return {
+        moduleId,
+        completed: false,
+        requiredVisibleCount: 0,
+        requiredCompletedCount: 0,
+        progressPercent: 0,
+      };
+    }
+
+    const visibleRequiredItems = module.sections.flatMap((section) =>
+      section.items.filter((item) => {
+        if (!this.isModuleItemVisibleToStudent(item)) return false;
+        if (!item.isRequired) return false;
+        return item.itemType === 'lesson' || item.itemType === 'assessment';
+      }),
+    );
+
+    const requiredLessonIds = visibleRequiredItems
+      .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
+      .map((item) => item.lessonId as string);
+    const requiredAssessmentIds = visibleRequiredItems
+      .filter((item) => item.itemType === 'assessment' && Boolean(item.assessmentId))
+      .map((item) => item.assessmentId as string);
+
+    const completedLessonIds = new Set<string>();
+    const completedAssessmentIds = new Set<string>();
+
+    if (requiredLessonIds.length > 0) {
+      const lessonRows = await this.db.query.lessonCompletions.findMany({
+        where: and(
+          eq(lessonCompletions.studentId, studentId),
+          inArray(lessonCompletions.lessonId, requiredLessonIds),
+        ),
+        columns: {
+          lessonId: true,
+        },
+      });
+      lessonRows.forEach((entry) => completedLessonIds.add(entry.lessonId));
+    }
+
+    if (requiredAssessmentIds.length > 0) {
+      const attemptRows = await this.db.query.assessmentAttempts.findMany({
+        where: and(
+          eq(assessmentAttempts.studentId, studentId),
+          inArray(assessmentAttempts.assessmentId, requiredAssessmentIds),
+          or(
+            eq(assessmentAttempts.isSubmitted, true),
+            isNotNull(assessmentAttempts.submittedAt),
+          ),
+        ),
+        columns: {
+          assessmentId: true,
+        },
+      });
+      attemptRows.forEach((entry) => completedAssessmentIds.add(entry.assessmentId));
+    }
+
+    let requiredCompletedCount = 0;
+    visibleRequiredItems.forEach((item) => {
+      if (item.itemType === 'lesson' && item.lessonId) {
+        if (completedLessonIds.has(item.lessonId)) {
+          requiredCompletedCount += 1;
+        }
+        return;
+      }
+      if (item.itemType === 'assessment' && item.assessmentId) {
+        if (completedAssessmentIds.has(item.assessmentId)) {
+          requiredCompletedCount += 1;
+        }
+      }
+    });
+
+    const requiredVisibleCount = visibleRequiredItems.length;
+    const completed =
+      requiredVisibleCount === 0 || requiredCompletedCount === requiredVisibleCount;
+    const progressPercent =
+      requiredVisibleCount === 0
+        ? 100
+        : Math.round((requiredCompletedCount / requiredVisibleCount) * 100);
+
+    return {
+      moduleId,
+      completed,
+      requiredVisibleCount,
+      requiredCompletedCount,
+      progressPercent,
+    };
+  }
+
   /**
    * Mark a lesson as complete for a student.
    * Prevents completing a lesson that is still a draft.
@@ -754,13 +904,38 @@ export class LessonsService {
       throw new NotFoundException(`Student with ID "${studentId}" not found`);
     }
 
+    const moduleItem = await this.db.query.moduleItems.findFirst({
+      where: eq(moduleItems.lessonId, lessonId),
+      with: {
+        section: {
+          with: {
+            module: {
+              columns: {
+                id: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    const lessonPoints = this.extractLessonPoints(moduleItem?.metadata);
+
     try {
       const result = await this.db
         .insert(lessonCompletions)
         .values({ studentId, lessonId, progressPercentage: 100 })
         .returning();
 
-      return { completed: true, completedAt: result[0].completedAt };
+      const moduleProgress = moduleItem?.section?.module?.id
+        ? await this.buildModuleProgressForStudent(moduleItem.section.module.id, studentId)
+        : null;
+
+      return {
+        completed: true,
+        completedAt: result[0].completedAt,
+        lessonPoints,
+        moduleProgress,
+      };
     } catch (error: any) {
       // Unique constraint violation — already completed; update timestamp
       if (error?.code === '23505') {
@@ -775,9 +950,15 @@ export class LessonsService {
           )
           .returning();
 
+        const moduleProgress = moduleItem?.section?.module?.id
+          ? await this.buildModuleProgressForStudent(moduleItem.section.module.id, studentId)
+          : null;
+
         return {
           completed: true,
           completedAt: updated.completedAt,
+          lessonPoints,
+          moduleProgress,
           message: 'Lesson already marked as complete',
         };
       }

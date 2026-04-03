@@ -1,37 +1,93 @@
-'use client';
+"use client";
 
-import { Bot, Sparkles } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from "react";
+import { Bot, MessageCircle, Sparkles, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 
 export function StudentTutorLauncher() {
   const pathname = usePathname();
   const router = useRouter();
-  const isStudentRoute = pathname.startsWith('/dashboard/student');
-  const isChatbotPage = pathname.startsWith('/dashboard/student/chatbot');
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const isStudentRoute = pathname.startsWith("/dashboard/student");
+  const isJaPage = pathname.startsWith("/dashboard/student/ja");
 
-  if (!isStudentRoute || isChatbotPage) {
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (!containerRef.current?.contains(target)) {
+        setExpanded(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setExpanded(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [expanded]);
+
+  if (!isStudentRoute || isJaPage) {
     return null;
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => router.push('/dashboard/student/chatbot')}
-      className="fixed bottom-5 right-5 z-30 flex items-center gap-3 rounded-full border border-[var(--student-outline-strong)] bg-[var(--student-elevated)] px-4 py-3 text-left shadow-[var(--student-shadow)] backdrop-blur md:bottom-6 md:right-6"
-      aria-label="Open AI chatbot"
+    <div
+      ref={containerRef}
+      className={`student-tutor-launcher${expanded ? " is-expanded" : ""}`}
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--student-accent)] text-[var(--student-accent-contrast)]">
-        <Bot className="h-5 w-5" />
-      </span>
-      <span className="hidden sm:block">
-        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.22em] text-[var(--student-accent)]">
-          <Sparkles className="h-3 w-3" />
-          AI Tutor
+      {expanded ? (
+        <div
+          className="student-tutor-launcher__panel"
+          role="dialog"
+          aria-label="AI Tutor launcher"
+        >
+          <div className="student-tutor-launcher__panel-head">
+            <span>
+              <Sparkles className="h-3.5 w-3.5" />
+              AI Tutor
+            </span>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label="Close AI tutor launcher"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p>Continue with Ja</p>
+          <button
+            type="button"
+            className="student-tutor-launcher__open"
+            onClick={() => router.push("/dashboard/student/ja")}
+          >
+            <MessageCircle className="h-4 w-4" />
+            Open JA
+          </button>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        className="student-tutor-launcher__bubble"
+        onClick={() => setExpanded((value) => !value)}
+        aria-label={
+          expanded ? "Collapse AI tutor launcher" : "Expand AI tutor launcher"
+        }
+      >
+        <span className="student-tutor-launcher__ring" aria-hidden="true" />
+        <span className="student-tutor-launcher__robot">
+          <Bot className="h-5 w-5" />
         </span>
-        <span className="block text-sm font-semibold text-[var(--student-text-strong)]">
-          Continue with Ja
-        </span>
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }

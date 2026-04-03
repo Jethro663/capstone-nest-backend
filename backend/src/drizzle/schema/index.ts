@@ -8,3 +8,4 @@ export * from './performance.schema';
 export * from './lxp.schema';
 export * from './rag.schema';
 export * from './school-events.schema';
+export * from './ja.schema';

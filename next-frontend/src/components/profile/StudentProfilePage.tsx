@@ -1,20 +1,31 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { AlertTriangle, Loader2, Save, ShieldCheck, Upload } from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  AlertTriangle,
+  GraduationCap,
+  IdCard,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  Save,
+  ShieldCheck,
+  Upload,
+  UserRound,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { updateProfile } from '@/lib/auth-service';
 import { profileService } from '@/services/profile-service';
-import type { AcademicSummary, StudentProfile } from '@/types/profile';
+import type { StudentProfile } from '@/types/profile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ProfileSecurityCard } from '@/components/profile/ProfileSecurityCard';
-import { ProfilePageFrame } from '@/components/profile/ProfilePageFrame';
 import {
   getMissingStudentProfileFields,
   isStudentProfileLocked,
@@ -22,6 +33,7 @@ import {
   normalizePhilippinePhone,
   normalizeStudentProfile,
 } from '@/utils/profile';
+import { cn } from '@/utils/cn';
 
 type StudentProfileForm = {
   lrn: string;
@@ -57,12 +69,13 @@ function toFormState(user: ReturnType<typeof mergeUserWithStudentProfile>): Stud
   };
 }
 
+const fieldClass = 'student-profile-input';
+
 export default function StudentProfilePage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { user, setUser, refreshAuth } = useAuth();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [academicSummary, setAcademicSummary] = useState<AcademicSummary | null>(null);
   const [form, setForm] = useState<StudentProfileForm>(() => toFormState(user));
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
@@ -80,12 +93,10 @@ export default function StudentProfilePage() {
         setLoadingProfile(true);
         const response = await profileService.getMine();
         const normalizedProfile = normalizeStudentProfile(response.data);
-        const academicSummaryResponse = await profileService.getAcademicSummary();
 
         if (!mounted) return;
 
         setProfile(normalizedProfile);
-        setAcademicSummary(academicSummaryResponse.data);
         const mergedUser = mergeUserWithStudentProfile(user, normalizedProfile);
         setForm(toFormState(mergedUser));
         setIsLocked(isStudentProfileLocked(mergedUser));
@@ -109,7 +120,6 @@ export default function StudentProfilePage() {
     return () => {
       mounted = false;
     };
-    // Initial profile fetch should run once on mount; subsequent state refreshes are explicit after saves/uploads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -123,6 +133,21 @@ export default function StudentProfilePage() {
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'S';
+  const displayName = user?.firstName
+    ? `${user.firstName} ${user.lastName ?? ''}`.trim()
+    : user?.email ?? 'Student';
+  const roleLine = form.gradeLevel ? `Student - Grade ${form.gradeLevel}` : 'Student';
+
+  const missingRequiredFields = getMissingStudentProfileFields({
+    dateOfBirth: form.dateOfBirth,
+    gender: form.gender,
+    phone: form.phone,
+    address: form.address,
+    familyName: form.familyName,
+    familyRelationship: form.familyRelationship,
+    familyContact: form.familyContact,
+  });
+  const isComplete = missingRequiredFields.length === 0;
 
   const handleFieldChange = (field: keyof StudentProfileForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -162,18 +187,8 @@ export default function StudentProfilePage() {
   };
 
   const validateBeforeConfirm = () => {
-    const missing = getMissingStudentProfileFields({
-      dateOfBirth: form.dateOfBirth,
-      gender: form.gender,
-      phone: form.phone,
-      address: form.address,
-      familyName: form.familyName,
-      familyRelationship: form.familyRelationship,
-      familyContact: form.familyContact,
-    });
-
-    if (missing.length > 0) {
-      setMissingFields(missing);
+    if (missingRequiredFields.length > 0) {
+      setMissingFields(missingRequiredFields);
       setMissingDialogOpen(true);
       return false;
     }
@@ -229,10 +244,8 @@ export default function StudentProfilePage() {
 
       await refreshAuth();
       const latestProfile = await profileService.getMine();
-      const latestAcademicSummary = await profileService.getAcademicSummary();
       const normalizedProfile = normalizeStudentProfile(latestProfile.data);
       setProfile(normalizedProfile);
-      setAcademicSummary(latestAcademicSummary.data);
       const finalUser = mergeUserWithStudentProfile(mergedUser, normalizedProfile);
       setForm(toFormState(finalUser));
       setIsLocked(isStudentProfileLocked(finalUser));
@@ -256,208 +269,232 @@ export default function StudentProfilePage() {
 
   return (
     <>
-      <ProfilePageFrame
-        email={user?.email}
-        roleLabel="Student"
-        title="Student Profile"
-        subtitle={
-          isLocked
-            ? 'Your student details have been finalized and are now read-only.'
-            : 'Complete the required student details carefully. Once you confirm them, they cannot be changed.'
-        }
-        initials={initials}
-        avatarSrc={form.profilePicture || user?.profilePicture}
-        heroAction={
-          <div className="flex flex-col gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
-              className="hidden"
-              onChange={handleAvatarSelected}
-            />
-            <Button
-              type="button"
-              onClick={handleChooseAvatar}
-              disabled={uploadingAvatar}
-              className="student-button-solid rounded-xl font-black gap-2"
-            >
-              {uploadingAvatar ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4" /> Change Picture
-                </>
-              )}
-            </Button>
-            <p className="text-[11px] font-semibold text-[var(--student-text-muted)]">PNG, JPG, GIF, or WebP up to 5 MB.</p>
+      <div className="student-profile-page mx-auto w-full max-w-[1260px] space-y-5 pb-8">
+        <section className="student-profile-header">
+          <div className="student-profile-header__copy">
+            <span className="student-profile-header__icon" aria-hidden="true">
+              <UserRound className="h-5 w-5" />
+            </span>
+            <div>
+              <h1>My Profile</h1>
+              <p>
+                {isLocked
+                  ? 'Your student details are finalized and read-only.'
+                  : 'Review and confirm your required student information.'}
+              </p>
+            </div>
           </div>
-        }
-        left={
-          <div className="space-y-6">
-            <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
-              <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
-                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
-                  <ShieldCheck className="h-4 w-4 text-[var(--student-accent)]" /> Student Information
-                </h3>
+        </section>
+
+        <section className="student-profile-card">
+          <CardContent className="space-y-5 px-6 py-6 md:px-7">
+            <div className="student-profile-identity-row">
+              <div className="student-profile-identity-main">
+                <div className="student-profile-avatar">{initials}</div>
+                <div className="space-y-0.5">
+                  <p className="student-profile-name">{displayName}</p>
+                  <p className="student-profile-role-line">{roleLine}</p>
+                  <p className="student-profile-email">{user?.email || 'No email set'}</p>
+                </div>
               </div>
-              <CardContent className="p-6 space-y-6">
-                <div
-                  className={`rounded-2xl border px-4 py-3 text-sm ${
-                    isLocked ? 'student-note-success' : 'student-note-danger'
-                  }`}
-                >
-                  {isLocked
-                    ? 'Your required student details are complete and locked.'
-                    : 'Finish all required details before saving. Once confirmed, these details cannot be changed.'}
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">First Name</Label>
-                    <Input className="student-input rounded-xl" value={user?.firstName ?? ''} disabled />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Middle Name</Label>
-                    <Input className="student-input rounded-xl" value={user?.middleName ?? ''} disabled />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Last Name</Label>
-                    <Input className="student-input rounded-xl" value={user?.lastName ?? ''} disabled />
-                  </div>
-                </div>
-
-                <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Student Identity</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">LRN</Label>
-                      <Input className="student-input rounded-xl" value={form.lrn} disabled />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Date of Birth</Label>
-                      <Input
-                        type="date"
-                        className="student-input rounded-xl"
-                        value={form.dateOfBirth}
-                        onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
-                        disabled={isLocked}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Gender</Label>
-                      <select
-                        value={form.gender}
-                        onChange={(e) => handleFieldChange('gender', e.target.value)}
-                        disabled={isLocked}
-                        className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Select</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
-                      <Input
-                        className="student-input rounded-xl"
-                        value={form.phone}
-                        onChange={(e) => handleFieldChange('phone', e.target.value)}
-                        disabled={isLocked}
-                        placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Home Address</Label>
-                    <Input
-                      className="student-input rounded-xl"
-                      value={form.address}
-                      onChange={(e) => handleFieldChange('address', e.target.value)}
-                      disabled={isLocked}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Grade Level</Label>
-                    <Input className="student-input rounded-xl" value={form.gradeLevel} disabled />
-                  </div>
-                </div>
-
-                <div className="space-y-4 border-t border-[var(--student-outline)] pt-4">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">Emergency Contact</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Guardian Name</Label>
-                      <Input
-                        className="student-input rounded-xl"
-                        value={form.familyName}
-                        onChange={(e) => handleFieldChange('familyName', e.target.value)}
-                        disabled={isLocked}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Relationship</Label>
-                      <select
-                        value={form.familyRelationship}
-                        onChange={(e) => handleFieldChange('familyRelationship', e.target.value)}
-                        disabled={isLocked}
-                        className="student-input flex h-10 w-full rounded-xl border px-3 py-2 text-sm focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Select</option>
-                        <option value="Father">Father</option>
-                        <option value="Mother">Mother</option>
-                        <option value="Guardian">Guardian</option>
-                        <option value="Sibling">Sibling</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black uppercase text-[var(--student-text-muted)]">Contact Number</Label>
-                      <Input
-                        className="student-input rounded-xl"
-                        value={form.familyContact}
-                        onChange={(e) => handleFieldChange('familyContact', e.target.value)}
-                        disabled={isLocked}
-                        placeholder="09XXXXXXXXX or +639XXXXXXXXX"
-                      />
-                    </div>
-                  </div>
-                </div>
-
+              <div className="student-profile-identity-actions">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleAvatarSelected}
+                />
                 <Button
-                  onClick={handleSaveAttempt}
-                  disabled={isLocked || saving}
-                  className="student-button-solid w-full rounded-xl font-black transition-all gap-2 md:w-auto"
+                  type="button"
+                  onClick={handleChooseAvatar}
+                  disabled={uploadingAvatar}
+                  className="student-profile-avatar-button"
                 >
-                  {saving ? (
+                  {uploadingAvatar ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Uploading...
                     </>
-                  ) : isLocked ? (
-                    'Profile Locked'
                   ) : (
                     <>
-                      <Save className="h-4 w-4" /> Save Profile Changes
+                      <Upload className="h-3.5 w-3.5" />
+                      Change Picture
                     </>
                   )}
                 </Button>
-              </CardContent>
-            </Card>
+                <p className="student-profile-avatar-help">PNG, JPG, GIF, or WebP up to 5 MB.</p>
+              </div>
+            </div>
 
-            <AcademicSummaryPanel academicSummary={academicSummary} />
-          </div>
-        }
-        right={
-          <div className="space-y-6">
-            <ProfileSecurityCard />
-            <AcademicHighlights academicSummary={academicSummary} />
-          </div>
-        }
-      />
+            <div className="student-profile-divider" />
+
+            <div
+              className={cn(
+                'student-profile-alert',
+                isLocked ? 'student-profile-alert--locked' : 'student-profile-alert--open',
+              )}
+            >
+              {isLocked
+                ? 'Your required student details are complete and locked.'
+                : 'Complete and review all required details before saving. This will lock your profile after confirmation.'}
+            </div>
+
+            <div className="student-profile-section space-y-3.5">
+              <h3 className="student-profile-section__title">Student Identity</h3>
+              <div className="grid grid-cols-1 gap-x-5 gap-y-3.5 md:grid-cols-2">
+                <ProfileField label="First Name" icon={UserRound}>
+                  <Input className={fieldClass} value={user?.firstName ?? ''} readOnly />
+                </ProfileField>
+                <ProfileField label="Middle Name" icon={UserRound}>
+                  <Input className={fieldClass} value={user?.middleName ?? ''} readOnly />
+                </ProfileField>
+                <ProfileField label="Last Name" icon={UserRound}>
+                  <Input className={fieldClass} value={user?.lastName ?? ''} readOnly />
+                </ProfileField>
+                <ProfileField label="Email" icon={Mail}>
+                  <Input className={fieldClass} value={user?.email ?? ''} readOnly />
+                </ProfileField>
+                <ProfileField label="LRN" icon={IdCard}>
+                  <Input className={fieldClass} value={form.lrn} readOnly />
+                </ProfileField>
+                <ProfileField label="Grade Level" icon={GraduationCap}>
+                  <Input className={fieldClass} value={form.gradeLevel} readOnly />
+                </ProfileField>
+                <ProfileField label="Date of Birth" icon={IdCard}>
+                  <Input
+                    type="date"
+                    className={fieldClass}
+                    value={form.dateOfBirth}
+                    onChange={(event) => handleFieldChange('dateOfBirth', event.target.value)}
+                    disabled={isLocked}
+                  />
+                </ProfileField>
+                <ProfileField label="Gender" icon={UserRound}>
+                  <select
+                    value={form.gender}
+                    onChange={(event) => handleFieldChange('gender', event.target.value)}
+                    disabled={isLocked}
+                    className={cn(fieldClass, 'w-full pr-10 disabled:cursor-not-allowed disabled:opacity-60')}
+                  >
+                    <option value="">Select</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </ProfileField>
+                <ProfileField label="Student Contact Number" icon={Phone}>
+                  <Input
+                    className={fieldClass}
+                    value={form.phone}
+                    onChange={(event) => handleFieldChange('phone', event.target.value)}
+                    disabled={isLocked}
+                    placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                  />
+                </ProfileField>
+                <ProfileField label="Home Address" icon={MapPin}>
+                  <Input
+                    className={fieldClass}
+                    value={form.address}
+                    onChange={(event) => handleFieldChange('address', event.target.value)}
+                    disabled={isLocked}
+                  />
+                </ProfileField>
+              </div>
+            </div>
+
+            <div className="student-profile-section space-y-3.5">
+              <h3 className="student-profile-section__title">Emergency Contact</h3>
+              <div className="grid grid-cols-1 gap-x-5 gap-y-3.5 md:grid-cols-3">
+                <ProfileField label="Guardian Name" icon={UserRound}>
+                  <Input
+                    className={fieldClass}
+                    value={form.familyName}
+                    onChange={(event) => handleFieldChange('familyName', event.target.value)}
+                    disabled={isLocked}
+                  />
+                </ProfileField>
+                <ProfileField label="Relationship" icon={UserRound}>
+                  <select
+                    value={form.familyRelationship}
+                    onChange={(event) => handleFieldChange('familyRelationship', event.target.value)}
+                    disabled={isLocked}
+                    className={cn(fieldClass, 'w-full pr-10 disabled:cursor-not-allowed disabled:opacity-60')}
+                  >
+                    <option value="">Select</option>
+                    <option value="Father">Father</option>
+                    <option value="Mother">Mother</option>
+                    <option value="Guardian">Guardian</option>
+                    <option value="Sibling">Sibling</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </ProfileField>
+                <ProfileField label="Guardian Contact Number" icon={Phone}>
+                  <Input
+                    className={fieldClass}
+                    value={form.familyContact}
+                    onChange={(event) => handleFieldChange('familyContact', event.target.value)}
+                    disabled={isLocked}
+                    placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                  />
+                </ProfileField>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <Button
+                type="button"
+                onClick={handleSaveAttempt}
+                disabled={isLocked || saving}
+                className="student-profile-save-button"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : isLocked ? (
+                  'Profile Locked'
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save Profile Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </section>
+
+        <section className="student-profile-support-grid">
+          <ProfileSecurityCard appearance="student" />
+
+          <Card className="student-profile-support-card">
+            <CardContent className="space-y-3 p-5">
+              <h3 className="student-profile-support-title">
+                <ShieldCheck className="h-4 w-4" />
+                Profile Status
+              </h3>
+              <div
+                className={cn(
+                  'student-profile-status-chip',
+                  isComplete
+                    ? 'student-profile-status-chip--complete'
+                    : 'student-profile-status-chip--incomplete',
+                )}
+              >
+                {isComplete
+                  ? 'All required student details are complete.'
+                  : `${missingRequiredFields.length} required field(s) still need attention.`}
+              </div>
+              <p className="student-profile-support-text">
+                Your profile information is visible to administrators and relevant staff to support
+                official school records.
+              </p>
+            </CardContent>
+          </Card>
+        </section>
+      </div>
 
       <Dialog open={missingDialogOpen} onOpenChange={setMissingDialogOpen}>
         <DialogContent>
@@ -500,159 +537,22 @@ export default function StudentProfilePage() {
   );
 }
 
-function AcademicHighlights({ academicSummary }: { academicSummary: AcademicSummary | null }) {
-  const atRiskCount =
-    academicSummary?.performanceSummary.filter((item) => item.isAtRisk).length ?? 0;
-  const activeInterventions =
-    academicSummary?.interventionSummary.filter((item) => item.status === 'active')
-      .length ?? 0;
-
+function ProfileField({
+  label,
+  icon: Icon,
+  children,
+}: {
+  label: string;
+  icon: typeof UserRound;
+  children: ReactNode;
+}) {
   return (
-    <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
-      <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
-        <h3 className="text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
-          Academic Snapshot
-        </h3>
-      </div>
-      <CardContent className="space-y-4 p-6">
-        <div className="grid grid-cols-2 gap-3">
-          <SnapshotStat label="Current Classes" value={academicSummary?.currentEnrollments.length ?? 0} />
-          <SnapshotStat label="At-Risk Subjects" value={atRiskCount} />
-          <SnapshotStat label="Active Interventions" value={activeInterventions} />
-          <SnapshotStat label="LXP Tracks" value={academicSummary?.lxpProgress.length ?? 0} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SnapshotStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
-      <p className="text-[10px] font-black uppercase tracking-widest text-[var(--student-text-muted)]">
+    <div className="space-y-1.5">
+      <Label className="student-profile-field-label">
+        <Icon className="h-4 w-4" />
         {label}
-      </p>
-      <p className="mt-2 text-2xl font-black text-[var(--student-text-strong)]">{value}</p>
+      </Label>
+      {children}
     </div>
-  );
-}
-
-function AcademicSummaryPanel({ academicSummary }: { academicSummary: AcademicSummary | null }) {
-  return (
-    <Card className="student-panel student-panel-hover overflow-hidden rounded-[1.5rem]">
-      <div className="border-b border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-6 py-4">
-        <h3 className="text-sm font-black uppercase tracking-widest text-[var(--student-text-strong)]">
-          Academic Profile
-        </h3>
-      </div>
-      <CardContent className="space-y-6 p-6">
-        <section className="space-y-3">
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
-            Enrollment History
-          </h4>
-          {(academicSummary?.enrollmentHistory.length ?? 0) === 0 ? (
-            <p className="text-sm text-[var(--student-text-muted)]">No enrollment history available.</p>
-          ) : (
-            <div className="space-y-2">
-              {academicSummary?.enrollmentHistory.slice(0, 5).map((row) => (
-                <div
-                  key={row.id}
-                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
-                >
-                  <p className="font-semibold text-[var(--student-text-strong)]">
-                    {row.class?.subjectName} ({row.class?.subjectCode})
-                  </p>
-                  <p className="text-[var(--student-text-muted)]">
-                    {row.section?.name ?? row.class?.section?.name ?? 'No section'} | {row.status}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
-            Performance Snapshot
-          </h4>
-          {(academicSummary?.performanceSummary.length ?? 0) === 0 ? (
-            <p className="text-sm text-[var(--student-text-muted)]">No performance analytics available yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {academicSummary?.performanceSummary.map((row) => (
-                <div
-                  key={`${row.classId}-${row.lastComputedAt}`}
-                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-[var(--student-text-strong)]">
-                      {row.class?.subjectCode ?? 'Class'}
-                    </p>
-                    <span className={row.isAtRisk ? 'text-red-500 font-bold' : 'text-emerald-600 font-bold'}>
-                      {row.isAtRisk ? 'At Risk' : 'On Track'}
-                    </span>
-                  </div>
-                  <p className="text-[var(--student-text-muted)]">
-                    Blended Score: {row.blendedScore ?? '--'} | Threshold: {row.thresholdApplied}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
-            Intervention & LXP
-          </h4>
-          {(academicSummary?.interventionSummary.length ?? 0) === 0 ? (
-            <p className="text-sm text-[var(--student-text-muted)]">
-              No intervention records available.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {academicSummary?.interventionSummary.map((row) => (
-                <div
-                  key={row.id}
-                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
-                >
-                  <p className="font-semibold text-[var(--student-text-strong)]">
-                    {row.class?.subjectName} ({row.class?.subjectCode})
-                  </p>
-                  <p className="text-[var(--student-text-muted)]">
-                    {row.status} | {row.completedAssignments}/{row.assignmentCount} tasks completed
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="space-y-3">
-          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--student-accent)]">
-            Assessment History
-          </h4>
-          {(academicSummary?.assessmentHistory.length ?? 0) === 0 ? (
-            <p className="text-sm text-[var(--student-text-muted)]">No assessment attempts recorded yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {academicSummary?.assessmentHistory.slice(0, 5).map((row) => (
-                <div
-                  key={row.id}
-                  className="rounded-2xl border border-[var(--student-outline)] px-4 py-3 text-sm"
-                >
-                  <p className="font-semibold text-[var(--student-text-strong)]">
-                    {row.assessment?.title}
-                  </p>
-                  <p className="text-[var(--student-text-muted)]">
-                    Attempt #{row.attemptNumber} | Score: {row.score ?? '--'} | {row.assessment?.class?.subjectCode ?? '--'}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </CardContent>
-    </Card>
   );
 }

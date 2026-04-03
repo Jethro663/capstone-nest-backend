@@ -768,7 +768,7 @@ export class LxpService {
           title: `Boost ${row.subjectName}`,
           subtitle: `Current blended score: ${row.masteryPercent}%`,
           masteryPercent: row.masteryPercent,
-          href: `/dashboard/student/lxp`,
+          href: `/dashboard/student/ja`,
         })),
       ...assignments
         .filter((item) => !item.isCompleted)
@@ -786,7 +786,7 @@ export class LxpService {
             ? `/dashboard/student/lessons/${item.lesson.id}`
             : item.assessment?.id
               ? `/dashboard/student/assessments/${item.assessment.id}`
-              : '/dashboard/student/lxp',
+              : '/dashboard/student/ja',
         })),
     ].slice(0, 4);
 

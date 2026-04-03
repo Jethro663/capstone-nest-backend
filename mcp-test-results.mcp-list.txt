@@ -1,3 +1,0 @@
-﻿Name        Command  Args                                                                                                               Env  Cwd  Status   Auth       
-playwright  npx      @playwright/mcp@latest --browser chrome --caps devtools                                                            -    -    enabled  Unsupported
-serena      uvx      --from git+https://github.com/oraios/serena serena start-mcp-server --project-from-cwd --open-web-dashboard False  -    -    enabled  Unsupported

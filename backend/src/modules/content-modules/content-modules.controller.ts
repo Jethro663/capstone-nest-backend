@@ -91,6 +91,27 @@ export class ContentModulesController {
     };
   }
 
+  @Get('class/:classId/:moduleId')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async getByClassAndModule(
+    @Param('classId') classId: string,
+    @Param('moduleId') moduleId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.contentModulesService.getModuleByClass(
+      classId,
+      moduleId,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Module retrieved successfully',
+      data,
+    };
+  }
+
   @Post()
   @Roles(RoleName.Admin, RoleName.Teacher)
   async create(@Body() dto: CreateModuleDto, @CurrentUser() user: any) {

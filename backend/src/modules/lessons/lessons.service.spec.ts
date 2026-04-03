@@ -70,6 +70,9 @@ function buildMockDb() {
       classes: { findFirst: jest.fn() },
       lessonCompletions: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
+      moduleItems: { findFirst: jest.fn() },
+      classModules: { findFirst: jest.fn() },
+      assessmentAttempts: { findMany: jest.fn() },
     },
     insert: jest.fn(),
     update: jest.fn(),
@@ -608,6 +611,7 @@ describe('LessonsService', () => {
     it('inserts a completion record and returns { completed: true, completedAt }', async () => {
       db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON); // published
       db.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      db.query.moduleItems.findFirst.mockResolvedValue(undefined);
 
       const now = new Date();
       mockInsert(db, [{ id: 'comp-1', completedAt: now }]);
@@ -616,6 +620,58 @@ describe('LessonsService', () => {
 
       expect(result.completed).toBe(true);
       expect(result.completedAt).toBe(now);
+    });
+
+    it('returns module progress payload when lesson is attached to a module', async () => {
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      db.query.moduleItems.findFirst
+        .mockResolvedValueOnce({
+          id: 'module-item-1',
+          lessonId: LESSON_ID,
+          metadata: { points: 20 },
+          section: { module: { id: 'module-1' } },
+        })
+        .mockResolvedValueOnce(undefined);
+      db.query.classModules.findFirst.mockResolvedValue({
+        id: 'module-1',
+        isVisible: true,
+        isLocked: false,
+        sections: [
+          {
+            id: 'section-1',
+            items: [
+              {
+                itemType: 'lesson',
+                lessonId: LESSON_ID,
+                assessmentId: null,
+                isVisible: true,
+                isRequired: true,
+                isGiven: true,
+                lesson: { id: LESSON_ID, isDraft: false },
+                assessment: null,
+                fileId: null,
+              },
+            ],
+          },
+        ],
+      });
+      db.query.lessonCompletions.findMany.mockResolvedValue([{ lessonId: LESSON_ID }]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+
+      const now = new Date();
+      mockInsert(db, [{ id: 'comp-2', completedAt: now }]);
+
+      const result = await service.markLessonComplete(STUDENT_ID, LESSON_ID);
+
+      expect(result.lessonPoints).toBe(20);
+      expect(result.moduleProgress).toEqual({
+        moduleId: 'module-1',
+        completed: true,
+        requiredVisibleCount: 1,
+        requiredCompletedCount: 1,
+        progressPercent: 100,
+      });
     });
 
     it('throws BadRequestException when lesson is still a draft', async () => {

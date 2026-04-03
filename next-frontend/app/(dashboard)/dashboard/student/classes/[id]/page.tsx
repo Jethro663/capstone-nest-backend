@@ -11,6 +11,8 @@ import {
   Clock3,
   FileSpreadsheet,
   FolderOpen,
+  Grid2X2,
+  LayoutPanelTop,
   Megaphone,
   School,
   Users,
@@ -46,6 +48,7 @@ type AssignmentCategory =
   | 'quarterly_assessment'
   | 'discussion';
 type CalendarKind = 'assessment' | 'event' | 'holiday';
+type ModuleCardView = 'card' | 'wide';
 
 interface AssignmentRow {
   assessment: Assessment;
@@ -86,6 +89,7 @@ const ASSIGNMENT_FILTERS: Array<{ key: AssignmentCategory; label: string }> = [
   { key: 'quarterly_assessment', label: 'Quarterly Assessment' },
   { key: 'discussion', label: 'Discussion' },
 ];
+const MODULE_CARD_VIEW_STORAGE_KEY_PREFIX = 'nexora.student.class.modules.view';
 
 const moduleToneByIndex = ['blue', 'green', 'violet'] as const;
 
@@ -148,7 +152,7 @@ function formatClassLine(classItem: ClassItem | null) {
   const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel || '--';
   const sectionName = classItem?.section?.name || 'Section';
   const teacherName = getTeacherName(classItem?.teacher);
-  return `Grade ${gradeLevel} - ${sectionName} · ${teacherName}`;
+  return `Grade ${gradeLevel} - ${sectionName} - ${teacherName}`;
 }
 
 function summarizeModule(moduleEntry: ClassModule) {
@@ -254,18 +258,7 @@ function getScoreTone(percent: number) {
 }
 
 function getOpenModuleHref(moduleEntry: ClassModule, classId: string) {
-  if (moduleEntry.isLocked) return null;
-  for (const section of moduleEntry.sections) {
-    for (const item of section.items) {
-      if (item.itemType === 'lesson' && item.lessonId) {
-        return `/dashboard/student/lessons/${item.lessonId}?classId=${classId}`;
-      }
-      if (item.itemType === 'assessment' && item.assessmentId) {
-        return `/dashboard/student/assessments/${item.assessmentId}?classId=${classId}`;
-      }
-    }
-  }
-  return `/dashboard/student/classes/${classId}?view=modules`;
+  return `/dashboard/student/classes/${classId}/modules/${moduleEntry.id}`;
 }
 
 export default function StudentClassDetailPage() {
@@ -286,6 +279,7 @@ export default function StudentClassDetailPage() {
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('all');
+  const [moduleCardView, setModuleCardView] = useState<ModuleCardView>('wide');
 
   const fetchPageData = useCallback(async () => {
     if (!classId) {
@@ -363,6 +357,33 @@ export default function StudentClassDetailPage() {
   useEffect(() => {
     void fetchPageData();
   }, [fetchPageData]);
+
+  useEffect(() => {
+    if (!classId) return;
+    const storageKey = `${MODULE_CARD_VIEW_STORAGE_KEY_PREFIX}.${classId}`;
+    const saved = window.localStorage.getItem(storageKey);
+    if (saved === 'wide' || saved === 'card') {
+      setModuleCardView(saved);
+      return;
+    }
+    if (saved === 'long') {
+      setModuleCardView('wide');
+      return;
+    }
+    if (saved === 'compact') {
+      setModuleCardView('card');
+    }
+  }, [classId]);
+
+  const setPersistedModuleCardView = useCallback(
+    (view: ModuleCardView) => {
+      setModuleCardView(view);
+      if (!classId) return;
+      const storageKey = `${MODULE_CARD_VIEW_STORAGE_KEY_PREFIX}.${classId}`;
+      window.localStorage.setItem(storageKey, view);
+    },
+    [classId],
+  );
 
   const workspaceTabs = useMemo(
     () =>
@@ -542,15 +563,37 @@ export default function StudentClassDetailPage() {
           initial="hidden"
           animate="show"
         >
-          <header className="student-class-panel__head">
-            <h2>Course Modules</h2>
-            <p>{modules.length} modules available</p>
+          <header className="student-class-panel__head student-class-panel__head--modules">
+            <div>
+              <h2>Course Modules</h2>
+              <p>{modules.length} modules available</p>
+            </div>
+            <div className="teacher-home-view-toggle" role="group" aria-label="Module view style">
+              <button
+                type="button"
+                data-active={moduleCardView === 'card'}
+                aria-label="Grid View"
+                title="Grid View"
+                onClick={() => setPersistedModuleCardView('card')}
+              >
+                <Grid2X2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                data-active={moduleCardView === 'wide'}
+                aria-label="Wide Card View"
+                title="Wide Card View"
+                onClick={() => setPersistedModuleCardView('wide')}
+              >
+                <LayoutPanelTop className="h-4 w-4" />
+              </button>
+            </div>
           </header>
 
           {modules.length === 0 ? (
             <div className="teacher-class-workspace__empty">No modules available yet.</div>
           ) : (
-            <div className="student-class-modules-grid">
+            <div className="student-class-modules-grid" data-view={moduleCardView}>
               {modules.map((moduleEntry, index) => {
                 const summary = summarizeModule(moduleEntry);
                 const openHref = getOpenModuleHref(moduleEntry, classId);
@@ -560,26 +603,37 @@ export default function StudentClassDetailPage() {
                     className="student-class-module-card"
                     data-tone={moduleToneByIndex[index % moduleToneByIndex.length]}
                     data-locked={moduleEntry.isLocked}
+                    data-view={moduleCardView}
                     variants={staggerItem}
                   >
-                    <header>
-                      <span className="student-class-module-card__index">{index + 1}</span>
-                      <div>
-                        <h3>{moduleEntry.title}</h3>
-                        <p>{moduleEntry.description || 'Extended learning and higher-order thinking activities.'}</p>
-                      </div>
-                    </header>
+                    <Link
+                      href={openHref}
+                      className="student-class-module-card__body-link"
+                      aria-label={`Open ${moduleEntry.title} module`}
+                    >
+                      <header>
+                        <span className="student-class-module-card__index">{index + 1}</span>
+                        <div>
+                          <h3>{moduleEntry.title}</h3>
+                          <p>{moduleEntry.description || 'Extended learning and higher-order thinking activities.'}</p>
+                        </div>
+                      </header>
 
-                    <div className="student-class-module-card__stats">
-                      <article>
-                        <strong>{summary.lessons}</strong>
-                        <span>Lessons</span>
-                      </article>
-                      <article>
-                        <strong>{summary.assessments}</strong>
-                        <span>Assessments</span>
-                      </article>
-                    </div>
+                      <div className="student-class-module-card__stats">
+                        <article>
+                          <strong>{summary.lessons}</strong>
+                          <span>Lessons</span>
+                        </article>
+                        <article>
+                          <strong>{summary.assessments}</strong>
+                          <span>Assessments</span>
+                        </article>
+                        <article>
+                          <strong>{moduleEntry.progressPercent ?? 0}%</strong>
+                          <span>Progress</span>
+                        </article>
+                      </div>
+                    </Link>
 
                     <footer>
                       <span
@@ -591,13 +645,9 @@ export default function StudentClassDetailPage() {
                       >
                         {moduleEntry.isLocked ? 'Locked' : 'Available'}
                       </span>
-                      {moduleEntry.isLocked || !openHref ? (
-                        <span className="student-class-module-card__cta muted">Locked</span>
-                      ) : (
-                        <Link className="student-class-module-card__cta" href={openHref}>
-                          Open
-                        </Link>
-                      )}
+                      <Link className="student-class-module-card__cta" href={openHref}>
+                        Open
+                      </Link>
                     </footer>
                   </motion.article>
                 );
@@ -648,7 +698,7 @@ export default function StudentClassDetailPage() {
                     </div>
                     <h3>{assessment.title}</h3>
                     <p>
-                      Due {formatDateLong(parseDate(assessment.dueDate))} · {assessment.totalPoints ?? 0} pts
+                      Due {formatDateLong(parseDate(assessment.dueDate))} - {assessment.totalPoints ?? 0} pts
                     </p>
                   </div>
                   <Link
@@ -690,7 +740,7 @@ export default function StudentClassDetailPage() {
                   <h3>{entry.title}</h3>
                   <p>{entry.content}</p>
                   <small>
-                    {entry.author?.firstName} {entry.author?.lastName} ·{' '}
+                    {entry.author?.firstName} {entry.author?.lastName} -{' '}
                     {formatDateLong(parseDate(entry.createdAt || null))}
                   </small>
                 </motion.article>

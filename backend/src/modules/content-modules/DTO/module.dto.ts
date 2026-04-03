@@ -186,6 +186,12 @@ export class AttachModuleItemDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  points?: number;
 }
 
 export class UpdateModuleItemDto {
@@ -209,6 +215,12 @@ export class UpdateModuleItemDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10000)
+  points?: number;
 }
 
 export class ReorderModuleItemsDto {

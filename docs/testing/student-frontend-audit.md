@@ -1,0 +1,40 @@
+# Student Frontend Audit
+
+## Run Summary
+
+- Role: `student`
+- Frontend root: `next-frontend`
+- Seed file: `backend/seed-database.js`
+- Base URL: `http://localhost:3001`
+- Routes discovered: `15`
+- Findings: `0`
+- Severity counts: `{}`
+
+## Route Inventory
+
+- `/dashboard`
+- `/dashboard/notifications`
+- `/dashboard/student`
+- `/dashboard/student/announcements`
+- `/dashboard/student/assessments/[id]`
+- `/dashboard/student/assessments/[id]/results/[attemptId]`
+- `/dashboard/student/assessments/[id]/take`
+- `/dashboard/student/chatbot`
+- `/dashboard/student/classes/[id]`
+- `/dashboard/student/classes/[id]/modules/[moduleId]`
+- `/dashboard/student/courses`
+- `/dashboard/student/lessons/[id]`
+- `/dashboard/student/lxp`
+- `/dashboard/student/performance`
+- `/dashboard/student/profile`
+
+## Findings
+
+- No findings were recorded.
+## Not Exercised
+
+- AI routes and controls were excluded by scope, including `/dashboard/student/chatbot`, the LXP `AI Tutor` tab, assessment-result `Ask Ja` actions, and the global AI tutor launcher button.
+- Mutating submissions were not executed (safe-only policy): assessment `Retake`/`Start Attempt` actions, profile password update, and profile image upload.
+- Per-user preference writes were not executed: class-card `Hide class`, `Save Theme` in class customization modal, notification `Mark All Read`, and logout actions.
+- Dynamic `/dashboard/student/assessments/[id]/take` was probed and redirected to assessment detail with "No active attempt found" guidance; no attempt was started.
+- Data-gated states were recorded but not treated as failures: LXP class switch to Science displayed a handled "LXP data is temporarily unavailable" state and toast.

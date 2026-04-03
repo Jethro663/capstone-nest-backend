@@ -1,7 +1,13 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
@@ -20,17 +26,24 @@ import {
   Star,
   Target,
   Trophy,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import { StudentPageShell, StudentPageStat, StudentSectionCard } from '@/components/student/StudentPageShell';
-import { StudentEmptyState, StudentStatusChip } from '@/components/student/student-primitives';
-import { lxpService } from '@/services/lxp-service';
+} from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  StudentPageShell,
+  StudentPageStat,
+  StudentSectionCard,
+} from "@/components/student/StudentPageShell";
+import {
+  StudentEmptyState,
+  StudentStatusChip,
+} from "@/components/student/student-primitives";
+import { lxpService } from "@/services/lxp-service";
 import type {
   EligibleClass,
   LxpCheckpoint,
@@ -39,53 +52,58 @@ import type {
   LxpOverviewSubjectMasteryRow,
   LxpOverviewWeakFocusItem,
   PlaylistResponse,
-} from '@/types/lxp';
-import { cn } from '@/utils/cn';
+} from "@/types/lxp";
+import { cn } from "@/utils/cn";
 
-type LxpTabKey = 'overview' | 'roadmap' | 'assessments' | 'interventions' | 'ai-tutor';
+type LxpTabKey =
+  | "overview"
+  | "roadmap"
+  | "assessments"
+  | "interventions"
+  | "ai-tutor";
 
 const TABS: Array<{ value: LxpTabKey; label: string }> = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'roadmap', label: 'Roadmap' },
-  { value: 'assessments', label: 'Assessments' },
-  { value: 'interventions', label: 'Interventions' },
-  { value: 'ai-tutor', label: 'AI Tutor' },
+  { value: "overview", label: "Overview" },
+  { value: "roadmap", label: "Roadmap" },
+  { value: "assessments", label: "Assessments" },
+  { value: "interventions", label: "Interventions" },
+  { value: "ai-tutor", label: "AI Tutor" },
 ];
 
 function formatPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '--';
+  if (value === null || value === undefined) return "--";
   return `${Math.round(value)}%`;
 }
 
 function formatDate(value: string | null | undefined): string {
-  if (!value) return 'No date set';
+  if (!value) return "No date set";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'No date set';
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  if (Number.isNaN(date.getTime())) return "No date set";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
 function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '--';
+  if (!value) return "--";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
 function timeAgo(value: string | null | undefined): string {
-  if (!value) return 'Just now';
+  if (!value) return "Just now";
   const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return 'Just now';
+  if (Number.isNaN(timestamp)) return "Just now";
   const diffHours = Math.floor((Date.now() - timestamp) / 3_600_000);
-  if (diffHours <= 0) return 'Just now';
+  if (diffHours <= 0) return "Just now";
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${Math.floor(diffHours / 24)}d ago`;
 }
@@ -95,33 +113,40 @@ function classLabel(item: EligibleClass): string {
 }
 
 function checkpointHref(checkpoint: LxpCheckpoint): string {
-  if (checkpoint.lesson?.id) return `/dashboard/student/lessons/${checkpoint.lesson.id}`;
-  if (checkpoint.assessment?.id) return `/dashboard/student/assessments/${checkpoint.assessment.id}`;
-  return '/dashboard/student/lxp';
+  if (checkpoint.lesson?.id)
+    return `/dashboard/student/lessons/${checkpoint.lesson.id}`;
+  if (checkpoint.assessment?.id)
+    return `/dashboard/student/assessments/${checkpoint.assessment.id}`;
+  return "/dashboard/student/ja";
 }
 
 function checkpointSummary(checkpoint: LxpCheckpoint): string {
   if (checkpoint.lesson?.description) return checkpoint.lesson.description;
-  if (checkpoint.assessment?.description) return checkpoint.assessment.description;
-  return checkpoint.type === 'lesson_review'
-    ? 'Review the lesson material connected to this intervention checkpoint.'
-    : 'Retry the linked assessment checkpoint and recover your standing.';
+  if (checkpoint.assessment?.description)
+    return checkpoint.assessment.description;
+  return checkpoint.type === "lesson_review"
+    ? "Review the lesson material connected to this intervention checkpoint."
+    : "Retry the linked assessment checkpoint and recover your standing.";
 }
 
-function checkpointTone(status: LxpOverviewResponse['interventionStatus']['code']) {
-  if (status === 'on_track') return 'success' as const;
-  if (status === 'improving') return 'warning' as const;
-  return 'danger' as const;
+function checkpointTone(
+  status: LxpOverviewResponse["interventionStatus"]["code"],
+) {
+  if (status === "on_track") return "success" as const;
+  if (status === "improving") return "warning" as const;
+  return "danger" as const;
 }
 
-function masteryTone(status: LxpOverviewSubjectMasteryRow['status']) {
-  if (status === 'on_track') return 'success' as const;
-  if (status === 'improving') return 'warning' as const;
-  return 'danger' as const;
+function masteryTone(status: LxpOverviewSubjectMasteryRow["status"]) {
+  if (status === "on_track") return "success" as const;
+  if (status === "improving") return "warning" as const;
+  return "danger" as const;
 }
 
 function weakFocusLabel(item: LxpOverviewWeakFocusItem): string {
-  return item.source === 'performance' ? 'Performance signal' : 'Checkpoint signal';
+  return item.source === "performance"
+    ? "Performance signal"
+    : "Checkpoint signal";
 }
 
 function PageSkeleton() {
@@ -181,7 +206,7 @@ function AssessmentRow({ item }: { item: LxpOverviewAssessmentItem }) {
           {item.title}
         </p>
         <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-          Due {formatDate(item.dueDate)} · Passing {item.passingScore ?? '--'}%
+          Due {formatDate(item.dueDate)} · Passing {item.passingScore ?? "--"}%
         </p>
       </div>
       <div className="flex items-center gap-3">
@@ -205,29 +230,35 @@ function CompactEmptyState({
         <Sparkles className="h-5 w-5" />
       </div>
       <div>
-        <p className="text-base font-black text-[var(--student-text-strong)]">{title}</p>
-        <p className="mt-2 text-sm text-[var(--student-text-muted)]">{description}</p>
+        <p className="text-base font-black text-[var(--student-text-strong)]">
+          {title}
+        </p>
+        <p className="mt-2 text-sm text-[var(--student-text-muted)]">
+          {description}
+        </p>
       </div>
     </div>
   );
 }
 
 export default function StudentLxpExperience() {
-  const [tab, setTab] = useState<LxpTabKey>('overview');
+  const [tab, setTab] = useState<LxpTabKey>("overview");
   const [loadingEligibility, setLoadingEligibility] = useState(true);
   const [loadingExperience, setLoadingExperience] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [eligibleClasses, setEligibleClasses] = useState<EligibleClass[]>([]);
   const [threshold, setThreshold] = useState(74);
-  const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistResponse | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState('');
+  const [feedback, setFeedback] = useState("");
   const [submittingEval, setSubmittingEval] = useState(false);
 
   const selectedClass = useMemo(
-    () => eligibleClasses.find((entry) => entry.classId === selectedClassId) ?? null,
+    () =>
+      eligibleClasses.find((entry) => entry.classId === selectedClassId) ??
+      null,
     [eligibleClasses, selectedClassId],
   );
 
@@ -245,12 +276,12 @@ export default function StudentLxpExperience() {
       setEligibleClasses(rows);
       setSelectedClassId((prev) => {
         if (prev && rows.some((item) => item.classId === prev)) return prev;
-        return rows[0]?.classId ?? '';
+        return rows[0]?.classId ?? "";
       });
     } catch {
-      toast.error('Failed to load your LXP classes.');
+      toast.error("Failed to load your LXP classes.");
       setEligibleClasses([]);
-      setSelectedClassId('');
+      setSelectedClassId("");
     } finally {
       setLoadingEligibility(false);
       setRefreshing(false);
@@ -273,7 +304,7 @@ export default function StudentLxpExperience() {
       setOverview(overviewRes.data);
       setPlaylist(playlistRes.data);
     } catch {
-      toast.error('Failed to load the LXP module for this class.');
+      toast.error("Failed to load the LXP module for this class.");
       setOverview(null);
       setPlaylist(null);
     } finally {
@@ -303,13 +334,16 @@ export default function StudentLxpExperience() {
 
     try {
       setCompletingId(assignmentId);
-      const res = await lxpService.completeCheckpoint(selectedClassId, assignmentId);
+      const res = await lxpService.completeCheckpoint(
+        selectedClassId,
+        assignmentId,
+      );
       setPlaylist(res.data);
       const overviewRes = await lxpService.getOverview(selectedClassId);
       setOverview(overviewRes.data);
-      toast.success('Checkpoint completed.');
+      toast.success("Checkpoint completed.");
     } catch {
-      toast.error('Failed to complete the checkpoint.');
+      toast.error("Failed to complete the checkpoint.");
     } finally {
       setCompletingId(null);
     }
@@ -319,17 +353,17 @@ export default function StudentLxpExperience() {
     try {
       setSubmittingEval(true);
       await lxpService.submitEvaluation({
-        targetModule: 'lxp',
+        targetModule: "lxp",
         usabilityScore: 4,
         functionalityScore: 4,
         performanceScore: 4,
         satisfactionScore: 4,
         feedback: feedback || undefined,
       });
-      toast.success('LXP feedback submitted.');
-      setFeedback('');
+      toast.success("LXP feedback submitted.");
+      setFeedback("");
     } catch {
-      toast.error('Failed to submit LXP feedback.');
+      toast.error("Failed to submit LXP feedback.");
     } finally {
       setSubmittingEval(false);
     }
@@ -338,7 +372,7 @@ export default function StudentLxpExperience() {
   const assessmentCheckpoints = useMemo(
     () =>
       (playlist?.checkpoints ?? []).filter(
-        (checkpoint) => checkpoint.type === 'assessment_retry',
+        (checkpoint) => checkpoint.type === "assessment_retry",
       ),
     [playlist?.checkpoints],
   );
@@ -346,12 +380,15 @@ export default function StudentLxpExperience() {
   const lessonCheckpoints = useMemo(
     () =>
       (playlist?.checkpoints ?? []).filter(
-        (checkpoint) => checkpoint.type === 'lesson_review',
+        (checkpoint) => checkpoint.type === "lesson_review",
       ),
     [playlist?.checkpoints],
   );
 
-  if (loadingEligibility || (selectedClassId && loadingExperience && !overview && !playlist)) {
+  if (
+    loadingEligibility ||
+    (selectedClassId && loadingExperience && !overview && !playlist)
+  ) {
     return <PageSkeleton />;
   }
 
@@ -426,7 +463,9 @@ export default function StudentLxpExperience() {
               onClick={handleRefresh}
               disabled={refreshing}
             >
-              <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
+              <RefreshCw
+                className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")}
+              />
               Refresh
             </Button>
           </div>
@@ -490,9 +529,12 @@ export default function StudentLxpExperience() {
                         {overview.selectedClass.subjectName}
                       </h3>
                       <p className="mt-2 text-sm text-[var(--student-text-muted)]">
-                        {selectedClass?.class.section?.name ?? overview.selectedClass.section?.name ?? 'Section unavailable'}
-                        {' · '}
-                        Threshold {overview.interventionStatus.thresholdApplied}%
+                        {selectedClass?.class.section?.name ??
+                          overview.selectedClass.section?.name ??
+                          "Section unavailable"}
+                        {" · "}
+                        Threshold {overview.interventionStatus.thresholdApplied}
+                        %
                       </p>
                     </div>
                   </div>
@@ -504,7 +546,8 @@ export default function StudentLxpExperience() {
                       {formatPercent(overview.selectedClass.blendedScore)}
                     </p>
                     <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-                      Last sync {formatDateTime(overview.selectedClass.lastComputedAt)}
+                      Last sync{" "}
+                      {formatDateTime(overview.selectedClass.lastComputedAt)}
                     </p>
                   </div>
                 </div>
@@ -539,7 +582,9 @@ export default function StudentLxpExperience() {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-3">
-                        <Badge className="student-badge">+{overview.recommendedAction.xpAwarded} XP</Badge>
+                        <Badge className="student-badge">
+                          +{overview.recommendedAction.xpAwarded} XP
+                        </Badge>
                         {overview.recommendedAction.href ? (
                           <Button asChild className="rounded-2xl">
                             <Link href={overview.recommendedAction.href}>
@@ -564,7 +609,9 @@ export default function StudentLxpExperience() {
                 <MiniInsightCard
                   icon={<Trophy className="h-4 w-4" />}
                   label="Trigger Score"
-                  value={formatPercent(overview.interventionStatus.triggerScore)}
+                  value={formatPercent(
+                    overview.interventionStatus.triggerScore,
+                  )}
                   caption="The blended score that opened recovery"
                 />
                 <MiniInsightCard
@@ -584,7 +631,10 @@ export default function StudentLxpExperience() {
             >
               <div className="space-y-3">
                 {overview.subjectMastery.map((row) => (
-                  <div key={row.classId} className="student-dashboard-list-card">
+                  <div
+                    key={row.classId}
+                    className="student-dashboard-list-card"
+                  >
                     <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
                       <BookOpen className="h-5 w-5" />
                     </div>
@@ -594,11 +644,11 @@ export default function StudentLxpExperience() {
                           {row.subjectName}
                         </p>
                         <StudentStatusChip tone={masteryTone(row.status)}>
-                          {row.status === 'on_track'
-                            ? 'On track'
-                            : row.status === 'improving'
-                              ? 'Improving'
-                              : 'Needs support'}
+                          {row.status === "on_track"
+                            ? "On track"
+                            : row.status === "improving"
+                              ? "Improving"
+                              : "Needs support"}
                         </StudentStatusChip>
                       </div>
                       <p className="mt-1 text-xs text-[var(--student-text-muted)]">
@@ -608,7 +658,9 @@ export default function StudentLxpExperience() {
                         <div className="student-dashboard-meter student-dashboard-meter--compact">
                           <div
                             className="student-dashboard-meter__fill"
-                            style={{ width: `${Math.max(8, row.masteryPercent ?? 0)}%` }}
+                            style={{
+                              width: `${Math.max(8, row.masteryPercent ?? 0)}%`,
+                            }}
                           />
                         </div>
                       </div>
@@ -618,7 +670,7 @@ export default function StudentLxpExperience() {
                         {formatPercent(row.masteryPercent)}
                       </p>
                       <p className="text-xs text-[var(--student-text-muted)]">
-                        {row.isSelected ? 'Selected' : 'Class'}
+                        {row.isSelected ? "Selected" : "Class"}
                       </p>
                     </div>
                   </div>
@@ -726,7 +778,8 @@ export default function StudentLxpExperience() {
             description="A step-by-step view of the lesson reviews and assessment retries assigned to your current intervention case."
             action={
               <Badge className="student-badge">
-                {playlist.progress.checkpointsCompleted}/{playlist.checkpoints.length} completed
+                {playlist.progress.checkpointsCompleted}/
+                {playlist.checkpoints.length} completed
               </Badge>
             }
           >
@@ -746,9 +799,17 @@ export default function StudentLxpExperience() {
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge className="student-badge">Step {index + 1}</Badge>
-                          <StudentStatusChip tone={checkpoint.isCompleted ? 'success' : 'warning'}>
-                            {checkpoint.isCompleted ? 'Completed' : 'In progress'}
+                          <Badge className="student-badge">
+                            Step {index + 1}
+                          </Badge>
+                          <StudentStatusChip
+                            tone={
+                              checkpoint.isCompleted ? "success" : "warning"
+                            }
+                          >
+                            {checkpoint.isCompleted
+                              ? "Completed"
+                              : "In progress"}
                           </StudentStatusChip>
                         </div>
                         <h3 className="text-lg font-black text-[var(--student-text-strong)]">
@@ -759,26 +820,39 @@ export default function StudentLxpExperience() {
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <Badge className="student-badge">
-                            {checkpoint.type === 'lesson_review' ? 'Lesson Review' : 'Assessment Retry'}
+                            {checkpoint.type === "lesson_review"
+                              ? "Lesson Review"
+                              : "Assessment Retry"}
                           </Badge>
-                          <Badge className="student-badge">+{checkpoint.xpAwarded} XP</Badge>
+                          <Badge className="student-badge">
+                            +{checkpoint.xpAwarded} XP
+                          </Badge>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-3">
-                        <Button asChild variant="outline" className="rounded-2xl">
+                        <Button
+                          asChild
+                          variant="outline"
+                          className="rounded-2xl"
+                        >
                           <Link href={checkpointHref(checkpoint)}>Open</Link>
                         </Button>
                         <Button
                           type="button"
                           className="rounded-2xl"
-                          onClick={() => handleCompleteCheckpoint(checkpoint.id)}
-                          disabled={checkpoint.isCompleted || completingId === checkpoint.id}
+                          onClick={() =>
+                            handleCompleteCheckpoint(checkpoint.id)
+                          }
+                          disabled={
+                            checkpoint.isCompleted ||
+                            completingId === checkpoint.id
+                          }
                         >
                           {checkpoint.isCompleted
-                            ? 'Completed'
+                            ? "Completed"
                             : completingId === checkpoint.id
-                              ? 'Saving...'
-                              : 'Mark Complete'}
+                              ? "Saving..."
+                              : "Mark Complete"}
                         </Button>
                       </div>
                     </div>
@@ -811,9 +885,11 @@ export default function StudentLxpExperience() {
                       <div className="space-y-2">
                         <div className="flex flex-wrap gap-2">
                           <Badge className="student-badge">
-                            {checkpoint.assessment?.type ?? 'assessment'}
+                            {checkpoint.assessment?.type ?? "assessment"}
                           </Badge>
-                          <Badge className="student-badge">+{checkpoint.xpAwarded} XP</Badge>
+                          <Badge className="student-badge">
+                            +{checkpoint.xpAwarded} XP
+                          </Badge>
                         </div>
                         <h3 className="text-lg font-black text-[var(--student-text-strong)]">
                           {checkpoint.assessment?.title ?? checkpoint.label}
@@ -827,25 +903,37 @@ export default function StudentLxpExperience() {
                             {formatDate(checkpoint.assessment?.dueDate ?? null)}
                           </span>
                           <span className="student-dashboard-task-date">
-                            Passing {checkpoint.assessment?.passingScore ?? '--'}%
+                            Passing{" "}
+                            {checkpoint.assessment?.passingScore ?? "--"}%
                           </span>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-3">
-                        <Button asChild variant="outline" className="rounded-2xl">
-                          <Link href={checkpointHref(checkpoint)}>Open Assessment</Link>
+                        <Button
+                          asChild
+                          variant="outline"
+                          className="rounded-2xl"
+                        >
+                          <Link href={checkpointHref(checkpoint)}>
+                            Open Assessment
+                          </Link>
                         </Button>
                         <Button
                           type="button"
                           className="rounded-2xl"
-                          onClick={() => handleCompleteCheckpoint(checkpoint.id)}
-                          disabled={checkpoint.isCompleted || completingId === checkpoint.id}
+                          onClick={() =>
+                            handleCompleteCheckpoint(checkpoint.id)
+                          }
+                          disabled={
+                            checkpoint.isCompleted ||
+                            completingId === checkpoint.id
+                          }
                         >
                           {checkpoint.isCompleted
-                            ? 'Completed'
+                            ? "Completed"
                             : completingId === checkpoint.id
-                              ? 'Saving...'
-                              : 'Mark Complete'}
+                              ? "Saving..."
+                              : "Mark Complete"}
                         </Button>
                       </div>
                     </div>
@@ -873,7 +961,11 @@ export default function StudentLxpExperience() {
                         {overview.interventionStatus.label}
                       </h3>
                       <p className="mt-2 text-sm text-[var(--student-text-muted)]">
-                        Trigger score {formatPercent(overview.interventionStatus.triggerScore)} · Opened{' '}
+                        Trigger score{" "}
+                        {formatPercent(
+                          overview.interventionStatus.triggerScore,
+                        )}{" "}
+                        · Opened{" "}
                         {formatDateTime(overview.interventionStatus.openedAt)}
                       </p>
                     </div>
@@ -909,7 +1001,10 @@ export default function StudentLxpExperience() {
                     Why this looks different from the Figma
                   </p>
                   <p className="mt-3 text-sm leading-6 text-[var(--student-text-muted)]">
-                    Topic-level mastery is not stored in the backend yet, so this view uses your blended performance and assigned checkpoints as the closest support signal. That keeps the page honest to the live data your system already owns.
+                    Topic-level mastery is not stored in the backend yet, so
+                    this view uses your blended performance and assigned
+                    checkpoints as the closest support signal. That keeps the
+                    page honest to the live data your system already owns.
                   </p>
                 </div>
               </div>
@@ -927,7 +1022,11 @@ export default function StudentLxpExperience() {
                   />
                 ) : (
                   overview.weakFocusItems.map((item) => (
-                    <Link key={item.id} href={item.href} className="student-dashboard-list-card">
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className="student-dashboard-list-card"
+                    >
                       <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
                         <AlertTriangle className="h-5 w-5" />
                       </div>
@@ -965,11 +1064,13 @@ export default function StudentLxpExperience() {
                       Ask for guided help without leaving your recovery flow
                     </h3>
                     <p className="max-w-2xl text-sm leading-6 text-[var(--student-text-muted)]">
-                      Use the chatbot when you want a simplified explanation, a study walkthrough, or a confidence check before returning to your next checkpoint.
+                      Use the chatbot when you want a simplified explanation, a
+                      study walkthrough, or a confidence check before returning
+                      to your next checkpoint.
                     </p>
                   </div>
                   <Button asChild className="rounded-2xl">
-                    <Link href="/dashboard/student/chatbot">
+                    <Link href="/dashboard/student/ja">
                       Open AI Tutor
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
@@ -1009,7 +1110,8 @@ export default function StudentLxpExperience() {
                     What is working well in this LXP experience?
                   </p>
                   <p className="mt-1 text-sm text-[var(--student-text-muted)]">
-                    Share friction points, missing data, or parts of the intervention flow that still feel unclear.
+                    Share friction points, missing data, or parts of the
+                    intervention flow that still feel unclear.
                   </p>
                 </div>
                 <Textarea
@@ -1026,7 +1128,7 @@ export default function StudentLxpExperience() {
                     disabled={submittingEval}
                   >
                     <MessageSquareText className="mr-2 h-4 w-4" />
-                    {submittingEval ? 'Submitting...' : 'Submit Feedback'}
+                    {submittingEval ? "Submitting..." : "Submit Feedback"}
                   </Button>
                 </div>
               </div>

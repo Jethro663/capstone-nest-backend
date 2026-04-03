@@ -37,6 +37,7 @@ export default function StudentLessonViewPage() {
   const searchParams = useSearchParams();
   const lessonId = params.id as string;
   const classId = searchParams.get('classId');
+  const moduleId = searchParams.get('moduleId');
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
@@ -61,6 +62,15 @@ export default function StudentLessonViewPage() {
       setLoading(false);
     }
   }, [lessonId]);
+
+  useEffect(() => {
+    if (classId && moduleId) {
+      router.replace(
+        `/dashboard/student/classes/${classId}/modules/${moduleId}?lessonId=${lessonId}`,
+      );
+      return;
+    }
+  }, [classId, lessonId, moduleId, router]);
 
   useEffect(() => {
     void fetchData();

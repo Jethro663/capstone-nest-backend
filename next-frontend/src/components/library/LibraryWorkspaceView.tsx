@@ -29,7 +29,7 @@ interface LibraryWorkspaceViewProps {
   workspace: LibraryWorkspaceController;
 }
 
-function onCardKeyDown(event: KeyboardEvent<HTMLDivElement>, onActivate: () => void) {
+function onCardKeyDown(event: KeyboardEvent<HTMLElement>, onActivate: () => void) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
     onActivate();

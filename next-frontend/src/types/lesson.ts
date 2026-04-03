@@ -96,3 +96,19 @@ export interface LessonCompletion {
   completed: boolean;
   completedAt?: string;
 }
+
+export interface LessonCompletionModuleProgress {
+  moduleId: string;
+  completed: boolean;
+  requiredVisibleCount: number;
+  requiredCompletedCount: number;
+  progressPercent: number;
+}
+
+export interface LessonCompleteResponseData {
+  completed: boolean;
+  completedAt?: string;
+  message?: string;
+  lessonPoints?: number;
+  moduleProgress?: LessonCompletionModuleProgress | null;
+}

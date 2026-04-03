@@ -18,6 +18,14 @@ export const moduleService = {
     return data;
   },
 
+  async getByClassAndModule(
+    classId: string,
+    moduleId: string,
+  ): Promise<{ success: boolean; message: string; data: ClassModule }> {
+    const { data } = await api.get(`/modules/class/${classId}/${moduleId}`);
+    return data;
+  },
+
   async create(
     dto: CreateClassModuleDto,
   ): Promise<{ success: boolean; message: string; data: ClassModule }> {

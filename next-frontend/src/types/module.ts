@@ -41,6 +41,9 @@ export interface ModuleItem {
   isRequired: boolean;
   isGiven: boolean;
   metadata?: Record<string, unknown> | null;
+  accessible?: boolean;
+  completed?: boolean;
+  lessonPoints?: number;
   lesson?: ModuleLessonRef | null;
   assessment?: ModuleAssessmentRef | null;
   file?: ModuleFileRef | null;
@@ -87,6 +90,10 @@ export interface ClassModule {
   imagePositionX?: number;
   imagePositionY?: number;
   imageScale?: number;
+  completed?: boolean;
+  requiredVisibleCount?: number;
+  requiredCompletedCount?: number;
+  progressPercent?: number;
   sections: ModuleSection[];
   gradingScaleEntries: ModuleGradingScaleEntry[];
   createdAt?: string;
@@ -135,6 +142,7 @@ export interface AttachModuleItemDto {
   isRequired?: boolean;
   isGiven?: boolean;
   metadata?: Record<string, unknown>;
+  points?: number;
 }
 
 export interface UpdateModuleItemDto {
@@ -143,6 +151,7 @@ export interface UpdateModuleItemDto {
   isRequired?: boolean;
   isGiven?: boolean;
   metadata?: Record<string, unknown>;
+  points?: number;
 }
 
 export interface ReplaceModuleGradingScaleDto {

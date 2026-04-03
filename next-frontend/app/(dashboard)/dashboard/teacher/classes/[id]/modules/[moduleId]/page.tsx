@@ -47,6 +47,7 @@ type AttachState = {
   sectionId: string;
   itemType: ModuleItemType | null;
   itemId: string;
+  lessonPoints: string;
   file: File | null;
 };
 
@@ -213,6 +214,7 @@ export default function TeacherModuleDetailPage() {
     sectionId: '',
     itemType: null,
     itemId: '',
+    lessonPoints: '0',
     file: null,
   });
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -515,7 +517,7 @@ export default function TeacherModuleDetailPage() {
   const handleUpdateItem = async (
     sectionId: string,
     itemId: string,
-    patch: { isRequired?: boolean; isVisible?: boolean; isGiven?: boolean },
+    patch: { isRequired?: boolean; isVisible?: boolean; isGiven?: boolean; points?: number },
   ) => {
     if (!module || pendingItemIds[itemId]) return;
 
@@ -530,7 +532,21 @@ export default function TeacherModuleDetailPage() {
             ? {
                 ...section,
                 items: section.items.map((item) =>
-                  item.id === itemId ? { ...item, ...patch } : item,
+                  item.id === itemId
+                    ? {
+                        ...item,
+                        ...patch,
+                        ...(patch.points !== undefined
+                          ? {
+                              lessonPoints: patch.points,
+                              metadata: {
+                                ...(item.metadata || {}),
+                                points: patch.points,
+                              },
+                            }
+                          : {}),
+                      }
+                    : item,
                 ),
               }
             : section,
@@ -581,6 +597,7 @@ export default function TeacherModuleDetailPage() {
         | {
             itemType: 'lesson';
             lessonId: string;
+            points?: number;
           }
         | {
             itemType: 'assessment';
@@ -594,7 +611,12 @@ export default function TeacherModuleDetailPage() {
           };
 
       if (attachState.itemType === 'lesson') {
-        payload = { itemType: 'lesson', lessonId: attachState.itemId };
+        const parsedPoints = Number.parseInt(attachState.lessonPoints || '0', 10);
+        payload = {
+          itemType: 'lesson',
+          lessonId: attachState.itemId,
+          points: Number.isFinite(parsedPoints) && parsedPoints >= 0 ? parsedPoints : 0,
+        };
       } else if (attachState.itemType === 'assessment') {
         payload = {
           itemType: 'assessment',
@@ -623,6 +645,7 @@ export default function TeacherModuleDetailPage() {
         sectionId: '',
         itemType: null,
         itemId: '',
+        lessonPoints: '0',
         file: null,
       });
       await fetchData();
@@ -807,6 +830,7 @@ export default function TeacherModuleDetailPage() {
                 <Button
                   type="button"
                   className="teacher-module-detail__primary"
+                  data-priority="primary"
                   onClick={() => void handleCreateSection()}
                   disabled={creatingSection}
                 >
@@ -851,6 +875,7 @@ export default function TeacherModuleDetailPage() {
                             type="button"
                             size="sm"
                             className="teacher-module-detail__primary"
+                            data-priority="primary"
                             onClick={() => void handleSaveSectionTitle(section.id)}
                             disabled={savingSectionEdit}
                           >
@@ -881,7 +906,7 @@ export default function TeacherModuleDetailPage() {
                       <ActionTooltip label="Delete section">
                         <button
                           type="button"
-                          className="teacher-module-detail__ghost"
+                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
                           onClick={() => confirmDeleteSection(section.id)}
                           aria-label="Delete section"
                         >
@@ -974,7 +999,7 @@ export default function TeacherModuleDetailPage() {
                                 </div>
                               )}
                               <div className="teacher-module-detail__item-controls">
-                                <label>
+                                <label className="teacher-module-detail__control-toggle">
                                   <input
                                     type="checkbox"
                                     checked={item.isRequired}
@@ -985,7 +1010,7 @@ export default function TeacherModuleDetailPage() {
                                   />
                                   Required
                                 </label>
-                                <label>
+                                <label className="teacher-module-detail__control-toggle">
                                   <input
                                     type="checkbox"
                                     checked={!item.isVisible}
@@ -997,7 +1022,7 @@ export default function TeacherModuleDetailPage() {
                                   Hide
                                 </label>
                                 {item.itemType === 'assessment' ? (
-                                  <label>
+                                  <label className="teacher-module-detail__control-toggle">
                                     <input
                                       type="checkbox"
                                       checked={item.isGiven}
@@ -1009,10 +1034,27 @@ export default function TeacherModuleDetailPage() {
                                     Give
                                   </label>
                                 ) : null}
+                                {item.itemType === 'lesson' ? (
+                                  <label className="teacher-module-detail__points-field">
+                                    Points
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={10000}
+                                      value={String(item.lessonPoints ?? Number((item.metadata as Record<string, unknown> | null)?.points ?? 0))}
+                                      disabled={pending}
+                                      onChange={(event) =>
+                                        void handleUpdateItem(section.id, item.id, {
+                                          points: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                ) : null}
                                 <ActionTooltip label="Remove item from section">
                                   <button
                                     type="button"
-                                    className="teacher-module-detail__ghost"
+                                    className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
                                     onClick={() => confirmDetachItem(item.id)}
                                     aria-label="Remove item"
                                   >
@@ -1031,12 +1073,14 @@ export default function TeacherModuleDetailPage() {
                     <button
                       type="button"
                       className="teacher-module-detail__outline"
+                      data-priority="section-add"
                       onClick={() =>
                         setAttachState({
                           open: true,
                           sectionId: section.id,
                           itemType: null,
                           itemId: '',
+                          lessonPoints: '0',
                           file: null,
                         })
                       }
@@ -1152,6 +1196,7 @@ export default function TeacherModuleDetailPage() {
                 <Button
                   type="button"
                   className="teacher-module-detail__primary"
+                  data-priority="primary"
                   onClick={() => void handleSaveNotes()}
                   disabled={savingNotes}
                 >
@@ -1175,6 +1220,7 @@ export default function TeacherModuleDetailPage() {
               <button
                 type="button"
                 className="teacher-module-detail__outline"
+                data-priority="secondary"
                 onClick={() =>
                   setGradingRows((current) => [
                     ...current,
@@ -1260,7 +1306,7 @@ export default function TeacherModuleDetailPage() {
                       <td>
                         <button
                           type="button"
-                          className="teacher-module-detail__ghost"
+                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
                           onClick={() =>
                             setGradingRows((current) =>
                               current.length > 1 ? current.filter((entry) => entry.id !== row.id) : current,
@@ -1281,6 +1327,7 @@ export default function TeacherModuleDetailPage() {
               <Button
                 type="button"
                 className="teacher-module-detail__primary"
+                data-priority="primary"
                 onClick={() => void handleSaveScale()}
                 disabled={savingScale}
               >
@@ -1304,6 +1351,7 @@ export default function TeacherModuleDetailPage() {
                   sectionId: '',
                   itemType: null,
                   itemId: '',
+                  lessonPoints: '0',
                   file: null,
                 },
           )
@@ -1348,6 +1396,7 @@ export default function TeacherModuleDetailPage() {
                         ...current,
                         itemType: option.type,
                         itemId: '',
+                        lessonPoints: '0',
                         file: null,
                       }))
                     }
@@ -1386,6 +1435,27 @@ export default function TeacherModuleDetailPage() {
               </div>
             ) : attachState.itemType ? (
               <>
+                {attachState.itemType === 'lesson' ? (
+                  <div className="teacher-module-detail__attach-field">
+                    <label htmlFor="attach-lesson-points">Lesson Reward Points</label>
+                    <Input
+                      id="attach-lesson-points"
+                      type="number"
+                      min={0}
+                      max={10000}
+                      value={attachState.lessonPoints}
+                      onChange={(event) =>
+                        setAttachState((current) => ({
+                          ...current,
+                          lessonPoints: event.target.value,
+                        }))
+                      }
+                    />
+                    <p className="teacher-module-detail__attach-note">
+                      Students earn these points after completing the lesson.
+                    </p>
+                  </div>
+                ) : null}
                 <label htmlFor="attach-item">Available {attachState.itemType}s</label>
                 <select
                   id="attach-item"
@@ -1435,6 +1505,7 @@ export default function TeacherModuleDetailPage() {
                   sectionId: '',
                   itemType: null,
                   itemId: '',
+                  lessonPoints: '0',
                   file: null,
                 })
               }
@@ -1444,6 +1515,7 @@ export default function TeacherModuleDetailPage() {
             <Button
               type="button"
               className="teacher-module-detail__primary"
+              data-priority="primary"
               onClick={() => void handleAttachItem()}
               disabled={!canSubmitAttach || attachingItem || !attachState.itemType}
             >
