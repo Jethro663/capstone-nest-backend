@@ -109,6 +109,74 @@ describe('UsersController', () => {
     expect(result.data.user.password).toBeUndefined();
   });
 
+  it('createUser forwards actor context for audited admin writes', async () => {
+    mockUsersService.createUser.mockResolvedValue({
+      id: 'u2',
+      email: 'new@example.com',
+    });
+
+    const result = await controller.createUser(
+      {
+        email: 'new@example.com',
+        firstName: 'New',
+        middleName: '',
+        lastName: 'User',
+        role: 'student',
+      } as any,
+      { sub: 'admin-7' },
+    );
+
+    expect(mockUsersService.createUser).toHaveBeenCalledWith(
+      {
+        email: 'new@example.com',
+        firstName: 'New',
+        middleName: '',
+        lastName: 'User',
+        role: 'student',
+      },
+      'admin-7',
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'User created successfully. Verification email sent.',
+      data: {
+        user: {
+          id: 'u2',
+          email: 'new@example.com',
+        },
+      },
+    });
+  });
+
+  it('updateUser forwards actor context for audited admin writes', async () => {
+    mockUsersService.updateUser.mockResolvedValue({
+      id: 'u1',
+      email: 'updated@example.com',
+    });
+
+    const result = await controller.updateUser(
+      'u1',
+      { email: 'updated@example.com' } as any,
+      { id: 'admin-8' },
+    );
+
+    expect(mockUsersService.updateUser).toHaveBeenCalledWith(
+      'u1',
+      { email: 'updated@example.com' },
+      'admin-8',
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'User updated successfully.',
+      data: {
+        user: {
+          id: 'u1',
+          email: 'updated@example.com',
+        },
+      },
+    });
+  });
+
   it('resetUserPassword returns generated password payload', async () => {
     mockUsersService.adminResetPassword.mockResolvedValue({
       message: 'Password reset successfully',
@@ -127,6 +195,21 @@ describe('UsersController', () => {
       message: 'Password reset successfully',
       userId: 'u1',
       generatedPassword: 'Temp@12345A',
+    });
+  });
+
+  it('deleteUser forwards actor context for legacy audited path', async () => {
+    mockUsersService.deleteUser.mockResolvedValue({
+      message: 'User successfully deleted',
+      userId: 'u1',
+    });
+
+    const result = await controller.deleteUser('u1', { sub: 'admin-9' });
+
+    expect(mockUsersService.deleteUser).toHaveBeenCalledWith('u1', 'admin-9');
+    expect(result).toEqual({
+      success: true,
+      message: 'User set to DELETED',
     });
   });
 
@@ -160,5 +243,28 @@ describe('UsersController', () => {
         failed: [{ userId: 'u3', reason: 'You cannot suspend your own account' }],
       },
     });
+  });
+
+  it('exportUserData forwards actor context and streams JSON response', async () => {
+    mockUsersService.exportUserData.mockResolvedValue({
+      user: { id: 'u1' },
+      exportedAt: '2026-04-05T00:00:00.000Z',
+    });
+    const res = {
+      setHeader: jest.fn(),
+      send: jest.fn(),
+    } as any;
+
+    await controller.exportUserData('u1', res, { sub: 'admin-10' });
+
+    expect(mockUsersService.exportUserData).toHaveBeenCalledWith(
+      'u1',
+      'admin-10',
+    );
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'application/json',
+    );
+    expect(res.send).toHaveBeenCalledWith(expect.stringContaining('"user"'));
   });
 });

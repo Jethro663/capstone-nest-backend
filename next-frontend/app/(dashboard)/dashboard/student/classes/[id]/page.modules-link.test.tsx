@@ -84,12 +84,12 @@ describe('StudentClassDetailPage module links', () => {
         enrollments: [],
         schedules: [],
       },
-    } as any);
+    } as Awaited<ReturnType<typeof classService.getById>>);
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
-    } as any);
+    } as Awaited<ReturnType<typeof classService.getByStudent>>);
 
     mockedModuleService.getByClass.mockResolvedValue({
       success: true,
@@ -108,7 +108,7 @@ describe('StudentClassDetailPage module links', () => {
           gradingScaleEntries: [],
         },
       ],
-    } as any);
+    } as Awaited<ReturnType<typeof moduleService.getByClass>>);
 
     mockedAssessmentService.getByClass.mockResolvedValue({
       success: true,
@@ -119,18 +119,18 @@ describe('StudentClassDetailPage module links', () => {
       page: 1,
       limit: 20,
       totalPages: 1,
-    } as any);
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
     mockedAnnouncementService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
       count: 0,
-    } as any);
+    } as Awaited<ReturnType<typeof announcementService.getByClass>>);
     mockedSchoolEventService.getAll.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
-    } as any);
+    } as Awaited<ReturnType<typeof schoolEventService.getAll>>);
   });
 
   it('routes module card open link to student module detail page', async () => {

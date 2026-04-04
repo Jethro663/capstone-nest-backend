@@ -290,6 +290,17 @@ describe('AnnouncementsService', () => {
 
       expect(result.title).toBe('Updated Title');
       expect(result.isPinned).toBe(true);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: TEACHER_ID,
+        action: 'announcement.updated',
+        targetType: 'announcement',
+        targetId: ANN_ID,
+        metadata: expect.objectContaining({
+          classId: CLASS_ID,
+          changedFields: ['title', 'isPinned'],
+          isPinned: true,
+        }),
+      });
     });
 
     it('throws NotFoundException when announcement is not found', async () => {
@@ -299,6 +310,7 @@ describe('AnnouncementsService', () => {
       await expect(
         service.update(CLASS_ID, ANN_ID, TEACHER_ID, { title: 'X' }),
       ).rejects.toThrow(NotFoundException);
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
 
     it('throws ForbiddenException when teacher does not own the announcement', async () => {
@@ -398,8 +410,16 @@ describe('AnnouncementsService', () => {
   describe('publishDueAnnouncements()', () => {
     it('enqueues fan-out jobs for each due announcement', async () => {
       const due = [
-        makeAnnouncement({ id: 'sched-1', publishedAt: null }),
-        makeAnnouncement({ id: 'sched-2', publishedAt: null }),
+        makeAnnouncement({
+          id: 'sched-1',
+          publishedAt: null,
+          authorId: TEACHER_ID,
+        }),
+        makeAnnouncement({
+          id: 'sched-2',
+          publishedAt: null,
+          authorId: OTHER_TEACHER_ID,
+        }),
       ];
       mockDb.query.announcements.findMany.mockResolvedValue(due);
       Object.assign(mockDb, makeUpdateChain([]));
@@ -412,6 +432,19 @@ describe('AnnouncementsService', () => {
         expect.objectContaining({ announcementId: 'sched-1' }),
         expect.anything(),
       );
+      expect(mockAuditService.log).toHaveBeenCalledTimes(2);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_ID,
+          action: 'announcement.published_scheduled',
+          targetType: 'announcement',
+          targetId: 'sched-1',
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            trigger: 'scheduler',
+          }),
+        }),
+      );
     });
 
     it('does nothing when no announcements are due', async () => {
@@ -420,6 +453,7 @@ describe('AnnouncementsService', () => {
       await service.publishDueAnnouncements();
 
       expect(mockQueue.add).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
   });
 });

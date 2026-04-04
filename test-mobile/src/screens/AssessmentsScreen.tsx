@@ -150,7 +150,7 @@ export function AssessmentsScreen({ navigation }: Props) {
     >
       <GradientHeader
         colors={gradients.assessments}
-        eyebrow="Track your work ðŸ“"
+        eyebrow="Track your work 📝"
         title="Assessments"
         rightContent={<FloatingIconButton icon="clipboard-check-outline" />}
       >
@@ -224,7 +224,7 @@ export function AssessmentsScreen({ navigation }: Props) {
             </Card>
           ) : null}
           {filtered.length === 0 ? (
-            <EmptyState emoji="ðŸŽ‰" title="All clear!" subtitle={`No ${activeFilter} assessments right now.`} />
+            <EmptyState emoji="🎉" title="All clear!" subtitle={`No ${activeFilter} assessments right now.`} />
           ) : (
             filtered.map((assessment, index) => {
               const config = statusConfig[assessment.status];
@@ -270,7 +270,7 @@ export function AssessmentsScreen({ navigation }: Props) {
                             </View>
                             {assessment.status === "completed" && assessment.score !== undefined ? (
                               <Pill
-                                label={`${Math.round(assessment.score)}/${assessment.totalScore} âœ“`}
+                                label={`${Math.round(assessment.score)}/${assessment.totalScore} ✓`}
                                 backgroundColor={colors.paleGreen}
                                 color={colors.green}
                               />

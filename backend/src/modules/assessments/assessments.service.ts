@@ -694,6 +694,25 @@ export class AssessmentsService {
     return 'student';
   }
 
+  private assertTeacherClassOwnership(
+    classTeacherId: string | null | undefined,
+    currentUser: any,
+    message: string,
+  ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    if (role === 'teacher' && classTeacherId && classTeacherId !== userId) {
+      throw new ForbiddenException(message);
+    }
+
+    return { userId, role };
+  }
+
   private async ensureStudentEnrolled(classId: string, studentId: string) {
     const enrollment = await this.db.query.enrollments.findFirst({
       where: and(
@@ -921,7 +940,31 @@ export class AssessmentsService {
       status?: 'all' | 'upcoming' | 'past_due' | 'completed';
       studentId?: string;
     },
+    currentUser?: any,
   ) {
+    if (currentUser) {
+      const { userId, role } = this.assertTeacherClassOwnership(
+        null,
+        currentUser,
+        'You do not have access to this class assessments list',
+      );
+      const cls = await this.db.query.classes.findFirst({
+        where: eq(classes.id, classId),
+        columns: { id: true, teacherId: true },
+      });
+      if (!cls) {
+        throw new NotFoundException(`Class with ID "${classId}" not found`);
+      }
+      if (role === 'teacher' && cls.teacherId !== userId) {
+        throw new ForbiddenException(
+          'You can only view assessments for your own classes',
+        );
+      }
+      if (role === 'student') {
+        await this.ensureStudentEnrolled(classId, userId);
+      }
+    }
+
     const page = options?.page ?? 1;
     const limit = options?.limit ?? 20;
     const offset = (page - 1) * limit;
@@ -939,6 +982,10 @@ export class AssessmentsService {
       },
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
+
+    if (currentUser && this.getUserRole(currentUser) === 'student') {
+      assessmentList = assessmentList.filter((assessment) => assessment.isPublished);
+    }
 
     if (options?.studentId) {
       const assessmentIds = assessmentList.map((assessment) => assessment.id);
@@ -1026,7 +1073,11 @@ export class AssessmentsService {
   /**
    * Get a single assessment by ID with all questions
    */
-  async getAssessmentById(assessmentId: string, viewerRole?: string) {
+  async getAssessmentById(
+    assessmentId: string,
+    viewerRole?: string,
+    currentUser?: any,
+  ) {
     const assessment = await this.db.query.assessments.findFirst({
       where: eq(assessments.id, assessmentId),
       with: {
@@ -1046,6 +1097,22 @@ export class AssessmentsService {
       throw new NotFoundException(
         `Assessment with ID "${assessmentId}" not found`,
       );
+    }
+
+    if (currentUser) {
+      const { userId, role } = this.assertTeacherClassOwnership(
+        assessment.class?.teacherId,
+        currentUser,
+        'You do not have access to this assessment',
+      );
+      if (role === 'student') {
+        await this.ensureStudentEnrolled(assessment.classId, userId);
+        if (!assessment.isPublished) {
+          throw new ForbiddenException(
+            'Students cannot view unpublished assessments',
+          );
+        }
+      }
     }
 
     let teacherAttachmentFile: any = null;
@@ -1111,7 +1178,16 @@ export class AssessmentsService {
   /**
    * Create a new assessment
    */
-  async createAssessment(createAssessmentDto: CreateAssessmentDto, actorId: string) {
+  async createAssessment(
+    createAssessmentDto: CreateAssessmentDto,
+    currentUser: any,
+  ) {
+    const { userId: actorId, role } = this.assertTeacherClassOwnership(
+      null,
+      currentUser,
+      'You can only create assessments for your own classes',
+    );
+
     // Verify class exists
     const classRecord = await this.db.query.classes.findFirst({
       where: eq(classes.id, createAssessmentDto.classId),
@@ -1120,6 +1196,12 @@ export class AssessmentsService {
     if (!classRecord) {
       throw new BadRequestException(
         `Class with ID "${createAssessmentDto.classId}" not found`,
+      );
+    }
+
+    if (role === 'teacher' && classRecord.teacherId !== actorId) {
+      throw new ForbiddenException(
+        'You can only create assessments for your own classes',
       );
     }
 
@@ -1346,10 +1428,21 @@ export class AssessmentsService {
   async updateAssessment(
     assessmentId: string,
     updateAssessmentDto: UpdateAssessmentDto,
-    actorId: string,
+    currentUser: any,
   ) {
+    const { userId: actorId } = this.assertTeacherClassOwnership(
+      null,
+      currentUser,
+      'You can only manage assessments for your own classes',
+    );
+
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      existingAssessment.class?.teacherId,
+      currentUser,
+      'You can only manage assessments for your own classes',
+    );
 
     const nextType = updateAssessmentDto.type ?? existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
@@ -1537,8 +1630,19 @@ export class AssessmentsService {
   /**
    * Delete an assessment
    */
-  async deleteAssessment(assessmentId: string, actorId: string) {
+  async deleteAssessment(assessmentId: string, currentUser: any) {
+    const { userId: actorId } = this.assertTeacherClassOwnership(
+      null,
+      currentUser,
+      'You can only manage assessments for your own classes',
+    );
+
     const assessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only manage assessments for your own classes',
+    );
 
     await this.db.delete(assessments).where(eq(assessments.id, assessmentId));
 
@@ -1565,9 +1669,22 @@ export class AssessmentsService {
   /**
    * Create a question for an assessment
    */
-  async createQuestion(createQuestionDto: CreateQuestionDto) {
+  async createQuestion(createQuestionDto: CreateQuestionDto, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
     // Verify assessment exists
     const assessment = await this.getAssessmentById(createQuestionDto.assessmentId);
+
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only manage questions for your own class assessments',
+      );
+    }
 
     const [newQuestion] = await this.db
       .insert(assessmentQuestions)
@@ -1600,10 +1717,26 @@ export class AssessmentsService {
 
     await this.ragIndexingService.queueClassReindex(assessment.classId, {
       reason: 'assessment_question_created',
+      actorId: userId,
       source: 'assessments.createQuestion',
     });
 
-    return this.getQuestionById(newQuestion.id);
+    const createdQuestion = await this.getQuestionById(newQuestion.id);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.question.created',
+      targetType: 'assessment_question',
+      targetId: newQuestion.id,
+      metadata: {
+        assessmentId: assessment.id,
+        classId: assessment.classId,
+        type: createdQuestion.type,
+        points: createdQuestion.points,
+      },
+    });
+
+    return createdQuestion;
   }
 
   /**
@@ -1632,8 +1765,23 @@ export class AssessmentsService {
   async updateQuestion(
     questionId: string,
     updateQuestionDto: UpdateQuestionDto,
+    currentUser: any,
   ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
     const question = await this.getQuestionById(questionId);
+    const assessment = await this.getAssessmentById(question.assessmentId);
+
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only manage questions for your own class assessments',
+      );
+    }
 
     // Update question fields
     if (
@@ -1695,10 +1843,23 @@ export class AssessmentsService {
       await this.recalculateTotalPoints(qRecord.assessmentId);
     }
 
-    const assessment = await this.getAssessmentById(question.assessmentId);
     await this.ragIndexingService.queueClassReindex(assessment.classId, {
       reason: 'assessment_question_updated',
+      actorId: userId,
       source: 'assessments.updateQuestion',
+    });
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.question.updated',
+      targetType: 'assessment_question',
+      targetId: questionId,
+      metadata: {
+        assessmentId: question.assessmentId,
+        classId: assessment.classId,
+        points: updatedQuestion.points,
+        optionsReplaced: updateQuestionDto.options !== undefined,
+      },
     });
 
     return updatedQuestion;
@@ -1707,9 +1868,22 @@ export class AssessmentsService {
   /**
    * Delete a question
    */
-  async deleteQuestion(questionId: string) {
+  async deleteQuestion(questionId: string, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
+
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only manage questions for your own class assessments',
+      );
+    }
 
     // Look up assessmentId before deletion
     const qRecord = await this.db.query.assessmentQuestions.findFirst({
@@ -1728,7 +1902,21 @@ export class AssessmentsService {
 
     await this.ragIndexingService.queueClassReindex(assessment.classId, {
       reason: 'assessment_question_deleted',
+      actorId: userId,
       source: 'assessments.deleteQuestion',
+    });
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.question.deleted',
+      targetType: 'assessment_question',
+      targetId: questionId,
+      metadata: {
+        assessmentId: question.assessmentId,
+        classId: assessment.classId,
+        type: question.type,
+        order: question.order,
+      },
     });
 
     return { success: true, message: 'Question deleted successfully' };
@@ -2138,6 +2326,21 @@ export class AssessmentsService {
     attempt = updatedAttempt;
 
     if (assessment.type === AssessmentType.FILE_UPLOAD) {
+      await this.auditService.log({
+        actorId: studentId,
+        action: 'assessment.submission.submitted',
+        targetType: 'assessment_attempt',
+        targetId: attempt.id,
+        metadata: {
+          assessmentId: submitAssessmentDto.assessmentId,
+          classId: assessment.classId,
+          studentId,
+          isFileUpload: true,
+          score: null,
+          passed: null,
+        },
+      });
+
       return {
         attempt,
         responses: [],
@@ -2179,6 +2382,21 @@ export class AssessmentsService {
       assessment.quarter ?? undefined,
     );
 
+    await this.auditService.log({
+      actorId: studentId,
+      action: 'assessment.submission.submitted',
+      targetType: 'assessment_attempt',
+      targetId: finalAttempt.id,
+      metadata: {
+        assessmentId: submitAssessmentDto.assessmentId,
+        classId: assessment.classId,
+        studentId,
+        isFileUpload: false,
+        score,
+        passed,
+      },
+    });
+
     return {
       attempt: finalAttempt,
       responses,
@@ -2202,11 +2420,7 @@ export class AssessmentsService {
 
     const assessment = await this.getAssessmentById(assessmentId);
 
-    if (
-      role === 'teacher' &&
-      assessment.class?.teacherId &&
-      assessment.class.teacherId !== userId
-    ) {
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
         'You can only manage attachments for your own class assessments',
       );
@@ -2234,6 +2448,19 @@ export class AssessmentsService {
       })
       .where(eq(assessments.id, assessmentId));
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.attachment.uploaded',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: assessment.classId,
+        fileId: record.id,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+      },
+    });
+
     return record;
   }
 
@@ -2251,11 +2478,7 @@ export class AssessmentsService {
 
     const assessment = await this.getAssessmentById(assessmentId);
 
-    if (
-      role === 'teacher' &&
-      assessment.class?.teacherId &&
-      assessment.class.teacherId !== userId
-    ) {
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
         'You can only manage rubrics for your own class assessments',
       );
@@ -2310,6 +2533,19 @@ export class AssessmentsService {
 
     const updatedAssessment = await this.getAssessmentById(assessmentId);
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.rubric.uploaded',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: assessment.classId,
+        fileId: record.id,
+        rubricParseStatus,
+        criteriaCount: updatedAssessment.rubricCriteria?.length ?? 0,
+      },
+    });
+
     return {
       file: record,
       rubricParseStatus,
@@ -2333,11 +2569,7 @@ export class AssessmentsService {
 
     const assessment = await this.getAssessmentById(assessmentId);
 
-    if (
-      role === 'teacher' &&
-      assessment.class?.teacherId &&
-      assessment.class.teacherId !== userId
-    ) {
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
         'You can only review rubrics for your own class assessments',
       );
@@ -2358,8 +2590,21 @@ export class AssessmentsService {
         updatedAt: new Date(),
       })
       .where(eq(assessments.id, assessmentId));
+    const updatedAssessment = await this.getAssessmentById(assessmentId);
 
-    return this.getAssessmentById(assessmentId);
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.rubric.reviewed',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: assessment.classId,
+        criteriaCount: normalizedCriteria.length,
+        totalPoints: updatedAssessment.totalPoints,
+      },
+    });
+
+    return updatedAssessment;
   }
 
   async unsubmitFileUploadAssessment(studentId: string, assessmentId: string) {
@@ -2422,6 +2667,19 @@ export class AssessmentsService {
       })
       .where(eq(assessmentAttempts.id, attempt.id))
       .returning();
+
+    await this.auditService.log({
+      actorId: studentId,
+      action: 'assessment.submission.unsubmitted',
+      targetType: 'assessment_attempt',
+      targetId: updatedAttempt.id,
+      metadata: {
+        assessmentId,
+        classId: assessment.classId,
+        studentId,
+        submittedFileId: attempt.submittedFileId,
+      },
+    });
 
     return updatedAttempt;
   }
@@ -2510,6 +2768,21 @@ export class AssessmentsService {
       })
       .where(eq(assessmentAttempts.id, attempt.id));
 
+    await this.auditService.log({
+      actorId: studentId,
+      action: 'assessment.submission.file_uploaded',
+      targetType: 'assessment_attempt',
+      targetId: attempt.id,
+      metadata: {
+        assessmentId,
+        classId: assessment.classId,
+        studentId,
+        fileId: record.id,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+      },
+    });
+
     return {
       attemptId: attempt.id,
       file: record,
@@ -2534,11 +2807,7 @@ export class AssessmentsService {
       await this.ensureStudentEnrolled(assessment.classId, userId);
     }
 
-    if (
-      role === 'teacher' &&
-      assessment.class?.teacherId &&
-      assessment.class.teacherId !== userId
-    ) {
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException('You do not have access to this file');
     }
 
@@ -2549,6 +2818,18 @@ export class AssessmentsService {
     if (!file) {
       throw new NotFoundException('Attached file not found');
     }
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.attachment.downloaded',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: assessment.classId,
+        fileId: file.id,
+        requestedByRole: role,
+      },
+    });
 
     return file;
   }
@@ -2584,11 +2865,7 @@ export class AssessmentsService {
       throw new ForbiddenException('You do not have access to this file');
     }
 
-    if (
-      role === 'teacher' &&
-      attempt.assessment?.class?.teacherId &&
-      attempt.assessment.class.teacherId !== userId
-    ) {
+    if (role === 'teacher' && attempt.assessment?.class?.teacherId !== userId) {
       throw new ForbiddenException('You do not have access to this file');
     }
 
@@ -2600,6 +2877,20 @@ export class AssessmentsService {
       throw new NotFoundException('Submitted file no longer exists');
     }
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.submission.file_downloaded',
+      targetType: 'assessment_attempt',
+      targetId: attempt.id,
+      metadata: {
+        assessmentId: attempt.assessmentId,
+        classId: attempt.assessment?.classId ?? null,
+        studentId: attempt.studentId,
+        fileId: file.id,
+        requestedByRole: role,
+      },
+    });
+
     return file;
   }
 
@@ -2608,12 +2899,27 @@ export class AssessmentsService {
    * For students: only show score/details if grade has been returned
    * For teachers: always show full results
    */
-  async getAttemptResults(attemptId: string, userRole?: string) {
+  async getAttemptResults(
+    attemptId: string,
+    currentUser: any,
+    userRole?: string,
+  ) {
+    const { userId, role } = this.assertTeacherClassOwnership(
+      undefined,
+      currentUser,
+      'You do not have access to this attempt',
+    );
+
     const attempt = await this.db.query.assessmentAttempts.findFirst({
       where: eq(assessmentAttempts.id, attemptId),
       with: {
         assessment: {
           with: {
+            class: {
+              columns: {
+                teacherId: true,
+              },
+            },
             questions: {
               with: {
                 options: true,
@@ -2639,6 +2945,18 @@ export class AssessmentsService {
       throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
     }
 
+    if (role === 'student' && attempt.studentId !== userId) {
+      throw new ForbiddenException(
+        'Students may only view their own attempt results',
+      );
+    }
+    if (role === 'teacher' && attempt.assessment?.class?.teacherId !== userId) {
+      throw new ForbiddenException('You do not have access to this attempt');
+    }
+
+    const normalizedUserRole =
+      userRole ?? (role === 'student' ? 'student' : undefined);
+
     let submittedFile: any = null;
     if (attempt.submittedFileId) {
       submittedFile = await this.db.query.uploadedFiles.findFirst({
@@ -2654,7 +2972,7 @@ export class AssessmentsService {
     }
 
     // If student role and grade not returned yet, hide score details
-    if (userRole === 'student' && !attempt.isReturned) {
+    if (normalizedUserRole === 'student' && !attempt.isReturned) {
       return {
         id: attempt.id,
         assessmentId: attempt.assessmentId,
@@ -2681,7 +2999,7 @@ export class AssessmentsService {
           totalPoints: attempt.assessment.totalPoints,
           rubricCriteria: this.sanitizeRubricForViewer(
             attempt.assessment.rubricCriteria,
-            userRole,
+            normalizedUserRole,
             attempt.assessment.rubricParseStatus,
           ),
         },
@@ -2689,7 +3007,7 @@ export class AssessmentsService {
       };
     }
 
-    if (userRole === 'student') {
+    if (normalizedUserRole === 'student') {
       // Apply smart feedback filtering via dedicated FeedbackService
       const filtered = this.feedbackService.applyFeedbackFiltering(attempt);
       filtered.isReturned = attempt.isReturned;
@@ -2734,6 +3052,21 @@ export class AssessmentsService {
       .returning();
 
     if (assessment.type === AssessmentType.FILE_UPLOAD) {
+      await this.auditService.log({
+        actorId: attempt.studentId,
+        action: 'assessment.submission.auto_submitted',
+        targetType: 'assessment_attempt',
+        targetId: updatedAttempt.id,
+        metadata: {
+          assessmentId: assessment.id,
+          classId: assessment.classId,
+          studentId: attempt.studentId,
+          isFileUpload: true,
+          score: null,
+          passed: null,
+        },
+      });
+
       return updatedAttempt;
     }
 
@@ -2761,6 +3094,21 @@ export class AssessmentsService {
       assessment.classRecordCategory ?? undefined,
       assessment.quarter ?? undefined,
     );
+
+    await this.auditService.log({
+      actorId: attempt.studentId,
+      action: 'assessment.submission.auto_submitted',
+      targetType: 'assessment_attempt',
+      targetId: finalAttempt.id,
+      metadata: {
+        assessmentId: assessment.id,
+        classId: assessment.classId,
+        studentId: attempt.studentId,
+        isFileUpload: false,
+        score,
+        passed,
+      },
+    });
 
     return finalAttempt;
   }
@@ -2904,7 +3252,22 @@ export class AssessmentsService {
    * Get all attempts for a student in an assessment
    * Hides score if grade hasn't been returned
    */
-  async getStudentAttempts(studentId: string, assessmentId: string) {
+  async getStudentAttempts(
+    studentId: string,
+    assessmentId: string,
+    currentUser: any,
+  ) {
+    const assessment = await this.getAssessmentById(assessmentId);
+    const { userId, role } = this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only view attempts for your own class assessments',
+    );
+
+    if (role === 'student' && userId !== studentId) {
+      throw new ForbiddenException('Students may only view their own attempts');
+    }
+
     const attempts = await this.db.query.assessmentAttempts.findMany({
       where: and(
         eq(assessmentAttempts.studentId, studentId),
@@ -2924,7 +3287,14 @@ export class AssessmentsService {
   /**
    * Get all student attempts for an assessment (for teacher view)
    */
-  async getAssessmentAttempts(assessmentId: string) {
+  async getAssessmentAttempts(assessmentId: string, currentUser: any) {
+    const assessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only view attempts for your own class assessments',
+    );
+
     const attempts = await this.db.query.assessmentAttempts.findMany({
       where: eq(assessmentAttempts.assessmentId, assessmentId),
       with: {
@@ -2946,9 +3316,14 @@ export class AssessmentsService {
   /**
    * Get high-level assessment stats for teacher
    */
-  async getAssessmentStats(assessmentId: string) {
+  async getAssessmentStats(assessmentId: string, currentUser: any) {
     const assessment = await this.getAssessmentById(assessmentId);
-    const attempts = await this.getAssessmentAttempts(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only view statistics for your own class assessments',
+    );
+    const attempts = await this.getAssessmentAttempts(assessmentId, currentUser);
     const submittedAttempts = attempts.filter((a) => a.isSubmitted);
 
     // Count enrolled students for completion rate
@@ -3020,8 +3395,13 @@ export class AssessmentsService {
    * Get all student submissions for an assessment (teacher view)
    * Shows ALL enrolled students with their submission status
    */
-  async getAssessmentSubmissions(assessmentId: string) {
+  async getAssessmentSubmissions(assessmentId: string, currentUser: any) {
     const assessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only view submissions for your own class assessments',
+    );
     const dueDate = assessment.dueDate ? new Date(assessment.dueDate) : null;
 
     const mapAttemptSummary = (
@@ -3180,11 +3560,26 @@ export class AssessmentsService {
   /**
    * Return a grade to a student (make score visible)
    */
-  async returnGrade(attemptId: string, dto: ReturnGradeDto) {
+  async returnGrade(attemptId: string, dto: ReturnGradeDto, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
     const attempt = await this.db.query.assessmentAttempts.findFirst({
       where: eq(assessmentAttempts.id, attemptId),
       with: {
-        assessment: true,
+        assessment: {
+          with: {
+            class: {
+              columns: {
+                teacherId: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -3201,6 +3596,12 @@ export class AssessmentsService {
     if (attempt.isReturned) {
       throw new BadRequestException(
         'Grade has already been returned for this attempt',
+      );
+    }
+
+    if (role === 'teacher' && attempt.assessment?.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only return grades for your own class assessments',
       );
     }
 
@@ -3307,13 +3708,58 @@ export class AssessmentsService {
       .where(eq(assessmentAttempts.id, attemptId))
       .returning();
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.grade.returned',
+      targetType: 'assessment_attempt',
+      targetId: attemptId,
+      metadata: {
+        assessmentId: attempt.assessmentId,
+        classId: attempt.assessment?.classId ?? null,
+        studentId: attempt.studentId,
+        score: updated.score,
+        passed: updated.passed,
+      },
+    });
+
     return updated;
   }
 
   /**
    * Bulk return grades for multiple attempts
    */
-  async bulkReturnGrades(dto: BulkReturnGradesDto) {
+  async bulkReturnGrades(dto: BulkReturnGradesDto, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const selectedAttempts = await this.db.query.assessmentAttempts.findMany({
+      where: inArray(assessmentAttempts.id, dto.attemptIds),
+      with: {
+        assessment: {
+          with: {
+            class: {
+              columns: { teacherId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      role === 'teacher' &&
+      selectedAttempts.some(
+        (attempt) => attempt.assessment?.class?.teacherId !== userId,
+      )
+    ) {
+      throw new ForbiddenException(
+        'You can only return grades for your own class assessments',
+      );
+    }
+
     const results = await this.db
       .update(assessmentAttempts)
       .set({
@@ -3330,6 +3776,22 @@ export class AssessmentsService {
       )
       .returning();
 
+    if (results.length > 0) {
+      await this.auditService.log({
+        actorId: userId,
+        action: 'assessment.grades.bulk_returned',
+        targetType: 'assessment_attempt',
+        targetId: results[0].id,
+        metadata: {
+          returned: results.length,
+          attemptIds: results.map((attempt) => attempt.id),
+          assessmentIds: [
+            ...new Set(selectedAttempts.map((attempt) => attempt.assessmentId)),
+          ],
+        },
+      });
+    }
+
     return {
       returned: results.length,
       attemptIds: results.map((r) => r.id),
@@ -3339,8 +3801,13 @@ export class AssessmentsService {
   /**
    * Get per-question analytics for an assessment (teacher view)
    */
-  async getQuestionAnalytics(assessmentId: string) {
+  async getQuestionAnalytics(assessmentId: string, currentUser: any) {
     const assessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only view analytics for your own class assessments',
+    );
 
     // Get all submitted attempts
     const submittedAttemptsList =
@@ -3457,8 +3924,25 @@ export class AssessmentsService {
   /**
    * Return all submitted (unreturned) grades for an assessment
    */
-  async returnAllGrades(assessmentId: string, teacherFeedback?: string) {
-    await this.getAssessmentById(assessmentId);
+  async returnAllGrades(
+    assessmentId: string,
+    teacherFeedback: string | undefined,
+    currentUser: any,
+  ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only return grades for your own class assessments',
+      );
+    }
 
     const results = await this.db
       .update(assessmentAttempts)
@@ -3475,6 +3959,17 @@ export class AssessmentsService {
         ),
       )
       .returning();
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.grades.returned_all',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: assessment.classId,
+        returned: results.length,
+      },
+    });
 
     return {
       returned: results.length,

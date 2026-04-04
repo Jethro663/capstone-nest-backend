@@ -330,7 +330,11 @@ export class ClassesService {
   /**
    * Create a new class
    */
-  async create(createClassDto: CreateClassDto) {
+  async create(
+    createClassDto: CreateClassDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     // Section check
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, createClassDto.sectionId),
@@ -423,13 +427,38 @@ export class ClassesService {
       );
     }
 
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? createClassDto.teacherId ?? 'system',
+      action: 'class.created',
+      targetType: 'class',
+      targetId: newClass.id,
+      metadata: {
+        actorRole,
+        sectionId: createClassDto.sectionId,
+        teacherId: createClassDto.teacherId,
+        schoolYear: createClassDto.schoolYear,
+        hasSchedules: Boolean(createClassDto.schedules?.length),
+      },
+    });
+
     return this.findById(newClass.id);
   }
 
   /**
    * Update a class
    */
-  async update(id: string, updateClassDto: UpdateClassDto) {
+  async update(
+    id: string,
+    updateClassDto: UpdateClassDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     // Verify class exists
     const existing = await this.findById(id);
 
@@ -517,6 +546,32 @@ export class ClassesService {
       }
     }
 
+    const changedFields = Object.entries(classFields)
+      .filter(([, value]) => value !== undefined)
+      .map(([field]) => field);
+    if (schedules !== undefined) {
+      changedFields.push('schedules');
+    }
+
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? existing.teacherId ?? 'system',
+      action: 'class.updated',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        changedFields,
+        sectionId: updateClassDto.sectionId ?? existing.sectionId,
+        teacherId: updateClassDto.teacherId ?? existing.teacherId,
+      },
+    });
+
     return this.findById(id);
   }
 
@@ -542,6 +597,30 @@ export class ClassesService {
     }
 
     await this.db.update(classes).set(payload).where(eq(classes.id, id));
+
+    const changedFields: string[] = [];
+    if (presentation.cardPreset !== undefined) changedFields.push('cardPreset');
+    if (presentation.cardBannerUrl !== undefined)
+      changedFields.push('cardBannerUrl');
+
+    const actorRole = requesterRoles.includes('admin')
+      ? 'admin'
+      : requesterRoles.includes('teacher')
+        ? 'teacher'
+        : 'unknown';
+
+    await this.auditService.log({
+      actorId: requesterId,
+      action: 'class.presentation.updated',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        changedFields,
+        cardPreset: presentation.cardPreset,
+        cardBannerUrl: presentation.cardBannerUrl,
+      },
+    });
 
     return this.findById(id);
   }
@@ -588,7 +667,7 @@ export class ClassesService {
    * Delete a class.
    * Blocked when active enrollments OR lessons are attached to prevent data loss.
    */
-  async delete(id: string) {
+  async delete(id: string, actorId?: string, actorRoles: string[] = []) {
     // Verify class exists
     const classRecord = await this.findById(id);
 
@@ -627,6 +706,24 @@ export class ClassesService {
 
     await this.db.delete(classes).where(eq(classes.id, id));
 
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? classRecord.teacherId ?? 'system',
+      action: 'class.deleted',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        softDelete: true,
+        previousIsActive: classRecord.isActive,
+      },
+    });
+
     return classRecord;
   }
 
@@ -634,7 +731,7 @@ export class ClassesService {
    * Permanently purge an archived class and all related cascade data.
    * This intentionally bypasses delete blockers used by the regular delete flow.
    */
-  async purge(id: string) {
+  async purge(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
 
     if (classRecord.isActive) {
@@ -645,12 +742,31 @@ export class ClassesService {
 
     await this.db.delete(classes).where(eq(classes.id, id));
 
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? classRecord.teacherId ?? 'system',
+      action: 'class.purged',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        previousIsActive: classRecord.isActive,
+      },
+    });
+
     return classRecord;
   }
 
   private async performBulkLifecycleAction(
     action: BulkClassLifecycleAction,
     classId: string,
+    actorId?: string,
+    actorRoles: string[] = [],
   ) {
     const classRecord = await this.findById(classId);
 
@@ -659,13 +775,13 @@ export class ClassesService {
         if (!classRecord.isActive) {
           throw new ConflictException('Class is already archived.');
         }
-        await this.toggleActive(classId);
+        await this.toggleActive(classId, actorId, actorRoles);
         return;
       case 'restore':
         if (classRecord.isActive) {
           throw new ConflictException('Class is already active.');
         }
-        await this.toggleActive(classId);
+        await this.toggleActive(classId, actorId, actorRoles);
         return;
       case 'purge':
         if (classRecord.isActive) {
@@ -673,7 +789,7 @@ export class ClassesService {
             'Only archived classes can be permanently deleted. Archive the class first.',
           );
         }
-        await this.purge(classId);
+        await this.purge(classId, actorId, actorRoles);
         return;
       default: {
         throw new BadRequestException(
@@ -705,6 +821,8 @@ export class ClassesService {
 
   async bulkLifecycleAction(
     dto: BulkClassLifecycleDto,
+    actorId?: string,
+    actorRoles: string[] = [],
   ): Promise<BulkClassLifecycleResult> {
     const classIds = [...new Set(dto.classIds)];
     const succeeded: string[] = [];
@@ -712,7 +830,12 @@ export class ClassesService {
 
     for (const classId of classIds) {
       try {
-        await this.performBulkLifecycleAction(dto.action, classId);
+        await this.performBulkLifecycleAction(
+          dto.action,
+          classId,
+          actorId,
+          actorRoles,
+        );
         succeeded.push(classId);
       } catch (error) {
         failed.push({
@@ -1094,6 +1217,25 @@ export class ClassesService {
       });
     }
 
+    const actorRole = userRoles.includes('admin')
+      ? 'admin'
+      : userRoles.includes('teacher')
+        ? 'teacher'
+        : userRoles.includes('student')
+          ? 'student'
+          : 'unknown';
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class.visibility.updated',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        actorRole,
+        hidden,
+      },
+    });
+
     return {
       classId,
       isHidden: hidden,
@@ -1103,16 +1245,35 @@ export class ClassesService {
   /**
    * Toggle class active status
    */
-  async toggleActive(id: string) {
+  async toggleActive(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
+    const nextIsActive = !classRecord.isActive;
 
     await this.db
       .update(classes)
       .set({
-        isActive: !classRecord.isActive,
+        isActive: nextIsActive,
         updatedAt: new Date(),
       })
       .where(eq(classes.id, id));
+
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? classRecord.teacherId ?? 'system',
+      action: 'class.status.toggled',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        previousIsActive: classRecord.isActive,
+        isActive: nextIsActive,
+      },
+    });
 
     return this.findById(id);
   }

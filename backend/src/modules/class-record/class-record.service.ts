@@ -187,6 +187,18 @@ export class ClassRecordService {
       `Generated class record for class "${dto.classId}", period ${dto.gradingPeriod}`,
     );
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.generated',
+      targetType: 'class_record',
+      targetId: record.id,
+      metadata: {
+        classId: dto.classId,
+        gradingPeriod: dto.gradingPeriod,
+        categoryCount: DEPED_CATEGORIES.length,
+      },
+    });
+
     return this.getClassRecord(record.id, userId, roles);
   }
 
@@ -712,7 +724,22 @@ export class ClassRecordService {
       throw new ForbiddenException('Access denied');
     }
 
-    return this.syncService.syncFromAssessment(itemId, userId);
+    const result = await this.syncService.syncFromAssessment(itemId, userId);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.scores.synced_assessment',
+      targetType: 'class_record_item',
+      targetId: itemId,
+      metadata: {
+        classRecordId: item.classRecord.id,
+        classId: item.classRecord.classId,
+        assessmentId: item.assessmentId,
+        synced: result.synced,
+      },
+    });
+
+    return result;
   }
 
   // ── Grade Preview & Finalization ──────────────────────────────────────────
@@ -787,6 +814,7 @@ export class ClassRecordService {
       targetType: 'class_record',
       targetId: classRecordId,
       metadata: {
+        classId: record.classId,
         gradeCount: result.gradeCount,
       },
     });
@@ -829,6 +857,7 @@ export class ClassRecordService {
       targetType: 'class_record',
       targetId: classRecordId,
       metadata: {
+        classId: record.classId,
         previousStatus: 'finalized',
         nextStatus: 'draft',
       },
@@ -865,12 +894,17 @@ export class ClassRecordService {
     userId: string,
     roles: string[],
   ) {
-    if (
-      !this.isAdmin(roles) &&
-      !roles.includes('teacher') &&
-      userId !== studentId
-    ) {
+    const isAdmin = this.isAdmin(roles);
+    const isTeacher = roles.includes('teacher');
+    const isStudentSelf = userId === studentId;
+
+    if (!isAdmin && !isTeacher && !isStudentSelf) {
       throw new ForbiddenException('Students may only view their own grade');
+    }
+
+    // Teachers can only view grades for class records they own.
+    if (isAdmin || isTeacher) {
+      await this.assertClassRecord(classRecordId, userId, roles);
     }
 
     const grade = await this.db.query.classRecordFinalGrades.findFirst({

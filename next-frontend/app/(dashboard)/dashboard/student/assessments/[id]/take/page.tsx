@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { CheckCircle2, Clock3, Flag, ListChecks, Download, UploadCloud, FileText } from 'lucide-react';
@@ -946,10 +947,13 @@ export default function StudentAssessmentTakePage() {
                   <h2 className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]">{current.content}</h2>
                   {current.imageUrl ? (
                     <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3">
-                      <img
+                      <Image
                         src={current.imageUrl}
                         alt="Question"
-                        className="max-h-[360px] w-full rounded-xl object-contain"
+                        width={1200}
+                        height={675}
+                        unoptimized
+                        className="max-h-[360px] h-auto w-full rounded-xl object-contain"
                       />
                     </div>
                   ) : null}

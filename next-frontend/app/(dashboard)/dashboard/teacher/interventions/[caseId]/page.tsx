@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,12 +26,17 @@ function studentName(entry: TeacherInterventionQueueItem['student']): string {
   return entry?.email ?? 'Unknown student';
 }
 
+const JOB_STATUS_FAILURE_THRESHOLD = 3;
+
 export default function TeacherInterventionWorkspacePage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const caseId = params.caseId as string;
   const classId = searchParams.get('classId') ?? '';
+  const interventionsRoute = classId
+    ? `/dashboard/teacher/interventions?classId=${classId}`
+    : '/dashboard/teacher/interventions';
 
   const [loading, setLoading] = useState(true);
   const [creatingJob, setCreatingJob] = useState(false);
@@ -42,6 +47,9 @@ export default function TeacherInterventionWorkspacePage() {
   const [result, setResult] = useState<InterventionStructuredOutput | null>(null);
   const [lessonXp, setLessonXp] = useState<Record<string, number>>({});
   const [assessmentXp, setAssessmentXp] = useState<Record<string, number>>({});
+  const [statusWarning, setStatusWarning] = useState<string | null>(null);
+  const [loadingResult, setLoadingResult] = useState(false);
+  const statusFailuresRef = useRef(0);
 
   const fetchCase = useCallback(async () => {
     if (!classId) {
@@ -63,6 +71,33 @@ export default function TeacherInterventionWorkspacePage() {
     void fetchCase();
   }, [fetchCase]);
 
+  const loadInterventionJobResult = useCallback(async (jobId: string): Promise<boolean> => {
+    try {
+      setLoadingResult(true);
+      const resultRes = await aiService.getInterventionJobResult(jobId);
+      const structured = resultRes.data.result.structuredOutput;
+      setResult(structured);
+      setStatusWarning(null);
+      setLessonXp(
+        Object.fromEntries(structured.recommendedLessons.map((lesson) => [lesson.lessonId, 20])),
+      );
+      setAssessmentXp(
+        Object.fromEntries(structured.recommendedAssessments.map((assessment) => [assessment.assessmentId, 30])),
+      );
+      return true;
+    } catch (error) {
+      const message = getApiErrorMessage(
+        error,
+        'Intervention plan is ready but result details are temporarily unavailable.',
+      );
+      setStatusWarning(message);
+      toast.error(message);
+      return false;
+    } finally {
+      setLoadingResult(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!job || ['completed', 'approved', 'failed', 'rejected'].includes(job.status)) {
       return;
@@ -71,41 +106,56 @@ export default function TeacherInterventionWorkspacePage() {
     const interval = window.setInterval(async () => {
       try {
         const statusRes = await aiService.getTeacherJobStatus(job.jobId);
+        statusFailuresRef.current = 0;
+        setStatusWarning(null);
         setJob(statusRes.data);
         if (['completed', 'approved'].includes(statusRes.data.status)) {
-          const resultRes = await aiService.getInterventionJobResult(job.jobId);
-          const structured = resultRes.data.result.structuredOutput;
-          setResult(structured);
-          setLessonXp(
-            Object.fromEntries(structured.recommendedLessons.map((lesson) => [lesson.lessonId, 20])),
-          );
-          setAssessmentXp(
-            Object.fromEntries(structured.recommendedAssessments.map((assessment) => [assessment.assessmentId, 30])),
-          );
+          window.clearInterval(interval);
+          await loadInterventionJobResult(statusRes.data.jobId);
         }
       } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Failed to refresh intervention plan status'));
-        window.clearInterval(interval);
+        statusFailuresRef.current += 1;
+        if (statusFailuresRef.current >= JOB_STATUS_FAILURE_THRESHOLD) {
+          const message = getApiErrorMessage(error, 'Failed to refresh intervention plan status');
+          setStatusWarning(message);
+          toast.error(message);
+          window.clearInterval(interval);
+        }
       }
     }, 2500);
 
     return () => window.clearInterval(interval);
-  }, [job]);
+  }, [job, loadInterventionJobResult]);
 
   const handleGenerate = async () => {
+    const hasCaseContext = Boolean(classId && queueEntry);
+    if (!hasCaseContext) {
+      toast.error('Select a valid intervention case from the queue before generating a plan.');
+      return;
+    }
     try {
       setCreatingJob(true);
       setResult(null);
+      statusFailuresRef.current = 0;
+      setStatusWarning(null);
       const res = await aiService.createInterventionJob(caseId, {
         note: note.trim() || undefined,
       });
       setJob(res.data);
       toast.success('AI intervention planning started.');
+      if (['completed', 'approved'].includes(res.data.status)) {
+        await loadInterventionJobResult(res.data.jobId);
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to start AI intervention planning'));
     } finally {
       setCreatingJob(false);
     }
+  };
+
+  const handleRetryResultLoad = async () => {
+    if (!job) return;
+    await loadInterventionJobResult(job.jobId);
   };
 
   const visibleLessons = useMemo(
@@ -116,6 +166,8 @@ export default function TeacherInterventionWorkspacePage() {
     () => result?.recommendedAssessments ?? [],
     [result],
   );
+  const hasCaseContext = Boolean(classId && queueEntry);
+  const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
 
   const handleRemoveLesson = (lessonId: string) => {
     setResult((current) => current
@@ -144,11 +196,22 @@ export default function TeacherInterventionWorkspacePage() {
   };
 
   const handleAssign = async () => {
-    if (!result) return;
+    if (!result || !hasCaseContext || !hasAssignableItems) {
+      if (result && hasCaseContext && !hasAssignableItems) {
+        toast.error('Add at least one lesson or assessment before assigning this intervention plan.');
+      }
+      return;
+    }
+    const teacherNote = note.trim();
+    const aiSuggestedNote = result.suggestedAssignmentPayload.note?.trim();
+    const assignmentNote =
+      aiSuggestedNote && teacherNote && !aiSuggestedNote.includes(teacherNote)
+        ? `${teacherNote}\n${aiSuggestedNote}`
+        : aiSuggestedNote || teacherNote || undefined;
     try {
       setAssigning(true);
       await lxpService.assignIntervention(caseId, {
-        note: result.suggestedAssignmentPayload.note,
+        note: assignmentNote,
         lessonAssignments: visibleLessons.map((lesson) => ({
           lessonId: lesson.lessonId,
           xpAwarded: lessonXp[lesson.lessonId] ?? 20,
@@ -161,7 +224,7 @@ export default function TeacherInterventionWorkspacePage() {
         })),
       });
       toast.success('AI intervention plan assigned.');
-      router.push(`/dashboard/teacher/interventions?classId=${classId}`);
+      router.push(interventionsRoute);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to assign intervention plan'));
     } finally {
@@ -181,7 +244,7 @@ export default function TeacherInterventionWorkspacePage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" onClick={() => router.push('/dashboard/teacher/interventions')}>
+      <Button variant="ghost" onClick={() => router.push(interventionsRoute)}>
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to interventions
       </Button>
@@ -193,7 +256,7 @@ export default function TeacherInterventionWorkspacePage() {
             AI Intervention Workspace
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            {queueEntry ? `${studentName(queueEntry.student)} • trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%` : 'Select a case from the intervention queue first.'}
+            {queueEntry ? `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%` : 'Select a case from the intervention queue first.'}
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-2">
@@ -211,12 +274,16 @@ export default function TeacherInterventionWorkspacePage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleGenerate} disabled={creatingJob || !classId}>
+              <Button onClick={handleGenerate} disabled={creatingJob || !hasCaseContext}>
                 {creatingJob ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {job ? 'Regenerate plan' : 'Generate plan'}
               </Button>
               {result && (
-                <Button variant="outline" onClick={handleAssign} disabled={assigning}>
+                <Button
+                  variant="outline"
+                  onClick={handleAssign}
+                  disabled={assigning || !hasCaseContext || !hasAssignableItems}
+                >
                   {assigning ? 'Assigning...' : 'Assign suggested path'}
                 </Button>
               )}
@@ -237,6 +304,19 @@ export default function TeacherInterventionWorkspacePage() {
                   </Badge>
                 </div>
                 {job?.errorMessage && <p className="text-sm text-destructive">{job.errorMessage}</p>}
+                {statusWarning && (
+                  <p className="text-sm text-yellow-700">{statusWarning}</p>
+                )}
+                {job && ['completed', 'approved'].includes(job.status) && !result && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryResultLoad}
+                    disabled={loadingResult}
+                  >
+                    {loadingResult ? 'Retrying result...' : 'Retry loading result'}
+                  </Button>
+                )}
               </CardContent>
             </Card>
 

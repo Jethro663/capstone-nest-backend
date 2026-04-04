@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
 import { DatabaseModule } from '../../database/database.module';
+import { AuditModule } from '../audit/audit.module';
 
 /**
  * AI Mentor Module
@@ -12,7 +13,7 @@ import { DatabaseModule } from '../../database/database.module';
  * requests via AiProxyService.
  */
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AuditModule],
   controllers: [AiMentorController],
   providers: [AiProxyService],
   exports: [AiProxyService],

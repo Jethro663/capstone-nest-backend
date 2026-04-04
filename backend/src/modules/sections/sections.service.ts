@@ -20,6 +20,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 import {
   sections,
   classes,
@@ -50,10 +51,19 @@ export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
 
 @Injectable()
 export class SectionsService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private resolveActorRole(actorRoles: string[] = []): 'admin' | 'teacher' | 'system' {
+    if (actorRoles.includes('admin')) return 'admin';
+    if (actorRoles.includes('teacher')) return 'teacher';
+    return 'system';
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -615,7 +625,11 @@ export class SectionsService {
 
   // ─── createSection ────────────────────────────────────────────────────────
 
-  async createSection(createSectionDto: CreateSectionDto) {
+  async createSection(
+    createSectionDto: CreateSectionDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     const existingSection = await this.db.query.sections.findFirst({
       where: and(
         eq(sections.name, createSectionDto.name),
@@ -659,6 +673,20 @@ export class SectionsService {
         })
         .returning();
 
+      await this.auditService.log({
+        actorId: actorId ?? createSectionDto.adviserId ?? 'system',
+        action: 'section.created',
+        targetType: 'section',
+        targetId: newSection.id,
+        metadata: {
+          actorRole: this.resolveActorRole(actorRoles),
+          gradeLevel: createSectionDto.gradeLevel,
+          schoolYear: createSectionDto.schoolYear,
+          adviserId: createSectionDto.adviserId ?? null,
+          capacity: createSectionDto.capacity,
+        },
+      });
+
       return this.findById(newSection.id);
     } catch (err: any) {
       // Surface DB-level unique constraint violations (23505) as a friendly 409 instead
@@ -675,7 +703,12 @@ export class SectionsService {
 
   // ─── updateSection ────────────────────────────────────────────────────────
 
-  async updateSection(id: string, updateSectionDto: UpdateSectionDto) {
+  async updateSection(
+    id: string,
+    updateSectionDto: UpdateSectionDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     const existingSection = await this.findById(id);
 
     if (
@@ -770,6 +803,24 @@ export class SectionsService {
 
     try {
       await this.db.update(sections).set(updateData).where(eq(sections.id, id));
+
+      const changedFields = Object.keys(updateData).filter(
+        (key) => key !== 'updatedAt',
+      );
+      await this.auditService.log({
+        actorId: actorId ?? existingSection.adviserId ?? 'system',
+        action: 'section.updated',
+        targetType: 'section',
+        targetId: id,
+        metadata: {
+          actorRole: this.resolveActorRole(actorRoles),
+          changedFields,
+          adviserId: updateSectionDto.adviserId ?? existingSection.adviserId,
+          gradeLevel: updateSectionDto.gradeLevel ?? existingSection.gradeLevel,
+          schoolYear: updateSectionDto.schoolYear ?? existingSection.schoolYear,
+        },
+      });
+
       return this.findById(id);
     } catch (err: any) {
       if (err?.code === '23505') {
@@ -813,6 +864,20 @@ export class SectionsService {
     }
 
     await this.db.update(sections).set(payload).where(eq(sections.id, id));
+
+    const actorRole = this.resolveActorRole(requesterRoles ?? []);
+    await this.auditService.log({
+      actorId: requesterId ?? sectionRecord.adviserId ?? 'system',
+      action: 'section.presentation.updated',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole,
+        changedFields:
+          presentation.cardBannerUrl !== undefined ? ['cardBannerUrl'] : [],
+        cardBannerUrl: presentation.cardBannerUrl,
+      },
+    });
 
     return this.findById(
       id,
@@ -858,14 +923,29 @@ export class SectionsService {
       });
     }
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'section.visibility.updated',
+      targetType: 'section',
+      targetId: sectionId,
+      metadata: {
+        actorRole: this.resolveActorRole(userRoles),
+        hidden,
+      },
+    });
+
     return {
       sectionId,
       isHidden: hidden,
     };
   }
 
-  async archiveSection(id: string) {
-    await this.findById(id);
+  async archiveSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const section = await this.findById(id);
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -883,24 +963,56 @@ export class SectionsService {
         .set({ isActive: false, updatedAt: new Date() })
         .where(eq(sections.id, id));
     });
+
+    await this.auditService.log({
+      actorId: actorId ?? section.adviserId ?? 'system',
+      action: 'section.archived',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        previousIsActive: section.isActive,
+      },
+    });
   }
 
-  async restoreSection(id: string) {
-    await this.findById(id);
+  async restoreSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const section = await this.findById(id);
 
     await this.db
       .update(sections)
       .set({ isActive: true, updatedAt: new Date() })
       .where(eq(sections.id, id));
+
+    await this.auditService.log({
+      actorId: actorId ?? section.adviserId ?? 'system',
+      action: 'section.restored',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        previousIsActive: section.isActive,
+      },
+    });
   }
 
-  async deleteSection(id: string) {
-    await this.archiveSection(id);
+  async deleteSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    await this.archiveSection(id, actorId, actorRoles);
   }
 
   private async performBulkLifecycleAction(
     action: BulkSectionLifecycleAction,
     sectionId: string,
+    actorId?: string,
+    actorRoles: string[] = [],
   ) {
     const section = await this.findById(sectionId);
 
@@ -909,13 +1021,13 @@ export class SectionsService {
         if (!section.isActive) {
           throw new ConflictException('Section is already archived.');
         }
-        await this.archiveSection(sectionId);
+        await this.archiveSection(sectionId, actorId, actorRoles);
         return;
       case 'restore':
         if (section.isActive) {
           throw new ConflictException('Section is already active.');
         }
-        await this.restoreSection(sectionId);
+        await this.restoreSection(sectionId, actorId, actorRoles);
         return;
       case 'purge':
         if (section.isActive) {
@@ -923,7 +1035,7 @@ export class SectionsService {
             'Only archived sections can be permanently deleted. Archive the section first.',
           );
         }
-        await this.permanentlyDeleteSection(sectionId);
+        await this.permanentlyDeleteSection(sectionId, actorId, actorRoles);
         return;
       default: {
         throw new BadRequestException(
@@ -955,6 +1067,8 @@ export class SectionsService {
 
   async bulkLifecycleAction(
     dto: BulkSectionLifecycleDto,
+    actorId?: string,
+    actorRoles: string[] = [],
   ): Promise<BulkSectionLifecycleResult> {
     const sectionIds = [...new Set(dto.sectionIds)];
     const succeeded: string[] = [];
@@ -962,7 +1076,12 @@ export class SectionsService {
 
     for (const sectionId of sectionIds) {
       try {
-        await this.performBulkLifecycleAction(dto.action, sectionId);
+        await this.performBulkLifecycleAction(
+          dto.action,
+          sectionId,
+          actorId,
+          actorRoles,
+        );
         succeeded.push(sectionId);
       } catch (error) {
         failed.push({
@@ -1063,9 +1182,13 @@ export class SectionsService {
 
   // ─── permanentlyDeleteSection ─────────────────────────────────────────────
 
-  async permanentlyDeleteSection(id: string) {
+  async permanentlyDeleteSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     // Verify section exists first
-    await this.findById(id);
+    const section = await this.findById(id);
 
     // Wrap the pre-flight count checks and the delete in a single transaction
     // to prevent a TOCTOU race where new enrolments are inserted between the
@@ -1098,6 +1221,17 @@ export class SectionsService {
       }
 
       await tx.delete(sections).where(eq(sections.id, id));
+    });
+
+    await this.auditService.log({
+      actorId: actorId ?? section.adviserId ?? 'system',
+      action: 'section.purged',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        previousIsActive: section.isActive,
+      },
     });
   }
 

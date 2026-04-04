@@ -7,6 +7,15 @@ import type {
 } from '@/types/extraction';
 
 type RawExtraction = Record<string, unknown>;
+type RawExtractionStatus = Record<string, unknown>;
+
+const EXTRACTION_STATUS_VALUES = new Set([
+  'pending',
+  'processing',
+  'completed',
+  'failed',
+  'applied',
+]);
 
 function readString(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -17,15 +26,39 @@ function readNullableString(value: unknown): string | null {
 }
 
 function readNumber(value: unknown, fallback = 0): number {
-  return typeof value === 'number' ? value : fallback;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
 }
 
 function readNullableNumber(value: unknown): number | null {
-  return typeof value === 'number' ? value : null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 function readBoolean(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function normalizeExtractionStatus(value: unknown): Extraction['extractionStatus'] {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (EXTRACTION_STATUS_VALUES.has(normalized)) {
+      return normalized as Extraction['extractionStatus'];
+    }
+  }
+  return 'processing';
 }
 
 function normalizeExtraction(raw: RawExtraction): Extraction {
@@ -34,9 +67,9 @@ function normalizeExtraction(raw: RawExtraction): Extraction {
     fileId: readString(raw.fileId ?? raw.file_id),
     classId: readString(raw.classId ?? raw.class_id),
     teacherId: readString(raw.teacherId ?? raw.teacher_id),
-    extractionStatus: readString(
+    extractionStatus: normalizeExtractionStatus(
       raw.extractionStatus ?? raw.extraction_status,
-    ) as Extraction['extractionStatus'],
+    ),
     modelUsed: readNullableString(raw.modelUsed ?? raw.model_used),
     errorMessage: readNullableString(raw.errorMessage ?? raw.error_message),
     structuredContent: (raw.structuredContent ??
@@ -50,6 +83,18 @@ function normalizeExtraction(raw: RawExtraction): Extraction {
     updatedAt: readString(raw.updatedAt ?? raw.updated_at),
     originalName:
       readNullableString(raw.originalName ?? raw.original_name) ?? undefined,
+  };
+}
+
+function normalizeExtractionStatusPayload(raw: RawExtractionStatus) {
+  return {
+    id: readString(raw.id),
+    status: normalizeExtractionStatus(raw.status ?? raw.extractionStatus),
+    progressPercent: readNumber(raw.progressPercent ?? raw.progress_percent),
+    totalChunks: readNullableNumber(raw.totalChunks ?? raw.total_chunks),
+    processedChunks: readNumber(raw.processedChunks ?? raw.processed_chunks),
+    modelUsed: readNullableString(raw.modelUsed ?? raw.model_used),
+    errorMessage: readNullableString(raw.errorMessage ?? raw.error_message),
   };
 }
 
@@ -81,7 +126,15 @@ export const extractionService = {
     };
   }> {
     const { data } = await api.get(`/ai/extractions/${id}/status`);
-    return data;
+    const rawPayload =
+      data && typeof data === 'object' && data.data && typeof data.data === 'object'
+        ? (data.data as RawExtractionStatus)
+        : {};
+
+    return {
+      ...data,
+      data: normalizeExtractionStatusPayload(rawPayload),
+    };
   },
 
   async listByClass(

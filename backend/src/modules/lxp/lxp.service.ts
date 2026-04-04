@@ -16,6 +16,7 @@ import {
   lessons,
   lxpProgress,
   performanceSnapshots,
+  systemEvaluationTargetEnum,
   systemEvaluations,
   users,
 } from '../../drizzle/schema';
@@ -36,6 +37,8 @@ type UserContext = {
   userId: string;
   roles: string[];
 };
+
+type SystemEvaluationTarget = (typeof systemEvaluationTargetEnum.enumValues)[number];
 
 @Injectable()
 export class LxpService {
@@ -62,6 +65,24 @@ export class LxpService {
 
   private xpToStars(xp: number) {
     return Math.round((xp / STAR_XP) * 100) / 100;
+  }
+
+  private appendInterventionNote(
+    existingNote: string | null | undefined,
+    newNote: string | null | undefined,
+  ): string | null {
+    const normalizedExisting = existingNote?.trim() ?? '';
+    const normalizedNew = newNote?.trim() ?? '';
+
+    if (!normalizedNew) {
+      return normalizedExisting.length > 0 ? normalizedExisting : null;
+    }
+
+    if (!normalizedExisting) {
+      return normalizedNew;
+    }
+
+    return `${normalizedExisting}\n${normalizedNew}`;
   }
 
   private getStatusSummary(input: {
@@ -275,6 +296,12 @@ export class LxpService {
   }
 
   async handlePerformanceStatusChanged(event: PerformanceStatusChangedEvent) {
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, event.classId),
+      columns: { id: true, teacherId: true },
+    });
+    const auditActorId = cls?.teacherId ?? null;
+
     if (event.currentIsAtRisk) {
       const interventionCase = await this.getOrCreateCaseForStudent(
         event.studentId,
@@ -285,24 +312,75 @@ export class LxpService {
       await this.ensureDefaultAssignments(interventionCase.id, event.classId);
       await this.getOrCreateProgress(event.studentId, event.classId);
       await this.notifyInterventionOpened(event.studentId, event.classId);
+
+      if (auditActorId) {
+        await this.auditService.log({
+          actorId: auditActorId,
+          action: 'lxp.intervention.auto_opened',
+          targetType: 'intervention_case',
+          targetId: interventionCase.id,
+          metadata: {
+            classId: event.classId,
+            studentId: event.studentId,
+            triggerSource: 'performance_status_changed',
+            previousIsAtRisk: event.previousIsAtRisk,
+            currentIsAtRisk: event.currentIsAtRisk,
+            blendedScore: event.blendedScore,
+            thresholdApplied: event.thresholdApplied,
+          },
+        });
+      }
       return;
     }
 
-    await this.db
-      .update(interventionCases)
-      .set({
-        status: 'completed',
-        closedAt: new Date(),
-        updatedAt: new Date(),
-        note: 'Auto-resolved because student is no longer at-risk.',
-      })
-      .where(
-        and(
-          eq(interventionCases.studentId, event.studentId),
-          eq(interventionCases.classId, event.classId),
-          eq(interventionCases.status, 'active'),
-        ),
+    const activeCases = await this.db.query.interventionCases.findMany({
+      where: and(
+        eq(interventionCases.studentId, event.studentId),
+        eq(interventionCases.classId, event.classId),
+        eq(interventionCases.status, 'active'),
+      ),
+      columns: { id: true, note: true },
+    });
+
+    if (activeCases.length === 0) {
+      return;
+    }
+
+    const autoResolveNote = 'Auto-resolved because student is no longer at-risk.';
+
+    for (const activeCase of activeCases) {
+      const resolvedNote = this.appendInterventionNote(
+        activeCase.note,
+        autoResolveNote,
       );
+      await this.db
+        .update(interventionCases)
+        .set({
+          status: 'completed',
+          closedAt: new Date(),
+          updatedAt: new Date(),
+          note: resolvedNote,
+        })
+        .where(eq(interventionCases.id, activeCase.id));
+
+      if (auditActorId) {
+        await this.auditService.log({
+          actorId: auditActorId,
+          action: 'lxp.intervention.auto_resolved',
+          targetType: 'intervention_case',
+          targetId: activeCase.id,
+          metadata: {
+            classId: event.classId,
+            studentId: event.studentId,
+            previousIsAtRisk: event.previousIsAtRisk,
+            currentIsAtRisk: event.currentIsAtRisk,
+            blendedScore: event.blendedScore,
+            thresholdApplied: event.thresholdApplied,
+            note: resolvedNote,
+          },
+        });
+      }
+    }
   }
 
   async getStudentEligibility(userId: string) {
@@ -395,6 +473,8 @@ export class LxpService {
   async getStudentPlaylist(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 
+    let openedOnStudentAccess = false;
+
     let interventionCase = await this.db.query.interventionCases.findFirst({
       where: and(
         eq(interventionCases.studentId, studentId),
@@ -423,10 +503,26 @@ export class LxpService {
         classId,
         'student_lxp_open',
       );
+      openedOnStudentAccess = true;
     }
 
     await this.ensureDefaultAssignments(interventionCase.id, classId);
     const progress = await this.getOrCreateProgress(studentId, classId);
+
+    if (openedOnStudentAccess) {
+      await this.notifyInterventionOpened(studentId, classId);
+      await this.auditService.log({
+        actorId: studentId,
+        action: 'lxp.intervention.opened_on_student_access',
+        targetType: 'intervention_case',
+        targetId: interventionCase.id,
+        metadata: {
+          classId,
+          studentId,
+          triggerSource: 'student_lxp_open',
+        },
+      });
+    }
 
     const assignments = await this.db.query.interventionAssignments.findMany({
       where: eq(interventionAssignments.caseId, interventionCase.id),
@@ -486,6 +582,8 @@ export class LxpService {
   async getStudentOverview(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 
+    let openedOnStudentAccess = false;
+
     let interventionCase = await this.db.query.interventionCases.findFirst({
       where: and(
         eq(interventionCases.studentId, studentId),
@@ -522,10 +620,26 @@ export class LxpService {
         classId,
         'student_lxp_open',
       );
+      openedOnStudentAccess = true;
     }
 
     await this.ensureDefaultAssignments(interventionCase.id, classId);
     const progress = await this.getOrCreateProgress(studentId, classId);
+
+    if (openedOnStudentAccess) {
+      await this.notifyInterventionOpened(studentId, classId);
+      await this.auditService.log({
+        actorId: studentId,
+        action: 'lxp.intervention.opened_on_student_access',
+        targetType: 'intervention_case',
+        targetId: interventionCase.id,
+        metadata: {
+          classId,
+          studentId,
+          triggerSource: 'student_lxp_open',
+        },
+      });
+    }
 
     const [studentEnrollments, assignments] = await Promise.all([
       this.db.query.enrollments.findMany({
@@ -773,21 +887,40 @@ export class LxpService {
       ...assignments
         .filter((item) => !item.isCompleted)
         .slice(0, 3)
-        .map((item) => ({
-          id: `checkpoint-${item.id}`,
-          source: 'checkpoint',
-          title: item.checkpointLabel,
-          subtitle:
-            item.assignmentType === 'lesson_review'
-              ? 'Lesson review placeholder for topic-level mastery.'
-              : 'Assessment retry placeholder for weak-topic recovery.',
-          masteryPercent: null,
-          href: item.lesson?.id
-            ? `/dashboard/student/lessons/${item.lesson.id}`
-            : item.assessment?.id
-              ? `/dashboard/student/assessments/${item.assessment.id}`
-              : '/dashboard/student/ja',
-        })),
+        .map((item) => {
+          const lessonSummary =
+            item.lesson?.description?.trim() ||
+            `Review ${item.lesson?.title ?? item.checkpointLabel} to strengthen this weak area.`;
+          const dueDate = item.assessment?.dueDate
+            ? new Date(item.assessment.dueDate).toISOString().slice(0, 10)
+            : null;
+          const assessmentSummary = item.assessment?.description?.trim()
+            ? item.assessment.description.trim()
+            : `Retry this checkpoint${
+                item.assessment?.passingScore
+                  ? ` and target ${item.assessment.passingScore}%.`
+                  : '.'
+              }`;
+          const assessmentSubtitle = dueDate
+            ? `${assessmentSummary} Due ${dueDate}.`
+            : assessmentSummary;
+
+          return {
+            id: `checkpoint-${item.id}`,
+            source: 'checkpoint',
+            title: item.checkpointLabel,
+            subtitle:
+              item.assignmentType === 'lesson_review'
+                ? lessonSummary
+                : assessmentSubtitle,
+            masteryPercent: null,
+            href: item.lesson?.id
+              ? `/dashboard/student/lessons/${item.lesson.id}`
+              : item.assessment?.id
+                ? `/dashboard/student/assessments/${item.assessment.id}`
+                : '/dashboard/student/ja',
+          };
+        }),
     ].slice(0, 4);
 
     const selectedMastery =
@@ -852,7 +985,13 @@ export class LxpService {
       where: eq(interventionAssignments.id, assignmentId),
       with: {
         interventionCase: {
-          columns: { id: true, studentId: true, classId: true, status: true },
+          columns: {
+            id: true,
+            studentId: true,
+            classId: true,
+            status: true,
+            note: true,
+          },
         },
       },
     });
@@ -870,6 +1009,12 @@ export class LxpService {
     if (assignment.interventionCase.status !== 'active') {
       throw new BadRequestException('Intervention case is no longer active');
     }
+
+    const autoCompletedNote = this.appendInterventionNote(
+      assignment.interventionCase.note,
+      'Auto-completed after finishing all LXP checkpoints.',
+    );
+    let interventionCompletedByStudent = false;
 
     await this.db.transaction(async (tx) => {
       if (!assignment.isCompleted) {
@@ -934,9 +1079,10 @@ export class LxpService {
             status: 'completed',
             closedAt: now,
             updatedAt: now,
-            note: 'Auto-completed after finishing all LXP checkpoints.',
+            note: autoCompletedNote,
           })
           .where(eq(interventionCases.id, assignment.interventionCase.id));
+        interventionCompletedByStudent = true;
       }
     });
 
@@ -950,6 +1096,36 @@ export class LxpService {
         classId,
       },
     });
+
+    if (interventionCompletedByStudent) {
+      const cls = await this.db.query.classes.findFirst({
+        where: eq(classes.id, classId),
+        columns: { teacherId: true, subjectCode: true },
+      });
+
+      if (cls?.teacherId) {
+        await this.notificationsService.createBulk([
+          {
+            userId: cls.teacherId,
+            type: 'grade_updated',
+            title: 'Intervention cycle completed',
+            body: `A student has completed all LXP checkpoints in ${cls.subjectCode ?? 'this class'}.`,
+          },
+        ]);
+      }
+
+      await this.auditService.log({
+        actorId: studentId,
+        action: 'lxp.intervention.completed_by_student',
+        targetType: 'intervention_case',
+        targetId: assignment.interventionCase.id,
+        metadata: {
+          classId,
+          studentId,
+          note: autoCompletedNote,
+        },
+      });
+    }
 
     return this.getStudentPlaylist(studentId, classId);
   }
@@ -1069,6 +1245,7 @@ export class LxpService {
         classId: true,
         studentId: true,
         status: true,
+        note: true,
       },
     });
     if (!interventionCase)
@@ -1146,6 +1323,17 @@ export class LxpService {
       }
     }
 
+    const existingAssignments =
+      await this.db.query.interventionAssignments.findMany({
+        where: eq(interventionAssignments.caseId, interventionCase.id),
+        columns: { id: true, isCompleted: true },
+      });
+    if (existingAssignments.some((assignment) => assignment.isCompleted)) {
+      throw new BadRequestException(
+        'Cannot replace intervention assignments after checkpoint progress has started.',
+      );
+    }
+
     await this.db.transaction(async (tx) => {
       await tx
         .delete(interventionAssignments)
@@ -1184,7 +1372,10 @@ export class LxpService {
 
       await tx
         .update(interventionCases)
-        .set({ note: dto.note ?? null, updatedAt: new Date() })
+        .set({
+          note: this.appendInterventionNote(interventionCase.note, dto.note),
+          updatedAt: new Date(),
+        })
         .where(eq(interventionCases.id, interventionCase.id));
     });
 
@@ -1199,12 +1390,27 @@ export class LxpService {
 
     await this.auditService.log({
       actorId: user.userId,
+      action: 'lxp.intervention.approved',
+      targetType: 'intervention_case',
+      targetId: interventionCase.id,
+      metadata: {
+        classId: interventionCase.classId,
+        studentId: interventionCase.studentId,
+        approvalSource: 'teacher_assignment',
+        previousAssignmentsCount: existingAssignments.length,
+        hasTeacherNote: Boolean(dto.note?.trim()),
+      },
+    });
+
+    await this.auditService.log({
+      actorId: user.userId,
       action: 'lxp.intervention.assigned',
       targetType: 'intervention_case',
       targetId: interventionCase.id,
       metadata: {
         classId: interventionCase.classId,
         studentId: interventionCase.studentId,
+        previousAssignmentsCount: existingAssignments.length,
         lessonAssignments,
         assessmentAssignments,
       },
@@ -1220,7 +1426,13 @@ export class LxpService {
   ) {
     const interventionCase = await this.db.query.interventionCases.findFirst({
       where: eq(interventionCases.id, caseId),
-      columns: { id: true, classId: true, studentId: true, status: true },
+      columns: {
+        id: true,
+        classId: true,
+        studentId: true,
+        status: true,
+        note: true,
+      },
     });
     if (!interventionCase)
       throw new NotFoundException('Intervention case not found');
@@ -1229,12 +1441,16 @@ export class LxpService {
       throw new BadRequestException('Intervention case is already closed.');
     }
 
+    const resolvedNote = this.appendInterventionNote(
+      interventionCase.note,
+      dto.note ?? 'Resolved by teacher.',
+    );
     await this.db
       .update(interventionCases)
       .set({
         status: 'completed',
         closedAt: new Date(),
-        note: dto.note ?? 'Resolved by teacher.',
+        note: resolvedNote,
         updatedAt: new Date(),
       })
       .where(eq(interventionCases.id, caseId));
@@ -1256,7 +1472,7 @@ export class LxpService {
       metadata: {
         classId: interventionCase.classId,
         studentId: interventionCase.studentId,
-        note: dto.note ?? 'Resolved by teacher.',
+        note: resolvedNote,
       },
     });
 
@@ -1387,6 +1603,21 @@ export class LxpService {
       })
       .returning();
 
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.system_evaluation.submitted',
+      targetType: 'system_evaluation',
+      targetId: created.id,
+      metadata: {
+        targetModule: dto.targetModule,
+        usabilityScore: dto.usabilityScore,
+        functionalityScore: dto.functionalityScore,
+        performanceScore: dto.performanceScore,
+        satisfactionScore: dto.satisfactionScore,
+        hasFeedback: Boolean(dto.feedback?.trim()),
+      },
+    });
+
     return created;
   }
 
@@ -1397,9 +1628,23 @@ export class LxpService {
       );
     }
 
+    let targetFilter: SystemEvaluationTarget | undefined;
+    if (targetModule !== undefined) {
+      if (
+        !systemEvaluationTargetEnum.enumValues.includes(
+          targetModule as SystemEvaluationTarget,
+        )
+      ) {
+        throw new BadRequestException(
+          `targetModule must be one of: ${systemEvaluationTargetEnum.enumValues.join(', ')}`,
+        );
+      }
+      targetFilter = targetModule as SystemEvaluationTarget;
+    }
+
     const rows = await this.db.query.systemEvaluations.findMany({
-      where: targetModule
-        ? eq(systemEvaluations.targetModule, targetModule as any)
+      where: targetFilter
+        ? eq(systemEvaluations.targetModule, targetFilter)
         : undefined,
       with: {
         submitter: {
@@ -1410,9 +1655,100 @@ export class LxpService {
       limit: 200,
     });
 
+    const roundToHundredths = (value: number) =>
+      Math.round(value * 100) / 100;
+    const averageFrom = (total: number, count: number) =>
+      count > 0 ? roundToHundredths(total / count) : 0;
+
+    const totals = {
+      usabilityScore: 0,
+      functionalityScore: 0,
+      performanceScore: 0,
+      satisfactionScore: 0,
+      feedbackCount: 0,
+    };
+    const moduleBuckets = new Map<
+      SystemEvaluationTarget,
+      {
+        count: number;
+        usabilityScore: number;
+        functionalityScore: number;
+        performanceScore: number;
+        satisfactionScore: number;
+      }
+    >();
+
+    for (const row of rows) {
+      const usabilityScore = this.toNumber(row.usabilityScore) ?? 0;
+      const functionalityScore = this.toNumber(row.functionalityScore) ?? 0;
+      const performanceScore = this.toNumber(row.performanceScore) ?? 0;
+      const satisfactionScore = this.toNumber(row.satisfactionScore) ?? 0;
+
+      totals.usabilityScore += usabilityScore;
+      totals.functionalityScore += functionalityScore;
+      totals.performanceScore += performanceScore;
+      totals.satisfactionScore += satisfactionScore;
+      if (row.feedback?.trim()) {
+        totals.feedbackCount += 1;
+      }
+
+      const bucket = moduleBuckets.get(row.targetModule) ?? {
+        count: 0,
+        usabilityScore: 0,
+        functionalityScore: 0,
+        performanceScore: 0,
+        satisfactionScore: 0,
+      };
+      bucket.count += 1;
+      bucket.usabilityScore += usabilityScore;
+      bucket.functionalityScore += functionalityScore;
+      bucket.performanceScore += performanceScore;
+      bucket.satisfactionScore += satisfactionScore;
+      moduleBuckets.set(row.targetModule, bucket);
+    }
+
     return {
       count: rows.length,
       rows,
+      summary: {
+        averages: {
+          usabilityScore: averageFrom(totals.usabilityScore, rows.length),
+          functionalityScore: averageFrom(
+            totals.functionalityScore,
+            rows.length,
+          ),
+          performanceScore: averageFrom(totals.performanceScore, rows.length),
+          satisfactionScore: averageFrom(
+            totals.satisfactionScore,
+            rows.length,
+          ),
+        },
+        feedbackCount: totals.feedbackCount,
+        moduleBreakdown: Array.from(moduleBuckets.entries()).map(
+          ([moduleName, bucket]) => ({
+            targetModule: moduleName,
+            count: bucket.count,
+            averages: {
+              usabilityScore: averageFrom(
+                bucket.usabilityScore,
+                bucket.count,
+              ),
+              functionalityScore: averageFrom(
+                bucket.functionalityScore,
+                bucket.count,
+              ),
+              performanceScore: averageFrom(
+                bucket.performanceScore,
+                bucket.count,
+              ),
+              satisfactionScore: averageFrom(
+                bucket.satisfactionScore,
+                bucket.count,
+              ),
+            },
+          }),
+        ),
+      },
     };
   }
 }

@@ -539,7 +539,7 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to save score'));
     }
-  }, [editValue, editingCell, reloadSelectedSpreadsheet]);
+  }, [editValue, editingCell, reloadSelectedSpreadsheet, selectedRecordId]);
 
   const handleCellKeyDown = useCallback(
     (e: ReactKeyboardEvent) => {

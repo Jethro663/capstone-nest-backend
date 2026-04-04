@@ -118,6 +118,7 @@ function buildMockDb() {
       classes: { findFirst: jest.fn() },
       uploadedFiles: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
+      enrollments: { findFirst: jest.fn() },
     },
     insert: jest.fn(),
     update: jest.fn(),
@@ -142,6 +143,12 @@ function mockUpdateReturning(db: any, rows: any[]) {
   db.update.mockReturnValueOnce({ set });
 }
 
+function mockUpdate(db: any) {
+  const where = jest.fn().mockResolvedValue(undefined);
+  const set = jest.fn().mockReturnValue({ where });
+  db.update.mockReturnValueOnce({ set });
+}
+
 function mockDelete(db: any) {
   const where = jest.fn().mockResolvedValue([]);
   db.delete.mockReturnValueOnce({ where });
@@ -161,6 +168,10 @@ describe('AssessmentsService', () => {
   let db: any;
   let eventEmitter: EventEmitter2;
   let feedbackService: { applyFeedbackFiltering: jest.Mock };
+  const mockAuditService = {
+    log: jest.fn(),
+    logAction: jest.fn(),
+  };
 
   beforeEach(async () => {
     db = buildMockDb();
@@ -169,6 +180,7 @@ describe('AssessmentsService', () => {
     db.query.classRecords.findFirst.mockResolvedValue(null);
     db.query.classRecordCategories.findFirst.mockResolvedValue(null);
     eventEmitter = { emit: jest.fn() } as any;
+    jest.clearAllMocks();
     feedbackService = {
       applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
     };
@@ -184,10 +196,7 @@ describe('AssessmentsService', () => {
         },
         {
           provide: AuditService,
-          useValue: {
-            log: jest.fn(),
-            logAction: jest.fn(),
-          },
+          useValue: mockAuditService,
         },
         {
           provide: RagIndexingService,
@@ -208,14 +217,20 @@ describe('AssessmentsService', () => {
   describe('createAssessment', () => {
     it('should create an assessment with default totalPoints 0', async () => {
       const created = { ...MOCK_ASSESSMENT, totalPoints: 0 };
-      db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID });
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
       mockInsert(db, [created]);
       db.query.assessments.findFirst.mockResolvedValue(created);
 
-      const result = await service.createAssessment({
-        title: 'Test Quiz',
-        classId: CLASS_ID,
-      } as any);
+      const result = await service.createAssessment(
+        {
+          title: 'Test Quiz',
+          classId: CLASS_ID,
+        } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
 
       expect(result).toEqual({
         ...created,
@@ -234,19 +249,42 @@ describe('AssessmentsService', () => {
         maxAttempts: 3,
         timeLimitMinutes: 30,
       };
-      db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID });
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
       mockInsert(db, [created]);
       db.query.assessments.findFirst.mockResolvedValue(created);
 
-      const result = await service.createAssessment({
-        title: 'Timed Quiz',
-        classId: CLASS_ID,
-        maxAttempts: 3,
-        timeLimitMinutes: 30,
-      } as any);
+      const result = await service.createAssessment(
+        {
+          title: 'Timed Quiz',
+          classId: CLASS_ID,
+          maxAttempts: 3,
+          timeLimitMinutes: 30,
+        } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
 
       expect(result.maxAttempts).toBe(3);
       expect(result.timeLimitMinutes).toBe(30);
+    });
+
+    it('should reject createAssessment for non-owner teacher class', async () => {
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-2',
+      });
+
+      await expect(
+        service.createAssessment(
+          {
+            title: 'Foreign Class Quiz',
+            classId: CLASS_ID,
+          } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -270,6 +308,105 @@ describe('AssessmentsService', () => {
       expect(result.id).toBe(ASSESSMENT_ID);
       expect(result.questions).toHaveLength(1);
     });
+
+    it('should reject getAssessmentById for non-owner teachers', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.getAssessmentById(ASSESSMENT_ID, undefined, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject unpublished assessment reads for students even if enrolled', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_ASSESSMENT,
+        isPublished: false,
+        class: { teacherId: 'teacher-1' },
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+
+      await expect(
+        service.getAssessmentById(ASSESSMENT_ID, 'student', {
+          userId: STUDENT_ID,
+          roles: ['student'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('getAssessmentsByClass access control', () => {
+    it('should reject class assessment listing for non-owner teachers', async () => {
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-2',
+      });
+
+      await expect(
+        service.getAssessmentsByClass(
+          CLASS_ID,
+          { page: 1, limit: 20 },
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should return only published assessments for student class listing', async () => {
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+      db.query.assessments.findMany.mockResolvedValue([
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: ASSESSMENT_ID,
+          isPublished: true,
+        },
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: '00000000-0000-0000-0000-000000000099',
+          isPublished: false,
+        },
+      ]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+
+      const result = await service.getAssessmentsByClass(
+        CLASS_ID,
+        { studentId: STUDENT_ID, status: 'all' },
+        { userId: STUDENT_ID, roles: ['student'] },
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].id).toBe(ASSESSMENT_ID);
+    });
+
+    it('should reject teacher class listing when class ownership metadata is missing', async () => {
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: null,
+      });
+
+      await expect(
+        service.getAssessmentsByClass(
+          CLASS_ID,
+          { page: 1, limit: 20 },
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -284,9 +421,13 @@ describe('AssessmentsService', () => {
         .mockResolvedValueOnce(updated);
       mockUpdateReturning(db, [updated]);
 
-      const result = await service.updateAssessment(ASSESSMENT_ID, {
-        title: 'Updated',
-      } as any);
+      const result = await service.updateAssessment(
+        ASSESSMENT_ID,
+        {
+          title: 'Updated',
+        } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
 
       expect(result.title).toBe('Updated');
     });
@@ -296,7 +437,11 @@ describe('AssessmentsService', () => {
       db.query.assessments.findFirst.mockResolvedValue(noQuestionsAssessment);
 
       await expect(
-        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any),
+        service.updateAssessment(
+          ASSESSMENT_ID,
+          { isPublished: true } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -309,7 +454,11 @@ describe('AssessmentsService', () => {
       db.query.assessments.findFirst.mockResolvedValue(noPassing);
 
       await expect(
-        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any),
+        service.updateAssessment(
+          ASSESSMENT_ID,
+          { isPublished: true } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -319,9 +468,13 @@ describe('AssessmentsService', () => {
       );
       mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT }]);
 
-      const result = await service.updateAssessment(ASSESSMENT_ID, {
-        isPublished: true,
-      } as any);
+      const result = await service.updateAssessment(
+        ASSESSMENT_ID,
+        {
+          isPublished: true,
+        } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
 
       expect(result.isPublished).toBe(true);
     });
@@ -334,8 +487,27 @@ describe('AssessmentsService', () => {
       db.query.assessments.findFirst.mockResolvedValue(invalidFileUpload);
 
       await expect(
-        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any),
+        service.updateAssessment(
+          ASSESSMENT_ID,
+          { isPublished: true } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject updateAssessment for non-owner teacher class', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.updateAssessment(
+          ASSESSMENT_ID,
+          { title: 'Forbidden Update' } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -413,7 +585,7 @@ describe('AssessmentsService', () => {
           quarter: 'Q1',
           classRecordItemId: 'slot-1',
         } as any,
-        'teacher-1',
+        { userId: 'teacher-1', roles: ['teacher'] },
       );
 
       expect(result.classRecordPlacement?.itemId).toBe('slot-1');
@@ -459,7 +631,7 @@ describe('AssessmentsService', () => {
             quarter: 'Q1',
             classRecordItemId: null,
           } as any,
-          'teacher-1',
+          { userId: 'teacher-1', roles: ['teacher'] },
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -610,6 +782,48 @@ describe('AssessmentsService', () => {
       expect(result?.attempt.lastQuestionIndex).toBe(1);
       expect(result?.attempt.currentQuestionDeadlineAt).toBeTruthy();
     });
+
+    it('should auto-submit expired ongoing attempts with audit logging', async () => {
+      const expiredAttempt = {
+        ...MOCK_ATTEMPT,
+        expiresAt: new Date(Date.now() - 1_000),
+      };
+      const submittedAttempt = {
+        ...expiredAttempt,
+        isSubmitted: true,
+        submittedAt: new Date(),
+      };
+      const finalAttempt = {
+        ...submittedAttempt,
+        score: 0,
+        passed: false,
+      };
+
+      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(expiredAttempt);
+      mockUpdateReturning(db, [submittedAttempt]);
+      mockUpdateReturning(db, [finalAttempt]);
+
+      const result = await service.getOngoingAttempt(STUDENT_ID, ASSESSMENT_ID);
+
+      expect(result).toBeNull();
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.auto_submitted',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            isFileUpload: false,
+            score: 0,
+            passed: false,
+          }),
+        }),
+      );
+    });
   });
 
   describe('updateAttemptProgress', () => {
@@ -681,6 +895,22 @@ describe('AssessmentsService', () => {
       ).rejects.toThrow(ForbiddenException);
 
       expect(db.update).toHaveBeenCalledTimes(2);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.auto_submitted',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            isFileUpload: true,
+            score: null,
+            passed: null,
+          }),
+        }),
+      );
     });
   });
 
@@ -744,6 +974,22 @@ describe('AssessmentsService', () => {
       expect(eventEmitter.emit).toHaveBeenCalledWith(
         'assessment.submitted',
         expect.objectContaining({ studentId: STUDENT_ID }),
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.submitted',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            isFileUpload: false,
+            score: 100,
+            passed: true,
+          }),
+        }),
       );
     });
 
@@ -847,6 +1093,22 @@ describe('AssessmentsService', () => {
         'assessment.submitted',
         expect.anything(),
       );
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.submitted',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            isFileUpload: true,
+            score: null,
+            passed: null,
+          }),
+        }),
+      );
     });
   });
 
@@ -882,6 +1144,20 @@ describe('AssessmentsService', () => {
 
       expect(result.isSubmitted).toBe(false);
       expect(result.submittedFileId).toBe(submittedAttempt.submittedFileId);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.unsubmitted',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            submittedFileId: submittedAttempt.submittedFileId,
+          }),
+        }),
+      );
     });
 
     it('should reject unsubmit for returned file upload attempts', async () => {
@@ -900,6 +1176,177 @@ describe('AssessmentsService', () => {
     });
   });
 
+  describe('uploadStudentSubmissionFile', () => {
+    it('should write audit metadata when a student uploads a submission file', async () => {
+      jest.spyOn(service, 'getAssessmentById').mockResolvedValue({
+        ...MOCK_FILE_UPLOAD_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      } as any);
+      jest
+        .spyOn(service as any, 'ensureStudentEnrolled')
+        .mockResolvedValue(undefined);
+      jest.spyOn(service, 'startAttempt').mockResolvedValue({
+        attempt: {
+          ...MOCK_ATTEMPT,
+          id: ATTEMPT_ID,
+        },
+      } as any);
+
+      mockInsert(db, [
+        {
+          id: 'file-3',
+          originalName: 'answer.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          filePath: 'uploads/assessment-files/answer.pdf',
+        },
+      ]);
+      mockUpdate(db);
+
+      const result = await service.uploadStudentSubmissionFile(
+        ASSESSMENT_ID,
+        { userId: STUDENT_ID, roles: ['student'] },
+        {
+          originalname: 'answer.pdf',
+          filename: 'answer-stored.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          path: 'uploads\\assessment-files\\answer-stored.pdf',
+        } as any,
+      );
+
+      expect(result.file.id).toBe('file-3');
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.file_uploaded',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            fileId: 'file-3',
+            mimeType: 'application/pdf',
+            sizeBytes: 1024,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('assessment file download ownership', () => {
+    it('should reject teacher attachment download when class ownership context is missing', async () => {
+      jest.spyOn(service, 'getAssessmentById').mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        teacherAttachmentFileId: 'file-attachment-1',
+        class: { teacherId: null },
+      } as any);
+
+      await expect(
+        service.getTeacherAttachmentDownload(ASSESSMENT_ID, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject attempt submission download when teacher ownership context is missing', async () => {
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        submittedFileId: 'submitted-file-1',
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          class: { teacherId: null },
+        },
+      });
+
+      await expect(
+        service.getAttemptSubmissionDownload(ATTEMPT_ID, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should write audit metadata for teacher attachment downloads', async () => {
+      jest.spyOn(service, 'getAssessmentById').mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        teacherAttachmentFileId: 'file-attachment-1',
+        class: { teacherId: 'teacher-1' },
+      } as any);
+      db.query.uploadedFiles.findFirst.mockResolvedValue({
+        id: 'file-attachment-1',
+        originalName: 'guide.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 2048,
+        filePath: 'uploads/assessment-files/guide.pdf',
+      });
+
+      const result = await service.getTeacherAttachmentDownload(ASSESSMENT_ID, {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
+
+      expect(result.id).toBe('file-attachment-1');
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.attachment.downloaded',
+          targetType: 'assessment',
+          targetId: ASSESSMENT_ID,
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            fileId: 'file-attachment-1',
+            requestedByRole: 'teacher',
+          }),
+        }),
+      );
+    });
+
+    it('should write audit metadata for student submission downloads', async () => {
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        submittedFileId: 'submitted-file-1',
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+        },
+      });
+      db.query.uploadedFiles.findFirst.mockResolvedValue({
+        id: 'submitted-file-1',
+        originalName: 'student-work.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 1024,
+        filePath: 'uploads/assessment-files/student-work.pdf',
+      });
+
+      const result = await service.getAttemptSubmissionDownload(ATTEMPT_ID, {
+        userId: STUDENT_ID,
+        roles: ['student'],
+      });
+
+      expect(result.id).toBe('submitted-file-1');
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_ID,
+          action: 'assessment.submission.file_downloaded',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            fileId: 'submitted-file-1',
+            requestedByRole: 'student',
+          }),
+        }),
+      );
+    });
+  });
+
   describe('getAttemptResults', () => {
     it('should return unfiltered responses for teachers', async () => {
       const attempt = {
@@ -911,6 +1358,7 @@ describe('AssessmentsService', () => {
           ...MOCK_PUBLISHED_ASSESSMENT,
           feedbackLevel: 'standard',
           feedbackDelayHours: 24,
+          class: { teacherId: 'teacher-1' },
         },
         responses: [
           {
@@ -932,7 +1380,10 @@ describe('AssessmentsService', () => {
 
       db.query.assessmentAttempts.findFirst.mockResolvedValue(attempt);
 
-      const result = await service.getAttemptResults(ATTEMPT_ID);
+      const result = await service.getAttemptResults(ATTEMPT_ID, {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
 
       expect(result.responses[0].studentAnswer).toBe('2');
       expect(result.responses[0].selectedOptionId).toBe(OPTION_ID_A);
@@ -986,19 +1437,431 @@ describe('AssessmentsService', () => {
       });
       feedbackService.applyFeedbackFiltering.mockReturnValue(filteredAttempt);
 
-      const result = await service.getAttemptResults(ATTEMPT_ID, 'student');
+      const result = await service.getAttemptResults(
+        ATTEMPT_ID,
+        { userId: STUDENT_ID, roles: ['student'] },
+        'student',
+      );
 
       expect(feedbackService.applyFeedbackFiltering).toHaveBeenCalled();
       expect(result.responses[0].studentAnswer).toBeNull();
+    });
+
+    it('should reject student viewers requesting another student attempt', async () => {
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        studentId: 'another-student',
+        isSubmitted: true,
+        isReturned: true,
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+        },
+        responses: [],
+      });
+
+      await expect(
+        service.getAttemptResults(
+          ATTEMPT_ID,
+          { userId: STUDENT_ID, roles: ['student'] },
+          'student',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('attachment and rubric audit logging', () => {
+    it('should write audit metadata when uploading teacher attachment', async () => {
+      jest.spyOn(service, 'getAssessmentById').mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      } as any);
+
+      mockInsert(db, [
+        {
+          id: 'file-1',
+          mimeType: 'application/pdf',
+          sizeBytes: 2048,
+        },
+      ]);
+      mockUpdate(db);
+
+      const result = await service.uploadTeacherAttachment(
+        ASSESSMENT_ID,
+        { userId: 'teacher-1', roles: ['teacher'] },
+        {
+          originalname: 'guide.pdf',
+          filename: 'guide-stored.pdf',
+          mimetype: 'application/pdf',
+          size: 2048,
+          path: 'uploads\\assessment-files\\guide-stored.pdf',
+        } as any,
+      );
+
+      expect(result.id).toBe('file-1');
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.attachment.uploaded',
+          targetType: 'assessment',
+          targetId: ASSESSMENT_ID,
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            fileId: 'file-1',
+            mimeType: 'application/pdf',
+            sizeBytes: 2048,
+          }),
+        }),
+      );
+    });
+
+    it('should write audit metadata when uploading rubric source', async () => {
+      jest
+        .spyOn(service, 'getAssessmentById')
+        .mockResolvedValueOnce({
+          ...MOCK_FILE_UPLOAD_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+        } as any)
+        .mockResolvedValueOnce({
+          ...MOCK_FILE_UPLOAD_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+          rubricCriteria: [
+            {
+              id: 'criterion-1',
+              title: 'Content',
+              points: 60,
+            },
+          ],
+        } as any);
+      jest
+        .spyOn(service as any, 'extractRubricTextFromFile')
+        .mockResolvedValue('Content - 60 points');
+      jest
+        .spyOn(service as any, 'draftRubricCriteriaFromText')
+        .mockReturnValue([
+          {
+            id: 'criterion-1',
+            title: 'Content',
+            points: 60,
+          },
+        ]);
+
+      mockInsert(db, [
+        {
+          id: 'file-2',
+          originalName: 'rubric.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          filePath: 'uploads/assessment-files/rubric.pdf',
+        },
+      ]);
+      mockUpdate(db);
+
+      const result = await service.uploadRubricSource(
+        ASSESSMENT_ID,
+        { userId: 'teacher-1', roles: ['teacher'] },
+        {
+          originalname: 'rubric.pdf',
+          filename: 'rubric-stored.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          path: 'uploads\\assessment-files\\rubric-stored.pdf',
+        } as any,
+      );
+
+      expect(result.rubricParseStatus).toBe('parsed');
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.rubric.uploaded',
+          targetType: 'assessment',
+          targetId: ASSESSMENT_ID,
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            fileId: 'file-2',
+            rubricParseStatus: 'parsed',
+            criteriaCount: 1,
+          }),
+        }),
+      );
+    });
+
+    it('should write audit metadata when reviewing rubric', async () => {
+      jest
+        .spyOn(service, 'getAssessmentById')
+        .mockResolvedValueOnce({
+          ...MOCK_FILE_UPLOAD_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+        } as any)
+        .mockResolvedValueOnce({
+          ...MOCK_FILE_UPLOAD_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+          totalPoints: 60,
+          rubricCriteria: [
+            {
+              id: 'criterion-1',
+              title: 'Content',
+              points: 60,
+            },
+          ],
+        } as any);
+      mockUpdate(db);
+
+      const result = await service.reviewRubric(
+        ASSESSMENT_ID,
+        { userId: 'teacher-1', roles: ['teacher'] },
+        [
+          {
+            id: 'criterion-1',
+            title: 'Content',
+            points: 60,
+          },
+        ],
+      );
+
+      expect(result.totalPoints).toBe(60);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.rubric.reviewed',
+          targetType: 'assessment',
+          targetId: ASSESSMENT_ID,
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            criteriaCount: 1,
+            totalPoints: 60,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('grade return ownership and audit', () => {
+    it('should reject returnGrade for non-owner teachers', async () => {
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        isReturned: false,
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          class: { teacherId: 'teacher-2' },
+        },
+      });
+
+      await expect(
+        service.returnGrade(
+          ATTEMPT_ID,
+          { teacherFeedback: 'Reviewed' },
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should write audit metadata when returnGrade succeeds for owner teacher', async () => {
+      db.query.assessmentAttempts.findFirst.mockResolvedValue({
+        ...MOCK_ATTEMPT,
+        isSubmitted: true,
+        isReturned: false,
+        score: 80,
+        passed: true,
+        assessment: {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
+        },
+      });
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          id: ATTEMPT_ID,
+          score: 80,
+          passed: true,
+          isReturned: true,
+        },
+      ]);
+
+      const result = await service.returnGrade(
+        ATTEMPT_ID,
+        { teacherFeedback: 'Reviewed' },
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result.isReturned).toBe(true);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.grade.returned',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            studentId: STUDENT_ID,
+            score: 80,
+            passed: true,
+          }),
+        }),
+      );
+    });
+
+    it('should reject returnAllGrades for non-owner teachers', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.returnAllGrades(ASSESSMENT_ID, 'Batch feedback', {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should write audit metadata when returnAllGrades succeeds', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      });
+      mockUpdateReturning(db, [
+        { id: ATTEMPT_ID },
+        { id: '00000000-0000-0000-0000-000000000051' },
+      ]);
+
+      const result = await service.returnAllGrades(
+        ASSESSMENT_ID,
+        'Batch feedback',
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result).toEqual({
+        returned: 2,
+        attemptIds: [ATTEMPT_ID, '00000000-0000-0000-0000-000000000051'],
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.grades.returned_all',
+          targetType: 'assessment',
+          targetId: ASSESSMENT_ID,
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            returned: 2,
+          }),
+        }),
+      );
+    });
+
+    it('should reject bulkReturnGrades for non-owner teachers', async () => {
+      db.query.assessmentAttempts.findMany.mockResolvedValue([
+        {
+          id: ATTEMPT_ID,
+          assessmentId: ASSESSMENT_ID,
+          assessment: {
+            class: { teacherId: 'teacher-2' },
+          },
+        },
+      ]);
+
+      await expect(
+        service.bulkReturnGrades(
+          {
+            attemptIds: [ATTEMPT_ID],
+            teacherFeedback: 'Batch feedback',
+          },
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should write audit metadata when bulkReturnGrades succeeds', async () => {
+      db.query.assessmentAttempts.findMany.mockResolvedValue([
+        {
+          id: ATTEMPT_ID,
+          assessmentId: ASSESSMENT_ID,
+          assessment: {
+            class: { teacherId: 'teacher-1' },
+          },
+        },
+        {
+          id: '00000000-0000-0000-0000-000000000051',
+          assessmentId: ASSESSMENT_ID,
+          assessment: {
+            class: { teacherId: 'teacher-1' },
+          },
+        },
+      ]);
+      mockUpdateReturning(db, [
+        { id: ATTEMPT_ID },
+        { id: '00000000-0000-0000-0000-000000000051' },
+      ]);
+
+      const result = await service.bulkReturnGrades(
+        {
+          attemptIds: [ATTEMPT_ID, '00000000-0000-0000-0000-000000000051'],
+          teacherFeedback: 'Batch feedback',
+        },
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result).toEqual({
+        returned: 2,
+        attemptIds: [ATTEMPT_ID, '00000000-0000-0000-0000-000000000051'],
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.grades.bulk_returned',
+          targetType: 'assessment_attempt',
+          targetId: ATTEMPT_ID,
+          metadata: expect.objectContaining({
+            returned: 2,
+            attemptIds: [ATTEMPT_ID, '00000000-0000-0000-0000-000000000051'],
+            assessmentIds: [ASSESSMENT_ID],
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('assessment read ownership', () => {
+    it('should reject getAssessmentAttempts for non-owner teachers', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.getAssessmentAttempts(ASSESSMENT_ID, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
   describe('deleteAssessment', () => {
     it('should throw NotFoundException if assessment does not exist', async () => {
       db.query.assessments.findFirst.mockResolvedValue(null);
-      await expect(service.deleteAssessment('nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.deleteAssessment('nonexistent', {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should reject deleteAssessment for non-owner teacher class', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.deleteAssessment(ASSESSMENT_ID, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -1009,7 +1872,10 @@ describe('AssessmentsService', () => {
   describe('createQuestion', () => {
     it('should create a question and recalculate total points', async () => {
       // Verify assessment exists
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      });
       // Insert question
       mockInsert(db, [{ ...MOCK_QUESTION }]);
       // Insert options (batch)
@@ -1031,9 +1897,177 @@ describe('AssessmentsService', () => {
           { text: '2', isCorrect: true, order: 1 },
           { text: '3', isCorrect: false, order: 2 },
         ],
-      } as any);
+      } as any, {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
 
       expect(result.id).toBe(QUESTION_ID);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.question.created',
+          targetType: 'assessment_question',
+          targetId: QUESTION_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            type: 'multiple_choice',
+            points: 5,
+          }),
+        }),
+      );
+    });
+
+    it('should reject createQuestion for non-owner teacher', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.createQuestion(
+          {
+            assessmentId: ASSESSMENT_ID,
+            type: 'multiple_choice',
+            content: 'Question',
+            points: 5,
+            order: 1,
+            options: [],
+          } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject createQuestion when class ownership metadata is missing for teacher', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_ASSESSMENT,
+        class: { teacherId: null },
+      });
+
+      await expect(
+        service.createQuestion(
+          {
+            assessmentId: ASSESSMENT_ID,
+            type: 'multiple_choice',
+            content: 'Question',
+            points: 5,
+            order: 1,
+            options: [],
+          } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('question mutation ownership and audit', () => {
+    it('should reject updateQuestion for non-owner teacher', async () => {
+      db.query.assessmentQuestions.findFirst
+        .mockResolvedValueOnce({
+          ...MOCK_QUESTION,
+          options: [],
+        })
+        .mockResolvedValueOnce({
+          assessmentId: ASSESSMENT_ID,
+        });
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-2' },
+      });
+
+      await expect(
+        service.updateQuestion(
+          QUESTION_ID,
+          { content: 'Updated question' } as any,
+          { userId: 'teacher-1', roles: ['teacher'] },
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should write audit metadata when updateQuestion succeeds', async () => {
+      db.query.assessmentQuestions.findFirst
+        .mockResolvedValueOnce({
+          ...MOCK_QUESTION,
+          options: [],
+        })
+        .mockResolvedValueOnce({
+          ...MOCK_QUESTION,
+          points: 6,
+          options: [],
+        })
+        .mockResolvedValueOnce({
+          assessmentId: ASSESSMENT_ID,
+        });
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      });
+      mockUpdate(db);
+      mockSelect(db, [{ total: 6 }]);
+      mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 6 }]);
+
+      const result = await service.updateQuestion(
+        QUESTION_ID,
+        { content: 'Updated', points: 6 } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result.points).toBe(6);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.question.updated',
+          targetType: 'assessment_question',
+          targetId: QUESTION_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            points: 6,
+            optionsReplaced: false,
+          }),
+        }),
+      );
+    });
+
+    it('should write audit metadata when deleteQuestion succeeds', async () => {
+      db.query.assessmentQuestions.findFirst
+        .mockResolvedValueOnce({
+          ...MOCK_QUESTION,
+          options: [],
+        })
+        .mockResolvedValueOnce({
+          assessmentId: ASSESSMENT_ID,
+        });
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      });
+      mockDelete(db);
+      mockSelect(db, [{ total: 0 }]);
+      mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 0 }]);
+
+      const result = await service.deleteQuestion(QUESTION_ID, {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher-1',
+          action: 'assessment.question.deleted',
+          targetType: 'assessment_question',
+          targetId: QUESTION_ID,
+          metadata: expect.objectContaining({
+            assessmentId: ASSESSMENT_ID,
+            classId: CLASS_ID,
+            type: 'multiple_choice',
+            order: 1,
+          }),
+        }),
+      );
     });
   });
 });

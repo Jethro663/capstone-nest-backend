@@ -75,7 +75,7 @@ describe('AdminDashboardPage', () => {
         },
         fetchedAt: '2026-03-27T00:00:00.000Z',
       },
-    } as any);
+    } as Awaited<ReturnType<typeof adminService.getOverview>>);
   });
 
   afterEach(() => {

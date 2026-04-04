@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { SectionsService } from './sections.service';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -122,14 +123,17 @@ describe('SectionsService', () => {
   };
 
   const mockDatabaseService = { db: mockDb };
+  const mockAuditService = { log: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockAuditService.log.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SectionsService,
         { provide: DatabaseService, useValue: mockDatabaseService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -620,10 +624,27 @@ describe('SectionsService', () => {
     it('creates a section and returns the full record', async () => {
       setupHappyPath();
 
-      const result = await service.createSection(dto as any);
+      const result = await service.createSection(
+        dto as any,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
 
       expect(result).toEqual(makeSection());
       expect(mockDb.insert).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADMIN_USER.userId,
+        action: 'section.created',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'admin',
+          gradeLevel: '7',
+          schoolYear: SCHOOL_YEAR,
+          adviserId: ADVISER_ID,
+          capacity: 40,
+        },
+      });
     });
 
     it('throws ConflictException when a section with the same name/grade/year already exists', async () => {
@@ -684,12 +705,28 @@ describe('SectionsService', () => {
         .mockResolvedValueOnce(makeSection({ name: 'Bonifacio' })); // findById after update
       mockDb.update.mockReturnValue(makeUpdateChain());
 
-      const result = await service.updateSection(SECTION_ID, {
-        name: 'Bonifacio',
-      });
+      const result = await service.updateSection(
+        SECTION_ID,
+        { name: 'Bonifacio' },
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
 
       expect(result.name).toBe('Bonifacio');
       expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADMIN_USER.userId,
+        action: 'section.updated',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'admin',
+          changedFields: ['name'],
+          adviserId: ADVISER_ID,
+          gradeLevel: '7',
+          schoolYear: SCHOOL_YEAR,
+        },
+      });
     });
 
     it('throws ConflictException when the updated name+grade+year matches another section', async () => {
@@ -760,6 +797,17 @@ describe('SectionsService', () => {
         id: SECTION_ID,
         cardBannerUrl: '/api/sections/banners/new.png',
       });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADVISER_ID,
+        action: 'section.presentation.updated',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'teacher',
+          changedFields: ['cardBannerUrl'],
+          cardBannerUrl: '/api/sections/banners/new.png',
+        },
+      });
     });
 
     it('throws ForbiddenException when non-adviser teacher updates presentation', async () => {
@@ -795,6 +843,16 @@ describe('SectionsService', () => {
 
       expect(mockDb.insert).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ sectionId: SECTION_ID, isHidden: true });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADVISER_ID,
+        action: 'section.visibility.updated',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'teacher',
+          hidden: true,
+        },
+      });
     });
 
     it('updates existing visibility preference row when present', async () => {
@@ -818,6 +876,16 @@ describe('SectionsService', () => {
 
       expect(mockDb.update).toHaveBeenCalledTimes(1);
       expect(result).toEqual({ sectionId: SECTION_ID, isHidden: false });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADVISER_ID,
+        action: 'section.visibility.updated',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'teacher',
+          hidden: false,
+        },
+      });
     });
 
     it('throws ForbiddenException when non-adviser teacher toggles visibility', async () => {
@@ -847,7 +915,7 @@ describe('SectionsService', () => {
       const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await service.deleteSection(SECTION_ID);
+      await service.deleteSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles);
 
       // archiveSection calls tx.update twice: enrollments drop + section archive
       expect(tx.update).toHaveBeenCalledTimes(2);
@@ -856,6 +924,16 @@ describe('SectionsService', () => {
       const sectionSetArgs = txUpdateChain.set.mock.calls[1][0];
       expect(sectionSetArgs.isActive).toBe(false);
       expect(sectionSetArgs).toHaveProperty('updatedAt');
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADMIN_USER.userId,
+        action: 'section.archived',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: true,
+        },
+      });
     });
 
     it('throws NotFoundException when the section does not exist', async () => {
@@ -876,6 +954,29 @@ describe('SectionsService', () => {
 
       // findFirst is called exactly once (inside findById)
       expect(mockDb.query.sections.findFirst).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('restoreSection', () => {
+    it('restores the section and writes actor-aware audit metadata', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ isActive: false }),
+      );
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      await service.restoreSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles);
+
+      expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADMIN_USER.userId,
+        action: 'section.restored',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: false,
+        },
+      });
     });
   });
 
@@ -904,9 +1005,23 @@ describe('SectionsService', () => {
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await expect(
-        service.permanentlyDeleteSection(SECTION_ID),
+        service.permanentlyDeleteSection(
+          SECTION_ID,
+          ADMIN_USER.userId,
+          ADMIN_USER.roles,
+        ),
       ).resolves.not.toThrow();
       expect(tx.delete).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: ADMIN_USER.userId,
+        action: 'section.purged',
+        targetType: 'section',
+        targetId: SECTION_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: true,
+        },
+      });
     });
 
     it('throws BadRequestException when there are active classes', async () => {

@@ -217,12 +217,23 @@ export class AnnouncementsService {
     const updates: Partial<typeof announcements.$inferInsert> = {
       updatedAt: new Date(),
     };
+    const changedFields: string[] = [];
 
-    if (dto.title !== undefined) updates.title = dto.title.trim();
-    if (dto.content !== undefined) updates.content = this.sanitize(dto.content);
-    if (dto.isPinned !== undefined) updates.isPinned = dto.isPinned;
+    if (dto.title !== undefined) {
+      updates.title = dto.title.trim();
+      changedFields.push('title');
+    }
+    if (dto.content !== undefined) {
+      updates.content = this.sanitize(dto.content);
+      changedFields.push('content');
+    }
+    if (dto.isPinned !== undefined) {
+      updates.isPinned = dto.isPinned;
+      changedFields.push('isPinned');
+    }
     if (dto.scheduledAt !== undefined) {
       updates.scheduledAt = new Date(dto.scheduledAt);
+      changedFields.push('scheduledAt');
     }
 
     const [updated] = await this.db
@@ -230,6 +241,19 @@ export class AnnouncementsService {
       .set(updates)
       .where(eq(announcements.id, announcementId))
       .returning();
+
+    await this.auditService.log({
+      actorId,
+      action: 'announcement.updated',
+      targetType: 'announcement',
+      targetId: announcementId,
+      metadata: {
+        classId,
+        changedFields,
+        isPinned: updated.isPinned,
+        scheduledAt: updated.scheduledAt,
+      },
+    });
 
     return updated;
   }
@@ -318,6 +342,18 @@ export class AnnouncementsService {
           removeOnFail: false,
         },
       );
+
+      await this.auditService.log({
+        actorId: ann.authorId,
+        action: 'announcement.published_scheduled',
+        targetType: 'announcement',
+        targetId: ann.id,
+        metadata: {
+          classId: ann.classId,
+          trigger: 'scheduler',
+          publishedAt: now,
+        },
+      });
     }
   }
 }

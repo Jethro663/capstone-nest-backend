@@ -18,6 +18,7 @@ import { useLxpCheckpointMutation, useLxpEligibility, useLxpPlaylist, useStudent
 import { toTutorRecommendationCards, toSubjectCard } from "../data/mappers";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { resolveInitialLxpClassId } from "./screen-flow";
 import { colors, gradients, shadow } from "../theme/tokens";
 
 type Props = BottomTabScreenProps<MainTabParamList, "LXP">;
@@ -28,6 +29,8 @@ export function LxpScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [selectedClassId, setSelectedClassId] = useState<string | undefined>();
   const [showConfetti, setShowConfetti] = useState(false);
+  const [checkpointActionError, setCheckpointActionError] = useState<string | null>(null);
+  const [tutorLaunchError, setTutorLaunchError] = useState<string | null>(null);
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const eligibilityQuery = useLxpEligibility();
   const tutorBootstrapQuery = useTutorBootstrap(selectedClassId);
@@ -37,10 +40,21 @@ export function LxpScreen({ navigation }: Props) {
   useEffect(() => {
     if (!selectedClassId) {
       setSelectedClassId(
-        eligibilityQuery.data?.eligibleClasses[0]?.classId || tutorBootstrapQuery.data?.selectedClassId || classesQuery.data?.[0]?.id,
+        resolveInitialLxpClassId({
+          selectedClassId,
+          eligibleClassId: eligibilityQuery.data?.eligibleClasses[0]?.classId,
+          tutorSelectedClassId: tutorBootstrapQuery.data?.selectedClassId,
+          fallbackClassId: classesQuery.data?.[0]?.id,
+        }),
       );
     }
   }, [classesQuery.data, eligibilityQuery.data, selectedClassId, tutorBootstrapQuery.data?.selectedClassId]);
+
+  useEffect(() => {
+    if (selectedClassId) {
+      setTutorLaunchError(null);
+    }
+  }, [selectedClassId]);
 
   const selectedClass = classesQuery.data?.find((classItem) => classItem.id === selectedClassId);
   const selectedEligibility = eligibilityQuery.data?.eligibleClasses.find((entry) => entry.classId === selectedClass?.id);
@@ -74,9 +88,23 @@ export function LxpScreen({ navigation }: Props) {
         }));
 
   const handleCompleteCheckpoint = async (assignmentId: string) => {
-    await checkpointMutation.mutateAsync({ assignmentId });
-    setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 1800);
+    try {
+      await checkpointMutation.mutateAsync({ assignmentId });
+      setCheckpointActionError(null);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 1800);
+    } catch (error) {
+      setCheckpointActionError(toAppError(error).message);
+    }
+  };
+
+  const handleOpenTutor = () => {
+    if (!selectedClassId) {
+      setTutorLaunchError("Select a class before opening the tutor");
+      return;
+    }
+    setTutorLaunchError(null);
+    (navigation as any).navigate("AiTutor", { classId: selectedClassId });
   };
 
   return (
@@ -117,7 +145,7 @@ export function LxpScreen({ navigation }: Props) {
 
       <GradientHeader
         colors={gradients.lxp}
-        eyebrow="Learning Experience âœ¨"
+        eyebrow="Learning Experience ✨"
         title="LXP Dashboard"
         rightContent={
           <View
@@ -169,6 +197,28 @@ export function LxpScreen({ navigation }: Props) {
             </Text>
           </Card>
         ) : null}
+
+        {checkpointActionError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+              Checkpoint update failed
+            </Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {checkpointActionError}
+            </Text>
+          </Card>
+        ) : null}
+
+        {tutorLaunchError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+              Tutor unavailable
+            </Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {tutorLaunchError}
+            </Text>
+          </Card>
+        ) : null}
         <Card style={{ backgroundColor: "#FFF8E7" }}>
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View
@@ -181,7 +231,7 @@ export function LxpScreen({ navigation }: Props) {
                 backgroundColor: "#FDE68A",
               }}
             >
-              <Text style={{ fontSize: 28 }}>ðŸ¤–</Text>
+              <Text style={{ fontSize: 28 }}>🤖</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -195,7 +245,7 @@ export function LxpScreen({ navigation }: Props) {
             </View>
           </View>
           <Pressable
-            onPress={() => (navigation as any).navigate("AiTutor", { classId: selectedClassId })}
+            onPress={handleOpenTutor}
             style={{
               marginTop: 14,
               alignSelf: "flex-start",
@@ -216,7 +266,7 @@ export function LxpScreen({ navigation }: Props) {
         <View>
           <SectionTitle title="Eligible Classes" />
           {eligibleClassCards.length === 0 ? (
-            <EmptyState emoji="ðŸ“˜" title="No classes ready" subtitle="Your account has no classes available for LXP yet." />
+            <EmptyState emoji="📘" title="No classes ready" subtitle="Your account has no classes available for LXP yet." />
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
               {eligibleClassCards.map((entry) => (
@@ -228,7 +278,7 @@ export function LxpScreen({ navigation }: Props) {
                       borderColor: entry.classId === selectedClassId ? colors.indigo : `${colors.indigo}22`,
                     }}
                   >
-                    <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "ðŸ“˜"}</Text>
+                    <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "📘"}</Text>
                     <Text style={{ marginTop: 10, fontSize: 13, fontWeight: "800", color: colors.text }}>
                       {entry.class.subjectName}
                     </Text>
@@ -243,7 +293,7 @@ export function LxpScreen({ navigation }: Props) {
         </View>
 
         <View>
-          <SectionTitle title="Recommended for You ðŸŽ¯" />
+          <SectionTitle title="Recommended for You 🎯" />
           <View style={{ gap: 12 }}>
             {recommendations.length === 0 ? (
               <Card>
@@ -286,7 +336,7 @@ export function LxpScreen({ navigation }: Props) {
                           <Text style={{ fontSize: 12, fontWeight: "900", color: colors.amber }}>+{recommendation.xp}</Text>
                         </View>
                         {recommendation.completed ? (
-                          <Text style={{ fontSize: 18 }}>âœ…</Text>
+                          <Text style={{ fontSize: 18 }}>✅</Text>
                         ) : (
                           <Pressable
                             onPress={() => void handleCompleteCheckpoint(recommendation.id)}
@@ -322,13 +372,13 @@ export function LxpScreen({ navigation }: Props) {
           <SectionTitle title="Checkpoint Progress" />
           <View style={{ gap: 14 }}>
             {(playlistQuery.data?.checkpoints ?? []).length === 0 ? (
-              <EmptyState emoji="ðŸš€" title="No checkpoints yet" subtitle="This class has not opened any LXP checkpoint progress." />
+              <EmptyState emoji="🚀" title="No checkpoints yet" subtitle="This class has not opened any LXP checkpoint progress." />
             ) : (
               (playlistQuery.data?.checkpoints ?? []).map((checkpoint) => (
                 <View key={checkpoint.id}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "ðŸ“˜"}</Text>
+                      <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "📘"}</Text>
                       <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
                     </View>
                     <Text style={{ fontSize: 12, fontWeight: "900", color: checkpoint.isCompleted ? colors.green : colors.indigo }}>

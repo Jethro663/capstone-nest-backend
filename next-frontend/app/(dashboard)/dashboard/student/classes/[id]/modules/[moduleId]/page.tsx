@@ -5,6 +5,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -99,7 +100,16 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       const caption = (block.metadata as Record<string, string>)?.caption;
       return (
         <figure>
-          {src ? <img src={src} alt={caption || 'Lesson image'} className="w-full rounded-lg" /> : null}
+          {src ? (
+            <Image
+              src={src}
+              alt={caption || 'Lesson image'}
+              width={1200}
+              height={675}
+              unoptimized
+              className="h-auto w-full rounded-lg"
+            />
+          ) : null}
           {caption ? (
             <figcaption className="mt-2 text-center text-sm text-[var(--student-text-muted)]">
               {caption}

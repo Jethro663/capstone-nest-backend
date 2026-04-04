@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type {
@@ -39,6 +39,26 @@ const blockTypeLabel: Record<string, string> = {
   file: 'File',
   divider: 'Divider',
 };
+
+const POLLING_FAILURE_THRESHOLD = 3;
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error !== null) {
+    const responseMessage = (
+      error as { response?: { data?: { message?: unknown } } }
+    ).response?.data?.message;
+    if (typeof responseMessage === 'string' && responseMessage.trim().length > 0) {
+      return responseMessage;
+    }
+
+    const directMessage = (error as { message?: unknown }).message;
+    if (typeof directMessage === 'string' && directMessage.trim().length > 0) {
+      return directMessage;
+    }
+  }
+
+  return fallback;
+}
 
 function getBlockTextContent(block: ExtractionBlock): string {
   if (typeof block.content === 'string') return block.content;
@@ -79,7 +99,9 @@ export default function ExtractionReviewPage() {
 
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const [pollingWarning, setPollingWarning] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -95,26 +117,38 @@ export default function ExtractionReviewPage() {
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingFailuresRef = useRef(0);
 
   /* ── Load extraction ──────────────────────────────────────────────── */
   const fetchExtraction = useCallback(async () => {
     try {
+      setLoadError(null);
       const res = await extractionService.getById(extractionId);
       setExtraction(res.data);
+      setPollingWarning(null);
+      pollingFailuresRef.current = 0;
 
       if (res.data.structuredContent) {
         setEditTitle(res.data.structuredContent.title || '');
         setEditDescription(res.data.structuredContent.description || '');
         setEditLessons(JSON.parse(JSON.stringify(res.data.structuredContent.lessons || [])));
         setSelectedLessons(new Set((res.data.structuredContent.lessons || []).map((_: ExtractionLesson, i: number) => i)));
+      } else {
+        setEditTitle('');
+        setEditDescription('');
+        setEditLessons([]);
+        setSelectedLessons(new Set());
       }
 
       /* start polling if still processing */
       if (['pending', 'processing'].includes(res.data.extractionStatus)) {
         startPolling();
       }
-    } catch {
-      toast.error('Failed to load extraction');
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'Failed to load extraction');
+      setLoadError(message);
+      stopPolling();
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -123,9 +157,15 @@ export default function ExtractionReviewPage() {
   const startPolling = useCallback(() => {
     if (pollRef.current) return;
     setPolling(true);
+    setPollingWarning(null);
+    pollingFailuresRef.current = 0;
+
     pollRef.current = setInterval(async () => {
       try {
         const res = await extractionService.getStatus(extractionId);
+        pollingFailuresRef.current = 0;
+        setPollingWarning(null);
+
         setExtraction((prev) =>
           prev
             ? {
@@ -141,23 +181,46 @@ export default function ExtractionReviewPage() {
 
         if (!['pending', 'processing'].includes(res.data.status)) {
           stopPolling();
-          /* reload full extraction to get structured content */
-          const full = await extractionService.getById(extractionId);
-          setExtraction(full.data);
-          if (full.data.structuredContent) {
-            setEditTitle(full.data.structuredContent.title || '');
-            setEditDescription(full.data.structuredContent.description || '');
-            setEditLessons(JSON.parse(JSON.stringify(full.data.structuredContent.lessons || [])));
-            setSelectedLessons(new Set((full.data.structuredContent.lessons || []).map((_: ExtractionLesson, i: number) => i)));
+          try {
+            const full = await extractionService.getById(extractionId);
+            setExtraction(full.data);
+            if (full.data.structuredContent) {
+              setEditTitle(full.data.structuredContent.title || '');
+              setEditDescription(full.data.structuredContent.description || '');
+              setEditLessons(JSON.parse(JSON.stringify(full.data.structuredContent.lessons || [])));
+              setSelectedLessons(new Set((full.data.structuredContent.lessons || []).map((_: ExtractionLesson, i: number) => i)));
+            } else {
+              setEditTitle('');
+              setEditDescription('');
+              setEditLessons([]);
+              setSelectedLessons(new Set());
+            }
+          } catch (error: unknown) {
+            const warning = getErrorMessage(
+              error,
+              'Extraction finished but details could not be refreshed. Reload this page.',
+            );
+            setPollingWarning(warning);
+            toast.error(warning);
           }
-          if (full.data.extractionStatus === 'completed') {
+
+          if (res.data.status === 'completed') {
             toast.success('Extraction completed!');
-          } else if (full.data.extractionStatus === 'failed') {
+          } else if (res.data.status === 'failed') {
             toast.error('Extraction failed');
           }
         }
-      } catch {
-        /* silently retry */
+      } catch (error: unknown) {
+        pollingFailuresRef.current += 1;
+        if (pollingFailuresRef.current >= POLLING_FAILURE_THRESHOLD) {
+          stopPolling();
+          const warning = getErrorMessage(
+            error,
+            'Live extraction updates are temporarily unavailable. Refresh to retry.',
+          );
+          setPollingWarning(warning);
+          toast.error(warning);
+        }
       }
     }, 3000);
   }, [extractionId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -167,6 +230,7 @@ export default function ExtractionReviewPage() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    pollingFailuresRef.current = 0;
     setPolling(false);
   }, []);
 
@@ -174,6 +238,12 @@ export default function ExtractionReviewPage() {
     fetchExtraction();
     return () => stopPolling();
   }, [fetchExtraction, stopPolling]);
+
+  const handleRetryLoad = () => {
+    setLoading(true);
+    setLoadError(null);
+    fetchExtraction();
+  };
 
   /* ── Save edits ───────────────────────────────────────────────────── */
   const handleSave = async () => {
@@ -200,13 +270,21 @@ export default function ExtractionReviewPage() {
     try {
       const indices = selectedLessons.size === editLessons.length ? undefined : Array.from(selectedLessons);
       const res = await extractionService.apply(extractionId, { lessonIndices: indices });
-      toast.success(res.message);
+      toast.success(res.message || 'Extraction applied');
       setShowApplyDialog(false);
       /* refresh to show applied status */
-      const full = await extractionService.getById(extractionId);
-      setExtraction(full.data);
-    } catch {
-      toast.error('Failed to apply extraction');
+      try {
+        const full = await extractionService.getById(extractionId);
+        setExtraction(full.data);
+      } catch (refreshError: unknown) {
+        const warning = getErrorMessage(
+          refreshError,
+          'Extraction applied, but latest details could not be refreshed.',
+        );
+        toast.error(warning);
+      }
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, 'Failed to apply extraction'));
     } finally {
       setApplying(false);
     }
@@ -306,6 +384,25 @@ export default function ExtractionReviewPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <Card className="max-w-3xl mx-auto border-destructive">
+        <CardHeader>
+          <CardTitle>Extraction unavailable</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">{loadError}</p>
+          <div className="flex items-center gap-2">
+            <Button onClick={handleRetryLoad}>Retry</Button>
+            <Button variant="outline" onClick={() => router.back()}>
+              Back
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!extraction) {
     return <p className="text-muted-foreground text-center mt-10">Extraction not found.</p>;
   }
@@ -373,6 +470,14 @@ export default function ExtractionReviewPage() {
             {polling && (
               <p className="text-xs text-muted-foreground animate-pulse">Polling for updates...</p>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {pollingWarning && (
+        <Card className="border-yellow-500/60">
+          <CardContent className="p-4 text-sm text-yellow-800">
+            {pollingWarning}
           </CardContent>
         </Card>
       )}
@@ -559,11 +664,11 @@ export default function ExtractionReviewPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Apply Extraction</DialogTitle>
+            <DialogDescription>
+              This will create <strong>{selectedLessons.size} lesson(s)</strong> as drafts in the class.
+              You can publish them individually afterwards.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will create <strong>{selectedLessons.size} lesson(s)</strong> as drafts in the class.
-            You can publish them individually afterwards.
-          </p>
           {dirty && (
             <p className="text-sm text-yellow-600">
               You have unsaved edits. They will NOT be included unless you save first.

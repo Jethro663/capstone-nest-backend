@@ -152,8 +152,15 @@ export class SectionsController {
    */
   @Post('create')
   @Roles(RoleName.Admin)
-  async createSection(@Body() createSectionDto: CreateSectionDto) {
-    const section = await this.sectionsService.createSection(createSectionDto);
+  async createSection(
+    @Body() createSectionDto: CreateSectionDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const section = await this.sectionsService.createSection(
+      createSectionDto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -171,10 +178,13 @@ export class SectionsController {
   async updateSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSectionDto: UpdateSectionDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const updatedSection = await this.sectionsService.updateSection(
       id,
       updateSectionDto,
+      user?.userId,
+      user?.roles ?? [],
     );
 
     return {
@@ -245,8 +255,11 @@ export class SectionsController {
    */
   @Delete('delete/:id')
   @Roles(RoleName.Admin)
-  async deleteSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.archiveSection(id);
+  async deleteSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    await this.sectionsService.archiveSection(id, user?.userId, user?.roles ?? []);
 
     return {
       success: true,
@@ -258,8 +271,13 @@ export class SectionsController {
   @Roles(RoleName.Admin)
   async bulkLifecycle(
     @Body() dto: BulkSectionLifecycleDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const result = await this.sectionsService.bulkLifecycleAction(dto);
+    const result = await this.sectionsService.bulkLifecycleAction(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -314,8 +332,11 @@ export class SectionsController {
    */
   @Put(':id/restore')
   @Roles(RoleName.Admin)
-  async restoreSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.restoreSection(id);
+  async restoreSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    await this.sectionsService.restoreSection(id, user?.userId, user?.roles ?? []);
 
     return {
       success: true,
@@ -415,8 +436,15 @@ export class SectionsController {
    */
   @Delete('permanent/:id')
   @Roles(RoleName.Admin)
-  async permanentlyDeleteSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.permanentlyDeleteSection(id);
+  async permanentlyDeleteSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    await this.sectionsService.permanentlyDeleteSection(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return { success: true, message: 'Section permanently deleted' };
   }

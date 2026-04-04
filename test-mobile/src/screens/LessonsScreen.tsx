@@ -138,7 +138,7 @@ export function LessonsScreen({ navigation }: Props) {
     <ScreenScroll refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}>
       <GradientHeader
         colors={gradients.lessons}
-        eyebrow={`Welcome back, ${user?.firstName || "Student"} ðŸ‘‹`}
+        eyebrow={`Welcome back, ${user?.firstName || "Student"} 👋`}
         title="Student Home"
         rightContent={<FloatingIconButton icon="refresh" onPress={handleRefresh} />}
       >
@@ -176,7 +176,7 @@ export function LessonsScreen({ navigation }: Props) {
 
       <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 22 }}>
         {classesQuery.isLoading ? (
-          <EmptyState emoji="â³" title="Loading workspace" subtitle="Pulling your classes and student data now." />
+          <EmptyState emoji="⏳" title="Loading workspace" subtitle="Pulling your classes and student data now." />
         ) : (
           <>
             {primaryError ? (
@@ -189,7 +189,7 @@ export function LessonsScreen({ navigation }: Props) {
             ) : null}
             <View>
               <SectionTitle
-                title="Continue Learning ðŸŽ¯"
+                title="Continue Learning 🎯"
                 right={<Pill label={`${continueLearning.length} live`} backgroundColor={colors.paleAmber} color={colors.amber} />}
               />
               {continueLearning.length === 0 ? (
@@ -255,7 +255,7 @@ export function LessonsScreen({ navigation }: Props) {
 
             <View>
               <SectionTitle
-                title="Announcements ðŸ“¢"
+                title="Announcements 📢"
                 right={<Pill label={`${announcements.length} updates`} backgroundColor={colors.paleBlue} color={colors.blueDeep} />}
               />
               {announcements.length === 0 ? (
@@ -274,7 +274,7 @@ export function LessonsScreen({ navigation }: Props) {
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>{announcement.title}</Text>
                             <Text style={{ marginTop: 2, fontSize: 11, color: colors.textSecondary }}>
-                              {announcement.subject} â€¢ {announcement.createdAt}
+                              {announcement.subject} • {announcement.createdAt}
                             </Text>
                           </View>
                           {announcement.isPinned ? (
@@ -293,11 +293,11 @@ export function LessonsScreen({ navigation }: Props) {
 
             <View>
               <SectionTitle
-                title="My Classes ðŸ“š"
+                title="My Classes 📚"
                 right={<Pill label={`${subjectCards.length} classes`} backgroundColor={colors.paleIndigo} color={colors.indigo} />}
               />
               {filteredSubjects.length === 0 ? (
-                <EmptyState emoji="ðŸ”Ž" title="No matches found" subtitle="Try a different class or subject keyword." />
+                <EmptyState emoji="🔎" title="No matches found" subtitle="Try a different class or subject keyword." />
               ) : (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
                   {filteredSubjects.map((subject, index) => (
@@ -331,7 +331,7 @@ export function LessonsScreen({ navigation }: Props) {
                             {subject.name}
                           </Text>
                           <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-                            {subject.subjectCode} â€¢ {subject.section}
+                            {subject.subjectCode} • {subject.section}
                           </Text>
                           <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>{subject.teacherName}</Text>
                           <View style={{ marginTop: 12 }}>

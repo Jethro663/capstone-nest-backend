@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime, timezone
 import json
 import logging
+import math
 import os
 import uuid
 from typing import Any
@@ -151,8 +152,17 @@ async def _run_with_retries(
 
 
 def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) -> int:
-    if runtime and isinstance(runtime.get("progressPercent"), int):
-        return max(0, min(100, runtime["progressPercent"]))
+    if runtime:
+        raw_percent = runtime.get("progressPercent")
+        if isinstance(raw_percent, (int, float, str)):
+            try:
+                parsed_percent = float(raw_percent)
+                if not math.isfinite(parsed_percent):
+                    raise ValueError("progressPercent must be finite")
+                percent = int(parsed_percent)
+                return max(0, min(100, percent))
+            except (TypeError, ValueError, OverflowError):
+                pass
     return {
         "pending": 5,
         "processing": 60,
