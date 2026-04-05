@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 import {
   assessmentAttempts,
   classRecordFinalGrades,
@@ -14,10 +15,20 @@ import { UpdateProfileDto } from './DTO/update-profile.dto';
 
 @Injectable()
 export class ProfilesService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private resolveActorRole(actorRoles: string[] = []): 'admin' | 'teacher' | 'student' | 'system' {
+    if (actorRoles.includes('admin')) return 'admin';
+    if (actorRoles.includes('teacher')) return 'teacher';
+    if (actorRoles.includes('student')) return 'student';
+    return 'system';
   }
 
   private mapProfileDto(dto: Partial<UpdateProfileDto>) {
@@ -52,22 +63,44 @@ export class ProfilesService {
     return profile;
   }
 
-  async createProfile(userId: string, dto: Partial<UpdateProfileDto>) {
+  async createProfile(
+    userId: string,
+    dto: Partial<UpdateProfileDto>,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     const payload = this.mapProfileDto(dto);
     const [newProfile] = await this.db
       .insert(studentProfiles)
       .values({ userId, ...payload })
       .returning();
 
+    await this.auditService.log({
+      actorId: actorId ?? userId,
+      action: 'student_profile.created',
+      targetType: 'student_profile',
+      targetId: userId,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        userId,
+        changedFields: Object.keys(payload),
+      },
+    });
+
     return newProfile;
   }
 
-  async updateProfile(userId: string, dto: Partial<UpdateProfileDto>) {
+  async updateProfile(
+    userId: string,
+    dto: Partial<UpdateProfileDto>,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     const existing = await this.findByUserId(userId);
     const payload = this.mapProfileDto(dto);
 
     if (!existing) {
-      return this.createProfile(userId, dto);
+      return this.createProfile(userId, dto, actorId, actorRoles);
     }
 
     const [updated] = await this.db
@@ -75,6 +108,18 @@ export class ProfilesService {
       .set({ ...payload, updatedAt: new Date() })
       .where(eq(studentProfiles.userId, userId))
       .returning();
+
+    await this.auditService.log({
+      actorId: actorId ?? userId,
+      action: 'student_profile.updated',
+      targetType: 'student_profile',
+      targetId: userId,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        userId,
+        changedFields: Object.keys(payload),
+      },
+    });
 
     return updated;
   }

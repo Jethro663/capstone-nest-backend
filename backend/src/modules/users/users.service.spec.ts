@@ -10,6 +10,7 @@ import { UsersService } from './users.service';
 import { DatabaseService } from '../../database/database.service';
 import { OtpService } from '../otp/otp.service';
 import { MailService } from '../mail/mail.service';
+import { AuditService } from '../audit/audit.service';
 import {
   archivedUsers,
   roles,
@@ -65,10 +66,15 @@ describe('UsersService', () => {
     emit: jest.fn(),
   };
 
+  const mockAuditService = {
+    log: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     bcrypt.hash.mockResolvedValue('hashed-password');
     mockOtpService.createAndSendOTP.mockResolvedValue(undefined);
+    mockAuditService.log.mockResolvedValue(undefined);
 
     mockDb = {
       query: {
@@ -113,6 +119,7 @@ describe('UsersService', () => {
         { provide: MailService, useValue: mockMailService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -273,6 +280,63 @@ describe('UsersService', () => {
         }),
       ).rejects.toThrow(ConflictException);
     });
+
+    it('writes actor-aware audit metadata when admin context is provided', async () => {
+      mockDb.query.users.findFirst.mockResolvedValue(null);
+      mockDb.query.roles.findFirst.mockResolvedValue({
+        id: 'role-student',
+        name: 'student',
+      });
+
+      const tx = {
+        insert: jest.fn().mockImplementation((table: any) => {
+          if (table === users) {
+            return {
+              values: jest.fn().mockReturnValue({
+                returning: jest.fn().mockResolvedValue([
+                  {
+                    id: 'new-user',
+                    email: 'student@example.com',
+                    password: 'hashed-password',
+                    firstName: 'Stu',
+                    middleName: null,
+                    lastName: 'Dent',
+                    status: 'PENDING',
+                    isEmailVerified: false,
+                  },
+                ]),
+              }),
+            };
+          }
+          return { values: jest.fn().mockResolvedValue(undefined) };
+        }),
+      };
+      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
+
+      await service.createUser(
+        {
+          email: 'student@example.com',
+          password: 'P@ssword1',
+          firstName: 'Stu',
+          middleName: '',
+          lastName: 'Dent',
+          role: 'student',
+          lrn: '123456789012',
+        },
+        'admin-1',
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.created',
+        targetType: 'user',
+        targetId: 'new-user',
+        metadata: {
+          role: 'student',
+          status: 'PENDING',
+        },
+      });
+    });
   });
 
   describe('updateUser', () => {
@@ -399,6 +463,81 @@ describe('UsersService', () => {
       expect(result.profilePicture).toBe('/api/profiles/images/test.png');
       expect(result.dateOfBirth).toBe('2005-08-15T00:00:00.000Z');
     });
+
+    it('writes actor-aware audit metadata when admin context is provided', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValueOnce(makeUser({ email: 'before@example.com' }))
+        .mockResolvedValueOnce(
+          makeUser({
+            email: 'before@example.com',
+            firstName: 'Updated',
+          }),
+        );
+
+      const tx = {
+        query: {
+          studentProfiles: { findFirst: jest.fn() },
+          roles: { findFirst: jest.fn() },
+          teacherProfiles: { findFirst: jest.fn() },
+        },
+        update: jest.fn().mockImplementation(() => ({
+          set: jest.fn().mockReturnValue({
+            where: jest.fn().mockResolvedValue(undefined),
+          }),
+        })),
+        insert: jest.fn(),
+        delete: jest.fn(),
+      };
+      mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
+
+      await service.updateUser(
+        'user-1',
+        {
+          firstName: 'Updated',
+        } as any,
+        'admin-1',
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.updated',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'ACTIVE',
+          changedFields: ['firstName'],
+        },
+      });
+    });
+  });
+
+  describe('deleteUser', () => {
+    it('writes actor-aware audit metadata for legacy status-flip deletion', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'ACTIVE' }));
+
+      const where = jest.fn().mockResolvedValue(undefined);
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      const result = await service.deleteUser('user-1', 'admin-1');
+
+      expect(result).toEqual({
+        message: 'User successfully deleted',
+        userId: 'user-1',
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.deleted_legacy',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'ACTIVE',
+        },
+      });
+    });
   });
 
   describe('adminResetPassword', () => {
@@ -435,6 +574,15 @@ describe('UsersService', () => {
           generatedPassword: expect.any(String),
         }),
       );
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.password.reset_admin',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'ACTIVE',
+        },
+      });
     });
 
     it('throws NotFoundException if user does not exist', async () => {
@@ -486,6 +634,42 @@ describe('UsersService', () => {
       expect(result.userId).toBe('user-1');
       expect(tx.insert).toHaveBeenCalledWith(archivedUsers);
       expect(tx.update).toHaveBeenCalledWith(users);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.archived',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'SUSPENDED',
+          roles: ['teacher'],
+        },
+      });
+    });
+  });
+
+  describe('exportUserData', () => {
+    it('writes actor-aware audit metadata for sensitive data exports', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(makeUser());
+      (service as any).collectUserData = jest.fn().mockResolvedValue({
+        exportedAt: '2026-04-05T00:00:00.000Z',
+        user: { id: 'user-1' },
+      });
+
+      const result = await service.exportUserData('user-1', 'admin-1');
+
+      expect(result).toEqual({
+        exportedAt: '2026-04-05T00:00:00.000Z',
+        user: { id: 'user-1' },
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.exported',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'ACTIVE',
+        },
+      });
     });
   });
 
@@ -515,6 +699,73 @@ describe('UsersService', () => {
       const result = await service.purgeUser('user-1', 'admin-1');
       expect(result.userId).toBe('user-1');
       expect(tx.delete).toHaveBeenCalledWith(users);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.purged',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'DELETED',
+        },
+      });
+    });
+  });
+
+  describe('reactivateUser', () => {
+    it('reactivates suspended user and writes audit metadata', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'SUSPENDED' }));
+
+      const where = jest.fn().mockResolvedValue(undefined);
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      const result = await service.reactivateUser('user-1', 'admin-1');
+
+      expect(result).toEqual({
+        message: 'User reactivated successfully',
+        userId: 'user-1',
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.reactivated',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'SUSPENDED',
+        },
+      });
+    });
+  });
+
+  describe('suspendUser', () => {
+    it('suspends active user and writes audit metadata', async () => {
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeUser({ status: 'ACTIVE', roles: [] }));
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+
+      const where = jest.fn().mockResolvedValue(undefined);
+      const set = jest.fn().mockReturnValue({ where });
+      mockDb.update.mockReturnValue({ set });
+
+      const result = await service.suspendUser('user-1', 'admin-1');
+
+      expect(result).toEqual({
+        message: 'User suspended successfully',
+        userId: 'user-1',
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.suspended',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'ACTIVE',
+          hasWarnings: false,
+        },
+      });
     });
   });
 

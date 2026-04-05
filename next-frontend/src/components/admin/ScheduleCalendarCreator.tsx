@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -182,14 +182,6 @@ export function ScheduleCalendarCreator({
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
 
-  useEffect(() => {
-    if (disabled) {
-      setActiveCell(null);
-      setCustomStart('');
-      setCustomEnd('');
-    }
-  }, [disabled]);
-
   const existingDayMap = useMemo(() => {
     const map = createDayRecord<{ idx: number; slot: ExistingScheduleSlot }[]>(() => []);
     existingSlots.forEach((slot, idx) => {
@@ -214,7 +206,7 @@ export function ScheduleCalendarCreator({
     const map = createDayRecord<Record<string, 'existing' | 'user' | null>>(() => ({}));
 
     SCHEDULE_DAYS.forEach((day) => {
-      SLOT_MARKS.forEach(({ label, minute }) => {
+      SLOT_MARKS.forEach(({ minute }) => {
         const time = minutesToTime(minute);
         map[day][time] = null;
       });

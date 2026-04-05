@@ -17,6 +17,7 @@ import {
   classes,
   enrollments,
   interventionCases,
+  lessons,
   lessonCompletions,
   lxpProgress,
   performanceSnapshots,
@@ -76,11 +77,56 @@ export class ReportsService {
     ].join('\n');
   }
 
+  private toPublicFilters(query: ReportQuery): ReportQuery {
+    return {
+      classId: query.classId,
+      sectionId: query.sectionId,
+      gradingPeriod: query.gradingPeriod,
+      studentId: query.studentId,
+      dateFrom: query.dateFrom,
+      dateTo: query.dateTo,
+      page: query.page,
+      limit: query.limit,
+      export: query.export,
+    };
+  }
+
+  private async resolveClassScopeIds(query: ReportQuery): Promise<string[] | null> {
+    if (!query.teacherId && !query.classId && !query.sectionId) {
+      return null;
+    }
+
+    const classRows = await this.db.query.classes.findMany({
+      where: and(
+        query.teacherId ? eq(classes.teacherId, query.teacherId) : undefined,
+        query.classId ? eq(classes.id, query.classId) : undefined,
+        query.sectionId ? eq(classes.sectionId, query.sectionId) : undefined,
+      ),
+      columns: { id: true },
+    });
+
+    return classRows.map((row) => row.id);
+  }
+
   async getStudentMasterList(query: ReportQuery) {
+    const classScopeIds = await this.resolveClassScopeIds(query);
+    if (classScopeIds && classScopeIds.length === 0) {
+      const pagination = this.paginate(0, query);
+      return {
+        data: [],
+        filters: this.toPublicFilters(query),
+        generatedAt: new Date().toISOString(),
+        page: pagination.page,
+        limit: pagination.limit,
+        total: 0,
+        totalPages: pagination.totalPages,
+        csv: this.toCsv([]),
+      };
+    }
+
     const whereClause = and(
       eq(enrollments.status, 'enrolled'),
-      query.classId ? eq(enrollments.classId, query.classId) : undefined,
-      query.sectionId ? eq(enrollments.sectionId, query.sectionId) : undefined,
+      classScopeIds ? inArray(enrollments.classId, classScopeIds) : undefined,
       query.studentId ? eq(enrollments.studentId, query.studentId) : undefined,
     );
 
@@ -120,7 +166,7 @@ export class ReportsService {
 
     return {
       data,
-      filters: query,
+      filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       page: pagination.page,
       limit: pagination.limit,
@@ -131,9 +177,23 @@ export class ReportsService {
   }
 
   async getClassEnrollment(query: ReportQuery) {
+    const classScopeIds = await this.resolveClassScopeIds(query);
+    if (classScopeIds && classScopeIds.length === 0) {
+      const pagination = this.paginate(0, query);
+      return {
+        data: [],
+        filters: this.toPublicFilters(query),
+        generatedAt: new Date().toISOString(),
+        page: pagination.page,
+        limit: pagination.limit,
+        total: 0,
+        totalPages: pagination.totalPages,
+        csv: this.toCsv([]),
+      };
+    }
+
     const classFilters = and(
-      query.classId ? eq(classes.id, query.classId) : undefined,
-      query.sectionId ? eq(classes.sectionId, query.sectionId) : undefined,
+      classScopeIds ? inArray(classes.id, classScopeIds) : undefined,
     );
 
     const [totalRow] = await this.db
@@ -198,7 +258,7 @@ export class ReportsService {
 
     return {
       data,
-      filters: query,
+      filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       page: pagination.page,
       limit: pagination.limit,
@@ -223,44 +283,35 @@ export class ReportsService {
   }
 
   async getStudentPerformance(query: ReportQuery) {
-    const classRows = await this.db.query.classes.findMany({
-      where: and(
-        query.classId ? eq(classes.id, query.classId) : undefined,
-        query.sectionId ? eq(classes.sectionId, query.sectionId) : undefined,
-      ),
-      columns: { id: true },
-    });
-
+    const classScopeIds = await this.resolveClassScopeIds(query);
     const rows =
-      (query.classId || query.sectionId) && classRows.length === 0
+      classScopeIds && classScopeIds.length === 0
         ? []
         : await this.db.query.performanceSnapshots.findMany({
-      where: and(
-        query.studentId
-          ? eq(performanceSnapshots.studentId, query.studentId)
-          : undefined,
-        classRows.length
-          ? inArray(
-              performanceSnapshots.classId,
-              classRows.map((row) => row.id),
-            )
-          : undefined,
-      ),
-      with: {
-        student: {
-          columns: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
+            where: and(
+              query.studentId
+                ? eq(performanceSnapshots.studentId, query.studentId)
+                : undefined,
+              classScopeIds
+                ? inArray(performanceSnapshots.classId, classScopeIds)
+                : undefined,
+            ),
+            with: {
+              student: {
+                columns: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+              class: {
+                columns: { id: true, subjectName: true, subjectCode: true },
+              },
+            },
+            orderBy: [desc(performanceSnapshots.lastComputedAt)],
           },
-        },
-        class: {
-          columns: { id: true, subjectName: true, subjectCode: true },
-        },
-      },
-      orderBy: [desc(performanceSnapshots.lastComputedAt)],
-    });
+        );
 
     const data = rows.map((row) => ({
       classId: row.classId,
@@ -280,15 +331,25 @@ export class ReportsService {
 
     return {
       data,
-      filters: query,
+      filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       csv: this.toCsv(data),
     };
   }
 
   async getInterventionParticipation(query: ReportQuery) {
+    const classScopeIds = await this.resolveClassScopeIds(query);
+    if (classScopeIds && classScopeIds.length === 0) {
+      return {
+        data: [],
+        filters: this.toPublicFilters(query),
+        generatedAt: new Date().toISOString(),
+        csv: this.toCsv([]),
+      };
+    }
+
     const whereClause = and(
-      query.classId ? eq(interventionCases.classId, query.classId) : undefined,
+      classScopeIds ? inArray(interventionCases.classId, classScopeIds) : undefined,
       query.studentId ? eq(interventionCases.studentId, query.studentId) : undefined,
       this.buildDateRange(interventionCases.openedAt, query),
     );
@@ -321,7 +382,7 @@ export class ReportsService {
     const progressRows = cases.length
       ? await this.db.query.lxpProgress.findMany({
           where: and(
-            query.classId ? eq(lxpProgress.classId, query.classId) : undefined,
+            classScopeIds ? inArray(lxpProgress.classId, classScopeIds) : undefined,
             inArray(
               lxpProgress.studentId,
               cases.map((entry) => entry.studentId),
@@ -367,15 +428,25 @@ export class ReportsService {
 
     return {
       data,
-      filters: query,
+      filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       csv: this.toCsv(data),
     };
   }
 
   async getAssessmentSummary(query: ReportQuery) {
+    const classScopeIds = await this.resolveClassScopeIds(query);
+    if (classScopeIds && classScopeIds.length === 0) {
+      return {
+        data: [],
+        filters: this.toPublicFilters(query),
+        generatedAt: new Date().toISOString(),
+        csv: this.toCsv([]),
+      };
+    }
+
     const whereClause = and(
-      query.classId ? eq(assessments.classId, query.classId) : undefined,
+      classScopeIds ? inArray(assessments.classId, classScopeIds) : undefined,
       query.gradingPeriod ? eq(assessments.quarter, query.gradingPeriod) : undefined,
       this.buildDateRange(assessments.createdAt, query),
     );
@@ -449,20 +520,42 @@ export class ReportsService {
 
     return {
       data,
-      filters: query,
+      filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       csv: this.toCsv(data),
     };
   }
 
   async getSystemUsage(query: ReportQuery) {
+    const classScopeIds = await this.resolveClassScopeIds(query);
+    const hasClassScope = Boolean(classScopeIds);
+    if (classScopeIds && classScopeIds.length === 0) {
+      return {
+        data: {
+          lessonCompletions: 0,
+          assessmentSubmissions: 0,
+          interventionOpens: 0,
+          interventionClosures: 0,
+          topActions: [],
+        },
+        filters: this.toPublicFilters(query),
+        generatedAt: new Date().toISOString(),
+        csv: this.toCsv([]),
+      };
+    }
+
     const recentActions = await this.db
       .select({
         action: auditLogs.action,
         total: count(),
       })
       .from(auditLogs)
-      .where(this.buildDateRange(auditLogs.createdAt, query))
+      .where(
+        and(
+          this.buildDateRange(auditLogs.createdAt, query),
+          query.teacherId ? eq(auditLogs.actorId, query.teacherId) : undefined,
+        ),
+      )
       .groupBy(auditLogs.action)
       .orderBy(desc(count()))
       .limit(10);
@@ -470,20 +563,37 @@ export class ReportsService {
     const [lessonCompletionCount] = await this.db
       .select({ total: count() })
       .from(lessonCompletions)
-      .where(this.buildDateRange(lessonCompletions.completedAt, query));
+      .innerJoin(lessons, eq(lessons.id, lessonCompletions.lessonId))
+      .where(
+        and(
+          this.buildDateRange(lessonCompletions.completedAt, query),
+          hasClassScope ? inArray(lessons.classId, classScopeIds as string[]) : undefined,
+        ),
+      );
     const [submittedAttemptCount] = await this.db
       .select({ total: count() })
       .from(assessmentAttempts)
+      .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
       .where(
         and(
           eq(assessmentAttempts.isSubmitted, true),
           this.buildDateRange(assessmentAttempts.startedAt, query),
+          hasClassScope
+            ? inArray(assessments.classId, classScopeIds as string[])
+            : undefined,
         ),
       );
     const [interventionOpenedCount] = await this.db
       .select({ total: count() })
       .from(interventionCases)
-      .where(this.buildDateRange(interventionCases.openedAt, query));
+      .where(
+        and(
+          this.buildDateRange(interventionCases.openedAt, query),
+          hasClassScope
+            ? inArray(interventionCases.classId, classScopeIds as string[])
+            : undefined,
+        ),
+      );
     const [interventionClosedCount] = await this.db
       .select({ total: count() })
       .from(interventionCases)
@@ -491,6 +601,9 @@ export class ReportsService {
         and(
           sql`${interventionCases.closedAt} IS NOT NULL`,
           this.buildDateRange(interventionCases.closedAt, query),
+          hasClassScope
+            ? inArray(interventionCases.classId, classScopeIds as string[])
+            : undefined,
         ),
       );
 
@@ -507,7 +620,7 @@ export class ReportsService {
 
     return {
       data,
-      filters: query,
+      filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       csv: this.toCsv(
         data.topActions.map((row) => ({

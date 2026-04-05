@@ -255,6 +255,26 @@ describe('ClassesService', () => {
       expect(mockDb.insert).toHaveBeenCalledTimes(1);
     });
 
+    it('writes audit metadata when class is created by an admin actor', async () => {
+      setupHappyPath();
+
+      await service.create(dto as any, 'admin-actor-1', ['admin']);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.created',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          sectionId: SECTION_ID,
+          teacherId: TEACHER_ID,
+          schoolYear: SCHOOL_YEAR,
+          hasSchedules: false,
+        },
+      });
+    });
+
     it('stores subjectCode in UPPERCASE regardless of input case', async () => {
       setupHappyPath();
 
@@ -471,6 +491,35 @@ describe('ClassesService', () => {
         service.update(CLASS_ID, { teacherId: 'nonexistent-teacher' } as any),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('writes audit metadata when class fields are updated by an admin actor', async () => {
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass())
+        .mockResolvedValueOnce(
+          makeClass({ subjectName: 'Updated Math', room: 'Lab 2' }),
+        );
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      await service.update(
+        CLASS_ID,
+        { subjectName: 'Updated Math', room: 'Lab 2' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.updated',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          changedFields: ['subjectName', 'room'],
+          sectionId: SECTION_ID,
+          teacherId: TEACHER_ID,
+        },
+      });
+    });
   });
 
   // =========================================================================
@@ -560,6 +609,63 @@ describe('ClassesService', () => {
   });
 
   // =========================================================================
+  // updatePresentation
+  // =========================================================================
+
+  describe('updatePresentation', () => {
+    it('writes audit metadata when class presentation is updated by an owner teacher', async () => {
+      const updatedClass = makeClass({
+        cardPreset: 'sunset',
+        cardBannerUrl: '/api/classes/banners/new-banner.png',
+      });
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass())
+        .mockResolvedValueOnce(updatedClass);
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      const result = await service.updatePresentation(
+        CLASS_ID,
+        {
+          cardPreset: 'sunset',
+          cardBannerUrl: '/api/classes/banners/new-banner.png',
+        },
+        TEACHER_ID,
+        ['teacher'],
+      );
+
+      expect(result).toEqual(updatedClass);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: TEACHER_ID,
+        action: 'class.presentation.updated',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'teacher',
+          changedFields: ['cardPreset', 'cardBannerUrl'],
+          cardPreset: 'sunset',
+          cardBannerUrl: '/api/classes/banners/new-banner.png',
+        },
+      });
+    });
+
+    it('does not write audit log when teacher is not owner and request is denied', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({ teacherId: 'teacher-other' }),
+      );
+
+      await expect(
+        service.updatePresentation(
+          CLASS_ID,
+          { cardPreset: 'sunset' },
+          TEACHER_ID,
+          ['teacher'],
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockAuditService.log).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
   // delete
   // =========================================================================
 
@@ -571,8 +677,21 @@ describe('ClassesService', () => {
       mockDb.query.assessments.findMany.mockResolvedValue([]);
       mockDb.delete.mockReturnValue(makeDeleteChain());
 
-      await expect(service.delete(CLASS_ID)).resolves.not.toThrow();
+      await expect(
+        service.delete(CLASS_ID, 'admin-actor-1', ['admin']),
+      ).resolves.not.toThrow();
       expect(mockDb.delete).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.deleted',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          softDelete: true,
+          previousIsActive: true,
+        },
+      });
     });
 
     it('throws ConflictException when there are active enrollments', async () => {
@@ -622,8 +741,20 @@ describe('ClassesService', () => {
       );
       mockDb.delete.mockReturnValue(makeDeleteChain());
 
-      await expect(service.purge(CLASS_ID)).resolves.not.toThrow();
+      await expect(
+        service.purge(CLASS_ID, 'admin-actor-1', ['admin']),
+      ).resolves.not.toThrow();
       expect(mockDb.delete).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.purged',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: false,
+        },
+      });
     });
 
     it('throws ConflictException when class is still active', async () => {
@@ -642,6 +773,52 @@ describe('ClassesService', () => {
         NotFoundException,
       );
       expect(mockDb.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // setClassHiddenState
+  // =========================================================================
+
+  describe('setClassHiddenState', () => {
+    it('writes audit metadata when class visibility is changed by a teacher', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue({
+        id: 'pref-1',
+        classId: CLASS_ID,
+        userId: TEACHER_ID,
+        isHidden: false,
+      });
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      const result = await service.setClassHiddenState(
+        CLASS_ID,
+        TEACHER_ID,
+        ['teacher'],
+        true,
+      );
+
+      expect(result).toEqual({ classId: CLASS_ID, isHidden: true });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: TEACHER_ID,
+        action: 'class.visibility.updated',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'teacher',
+          hidden: true,
+        },
+      });
+    });
+
+    it('does not write audit log when student is not enrolled and request is denied', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.setClassHiddenState(CLASS_ID, STUDENT_ID, ['student'], true),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
   });
 
@@ -1383,6 +1560,27 @@ describe('ClassesService', () => {
       const result = await service.toggleActive(CLASS_ID);
 
       expect(result.isActive).toBe(true);
+    });
+
+    it('writes an audit log with actor context when status is toggled', async () => {
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass({ isActive: true }))
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      await service.toggleActive(CLASS_ID, 'admin-actor-1', ['admin']);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.status.toggled',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: true,
+          isActive: false,
+        },
+      });
     });
   });
 });

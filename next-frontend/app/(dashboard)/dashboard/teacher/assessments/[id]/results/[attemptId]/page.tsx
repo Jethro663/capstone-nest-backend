@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { assessmentService } from '@/services/assessment-service';
@@ -150,7 +151,14 @@ export default function TeacherAttemptResultsPage() {
                   <p className="font-medium">{response.question?.content}</p>
                   {response.question?.imageUrl && (
                     <div className="mt-2">
-                      <img src={response.question.imageUrl} alt="Question" className="max-h-40 rounded-md border object-contain" />
+                      <Image
+                        src={response.question.imageUrl}
+                        alt="Question"
+                        width={960}
+                        height={540}
+                        unoptimized
+                        className="max-h-40 h-auto w-auto rounded-md border object-contain"
+                      />
                     </div>
                   )}
 

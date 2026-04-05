@@ -256,4 +256,23 @@ export interface SystemEvaluationRow {
 export interface SystemEvaluationListResponse {
   count: number;
   rows: SystemEvaluationRow[];
+  summary?: {
+    averages: {
+      usabilityScore: number;
+      functionalityScore: number;
+      performanceScore: number;
+      satisfactionScore: number;
+    };
+    feedbackCount: number;
+    moduleBreakdown: Array<{
+      targetModule: SystemEvaluationTargetModule;
+      count: number;
+      averages: {
+        usabilityScore: number;
+        functionalityScore: number;
+        performanceScore: number;
+        satisfactionScore: number;
+      };
+    }>;
+  };
 }

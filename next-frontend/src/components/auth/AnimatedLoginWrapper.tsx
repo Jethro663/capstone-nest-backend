@@ -1,5 +1,6 @@
 "use client";
 
+import Image from 'next/image';
 import { motion, Variants } from 'framer-motion';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { Sparkles, ShieldCheck, Zap } from 'lucide-react';
@@ -60,7 +61,7 @@ export default function AnimatedLoginWrapper() {
           >
             <div className="absolute -inset-4 bg-red-500/20 rounded-full blur-xl animate-pulse" />
             <div className="relative h-20 w-20 rounded-[2rem] bg-white border-[1.5px] border-slate-200 shadow-2xl flex items-center justify-center overflow-hidden">
-               <img src="/taguigpic.png" alt="GABHS" className="w-14 h-14 object-contain" />
+               <Image src="/taguigpic.png" alt="GABHS" width={56} height={56} className="h-14 w-14 object-contain" />
             </div>
             <div className="absolute -bottom-1 -right-1 h-7 w-7 bg-red-500 rounded-xl border-4 border-slate-50 flex items-center justify-center shadow-lg">
                <Zap className="h-3 w-3 text-white fill-current" />

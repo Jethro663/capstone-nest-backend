@@ -23,7 +23,7 @@ describe("StudentTutorLauncher", () => {
     );
 
     expect(screen.getByText("Continue with Ja")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open JA" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open JA Hub" })).toBeInTheDocument();
   });
 
   it("navigates to student ja when open button is clicked", () => {
@@ -32,7 +32,7 @@ describe("StudentTutorLauncher", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Expand AI tutor launcher" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open JA" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open JA Hub" }));
 
     expect(push).toHaveBeenCalledWith("/dashboard/student/ja");
   });

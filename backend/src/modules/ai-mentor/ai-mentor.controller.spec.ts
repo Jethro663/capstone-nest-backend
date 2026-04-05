@@ -1,7 +1,9 @@
+import { HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -32,10 +34,18 @@ const ADMIN_USER = {
 // ---------------------------------------------------------------------------
 
 const mockProxy = { forward: jest.fn() };
+const mockAudit = { log: jest.fn() };
 const mockDb = {
   query: {
     enrollments: { findMany: jest.fn() },
     classModules: { findMany: jest.fn() },
+    classes: { findFirst: jest.fn() },
+    aiGenerationJobs: { findFirst: jest.fn() },
+    aiGenerationOutputs: { findFirst: jest.fn() },
+    assessments: { findFirst: jest.fn() },
+    interventionCases: { findFirst: jest.fn() },
+    extractedModules: { findFirst: jest.fn(), findMany: jest.fn() },
+    uploadedFiles: { findFirst: jest.fn() },
   },
 };
 
@@ -48,16 +58,71 @@ describe('AiMentorController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockAudit.log.mockReset();
+    mockAudit.log.mockResolvedValue(undefined);
     mockDb.query.enrollments.findMany.mockReset();
     mockDb.query.classModules.findMany.mockReset();
+    mockDb.query.classes.findFirst.mockReset();
+    mockDb.query.aiGenerationJobs.findFirst.mockReset();
+    mockDb.query.aiGenerationOutputs.findFirst.mockReset();
+    mockDb.query.assessments.findFirst.mockReset();
+    mockDb.query.interventionCases.findFirst.mockReset();
+    mockDb.query.extractedModules.findFirst.mockReset();
+    mockDb.query.extractedModules.findMany.mockReset();
+    mockDb.query.uploadedFiles.findFirst.mockReset();
     mockDb.query.enrollments.findMany.mockResolvedValue([]);
     mockDb.query.classModules.findMany.mockResolvedValue([]);
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_USER.id,
+    });
+    mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+      id: JOB_ID,
+      teacherId: TEACHER_USER.id,
+      jobType: 'quiz_generation',
+      status: 'processing',
+      errorMessage: null,
+      sourceFilters: null,
+      updatedAt: '2026-04-04T00:00:00.000Z',
+    });
+    mockDb.query.aiGenerationOutputs.findFirst.mockResolvedValue(null);
+    mockDb.query.assessments.findFirst.mockResolvedValue(null);
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: JOB_ID,
+      classId: CLASS_ID,
+      status: 'active',
+    });
+    mockDb.query.extractedModules.findFirst.mockResolvedValue({
+      id: EXTRACTION_ID,
+      fileId: 'file-uuid-1',
+      classId: CLASS_ID,
+      teacherId: TEACHER_USER.id,
+      extractionStatus: 'processing',
+      modelUsed: null,
+      errorMessage: null,
+      structuredContent: null,
+      isApplied: false,
+      progressPercent: 0,
+      totalChunks: null,
+      processedChunks: 0,
+      createdAt: '2026-04-04T00:00:00.000Z',
+      updatedAt: '2026-04-04T00:00:00.000Z',
+      file: {
+        originalName: 'module.pdf',
+      },
+    });
+    mockDb.query.extractedModules.findMany.mockResolvedValue([]);
+    mockDb.query.uploadedFiles.findFirst.mockResolvedValue({
+      id: 'file-uuid-1',
+      classId: CLASS_ID,
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiMentorController],
       providers: [
         { provide: AiProxyService, useValue: mockProxy },
         { provide: DatabaseService, useValue: { db: mockDb } },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
 
@@ -145,7 +210,44 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         dto,
       );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.queued',
+          targetType: 'uploaded_file',
+          targetId: dto.fileId,
+          metadata: expect.objectContaining({
+            extractionId: EXTRACTION_ID,
+          }),
+        }),
+      );
       expect(result).toEqual({ extractionId: EXTRACTION_ID });
+    });
+
+    it('should block teacher extraction for files outside owned classes', async () => {
+      mockDb.query.uploadedFiles.findFirst.mockResolvedValue({
+        id: 'file-uuid-1',
+        classId: CLASS_ID,
+      });
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.extractModule({ fileId: 'file-uuid-1' } as any, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+
+    it('should return service unavailable when extraction queue endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      await expect(
+        controller.extractModule({ fileId: 'file-uuid-1' } as any, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI extraction queue is temporarily unavailable. Please retry shortly.',
+      );
     });
   });
 
@@ -169,6 +271,57 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({ status: 'completed' });
     });
+
+    it('should propagate HttpException for extraction status endpoint', async () => {
+      const statusError = new HttpException(
+        { message: 'Extraction status is unavailable for this request' },
+        403,
+      );
+      mockProxy.forward.mockRejectedValue(statusError);
+
+      await expect(
+        controller.getExtractionStatus(EXTRACTION_ID, TEACHER_USER),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should return degraded fallback payload when extraction status endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.extractedModules.findFirst
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          classId: CLASS_ID,
+        })
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          extractionStatus: 'failed',
+          progressPercent: 90,
+          totalChunks: 10,
+          processedChunks: 9,
+          modelUsed: 'llama3.1',
+          errorMessage: 'cached extraction error',
+        });
+
+      const result = await controller.getExtractionStatus(
+        EXTRACTION_ID,
+        TEACHER_USER,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        degraded: true,
+        message:
+          'AI extraction status temporarily unavailable; returning last known extraction status.',
+        data: {
+          id: EXTRACTION_ID,
+          status: 'failed',
+          progressPercent: 90,
+          totalChunks: 10,
+          processedChunks: 9,
+          modelUsed: 'llama3.1',
+          errorMessage: 'cached extraction error',
+        },
+      });
+    });
   });
 
   // =========================================================================
@@ -189,17 +342,67 @@ describe('AiMentorController', () => {
       expect(result).toEqual([{ id: EXTRACTION_ID }]);
     });
 
-    it('should return an empty-list fallback when extraction history is unavailable', async () => {
+    it('should return cached extraction fallback list when extraction history is unavailable', async () => {
       mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.extractedModules.findMany.mockResolvedValue([
+        {
+          id: EXTRACTION_ID,
+          fileId: 'file-uuid-1',
+          classId: CLASS_ID,
+          teacherId: TEACHER_USER.id,
+          extractionStatus: 'completed',
+          modelUsed: 'llama3.1',
+          errorMessage: null,
+          structuredContent: { lessons: [] },
+          isApplied: false,
+          progressPercent: 100,
+          totalChunks: 12,
+          processedChunks: 12,
+          createdAt: '2026-04-04T00:00:00.000Z',
+          updatedAt: '2026-04-04T00:05:00.000Z',
+          file: { originalName: 'module.pdf' },
+        },
+      ]);
 
       const result = await controller.listExtractions(CLASS_ID, TEACHER_USER);
 
       expect(result).toEqual({
         success: true,
         degraded: true,
-        message: 'AI extraction history unavailable; returning an empty list.',
-        data: [],
+        message:
+          'AI extraction history unavailable; returning cached extraction list.',
+        data: [
+          {
+            id: EXTRACTION_ID,
+            fileId: 'file-uuid-1',
+            classId: CLASS_ID,
+            teacherId: TEACHER_USER.id,
+            extractionStatus: 'completed',
+            modelUsed: 'llama3.1',
+            errorMessage: null,
+            structuredContent: { lessons: [] },
+            isApplied: false,
+            progressPercent: 100,
+            totalChunks: 12,
+            processedChunks: 12,
+            createdAt: '2026-04-04T00:00:00.000Z',
+            updatedAt: '2026-04-04T00:05:00.000Z',
+            originalName: 'module.pdf',
+          },
+        ],
       });
+    });
+
+    it('should reject teacher class access when listing extraction history outside ownership', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.listExtractions(CLASS_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
 
@@ -219,6 +422,74 @@ describe('AiMentorController', () => {
         ADMIN_USER,
       );
       expect(result).toEqual({ id: EXTRACTION_ID });
+    });
+
+    it('should return cached extraction detail fallback when extraction endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.extractedModules.findFirst
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          classId: CLASS_ID,
+        })
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          fileId: 'file-uuid-1',
+          classId: CLASS_ID,
+          teacherId: TEACHER_USER.id,
+          extractionStatus: 'completed',
+          modelUsed: 'llama3.1',
+          errorMessage: null,
+          structuredContent: { lessons: [] },
+          isApplied: false,
+          progressPercent: 100,
+          totalChunks: 10,
+          processedChunks: 10,
+          createdAt: '2026-04-04T00:00:00.000Z',
+          updatedAt: '2026-04-04T00:02:00.000Z',
+          file: { originalName: 'module.pdf' },
+        });
+
+      const result = await controller.getExtraction(EXTRACTION_ID, TEACHER_USER);
+
+      expect(result).toEqual({
+        success: true,
+        degraded: true,
+        message:
+          'AI extraction detail temporarily unavailable; returning cached extraction record.',
+        data: {
+          id: EXTRACTION_ID,
+          fileId: 'file-uuid-1',
+          classId: CLASS_ID,
+          teacherId: TEACHER_USER.id,
+          extractionStatus: 'completed',
+          modelUsed: 'llama3.1',
+          errorMessage: null,
+          structuredContent: { lessons: [] },
+          isApplied: false,
+          progressPercent: 100,
+          totalChunks: 10,
+          processedChunks: 10,
+          createdAt: '2026-04-04T00:00:00.000Z',
+          updatedAt: '2026-04-04T00:02:00.000Z',
+          originalName: 'module.pdf',
+        },
+      });
+    });
+
+    it('should reject teacher access to extraction outside owned class', async () => {
+      mockDb.query.extractedModules.findFirst.mockResolvedValue({
+        id: EXTRACTION_ID,
+        classId: CLASS_ID,
+      });
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.getExtraction(EXTRACTION_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
 
@@ -243,7 +514,25 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         dto,
       );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.updated',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+        }),
+      );
       expect(result).toEqual({ updated: true });
+    });
+
+    it('should return service unavailable when extraction update endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      await expect(
+        controller.updateExtraction(EXTRACTION_ID, { lessons: [] } as any, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI extraction update is temporarily unavailable. Please retry shortly.',
+      );
     });
   });
 
@@ -268,7 +557,67 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         dto,
       );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.applied',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+          metadata: expect.objectContaining({
+            lessonsCreated: 3,
+          }),
+        }),
+      );
       expect(result).toEqual({ lessonsCreated: 3 });
+    });
+
+    it('should return cached applied fallback when apply endpoint is unreachable but extraction is already applied', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.extractedModules.findFirst
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          classId: CLASS_ID,
+        })
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          isApplied: true,
+        });
+
+      const result = await controller.applyExtraction(
+        EXTRACTION_ID,
+        {},
+        TEACHER_USER,
+      );
+
+      expect(result).toEqual({
+        success: true,
+        degraded: true,
+        message:
+          'Extraction was already applied earlier; returning cached completion state.',
+        data: {
+          lessonsCreated: 0,
+          lessons: [],
+        },
+      });
+    });
+
+    it('should return service unavailable when apply endpoint is unreachable and extraction is not yet applied', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.extractedModules.findFirst
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          classId: CLASS_ID,
+        })
+        .mockResolvedValueOnce({
+          id: EXTRACTION_ID,
+          isApplied: false,
+        });
+
+      await expect(
+        controller.applyExtraction(EXTRACTION_ID, {}, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI extraction apply is temporarily unavailable. Please retry shortly.',
+      );
     });
   });
 
@@ -290,7 +639,25 @@ describe('AiMentorController', () => {
         `/extractions/${EXTRACTION_ID}`,
         TEACHER_USER,
       );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.deleted',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+        }),
+      );
       expect(result).toEqual({ deleted: true });
+    });
+
+    it('should return service unavailable when extraction delete endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      await expect(
+        controller.deleteExtraction(EXTRACTION_ID, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI extraction delete is temporarily unavailable. Please retry shortly.',
+      );
     });
   });
 
@@ -311,7 +678,132 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         dto,
       );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.intervention_recommendation.queued',
+          targetType: 'intervention_case',
+          targetId: JOB_ID,
+          metadata: expect.objectContaining({
+            jobId: JOB_ID,
+          }),
+        }),
+      );
       expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+
+    it('should propagate proxy HttpException for queue authorization failures', async () => {
+      const dto = { note: 'Focus on fractions' };
+      const queueError = new HttpException({ message: 'You do not have access to this intervention case' }, 403);
+      mockProxy.forward.mockRejectedValue(queueError);
+
+      await expect(
+        controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should block queue when teacher does not own intervention case class', async () => {
+      const dto = { note: 'Focus on fractions' };
+      mockDb.query.interventionCases.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        classId: CLASS_ID,
+      });
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+
+    it('should block queue for closed intervention cases', async () => {
+      const dto = { note: 'Focus on fractions' };
+      mockDb.query.interventionCases.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        classId: CLASS_ID,
+        status: 'completed',
+      });
+
+      await expect(
+        controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI recommendations are only available for active intervention cases.',
+      );
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recommendIntervention()', () => {
+    it('should forward POST /teacher/interventions/:caseId/recommend with dto and write audit log', async () => {
+      const dto = { note: 'Focus on algebra fundamentals' };
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { recommendations: [] },
+      });
+
+      const result = await controller.recommendIntervention(
+        JOB_ID,
+        dto,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/interventions/${JOB_ID}/recommend`,
+        TEACHER_USER,
+        dto,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.intervention_recommendation.generated',
+          targetType: 'intervention_case',
+          targetId: JOB_ID,
+          metadata: expect.objectContaining({
+            noteProvided: true,
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { recommendations: [] },
+      });
+    });
+
+    it('should block recommendation generation when teacher does not own intervention case class', async () => {
+      const dto = { note: 'Focus on algebra fundamentals' };
+      mockDb.query.interventionCases.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        classId: CLASS_ID,
+      });
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.recommendIntervention(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+
+    it('should block recommendation generation for closed intervention cases', async () => {
+      const dto = { note: 'Focus on algebra fundamentals' };
+      mockDb.query.interventionCases.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        classId: CLASS_ID,
+        status: 'completed',
+      });
+
+      await expect(
+        controller.recommendIntervention(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI recommendations are only available for active intervention cases.',
+      );
+      expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
 
@@ -398,7 +890,102 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         dto,
       );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.queued',
+          targetType: 'class',
+          targetId: CLASS_ID,
+          metadata: expect.objectContaining({
+            jobId: JOB_ID,
+            questionCount: 5,
+          }),
+        }),
+      );
       expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+
+    it('should block quiz draft queue when teacher does not own class', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        questionCount: 5,
+        questionType: 'multiple_choice',
+        assessmentType: 'quiz',
+        passingScore: 60,
+        feedbackLevel: 'standard',
+      };
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.queueQuizDraftJob(dto as any, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('generateQuizDraft()', () => {
+    it('should forward POST /teacher/quizzes/generate-draft with dto and write audit log', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        questionCount: 8,
+        questionType: 'multiple_choice',
+        assessmentType: 'quiz',
+        passingScore: 70,
+        feedbackLevel: 'standard',
+      };
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { draftId: 'draft-1' },
+      });
+
+      const result = await controller.generateQuizDraft(dto as any, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/teacher/quizzes/generate-draft',
+        TEACHER_USER,
+        dto,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.generated',
+          targetType: 'class',
+          targetId: CLASS_ID,
+          metadata: expect.objectContaining({
+            questionCount: 8,
+            questionType: 'multiple_choice',
+            assessmentType: 'quiz',
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { draftId: 'draft-1' },
+      });
+    });
+
+    it('should block quiz draft generation when teacher does not own class', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        questionCount: 8,
+        questionType: 'multiple_choice',
+        assessmentType: 'quiz',
+        passingScore: 70,
+        feedbackLevel: 'standard',
+      };
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.generateQuizDraft(dto as any, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
 
@@ -415,6 +1002,61 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({ jobId: JOB_ID, status: 'processing' });
     });
+
+    it('should return degraded fallback payload when AI status endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        teacherId: TEACHER_USER.id,
+        jobType: 'quiz_generation',
+        status: 'completed',
+        errorMessage: null,
+        sourceFilters: {
+          runtime: {
+            progressPercent: 88,
+            statusMessage: 'Draft ready for teacher review',
+          },
+        },
+        updatedAt: '2026-04-04T00:10:00.000Z',
+      });
+      mockDb.query.aiGenerationOutputs.findFirst.mockResolvedValue({
+        id: 'output-1',
+      });
+      mockDb.query.assessments.findFirst.mockResolvedValue({
+        id: 'assessment-1',
+      });
+
+      const result = await controller.getTeacherJobStatus(JOB_ID, TEACHER_USER);
+
+      expect(result).toMatchObject({
+        success: true,
+        degraded: true,
+        message:
+          'AI job status temporarily unavailable; returning cached job status.',
+        data: {
+          jobId: JOB_ID,
+          jobType: 'quiz_generation',
+          status: 'completed',
+          progressPercent: 88,
+          statusMessage: 'Draft ready for teacher review',
+          errorMessage: 'connect ECONNREFUSED',
+          outputId: 'output-1',
+          assessmentId: 'assessment-1',
+        },
+      });
+    });
+
+    it('should block status polling when teacher does not own AI generation job', async () => {
+      mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.getTeacherJobStatus(JOB_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this AI generation job.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
   });
 
   describe('getTeacherJobResult()', () => {
@@ -429,6 +1071,115 @@ describe('AiMentorController', () => {
         TEACHER_USER,
       );
       expect(result).toEqual({ jobId: JOB_ID, result: {} });
+    });
+
+    it('should propagate proxy HttpException when result is not ready', async () => {
+      const resultPendingError = new HttpException(
+        { message: 'AI generation result is not ready yet' },
+        409,
+      );
+      mockProxy.forward.mockRejectedValue(resultPendingError);
+
+      await expect(
+        controller.getTeacherJobResult(JOB_ID, TEACHER_USER),
+      ).rejects.toThrow(HttpException);
+    });
+
+    it('should return degraded fallback when result endpoint is unreachable', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        teacherId: TEACHER_USER.id,
+        jobType: 'remedial_plan_generation',
+        status: 'completed',
+        errorMessage: null,
+        sourceFilters: {
+          runtime: {
+            retryState: { attempt: 2, maxAttempts: 3 },
+            resultSummary: { caseId: 'case-1' },
+          },
+        },
+        updatedAt: '2026-04-04T00:12:00.000Z',
+      });
+      mockDb.query.aiGenerationOutputs.findFirst.mockResolvedValue({
+        id: 'output-2',
+        outputType: 'intervention_recommendation',
+        structuredOutput: { caseId: 'case-1', weakConcepts: ['Fractions'] },
+      });
+
+      const result = await controller.getTeacherJobResult(
+        JOB_ID,
+        TEACHER_USER,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        degraded: true,
+        message:
+          'AI job result temporarily unavailable; returning cached generated result.',
+        data: {
+          job: {
+            jobId: JOB_ID,
+            jobType: 'remedial_plan_generation',
+            status: 'completed',
+            outputId: 'output-2',
+          },
+          result: {
+            outputId: 'output-2',
+            outputType: 'intervention_recommendation',
+            structuredOutput: {
+              caseId: 'case-1',
+              weakConcepts: ['Fractions'],
+              runtime: { caseId: 'case-1' },
+            },
+          },
+          errorMessage: 'connect ECONNREFUSED',
+        },
+      });
+    });
+
+    it('should return cached job state when AI result endpoint is unreachable and output is not ready', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+      mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        teacherId: TEACHER_USER.id,
+        jobType: 'quiz_generation',
+        status: 'processing',
+        errorMessage: null,
+        sourceFilters: null,
+        updatedAt: '2026-04-04T00:15:00.000Z',
+      });
+      mockDb.query.aiGenerationOutputs.findFirst.mockResolvedValue(null);
+
+      const result = await controller.getTeacherJobResult(
+        JOB_ID,
+        TEACHER_USER,
+      );
+
+      expect(result).toMatchObject({
+        success: true,
+        degraded: true,
+        message:
+          'AI job result temporarily unavailable; returning cached job state.',
+        data: {
+          jobId: JOB_ID,
+          status: 'processing',
+          result: null,
+          errorMessage: 'connect ECONNREFUSED',
+        },
+      });
+    });
+
+    it('should block result retrieval when teacher does not own AI generation job', async () => {
+      mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.getTeacherJobResult(JOB_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this AI generation job.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
 
@@ -461,6 +1212,41 @@ describe('AiMentorController', () => {
         message: 'AI history unavailable; returning an empty list.',
         data: [],
       });
+    });
+  });
+
+  describe('reindexClass()', () => {
+    it('should forward POST /index/classes/:classId for owned teacher class', async () => {
+      mockProxy.forward.mockResolvedValue({ success: true, message: 'queued' });
+
+      const result = await controller.reindexClass(CLASS_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/index/classes/${CLASS_ID}`,
+        TEACHER_USER,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.class_content.reindex_queued',
+          targetType: 'class',
+          targetId: CLASS_ID,
+        }),
+      );
+      expect(result).toEqual({ success: true, message: 'queued' });
+    });
+
+    it('should block reindex for teacher class outside ownership', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.reindexClass(CLASS_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
 });

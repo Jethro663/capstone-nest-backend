@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, CircleCheckBig, CircleX, Hourglass } from 'lucide-react';
@@ -207,7 +208,14 @@ export default function StudentAssessmentResultsPage() {
 
                   {response.question?.imageUrl && (
                     <div className="mt-3">
-                      <img src={response.question.imageUrl} alt="Question" className="max-h-48 rounded-xl border border-[var(--student-outline)] object-contain" />
+                      <Image
+                        src={response.question.imageUrl}
+                        alt="Question"
+                        width={960}
+                        height={540}
+                        unoptimized
+                        className="max-h-48 h-auto w-auto rounded-xl border border-[var(--student-outline)] object-contain"
+                      />
                     </div>
                   )}
 

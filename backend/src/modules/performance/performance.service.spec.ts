@@ -4,6 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PerformanceService } from './performance.service';
 import { DatabaseService } from '../../database/database.service';
 import { PerformanceStatusChangedEvent } from '../../common/events';
+import { AuditService } from '../audit/audit.service';
 
 function buildMockDb() {
   return {
@@ -44,16 +45,19 @@ describe('PerformanceService', () => {
   let service: PerformanceService;
   let db: any;
   let eventEmitter: EventEmitter2;
+  let auditService: { log: jest.Mock };
 
   beforeEach(async () => {
     db = buildMockDb();
     eventEmitter = { emit: jest.fn() } as any;
+    auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PerformanceService,
         { provide: DatabaseService, useValue: { db } },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: AuditService, useValue: auditService },
       ],
     }).compile();
 
@@ -242,6 +246,56 @@ describe('PerformanceService', () => {
     await expect(
       service.getClassSummary('class-1', 'teacher-1', ['teacher']),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('recomputeClass should write manual recompute audit metadata', async () => {
+    jest
+      .spyOn(service as any, 'assertClassAccess')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'loadEnrolledStudents').mockResolvedValue([
+      { studentId: 'student-1' },
+      { studentId: 'student-2' },
+    ]);
+    jest
+      .spyOn(service as any, 'recomputeStudentsForClass')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service, 'getClassSummary').mockResolvedValue({
+      classId: 'class-1',
+      threshold: 74,
+      totalStudents: 2,
+      studentsWithData: 2,
+      atRiskCount: 1,
+      atRiskRate: 50,
+      averages: {
+        blended: 70,
+        assessment: 72,
+        classRecord: 68,
+      },
+      students: [],
+    });
+
+    const result = await service.recomputeClass('class-1', 'teacher-1', [
+      'teacher',
+    ]);
+
+    expect(result).toEqual({
+      classId: 'class-1',
+      recomputed: 2,
+      atRiskCount: 1,
+      totalStudents: 2,
+    });
+    expect(auditService.log).toHaveBeenCalledWith({
+      actorId: 'teacher-1',
+      action: 'performance.class.recomputed',
+      targetType: 'class',
+      targetId: 'class-1',
+      metadata: {
+        actorRole: 'teacher',
+        recomputedStudentCount: 2,
+        atRiskCount: 1,
+        totalStudents: 2,
+      },
+    });
   });
 
   it('getClassLogs should return parsed logs with student metadata', async () => {

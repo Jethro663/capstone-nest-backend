@@ -18,6 +18,7 @@ import {
 } from '../../drizzle/schema';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { QueryPerformanceLogsDto } from './DTO/query-performance-logs.dto';
+import { AuditService } from '../audit/audit.service';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
 
@@ -55,6 +56,7 @@ export class PerformanceService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
@@ -63,6 +65,12 @@ export class PerformanceService {
 
   private isAdmin(roles: string[]): boolean {
     return roles.includes('admin');
+  }
+
+  private getActorRole(roles: string[]): 'admin' | 'teacher' | 'unknown' {
+    if (roles.includes('admin')) return 'admin';
+    if (roles.includes('teacher')) return 'teacher';
+    return 'unknown';
   }
 
   private round(value: number): number {
@@ -542,6 +550,18 @@ export class PerformanceService {
       'manual_recompute',
     );
     const summary = await this.getClassSummary(classId, userId, roles);
+    await this.auditService.log({
+      actorId: userId,
+      action: 'performance.class.recomputed',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        actorRole: this.getActorRole(roles),
+        recomputedStudentCount: studentIds.length,
+        atRiskCount: summary.atRiskCount,
+        totalStudents: summary.totalStudents,
+      },
+    });
     return {
       classId,
       recomputed: studentIds.length,

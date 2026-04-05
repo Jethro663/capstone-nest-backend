@@ -81,7 +81,12 @@ export class TeacherProfilesController {
       throw new ForbiddenException('Not authorized to update this profile');
     }
 
-    const data = await this.teacherProfilesService.updateProfile(userId, dto);
+    const data = await this.teacherProfilesService.updateProfile(
+      userId,
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
     return {
       success: true,
       message: 'Teacher profile updated successfully',
@@ -132,6 +137,8 @@ export class TeacherProfilesController {
       {
         profilePicture,
       },
+      user?.userId,
+      user?.roles ?? [],
     );
 
     return {

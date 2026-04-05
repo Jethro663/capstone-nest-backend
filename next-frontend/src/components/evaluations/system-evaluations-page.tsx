@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Gauge, MessageSquareQuote, SlidersHorizontal, Star } from 'lucide-react';
 import { lxpService } from '@/services/lxp-service';
 import type {
+  SystemEvaluationListResponse,
   SystemEvaluationRow,
   SystemEvaluationTargetModule,
 } from '@/types/lxp';
@@ -73,6 +74,9 @@ export function SystemEvaluationsPage({
   const [targetModule, setTargetModule] = useState<'' | SystemEvaluationTargetModule>('');
   const [rows, setRows] = useState<SystemEvaluationRow[]>([]);
   const [count, setCount] = useState(0);
+  const [summary, setSummary] = useState<
+    SystemEvaluationListResponse['summary'] | null
+  >(null);
   const [loading, setLoading] = useState(true);
 
   const fetchEvaluations = useCallback(async () => {
@@ -81,10 +85,12 @@ export function SystemEvaluationsPage({
       const res = await lxpService.getEvaluations(targetModule || undefined);
       setRows(res.data.rows ?? []);
       setCount(res.data.count ?? 0);
+      setSummary(res.data.summary ?? null);
     } catch {
       toast.error('Failed to load system evaluations');
       setRows([]);
       setCount(0);
+      setSummary(null);
     } finally {
       setLoading(false);
     }
@@ -95,6 +101,14 @@ export function SystemEvaluationsPage({
   }, [fetchEvaluations]);
 
   const averageScores = useMemo(() => {
+    if (summary?.averages) {
+      return {
+        satisfaction: Number(summary.averages.satisfactionScore ?? 0).toFixed(1),
+        usability: Number(summary.averages.usabilityScore ?? 0).toFixed(1),
+        feedback: summary.feedbackCount ?? 0,
+      };
+    }
+
     if (rows.length === 0) {
       return {
         satisfaction: '--',
@@ -118,7 +132,7 @@ export function SystemEvaluationsPage({
       usability: (totals.usability / rows.length).toFixed(1),
       feedback: totals.feedback,
     };
-  }, [rows]);
+  }, [rows, summary]);
 
   if (loading) {
     return (

@@ -135,7 +135,7 @@ async function refreshAccessToken(): Promise<string | null> {
       return newToken;
     }
     return null;
-  } catch (error) {
+  } catch {
     accessToken = null;
     return null;
   }

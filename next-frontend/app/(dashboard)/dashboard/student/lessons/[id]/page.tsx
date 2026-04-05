@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { lessonService } from '@/services/lesson-service';
 import { Card, CardContent } from '@/components/ui/card';
@@ -195,7 +196,16 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       const caption = (block.metadata as Record<string, string>)?.caption;
       return (
         <figure>
-          {src && <img src={src} alt={caption || 'Lesson image'} className="w-full rounded-lg" />}
+          {src && (
+            <Image
+              src={src}
+              alt={caption || 'Lesson image'}
+              width={1200}
+              height={675}
+              unoptimized
+              className="h-auto w-full rounded-lg"
+            />
+          )}
           {caption && <figcaption className="mt-2 text-center text-sm text-[var(--student-text-muted)]">{caption}</figcaption>}
         </figure>
       );

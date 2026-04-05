@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
 import { MailService } from '../mail/mail.service';
+import { AuditService } from '../audit/audit.service';
 import {
   users,
   roles,
@@ -48,6 +49,7 @@ export class UsersService {
     private configService: ConfigService,
     private eventEmitter: EventEmitter2,
     private mailService: MailService,
+    private readonly auditService: AuditService,
   ) {
     const configuredRounds = Number(
       this.configService.get<string>('AUTH_PASSWORD_HASH_ROUNDS') ?? '10',
@@ -275,7 +277,7 @@ export class UsersService {
   }
   //CRUD Operations
 
-  async createUser(createUserDto: CreateUserDto) {
+  async createUser(createUserDto: CreateUserDto, actorId?: string) {
     const {
       email,
       password,
@@ -421,12 +423,25 @@ export class UsersService {
       }),
     );
 
+    if (actorId) {
+      await this.auditService.log({
+        actorId,
+        action: 'user.created',
+        targetType: 'user',
+        targetId: result.id,
+        metadata: {
+          role,
+          status: result.status,
+        },
+      });
+    }
+
     // 8. Return sanitized user only
     return this.toPublicUser(result);
   }
 
   // !!Subject to change based on requirements
-  async updateUser(id: string, updateUserDto: UpdateUserDto) {
+  async updateUser(id: string, updateUserDto: UpdateUserDto, actorId?: string) {
     const existingUser = await this.findById(id);
 
     if (!existingUser) {
@@ -625,6 +640,27 @@ export class UsersService {
       );
     }
 
+    if (actorId) {
+      const changedFields = [
+        ...Object.keys(updateData),
+        ...Object.keys(profilePayload),
+        ...(updateUserDto.role ? ['role'] : []),
+        ...(updateUserDto.employeeId !== undefined ? ['employeeId'] : []),
+        ...(updateUserDto.contactNumber !== undefined ? ['contactNumber'] : []),
+      ];
+
+      await this.auditService.log({
+        actorId,
+        action: 'user.updated',
+        targetType: 'user',
+        targetId: id,
+        metadata: {
+          previousStatus: existingUser.status,
+          changedFields: Array.from(new Set(changedFields)),
+        },
+      });
+    }
+
     const updatedUser = await this.findById(id);
     if (!updatedUser) {
       throw new NotFoundException('User not found after update');
@@ -680,6 +716,16 @@ export class UsersService {
       `[USER:PASSWORD_RESET] actor=${adminId} target=${id} status=${existingUser.status}`,
     );
 
+    await this.auditService.log({
+      actorId: adminId,
+      action: 'user.password.reset_admin',
+      targetType: 'user',
+      targetId: id,
+      metadata: {
+        previousStatus: existingUser.status,
+      },
+    });
+
     return {
       message: 'Password reset successfully',
       userId: id,
@@ -687,7 +733,7 @@ export class UsersService {
     };
   }
 
-  async deleteUser(id: string) {
+  async deleteUser(id: string, actorId?: string) {
     const existingUser = await this.findById(id);
 
     if (!existingUser) {
@@ -705,6 +751,18 @@ export class UsersService {
         updatedAt: new Date(),
       })
       .where(eq(users.id, id));
+
+    if (actorId) {
+      await this.auditService.log({
+        actorId,
+        action: 'user.deleted_legacy',
+        targetType: 'user',
+        targetId: id,
+        metadata: {
+          previousStatus: existingUser.status,
+        },
+      });
+    }
 
     return {
       message: 'User successfully deleted',
@@ -768,6 +826,17 @@ export class UsersService {
       .set({ status: 'SUSPENDED', updatedAt: new Date() })
       .where(eq(users.id, id));
 
+    await this.auditService.log({
+      actorId: adminId,
+      action: 'user.suspended',
+      targetType: 'user',
+      targetId: id,
+      metadata: {
+        previousStatus: existingUser.status,
+        hasWarnings: Boolean(warnings),
+      },
+    });
+
     return {
       message: warnings
         ? 'User suspended with warnings'
@@ -798,6 +867,16 @@ export class UsersService {
       .update(users)
       .set({ status: 'ACTIVE', updatedAt: new Date() })
       .where(eq(users.id, id));
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: 'user.reactivated',
+      targetType: 'user',
+      targetId: id,
+      metadata: {
+        previousStatus: existingUser.status,
+      },
+    });
 
     return { message: 'User reactivated successfully', userId: id };
   }
@@ -844,19 +923,44 @@ export class UsersService {
         .where(eq(users.id, id));
     });
 
+    await this.auditService.log({
+      actorId: adminId,
+      action: 'user.archived',
+      targetType: 'user',
+      targetId: id,
+      metadata: {
+        previousStatus: existingUser.status,
+        roles: userRoleNames,
+      },
+    });
+
     return { message: 'User archived and marked as deleted', userId: id };
   }
 
   /**
    * Export all user data as a JSON object — for admin download before purge.
    */
-  async exportUserData(id: string) {
+  async exportUserData(id: string, actorId?: string) {
     const existingUser = await this.findById(id);
     if (!existingUser) {
       throw new NotFoundException('User not found');
     }
 
-    return this.collectUserData(id);
+    const payload = await this.collectUserData(id);
+
+    if (actorId) {
+      await this.auditService.log({
+        actorId,
+        action: 'user.exported',
+        targetType: 'user',
+        targetId: id,
+        metadata: {
+          previousStatus: existingUser.status,
+        },
+      });
+    }
+
+    return payload;
   }
 
   /**
@@ -904,6 +1008,16 @@ export class UsersService {
 
       // Hard delete — CASCADE handles remaining related tables.
       await tx.delete(users).where(eq(users.id, id));
+    });
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: 'user.purged',
+      targetType: 'user',
+      targetId: id,
+      metadata: {
+        previousStatus: existingUser.status,
+      },
     });
 
     return { message: 'User permanently purged from the system', userId: id };

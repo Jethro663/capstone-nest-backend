@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Controller,
   ForbiddenException,
+  HttpException,
   Get,
   Post,
   Patch,
@@ -13,6 +15,8 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Logger,
+  NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -43,12 +47,20 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { AuditService } from '../audit/audit.service';
 import { DatabaseService } from '../../database/database.service';
 import {
+  aiGenerationJobs,
+  aiGenerationOutputs,
+  assessments,
+  classes,
   classModules,
   enrollments,
+  extractedModules,
+  interventionCases,
+  uploadedFiles,
 } from '../../drizzle/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 @ApiTags('AI Mentor')
 @ApiBearerAuth('token')
@@ -60,10 +72,249 @@ export class AiMentorController {
   constructor(
     private readonly proxy: AiProxyService,
     private readonly databaseService: DatabaseService,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private toIsoDate(value: unknown) {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string') return value;
+    return new Date().toISOString();
+  }
+
+  private toExtractionFallbackPayload(
+    extraction: {
+      id: string;
+      fileId: string;
+      classId: string;
+      teacherId: string;
+      extractionStatus: string;
+      modelUsed: string | null;
+      errorMessage: string | null;
+      structuredContent: unknown;
+      isApplied: boolean;
+      progressPercent: number;
+      totalChunks: number | null;
+      processedChunks: number;
+      createdAt: Date | string;
+      updatedAt: Date | string;
+      file?: { originalName: string } | null;
+    },
+  ) {
+    return {
+      id: extraction.id,
+      fileId: extraction.fileId,
+      classId: extraction.classId,
+      teacherId: extraction.teacherId,
+      extractionStatus: extraction.extractionStatus,
+      modelUsed: extraction.modelUsed ?? null,
+      errorMessage: extraction.errorMessage ?? null,
+      structuredContent: extraction.structuredContent ?? null,
+      isApplied: extraction.isApplied,
+      progressPercent: extraction.progressPercent ?? 0,
+      totalChunks: extraction.totalChunks ?? null,
+      processedChunks: extraction.processedChunks ?? 0,
+      createdAt: this.toIsoDate(extraction.createdAt),
+      updatedAt: this.toIsoDate(extraction.updatedAt),
+      originalName: extraction.file?.originalName ?? undefined,
+    };
+  }
+
+  private hasRole(userRoles: string[] | undefined, role: RoleName) {
+    return Array.isArray(userRoles) && userRoles.includes(role);
+  }
+
+  private async assertTeacherClassAccess(
+    classId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException('Only teachers and admins can access this class.');
+    }
+
+    const classRecord = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: {
+        id: true,
+        teacherId: true,
+      },
+    });
+
+    if (!classRecord) {
+      throw new NotFoundException(`Class with ID "${classId}" not found`);
+    }
+
+    if (classRecord.teacherId !== user.id) {
+      throw new ForbiddenException('You do not have access to this class.');
+    }
+  }
+
+  private async assertTeacherExtractionAccess(
+    extractionId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException('Only teachers and admins can access this extraction.');
+    }
+
+    const extraction = await this.db.query.extractedModules.findFirst({
+      where: eq(extractedModules.id, extractionId),
+      columns: {
+        id: true,
+        classId: true,
+      },
+    });
+
+    if (!extraction) {
+      throw new NotFoundException(`Extraction with ID "${extractionId}" not found`);
+    }
+
+    await this.assertTeacherClassAccess(extraction.classId, user);
+  }
+
+  private async assertTeacherFileAccess(
+    fileId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException('Only teachers and admins can start module extraction.');
+    }
+
+    const file = await this.db.query.uploadedFiles.findFirst({
+      where: eq(uploadedFiles.id, fileId),
+      columns: {
+        id: true,
+        classId: true,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID "${fileId}" not found`);
+    }
+    if (!file.classId) {
+      throw new BadRequestException(
+        'Extraction requires a class-scoped uploaded file.',
+      );
+    }
+
+    await this.assertTeacherClassAccess(file.classId, user);
+  }
+
+  private async assertTeacherInterventionCaseAccess(
+    caseId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const interventionCase = await this.db.query.interventionCases.findFirst({
+      where: eq(interventionCases.id, caseId),
+      columns: {
+        id: true,
+        classId: true,
+        status: true,
+      },
+    });
+
+    if (!interventionCase) {
+      throw new NotFoundException(`Intervention case with ID "${caseId}" not found`);
+    }
+
+    await this.assertTeacherClassAccess(interventionCase.classId, user);
+
+    if (interventionCase.status !== 'active') {
+      throw new BadRequestException(
+        'AI recommendations are only available for active intervention cases.',
+      );
+    }
+  }
+
+  private async assertTeacherJobAccess(
+    jobId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const job = await this.db.query.aiGenerationJobs.findFirst({
+      where: eq(aiGenerationJobs.id, jobId),
+      columns: {
+        id: true,
+        teacherId: true,
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(`AI generation job with ID "${jobId}" not found`);
+    }
+
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can access AI generation jobs.',
+      );
+    }
+    if (!job.teacherId || job.teacherId !== user.id) {
+      throw new ForbiddenException(
+        'You do not have access to this AI generation job.',
+      );
+    }
+  }
+
+  private extractRuntimeFromSourceFilters(
+    sourceFilters: unknown,
+  ): Record<string, unknown> | null {
+    if (!sourceFilters || typeof sourceFilters !== 'object') {
+      return null;
+    }
+    const runtime = (sourceFilters as Record<string, unknown>).runtime;
+    if (!runtime || typeof runtime !== 'object') {
+      return null;
+    }
+    return runtime as Record<string, unknown>;
+  }
+
+  private runtimeProgressForStatus(
+    status: string,
+    runtime: Record<string, unknown> | null,
+  ): number {
+    const rawPercent = runtime?.progressPercent;
+    if (typeof rawPercent === 'number' && Number.isFinite(rawPercent)) {
+      return Math.max(0, Math.min(100, Math.round(rawPercent)));
+    }
+    if (typeof rawPercent === 'string') {
+      const parsed = Number(rawPercent);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, Math.min(100, Math.round(parsed)));
+      }
+    }
+    return {
+      pending: 5,
+      processing: 60,
+      completed: 100,
+      approved: 100,
+      rejected: 100,
+      failed: 100,
+    }[status] ?? 0;
+  }
+
+  private async resolveAssessmentIdForOutput(outputId: string | null) {
+    if (!outputId) return null;
+    const assessment = await this.db.query.assessments.findFirst({
+      where: eq(assessments.aiGenerationOutputId, outputId),
+      columns: {
+        id: true,
+      },
+    });
+    return assessment?.id ?? null;
   }
 
   private isTutorItemVisible(item: {
@@ -93,6 +344,62 @@ export class AiMentorController {
       };
     }
     return { isEnvelope: false, envelope: null, data: payload };
+  }
+
+  private readStringField(payload: unknown, key: string): string | null {
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      key in payload &&
+      typeof (payload as Record<string, unknown>)[key] === 'string'
+    ) {
+      return (payload as Record<string, string>)[key];
+    }
+    return null;
+  }
+
+  private readNumberField(payload: unknown, key: string): number | null {
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      key in payload &&
+      typeof (payload as Record<string, unknown>)[key] === 'number'
+    ) {
+      return (payload as Record<string, number>)[key];
+    }
+    return null;
+  }
+
+  private extractStringField(payload: unknown, key: string): string | null {
+    const unwrapped = this.unwrapEnvelope(payload);
+    return (
+      this.readStringField(unwrapped.data, key) ?? this.readStringField(payload, key)
+    );
+  }
+
+  private extractNumberField(payload: unknown, key: string): number | null {
+    const unwrapped = this.unwrapEnvelope(payload);
+    return (
+      this.readNumberField(unwrapped.data, key) ?? this.readNumberField(payload, key)
+    );
+  }
+
+  private async logAuditSafe(params: {
+    actorId: string;
+    action: string;
+    targetType: string;
+    targetId: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    try {
+      await this.auditService.log(params);
+    } catch (error) {
+      this.logger.warn(
+        `Audit logging failed for ${params.action} (${params.targetType}:${params.targetId}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private isAllowedRecommendation(
@@ -594,7 +901,32 @@ export class AiMentorController {
     @Body() dto: ExtractModuleDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/extract', user, dto);
+    await this.assertTeacherFileAccess(dto.fileId, user);
+    try {
+      const result = await this.proxy.forward('POST', '/extract', user, dto);
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.queued',
+        targetType: 'uploaded_file',
+        targetId: dto.fileId,
+        metadata: {
+          extractionId: this.extractStringField(result, 'extractionId'),
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown extraction queue error';
+      this.logger.warn(
+        `AI extraction queue unavailable for file ${dto.fileId}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction queue is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
   // ─── Extraction status (polling) ──────────────────────────────────────
@@ -610,7 +942,52 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/extractions/${id}/status`, user);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      return await this.proxy.forward('GET', `/extractions/${id}/status`, user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown extraction status error';
+      this.logger.warn(
+        `AI extraction status degraded fallback for ${id}: ${message}`,
+      );
+
+      const cachedExtraction = await this.db.query.extractedModules.findFirst({
+        where: eq(extractedModules.id, id),
+        columns: {
+          id: true,
+          extractionStatus: true,
+          progressPercent: true,
+          totalChunks: true,
+          processedChunks: true,
+          modelUsed: true,
+          errorMessage: true,
+        },
+      });
+
+      if (!cachedExtraction) {
+        throw new NotFoundException(`Extraction with ID "${id}" not found`);
+      }
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI extraction status temporarily unavailable; returning last known extraction status.',
+        data: {
+          id,
+          status: cachedExtraction.extractionStatus,
+          progressPercent: cachedExtraction.progressPercent ?? 0,
+          totalChunks: cachedExtraction.totalChunks ?? null,
+          processedChunks: cachedExtraction.processedChunks ?? 0,
+          modelUsed: cachedExtraction.modelUsed ?? null,
+          errorMessage: cachedExtraction.errorMessage ?? message,
+        },
+      };
+    }
   }
 
   // ─── List extractions ─────────────────────────────────────────────────
@@ -627,6 +1004,7 @@ export class AiMentorController {
     @Query('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
+    await this.assertTeacherClassAccess(classId, user);
     try {
       return await this.proxy.forward(
         'GET',
@@ -639,11 +1017,43 @@ export class AiMentorController {
           error instanceof Error ? error.message : String(error)
         }`,
       );
+
+      const cachedExtractions = await this.db.query.extractedModules.findMany({
+        where: eq(extractedModules.classId, classId),
+        columns: {
+          id: true,
+          fileId: true,
+          classId: true,
+          teacherId: true,
+          extractionStatus: true,
+          modelUsed: true,
+          errorMessage: true,
+          structuredContent: true,
+          isApplied: true,
+          progressPercent: true,
+          totalChunks: true,
+          processedChunks: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        with: {
+          file: {
+            columns: {
+              originalName: true,
+            },
+          },
+        },
+        orderBy: [desc(extractedModules.createdAt)],
+      });
+
       return {
         success: true,
         degraded: true,
-        message: 'AI extraction history unavailable; returning an empty list.',
-        data: [],
+        message:
+          'AI extraction history unavailable; returning cached extraction list.',
+        data: cachedExtractions.map((entry) =>
+          this.toExtractionFallbackPayload(entry),
+        ),
       };
     }
   }
@@ -661,7 +1071,59 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/extractions/${id}`, user);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      return await this.proxy.forward('GET', `/extractions/${id}`, user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const message =
+        error instanceof Error ? error.message : 'Unknown extraction detail error';
+      this.logger.warn(
+        `AI extraction detail degraded fallback for ${id}: ${message}`,
+      );
+
+      const cachedExtraction = await this.db.query.extractedModules.findFirst({
+        where: eq(extractedModules.id, id),
+        columns: {
+          id: true,
+          fileId: true,
+          classId: true,
+          teacherId: true,
+          extractionStatus: true,
+          modelUsed: true,
+          errorMessage: true,
+          structuredContent: true,
+          isApplied: true,
+          progressPercent: true,
+          totalChunks: true,
+          processedChunks: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        with: {
+          file: {
+            columns: {
+              originalName: true,
+            },
+          },
+        },
+      });
+
+      if (!cachedExtraction) {
+        throw new NotFoundException(`Extraction with ID "${id}" not found`);
+      }
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI extraction detail temporarily unavailable; returning cached extraction record.',
+        data: this.toExtractionFallbackPayload(cachedExtraction),
+      };
+    }
   }
 
   // ─── Update extraction (edit before applying) ─────────────────────────
@@ -682,7 +1144,37 @@ export class AiMentorController {
     @Body() dto: UpdateExtractionDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('PATCH', `/extractions/${id}`, user, dto);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'PATCH',
+        `/extractions/${id}`,
+        user,
+        dto,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.updated',
+        targetType: 'extraction',
+        targetId: id,
+        metadata: {
+          lessonCount: Array.isArray(dto.lessons) ? dto.lessons.length : 0,
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown extraction update error';
+      this.logger.warn(
+        `AI extraction update unavailable for ${id}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction update is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
   // ─── Apply extraction → create lessons ─────────────────────────────────
@@ -704,7 +1196,66 @@ export class AiMentorController {
     @Body() dto: ApplyExtractionDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', `/extractions/${id}/apply`, user, dto);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/apply`,
+        user,
+        dto,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.applied',
+        targetType: 'extraction',
+        targetId: id,
+        metadata: {
+          lessonIndicesRequested: Array.isArray(dto.lessonIndices)
+            ? dto.lessonIndices.length
+            : null,
+          lessonsCreated: this.extractNumberField(result, 'lessonsCreated'),
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown extraction apply error';
+      this.logger.warn(
+        `AI extraction apply unavailable for ${id}: ${message}`,
+      );
+
+      const cachedExtraction = await this.db.query.extractedModules.findFirst({
+        where: eq(extractedModules.id, id),
+        columns: {
+          id: true,
+          isApplied: true,
+        },
+      });
+
+      if (!cachedExtraction) {
+        throw new NotFoundException(`Extraction with ID "${id}" not found`);
+      }
+
+      if (cachedExtraction.isApplied) {
+        return {
+          success: true,
+          degraded: true,
+          message:
+            'Extraction was already applied earlier; returning cached completion state.',
+          data: {
+            lessonsCreated: 0,
+            lessons: [],
+          },
+        };
+      }
+
+      throw new ServiceUnavailableException(
+        'AI extraction apply is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
   // ─── Delete extraction ─────────────────────────────────────────────────
@@ -720,7 +1271,29 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('DELETE', `/extractions/${id}`, user);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward('DELETE', `/extractions/${id}`, user);
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.deleted',
+        targetType: 'extraction',
+        targetId: id,
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown extraction delete error';
+      this.logger.warn(
+        `AI extraction delete unavailable for ${id}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction delete is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
   // ─── AI interaction history ────────────────────────────────────────────
@@ -758,12 +1331,23 @@ export class AiMentorController {
     @Body() dto: InterventionRecommendationDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward(
+    await this.assertTeacherInterventionCaseAccess(caseId, user);
+    const result = await this.proxy.forward(
       'POST',
       `/teacher/interventions/${caseId}/recommend`,
       user,
       dto,
     );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.intervention_recommendation.generated',
+      targetType: 'intervention_case',
+      targetId: caseId,
+      metadata: {
+        noteProvided: Boolean(dto.note?.trim()),
+      },
+    });
+    return result;
   }
 
   @Post('teacher/interventions/:caseId/jobs')
@@ -775,12 +1359,24 @@ export class AiMentorController {
     @Body() dto: InterventionRecommendationDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward(
+    await this.assertTeacherInterventionCaseAccess(caseId, user);
+    const result = await this.proxy.forward(
       'POST',
       `/teacher/interventions/${caseId}/jobs`,
       user,
       dto,
     );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.intervention_recommendation.queued',
+      targetType: 'intervention_case',
+      targetId: caseId,
+      metadata: {
+        jobId: this.extractStringField(result, 'jobId'),
+        noteProvided: Boolean(dto.note?.trim()),
+      },
+    });
+    return result;
   }
 
   @Post('teacher/quizzes/generate-draft')
@@ -791,7 +1387,25 @@ export class AiMentorController {
     @Body() dto: GenerateQuizDraftDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/teacher/quizzes/generate-draft', user, dto);
+    await this.assertTeacherClassAccess(dto.classId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      '/teacher/quizzes/generate-draft',
+      user,
+      dto,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.generated',
+      targetType: 'class',
+      targetId: dto.classId,
+      metadata: {
+        questionCount: dto.questionCount,
+        questionType: dto.questionType,
+        assessmentType: dto.assessmentType,
+      },
+    });
+    return result;
   }
 
   @Post('teacher/quizzes/jobs')
@@ -802,7 +1416,21 @@ export class AiMentorController {
     @Body() dto: GenerateQuizDraftDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/teacher/quizzes/jobs', user, dto);
+    await this.assertTeacherClassAccess(dto.classId, user);
+    const result = await this.proxy.forward('POST', '/teacher/quizzes/jobs', user, dto);
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.queued',
+      targetType: 'class',
+      targetId: dto.classId,
+      metadata: {
+        jobId: this.extractStringField(result, 'jobId'),
+        questionCount: dto.questionCount,
+        questionType: dto.questionType,
+        assessmentType: dto.assessmentType,
+      },
+    });
+    return result;
   }
 
   @Get('teacher/jobs/:jobId')
@@ -812,7 +1440,77 @@ export class AiMentorController {
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/teacher/jobs/${jobId}`, user);
+    await this.assertTeacherJobAccess(jobId, user);
+    try {
+      return await this.proxy.forward('GET', `/teacher/jobs/${jobId}`, user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown AI status error';
+      this.logger.warn(
+        `AI job status degraded fallback for ${jobId}: ${message}`,
+      );
+
+      const cachedJob = await this.db.query.aiGenerationJobs.findFirst({
+        where: eq(aiGenerationJobs.id, jobId),
+        columns: {
+          id: true,
+          jobType: true,
+          status: true,
+          errorMessage: true,
+          sourceFilters: true,
+          updatedAt: true,
+        },
+      });
+      if (!cachedJob) {
+        throw new NotFoundException(
+          `AI generation job with ID "${jobId}" not found`,
+        );
+      }
+
+      const cachedOutput = await this.db.query.aiGenerationOutputs.findFirst({
+        where: eq(aiGenerationOutputs.jobId, jobId),
+        columns: {
+          id: true,
+        },
+        orderBy: [desc(aiGenerationOutputs.createdAt)],
+      });
+      const outputId = cachedOutput?.id ?? null;
+      const assessmentId = await this.resolveAssessmentIdForOutput(outputId);
+      const runtime = this.extractRuntimeFromSourceFilters(
+        cachedJob.sourceFilters,
+      );
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI job status temporarily unavailable; returning cached job status.',
+        data: {
+          jobId: cachedJob.id,
+          jobType: cachedJob.jobType,
+          status: cachedJob.status,
+          progressPercent: this.runtimeProgressForStatus(
+            cachedJob.status,
+            runtime,
+          ),
+          statusMessage:
+            (typeof runtime?.statusMessage === 'string' &&
+              runtime.statusMessage) ||
+            'AI service temporarily unavailable.',
+          errorMessage:
+            cachedJob.errorMessage ??
+            (typeof runtime?.errorMessage === 'string'
+              ? runtime.errorMessage
+              : message),
+          outputId,
+          assessmentId,
+          updatedAt: this.toIsoDate(cachedJob.updatedAt),
+        },
+      };
+    }
   }
 
   @Get('teacher/jobs/:jobId/result')
@@ -822,7 +1520,121 @@ export class AiMentorController {
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/teacher/jobs/${jobId}/result`, user);
+    await this.assertTeacherJobAccess(jobId, user);
+    try {
+      return await this.proxy.forward(
+        'GET',
+        `/teacher/jobs/${jobId}/result`,
+        user,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown AI result error';
+      this.logger.warn(
+        `AI job result degraded fallback for ${jobId}: ${message}`,
+      );
+
+      const cachedJob = await this.db.query.aiGenerationJobs.findFirst({
+        where: eq(aiGenerationJobs.id, jobId),
+        columns: {
+          id: true,
+          jobType: true,
+          status: true,
+          errorMessage: true,
+          sourceFilters: true,
+          updatedAt: true,
+        },
+      });
+      if (!cachedJob) {
+        throw new NotFoundException(
+          `AI generation job with ID "${jobId}" not found`,
+        );
+      }
+
+      const runtime = this.extractRuntimeFromSourceFilters(
+        cachedJob.sourceFilters,
+      );
+      const cachedOutput = await this.db.query.aiGenerationOutputs.findFirst({
+        where: eq(aiGenerationOutputs.jobId, jobId),
+        columns: {
+          id: true,
+          outputType: true,
+          structuredOutput: true,
+        },
+        orderBy: [desc(aiGenerationOutputs.createdAt)],
+      });
+      const outputId = cachedOutput?.id ?? null;
+      const assessmentId = await this.resolveAssessmentIdForOutput(outputId);
+
+      if (
+        !['completed', 'approved'].includes(cachedJob.status) ||
+        !cachedOutput
+      ) {
+        return {
+          success: true,
+          degraded: true,
+          message:
+            'AI job result temporarily unavailable; returning cached job state.',
+          data: {
+            jobId: cachedJob.id,
+            status: cachedJob.status,
+            result: null,
+            errorMessage:
+              cachedJob.errorMessage ??
+              (typeof runtime?.errorMessage === 'string'
+                ? runtime.errorMessage
+                : message),
+            updatedAt: this.toIsoDate(cachedJob.updatedAt),
+          },
+        };
+      }
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI job result temporarily unavailable; returning cached generated result.',
+        data: {
+          job: {
+            jobId: cachedJob.id,
+            jobType: cachedJob.jobType,
+            status: cachedJob.status,
+            outputId: cachedOutput.id,
+            assessmentId,
+            updatedAt: this.toIsoDate(cachedJob.updatedAt),
+            retryState:
+              runtime &&
+              typeof runtime.retryState === 'object' &&
+              runtime.retryState !== null
+                ? runtime.retryState
+                : null,
+          },
+          result: {
+            outputId: cachedOutput.id,
+            outputType: cachedOutput.outputType,
+            structuredOutput: {
+              ...((cachedOutput.structuredOutput as Record<string, unknown>) ??
+                {}),
+              ...(assessmentId ? { assessmentId } : {}),
+              ...(runtime &&
+              runtime.resultSummary &&
+              typeof runtime.resultSummary === 'object'
+                ? { runtime: runtime.resultSummary }
+                : {}),
+            },
+          },
+          errorMessage:
+            cachedJob.errorMessage ??
+            (typeof runtime?.errorMessage === 'string'
+              ? runtime.errorMessage
+              : message),
+          updatedAt: this.toIsoDate(cachedJob.updatedAt),
+        },
+      };
+    }
   }
 
   @Post('index/classes/:classId')
@@ -832,6 +1644,14 @@ export class AiMentorController {
     @Param('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', `/index/classes/${classId}`, user);
+    await this.assertTeacherClassAccess(classId, user);
+    const result = await this.proxy.forward('POST', `/index/classes/${classId}`, user);
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.class_content.reindex_queued',
+      targetType: 'class',
+      targetId: classId,
+    });
+    return result;
   }
 }
