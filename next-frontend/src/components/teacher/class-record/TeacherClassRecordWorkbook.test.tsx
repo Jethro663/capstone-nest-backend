@@ -126,6 +126,40 @@ function createState(): TeacherClassRecordState {
           gender: 'female',
           remarks: 'Passed',
         },
+        {
+          studentId: 'student-2',
+          firstName: 'Ben',
+          lastName: 'Lopez',
+          email: 'ben.lopez@nexora.edu',
+          categories: [
+            {
+              categoryId: 'cat-1',
+              scores: [14],
+              total: 14,
+              ps: 70,
+              ws: 28,
+            },
+            {
+              categoryId: 'cat-2',
+              scores: [20],
+              total: 20,
+              ps: 66.666,
+              ws: 26.666,
+            },
+            {
+              categoryId: 'cat-3',
+              scores: [30],
+              total: 30,
+              ps: 60,
+              ws: 12,
+            },
+          ],
+          initialGrade: 66.666,
+          quarterlyGrade: 72,
+          remarks: 'For Intervention',
+          isRemoved: true,
+          enrollmentState: 'removed',
+        },
       ],
     },
     quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
@@ -168,6 +202,9 @@ describe('TeacherClassRecordWorkbook', () => {
     expect(screen.getByText('MATH')).toBeInTheDocument();
     expect(screen.getByText("LEARNERS' NAMES")).toBeInTheDocument();
     expect(screen.getByText('Santos, Ana')).toBeInTheDocument();
+    expect(screen.getByText('REMOVED')).toBeInTheDocument();
+    expect(screen.getByText('Lopez, Ben')).toBeInTheDocument();
+    expect(screen.getByText('Removed')).toBeInTheDocument();
     expect(screen.getByText('Finalize Quarter')).toBeInTheDocument();
   });
 });

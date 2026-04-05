@@ -99,6 +99,8 @@ export interface SpreadsheetStudentRow {
   initialGrade: number;
   quarterlyGrade: number;
   remarks?: 'Passed' | 'For Intervention';
+  isRemoved?: boolean;
+  enrollmentState?: 'active' | 'removed';
 }
 
 export interface SpreadsheetData {

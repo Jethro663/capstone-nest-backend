@@ -129,16 +129,111 @@ def build_extraction_chunks(rows: list[dict[str, Any]]) -> list[IndexChunk]:
         if not structured:
             continue
 
-        lessons = structured.get("lessons") or []
-        for lesson_index, lesson in enumerate(lessons):
-            lesson_text = "\n\n".join(
-                _stringify_content(block.get("content"))
-                for block in lesson.get("blocks", [])
-                if block.get("type") in {"text", "question"}
-            ).strip()
-            if not lesson_text:
+        sections = structured.get("sections")
+        if not isinstance(sections, list):
+            legacy_lessons = structured.get("lessons")
+            if isinstance(legacy_lessons, list):
+                sections = [
+                    {
+                        "title": lesson.get("title") if isinstance(lesson, dict) else f"Section {idx + 1}",
+                        "description": lesson.get("description") if isinstance(lesson, dict) else "",
+                        "lessonBlocks": lesson.get("blocks") if isinstance(lesson, dict) else [],
+                        "assessmentDraft": lesson.get("assessmentDraft") if isinstance(lesson, dict) else None,
+                    }
+                    for idx, lesson in enumerate(legacy_lessons)
+                ]
+            else:
+                sections = []
+
+        for section_index, section in enumerate(sections):
+            if not isinstance(section, dict):
                 continue
-            for idx, chunk_text in enumerate(chunk_text_for_indexing(lesson_text)):
+
+            blocks = section.get("lessonBlocks")
+            if not isinstance(blocks, list):
+                blocks = section.get("blocks") if isinstance(section.get("blocks"), list) else []
+
+            section_parts: list[str] = []
+            section_description = str(section.get("description") or "").strip()
+            if section_description:
+                section_parts.append(section_description)
+            graph_keywords = section.get("graphKeywords")
+            if isinstance(graph_keywords, list):
+                keyword_line = " ".join(
+                    str(keyword).strip()
+                    for keyword in graph_keywords
+                    if isinstance(keyword, str) and keyword.strip()
+                )
+                if keyword_line:
+                    section_parts.append(f"Section keywords: {keyword_line}")
+            figure_references = section.get("figureReferences")
+            if isinstance(figure_references, list):
+                refs_line = " ".join(
+                    str(reference).strip()
+                    for reference in figure_references
+                    if isinstance(reference, str) and reference.strip()
+                )
+                if refs_line:
+                    section_parts.append(f"Figure references: {refs_line}")
+
+            for block in blocks:
+                if not isinstance(block, dict):
+                    continue
+                block_type = str(block.get("type") or "").strip().lower()
+                content = block.get("content")
+                if block_type in {"text", "question"}:
+                    block_text = _stringify_content(content).strip()
+                    if block_text:
+                        section_parts.append(block_text)
+                elif block_type == "image" and isinstance(content, dict):
+                    caption = str(content.get("caption") or content.get("alt") or "").strip()
+                    if caption:
+                        section_parts.append(f"Image context: {caption}")
+
+            assessment_draft = section.get("assessmentDraft")
+            if isinstance(assessment_draft, dict):
+                draft_title = str(assessment_draft.get("title") or "").strip()
+                draft_description = str(assessment_draft.get("description") or "").strip()
+                if draft_title:
+                    section_parts.append(f"Section assessment draft: {draft_title}")
+                if draft_description:
+                    section_parts.append(draft_description)
+                questions = assessment_draft.get("questions")
+                if isinstance(questions, list):
+                    for question in questions:
+                        if not isinstance(question, dict):
+                            continue
+                        question_text = str(question.get("content") or "").strip()
+                        if question_text:
+                            section_parts.append(question_text)
+                        options = question.get("options")
+                        if isinstance(options, list):
+                            option_lines = [
+                                str(option.get("text")).strip()
+                                for option in options
+                                if isinstance(option, dict) and str(option.get("text") or "").strip()
+                            ]
+                            if option_lines:
+                                section_parts.append("Options: " + " | ".join(option_lines))
+
+            extraction_audit = structured.get("audit")
+            if isinstance(extraction_audit, dict):
+                coherence_warnings = extraction_audit.get("coherenceWarnings")
+                if isinstance(coherence_warnings, list):
+                    warning_text = " ".join(
+                        str(item).strip()
+                        for item in coherence_warnings
+                        if isinstance(item, str) and item.strip()
+                    )
+                    if warning_text:
+                        section_parts.append(f"Coherence context: {warning_text}")
+
+            section_text = "\n\n".join(part for part in section_parts if part).strip()
+            if not section_text:
+                continue
+
+            section_title = str(section.get("title") or f"Section {section_index + 1}")
+            for idx, chunk_text in enumerate(chunk_text_for_indexing(section_text)):
                 chunks.append(
                     IndexChunk(
                         source_type="extracted_module",
@@ -146,18 +241,18 @@ def build_extraction_chunks(rows: list[dict[str, Any]]) -> list[IndexChunk]:
                         class_id=str(row["class_id"]),
                         extraction_id=str(row["id"]),
                         chunk_text=chunk_text,
-                        chunk_order=(lesson_index * 100) + idx,
-                    metadata={
-                            "documentId": f"extraction:{row['id']}:lesson:{lesson_index}",
+                        chunk_order=(section_index * 100) + idx,
+                        metadata={
+                            "documentId": f"extraction:{row['id']}:section:{section_index}",
                             "classId": str(row["class_id"]),
                             "extractionId": str(row["id"]),
                             "teacherId": str(row["teacher_id"]),
                             "title": structured.get("title"),
-                            "lessonTitle": lesson.get("title"),
-                            "lessonIndex": lesson_index,
-                            "blockType": "extracted_lesson",
+                            "sectionTitle": section_title,
+                            "sectionIndex": section_index,
+                            "blockType": "extracted_section",
                             "sourceReference": (
-                                f"extraction:{row['id']} | lesson:{lesson_index} | chunk:{idx}"
+                                f"extraction:{row['id']} | section:{section_index} | chunk:{idx}"
                             ),
                             "subjectName": row["subject_name"],
                             "subjectCode": row["subject_code"],

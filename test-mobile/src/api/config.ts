@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 const hostUri =
   Constants.expoConfig?.hostUri ||
@@ -12,11 +13,13 @@ const inferredApiUrl =
     ? `http://${inferredHost}:3000/api`
     : "";
 
+const localFallbackApiUrl = Platform.OS === "android" ? "http://10.0.2.2:3000/api" : "http://localhost:3000/api";
+
 // Use EXPO_PUBLIC_API_URL for physical-device testing, e.g. http://192.168.1.10:3000/api.
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL?.trim() ||
   inferredApiUrl ||
-  'http://localhost:3000/api';
+  localFallbackApiUrl;
 
 export const AUTH_STORAGE_KEYS = {
   accessToken: "nexora.test-mobile.access-token",

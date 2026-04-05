@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpen,
@@ -192,10 +192,12 @@ function buildGradingRows(module: ClassModule | null) {
 
 export default function TeacherModuleDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const classId = toParamValue(params.id);
   const moduleId = toParamValue(params.moduleId);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
+  const [classModules, setClassModules] = useState<ClassModule[]>([]);
   const [module, setModule] = useState<ClassModule | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -239,10 +241,14 @@ export default function TeacherModuleDetailPage() {
       ]);
 
       const resolvedClass = classResponse.data || null;
-      const currentModuleRaw = modulesResponse.data.find((entry) => entry.id === moduleId) || null;
-      const currentModule = currentModuleRaw ? normalizeModule(currentModuleRaw) : null;
+      const normalizedModules = (modulesResponse.data || []).map((entry) =>
+        normalizeModule(entry),
+      );
+      const currentModule =
+        normalizedModules.find((entry) => entry.id === moduleId) || null;
 
       setClassItem(resolvedClass);
+      setClassModules(normalizedModules);
       setModule(currentModule);
       setLessons(lessonResponse.data || []);
       setAssessments(assessmentResponse.data || []);
@@ -258,6 +264,7 @@ export default function TeacherModuleDetailPage() {
       });
     } catch {
       setClassItem(null);
+      setClassModules([]);
       setModule(null);
       setLessons([]);
       setAssessments([]);
@@ -273,14 +280,6 @@ export default function TeacherModuleDetailPage() {
 
   const sectionList = useMemo(() => module?.sections || [], [module]);
 
-  const allAttachedLessonIds = useMemo(() => {
-    return new Set(
-      sectionList.flatMap((section) =>
-        section.items.filter((item) => item.itemType === 'lesson' && item.lessonId).map((item) => item.lessonId as string),
-      ),
-    );
-  }, [sectionList]);
-
   const allAttachedAssessmentIds = useMemo(() => {
     return new Set(
       sectionList.flatMap((section) =>
@@ -292,18 +291,13 @@ export default function TeacherModuleDetailPage() {
   }, [sectionList]);
 
   const availableAttachOptions = useMemo(() => {
-    if (attachState.itemType === 'lesson') {
-      return lessons
-        .filter((lesson) => !allAttachedLessonIds.has(lesson.id))
-        .map((lesson) => ({ id: lesson.id, label: lesson.title }));
-    }
     if (attachState.itemType === 'assessment') {
       return assessments
         .filter((assessment) => !allAttachedAssessmentIds.has(assessment.id))
         .map((assessment) => ({ id: assessment.id, label: assessment.title }));
     }
     return [];
-  }, [assessments, allAttachedAssessmentIds, allAttachedLessonIds, attachState.itemType, lessons]);
+  }, [assessments, allAttachedAssessmentIds, attachState.itemType]);
 
   const attachDialogTitle =
     attachState.itemType === 'lesson'
@@ -316,7 +310,7 @@ export default function TeacherModuleDetailPage() {
 
   const attachDialogDescription =
     attachState.itemType === 'lesson'
-      ? 'Attach an existing lesson from this class into this module section.'
+      ? 'Create a new empty lesson, attach it to this section, then open the lesson editor.'
       : attachState.itemType === 'assessment'
         ? 'Attach an assessment block. New assessment blocks start with Give unchecked.'
         : attachState.itemType === 'file'
@@ -326,13 +320,21 @@ export default function TeacherModuleDetailPage() {
   const canSubmitAttach =
     attachState.itemType === 'file'
       ? Boolean(attachState.file)
+      : attachState.itemType === 'lesson'
+        ? true
       : attachState.itemType === null
         ? false
         : Boolean(attachState.itemId);
 
   useEffect(() => {
     if (!attachState.open) return;
-    if (attachState.itemType === 'file' || attachState.itemType === null) return;
+    if (
+      attachState.itemType === 'file' ||
+      attachState.itemType === 'lesson' ||
+      attachState.itemType === null
+    ) {
+      return;
+    }
     setAttachState((current) => {
       if (current.itemId && availableAttachOptions.some((option) => option.id === current.itemId)) {
         return current;
@@ -348,6 +350,22 @@ export default function TeacherModuleDetailPage() {
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'lesson').length,
     0,
   );
+
+  const attachedLessonIdsAcrossClass = useMemo(() => {
+    return new Set(
+      classModules.flatMap((entry) =>
+        entry.sections.flatMap((section) =>
+          section.items
+            .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
+            .map((item) => item.lessonId as string),
+        ),
+      ),
+    );
+  }, [classModules]);
+
+  const legacyLessons = useMemo(() => {
+    return lessons.filter((lesson) => !attachedLessonIdsAcrossClass.has(lesson.id));
+  }, [attachedLessonIdsAcrossClass, lessons]);
 
   const assessmentCount = sectionList.reduce(
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
@@ -583,10 +601,26 @@ export default function TeacherModuleDetailPage() {
     });
   };
 
+  const confirmDeleteLegacyLesson = (lesson: Lesson) => {
+    setConfirmation({
+      title: 'Delete legacy lesson?',
+      description:
+        'This lesson is not attached to any module and will be permanently deleted.',
+      tone: 'danger',
+      confirmLabel: 'Delete Lesson',
+      details: 'This action cannot be undone.',
+      onConfirm: async () => {
+        await lessonService.delete(lesson.id);
+        await fetchData();
+        toast.success('Legacy lesson deleted');
+      },
+    });
+  };
+
   const handleAttachItem = async () => {
     if (!attachState.sectionId || !attachState.itemType || attachingItem) return;
 
-    if (attachState.itemType !== 'file' && !attachState.itemId) {
+    if (attachState.itemType === 'assessment' && !attachState.itemId) {
       toast.error('Select an item to attach');
       return;
     }
@@ -611,10 +645,15 @@ export default function TeacherModuleDetailPage() {
           };
 
       if (attachState.itemType === 'lesson') {
+        const createdLesson = await lessonService.create({
+          classId,
+          title: 'Untitled Lesson',
+          description: '',
+        });
         const parsedPoints = Number.parseInt(attachState.lessonPoints || '0', 10);
         payload = {
           itemType: 'lesson',
-          lessonId: attachState.itemId,
+          lessonId: createdLesson.data.id,
           points: Number.isFinite(parsedPoints) && parsedPoints >= 0 ? parsedPoints : 0,
         };
       } else if (attachState.itemType === 'assessment') {
@@ -649,12 +688,16 @@ export default function TeacherModuleDetailPage() {
         file: null,
       });
       await fetchData();
+      if (attachState.itemType === 'lesson' && payload.itemType === 'lesson') {
+        toast.success('Lesson block created');
+        router.push(`/dashboard/teacher/lessons/${payload.lessonId}/edit`);
+        return;
+      }
+
       toast.success(
-        attachState.itemType === 'lesson'
-          ? 'Lesson attached'
-          : attachState.itemType === 'assessment'
-            ? 'Assessment attached (not given yet)'
-            : 'PDF block attached',
+        attachState.itemType === 'assessment'
+          ? 'Assessment attached (not given yet)'
+          : 'PDF block attached',
       );
     } catch {
       toast.error('Unable to attach item');
@@ -1092,6 +1135,63 @@ export default function TeacherModuleDetailPage() {
                 </article>
               );
             })}
+
+            <article className="teacher-module-detail__section-card">
+              <header className="teacher-module-detail__section-card-head">
+                <div className="teacher-module-detail__section-main">
+                  <h3>Legacy Lessons (Not In Modules)</h3>
+                  <span>{legacyLessons.length} lessons</span>
+                </div>
+              </header>
+              <div className="teacher-module-detail__items">
+                {legacyLessons.length === 0 ? (
+                  <div className="teacher-module-detail__empty">
+                    No legacy lessons found. All class lessons are attached to modules.
+                  </div>
+                ) : (
+                  legacyLessons.map((lesson) => (
+                    <div key={lesson.id} className="teacher-module-detail__item-row">
+                      <div className="teacher-module-detail__item-main">
+                        <div className="teacher-module-detail__item-icon">
+                          <BookOpen className="h-4 w-4" />
+                        </div>
+                        <div className="teacher-module-detail__item-copy">
+                          <div className="teacher-module-detail__chips">
+                            <span data-kind="lesson">lesson</span>
+                            <span data-kind={lesson.isDraft ? 'draft' : 'published'}>
+                              {lesson.isDraft ? 'Draft' : 'Published'}
+                            </span>
+                          </div>
+                          <h4>{lesson.title}</h4>
+                          <p>Legacy lesson not attached to any module section.</p>
+                        </div>
+                      </div>
+                      <div className="teacher-module-detail__item-controls">
+                        <ActionTooltip label="Open lesson editor">
+                          <Link
+                            href={`/dashboard/teacher/lessons/${lesson.id}/edit`}
+                            className="teacher-module-detail__ghost"
+                            aria-label="Open legacy lesson editor"
+                          >
+                            <NotebookPen className="h-4 w-4" />
+                          </Link>
+                        </ActionTooltip>
+                        <ActionTooltip label="Delete legacy lesson">
+                          <button
+                            type="button"
+                            className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                            onClick={() => confirmDeleteLegacyLesson(lesson)}
+                            aria-label="Delete legacy lesson"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </ActionTooltip>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
           </div>
         ) : null}
         {activeTab === 'visibility' ? (
@@ -1454,39 +1554,41 @@ export default function TeacherModuleDetailPage() {
                     <p className="teacher-module-detail__attach-note">
                       Students earn these points after completing the lesson.
                     </p>
+                    <p className="teacher-module-detail__attach-note">
+                      A new empty draft lesson will be created and attached to this section.
+                    </p>
                   </div>
                 ) : null}
-                <label htmlFor="attach-item">Available {attachState.itemType}s</label>
-                <select
-                  id="attach-item"
-                  value={attachState.itemId}
-                  onChange={(event) =>
-                    setAttachState((current) => ({
-                      ...current,
-                      itemId: event.target.value,
-                    }))
-                  }
-                >
-                  {availableAttachOptions.length === 0 ? (
-                    <option value="">No available items</option>
-                  ) : (
-                    availableAttachOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))
-                  )}
-                </select>
-                {availableAttachOptions.length === 0 ? (
-                  <p className="teacher-module-detail__attach-note">
-                    No available {attachState.itemType}s. Create one from{' '}
-                    {attachState.itemType === 'lesson' ? (
-                      <Link href="/dashboard/teacher/lessons">Lessons</Link>
-                    ) : (
-                      <Link href="/dashboard/teacher/assessments">Assessments</Link>
-                    )}
-                    .
-                  </p>
+                {attachState.itemType === 'assessment' ? (
+                  <>
+                    <label htmlFor="attach-item">Available assessments</label>
+                    <select
+                      id="attach-item"
+                      value={attachState.itemId}
+                      onChange={(event) =>
+                        setAttachState((current) => ({
+                          ...current,
+                          itemId: event.target.value,
+                        }))
+                      }
+                    >
+                      {availableAttachOptions.length === 0 ? (
+                        <option value="">No available items</option>
+                      ) : (
+                        availableAttachOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {availableAttachOptions.length === 0 ? (
+                      <p className="teacher-module-detail__attach-note">
+                        No available assessments. Create one from{' '}
+                        <Link href="/dashboard/teacher/assessments">Assessments</Link>.
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             ) : (

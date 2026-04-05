@@ -1,0 +1,13 @@
+Starting project at C:\Users\jethr\Desktop\capstone-nest-react-lms\test-mobile
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Android node_modules\expo\AppEntry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android node_modules\expo\AppEntry.js ▓▓▓▓▓▓▓░░░░░░░░░ 44.0% (61/92)
+Android node_modules\expo\AppEntry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 56.3% (222/417)
+Android node_modules\expo\AppEntry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 56.3% (491/747)
+Android node_modules\expo\AppEntry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 63.9% (792/991)
+Android node_modules\expo\AppEntry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73.7% (1018/1232)
+Android node_modules\expo\AppEntry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96.5% (1569/1597)
+Android Bundled 22505ms node_modules\expo\AppEntry.js (1605 modules)

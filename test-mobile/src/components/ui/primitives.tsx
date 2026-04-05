@@ -1,9 +1,12 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  ActivityIndicator,
   Animated,
+  PanResponder,
+  Platform,
   RefreshControl,
   ScrollView,
   Text,
@@ -16,19 +19,118 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 import { colors, radii, shadow } from "../../theme/tokens";
 
+type AndroidRefreshFallback = {
+  refreshing: boolean;
+  onRefresh: () => void;
+};
+
+function resolveAndroidRefreshFallback(refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"]) {
+  if (Platform.OS !== "android" || !refreshControl) {
+    return null;
+  }
+
+  const props = (refreshControl as { props?: { refreshing?: boolean; onRefresh?: () => void } }).props;
+  if (!props || typeof props.onRefresh !== "function") {
+    return null;
+  }
+
+  return {
+    refreshing: !!props.refreshing,
+    onRefresh: props.onRefresh,
+  } satisfies AndroidRefreshFallback;
+}
+
+function AndroidPullToRefresh({ refreshing, onRefresh }: AndroidRefreshFallback) {
+  const [pullDistance, setPullDistance] = useState(0);
+  const triggerDistance = 64;
+  const maxPullDistance = 120;
+  const armed = pullDistance >= triggerDistance;
+
+  const resetPull = () => setPullDistance(0);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          !refreshing && gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+        onPanResponderMove: (_, gestureState) => {
+          const nextDistance = Math.max(0, Math.min(maxPullDistance, gestureState.dy));
+          setPullDistance(nextDistance);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const releasedDistance = Math.max(0, Math.min(maxPullDistance, gestureState.dy));
+          if (releasedDistance >= triggerDistance && !refreshing) {
+            onRefresh();
+          }
+          resetPull();
+        },
+        onPanResponderTerminate: resetPull,
+      }),
+    [onRefresh, refreshing],
+  );
+
+  const helperText = refreshing
+    ? "Refreshing..."
+    : armed
+      ? "Release to refresh"
+      : pullDistance > 0
+        ? "Pull a little more"
+        : "Pull down to refresh";
+
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+      <View
+        {...panResponder.panHandlers}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: armed ? colors.amber : colors.border,
+          backgroundColor: colors.white,
+          paddingVertical: 10,
+          transform: [{ translateY: Math.min(14, pullDistance / 8) }],
+        }}
+      >
+        {refreshing ? (
+          <ActivityIndicator size="small" color={colors.amber} />
+        ) : (
+          <MaterialCommunityIcons
+            name={armed ? "arrow-down-bold-circle" : "arrow-down-circle-outline"}
+            size={16}
+            color={armed ? colors.amber : colors.muted}
+          />
+        )}
+        <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>{helperText}</Text>
+      </View>
+    </View>
+  );
+}
+
 export function ScreenScroll({
   children,
   refreshControl,
 }: PropsWithChildren<{ refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"] }>) {
+  const androidRefreshFallback = resolveAndroidRefreshFallback(refreshControl);
+  const resolvedRefreshControl = Platform.OS === "android" ? undefined : refreshControl;
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["left", "right"]}>
       <ScrollView
         bounces
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 112 }}
-        refreshControl={refreshControl}
+        refreshControl={resolvedRefreshControl}
         style={{ flex: 1, backgroundColor: colors.surface }}
       >
+        {androidRefreshFallback ? (
+          <AndroidPullToRefresh
+            refreshing={androidRefreshFallback.refreshing}
+            onRefresh={androidRefreshFallback.onRefresh}
+          />
+        ) : null}
         {children}
       </ScrollView>
     </SafeAreaView>

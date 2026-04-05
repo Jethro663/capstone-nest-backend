@@ -12,9 +12,11 @@ function buildMockDb() {
     query: {
       classRecordItems: { findFirst: jest.fn() },
       classRecords: { findFirst: jest.fn() },
+      classRecordCategories: { findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
       classRecordFinalGrades: { findFirst: jest.fn() },
     },
+    select: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
     transaction: jest.fn(),
@@ -30,12 +32,40 @@ function mockUpdateReturning(db: any, rows: any[]) {
   db.update.mockReturnValueOnce({ set });
 }
 
+function mockSelectQuery(db: any, rows: any[]) {
+  const chain: any = {
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockResolvedValue(rows),
+  };
+  chain.from = jest.fn().mockReturnValue(chain);
+  db.select.mockReturnValueOnce(chain);
+}
+
+function mockSelectRows(db: any, rows: any[]) {
+  const chain: any = {
+    where: jest.fn().mockResolvedValue(rows),
+  };
+  chain.from = jest.fn().mockReturnValue(chain);
+  db.select.mockReturnValueOnce(chain);
+}
+
+function mockSelectRowsWithJoin(db: any, rows: any[]) {
+  const chain: any = {
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockResolvedValue(rows),
+  };
+  chain.from = jest.fn().mockReturnValue(chain);
+  db.select.mockReturnValueOnce(chain);
+}
+
 describe('ClassRecordService', () => {
   let service: ClassRecordService;
   let db: any;
   const mockComputationService = {
     validateCategoryWeights: jest.fn(),
     computeGrades: jest.fn(),
+    transmute: jest.fn((value: number) => Math.max(60, Math.round(value * 0.4 + 60))),
   };
   const mockSyncService = {
     syncFromAssessment: jest.fn(),
@@ -530,5 +560,131 @@ describe('ClassRecordService', () => {
       studentId: 'student-1',
       finalPercentage: '88',
     });
+  });
+
+  it('includes removed students with class-record history in spreadsheet output', async () => {
+    db.query.classRecords.findFirst.mockResolvedValue({
+      id: 'record-1',
+      classId: 'class-1',
+      gradingPeriod: 'Q1',
+      status: 'draft',
+      teacherId: 'teacher-1',
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      subjectName: 'Math',
+      section: { gradeLevel: '7', name: 'Sampaguita' },
+      teacher: { firstName: 'Juan', lastName: 'Dela Cruz', middleName: null },
+    });
+
+    mockSelectQuery(db, [
+      {
+        studentId: 'student-active',
+        firstName: 'Ana',
+        lastName: 'Santos',
+        middleName: null,
+        email: 'ana@nexora.edu',
+      },
+    ]);
+    mockSelectRowsWithJoin(db, [{ studentId: 'student-removed' }]);
+    mockSelectRows(db, [
+      {
+        studentId: 'student-removed',
+        finalPercentage: '81',
+        remarks: 'Passed',
+      },
+    ]);
+    mockSelectQuery(db, [
+      {
+        studentId: 'student-removed',
+        firstName: 'Ben',
+        lastName: 'Lopez',
+        middleName: null,
+        email: 'ben@nexora.edu',
+      },
+    ]);
+
+    db.query.classRecordCategories.findMany.mockResolvedValue([
+      {
+        id: 'cat-1',
+        name: 'Written Works',
+        weightPercentage: '100',
+        items: [
+          {
+            id: 'item-1',
+            itemOrder: 1,
+            assessmentId: null,
+            title: 'WW1',
+            maxScore: '100',
+            scores: [
+              { studentId: 'student-active', score: '85' },
+              { studentId: 'student-removed', score: '70' },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.getSpreadsheet('record-1', 'teacher-1', [
+      'teacher',
+    ]);
+
+    expect(result.students).toHaveLength(2);
+    expect(result.students[0]).toMatchObject({
+      studentId: 'student-active',
+      isRemoved: false,
+      enrollmentState: 'active',
+    });
+    expect(result.students[1]).toMatchObject({
+      studentId: 'student-removed',
+      isRemoved: true,
+      enrollmentState: 'removed',
+      quarterlyGrade: 81,
+      remarks: 'Passed',
+    });
+  });
+
+  it('excludes removed students with no score/final-grade history from spreadsheet output', async () => {
+    db.query.classRecords.findFirst.mockResolvedValue({
+      id: 'record-1',
+      classId: 'class-1',
+      gradingPeriod: 'Q1',
+      status: 'draft',
+      teacherId: 'teacher-1',
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      subjectName: 'Math',
+      section: { gradeLevel: '7', name: 'Sampaguita' },
+      teacher: { firstName: 'Juan', lastName: 'Dela Cruz', middleName: null },
+    });
+
+    mockSelectQuery(db, [
+      {
+        studentId: 'student-active',
+        firstName: 'Ana',
+        lastName: 'Santos',
+        middleName: null,
+        email: 'ana@nexora.edu',
+      },
+    ]);
+    mockSelectRowsWithJoin(db, []);
+    mockSelectRows(db, []);
+
+    db.query.classRecordCategories.findMany.mockResolvedValue([
+      {
+        id: 'cat-1',
+        name: 'Written Works',
+        weightPercentage: '100',
+        items: [],
+      },
+    ]);
+
+    const result = await service.getSpreadsheet('record-1', 'teacher-1', [
+      'teacher',
+    ]);
+
+    expect(result.students).toHaveLength(1);
+    expect(result.students[0].studentId).toBe('student-active');
   });
 });

@@ -45,6 +45,7 @@ class ExtractRequest(BaseModel):
 
 
 class ApplyExtractionRequest(BaseModel):
+    section_indices: list[int] | None = Field(None, alias="sectionIndices")
     lesson_indices: list[int] | None = Field(None, alias="lessonIndices")
 
     model_config = {"populate_by_name": True}
@@ -53,7 +54,7 @@ class ApplyExtractionRequest(BaseModel):
 class ExtractionBlockDto(BaseModel):
     type: str
     order: int
-    content: dict[str, Any]
+    content: dict[str, Any] | str
     metadata: dict[str, Any] | None = None
 
 
@@ -63,10 +64,60 @@ class ExtractionLessonDto(BaseModel):
     blocks: list[ExtractionBlockDto]
 
 
+class ExtractionAssessmentOptionDto(BaseModel):
+    text: str
+    is_correct: bool = Field(default=False, alias="isCorrect")
+    order: int | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionAssessmentQuestionDto(BaseModel):
+    content: str
+    type: str = "multiple_choice"
+    points: int = 1
+    order: int | None = None
+    explanation: str | None = None
+    image_url: str | None = Field(default=None, alias="imageUrl")
+    concept_tags: list[str] | None = Field(default=None, alias="conceptTags")
+    options: list[ExtractionAssessmentOptionDto] | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionAssessmentDraftDto(BaseModel):
+    title: str
+    description: str | None = None
+    type: str = "quiz"
+    passing_score: int = Field(default=60, alias="passingScore")
+    feedback_level: str = Field(default="standard", alias="feedbackLevel")
+    question_type: str = Field(default="multiple_choice", alias="questionType")
+    questions: list[ExtractionAssessmentQuestionDto] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionSectionDto(BaseModel):
+    title: str
+    description: str | None = None
+    order: int | None = None
+    lesson_blocks: list[ExtractionBlockDto] = Field(default_factory=list, alias="lessonBlocks")
+    assessment_draft: ExtractionAssessmentDraftDto | None = Field(
+        default=None,
+        alias="assessmentDraft",
+    )
+    confidence: float | None = None
+
+    model_config = {"populate_by_name": True}
+
+
 class UpdateExtractionRequest(BaseModel):
     title: str | None = None
     description: str | None = None
-    lessons: list[ExtractionLessonDto]
+    sections: list[ExtractionSectionDto] | None = None
+    lessons: list[ExtractionLessonDto] | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 # ---------------------------------------------------------------------------

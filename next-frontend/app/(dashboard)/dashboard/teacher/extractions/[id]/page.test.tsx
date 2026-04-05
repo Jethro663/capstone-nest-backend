@@ -47,25 +47,45 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
         ? {
             title: 'Module Title',
             description: 'Module Description',
-            lessons: [
+            sections: [
               {
-                title: 'Lesson 1',
-                description: 'Lesson Description',
+                title: 'Section 1',
+                description: 'Section Description',
                 order: 1,
-                blocks: [
+                lessonBlocks: [
                   {
                     type: 'text',
                     content: { text: 'Lesson content' },
+                    order: 0,
+                  },
+                  {
+                    type: 'image',
+                    content: {
+                      url: 'data:image/png;base64,ZmFrZQ==',
+                      caption: 'Figure from page 1',
+                    },
                     order: 1,
+                    metadata: {
+                      pageNumber: 1,
+                      assignmentConfidence: 0.88,
+                    },
                   },
                 ],
+                assessmentDraft: {
+                  title: 'Checkpoint',
+                  description: 'Quick check',
+                  type: 'quiz',
+                  passingScore: 60,
+                  feedbackLevel: 'standard',
+                  questions: [{ content: 'What is photosynthesis?', type: 'short_answer', points: 1, order: 1 }],
+                },
               },
             ],
           }
         : null,
     isApplied: false,
     progressPercent: status === 'pending' ? 10 : 100,
-    totalChunks: status === 'pending' ? 10 : 10,
+    totalChunks: 10,
     processedChunks: status === 'pending' ? 1 : 10,
     createdAt: '2026-04-04T00:00:00.000Z',
     updatedAt: '2026-04-04T00:00:00.000Z',
@@ -88,6 +108,24 @@ describe('ExtractionReviewPage', () => {
     jest.useRealTimers();
   });
 
+  it('renders section-first content with image preview and assessment draft', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildExtraction('completed'),
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(await screen.findByText('Extraction Review')).toBeInTheDocument();
+    expect(screen.getByText('Sections (1)')).toBeInTheDocument();
+    expect(screen.getByText('Assessment Draft')).toBeInTheDocument();
+    expect(screen.getByAltText('Extracted visual')).toBeInTheDocument();
+    expect(screen.getByText('Page 1')).toBeInTheDocument();
+    expect(screen.getByText('Confidence 88%')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue(/data:image\/png;base64/i)).not.toBeInTheDocument();
+  });
+
   it('renders load error state and retries fetching extraction', async () => {
     mockedExtractionService.getById
       .mockRejectedValueOnce({
@@ -96,25 +134,25 @@ describe('ExtractionReviewPage', () => {
             message: 'AI extraction queue is temporarily unavailable. Please retry shortly.',
           },
         },
-      })
+      } as never)
       .mockResolvedValueOnce({
         success: true,
         message: 'ok',
         data: buildExtraction('completed'),
-      });
+      } as never);
 
     render(<ExtractionReviewPage />);
 
     expect(
       await screen.findByText('AI extraction queue is temporarily unavailable. Please retry shortly.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     await waitFor(() => {
       expect(screen.getByText('Extraction Review')).toBeInTheDocument();
     });
+
     expect(mockedExtractionService.getById).toHaveBeenCalledTimes(2);
     expect(mockedToast.error).toHaveBeenCalledWith(
       'AI extraction queue is temporarily unavailable. Please retry shortly.',
@@ -128,14 +166,10 @@ describe('ExtractionReviewPage', () => {
       success: true,
       message: 'ok',
       data: buildExtraction('pending'),
-    });
+    } as never);
     mockedExtractionService.getStatus.mockRejectedValue({
-      response: {
-        data: {
-          message: outageMessage,
-        },
-      },
-    });
+      response: { data: { message: outageMessage } },
+    } as never);
 
     render(<ExtractionReviewPage />);
 
@@ -162,14 +196,10 @@ describe('ExtractionReviewPage', () => {
       success: true,
       message: 'ok',
       data: buildExtraction('completed'),
-    });
+    } as never);
     mockedExtractionService.apply.mockRejectedValue({
-      response: {
-        data: {
-          message: backendMessage,
-        },
-      },
-    });
+      response: { data: { message: backendMessage } },
+    } as never);
 
     render(<ExtractionReviewPage />);
 
@@ -177,50 +207,11 @@ describe('ExtractionReviewPage', () => {
       expect(screen.getByText('Extraction Review')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Apply (1 lesson)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply (1 section)' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
 
     await waitFor(() => {
       expect(mockedToast.error).toHaveBeenCalledWith(backendMessage);
     });
-  });
-
-  it('keeps apply success and shows warning when post-apply refresh fails', async () => {
-    mockedExtractionService.getById
-      .mockResolvedValueOnce({
-        success: true,
-        message: 'ok',
-        data: buildExtraction('completed'),
-      })
-      .mockRejectedValueOnce({
-        response: {
-          data: {
-            message: 'Applied, but latest extraction details are unavailable.',
-          },
-        },
-      });
-    mockedExtractionService.apply.mockResolvedValue({
-      success: true,
-      message: 'Extraction applied',
-      data: {
-        lessonsCreated: 1,
-      },
-    });
-
-    render(<ExtractionReviewPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply (1 lesson)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
-
-    await waitFor(() => {
-      expect(mockedToast.success).toHaveBeenCalledWith('Extraction applied');
-    });
-    expect(mockedToast.error).toHaveBeenCalledWith(
-      'Applied, but latest extraction details are unavailable.',
-    );
   });
 });

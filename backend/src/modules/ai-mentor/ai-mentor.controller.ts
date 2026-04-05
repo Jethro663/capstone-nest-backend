@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadRequestException,
   Controller,
   ForbiddenException,
@@ -539,12 +539,12 @@ export class AiMentorController {
     return typeof state.classId === 'string' ? state.classId : undefined;
   }
 
-  // ─── JAKIPIR Chat ──────────────────────────────────────────────────────
+  // â”€â”€â”€ JAKIPIR Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * POST /api/ai/chat
    * Multi-turn AI Mentor chat with JAKIPIR ("Ja").
-   * Students only — Ja is a personalized learning detective.
+   * Students only â€” Ja is a personalized learning detective.
    *
    * First message:   { "message": "Hi Ja!" }
    * Follow-up:       { "message": "Tell me more", "sessionId": "<from-prev>" }
@@ -847,7 +847,7 @@ export class AiMentorController {
     };
   }
 
-  // ─── Health check ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/health
@@ -880,11 +880,11 @@ export class AiMentorController {
     }
   }
 
-  // ─── Module Extraction ─────────────────────────────────────────────────
+  // â”€â”€â”€ Module Extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * POST /api/ai/extract-module
-   * Queues a PDF → structured lesson extraction job.
+   * Queues a PDF â†’ structured lesson extraction job.
    * Returns immediately with extractionId for polling.
    */
   @Post('extract-module')
@@ -895,7 +895,7 @@ export class AiMentorController {
   })
   @ApiResponse({
     status: 202,
-    description: 'Extraction queued — poll for status',
+    description: 'Extraction queued â€” poll for status',
   })
   async extractModule(
     @Body() dto: ExtractModuleDto,
@@ -929,7 +929,7 @@ export class AiMentorController {
     }
   }
 
-  // ─── Extraction status (polling) ──────────────────────────────────────
+  // â”€â”€â”€ Extraction status (polling) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/extractions/:id/status
@@ -990,7 +990,7 @@ export class AiMentorController {
     }
   }
 
-  // ─── List extractions ─────────────────────────────────────────────────
+  // â”€â”€â”€ List extractions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/extractions?classId=...
@@ -1058,7 +1058,7 @@ export class AiMentorController {
     }
   }
 
-  // ─── Get single extraction ─────────────────────────────────────────────
+  // â”€â”€â”€ Get single extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/extractions/:id
@@ -1126,12 +1126,12 @@ export class AiMentorController {
     }
   }
 
-  // ─── Update extraction (edit before applying) ─────────────────────────
+  // â”€â”€â”€ Update extraction (edit before applying) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * PATCH /api/ai/extractions/:id
    * Updates the structured content of a completed extraction.
-   * Teacher can edit lesson titles, block content, reorder, etc. before applying.
+   * Teacher can edit section titles, lesson blocks, and draft assessments before applying.
    */
   @Patch('extractions/:id')
   @Roles(RoleName.Teacher, RoleName.Admin)
@@ -1158,7 +1158,11 @@ export class AiMentorController {
         targetType: 'extraction',
         targetId: id,
         metadata: {
-          lessonCount: Array.isArray(dto.lessons) ? dto.lessons.length : 0,
+          sectionCount: Array.isArray(dto.sections)
+            ? dto.sections.length
+            : Array.isArray(dto.lessons)
+              ? dto.lessons.length
+              : 0,
         },
       });
       return result;
@@ -1177,20 +1181,23 @@ export class AiMentorController {
     }
   }
 
-  // ─── Apply extraction → create lessons ─────────────────────────────────
+  // â”€â”€â”€ Apply extraction â†’ create lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * POST /api/ai/extractions/:id/apply
-   * Takes a completed extraction and creates actual lesson + content block
-   * records in the database. Supports selective lesson application.
+   * Takes a completed extraction and creates hidden module sections
+   * with draft lessons and optional draft assessments.
    */
   @Post('extractions/:id/apply')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Apply extraction → create lessons (optionally selective)',
+    summary: 'Apply extraction -> create module sections with draft content',
   })
-  @ApiResponse({ status: 201, description: 'Lessons created from extraction' })
+  @ApiResponse({
+    status: 201,
+    description: 'Module sections with draft lessons/assessments created from extraction',
+  })
   async applyExtraction(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ApplyExtractionDto,
@@ -1210,10 +1217,19 @@ export class AiMentorController {
         targetType: 'extraction',
         targetId: id,
         metadata: {
+          sectionIndicesRequested: Array.isArray(dto.sectionIndices)
+            ? dto.sectionIndices.length
+            : null,
           lessonIndicesRequested: Array.isArray(dto.lessonIndices)
             ? dto.lessonIndices.length
             : null,
+          sectionsCreated: this.extractNumberField(result, 'sectionsCreated'),
           lessonsCreated: this.extractNumberField(result, 'lessonsCreated'),
+          assessmentsCreated: this.extractNumberField(
+            result,
+            'assessmentsCreated',
+          ),
+          moduleId: this.readStringField(result, 'moduleId'),
         },
       });
       return result;
@@ -1246,8 +1262,12 @@ export class AiMentorController {
           message:
             'Extraction was already applied earlier; returning cached completion state.',
           data: {
+            sectionsCreated: 0,
             lessonsCreated: 0,
+            assessmentsCreated: 0,
             lessons: [],
+            sections: [],
+            assessments: [],
           },
         };
       }
@@ -1258,7 +1278,7 @@ export class AiMentorController {
     }
   }
 
-  // ─── Delete extraction ─────────────────────────────────────────────────
+  // â”€â”€â”€ Delete extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * DELETE /api/ai/extractions/:id
@@ -1296,7 +1316,7 @@ export class AiMentorController {
     }
   }
 
-  // ─── AI interaction history ────────────────────────────────────────────
+  // â”€â”€â”€ AI interaction history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/history

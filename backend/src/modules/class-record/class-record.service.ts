@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   classRecords,
@@ -366,13 +366,14 @@ export class ClassRecordService {
       },
     });
 
-    // Load enrolled students (alphabetical by lastName, firstName)
-    const enrolledStudents = await this.db
+    // Load active class participants (alphabetical by lastName, firstName)
+    const activeStudents = await this.db
       .select({
         studentId: enrollments.studentId,
         firstName: users.firstName,
         lastName: users.lastName,
         middleName: users.middleName,
+        email: users.email,
       })
       .from(enrollments)
       .innerJoin(users, eq(users.id, enrollments.studentId))
@@ -383,6 +384,72 @@ export class ClassRecordService {
         ),
       )
       .orderBy(users.lastName, users.firstName);
+
+    const historicalScoreRows = await this.db
+      .select({ studentId: classRecordScores.studentId })
+      .from(classRecordScores)
+      .innerJoin(
+        classRecordItems,
+        eq(classRecordItems.id, classRecordScores.classRecordItemId),
+      )
+      .where(eq(classRecordItems.classRecordId, classRecordId));
+
+    const historicalFinalRows = await this.db
+      .select({
+        studentId: classRecordFinalGrades.studentId,
+        finalPercentage: classRecordFinalGrades.finalPercentage,
+        remarks: classRecordFinalGrades.remarks,
+      })
+      .from(classRecordFinalGrades)
+      .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
+
+    const activeStudentIdSet = new Set(
+      activeStudents.map((student) => student.studentId),
+    );
+    const removedStudentIds = [
+      ...new Set(
+        [
+          ...historicalScoreRows.map((entry) => entry.studentId),
+          ...historicalFinalRows.map((entry) => entry.studentId),
+        ].filter((studentId) => !activeStudentIdSet.has(studentId)),
+      ),
+    ];
+
+    const removedStudents =
+      removedStudentIds.length > 0
+        ? await this.db
+            .select({
+              studentId: users.id,
+              firstName: users.firstName,
+              lastName: users.lastName,
+              middleName: users.middleName,
+              email: users.email,
+            })
+            .from(users)
+            .where(inArray(users.id, removedStudentIds))
+            .orderBy(users.lastName, users.firstName)
+        : [];
+
+    const finalGradeByStudentId = new Map(
+      historicalFinalRows.map((entry) => [
+        entry.studentId,
+        {
+          finalPercentage: parseFloat(entry.finalPercentage),
+          remarks: entry.remarks,
+        },
+      ]),
+    );
+
+    const participants = [
+      ...activeStudents.map((student) => ({
+        ...student,
+        enrollmentState: 'active' as const,
+      })),
+      ...removedStudents.map((student) => ({
+        ...student,
+        enrollmentState: 'removed' as const,
+      })),
+    ];
 
     // Load categories + items + scores
     const categories = await this.db.query.classRecordCategories.findMany({
@@ -396,7 +463,7 @@ export class ClassRecordService {
     });
 
     // Build spreadsheet data per student
-    const studentRows = enrolledStudents.map((student) => {
+    const studentRows = participants.map((student) => {
       const categoryData = categories.map((category) => {
         const weight = parseFloat(category.weightPercentage);
         const items = category.items;
@@ -435,20 +502,33 @@ export class ClassRecordService {
       });
 
       const initialGrade = categoryData.reduce((sum, c) => sum + c.ws, 0);
-      const quarterlyGrade = this.computationService.transmute(initialGrade);
+      const computedQuarterlyGrade = this.computationService.transmute(initialGrade);
+      const historicalFinal = finalGradeByStudentId.get(student.studentId);
+      const hasHistoricalQuarterly =
+        historicalFinal && Number.isFinite(historicalFinal.finalPercentage);
+      const quarterlyGrade =
+        student.enrollmentState === 'removed' && hasHistoricalQuarterly
+          ? historicalFinal.finalPercentage
+          : computedQuarterlyGrade;
+      const remarks =
+        student.enrollmentState === 'removed' && hasHistoricalQuarterly
+          ? historicalFinal.remarks
+          : quarterlyGrade < 75
+            ? ('For Intervention' as const)
+            : ('Passed' as const);
 
       return {
         studentId: student.studentId,
         firstName: student.firstName,
         lastName: student.lastName,
         middleName: student.middleName,
+        email: student.email ?? undefined,
+        isRemoved: student.enrollmentState === 'removed',
+        enrollmentState: student.enrollmentState,
         categories: categoryData,
         initialGrade: Math.round(initialGrade * 1000) / 1000,
         quarterlyGrade,
-        remarks:
-          quarterlyGrade < 75
-            ? ('For Intervention' as const)
-            : ('Passed' as const),
+        remarks,
       };
     });
 

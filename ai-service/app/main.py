@@ -1,5 +1,5 @@
-"""
-Nexora AI Service – FastAPI application.
+﻿"""
+Nexora AI Service â€“ FastAPI application.
 
 All authentication is handled by the NestJS backend proxy.
 User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
@@ -447,23 +447,23 @@ async def _run_intervention_generation_job(
 # JAKIPIR System Prompt
 # ---------------------------------------------------------------------------
 
-JAKIPIR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R — Just-in-time Adaptive Knowledge Instructor & Personalized Intelligence Resource. Your nickname is "Ja".
+JAKIPIR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R â€” Just-in-time Adaptive Knowledge Instructor & Personalized Intelligence Resource. Your nickname is "Ja".
 
-You are the AI Mentor of Nexora, a Learning Management System for Gat Andres Bonifacio High School (Grades 7–10, Philippines DepEd curriculum).
+You are the AI Mentor of Nexora, a Learning Management System for Gat Andres Bonifacio High School (Grades 7â€“10, Philippines DepEd curriculum).
 
 PERSONALITY:
 - You have a perceptive, detective-like demeanor. You notice patterns, pick up on clues in what students say, and investigate their learning gaps like a case to be cracked.
 - Use investigative language naturally: "I notice...", "That's an interesting clue...", "Let's piece this together...", "I've been observing your progress and...", "The evidence suggests..."
-- You are a hype coach at heart — you genuinely celebrate student effort and achievements. You get excited about breakthroughs. But you maintain formality and professionalism.
+- You are a hype coach at heart â€” you genuinely celebrate student effort and achievements. You get excited about breakthroughs. But you maintain formality and professionalism.
 - Be warm, supportive, and encouraging, but never condescending. Speak at a high school level.
 - When a student is struggling, be empathetic and frame challenges as mysteries to solve together.
 
 RULES:
-1. ALWAYS end your response with a study tip or learning strategy under the heading "📌 Ja's Study Tip:". The tip should be practical and relevant to the conversation topic.
+1. ALWAYS end your response with a study tip or learning strategy under the heading "ðŸ“Œ Ja's Study Tip:". The tip should be practical and relevant to the conversation topic.
 2. NEVER give direct answers to test or assessment questions. Instead, guide students with hints, analogies, and step-by-step reasoning.
-3. When a student shares progress or success, celebrate it enthusiastically but professionally — like a detective who just cracked a big case.
-4. Keep responses concise — aim for 2-4 paragraphs max, plus the study tip.
-5. If the student greets you or asks who you are, introduce yourself briefly: "I'm Ja — your AI Mentor here at Nexora! Think of me as your personal learning detective. I'm here to help you crack the case on any topic you're studying."
+3. When a student shares progress or success, celebrate it enthusiastically but professionally â€” like a detective who just cracked a big case.
+4. Keep responses concise â€” aim for 2-4 paragraphs max, plus the study tip.
+5. If the student greets you or asks who you are, introduce yourself briefly: "I'm Ja â€” your AI Mentor here at Nexora! Think of me as your personal learning detective. I'm here to help you crack the case on any topic you're studying."
 6. If you don't know something or the question is outside academics, say so honestly and redirect to academic topics.
 7. Use Filipino cultural context when appropriate (e.g., referencing DepEd subjects, local examples) but respond in English unless the student writes in Filipino."""
 
@@ -587,19 +587,19 @@ async def chat(
             logger.warning("Ollama chat failed: %s", str(err))
             reply = (
                 "Hmm, it seems my investigation tools are temporarily offline "
-                "— like a detective without a magnifying glass! 🔍 Please try again "
-                "in a moment. In the meantime, review your notes — that's always a solid lead!\n\n"
-                "📌 Ja's Study Tip: While waiting, try writing down one thing you learned "
+                "â€” like a detective without a magnifying glass! ðŸ” Please try again "
+                "in a moment. In the meantime, review your notes â€” that's always a solid lead!\n\n"
+                "ðŸ“Œ Ja's Study Tip: While waiting, try writing down one thing you learned "
                 "today. It helps lock it into memory!"
             )
             model_used = "fallback (ollama-unavailable)"
     else:
-        logger.info("Ollama unavailable for chat — returning fallback")
+        logger.info("Ollama unavailable for chat â€” returning fallback")
         reply = (
-            "I'm currently recharging my detective instincts — Ollama (my brain!) "
+            "I'm currently recharging my detective instincts â€” Ollama (my brain!) "
             "isn't running right now. Ask your teacher to start it up, and I'll be "
-            "right back on the case! 🕵️\n\n"
-            "📌 Ja's Study Tip: Use this downtime to quiz yourself on what you studied "
+            "right back on the case! ðŸ•µï¸\n\n"
+            "ðŸ“Œ Ja's Study Tip: Use this downtime to quiz yourself on what you studied "
             "last. Self-testing is one of the most powerful study techniques!"
         )
         model_used = "fallback (ollama-offline)"
@@ -1090,6 +1090,281 @@ async def internal_backfill_index(
 
 
 # ---------------------------------------------------------------------------
+# Extraction normalization helpers
+# ---------------------------------------------------------------------------
+
+VALID_EXTRACTION_BLOCK_TYPES = {"text", "image", "video", "question", "file", "divider"}
+VALID_ASSESSMENT_TYPES = {"quiz", "exam", "assignment", "file_upload"}
+VALID_QUESTION_TYPES = {
+    "multiple_choice",
+    "multiple_select",
+    "true_false",
+    "short_answer",
+    "fill_blank",
+    "dropdown",
+}
+
+
+def _safe_int(value: Any, fallback: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed
+
+
+def _normalize_block_content(content: Any) -> dict[str, Any] | str:
+    if isinstance(content, dict):
+        return content
+    if isinstance(content, str):
+        return {"text": content}
+    if content is None:
+        return {"text": ""}
+    return {"text": str(content)}
+
+
+def _normalize_extraction_block(block: Any, order_fallback: int) -> dict[str, Any]:
+    if not isinstance(block, dict):
+        return {
+            "type": "text",
+            "order": order_fallback,
+            "content": {"text": str(block)},
+            "metadata": {},
+        }
+
+    block_type = str(block.get("type") or "text").strip().lower()
+    if block_type not in VALID_EXTRACTION_BLOCK_TYPES:
+        block_type = "text"
+
+    return {
+        "type": block_type,
+        "order": _safe_int(block.get("order"), order_fallback),
+        "content": _normalize_block_content(block.get("content")),
+        "metadata": block.get("metadata") if isinstance(block.get("metadata"), dict) else {},
+    }
+
+
+def _normalize_assessment_draft(draft: Any, *, section_title: str) -> dict[str, Any] | None:
+    if not isinstance(draft, dict):
+        return None
+
+    raw_questions = draft.get("questions")
+    if not isinstance(raw_questions, list):
+        return None
+
+    normalized_questions: list[dict[str, Any]] = []
+    for index, raw_question in enumerate(raw_questions, start=1):
+        if not isinstance(raw_question, dict):
+            continue
+        content = str(raw_question.get("content") or "").strip()
+        if not content:
+            continue
+        question_type = str(
+            raw_question.get("type") or draft.get("questionType") or "multiple_choice"
+        ).strip().lower()
+        if question_type not in VALID_QUESTION_TYPES:
+            question_type = "multiple_choice"
+
+        options_payload: list[dict[str, Any]] = []
+        raw_options = raw_question.get("options")
+        if isinstance(raw_options, list):
+            for option_index, raw_option in enumerate(raw_options, start=1):
+                if not isinstance(raw_option, dict):
+                    continue
+                option_text = str(raw_option.get("text") or "").strip()
+                if not option_text:
+                    continue
+                options_payload.append(
+                    {
+                        "text": option_text,
+                        "isCorrect": bool(raw_option.get("isCorrect")),
+                        "order": _safe_int(raw_option.get("order"), option_index),
+                    }
+                )
+
+        normalized_questions.append(
+            {
+                "content": content,
+                "type": question_type,
+                "points": max(1, _safe_int(raw_question.get("points"), 1)),
+                "order": _safe_int(raw_question.get("order"), index),
+                "explanation": str(raw_question.get("explanation") or "").strip() or None,
+                "imageUrl": (
+                    str(raw_question.get("imageUrl")).strip()
+                    if isinstance(raw_question.get("imageUrl"), str)
+                    else None
+                ),
+                "conceptTags": (
+                    [str(tag) for tag in raw_question.get("conceptTags", []) if str(tag).strip()]
+                    if isinstance(raw_question.get("conceptTags"), list)
+                    else None
+                ),
+                "options": options_payload,
+            }
+        )
+
+    if not normalized_questions:
+        return None
+
+    assessment_type = str(draft.get("type") or "quiz").strip().lower()
+    if assessment_type not in VALID_ASSESSMENT_TYPES:
+        assessment_type = "quiz"
+
+    return {
+        "title": str(draft.get("title") or f"{section_title} Checkpoint").strip(),
+        "description": str(draft.get("description") or "").strip(),
+        "type": assessment_type,
+        "passingScore": _safe_int(draft.get("passingScore"), 60),
+        "feedbackLevel": str(draft.get("feedbackLevel") or "standard").strip() or "standard",
+        "questions": normalized_questions,
+    }
+
+
+def _derive_assessment_draft_from_blocks(
+    *,
+    section_title: str,
+    blocks: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    question_blocks = [block for block in blocks if block.get("type") == "question"]
+    if not question_blocks:
+        return None
+
+    normalized_questions: list[dict[str, Any]] = []
+    for index, block in enumerate(question_blocks, start=1):
+        content = block.get("content")
+        question_text = ""
+        if isinstance(content, dict):
+            question_text = str(content.get("text") or "").strip()
+        elif isinstance(content, str):
+            question_text = content.strip()
+
+        if not question_text:
+            continue
+
+        metadata = block.get("metadata") if isinstance(block.get("metadata"), dict) else {}
+        normalized_questions.append(
+            {
+                "content": question_text,
+                "type": "short_answer",
+                "points": max(1, _safe_int(metadata.get("points"), 1)),
+                "order": index,
+                "explanation": None,
+                "imageUrl": (
+                    str(metadata.get("imageUrl")).strip()
+                    if isinstance(metadata.get("imageUrl"), str)
+                    else None
+                ),
+                "conceptTags": None,
+                "options": [],
+            }
+        )
+
+    if not normalized_questions:
+        return None
+
+    return {
+        "title": f"{section_title} Checkpoint",
+        "description": "Auto-generated checkpoint based on extracted question prompts.",
+        "type": "quiz",
+        "passingScore": 60,
+        "feedbackLevel": "standard",
+        "questions": normalized_questions,
+    }
+
+
+def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
+    if not isinstance(section, dict):
+        fallback_title = f"Section {index + 1}"
+        blocks = [_normalize_extraction_block(section, 1)]
+        return {
+            "title": fallback_title,
+            "description": "",
+            "order": index + 1,
+            "lessonBlocks": blocks,
+            "assessmentDraft": _derive_assessment_draft_from_blocks(
+                section_title=fallback_title,
+                blocks=blocks,
+            ),
+            "confidence": None,
+        }
+
+    title = str(section.get("title") or section.get("sectionTitle") or f"Section {index + 1}").strip()
+    description = str(section.get("description") or section.get("sectionDescription") or "").strip()
+    order = _safe_int(section.get("order"), index + 1)
+    raw_blocks = section.get("lessonBlocks")
+    if not isinstance(raw_blocks, list):
+        raw_blocks = section.get("blocks")
+    if not isinstance(raw_blocks, list):
+        raw_blocks = []
+    lesson_blocks = [
+        _normalize_extraction_block(block, block_index)
+        for block_index, block in enumerate(raw_blocks, start=1)
+    ]
+    confidence = section.get("confidence")
+    normalized_draft = _normalize_assessment_draft(
+        section.get("assessmentDraft"),
+        section_title=title,
+    )
+    if normalized_draft is None:
+        normalized_draft = _derive_assessment_draft_from_blocks(
+            section_title=title,
+            blocks=lesson_blocks,
+        )
+
+    return {
+        "title": title,
+        "description": description,
+        "order": order,
+        "lessonBlocks": lesson_blocks,
+        "assessmentDraft": normalized_draft,
+        "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
+    }
+
+
+def _normalize_structured_content(payload: Any) -> dict[str, Any]:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    title = str(payload.get("title") or "Extracted Module").strip()
+    description = str(payload.get("description") or "").strip()
+    audit = payload.get("audit") if isinstance(payload.get("audit"), dict) else {}
+
+    raw_sections = payload.get("sections")
+    if not isinstance(raw_sections, list):
+        legacy_lessons = payload.get("lessons")
+        if isinstance(legacy_lessons, list):
+            raw_sections = [
+                {
+                    "title": lesson.get("title") if isinstance(lesson, dict) else f"Section {idx + 1}",
+                    "description": lesson.get("description") if isinstance(lesson, dict) else "",
+                    "order": idx + 1,
+                    "lessonBlocks": lesson.get("blocks") if isinstance(lesson, dict) else [],
+                }
+                for idx, lesson in enumerate(legacy_lessons)
+            ]
+        else:
+            raw_sections = []
+
+    sections = [
+        _normalize_extraction_section(section, index)
+        for index, section in enumerate(raw_sections)
+    ]
+
+    return {
+        "title": title,
+        "description": description,
+        "sections": sections,
+        "audit": audit,
+    }
+
+
+# ---------------------------------------------------------------------------
 # POST /extract
 # ---------------------------------------------------------------------------
 
@@ -1151,7 +1426,7 @@ async def extract_module(
 
     return {
         "success": True,
-        "message": "Extraction queued — poll GET /extractions/:id/status for progress",
+        "message": "Extraction queued â€” poll GET /extractions/:id/status for progress",
         "data": {
             "extractionId": extraction_id,
             "status": "pending",
@@ -1186,12 +1461,9 @@ async def get_extraction_status(
     is_admin = "admin" in user.roles
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
-    structured_content = extraction.get("structured_content") or {}
-    if isinstance(structured_content, str):
-        try:
-            structured_content = json.loads(structured_content)
-        except json.JSONDecodeError:
-            structured_content = {}
+    structured_content = _normalize_structured_content(
+        extraction.get("structured_content"),
+    )
     audit = structured_content.get("audit") or {}
 
     return {
@@ -1258,12 +1530,10 @@ async def list_extractions(
     data = []
     for row in rows.mappings():
         item = dict(row)
-        structured_content = item.get("structured_content") or {}
-        if isinstance(structured_content, str):
-            try:
-                structured_content = json.loads(structured_content)
-            except json.JSONDecodeError:
-                structured_content = {}
+        structured_content = _normalize_structured_content(
+            item.get("structured_content"),
+        )
+        item["structured_content"] = structured_content
         audit = structured_content.get("audit") or {}
         item["qualityGate"] = audit.get("qualityGate")
         item["reviewRequired"] = bool(audit.get("reviewRequired"))
@@ -1306,12 +1576,10 @@ async def get_extraction(
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
     extraction_data = dict(extraction)
-    structured_content = extraction_data.get("structured_content") or {}
-    if isinstance(structured_content, str):
-        try:
-            structured_content = json.loads(structured_content)
-        except json.JSONDecodeError:
-            structured_content = {}
+    structured_content = _normalize_structured_content(
+        extraction_data.get("structured_content"),
+    )
+    extraction_data["structured_content"] = structured_content
     audit = structured_content.get("audit") or {}
     extraction_data["qualityGate"] = audit.get("qualityGate")
     extraction_data["reviewRequired"] = bool(audit.get("reviewRequired"))
@@ -1339,7 +1607,7 @@ async def update_extraction(
 ):
     row = await db.execute(
         sa_text(
-            "SELECT id, extraction_status, is_applied, teacher_id "
+            "SELECT id, extraction_status, is_applied, teacher_id, structured_content "
             "FROM extracted_modules WHERE id = :id"
         ),
         {"id": extraction_id},
@@ -1355,31 +1623,47 @@ async def update_extraction(
     if extraction["extraction_status"] != "completed":
         raise HTTPException(
             400,
-            f'Extraction is "{extraction["extraction_status"]}" — only completed extractions can be edited',
+            f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be edited',
         )
     if extraction["is_applied"]:
         raise HTTPException(400, "This extraction has already been applied and cannot be edited")
 
-    structured_content = {
-        "title": body.title or "",
-        "description": body.description or "",
-        "lessons": [
-            {
-                "title": l.title,
-                "description": l.description or "",
-                "blocks": [
-                    {
-                        "type": b.type,
-                        "order": b.order,
-                        "content": b.content,
-                        "metadata": b.metadata or {},
-                    }
-                    for b in l.blocks
-                ],
-            }
-            for l in body.lessons
-        ],
-    }
+    existing_content = _normalize_structured_content(extraction.get("structured_content"))
+    raw_sections: list[Any]
+    if body.sections is not None:
+        raw_sections = [
+            section.model_dump(by_alias=True)
+            if hasattr(section, "model_dump")
+            else dict(section)
+            for section in body.sections
+        ]
+    elif body.lessons is not None:
+        raw_sections = []
+        for index, lesson in enumerate(body.lessons, start=1):
+            lesson_payload = lesson.model_dump() if hasattr(lesson, "model_dump") else dict(lesson)
+            raw_sections.append(
+                {
+                    "title": lesson_payload.get("title") or f"Section {index}",
+                    "description": lesson_payload.get("description") or "",
+                    "order": index,
+                    "lessonBlocks": lesson_payload.get("blocks") or [],
+                }
+            )
+    else:
+        raw_sections = existing_content.get("sections") or []
+
+    structured_content = _normalize_structured_content(
+        {
+            "title": body.title if body.title is not None else existing_content.get("title"),
+            "description": (
+                body.description
+                if body.description is not None
+                else existing_content.get("description")
+            ),
+            "sections": raw_sections,
+            "audit": existing_content.get("audit") or {},
+        }
+    )
 
     await db.execute(
         sa_text(
@@ -1391,7 +1675,6 @@ async def update_extraction(
     )
     await db.commit()
 
-    # Re-fetch
     return await get_extraction(extraction_id, user, db)
 
 
@@ -1424,32 +1707,36 @@ async def apply_extraction(
         raise HTTPException(403, "You can only view your own extractions")
 
     if extraction["extraction_status"] != "completed":
-        raise HTTPException(400, f'Extraction is "{extraction["extraction_status"]}" — only completed extractions can be applied')
+        raise HTTPException(
+            400,
+            f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be applied',
+        )
     if extraction["is_applied"]:
         raise HTTPException(400, "This extraction has already been applied")
 
-    content = extraction["structured_content"]
-    if isinstance(content, str):
-        content = json.loads(content)
-    if not content or not content.get("lessons"):
-        raise HTTPException(400, "No lessons found in extraction result")
+    content = _normalize_structured_content(extraction["structured_content"])
+    all_sections = content.get("sections") or []
+    if not all_sections:
+        raise HTTPException(400, "No sections found in extraction result")
 
-    all_lessons = content["lessons"]
-
-    if body.lesson_indices:
-        invalid = [i for i in body.lesson_indices if i < 0 or i >= len(all_lessons)]
+    selected_indices = (
+        body.section_indices
+        if body.section_indices is not None
+        else body.lesson_indices
+    )
+    if selected_indices:
+        invalid = [i for i in selected_indices if i < 0 or i >= len(all_sections)]
         if invalid:
             raise HTTPException(
                 400,
-                f"Invalid lesson indices: {invalid}. Valid range: 0–{len(all_lessons) - 1}",
+                f"Invalid section indices: {invalid}. Valid range: 0-{len(all_sections) - 1}",
             )
-        lessons_to_apply = [(all_lessons[i], i) for i in body.lesson_indices]
+        sections_to_apply = [(all_sections[i], i) for i in selected_indices]
     else:
-        lessons_to_apply = [(l, i) for i, l in enumerate(all_lessons)]
+        sections_to_apply = [(section, i) for i, section in enumerate(all_sections)]
 
     class_id = extraction["class_id"]
 
-    # Check class exists
     cls_row = await db.execute(
         sa_text("SELECT id FROM classes WHERE id = :id"),
         {"id": class_id},
@@ -1457,43 +1744,122 @@ async def apply_extraction(
     if not cls_row.first():
         raise HTTPException(404, f'Class "{class_id}" not found')
 
-    # Get last lesson order
-    order_row = await db.execute(
+    module_order_row = await db.execute(
+        sa_text(
+            'SELECT "order" FROM class_modules WHERE class_id = :cid ORDER BY "order" DESC LIMIT 1'
+        ),
+        {"cid": class_id},
+    )
+    module_order = (_safe_int(module_order_row.scalar(), 0)) + 1
+
+    raw_module_title = str(content.get("title") or f"Extracted Module {module_order}").strip()
+    module_title = raw_module_title
+    suffix = 2
+    while True:
+        title_row = await db.execute(
+            sa_text(
+                "SELECT id FROM class_modules WHERE class_id = :cid AND lower(title) = lower(:title) LIMIT 1"
+            ),
+            {"cid": class_id, "title": module_title},
+        )
+        if not title_row.first():
+            break
+        module_title = f"{raw_module_title} ({suffix})"
+        suffix += 1
+
+    module_insert = await db.execute(
+        sa_text(
+            'INSERT INTO class_modules (class_id, title, description, "order", is_visible, is_locked, teacher_notes) '
+            "VALUES (:classId, :title, :description, :order, false, true, :teacherNotes) "
+            "RETURNING id, title"
+        ),
+        {
+            "classId": class_id,
+            "title": module_title,
+            "description": str(content.get("description") or "").strip(),
+            "order": module_order,
+            "teacherNotes": (
+                f"Created from extraction {extraction_id}. "
+                "Hidden and locked by default until teacher review."
+            ),
+        },
+    )
+    module_row = module_insert.mappings().first()
+    if not module_row:
+        raise HTTPException(500, "Failed to create class module from extraction")
+    module_id = str(module_row["id"])
+
+    lesson_order_row = await db.execute(
         sa_text(
             'SELECT "order" FROM lessons WHERE class_id = :cid ORDER BY "order" DESC LIMIT 1'
         ),
         {"cid": class_id},
     )
-    last_order_val = order_row.scalar()
-    lesson_order = (last_order_val or 0) + 1
+    lesson_order = (_safe_int(lesson_order_row.scalar(), 0)) + 1
 
-    created_lessons: list[dict] = []
+    created_lessons: list[dict[str, Any]] = []
+    created_sections: list[dict[str, Any]] = []
+    created_assessments: list[dict[str, Any]] = []
+    allowed_feedback_levels = {"immediate", "standard", "detailed"}
 
-    for lesson_data, _ in lessons_to_apply:
-        result = await db.execute(
+    for section_offset, (section_data, source_section_index) in enumerate(
+        sections_to_apply,
+        start=1,
+    ):
+        section_title = str(section_data.get("title") or f"Section {section_offset}").strip()
+        section_description = str(section_data.get("description") or "").strip()
+        section_insert = await db.execute(
+            sa_text(
+                'INSERT INTO module_sections (module_id, title, description, "order") '
+                "VALUES (:moduleId, :title, :description, :order) "
+                "RETURNING id, title"
+            ),
+            {
+                "moduleId": module_id,
+                "title": section_title,
+                "description": section_description,
+                "order": section_offset,
+            },
+        )
+        module_section = section_insert.mappings().first()
+        if not module_section:
+            raise HTTPException(500, "Failed to create module section from extraction")
+        module_section_id = str(module_section["id"])
+        created_sections.append(
+            {
+                "id": module_section_id,
+                "title": str(module_section["title"]),
+                "sourceSectionIndex": source_section_index,
+            }
+        )
+
+        lesson_insert = await db.execute(
             sa_text(
                 'INSERT INTO lessons (title, description, class_id, "order", is_draft, source_extraction_id) '
                 "VALUES (:title, :desc, :classId, :order, true, :extractionId) "
                 "RETURNING id, title"
             ),
             {
-                "title": lesson_data.get("title", f"Lesson {lesson_order}"),
-                "desc": lesson_data.get("description", ""),
+                "title": section_title or f"Lesson {lesson_order}",
+                "desc": section_description,
                 "classId": class_id,
                 "order": lesson_order,
                 "extractionId": extraction_id,
             },
         )
-        new_lesson = result.mappings().first()
+        new_lesson = lesson_insert.mappings().first()
         lesson_order += 1
+        if not new_lesson:
+            raise HTTPException(500, "Failed to create lesson from extracted section")
 
-        blocks = lesson_data.get("blocks", [])
+        blocks = section_data.get("lessonBlocks")
+        if not isinstance(blocks, list):
+            blocks = section_data.get("blocks")
+        if not isinstance(blocks, list):
+            blocks = []
+
         for idx, block in enumerate(blocks):
-            valid_types = {"text", "image", "video", "question", "file", "divider"}
-            block_type = block.get("type", "text")
-            if block_type not in valid_types:
-                block_type = "text"
-
+            normalized_block = _normalize_extraction_block(block, idx + 1)
             await db.execute(
                 sa_text(
                     'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
@@ -1504,40 +1870,229 @@ async def apply_extraction(
                 ),
                 {
                     "lessonId": new_lesson["id"],
-                    "type": block_type,
-                    "order": block.get("order", idx),
-                    "content": block.get("content", {}),
-                    "metadata": block.get("metadata", {}),
+                    "type": normalized_block.get("type"),
+                    "order": _safe_int(normalized_block.get("order"), idx),
+                    "content": normalized_block.get("content") or {},
+                    "metadata": normalized_block.get("metadata") or {},
                 },
             )
 
+        await db.execute(
+            sa_text(
+                'INSERT INTO module_items (module_section_id, item_type, lesson_id, "order", is_visible, is_required, is_given, metadata) '
+                "VALUES (:sectionId, 'lesson', :lessonId, 1, false, false, true, :metadata)"
+            ).bindparams(bindparam("metadata", type_=postgresql.JSONB)),
+            {
+                "sectionId": module_section_id,
+                "lessonId": new_lesson["id"],
+                "metadata": {
+                    "sourceExtractionId": extraction_id,
+                    "sourceSectionIndex": source_section_index,
+                    "sourceSectionTitle": section_title,
+                },
+            },
+        )
+
         created_lessons.append({"id": new_lesson["id"], "title": new_lesson["title"]})
 
-    # Mark extraction as applied
+        assessment_draft = _normalize_assessment_draft(
+            section_data.get("assessmentDraft"),
+            section_title=section_title,
+        )
+        if assessment_draft and isinstance(assessment_draft.get("questions"), list):
+            questions = assessment_draft["questions"]
+            if questions:
+                feedback_level = str(assessment_draft.get("feedbackLevel") or "standard").strip().lower()
+                if feedback_level not in allowed_feedback_levels:
+                    feedback_level = "standard"
+                assessment_type = str(assessment_draft.get("type") or "quiz").strip().lower()
+                if assessment_type not in VALID_ASSESSMENT_TYPES:
+                    assessment_type = "quiz"
+
+                assessment_insert = await db.execute(
+                    sa_text(
+                        """
+                        INSERT INTO assessments (
+                          title,
+                          description,
+                          class_id,
+                          type,
+                          total_points,
+                          passing_score,
+                          feedback_level,
+                          is_published,
+                          ai_origin
+                        )
+                        VALUES (
+                          :title,
+                          :description,
+                          :classId,
+                          :assessmentType,
+                          :totalPoints,
+                          :passingScore,
+                          :feedbackLevel,
+                          false,
+                          'ai_extraction_draft'
+                        )
+                        RETURNING id, title
+                        """
+                    ),
+                    {
+                        "title": str(assessment_draft.get("title") or f"{section_title} Checkpoint"),
+                        "description": str(assessment_draft.get("description") or "").strip(),
+                        "classId": class_id,
+                        "assessmentType": assessment_type,
+                        "totalPoints": sum(
+                            max(1, _safe_int(question.get("points"), 1))
+                            for question in questions
+                        ),
+                        "passingScore": max(1, _safe_int(assessment_draft.get("passingScore"), 60)),
+                        "feedbackLevel": feedback_level,
+                    },
+                )
+                assessment_row = assessment_insert.mappings().first()
+                if not assessment_row:
+                    raise HTTPException(500, "Failed to create assessment from section draft")
+                assessment_id = str(assessment_row["id"])
+
+                for question_index, question in enumerate(questions, start=1):
+                    question_type = str(question.get("type") or "multiple_choice").strip().lower()
+                    if question_type not in VALID_QUESTION_TYPES:
+                        question_type = "short_answer"
+                    question_insert = await db.execute(
+                        sa_text(
+                            """
+                            INSERT INTO assessment_questions (
+                              assessment_id,
+                              type,
+                              content,
+                              points,
+                              "order",
+                              explanation,
+                              image_url,
+                              concept_tags
+                            )
+                            VALUES (
+                              :assessmentId,
+                              :type,
+                              :content,
+                              :points,
+                              :order,
+                              :explanation,
+                              :imageUrl,
+                              :conceptTags
+                            )
+                            RETURNING id
+                            """
+                        ).bindparams(bindparam("conceptTags", type_=postgresql.JSONB)),
+                        {
+                            "assessmentId": assessment_id,
+                            "type": question_type,
+                            "content": str(question.get("content") or "").strip(),
+                            "points": max(1, _safe_int(question.get("points"), 1)),
+                            "order": _safe_int(question.get("order"), question_index),
+                            "explanation": (
+                                str(question.get("explanation")).strip()
+                                if isinstance(question.get("explanation"), str)
+                                else None
+                            ),
+                            "imageUrl": (
+                                str(question.get("imageUrl")).strip()
+                                if isinstance(question.get("imageUrl"), str)
+                                else None
+                            ),
+                            "conceptTags": (
+                                [str(tag).strip() for tag in question.get("conceptTags", []) if str(tag).strip()]
+                                if isinstance(question.get("conceptTags"), list)
+                                else []
+                            ),
+                        },
+                    )
+                    question_id = question_insert.scalar_one()
+                    options = question.get("options")
+                    if isinstance(options, list):
+                        for option_index, option in enumerate(options, start=1):
+                            if not isinstance(option, dict):
+                                continue
+                            option_text = str(option.get("text") or "").strip()
+                            if not option_text:
+                                continue
+                            await db.execute(
+                                sa_text(
+                                    """
+                                    INSERT INTO assessment_question_options (
+                                      question_id,
+                                      text,
+                                      is_correct,
+                                      "order"
+                                    )
+                                    VALUES (
+                                      :questionId,
+                                      :text,
+                                      :isCorrect,
+                                      :order
+                                    )
+                                    """
+                                ),
+                                {
+                                    "questionId": question_id,
+                                    "text": option_text,
+                                    "isCorrect": bool(option.get("isCorrect")),
+                                    "order": _safe_int(option.get("order"), option_index),
+                                },
+                            )
+
+                await db.execute(
+                    sa_text(
+                        'INSERT INTO module_items (module_section_id, item_type, assessment_id, "order", is_visible, is_required, is_given, metadata) '
+                        "VALUES (:sectionId, 'assessment', :assessmentId, 2, false, false, false, :metadata)"
+                    ).bindparams(bindparam("metadata", type_=postgresql.JSONB)),
+                    {
+                        "sectionId": module_section_id,
+                        "assessmentId": assessment_id,
+                        "metadata": {
+                            "sourceExtractionId": extraction_id,
+                            "sourceSectionIndex": source_section_index,
+                            "sourceSectionTitle": section_title,
+                        },
+                    },
+                )
+                created_assessments.append(
+                    {"id": assessment_id, "title": str(assessment_row["title"])}
+                )
+
     await db.execute(
         sa_text(
             "UPDATE extracted_modules "
-            "SET is_applied = true, extraction_status = 'applied', updated_at = NOW() "
+            "SET is_applied = true, extraction_status = 'applied', structured_content = :sc, updated_at = NOW() "
             "WHERE id = :id"
-        ),
-        {"id": extraction_id},
+        ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+        {"id": extraction_id, "sc": content},
     )
     await db.commit()
     index_result = await reindex_class_content(db, str(class_id))
 
     return {
         "success": True,
-        "message": f"Created {len(created_lessons)} lesson(s) from extraction",
+        "message": (
+            f"Created module with {len(created_sections)} section(s), "
+            f"{len(created_lessons)} lesson draft(s), and {len(created_assessments)} assessment draft(s)"
+        ),
         "data": {
             "classId": class_id,
             "extractionId": extraction_id,
+            "moduleId": module_id,
+            "sectionsCreated": len(created_sections),
             "lessonsCreated": len(created_lessons),
-            "totalLessonsAvailable": len(all_lessons),
+            "assessmentsCreated": len(created_assessments),
+            "totalSectionsAvailable": len(all_sections),
+            "totalLessonsAvailable": len(all_sections),
+            "sections": created_sections,
             "lessons": created_lessons,
+            "assessments": created_assessments,
             "indexing": index_result,
         },
     }
-
 
 # ---------------------------------------------------------------------------
 # DELETE /extractions/:id

@@ -18,16 +18,65 @@ export interface ExtractionLesson {
   blocks: ExtractionBlock[];
 }
 
+export interface ExtractionAssessmentOption {
+  text: string;
+  isCorrect?: boolean;
+  order?: number;
+}
+
+export interface ExtractionAssessmentQuestion {
+  content: string;
+  type?: string;
+  points?: number;
+  order?: number;
+  explanation?: string | null;
+  imageUrl?: string | null;
+  conceptTags?: string[] | null;
+  options?: ExtractionAssessmentOption[];
+}
+
+export interface ExtractionAssessmentDraft {
+  title?: string;
+  description?: string;
+  type?: string;
+  passingScore?: number;
+  feedbackLevel?: string;
+  questions?: ExtractionAssessmentQuestion[];
+}
+
+export interface ExtractionSection {
+  title: string;
+  description?: string;
+  order: number;
+  lessonBlocks: ExtractionBlock[];
+  assessmentDraft?: ExtractionAssessmentDraft | null;
+  confidence?: number | null;
+  graphKeywords?: string[];
+  figureReferences?: string[];
+}
+
 export interface ExtractionStructuredContent {
   title: string;
   description: string;
-  lessons: ExtractionLesson[];
+  sections: ExtractionSection[];
   audit?: {
     pipelineVersion?: string;
     overallConfidence?: number;
     warnings?: string[];
     sourceMethods?: string[];
     sectionCount?: number;
+    coherenceScore?: number;
+    coherenceWarnings?: string[];
+    reviewFlags?: string[];
+    imageAssignmentSummary?: {
+      assigned?: number;
+      unassigned?: number;
+      reusedByCitation?: number;
+    };
+    documentGraph?: {
+      version?: string;
+      summary?: Record<string, unknown>;
+    };
     pipelineStages?: string[];
     classification?: {
       safe: boolean;
@@ -66,11 +115,13 @@ export interface ExtractModuleDto {
 }
 
 export interface ApplyExtractionDto {
+  sectionIndices?: number[];
   lessonIndices?: number[];
 }
 
 export interface UpdateExtractionDto {
   title?: string;
   description?: string;
-  lessons: ExtractionLesson[];
+  sections?: ExtractionSection[];
+  lessons?: ExtractionLesson[];
 }

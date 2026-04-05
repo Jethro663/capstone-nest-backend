@@ -135,4 +135,52 @@ describe('extractionService', () => {
 
     expect(result.data.extractionStatus).toBe('processing');
   });
+
+  it('normalizes legacy structured_content.lessons into canonical sections', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'ok',
+        data: {
+          id: 'extraction-legacy',
+          fileId: 'file-legacy',
+          classId: 'class-legacy',
+          teacherId: 'teacher-legacy',
+          extractionStatus: 'completed',
+          isApplied: false,
+          progressPercent: 100,
+          totalChunks: 1,
+          processedChunks: 1,
+          createdAt: '2026-04-04T00:00:00.000Z',
+          updatedAt: '2026-04-04T00:00:00.000Z',
+          structured_content: {
+            title: 'Legacy Module',
+            description: 'Legacy description',
+            lessons: [
+              {
+                title: 'Legacy Lesson',
+                description: 'Legacy lesson description',
+                blocks: [
+                  {
+                    type: 'text',
+                    order: 0,
+                    content: { text: 'Legacy body' },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const result = await extractionService.getById('extraction-legacy');
+
+    expect(result.data.structuredContent?.sections).toHaveLength(1);
+    expect(result.data.structuredContent?.sections[0]).toMatchObject({
+      title: 'Legacy Lesson',
+      description: 'Legacy lesson description',
+    });
+    expect(result.data.structuredContent?.sections[0].lessonBlocks).toHaveLength(1);
+  });
 });

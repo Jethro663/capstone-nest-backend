@@ -9,6 +9,7 @@ import {
   classRecords,
   classRecordCategories,
   classRecordItems,
+  classRecordFinalGrades,
   classRecordScores,
   enrollments,
 } from '../../drizzle/schema';
@@ -81,7 +82,8 @@ export class ClassRecordComputationService {
   }
 
   /**
-   * Computes DepEd-standard grades for all enrolled students.
+   * Computes DepEd-standard grades for all active students plus removed students
+   * who already have class-record history (scores and/or finalized grades).
    *
    * Formula:
    *   PS (Percentage Score) = (total raw / total HPS) × 100
@@ -109,7 +111,7 @@ export class ClassRecordComputationService {
       );
     }
 
-    // 2. Load enrolled students
+    // 2. Load active class participants
     const enrolled = await conn
       .select({ studentId: enrollments.studentId })
       .from(enrollments)
@@ -120,13 +122,31 @@ export class ClassRecordComputationService {
         ),
       );
 
-    if (enrolled.length === 0) {
+    const historicalScoreRows = await conn
+      .select({ studentId: classRecordScores.studentId })
+      .from(classRecordScores)
+      .innerJoin(
+        classRecordItems,
+        eq(classRecordItems.id, classRecordScores.classRecordItemId),
+      )
+      .where(eq(classRecordItems.classRecordId, classRecordId));
+
+    const historicalFinalRows = await conn
+      .select({ studentId: classRecordFinalGrades.studentId })
+      .from(classRecordFinalGrades)
+      .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
+
+    const participantIds = new Set<string>();
+    enrolled.forEach((entry) => participantIds.add(entry.studentId));
+    historicalScoreRows.forEach((entry) => participantIds.add(entry.studentId));
+    historicalFinalRows.forEach((entry) => participantIds.add(entry.studentId));
+
+    if (participantIds.size === 0) {
       throw new UnprocessableEntityException(
-        'No enrolled students found for this class',
+        'No class-record participants found for this class',
       );
     }
-
-    const studentIds = enrolled.map((e) => e.studentId);
+    const studentIds = [...participantIds];
 
     // 3. Load categories
     const categories = await conn.query.classRecordCategories.findMany({

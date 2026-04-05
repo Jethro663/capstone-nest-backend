@@ -7,6 +7,9 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
+    "android:emulator": "set EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api&& expo start --android --port 8081",
+    "expo:kill-8081": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$p=(Get-NetTCPConnection -LocalPort 8081 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess); if($p){Stop-Process -Id $p -Force}\"",
+    "android:emulator:clean": "npm run expo:kill-8081 && npm run android:emulator",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",

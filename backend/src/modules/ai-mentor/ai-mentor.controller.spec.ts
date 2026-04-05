@@ -595,8 +595,12 @@ describe('AiMentorController', () => {
         message:
           'Extraction was already applied earlier; returning cached completion state.',
         data: {
+          sectionsCreated: 0,
           lessonsCreated: 0,
+          assessmentsCreated: 0,
+          sections: [],
           lessons: [],
+          assessments: [],
         },
       });
     });
