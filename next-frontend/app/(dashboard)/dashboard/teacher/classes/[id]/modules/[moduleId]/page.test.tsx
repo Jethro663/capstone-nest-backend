@@ -1,6 +1,6 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TeacherModuleDetailPage from './page';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
@@ -51,7 +51,7 @@ jest.mock('@/services/lesson-service', () => ({
 }));
 
 jest.mock('@/services/assessment-service', () => ({
-  assessmentService: { getByClass: jest.fn() },
+  assessmentService: { getByClass: jest.fn(), create: jest.fn() },
 }));
 
 jest.mock('@/services/file-service', () => ({
@@ -141,6 +141,11 @@ describe('TeacherModuleDetailPage', () => {
       totalPages: 1,
       total: 0,
     } as never);
+    mockedAssessmentService.create.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: { id: 'assessment-new' } as never,
+    });
     mockedModuleService.attachItem.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -164,9 +169,14 @@ describe('TeacherModuleDetailPage', () => {
 
     await screen.findByRole('heading', { name: 'Sections' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add Block' }));
-    fireEvent.click(screen.getByRole('button', { name: /Lesson/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add Block' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const lessonTypeButton = within(dialog).getByText('Lesson').closest('button');
+    if (!lessonTypeButton) {
+      throw new Error('Lesson block type button was not rendered');
+    }
+    fireEvent.click(lessonTypeButton);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
 
     await waitFor(() => {
       expect(mockedLessonService.create).toHaveBeenCalledWith(
@@ -186,6 +196,122 @@ describe('TeacherModuleDetailPage', () => {
     expect(pushMock).toHaveBeenCalledWith(
       '/dashboard/teacher/lessons/lesson-new/edit',
     );
+  });
+
+  it('creates and attaches a new assessment block then opens assessment editor', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const assessmentTypeButton = within(dialog).getByText('Assessment').closest('button');
+    if (!assessmentTypeButton) {
+      throw new Error('Assessment block type button was not rendered');
+    }
+    fireEvent.click(assessmentTypeButton);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+
+    await waitFor(() => {
+      expect(mockedAssessmentService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Untitled Assessment',
+          classId: 'class-1',
+        }),
+      );
+    });
+    expect(mockedModuleService.attachItem).toHaveBeenCalledWith(
+      'section-1',
+      expect.objectContaining({
+        itemType: 'assessment',
+        assessmentId: 'assessment-new',
+        isGiven: false,
+      }),
+    );
+    expect(pushMock).toHaveBeenCalledWith(
+      '/dashboard/teacher/assessments/assessment-new/edit',
+    );
+  });
+
+  it('attaches an existing assessment without creating a new one', async () => {
+    mockedAssessmentService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'assessment-existing',
+          classId: 'class-1',
+          title: 'Existing Assessment',
+          isPublished: false,
+        },
+      ] as never,
+      count: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+      total: 1,
+    } as never);
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const assessmentTypeButton = within(dialog).getByText('Assessment').closest('button');
+    if (!assessmentTypeButton) {
+      throw new Error('Assessment block type button was not rendered');
+    }
+    fireEvent.click(assessmentTypeButton);
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Attach Existing Assessment/i }),
+    );
+    fireEvent.change(within(dialog).getByLabelText('Available assessments'), {
+      target: { value: 'assessment-existing' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+
+    await waitFor(() => {
+      expect(mockedModuleService.attachItem).toHaveBeenCalledWith(
+        'section-1',
+        expect.objectContaining({
+          itemType: 'assessment',
+          assessmentId: 'assessment-existing',
+          isGiven: false,
+        }),
+      );
+    });
+    expect(mockedAssessmentService.create).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('updates assessment submit state when switching between create and existing modes', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const assessmentTypeButton = within(dialog).getByText('Assessment').closest('button');
+    if (!assessmentTypeButton) {
+      throw new Error('Assessment block type button was not rendered');
+    }
+    fireEvent.click(assessmentTypeButton);
+
+    const submitButton = within(dialog).getByRole('button', { name: 'Add Block' });
+    expect(submitButton).not.toBeDisabled();
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Attach Existing Assessment/i }),
+    );
+    expect(submitButton).toBeDisabled();
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /Create New Assessment/i }),
+    );
+    expect(submitButton).not.toBeDisabled();
   });
 
   it('shows orphan legacy lessons and deletes them from the cleanup section', async () => {

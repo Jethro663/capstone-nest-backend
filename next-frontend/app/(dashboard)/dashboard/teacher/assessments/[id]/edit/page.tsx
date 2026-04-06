@@ -51,6 +51,7 @@ import type {
   CreateQuestionDto,
   QuestionAnalyticsResponse,
   RubricCriterion,
+  UpdateQuestionDto,
 } from '@/types/assessment';
 import type { ClassRecordSlotOverview, ClassRecordSlotOverviewCategory } from '@/types/class-record';
 import type { AssessmentType, FeedbackLevel, GradingPeriod, QuestionType } from '@/utils/constants';
@@ -622,43 +623,60 @@ export default function AssessmentEditorPage() {
 
     for (let index = 0; index < questions.length; index += 1) {
       const question = questions[index];
-      const payload: Omit<CreateQuestionDto, 'assessmentId'> = {
-        type: question.type,
-        content: question.content.trim(),
-        points: Number(question.points) || 1,
-        order: index + 1,
-        isRequired: question.isRequired,
-        options: supportsOptions(question.type)
-          ? question.options
-              .map((option, optionIndex) => ({
-                text: option.text.trim(),
-                isCorrect: option.isCorrect,
-                order: optionIndex + 1,
-              }))
-              .filter((option) => option.text)
-          : [],
-      };
+      const content = question.content.trim();
+      const points = Number(question.points);
+      const options = supportsOptions(question.type)
+        ? question.options.map((option, optionIndex) => ({
+            text: option.text.trim(),
+            isCorrect: option.isCorrect,
+            order: optionIndex + 1,
+          }))
+        : [];
 
-      if (!payload.content) {
+      if (!content) {
         throw new Error(`Question ${index + 1} is empty`);
       }
 
+      if (!Number.isInteger(points) || points < 1) {
+        throw new Error(`Question ${index + 1} needs valid points`);
+      }
+
       if (supportsOptions(question.type)) {
-        if ((payload.options?.length || 0) < 2) {
+        if (options.some((option) => !option.text)) {
+          throw new Error(`Question ${index + 1} has empty answer choices`);
+        }
+        if (options.some((option) => typeof option.isCorrect !== 'boolean')) {
+          throw new Error(`Question ${index + 1} has invalid answer choices`);
+        }
+        if (options.length < 2) {
           throw new Error(`Question ${index + 1} needs at least two answer choices`);
         }
-        if (!payload.options?.some((option) => option.isCorrect)) {
+        if (!options.some((option) => option.isCorrect)) {
           throw new Error(`Question ${index + 1} needs at least one correct answer`);
         }
       }
 
+      const updatePayload: UpdateQuestionDto = {
+        content,
+        points,
+        order: index + 1,
+        isRequired: question.isRequired,
+        options,
+      };
+
       if (question.isNew || question.id.startsWith('temp-')) {
-        await assessmentService.createQuestion({
+        const createPayload: CreateQuestionDto = {
           assessmentId: assessment.id,
-          ...payload,
-        });
+          type: question.type,
+          content,
+          points,
+          order: index + 1,
+          isRequired: question.isRequired,
+          options,
+        };
+        await assessmentService.createQuestion(createPayload);
       } else {
-        await assessmentService.updateQuestion(question.id, payload);
+        await assessmentService.updateQuestion(question.id, updatePayload);
       }
     }
   };

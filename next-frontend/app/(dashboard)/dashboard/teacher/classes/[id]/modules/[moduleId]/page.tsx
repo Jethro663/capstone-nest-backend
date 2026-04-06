@@ -41,11 +41,13 @@ import type { ClassModule, ModuleItem, ModuleItemType } from '@/types/module';
 import './module-workspace.css';
 
 type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes' | 'grading';
+type AssessmentAttachMode = 'create-new' | 'attach-existing';
 
 type AttachState = {
   open: boolean;
   sectionId: string;
   itemType: ModuleItemType | null;
+  assessmentMode: AssessmentAttachMode;
   itemId: string;
   lessonPoints: string;
   file: File | null;
@@ -215,6 +217,7 @@ export default function TeacherModuleDetailPage() {
     open: false,
     sectionId: '',
     itemType: null,
+    assessmentMode: 'create-new',
     itemId: '',
     lessonPoints: '0',
     file: null,
@@ -312,7 +315,7 @@ export default function TeacherModuleDetailPage() {
     attachState.itemType === 'lesson'
       ? 'Create a new empty lesson, attach it to this section, then open the lesson editor.'
       : attachState.itemType === 'assessment'
-        ? 'Attach an assessment block. New assessment blocks start with Give unchecked.'
+        ? 'Create a new empty assessment or attach an existing one.'
         : attachState.itemType === 'file'
           ? 'Upload a PDF and attach it as a downloadable module block.'
           : 'Choose the block type you want to add to this section.';
@@ -322,15 +325,18 @@ export default function TeacherModuleDetailPage() {
       ? Boolean(attachState.file)
       : attachState.itemType === 'lesson'
         ? true
+      : attachState.itemType === 'assessment'
+        ? attachState.assessmentMode === 'create-new' || Boolean(attachState.itemId)
       : attachState.itemType === null
         ? false
-        : Boolean(attachState.itemId);
+        : false;
 
   useEffect(() => {
     if (!attachState.open) return;
     if (
       attachState.itemType === 'file' ||
       attachState.itemType === 'lesson' ||
+      attachState.assessmentMode !== 'attach-existing' ||
       attachState.itemType === null
     ) {
       return;
@@ -344,7 +350,7 @@ export default function TeacherModuleDetailPage() {
         itemId: availableAttachOptions[0]?.id || '',
       };
     });
-  }, [attachState.itemType, attachState.open, availableAttachOptions]);
+  }, [attachState.assessmentMode, attachState.itemType, attachState.open, availableAttachOptions]);
 
   const lessonCount = sectionList.reduce(
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'lesson').length,
@@ -620,13 +626,18 @@ export default function TeacherModuleDetailPage() {
   const handleAttachItem = async () => {
     if (!attachState.sectionId || !attachState.itemType || attachingItem) return;
 
-    if (attachState.itemType === 'assessment' && !attachState.itemId) {
+    if (
+      attachState.itemType === 'assessment' &&
+      attachState.assessmentMode === 'attach-existing' &&
+      !attachState.itemId
+    ) {
       toast.error('Select an item to attach');
       return;
     }
 
     try {
       setAttachingItem(true);
+      let createdAssessmentId: string | null = null;
       let payload:
         | {
             itemType: 'lesson';
@@ -657,11 +668,24 @@ export default function TeacherModuleDetailPage() {
           points: Number.isFinite(parsedPoints) && parsedPoints >= 0 ? parsedPoints : 0,
         };
       } else if (attachState.itemType === 'assessment') {
-        payload = {
-          itemType: 'assessment',
-          assessmentId: attachState.itemId,
-          isGiven: false,
-        };
+        if (attachState.assessmentMode === 'create-new') {
+          const createdAssessment = await assessmentService.create({
+            title: 'Untitled Assessment',
+            classId,
+          });
+          createdAssessmentId = createdAssessment.data.id;
+          payload = {
+            itemType: 'assessment',
+            assessmentId: createdAssessmentId,
+            isGiven: false,
+          };
+        } else {
+          payload = {
+            itemType: 'assessment',
+            assessmentId: attachState.itemId,
+            isGiven: false,
+          };
+        }
       } else {
         if (!attachState.file) {
           toast.error('Upload a PDF file first');
@@ -683,6 +707,7 @@ export default function TeacherModuleDetailPage() {
         open: false,
         sectionId: '',
         itemType: null,
+        assessmentMode: 'create-new',
         itemId: '',
         lessonPoints: '0',
         file: null,
@@ -691,6 +716,16 @@ export default function TeacherModuleDetailPage() {
       if (attachState.itemType === 'lesson' && payload.itemType === 'lesson') {
         toast.success('Lesson block created');
         router.push(`/dashboard/teacher/lessons/${payload.lessonId}/edit`);
+        return;
+      }
+
+      if (
+        attachState.itemType === 'assessment' &&
+        attachState.assessmentMode === 'create-new' &&
+        createdAssessmentId
+      ) {
+        toast.success('Assessment block created');
+        router.push(`/dashboard/teacher/assessments/${createdAssessmentId}/edit`);
         return;
       }
 
@@ -1122,6 +1157,7 @@ export default function TeacherModuleDetailPage() {
                           open: true,
                           sectionId: section.id,
                           itemType: null,
+                          assessmentMode: 'create-new',
                           itemId: '',
                           lessonPoints: '0',
                           file: null,
@@ -1450,6 +1486,7 @@ export default function TeacherModuleDetailPage() {
                   open: false,
                   sectionId: '',
                   itemType: null,
+                  assessmentMode: 'create-new',
                   itemId: '',
                   lessonPoints: '0',
                   file: null,
@@ -1495,6 +1532,7 @@ export default function TeacherModuleDetailPage() {
                       setAttachState((current) => ({
                         ...current,
                         itemType: option.type,
+                        assessmentMode: option.type === 'assessment' ? 'create-new' : current.assessmentMode,
                         itemId: '',
                         lessonPoints: '0',
                         file: null,
@@ -1561,32 +1599,79 @@ export default function TeacherModuleDetailPage() {
                 ) : null}
                 {attachState.itemType === 'assessment' ? (
                   <>
-                    <label htmlFor="attach-item">Available assessments</label>
-                    <select
-                      id="attach-item"
-                      value={attachState.itemId}
-                      onChange={(event) =>
-                        setAttachState((current) => ({
-                          ...current,
-                          itemId: event.target.value,
-                        }))
-                      }
-                    >
-                      {availableAttachOptions.length === 0 ? (
-                        <option value="">No available items</option>
-                      ) : (
-                        availableAttachOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    {availableAttachOptions.length === 0 ? (
+                    <div className="teacher-module-detail__attach-type-grid">
+                      <button
+                        type="button"
+                        className="teacher-module-detail__attach-type"
+                        data-active={attachState.assessmentMode === 'create-new'}
+                        onClick={() =>
+                          setAttachState((current) => ({
+                            ...current,
+                            assessmentMode: 'create-new',
+                            itemId: '',
+                          }))
+                        }
+                      >
+                        <div>
+                          <strong>Create New Assessment</strong>
+                          <p>Start with a blank assessment and open the editor.</p>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        className="teacher-module-detail__attach-type"
+                        data-active={attachState.assessmentMode === 'attach-existing'}
+                        onClick={() =>
+                          setAttachState((current) => ({
+                            ...current,
+                            assessmentMode: 'attach-existing',
+                            itemId: '',
+                          }))
+                        }
+                      >
+                        <div>
+                          <strong>Attach Existing Assessment</strong>
+                          <p>Reuse an assessment already created for this class.</p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {attachState.assessmentMode === 'create-new' ? (
                       <p className="teacher-module-detail__attach-note">
-                        No available assessments. Create one from{' '}
-                        <Link href="/dashboard/teacher/assessments">Assessments</Link>.
+                        A new empty assessment will be created, attached to this section, then opened in the editor.
                       </p>
+                    ) : null}
+
+                    {attachState.assessmentMode === 'attach-existing' ? (
+                      <>
+                        <label htmlFor="attach-item">Available assessments</label>
+                        <select
+                          id="attach-item"
+                          value={attachState.itemId}
+                          onChange={(event) =>
+                            setAttachState((current) => ({
+                              ...current,
+                              itemId: event.target.value,
+                            }))
+                          }
+                        >
+                          {availableAttachOptions.length === 0 ? (
+                            <option value="">No available items</option>
+                          ) : (
+                            availableAttachOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        {availableAttachOptions.length === 0 ? (
+                          <p className="teacher-module-detail__attach-note">
+                            No available assessments. Create one from{' '}
+                            <Link href="/dashboard/teacher/assessments">Assessments</Link>.
+                          </p>
+                        ) : null}
+                      </>
                     ) : null}
                   </>
                 ) : null}
@@ -1606,6 +1691,7 @@ export default function TeacherModuleDetailPage() {
                   open: false,
                   sectionId: '',
                   itemType: null,
+                  assessmentMode: 'create-new',
                   itemId: '',
                   lessonPoints: '0',
                   file: null,

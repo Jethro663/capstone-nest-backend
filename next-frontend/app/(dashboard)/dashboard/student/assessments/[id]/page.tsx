@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -22,6 +23,56 @@ import {
 } from '@/utils/student-assessment-routing';
 import { getDescription, formatDate } from '@/utils/helpers';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
+
+type StatusTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info';
+
+function toAssessmentTypeLabel(type: string) {
+  return type.replaceAll('_', ' ');
+}
+
+function getAssessmentTypeTone(type: Assessment['type']): StatusTone {
+  if (type === 'exam') return 'danger';
+  if (type === 'assignment') return 'warning';
+  return 'info';
+}
+
+function getAttemptStatus(attempt: AssessmentAttempt): { tone: StatusTone; label: string } {
+  if (attempt.isReturned === false) {
+    return { tone: 'warning', label: 'Awaiting Review' };
+  }
+
+  if (attempt.passed) {
+    return {
+      tone: 'success',
+      label: `Passed${attempt.score != null ? ` \u2022 ${attempt.score}%` : ''}`,
+    };
+  }
+
+  return {
+    tone: 'danger',
+    label: `Needs Improvement${attempt.score != null ? ` \u2022 ${attempt.score}%` : ''}`,
+  };
+}
+
+function MetricTile({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-medium uppercase tracking-wide student-muted-text">{label}</p>
+        <span className="text-[var(--student-accent)]">{icon}</span>
+      </div>
+      <p className="mt-2 text-xl font-bold text-[var(--student-text-strong)]">{value}</p>
+    </div>
+  );
+}
 
 export default function StudentAssessmentPage() {
   const params = useParams();
@@ -78,6 +129,8 @@ export default function StudentAssessmentPage() {
   const maxAttempts = assessment?.maxAttempts ?? 1;
   const attemptsRemaining = Math.max(0, maxAttempts - submittedAttempts.length);
   const canStart = attemptsRemaining > 0;
+  const questionCount = assessment?.questions?.length ?? 0;
+  const dueDateLabel = assessment?.dueDate ? `Due ${formatDate(assessment.dueDate)}` : 'No due date';
 
   const handleStart = async () => {
     try {
@@ -144,110 +197,116 @@ export default function StudentAssessmentPage() {
   }
 
   const isPastDue = assessment.dueDate ? new Date(assessment.dueDate) < new Date() : false;
+  const assessmentTypeTone = getAssessmentTypeTone(assessment.type);
 
   return (
     <div className="student-page rounded-3xl p-1">
-      <motion.div {...motionProps.container} className="mx-auto max-w-4xl space-y-6">
+      <motion.main {...motionProps.container} className="mx-auto max-w-4xl space-y-5">
         <motion.div {...motionProps.item}>
-          <Button variant="ghost" size="sm" onClick={() => router.push('/dashboard/student')} className="text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/dashboard/student')}
+            className="text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+          >
             <ArrowLeft className="mr-1 h-4 w-4" />
-            Back
+            Back to dashboard
           </Button>
         </motion.div>
 
-        <motion.div {...motionProps.item}>
-          <StudentActionCard className="border-0 bg-[var(--student-accent)] text-[var(--student-accent-contrast)]">
+        <motion.section {...motionProps.item}>
+          <StudentActionCard>
             <StudentSectionHeader
               title={assessment.title}
-              subtitle={`${assessment.questions?.length ?? 0} questions`}
-              className="[&_h2]:text-[var(--student-accent-contrast)] [&_p]:text-[var(--student-accent-contrast)]/70"
               action={
-                <StudentStatusChip tone={assessment.type === 'exam' ? 'danger' : assessment.type === 'assignment' ? 'warning' : 'info'}>
-                  {assessment.type}
+                <StudentStatusChip tone={assessmentTypeTone}>
+                  {toAssessmentTypeLabel(assessment.type)}
                 </StudentStatusChip>
               }
             />
+
             {assessment.description && (
-              <p className="mt-3 max-w-2xl text-sm text-[var(--student-accent-contrast)]/80">{getDescription(assessment.description)}</p>
+              <p className="mt-3 max-w-3xl text-sm student-muted-text">{getDescription(assessment.description)}</p>
             )}
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <StudentStatusChip tone="info">{questionCount} question{questionCount === 1 ? '' : 's'}</StudentStatusChip>
+              <StudentStatusChip tone={isPastDue ? 'danger' : 'neutral'}>
+                {isPastDue ? 'Past due' : dueDateLabel}
+              </StudentStatusChip>
+            </div>
           </StudentActionCard>
-        </motion.div>
+        </motion.section>
 
-        <motion.div {...motionProps.container} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <motion.div {...motionProps.item}>
-            <StudentActionCard>
-              <div className="flex items-center justify-between">
-                <p className="text-sm student-muted-text">Total Points</p>
-                <Target className="h-4 w-4 text-[var(--student-accent)]" />
-              </div>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{assessment.totalPoints ?? 0}</p>
-            </StudentActionCard>
-          </motion.div>
-          <motion.div {...motionProps.item}>
-            <StudentActionCard>
-              <div className="flex items-center justify-between">
-                <p className="text-sm student-muted-text">Passing Score</p>
-                <Medal className="h-4 w-4 text-[var(--student-accent)]" />
-              </div>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{assessment.passingScore ?? 60}%</p>
-            </StudentActionCard>
-          </motion.div>
-          <motion.div {...motionProps.item}>
-            <StudentActionCard>
-              <div className="flex items-center justify-between">
-                <p className="text-sm student-muted-text">Attempts</p>
-                <Clock3 className="h-4 w-4 text-[var(--student-accent)]" />
-              </div>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{submittedAttempts.length}/{maxAttempts}</p>
-            </StudentActionCard>
-          </motion.div>
-          <motion.div {...motionProps.item}>
-            <StudentActionCard>
-              <div className="flex items-center justify-between">
-                <p className="text-sm student-muted-text">Time Limit</p>
-                <Clock3 className="h-4 w-4 text-[var(--student-accent)]" />
-              </div>
-              <p className="mt-2 text-2xl font-extrabold text-[var(--student-text-strong)]">{assessment.timeLimitMinutes ?? '\u221E'}</p>
-            </StudentActionCard>
-          </motion.div>
-        </motion.div>
+        <motion.section {...motionProps.item}>
+          <StudentActionCard>
+            <StudentSectionHeader title="Assessment Overview" subtitle="Core details at a glance." />
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricTile
+                label="Total Points"
+                value={assessment.totalPoints ?? 0}
+                icon={<Target className="h-4 w-4" />}
+              />
+              <MetricTile
+                label="Passing Score"
+                value={`${assessment.passingScore ?? 60}%`}
+                icon={<Medal className="h-4 w-4" />}
+              />
+              <MetricTile
+                label="Attempts"
+                value={`${submittedAttempts.length}/${maxAttempts}`}
+                icon={<Clock3 className="h-4 w-4" />}
+              />
+              <MetricTile
+                label="Time Limit"
+                value={assessment.timeLimitMinutes ?? '\u221E'}
+                icon={<Clock3 className="h-4 w-4" />}
+              />
+            </div>
+          </StudentActionCard>
+        </motion.section>
 
-        <motion.div {...motionProps.item}>
+        <motion.section {...motionProps.item}>
           <StudentActionCard className={isPastDue ? 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)]' : ''}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-[var(--student-text-strong)]">
-                  {assessment.dueDate ? `Due ${formatDate(assessment.dueDate)}` : 'No due date'}
+                  {dueDateLabel}
                 </p>
                 <p className={isPastDue ? 'text-xs font-semibold text-[var(--student-danger-text)]' : 'text-xs student-muted-text'}>
                   {isPastDue ? 'This assessment is past due. You may still proceed if attempts remain.' : `${attemptsRemaining} attempt(s) remaining`}
                 </p>
               </div>
-              {canStart ? (
-                <Button onClick={handleStart} disabled={starting} className="student-button-solid">
-                  {starting
-                    ? 'Starting...'
-                    : submittedAttempts.length > 0
-                      ? `Retake (${attemptsRemaining} left)`
-                      : 'Start Assessment'}
-                </Button>
-              ) : (
-                <Button disabled>No attempts remaining</Button>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <StudentStatusChip tone={attemptsRemaining > 0 ? 'info' : 'danger'}>
+                  {attemptsRemaining} remaining
+                </StudentStatusChip>
+                {canStart ? (
+                  <Button onClick={handleStart} disabled={starting} className="student-button-solid">
+                    {starting
+                      ? 'Starting...'
+                      : submittedAttempts.length > 0
+                        ? `Retake (${attemptsRemaining} left)`
+                        : 'Start Assessment'}
+                  </Button>
+                ) : (
+                  <Button disabled>No attempts remaining</Button>
+                )}
+              </div>
             </div>
           </StudentActionCard>
-        </motion.div>
+        </motion.section>
 
         {(assessment.rubricCriteria?.length ?? 0) > 0 && (
-          <motion.div {...motionProps.item}>
+          <motion.section {...motionProps.item}>
             <StudentActionCard>
               <StudentSectionHeader
                 title="Rubric"
                 subtitle="Your teacher will score this assessment using the reviewed rubric below."
               />
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 divide-y divide-[var(--student-outline)]">
                 {assessment.rubricCriteria?.map((criterion) => (
-                  <div key={criterion.id} className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+                  <div key={criterion.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-[var(--student-text-strong)]">{criterion.title}</p>
@@ -261,11 +320,18 @@ export default function StudentAssessmentPage() {
                 ))}
               </div>
             </StudentActionCard>
-          </motion.div>
+          </motion.section>
         )}
 
         <motion.section {...motionProps.item} className="space-y-3">
-          <StudentSectionHeader title="My Attempts" subtitle="Review all your submitted attempts." />
+          <StudentSectionHeader
+            title="My Attempts"
+            subtitle={
+              submittedAttempts.length > 0
+                ? `${submittedAttempts.length} submitted attempt${submittedAttempts.length === 1 ? '' : 's'}`
+                : 'Review all your submitted attempts.'
+            }
+          />
           {submittedAttempts.length === 0 ? (
             <StudentEmptyState
               title="No attempts yet"
@@ -273,23 +339,19 @@ export default function StudentAssessmentPage() {
               icon={<ClipboardAttemptIcon />}
             />
           ) : (
-            <motion.div {...motionProps.container} className="space-y-3">
-              {submittedAttempts.map((attempt) => (
-                <motion.div key={attempt.id} {...motionProps.item}>
-                  <StudentActionCard>
+            <div className="space-y-3">
+              {submittedAttempts.map((attempt) => {
+                const status = getAttemptStatus(attempt);
+
+                return (
+                  <StudentActionCard key={attempt.id} className="border-[var(--student-outline)]">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold text-[var(--student-text-strong)]">Attempt #{attempt.attemptNumber ?? '?'}</p>
                         <p className="text-xs student-muted-text">{formatDate(attempt.submittedAt || attempt.createdAt || '')}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {attempt.isReturned === false ? (
-                          <StudentStatusChip tone="warning">Awaiting Review</StudentStatusChip>
-                        ) : (
-                          <StudentStatusChip tone={attempt.passed ? 'success' : 'danger'}>
-                            {attempt.passed ? 'Passed' : 'Needs Improvement'} {attempt.score != null ? `\u2022 ${attempt.score}%` : ''}
-                          </StudentStatusChip>
-                        )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StudentStatusChip tone={status.tone}>{status.label}</StudentStatusChip>
                         <Button
                           variant="outline"
                           size="sm"
@@ -310,12 +372,12 @@ export default function StudentAssessmentPage() {
                       </div>
                     </div>
                   </StudentActionCard>
-                </motion.div>
-              ))}
-            </motion.div>
+                );
+              })}
+            </div>
           )}
         </motion.section>
-      </motion.div>
+      </motion.main>
     </div>
   );
 }

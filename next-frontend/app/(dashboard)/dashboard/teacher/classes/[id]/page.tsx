@@ -29,6 +29,7 @@ import {
   Palette,
   Plus,
   Radar,
+  Sparkles,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ import { moduleService } from '@/services/module-service';
 import { announcementService } from '@/services/announcement-service';
 import { assessmentService } from '@/services/assessment-service';
 import { extractionService } from '@/services/extraction-service';
+import { aiService } from '@/services/ai-service';
 import { classRecordService } from '@/services/class-record-service';
 import { fileService } from '@/services/file-service';
 import { Button } from '@/components/ui/button';
@@ -51,6 +53,7 @@ import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer
 import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
+import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
@@ -157,6 +160,19 @@ function formatDateYmd(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--';
   return date.toISOString().slice(0, 10);
+}
+
+function formatRelativeTime(value?: string | null) {
+  if (!value) return 'Unknown';
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return 'Unknown';
+  const diffMs = Date.now() - timestamp;
+  const minutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function formatEventBadgeDate(date: Date) {
@@ -315,6 +331,8 @@ export default function TeacherClassDetailPage() {
   const [busyAssessmentId, setBusyAssessmentId] = useState<string | null>(null);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
+  const [aiDraftJobs, setAiDraftJobs] = useState<TrackedAiDraftJobEntry[]>([]);
+  const [aiDraftJobsBusy, setAiDraftJobsBusy] = useState(false);
 
   const [uploadingExtraction, setUploadingExtraction] = useState(false);
   const extractionInputRef = useRef<HTMLInputElement | null>(null);
@@ -418,6 +436,69 @@ export default function TeacherClassDetailPage() {
     void fetchData();
   }, [fetchData]);
 
+  const refreshAiDraftJobs = useCallback(async () => {
+    if (!isClassIdValid) {
+      setAiDraftJobs([]);
+      return;
+    }
+    const cached = readTrackedAiDraftJobs(classId);
+    if (cached.length === 0) {
+      setAiDraftJobs([]);
+      return;
+    }
+
+    setAiDraftJobsBusy(true);
+    try {
+      const refreshed = await Promise.all(cached.map(async (entry) => {
+        try {
+          const statusRes = await aiService.getTeacherJobStatus(entry.jobId);
+          return {
+            ...entry,
+            lastKnownStatus: statusRes.data.status,
+            lastKnownProgress: statusRes.data.progressPercent,
+            assessmentId: statusRes.data.assessmentId ?? entry.assessmentId ?? null,
+            updatedAt: statusRes.data.updatedAt ?? entry.updatedAt ?? null,
+          };
+        } catch {
+          return entry;
+        }
+      }));
+
+      const sorted = [...refreshed].sort((a, b) => {
+        const aTs = Date.parse(a.updatedAt || a.createdAt);
+        const bTs = Date.parse(b.updatedAt || b.createdAt);
+        return bTs - aTs;
+      });
+      writeTrackedAiDraftJobs(classId, sorted);
+      setAiDraftJobs(readTrackedAiDraftJobs(classId));
+    } finally {
+      setAiDraftJobsBusy(false);
+    }
+  }, [classId, isClassIdValid]);
+
+  useEffect(() => {
+    if (!isClassIdValid) {
+      setAiDraftJobs([]);
+      return;
+    }
+    setAiDraftJobs(readTrackedAiDraftJobs(classId));
+  }, [classId, isClassIdValid]);
+
+  useEffect(() => {
+    if (activeTab !== 'assignments') return;
+    void refreshAiDraftJobs();
+  }, [activeTab, refreshAiDraftJobs]);
+
+  useEffect(() => {
+    if (activeTab !== 'assignments') return;
+    if (aiDraftJobs.length === 0) return;
+    if (!aiDraftJobs.some((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus))) return;
+    const interval = window.setInterval(() => {
+      void refreshAiDraftJobs();
+    }, 3000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, aiDraftJobs, refreshAiDraftJobs]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const raw = window.localStorage.getItem(modulesViewStorageKey);
@@ -500,6 +581,12 @@ export default function TeacherClassDetailPage() {
     if (assignmentFilter === 'all') return assessments;
     return assessments.filter((assessment) => deriveAssignmentFilter(assessment) === assignmentFilter);
   }, [assignmentFilter, assessments]);
+
+  const recentAiDraftJobs = useMemo(() => aiDraftJobs.slice(0, 6), [aiDraftJobs]);
+  const activeAiDraftJobCount = useMemo(
+    () => aiDraftJobs.filter((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus)).length,
+    [aiDraftJobs],
+  );
 
   useEffect(() => {
     const assessmentIdSet = new Set(filteredAssignments.map((assessment) => assessment.id));
@@ -1265,6 +1352,55 @@ export default function TeacherClassDetailPage() {
                 </Button>
               </div>
             </div>
+
+            <article className="teacher-class-workspace__assignment-card">
+              <div className="teacher-class-workspace__assignment-main">
+                <div className="teacher-class-workspace__assignment-icon">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="teacher-class-workspace__assignment-copy">
+                  <div className="teacher-class-workspace__assignment-tags">
+                    <span>AI Draft Jobs</span>
+                    <span data-status={activeAiDraftJobCount > 0 ? 'published' : 'draft'}>
+                      {activeAiDraftJobCount > 0 ? `${activeAiDraftJobCount} active` : 'No active jobs'}
+                    </span>
+                  </div>
+                  <p>
+                    {aiDraftJobsBusy ? 'Refreshing AI draft tracker...' : `${recentAiDraftJobs.length} tracked job(s) for this class`}
+                  </p>
+                  {recentAiDraftJobs.length === 0 ? (
+                    <div className="teacher-class-workspace__assignment-actions">
+                      <Link href={`/dashboard/teacher/classes/${classId}/ai-draft`} className="teacher-class-workspace__outline">
+                        Start AI Draft
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="teacher-class-workspace__stack">
+                      {recentAiDraftJobs.map((entry) => (
+                        <div key={entry.jobId} className="teacher-class-workspace__selection-bar">
+                          <div>
+                            <strong>{entry.jobId}</strong>
+                            <p className="text-xs text-muted-foreground">
+                              {entry.lastKnownStatus} • {Math.round(entry.lastKnownProgress)}% • {formatRelativeTime(entry.updatedAt || entry.createdAt)}
+                            </p>
+                          </div>
+                          <div className="teacher-class-workspace__selection-actions">
+                            <Link href={`/dashboard/teacher/classes/${classId}/ai-draft`} className="teacher-class-workspace__outline">
+                              Resume
+                            </Link>
+                            {entry.assessmentId ? (
+                              <Link href={`/dashboard/teacher/assessments/${entry.assessmentId}/edit`} className="teacher-class-workspace__outline">
+                                Open Assessment
+                              </Link>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </article>
 
             <div className="teacher-class-workspace__chips">
               {ASSIGNMENT_FILTERS.map((filter) => (

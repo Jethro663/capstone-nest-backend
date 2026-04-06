@@ -167,7 +167,6 @@ export interface CreateQuestionDto {
 }
 
 export interface UpdateQuestionDto {
-  type?: QuestionType;
   content?: string;
   points?: number;
   order?: number;
