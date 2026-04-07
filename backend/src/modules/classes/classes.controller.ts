@@ -71,6 +71,34 @@ export class ClassesController {
   constructor(private classesService: ClassesService) {}
 
   /**
+   * Backward-compatible classes listing endpoint.
+   * Some legacy clients still call GET /classes.
+   */
+  @Get()
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getAllClassesLegacy(
+    @Query('subjectId') subjectId?: string,
+    @Query('sectionId') sectionId?: string,
+    @Query('teacherId') teacherId?: string,
+    @Query('schoolYear') schoolYear?: string,
+    @Query('isActive') isActive?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.getAllClasses(
+      subjectId,
+      sectionId,
+      teacherId,
+      schoolYear,
+      isActive,
+      search,
+      page,
+      limit,
+    );
+  }
+
+  /**
    * Get all classes with optional filters
    * Admin and Teacher can access
    */

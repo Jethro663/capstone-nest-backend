@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import AnimatedLoginWrapper from '@/components/auth/AnimatedLoginWrapper';
+import { LoginForm } from '@/components/auth/LoginForm';
 import { AppOrbitLoader } from '@/components/shared/AppOrbitLoader';
 
 export const metadata = {
@@ -10,7 +10,7 @@ export const metadata = {
 export default function LoginPage() {
   return (
     <Suspense fallback={<AppOrbitLoader variant="calm" />}>
-      <AnimatedLoginWrapper />
+      <LoginForm />
     </Suspense>
   );
 }

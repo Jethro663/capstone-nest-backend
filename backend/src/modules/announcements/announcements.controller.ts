@@ -25,7 +25,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RoleName } from '../../common/constants/role.constants';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
-import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
+import {
+  ReleaseCoreAnnouncementDto,
+  UpdateAnnouncementDto,
+} from './DTO/update-announcement.dto';
 import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
 
 @ApiTags('Announcements')
@@ -122,6 +125,25 @@ export class AnnouncementsController {
       user.roles.includes(RoleName.Admin),
     );
     return { success: true, message: 'Announcement updated.', data };
+  }
+
+  @Patch(':id/core-release')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Release controls for core template announcement' })
+  async releaseCore(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReleaseCoreAnnouncementDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.announcementsService.releaseCoreAnnouncement(
+      classId,
+      id,
+      user.userId,
+      user.roles.includes(RoleName.Admin),
+      dto,
+    );
+    return { success: true, message: 'Core announcement release updated.', data };
   }
 
   // ─── Teacher: soft-delete ───────────────────────────────────────────────────

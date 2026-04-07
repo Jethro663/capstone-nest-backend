@@ -30,6 +30,8 @@ import {
   ReorderModuleItemsDto,
   ReorderModulesDto,
   ReorderModuleSectionsDto,
+  ReleaseCoreModuleDto,
+  ReleaseCoreModuleItemDto,
   UpdateModuleDto,
   UpdateModuleItemDto,
   UpdateModuleSectionDto,
@@ -109,6 +111,17 @@ export class ContentModulesService {
     }
 
     return classRecord;
+  }
+
+  private ensureNotCoreAsset(
+    isCoreTemplateAsset: boolean | null | undefined,
+    actionLabel: string,
+  ) {
+    if (isCoreTemplateAsset) {
+      throw new ForbiddenException(
+        `Core template assets are immutable; use release controls to ${actionLabel}`,
+      );
+    }
   }
 
   private async getModuleByIdOrThrow(moduleId: string) {
@@ -198,6 +211,7 @@ export class ContentModulesService {
           columns: {
             id: true,
             classId: true,
+            isCoreTemplateAsset: true,
           },
         },
       },
@@ -220,6 +234,7 @@ export class ContentModulesService {
               columns: {
                 id: true,
                 classId: true,
+                isCoreTemplateAsset: true,
               },
             },
           },
@@ -579,6 +594,7 @@ export class ContentModulesService {
   async updateModule(moduleId: string, dto: UpdateModuleDto, userId: string, userRoles: string[]) {
     const module = await this.getModuleByIdOrThrow(moduleId);
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(module.isCoreTemplateAsset, 'update visibility');
 
     await this.db
       .update(classModules)
@@ -618,6 +634,7 @@ export class ContentModulesService {
   async deleteModule(moduleId: string, userId: string, userRoles: string[]) {
     const module = await this.getModuleByIdOrThrow(moduleId);
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(module.isCoreTemplateAsset, 'delete content');
 
     await this.db.delete(classModules).where(eq(classModules.id, moduleId));
 
@@ -679,6 +696,7 @@ export class ContentModulesService {
   async createSection(moduleId: string, dto: CreateModuleSectionDto, userId: string, userRoles: string[]) {
     const module = await this.getModuleByIdOrThrow(moduleId);
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(module.isCoreTemplateAsset, 'add sections');
 
     const maxOrderResult = await this.db
       .select({ maxOrder: max(moduleSections.order) })
@@ -717,6 +735,7 @@ export class ContentModulesService {
   ) {
     const section = await this.getModuleContextFromSection(sectionId);
     await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(section.module.isCoreTemplateAsset, 'update sections');
 
     await this.db
       .update(moduleSections)
@@ -745,6 +764,7 @@ export class ContentModulesService {
   async deleteSection(sectionId: string, userId: string, userRoles: string[]) {
     const section = await this.getModuleContextFromSection(sectionId);
     await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(section.module.isCoreTemplateAsset, 'delete sections');
 
     await this.db.delete(moduleSections).where(eq(moduleSections.id, sectionId));
 
@@ -825,6 +845,7 @@ export class ContentModulesService {
 
     const section = await this.getModuleContextFromSection(sectionId);
     await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(section.module.isCoreTemplateAsset, 'attach items');
 
     if (dto.lessonId) {
       const lesson = await this.db.query.lessons.findFirst({
@@ -914,6 +935,7 @@ export class ContentModulesService {
   async updateItem(itemId: string, dto: UpdateModuleItemDto, userId: string, userRoles: string[]) {
     const item = await this.getModuleContextFromItem(itemId);
     await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(item.isCoreTemplateAsset, 'update items');
 
     const normalizedMetadata = this.normalizeItemMetadataForUpdate(item, dto);
 
@@ -947,6 +969,7 @@ export class ContentModulesService {
   async deleteItem(itemId: string, userId: string, userRoles: string[]) {
     const item = await this.getModuleContextFromItem(itemId);
     await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
+    this.ensureNotCoreAsset(item.isCoreTemplateAsset, 'delete items');
 
     await this.db.delete(moduleItems).where(eq(moduleItems.id, itemId));
 
@@ -1070,5 +1093,78 @@ export class ContentModulesService {
       where: eq(moduleGradingScaleEntries.moduleId, moduleId),
       orderBy: [asc(moduleGradingScaleEntries.order)],
     });
+  }
+
+  async releaseCoreModule(
+    moduleId: string,
+    dto: ReleaseCoreModuleDto,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const module = await this.getModuleByIdOrThrow(moduleId);
+    await this.assertClassWriteAccess(module.classId, userId, userRoles);
+    if (!module.isCoreTemplateAsset) {
+      throw new BadRequestException('Only core template modules can be released here');
+    }
+
+    const [updated] = await this.db
+      .update(classModules)
+      .set({
+        ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(classModules.id, moduleId))
+      .returning();
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'module.core_release_updated',
+      targetType: 'module',
+      targetId: moduleId,
+      metadata: {
+        classId: module.classId,
+        isVisible: updated.isVisible,
+      },
+    });
+
+    return this.getModuleByIdOrThrow(moduleId);
+  }
+
+  async releaseCoreModuleItem(
+    itemId: string,
+    dto: ReleaseCoreModuleItemDto,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const item = await this.getModuleContextFromItem(itemId);
+    await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
+    if (!item.isCoreTemplateAsset) {
+      throw new BadRequestException('Only core template items can be released here');
+    }
+
+    const [updated] = await this.db
+      .update(moduleItems)
+      .set({
+        ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
+        ...(dto.isGiven !== undefined ? { isGiven: dto.isGiven } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(moduleItems.id, itemId))
+      .returning();
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'module.item.core_release_updated',
+      targetType: 'module_item',
+      targetId: itemId,
+      metadata: {
+        moduleId: item.section.module.id,
+        classId: item.section.module.classId,
+        isVisible: updated.isVisible,
+        isGiven: updated.isGiven,
+      },
+    });
+
+    return updated;
   }
 }

@@ -859,6 +859,28 @@ export default function TeacherClassDetailPage() {
     setModuleDraft(normalizeModulePresentation(module));
   };
 
+  const toggleCoreModuleVisibility = async (module: ClassModule) => {
+    try {
+      const response = await moduleService.releaseCoreModule(module.id, {
+        isVisible: !module.isVisible,
+      });
+      setModules((current) =>
+        current.map((entry) =>
+          entry.id === module.id ? response.data : entry,
+        ),
+      );
+      toast.success(
+        response.data.isVisible
+          ? 'Core module released to students'
+          : 'Core module hidden from students',
+      );
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, 'Failed to update core module release'),
+      );
+    }
+  };
+
   const handleUploadModuleCover = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -1225,6 +1247,7 @@ export default function TeacherClassDetailPage() {
               {modules.map((module, index) => {
                 const summary = summarizeModule(module);
                 const isSelected = selectedModuleIds.includes(module.id);
+                const isCoreModule = Boolean(module.isCoreTemplateAsset);
                 const mediaSource =
                   module.coverImageUrl || MODULE_STOCK_IMAGES[index % MODULE_STOCK_IMAGES.length];
                 const gradientBackground = getModuleGradient(module.gradientId);
@@ -1286,6 +1309,11 @@ export default function TeacherClassDetailPage() {
                         <div className="teacher-class-workspace__module-index">{index + 1}</div>
                         <div className="teacher-class-workspace__module-copy">
                           <h3>{module.title}</h3>
+                          {isCoreModule ? (
+                            <span className="teacher-class-workspace__pill">
+                              Core Module
+                            </span>
+                          ) : null}
                           <p>{module.description || 'Add a short module description.'}</p>
                         </div>
                       </header>
@@ -1302,24 +1330,40 @@ export default function TeacherClassDetailPage() {
                         </article>
                       </div>
                     </Link>
-                    <button
-                      type="button"
-                      className="teacher-class-workspace__ghost-icon"
-                      onClick={() => openModuleDesignDialog(module)}
-                      aria-label="Customize module design"
-                      title="Customize module design"
-                    >
-                      <Palette className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="teacher-class-workspace__ghost-icon"
-                      onClick={() => handleDeleteModule(module.id)}
-                      disabled={busyModuleId === module.id}
-                      aria-label="Delete module"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {isCoreModule ? (
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__outline"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void toggleCoreModuleVisibility(module);
+                        }}
+                      >
+                        {module.isVisible ? 'Hide Core' : 'Release Core'}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__ghost-icon"
+                          onClick={() => openModuleDesignDialog(module)}
+                          aria-label="Customize module design"
+                          title="Customize module design"
+                        >
+                          <Palette className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__ghost-icon"
+                          onClick={() => handleDeleteModule(module.id)}
+                          disabled={busyModuleId === module.id}
+                          aria-label="Delete module"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
                   </article>
                 );
               })}

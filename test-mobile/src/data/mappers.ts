@@ -18,11 +18,11 @@ import type {
 import { colors, gradients } from "../theme/tokens";
 
 const subjectVisuals = [
-  { match: ["math", "algebra", "geometry", "statistics"], emoji: "📐", color: colors.red, bgColor: colors.paleRed, gradient: gradients.assessments },
-  { match: ["science", "biology", "chemistry", "physics"], emoji: "🔬", color: colors.green, bgColor: colors.paleGreen, gradient: gradients.progress },
-  { match: ["english", "reading", "literature"], emoji: "📚", color: colors.blue, bgColor: colors.paleBlue, gradient: gradients.lessons },
-  { match: ["history", "social", "civics"], emoji: "🏛️", color: colors.orange, bgColor: colors.paleOrange, gradient: gradients.lessons },
-  { match: ["filipino", "language"], emoji: "🌺", color: colors.purple, bgColor: colors.palePurple, gradient: gradients.profile },
+  { match: ["math", "algebra", "geometry", "statistics"], emoji: "ðŸ“", color: colors.red, bgColor: colors.paleRed, gradient: gradients.assessments },
+  { match: ["science", "biology", "chemistry", "physics"], emoji: "ðŸ”¬", color: colors.green, bgColor: colors.paleGreen, gradient: gradients.announcements },
+  { match: ["english", "reading", "literature"], emoji: "ðŸ“š", color: colors.blue, bgColor: colors.paleBlue, gradient: gradients.classes },
+  { match: ["history", "social", "civics"], emoji: "ðŸ›ï¸", color: colors.orange, bgColor: colors.paleOrange, gradient: gradients.classes },
+  { match: ["filipino", "language"], emoji: "ðŸŒº", color: colors.purple, bgColor: colors.palePurple, gradient: gradients.profile },
 ];
 
 const normalize = (value?: string | null) => (value ?? "").trim().toLowerCase();
@@ -167,11 +167,11 @@ export function buildAchievements(
   const totalCompletedLessons = subjects.reduce((total, subject) => total + subject.completedLessons, 0);
 
   return [
-    { id: "first-lesson", title: "First Steps", description: "Complete your first lesson", emoji: "👣", earned: totalCompletedLessons > 0, earnedDate: totalCompletedLessons > 0 ? "Derived from lesson completions" : undefined },
-    { id: "assessment-finisher", title: "Assessment Finisher", description: "Submit at least one assessment attempt", emoji: "📝", earned: completedAssessments.length > 0, earnedDate: completedAssessments.length > 0 ? "Derived from submitted attempts" : undefined },
-    { id: "steady-climber", title: "Steady Climber", description: "Reach 60% average class progress", emoji: "📈", earned: subjects.length > 0 && Math.round(subjects.reduce((total, subject) => total + subject.progress, 0) / subjects.length) >= 60, earnedDate: "Derived from class progress" },
-    { id: "lxp-runner", title: "LXP Runner", description: "Complete a remedial checkpoint", emoji: "🚀", earned: (playlist?.progress.checkpointsCompleted ?? 0) > 0, earnedDate: (playlist?.progress.checkpointsCompleted ?? 0) > 0 ? "Derived from LXP checkpoints" : undefined },
-    { id: "risk-reducer", title: "Risk Reducer", description: "Keep your at-risk classes below two", emoji: "🛡️", earned: (performance?.overall.atRiskClasses ?? 0) < 2, earnedDate: "Derived from performance snapshot" },
+    { id: "first-lesson", title: "First Steps", description: "Complete your first lesson", emoji: "ðŸ‘£", earned: totalCompletedLessons > 0, earnedDate: totalCompletedLessons > 0 ? "Derived from lesson completions" : undefined },
+    { id: "assessment-finisher", title: "Assessment Finisher", description: "Submit at least one assessment attempt", emoji: "ðŸ“", earned: completedAssessments.length > 0, earnedDate: completedAssessments.length > 0 ? "Derived from submitted attempts" : undefined },
+    { id: "steady-climber", title: "Steady Climber", description: "Reach 60% average class progress", emoji: "ðŸ“ˆ", earned: subjects.length > 0 && Math.round(subjects.reduce((total, subject) => total + subject.progress, 0) / subjects.length) >= 60, earnedDate: "Derived from class progress" },
+    { id: "lxp-runner", title: "LXP Runner", description: "Complete a remedial checkpoint", emoji: "ðŸš€", earned: (playlist?.progress.checkpointsCompleted ?? 0) > 0, earnedDate: (playlist?.progress.checkpointsCompleted ?? 0) > 0 ? "Derived from LXP checkpoints" : undefined },
+    { id: "risk-reducer", title: "Risk Reducer", description: "Keep your at-risk classes below two", emoji: "ðŸ›¡ï¸", earned: (performance?.overall.atRiskClasses ?? 0) < 2, earnedDate: "Derived from performance snapshot" },
   ];
 }
 
@@ -196,7 +196,7 @@ export function toUserProfileSummary(
     name: fullName,
     grade: profile?.gradeLevel || user?.gradeLevel || "Assigned grade",
     section: subjects[0]?.section || "Assigned section",
-    avatar: profile?.profilePicture || user?.profilePicture || "🎓",
+    avatar: profile?.profilePicture || user?.profilePicture || "ðŸŽ“",
     xp,
     level: Math.max(1, Math.ceil(xp / 250)),
     streak: playlist?.progress.streakDays ?? Math.max(1, subjects.filter((entry) => entry.progress > 0).length),

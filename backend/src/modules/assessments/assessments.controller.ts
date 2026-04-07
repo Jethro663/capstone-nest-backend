@@ -39,6 +39,7 @@ import {
   UpdateAttemptProgressDto,
   ReturnGradeDto,
   BulkReturnGradesDto,
+  ReleaseCoreAssessmentDto,
 } from './DTO/assessment.dto';
 
 const IMAGE_UPLOAD_DEST = './uploads/question-images';
@@ -192,6 +193,26 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Assessment updated successfully',
+      data: assessment,
+    };
+  }
+
+  @Patch(':id/core-release')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async releaseCoreAssessment(
+    @Param('id') id: string,
+    @Body() dto: ReleaseCoreAssessmentDto,
+    @CurrentUser() user: any,
+  ) {
+    const assessment = await this.assessmentsService.releaseCoreAssessment(
+      id,
+      dto,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Core assessment release updated successfully',
       data: assessment,
     };
   }

@@ -9,3 +9,4 @@ export * from './lxp.schema';
 export * from './rag.schema';
 export * from './school-events.schema';
 export * from './ja.schema';
+export * from './class-templates.schema';

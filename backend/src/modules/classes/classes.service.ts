@@ -22,7 +22,17 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import {
   assessments,
+  assessmentQuestions,
+  assessmentQuestionOptions,
   assessmentAttempts,
+  announcements,
+  classModules,
+  classTemplateAnnouncements,
+  classTemplateAssessments,
+  classTemplateModuleItems,
+  classTemplateModules,
+  classTemplateModuleSections,
+  classTemplates,
   classSchedules,
   studentClassPresentationPreferences,
   studentCourseViewPreferences,
@@ -34,6 +44,8 @@ import {
   classRecordScores,
   classRecords,
   sections,
+  moduleItems,
+  moduleSections,
   users,
   userRoles,
   roles,
@@ -427,6 +439,15 @@ export class ClassesService {
       );
     }
 
+    if (createClassDto.templateId) {
+      await this.applyTemplateToClass(
+        createClassDto.templateId,
+        newClass.id,
+        createClassDto,
+        actorId ?? createClassDto.teacherId,
+      );
+    }
+
     const actorRole = actorRoles.includes('admin')
       ? 'admin'
       : actorRoles.includes('teacher')
@@ -444,10 +465,231 @@ export class ClassesService {
         teacherId: createClassDto.teacherId,
         schoolYear: createClassDto.schoolYear,
         hasSchedules: Boolean(createClassDto.schedules?.length),
+        templateId: createClassDto.templateId ?? null,
       },
     });
 
     return this.findById(newClass.id);
+  }
+
+  private async applyTemplateToClass(
+    templateId: string,
+    classId: string,
+    createClassDto: CreateClassDto,
+    actorId: string,
+  ) {
+    const template = await this.db.query.classTemplates.findFirst({
+      where: eq(classTemplates.id, templateId),
+    });
+
+    if (!template) {
+      throw new BadRequestException(`Template with ID "${templateId}" not found`);
+    }
+
+    if (template.status !== 'published') {
+      throw new BadRequestException('Only published templates can be applied');
+    }
+
+    if (
+      template.subjectCode.toUpperCase() !== createClassDto.subjectCode.toUpperCase() ||
+      template.subjectGradeLevel !== createClassDto.subjectGradeLevel
+    ) {
+      throw new BadRequestException(
+        'Template subjectCode and subjectGradeLevel must exactly match class subject',
+      );
+    }
+
+    const [templateAssessments, templateModules, templateAnnouncements] =
+      await Promise.all([
+        this.db.query.classTemplateAssessments.findMany({
+          where: eq(classTemplateAssessments.templateId, templateId),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        }),
+        this.db.query.classTemplateModules.findMany({
+          where: eq(classTemplateModules.templateId, templateId),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        }),
+        this.db.query.classTemplateAnnouncements.findMany({
+          where: eq(classTemplateAnnouncements.templateId, templateId),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        }),
+      ]);
+
+    const assessmentIdMap = new Map<string, string>();
+    for (const templateAssessment of templateAssessments) {
+      const settings = (templateAssessment.settings ?? {}) as Record<string, unknown>;
+      const dueOffset =
+        typeof settings.dueDateOffsetDays === 'number'
+          ? settings.dueDateOffsetDays
+          : templateAssessment.dueDateOffsetDays;
+      const dueDate =
+        typeof dueOffset === 'number'
+          ? new Date(Date.now() + dueOffset * 24 * 60 * 60 * 1000)
+          : null;
+
+      const [assessment] = await this.db
+        .insert(assessments)
+        .values({
+          classId,
+          title: templateAssessment.title,
+          description: templateAssessment.description,
+          type: templateAssessment.type as any,
+          dueDate,
+          totalPoints: templateAssessment.totalPoints ?? 0,
+          isPublished: false,
+          randomizeQuestions: Boolean(settings.randomizeQuestions ?? false),
+          closeWhenDue: settings.closeWhenDue === undefined ? true : Boolean(settings.closeWhenDue),
+          passingScore:
+            typeof settings.passingScore === 'number'
+              ? settings.passingScore
+              : undefined,
+          maxAttempts:
+            typeof settings.maxAttempts === 'number'
+              ? settings.maxAttempts
+              : 1,
+          isCoreTemplateAsset: true,
+          templateId,
+          templateSourceId: templateAssessment.id,
+        } as any)
+        .returning();
+
+      const questionRows = Array.isArray(templateAssessment.questions)
+        ? (templateAssessment.questions as any[])
+        : [];
+
+      for (let questionIndex = 0; questionIndex < questionRows.length; questionIndex += 1) {
+        const templateQuestion = questionRows[questionIndex];
+        const [question] = await this.db
+          .insert(assessmentQuestions)
+          .values({
+            assessmentId: assessment.id,
+            type: templateQuestion.type ?? 'multiple_choice',
+            content: templateQuestion.content ?? '',
+            points: templateQuestion.points ?? 1,
+            order: templateQuestion.order ?? questionIndex + 1,
+            isRequired: templateQuestion.isRequired ?? true,
+            explanation: templateQuestion.explanation ?? null,
+            imageUrl: templateQuestion.imageUrl ?? null,
+          })
+          .returning();
+
+        const options = Array.isArray(templateQuestion.options)
+          ? templateQuestion.options
+          : [];
+        if (options.length > 0) {
+          await this.db.insert(assessmentQuestionOptions).values(
+            options.map((option: any, optionIndex: number) => ({
+              questionId: question.id,
+              text: option.text ?? '',
+              isCorrect: option.isCorrect ?? false,
+              order: option.order ?? optionIndex + 1,
+            })),
+          );
+        }
+      }
+
+      assessmentIdMap.set(templateAssessment.id, assessment.id);
+    }
+
+    const templateModuleIds = templateModules.map((module) => module.id);
+    const templateSections = templateModuleIds.length
+      ? await this.db.query.classTemplateModuleSections.findMany({
+          where: inArray(
+            classTemplateModuleSections.templateModuleId,
+            templateModuleIds,
+          ),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        })
+      : [];
+    const templateSectionIds = templateSections.map((section) => section.id);
+    const templateItems = templateSectionIds.length
+      ? await this.db.query.classTemplateModuleItems.findMany({
+          where: inArray(
+            classTemplateModuleItems.templateSectionId,
+            templateSectionIds,
+          ),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        })
+      : [];
+
+    const moduleIdMap = new Map<string, string>();
+    for (const templateModule of templateModules) {
+      const [module] = await this.db
+        .insert(classModules)
+        .values({
+          classId,
+          title: templateModule.title,
+          description: templateModule.description,
+          order: templateModule.order,
+          themeKind: templateModule.themeKind,
+          gradientId: templateModule.gradientId,
+          coverImageUrl: templateModule.coverImageUrl,
+          imagePositionX: templateModule.imagePositionX,
+          imagePositionY: templateModule.imagePositionY,
+          imageScale: templateModule.imageScale,
+          isVisible: false,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          templateId,
+          templateSourceId: templateModule.id,
+        })
+        .returning();
+
+      moduleIdMap.set(templateModule.id, module.id);
+    }
+
+    const sectionIdMap = new Map<string, string>();
+    for (const templateSection of templateSections) {
+      const moduleId = moduleIdMap.get(templateSection.templateModuleId);
+      if (!moduleId) continue;
+      const [section] = await this.db
+        .insert(moduleSections)
+        .values({
+          moduleId,
+          title: templateSection.title,
+          description: templateSection.description,
+          order: templateSection.order,
+        })
+        .returning();
+      sectionIdMap.set(templateSection.id, section.id);
+    }
+
+    for (const templateItem of templateItems) {
+      const sectionId = sectionIdMap.get(templateItem.templateSectionId);
+      if (!sectionId) continue;
+      const mappedAssessmentId = templateItem.templateAssessmentId
+        ? assessmentIdMap.get(templateItem.templateAssessmentId) ?? null
+        : null;
+
+      await this.db.insert(moduleItems).values({
+        moduleSectionId: sectionId,
+        itemType: templateItem.itemType as any,
+        assessmentId: mappedAssessmentId,
+        order: templateItem.order,
+        isVisible: false,
+        isGiven: false,
+        isRequired: templateItem.isRequired,
+        metadata: templateItem.metadata,
+        isCoreTemplateAsset: true,
+        templateId,
+        templateSourceId: templateItem.id,
+      });
+    }
+
+    for (const templateAnnouncement of templateAnnouncements) {
+      await this.db.insert(announcements).values({
+        classId,
+        authorId: actorId,
+        title: templateAnnouncement.title,
+        content: templateAnnouncement.content,
+        isPinned: templateAnnouncement.isPinned,
+        isVisible: false,
+        publishedAt: null,
+        isCoreTemplateAsset: true,
+        templateId,
+        templateSourceId: templateAnnouncement.id,
+      });
+    }
   }
 
   /**

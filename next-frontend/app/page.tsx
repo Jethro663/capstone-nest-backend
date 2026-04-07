@@ -208,10 +208,16 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          <Link href="/login" className="landing-button-solid text-sm">
-            Access Portal
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/demo" className="landing-button-ghost text-sm">
+              Demo
+              <Sparkles className="h-4 w-4" />
+            </Link>
+            <Link href="/login" className="landing-button-solid text-sm">
+              Access Portal
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -259,6 +265,10 @@ export default function LandingPage() {
                 <Link href="/login" className="landing-button-solid text-base">
                   Enter Nexora
                   <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/demo" className="landing-button-ghost text-base">
+                  Open Demo
+                  <Sparkles className="h-4 w-4" />
                 </Link>
                 <a href="#experience" className="landing-button-ghost text-base">
                   Explore the experience

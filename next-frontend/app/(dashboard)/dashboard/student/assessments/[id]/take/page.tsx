@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { CheckCircle2, Clock3, Flag, ListChecks, Download, UploadCloud, FileText } from 'lucide-react';
+import { Clock3, ListChecks, Download, UploadCloud, FileText } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentStatusChip } from '@/components/student/student-primitives';
+import { SharedAnswerInput, type SharedQuestionType } from '@/components/assessment/shared-answer-input';
+import { SharedQuestionNavigator } from '@/components/assessment/shared-question-navigator';
 import { toast } from 'sonner';
 import {
   getLatestReturnedAttempt,
@@ -959,7 +961,18 @@ export default function StudentAssessmentTakePage() {
                   ) : null}
                 </div>
                 <div className="mt-4">
-                  <AnswerInput question={current} value={responses[current.id]} onChange={(val) => setResponse(current.id, val)} />
+                  <SharedAnswerInput
+                    question={{
+                      id: current.id,
+                      type: current.type as SharedQuestionType,
+                      options: (current.options || []).map((opt) => ({
+                        id: opt.id,
+                        text: opt.text,
+                      })),
+                    }}
+                    value={responses[current.id]}
+                    onChange={(val) => setResponse(current.id, val)}
+                  />
                 </div>
               </motion.div>
             </AnimatePresence>
@@ -999,37 +1012,17 @@ export default function StudentAssessmentTakePage() {
 
         <Card className="student-card h-fit">
           <CardContent className="p-4">
-            <p className="mb-3 text-sm font-semibold text-[var(--student-text-strong)]">Question Navigator</p>
-            <div className="grid grid-cols-4 gap-2">
-              {questions.map((q, i) => {
-                const answered = isQuestionAnswered(q, responses[q.id]);
-                return (
-                  <Button
-                    key={q.id}
-                    variant="outline"
-                    size="sm"
-                    disabled={isSequentialNavigationLocked && i !== currentIdx}
-                    onClick={() => {
-                      if (isSequentialNavigationLocked && i !== currentIdx) return;
-                      void handleNavigateToQuestion(i);
-                    }}
-                    className={
-                      i === currentIdx
-                        ? 'border-[var(--student-accent)] bg-[var(--student-accent)] text-[var(--student-accent-contrast)] hover:opacity-90'
-                        : answered
-                          ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
-                          : ''
-                    }
-                  >
-                    {i + 1}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className="mt-3 space-y-1 text-xs student-muted-text">
-              <p className="flex items-center gap-1"><Flag className="h-3.5 w-3.5 text-[var(--student-accent)]" /> Current</p>
-              <p className="flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5 text-[var(--student-success-text)]" /> Answered</p>
-            </div>
+            <SharedQuestionNavigator
+              questionIds={questions.map((question) => question.id)}
+              currentIdx={currentIdx}
+              answeredById={Object.fromEntries(
+                questions.map((question) => [question.id, isQuestionAnswered(question, responses[question.id])]),
+              )}
+              navigationLocked={isSequentialNavigationLocked}
+              onNavigate={(index) => {
+                void handleNavigateToQuestion(index);
+              }}
+            />
           </CardContent>
         </Card>
       </div>
@@ -1071,117 +1064,4 @@ export default function StudentAssessmentTakePage() {
       </Dialog>
     </div>
   );
-}
-
-function AnswerInput({
-  question,
-  value,
-  onChange,
-}: {
-  question: AssessmentQuestion;
-  value: string | string[] | undefined;
-  onChange: (val: string | string[]) => void;
-}) {
-  const options = question.options || [];
-
-  switch (question.type) {
-    case 'multiple_choice':
-      return (
-        <div className="space-y-2">
-          {options.map((opt) => (
-            <label
-              key={opt.id}
-              className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${
-                value === opt.id ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]' : 'border-[var(--student-outline)] hover:bg-[var(--student-surface-soft)]'
-              }`}
-            >
-              <input
-                type="radio"
-                name={question.id}
-                checked={value === opt.id}
-                onChange={() => onChange(opt.id)}
-                className="accent-[var(--student-accent)]"
-              />
-              <span className="select-none text-[var(--student-text-strong)]">{opt.text}</span>
-            </label>
-          ))}
-        </div>
-      );
-
-    case 'multiple_select':
-      return (
-        <div className="space-y-2">
-          {options.map((opt) => {
-            const selected = Array.isArray(value) ? value.includes(opt.id) : false;
-            return (
-              <label
-                key={opt.id}
-                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${
-                  selected ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]' : 'border-[var(--student-outline)] hover:bg-[var(--student-surface-soft)]'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => {
-                    const current = Array.isArray(value) ? value : [];
-                    onChange(selected ? current.filter((id) => id !== opt.id) : [...current, opt.id]);
-                  }}
-                  className="accent-[var(--student-accent)]"
-                />
-                <span className="select-none text-[var(--student-text-strong)]">{opt.text}</span>
-              </label>
-            );
-          })}
-        </div>
-      );
-
-    case 'true_false':
-      return (
-        <div className="grid grid-cols-2 gap-3">
-          {['True', 'False'].map((label) => {
-            const opt = options.find((o) => o.text.toLowerCase() === label.toLowerCase());
-            const optId = opt?.id || label.toLowerCase();
-            return (
-              <Button
-                key={label}
-                variant={value === optId ? 'default' : 'outline'}
-                className={value === optId ? 'student-button-solid' : ''}
-                onClick={() => onChange(optId)}
-              >
-                {label}
-              </Button>
-            );
-          })}
-        </div>
-      );
-
-    case 'short_answer':
-    case 'fill_blank':
-      return (
-        <textarea
-          value={(value as string) || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Type your answer..."
-          className="min-h-[120px] w-full resize-y rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)] p-3 focus:border-[var(--student-accent)] focus:outline-none"
-        />
-      );
-
-    case 'dropdown':
-      return (
-        <select
-          value={(value as string) || ''}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)] p-3 focus:border-[var(--student-accent)] focus:outline-none"
-        >
-          <option value="">Select an answer...</option>
-          {options.map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.text}</option>
-          ))}
-        </select>
-      );
-
-    default:
-      return <p className="text-[var(--student-text-muted)]">Unsupported question type</p>;
-  }
 }

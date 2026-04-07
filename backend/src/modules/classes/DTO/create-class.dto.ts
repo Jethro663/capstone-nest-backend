@@ -31,6 +31,10 @@ export class CreateClassDto {
   @IsUUID('4', { message: 'teacherId must be a valid UUID' })
   teacherId: string;
 
+  @IsOptional()
+  @IsUUID('4', { message: 'templateId must be a valid UUID' })
+  templateId?: string;
+
   @IsString({ message: 'schoolYear must be a string' })
   @Validate(IsValidSchoolYearConstraint)
   schoolYear: string;

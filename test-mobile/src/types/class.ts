@@ -23,4 +23,13 @@ export interface ClassItem {
   updatedAt?: string;
   className?: string;
   name?: string;
+  enrollments?: Array<{
+    id: string;
+    student?: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    };
+  }>;
 }

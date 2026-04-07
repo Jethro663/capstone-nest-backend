@@ -65,6 +65,17 @@ export class AnnouncementsService {
     return sanitizeHtml(html, ALLOWED_TAGS);
   }
 
+  private ensureMutableAnnouncement(
+    announcement: { isCoreTemplateAsset?: boolean | null },
+    action: string,
+  ) {
+    if (announcement.isCoreTemplateAsset) {
+      throw new ForbiddenException(
+        `Core template announcements are immutable; use release control to ${action}`,
+      );
+    }
+  }
+
   // ─── CRUD ───────────────────────────────────────────────────────────────────
 
   async create(
@@ -146,7 +157,10 @@ export class AnnouncementsService {
         // Students only see published; teacher sees all (including pending)
         viewerIsTeacher
           ? undefined
-          : sql`${announcements.publishedAt} IS NOT NULL`,
+          : and(
+              sql`${announcements.publishedAt} IS NOT NULL`,
+              eq(announcements.isVisible, true),
+            ),
       ),
       orderBy: [desc(announcements.isPinned), desc(announcements.createdAt)],
       limit,
@@ -173,7 +187,10 @@ export class AnnouncementsService {
         isNull(announcements.archivedAt),
         viewerIsTeacher
           ? undefined
-          : sql`${announcements.publishedAt} IS NOT NULL`,
+          : and(
+              sql`${announcements.publishedAt} IS NOT NULL`,
+              eq(announcements.isVisible, true),
+            ),
       ),
       with: {
         author: {
@@ -213,6 +230,7 @@ export class AnnouncementsService {
     if (!isAdmin && existing.authorId !== actorId) {
       throw new ForbiddenException('You can only edit your own announcements.');
     }
+    this.ensureMutableAnnouncement(existing, 'update');
 
     const updates: Partial<typeof announcements.$inferInsert> = {
       updatedAt: new Date(),
@@ -283,6 +301,7 @@ export class AnnouncementsService {
         'You can only delete your own announcements.',
       );
     }
+    this.ensureMutableAnnouncement(existing, 'delete');
 
     await this.db
       .update(announcements)
@@ -355,5 +374,58 @@ export class AnnouncementsService {
         },
       });
     }
+  }
+
+  async releaseCoreAnnouncement(
+    classId: string,
+    announcementId: string,
+    actorId: string,
+    isAdmin: boolean,
+    dto: { isVisible?: boolean; isPublished?: boolean },
+  ) {
+    await this.verifyClassAnnouncementAccess(classId, actorId, isAdmin);
+
+    const existing = await this.db.query.announcements.findFirst({
+      where: and(
+        eq(announcements.id, announcementId),
+        eq(announcements.classId, classId),
+        isNull(announcements.archivedAt),
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Announcement not found.');
+    }
+    if (!existing.isCoreTemplateAsset) {
+      throw new BadRequestException(
+        'Only core template announcements can be released here',
+      );
+    }
+
+    const [updated] = await this.db
+      .update(announcements)
+      .set({
+        ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
+        ...(dto.isPublished !== undefined
+          ? { publishedAt: dto.isPublished ? new Date() : null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(announcements.id, announcementId))
+      .returning();
+
+    await this.auditService.log({
+      actorId,
+      action: 'announcement.core_release_updated',
+      targetType: 'announcement',
+      targetId: announcementId,
+      metadata: {
+        classId,
+        isVisible: updated.isVisible,
+        isPublished: Boolean(updated.publishedAt),
+      },
+    });
+
+    return updated;
   }
 }

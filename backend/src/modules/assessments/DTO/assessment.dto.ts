@@ -485,3 +485,8 @@ export class BulkReturnGradesDto {
   @IsString()
   teacherFeedback?: string;
 }
+
+export class ReleaseCoreAssessmentDto {
+  @IsBoolean()
+  isPublished: boolean;
+}

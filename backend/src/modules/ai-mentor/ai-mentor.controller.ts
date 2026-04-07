@@ -36,6 +36,7 @@ import {
 } from './DTO/extract-module.dto';
 import { GenerateQuizDraftDto } from './DTO/quiz-generation.dto';
 import { InterventionRecommendationDto } from './DTO/intervention-recommendation.dto';
+import { DemoInterventionPlanDto } from './DTO/demo-intervention-plan.dto';
 import {
   StudentTutorAnswersDto,
   StudentTutorBootstrapQueryDto,
@@ -436,6 +437,51 @@ export class AiMentorController {
         allowedAssessmentIds,
       ),
     );
+  }
+
+  private buildDemoPlanQuestions(
+    weakConcepts: string[],
+    subjectId: 'english' | 'science',
+  ) {
+    const normalizedConcepts =
+      weakConcepts.length > 0
+        ? weakConcepts
+        : subjectId === 'science'
+          ? ['Scientific reasoning', 'Evidence-based explanation']
+          : ['Reading comprehension', 'Paragraph coherence'];
+
+    const questions = normalizedConcepts.flatMap((concept, conceptIndex) => {
+      return [
+        {
+          id: `demo-plan-${subjectId}-${conceptIndex + 1}-a`,
+          prompt: `Which practice habit best improves "${concept}"?`,
+          options: [
+            `Solve one short task on ${concept} and explain your reasoning.`,
+            'Skip steps and memorize only final answers.',
+            'Switch to unrelated topics without review.',
+            'Wait for quiz day before studying.',
+          ],
+          correctIndex: 0,
+          explanation:
+            'Short, guided retrieval with explanation improves retention and transfer.',
+        },
+        {
+          id: `demo-plan-${subjectId}-${conceptIndex + 1}-b`,
+          prompt: `After studying "${concept}", what should you do next?`,
+          options: [
+            'Check understanding with a fresh question and compare with evidence.',
+            'Assume mastery without testing.',
+            'Rewrite the same sentence repeatedly only.',
+            'Skip feedback and grading notes.',
+          ],
+          correctIndex: 0,
+          explanation:
+            'Immediate self-check verifies understanding and reveals remaining gaps.',
+        },
+      ];
+    });
+
+    return questions.slice(0, 10);
   }
 
   private async getAllowedTutorSourceIds(studentId: string, classId?: string) {
@@ -878,6 +924,145 @@ export class AiMentorController {
         },
       };
     }
+  }
+
+  @Post('demo/intervention-plan')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Generate a demo-safe AI intervention plan for public /demo flow (non-authoritative)',
+  })
+  @ApiResponse({ status: 200, description: 'Demo intervention plan generated' })
+  async generateDemoInterventionPlan(@Body() dto: DemoInterventionPlanDto) {
+    const subjectModules: Record<'english' | 'science', string[]> = {
+      english: [
+        'Module 1: Reading for Main Idea and Supporting Details',
+        'Module 2: Context Clues and Vocabulary',
+        'Module 3: Paragraph Writing and Coherence',
+      ],
+      science: [
+        'Module 1: Scientific Inquiry and Variables',
+        'Module 2: Ecosystems and Energy Flow',
+        'Module 3: Cells and Organisms',
+      ],
+    };
+
+    const weakConceptsInput = (dto.weakConcepts ?? [])
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+      .slice(0, 6);
+
+    const moduleScores = (dto.moduleScores ?? [])
+      .map((value) => Math.max(0, Math.min(100, Math.round(value))))
+      .slice(0, 6);
+
+    const sortedModuleTitles = subjectModules[dto.subjectId];
+    const recommendedModules =
+      moduleScores.length > 0
+        ? sortedModuleTitles
+            .map((title, index) => ({
+              title,
+              score: moduleScores[index] ?? 100,
+            }))
+            .sort((a, b) => a.score - b.score)
+            .map((entry) => entry.title)
+            .slice(0, 2)
+        : sortedModuleTitles.slice(0, 2);
+
+    const fallbackWeakConcepts =
+      weakConceptsInput.length > 0
+        ? weakConceptsInput
+        : dto.subjectId === 'science'
+          ? ['Scientific reasoning fundamentals', 'Cell and ecosystem concept transfer']
+          : ['Main idea extraction', 'Coherent paragraph development'];
+
+    const fallbackPayload = {
+      source: 'fallback' as const,
+      weakConcepts: fallbackWeakConcepts,
+      recommendedModules,
+      teacherSummary:
+        dto.quarterExamScore <= 74
+          ? 'Student is currently below target threshold. Prioritize foundational remediation and short feedback loops.'
+          : 'Student is improving. Use focused reinforcement before the next full assessment.',
+      lxpQuestions: this.buildDemoPlanQuestions(fallbackWeakConcepts, dto.subjectId),
+    };
+
+    const userContext = { id: '', email: '', roles: [] as string[] };
+    const payload = {
+      subjectId: dto.subjectId,
+      quarterExamScore: dto.quarterExamScore,
+      weakConcepts: weakConceptsInput,
+      moduleScores,
+    };
+
+    let liveError: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const rawResult = await this.proxy.forward(
+          'POST',
+          '/demo/intervention-plan',
+          userContext,
+          payload,
+        );
+        const unwrapped = this.unwrapEnvelope(rawResult);
+        const liveData =
+          unwrapped.data && typeof unwrapped.data === 'object'
+            ? (unwrapped.data as Record<string, unknown>)
+            : rawResult && typeof rawResult === 'object'
+              ? (rawResult as Record<string, unknown>)
+              : null;
+
+        const questions = Array.isArray(liveData?.lxpQuestions)
+          ? liveData?.lxpQuestions
+          : [];
+        if (!liveData || questions.length === 0) {
+          throw new ServiceUnavailableException(
+            'Live demo AI plan payload was empty or invalid.',
+          );
+        }
+
+        return {
+          success: true,
+          message: 'Demo AI intervention plan generated.',
+          data: {
+            source:
+              typeof liveData.source === 'string' &&
+              (liveData.source === 'live' || liveData.source === 'fallback')
+                ? liveData.source
+                : 'live',
+            weakConcepts: Array.isArray(liveData.weakConcepts)
+              ? liveData.weakConcepts
+              : fallbackWeakConcepts,
+            recommendedModules: Array.isArray(liveData.recommendedModules)
+              ? liveData.recommendedModules
+              : recommendedModules,
+            teacherSummary:
+              typeof liveData.teacherSummary === 'string'
+                ? liveData.teacherSummary
+                : fallbackPayload.teacherSummary,
+            lxpQuestions: questions,
+          },
+        };
+      } catch (error) {
+        liveError = error;
+        const status =
+          error instanceof HttpException ? error.getStatus() : undefined;
+        const message =
+          error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Demo AI live plan attempt ${attempt} failed${status ? ` (status ${status})` : ''}: ${message}`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      degraded: true,
+      message: 'Live AI unavailable. Returning demo fallback intervention plan.',
+      data: fallbackPayload,
+      error: liveError instanceof Error ? liveError.message : undefined,
+    };
   }
 
   // â”€â”€â”€ Module Extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

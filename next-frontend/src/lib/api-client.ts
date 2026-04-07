@@ -62,14 +62,28 @@ export function createApiClient(): AxiosInstance {
     (response) => response,
     async (error: AxiosError) => {
       const originalRequest = error.config as ApiRequestConfig | undefined;
+      const responseStatus = error.response?.status;
+      const responseData = error.response?.data as
+        | { statusCode?: number; message?: string }
+        | undefined;
+      const responseMessage =
+        typeof responseData?.message === 'string'
+          ? responseData.message.toLowerCase()
+          : '';
+      const isAuthExpiredResponse =
+        responseStatus === 401 ||
+        responseData?.statusCode === 401 ||
+        responseMessage.includes('invalid or expired token') ||
+        responseMessage.includes('jwt expired') ||
+        responseMessage.includes('token expired');
 
       if (!originalRequest) {
         return Promise.reject(error);
       }
 
-      // If 401 and not already retried
+      // Retry once when auth has expired, even if backend wraps it in a 400 payload.
       if (
-        error.response?.status === 401 &&
+        isAuthExpiredResponse &&
         !originalRequest._retry &&
         !originalRequest.skipAuthRefresh
       ) {

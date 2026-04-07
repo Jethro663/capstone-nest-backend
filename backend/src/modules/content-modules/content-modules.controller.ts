@@ -36,6 +36,8 @@ import {
   ReorderModuleItemsDto,
   ReorderModulesDto,
   ReorderModuleSectionsDto,
+  ReleaseCoreModuleDto,
+  ReleaseCoreModuleItemDto,
   UpdateModuleDto,
   UpdateModuleItemDto,
   UpdateModuleSectionDto,
@@ -145,6 +147,27 @@ export class ContentModulesController {
     return {
       success: true,
       message: 'Module updated successfully',
+      data,
+    };
+  }
+
+  @Patch(':moduleId/core-release')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async releaseCoreModule(
+    @Param('moduleId') moduleId: string,
+    @Body() dto: ReleaseCoreModuleDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.contentModulesService.releaseCoreModule(
+      moduleId,
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Core module release updated successfully',
       data,
     };
   }
@@ -305,6 +328,27 @@ export class ContentModulesController {
     return {
       success: true,
       message: 'Module item updated successfully',
+      data,
+    };
+  }
+
+  @Patch('items/:itemId/core-release')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async releaseCoreModuleItem(
+    @Param('itemId') itemId: string,
+    @Body() dto: ReleaseCoreModuleItemDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.contentModulesService.releaseCoreModuleItem(
+      itemId,
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Core module item release updated successfully',
       data,
     };
   }

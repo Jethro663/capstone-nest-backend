@@ -138,6 +138,15 @@ class InterventionRecommendationRequest(BaseModel):
     note: str | None = None
 
 
+class DemoInterventionPlanRequest(BaseModel):
+    subject_id: str = Field(..., alias="subjectId")
+    quarter_exam_score: int = Field(..., alias="quarterExamScore")
+    weak_concepts: list[str] = Field(default_factory=list, alias="weakConcepts")
+    module_scores: list[int] | None = Field(default=None, alias="moduleScores")
+
+    model_config = {"populate_by_name": True}
+
+
 class GenerateQuizDraftRequest(BaseModel):
     class_id: str = Field(..., alias="classId")
     lesson_ids: list[str] | None = Field(default=None, alias="lessonIds")

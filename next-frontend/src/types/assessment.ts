@@ -68,6 +68,9 @@ export interface Assessment {
   allowedUploadExtensions?: string[];
   maxUploadSizeBytes?: number;
   isPublished: boolean;
+  isCoreTemplateAsset?: boolean;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
   classRecordCategory?: ClassRecordCategory;

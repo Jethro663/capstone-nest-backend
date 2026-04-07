@@ -41,6 +41,7 @@ export interface CreateClassDto {
   room?: string;
   cardPreset?: string;
   cardBannerUrl?: string | null;
+  templateId?: string;
   schedules?: { days: ScheduleDay[]; startTime: string; endTime: string }[];
 }
 

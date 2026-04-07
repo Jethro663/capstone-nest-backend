@@ -31,6 +31,18 @@ export const announcementService = {
     return data;
   },
 
+  async releaseCore(
+    classId: string,
+    id: string,
+    dto: { isVisible?: boolean; isPublished?: boolean },
+  ): Promise<{ success: boolean; message: string; data: Announcement }> {
+    const { data } = await api.patch(
+      `/classes/${classId}/announcements/${id}/core-release`,
+      dto,
+    );
+    return data;
+  },
+
   /** DELETE /classes/:classId/announcements/:id — Teacher */
   async delete(classId: string, id: string): Promise<{ success: boolean; message?: string }> {
     const { data } = await api.delete(`/classes/${classId}/announcements/${id}`);

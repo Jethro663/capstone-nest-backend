@@ -694,6 +694,17 @@ export class AssessmentsService {
     return 'student';
   }
 
+  private ensureAssessmentNotCoreTemplateAsset(
+    assessment: { isCoreTemplateAsset?: boolean | null },
+    action: string,
+  ) {
+    if (assessment.isCoreTemplateAsset) {
+      throw new ForbiddenException(
+        `Core template assessments are immutable; use release control to ${action}`,
+      );
+    }
+  }
+
   private assertTeacherClassOwnership(
     classTeacherId: string | null | undefined,
     currentUser: any,
@@ -1438,6 +1449,7 @@ export class AssessmentsService {
 
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
+    this.ensureAssessmentNotCoreTemplateAsset(existingAssessment, 'update publish state');
     this.assertTeacherClassOwnership(
       existingAssessment.class?.teacherId,
       currentUser,
@@ -1627,6 +1639,54 @@ export class AssessmentsService {
     return assessment;
   }
 
+  async releaseCoreAssessment(
+    assessmentId: string,
+    dto: { isPublished: boolean },
+    currentUser: any,
+  ) {
+    const { userId: actorId } = this.assertTeacherClassOwnership(
+      null,
+      currentUser,
+      'You can only manage assessments for your own classes',
+    );
+
+    const assessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only manage assessments for your own classes',
+    );
+
+    if (!assessment.isCoreTemplateAsset) {
+      throw new BadRequestException(
+        'Only core template assessments can be released with this endpoint',
+      );
+    }
+
+    if (dto.isPublished) {
+      await this.validateForPublish(assessmentId);
+    }
+
+    const [updated] = await this.db
+      .update(assessments)
+      .set({ isPublished: dto.isPublished, updatedAt: new Date() })
+      .where(eq(assessments.id, assessmentId))
+      .returning();
+
+    await this.auditService.log({
+      actorId,
+      action: 'assessment.core_release_updated',
+      targetType: 'assessment',
+      targetId: assessmentId,
+      metadata: {
+        classId: updated.classId,
+        isPublished: updated.isPublished,
+      },
+    });
+
+    return this.getAssessmentById(assessmentId);
+  }
+
   /**
    * Delete an assessment
    */
@@ -1638,6 +1698,7 @@ export class AssessmentsService {
     );
 
     const assessment = await this.getAssessmentById(assessmentId);
+    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'delete');
     this.assertTeacherClassOwnership(
       assessment.class?.teacherId,
       currentUser,
@@ -1679,6 +1740,7 @@ export class AssessmentsService {
 
     // Verify assessment exists
     const assessment = await this.getAssessmentById(createQuestionDto.assessmentId);
+    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -1776,6 +1838,7 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
+    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -1878,6 +1941,7 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
+    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(

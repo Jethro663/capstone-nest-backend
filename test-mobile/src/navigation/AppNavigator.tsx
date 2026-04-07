@@ -5,17 +5,18 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../providers/AuthProvider";
 import { BottomTabBar } from "../components/ui/BottomTabBar";
-import { LessonsScreen } from "../screens/LessonsScreen";
+import { LessonsScreen as ClassesScreen } from "../screens/LessonsScreen";
 import { AssessmentsScreen } from "../screens/AssessmentsScreen";
-import { LxpScreen } from "../screens/LxpScreen";
+import { JaScreen } from "../screens/JaScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
-import { ProgressScreen } from "../screens/ProgressScreen";
-import { SubjectLessonsScreen } from "../screens/SubjectLessonsScreen";
+import { AnnouncementsScreen } from "../screens/AnnouncementsScreen";
+import { SubjectLessonsScreen as ClassWorkspaceScreen } from "../screens/SubjectLessonsScreen";
 import { LoginScreen } from "../screens/LoginScreen";
 import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
+import { TeacherUnsupportedScreen } from "../screens/TeacherUnsupportedScreen";
 import { colors } from "../theme/tokens";
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
 
@@ -37,10 +38,24 @@ const navigationTheme = {
 
 function RootFallback() {
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>
-      <ActivityIndicator size="large" color={colors.amber} />
-      <Text style={{ marginTop: 12, fontSize: 12, fontWeight: "800", color: colors.textSecondary }}>
-        Loading student workspace...
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, paddingHorizontal: 24 }}>
+      <View
+        style={{
+          width: 86,
+          height: 86,
+          borderRadius: 999,
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 2,
+          borderColor: colors.paleIndigo,
+          backgroundColor: colors.white,
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.indigo} />
+      </View>
+      <Text style={{ marginTop: 14, fontSize: 14, fontWeight: "900", color: colors.text }}>Warming up Nexora...</Text>
+      <Text style={{ marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>
+        Syncing classes, JA, and announcements
       </Text>
     </View>
   );
@@ -122,10 +137,10 @@ function AuthNavigator() {
 function MainTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
-      <Tab.Screen name="Lessons" component={LessonsScreen} />
+      <Tab.Screen name="Classes" component={ClassesScreen} />
       <Tab.Screen name="Assessments" component={AssessmentsScreen} />
-      <Tab.Screen name="LXP" component={LxpScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
+      <Tab.Screen name="JA" component={JaScreen} />
+      <Tab.Screen name="Announcements" component={AnnouncementsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -135,7 +150,7 @@ function StudentNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={MainTabs} />
-      <RootStack.Screen name="SubjectLessons" component={SubjectLessonsScreen} />
+      <RootStack.Screen name="ClassWorkspace" component={ClassWorkspaceScreen} />
       <RootStack.Screen name="AssessmentDetail" component={AssessmentDetailScreen} />
       <RootStack.Screen name="AssessmentTake" component={AssessmentTakeScreen} />
       <RootStack.Screen name="AssessmentResults" component={AssessmentResultsScreen} />
@@ -144,32 +159,46 @@ function StudentNavigator() {
   );
 }
 
+function hasTeacherRole(roles: unknown): boolean {
+  if (!Array.isArray(roles)) return false;
+  return roles.some((role) => {
+    if (typeof role === "string") return role.toLowerCase() === "teacher";
+    if (role && typeof role === "object" && "name" in role) {
+      return typeof role.name === "string" && role.name.toLowerCase() === "teacher";
+    }
+    return false;
+  });
+}
+
 function getActiveRouteName(state: any): string {
   const route = state?.routes?.[state?.index ?? 0];
   if (!route) {
-    return "Lessons";
+    return "Classes";
   }
 
   if (route.state?.routes?.length) {
     return getActiveRouteName(route.state);
   }
 
-  return route.name || "Lessons";
+  return route.name || "Classes";
 }
 
 export function AppNavigator() {
-  const { isAuthenticated, loading } = useAuth();
-  const [currentRouteName, setCurrentRouteName] = useState("Lessons");
+  const { isAuthenticated, loading, user } = useAuth();
+  const [currentRouteName, setCurrentRouteName] = useState("Classes");
+  const isTeacher = hasTeacherRole(user?.roles);
   const navigator = useMemo(
     () =>
-      isAuthenticated ? (
+      isAuthenticated && !isTeacher ? (
         <NavigationErrorBoundary currentRouteName={currentRouteName}>
           <StudentNavigator />
         </NavigationErrorBoundary>
+      ) : isAuthenticated && isTeacher ? (
+        <TeacherUnsupportedScreen />
       ) : (
         <AuthNavigator />
       ),
-    [currentRouteName, isAuthenticated],
+    [currentRouteName, isAuthenticated, isTeacher],
   );
 
   if (loading) {
@@ -179,7 +208,7 @@ export function AppNavigator() {
   return (
     <NavigationContainer
       theme={navigationTheme}
-      onReady={() => setCurrentRouteName(isAuthenticated ? "Lessons" : "Login")}
+      onReady={() => setCurrentRouteName(isAuthenticated ? (isTeacher ? "TeacherUnsupported" : "Classes") : "Login")}
       onStateChange={(state) => setCurrentRouteName(getActiveRouteName(state))}
     >
       {navigator}

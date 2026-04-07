@@ -1,6 +1,6 @@
 export type RootStackParamList = {
   MainTabs: undefined;
-  SubjectLessons: { classId: string };
+  ClassWorkspace: { classId: string };
   AssessmentDetail: { assessmentId: string; classId: string };
   AssessmentTake: { assessmentId: string };
   AssessmentResults: { attemptId: string };
@@ -8,11 +8,15 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
-  Lessons: undefined;
+  Classes: undefined;
   Assessments: undefined;
+  JA: undefined;
+  Announcements: undefined;
+  Profile: undefined;
+  // Deprecated keys kept temporarily for migration-only screen compatibility.
   LXP: undefined;
   Progress: undefined;
-  Profile: undefined;
+  Lessons: undefined;
 };
 
 export type AuthStackParamList = {

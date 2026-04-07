@@ -8,7 +8,11 @@
     "start": "node scripts/start-standalone.js",
     "lint": "eslint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:admin": "playwright test tests/e2e/admin-class-template-editor.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

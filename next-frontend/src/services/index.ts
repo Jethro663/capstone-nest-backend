@@ -1,6 +1,7 @@
 export { userService } from './user-service';
 export { sectionService } from './section-service';
 export { classService } from './class-service';
+export { classTemplateService } from './class-template-service';
 export { lessonService } from './lesson-service';
 export { assessmentService } from './assessment-service';
 export { classRecordService } from './class-record-service';

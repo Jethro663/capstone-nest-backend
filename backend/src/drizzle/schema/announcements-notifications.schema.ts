@@ -40,6 +40,12 @@ export const announcements = pgTable(
     title: varchar('title', { length: 255 }).notNull(),
     content: text('content').notNull(),
     isPinned: boolean('is_pinned').notNull().default(false),
+    isVisible: boolean('is_visible').notNull().default(true),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
     scheduledAt: timestamp('scheduled_at'),
     publishedAt: timestamp('published_at'),
     archivedAt: timestamp('archived_at'),

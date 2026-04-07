@@ -288,13 +288,22 @@ export default function ClassManagementPage() {
       description="Manage all classes across grades"
       icon={BookOpen}
       actions={(
-        <Button
-          className="admin-button-solid rounded-[1rem] px-4 font-bold"
-          onClick={() => router.push('/dashboard/admin/classes/new')}
-        >
-          <BookOpen className="h-4 w-4" />
-          Create Class
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="admin-button-outline rounded-[1rem] px-4 font-bold"
+            onClick={() => router.push('/dashboard/admin/class-templates')}
+          >
+            Template Classes
+          </Button>
+          <Button
+            className="admin-button-solid rounded-[1rem] px-4 font-bold"
+            onClick={() => router.push('/dashboard/admin/classes/new')}
+          >
+            <BookOpen className="h-4 w-4" />
+            Create Class
+          </Button>
+        </div>
       )}
     >
       <AdminSectionCard title="Class Directory" contentClassName="space-y-5">

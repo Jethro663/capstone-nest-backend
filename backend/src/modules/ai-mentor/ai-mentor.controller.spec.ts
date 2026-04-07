@@ -193,6 +193,76 @@ describe('AiMentorController', () => {
     });
   });
 
+  describe('generateDemoInterventionPlan()', () => {
+    it('returns a live plan payload when ai-service succeeds', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: {
+          source: 'live',
+          weakConcepts: ['Cell structures and functions'],
+          recommendedModules: ['Module 3: Cells and Organisms'],
+          teacherSummary: 'Live summary',
+          lxpQuestions: [
+            {
+              id: 'live-1',
+              prompt: 'Live question',
+              options: ['A', 'B', 'C', 'D'],
+              correctIndex: 0,
+              explanation: 'Because evidence',
+            },
+          ],
+        },
+      });
+
+      const result = await controller.generateDemoInterventionPlan({
+        subjectId: 'science',
+        quarterExamScore: 68,
+        weakConcepts: ['Cell structures and functions'],
+        moduleScores: [62, 71, 75],
+      });
+
+      expect(result).toMatchObject({
+        success: true,
+        message: 'Demo AI intervention plan generated.',
+        data: {
+          source: 'live',
+          weakConcepts: ['Cell structures and functions'],
+          teacherSummary: 'Live summary',
+        },
+      });
+      expect(result.data.recommendedModules.length).toBeGreaterThan(0);
+      expect(result.data.lxpQuestions.length).toBeGreaterThan(0);
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/demo/intervention-plan',
+        { id: '', email: '', roles: [] },
+        {
+          subjectId: 'science',
+          quarterExamScore: 68,
+          weakConcepts: ['Cell structures and functions'],
+          moduleScores: [62, 71, 75],
+        },
+      );
+      expect(mockAudit.log).not.toHaveBeenCalled();
+    });
+
+    it('falls back when live ai-service fails after retry', async () => {
+      mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const result = await controller.generateDemoInterventionPlan({
+        subjectId: 'english',
+        quarterExamScore: 80,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.degraded).toBe(true);
+      expect(result.data.source).toBe('fallback');
+      expect(result.data.weakConcepts.length).toBeGreaterThan(0);
+      expect(result.data.lxpQuestions.length).toBeGreaterThan(0);
+      expect(mockProxy.forward).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // =========================================================================
   // POST /ai/extract-module
   // =========================================================================

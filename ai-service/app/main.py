@@ -50,6 +50,7 @@ from .ja_practice_service import (
 from .schemas import (
     ApplyExtractionRequest,
     ChatRequest,
+    DemoInterventionPlanRequest,
     ExtractRequest,
     GenerateQuizDraftRequest,
     InterventionRecommendationRequest,
@@ -69,6 +70,56 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
+
+DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT = """You generate concise, practical demo intervention plans for a school LMS.
+
+Rules:
+- Output valid JSON only.
+- Keep wording teacher-facing and actionable.
+- Focus on weak concepts and remediation sequencing.
+- Questions must be answerable from Grade 7 lesson scope and include one correct option index.
+"""
+
+DEMO_INTERVENTION_PLAN_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "weakConcepts": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 6,
+        },
+        "recommendedModules": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 3,
+        },
+        "teacherSummary": {"type": "string"},
+        "lxpQuestions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "prompt": {"type": "string"},
+                    "options": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 4,
+                        "maxItems": 4,
+                    },
+                    "correctIndex": {"type": "integer"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["id", "prompt", "options", "correctIndex", "explanation"],
+            },
+            "minItems": 6,
+            "maxItems": 6,
+        },
+    },
+    "required": ["weakConcepts", "recommendedModules", "teacherSummary", "lxpQuestions"],
+}
 
 
 @app.on_event("startup")
@@ -529,6 +580,44 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     }
 
 
+def _extract_json_payload(raw: str) -> str:
+    cleaned = (
+        raw.strip()
+        .removeprefix("```json")
+        .removeprefix("```")
+        .removesuffix("```")
+        .strip()
+    )
+    first = cleaned.find("{")
+    last = cleaned.rfind("}")
+    if first == -1 or last <= first:
+        raise ValueError("Model output did not contain a JSON object")
+    return cleaned[first : last + 1]
+
+
+async def _parse_or_repair_demo_plan(raw: str) -> dict[str, Any]:
+    try:
+        return json.loads(_extract_json_payload(raw))
+    except Exception as parse_err:
+        logger.warning("[demo-ai] Initial JSON parse failed, requesting repair: %s", parse_err)
+
+    repair_prompt = f"""
+Repair this malformed JSON into valid JSON that strictly matches the required intervention plan schema.
+Do not add commentary. Return one JSON object only.
+
+Malformed JSON:
+{raw}
+"""
+    repaired_raw = await ollama_client.generate(
+        repair_prompt,
+        DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT,
+        task="intervention",
+        response_format=DEMO_INTERVENTION_PLAN_FORMAT,
+        num_predict=512,
+    )
+    return json.loads(_extract_json_payload(repaired_raw))
+
+
 # ---------------------------------------------------------------------------
 # POST /chat
 # ---------------------------------------------------------------------------
@@ -930,6 +1019,151 @@ async def ready(db: AsyncSession = Depends(get_db)):
         "success": True,
         "message": "AI service is ready",
         "data": state,
+    }
+
+
+@app.post("/demo/intervention-plan")
+async def generate_demo_intervention_plan(
+    body: DemoInterventionPlanRequest,
+    _auth: None = Depends(require_internal_service),
+):
+    subject_id = (body.subject_id or "").strip().lower()
+    if subject_id not in {"english", "science"}:
+        raise HTTPException(400, "subjectId must be either 'english' or 'science'")
+
+    module_catalog = {
+        "english": [
+            "Module 1: Reading for Main Idea and Supporting Details",
+            "Module 2: Context Clues and Vocabulary",
+            "Module 3: Paragraph Writing and Coherence",
+        ],
+        "science": [
+            "Module 1: Scientific Inquiry and Variables",
+            "Module 2: Ecosystems and Energy Flow",
+            "Module 3: Cells and Organisms",
+        ],
+    }
+
+    weak_concepts = [
+        str(item).strip()
+        for item in (body.weak_concepts or [])
+        if str(item).strip()
+    ][:6]
+    module_scores = [int(value) for value in (body.module_scores or [])][:6]
+    sorted_modules = module_catalog[subject_id]
+    if module_scores:
+        recommended_modules = [
+            row["title"]
+            for row in sorted(
+                [
+                    {"title": title, "score": module_scores[index] if index < len(module_scores) else 100}
+                    for index, title in enumerate(sorted_modules)
+                ],
+                key=lambda row: row["score"],
+            )[:2]
+        ]
+    else:
+        recommended_modules = sorted_modules[:2]
+
+    fallback_weak_concepts = weak_concepts or (
+        ["Scientific reasoning fundamentals", "Cell and ecosystem concept transfer"]
+        if subject_id == "science"
+        else ["Main idea extraction", "Coherent paragraph development"]
+    )
+
+    def build_fallback_questions() -> list[dict[str, Any]]:
+        questions: list[dict[str, Any]] = []
+        for concept_index, concept in enumerate(fallback_weak_concepts[:4]):
+            questions.append(
+                {
+                    "id": f"demo-fallback-{subject_id}-{concept_index + 1}-a",
+                    "prompt": f'Which study strategy best improves "{concept}"?',
+                    "options": [
+                        f"Practice {concept} with examples and explain your reasoning.",
+                        "Memorize random facts without checking understanding.",
+                        "Skip feedback and move to unrelated topics.",
+                        "Answer quickly without reading the question fully.",
+                    ],
+                    "correctIndex": 0,
+                    "explanation": "Concept-focused practice with explanation improves retention and transfer.",
+                }
+            )
+            questions.append(
+                {
+                    "id": f"demo-fallback-{subject_id}-{concept_index + 1}-b",
+                    "prompt": f'After reviewing "{concept}", what should the learner do next?',
+                    "options": [
+                        "Take a short check question and review errors.",
+                        "Assume mastery without any check.",
+                        "Skip to a new topic immediately.",
+                        "Repeat one sentence without application.",
+                    ],
+                    "correctIndex": 0,
+                    "explanation": "A quick mastery check validates understanding and exposes remaining gaps.",
+                }
+            )
+        return questions[:10]
+
+    def build_fallback_response(reason: str) -> dict[str, Any]:
+        logger.warning("[demo-ai] Falling back to deterministic demo plan: %s", reason)
+        return {
+            "success": True,
+            "degraded": True,
+            "message": "Demo fallback intervention plan generated because live AI is unavailable.",
+            "data": {
+                "source": "fallback",
+                "weakConcepts": fallback_weak_concepts,
+                "recommendedModules": recommended_modules,
+                "teacherSummary": (
+                    "Live AI timed out. Use this fallback remediation sequence, then retry for a live plan when AI is stable."
+                ),
+                "lxpQuestions": build_fallback_questions(),
+            },
+        }
+
+    prompt = f"""
+Generate a remediation plan for a public LMS demo.
+
+Subject: {subject_id}
+Quarter exam score: {body.quarter_exam_score}
+Weak concepts: {json.dumps(weak_concepts or ['Concept reinforcement needed'], ensure_ascii=False)}
+Recommended module candidates: {json.dumps(recommended_modules, ensure_ascii=False)}
+
+Return one JSON object that matches the required format exactly.
+- Use exactly 6 lxpQuestions.
+- Each lxpQuestion must have exactly 4 options and a valid correctIndex (0-3).
+- Keep language at Grade 7 level.
+"""
+    try:
+        raw = await ollama_client.generate(
+            prompt,
+            DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT,
+            task="intervention",
+            response_format=DEMO_INTERVENTION_PLAN_FORMAT,
+            num_predict=1024,
+        )
+    except Exception as err:
+        return build_fallback_response(f"live generation request failed: {err}")
+
+    try:
+        parsed = await _parse_or_repair_demo_plan(raw)
+    except Exception as err:
+        return build_fallback_response(f"invalid live JSON payload: {err}")
+
+    questions = parsed.get("lxpQuestions")
+    if not isinstance(questions, list) or len(questions) == 0:
+        return build_fallback_response("live payload had no remediation questions")
+
+    return {
+        "success": True,
+        "message": "Demo live AI intervention plan generated",
+        "data": {
+            "source": "live",
+            "weakConcepts": parsed.get("weakConcepts") or weak_concepts or ["Concept reinforcement needed"],
+            "recommendedModules": parsed.get("recommendedModules") or recommended_modules,
+            "teacherSummary": parsed.get("teacherSummary") or "Live AI remediation summary generated.",
+            "lxpQuestions": questions,
+        },
     }
 
 

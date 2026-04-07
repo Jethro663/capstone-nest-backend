@@ -8,18 +8,85 @@ import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
 import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
+import { classTemplateService } from '@/services/class-template-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
 import type { Section } from '@/types/section';
+import type { ClassTemplate } from '@/types/class-template';
 import type { User } from '@/types/user';
 import { toast } from 'sonner';
 
+const SUBJECT_CODE_HINTS: Record<string, string[]> = {
+  science: ['SCI', 'SCIENCE'],
+  'araling panlipunan': ['AP', 'ARALING', 'PANLIPUNAN'],
+  mathematics: ['MATH', 'MATHEMATICS'],
+  english: ['ENG', 'ENGLISH'],
+  fili: ['FIL', 'FILI', 'FILIPINO'],
+  tle: ['TLE'],
+  values: ['VALUES', 'ESP'],
+  mapeh: ['MAPEH'],
+};
+
+function normalizeToken(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function getSubjectCodeCandidates(subjectName: string, subjectCodeInput: string) {
+  const candidates = new Set<string>();
+
+  const explicitCode = normalizeToken(subjectCodeInput);
+  if (explicitCode) {
+    candidates.add(explicitCode);
+  }
+
+  const key = subjectName.trim().toLowerCase();
+  const hints = SUBJECT_CODE_HINTS[key] ?? [subjectName];
+
+  for (const hint of hints) {
+    const token = normalizeToken(hint);
+    if (!token) continue;
+    candidates.add(token);
+  }
+
+  return Array.from(candidates);
+}
+
+function matchesTemplateToSubject(
+  template: ClassTemplate,
+  subjectName: string,
+  subjectCodeInput: string,
+) {
+  const templateCode = normalizeToken(template.subjectCode || '');
+  const templateName = normalizeToken(template.name || '');
+  const candidates = getSubjectCodeCandidates(subjectName, subjectCodeInput);
+
+  return candidates.some((candidate) => {
+    const token = normalizeToken(candidate);
+    if (!token) return false;
+
+    return (
+      templateCode === token ||
+      templateCode.includes(token) ||
+      token.includes(templateCode) ||
+      templateName.includes(token)
+    );
+  });
+}
+
+function isTemplateExactlyCompatible(
+  template: ClassTemplate,
+  subjectCodeInput: string,
+  subjectGradeLevel: string,
+) {
+  return (
+    template.status === 'published' &&
+    template.subjectGradeLevel === subjectGradeLevel &&
+    template.subjectCode.trim().toUpperCase() === subjectCodeInput.trim().toUpperCase()
+  );
+}
+
 export default function CreateClassPage() {
   const router = useRouter();
-  const [sections, setSections] = useState<Section[]>([]);
-  const [teachers, setTeachers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const schoolYears = useMemo(() => {
     const now = new Date();
@@ -31,6 +98,20 @@ export default function CreateClassPage() {
   const initialValues = useMemo(
     () => createEmptyClassForm(schoolYears[0] || ''),
     [schoolYears],
+  );
+
+  const [sections, setSections] = useState<Section[]>([]);
+  const [teachers, setTeachers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [formValues, setFormValues] = useState<ClassFormValues>(initialValues);
+  const [compatibleTemplates, setCompatibleTemplates] = useState<ClassTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+
+  const templateSelectionReady = useMemo(
+    () => Boolean(formValues.subjectName.trim() && formValues.subjectGradeLevel),
+    [formValues.subjectGradeLevel, formValues.subjectName],
   );
 
   const fetchData = useCallback(async () => {
@@ -53,9 +134,130 @@ export default function CreateClassPage() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    setFormValues(initialValues);
+  }, [initialValues]);
+
+  useEffect(() => {
+    if (!templateSelectionReady) {
+      setCompatibleTemplates([]);
+      setSelectedTemplateId('');
+      return;
+    }
+
+    let mounted = true;
+
+    const loadCompatibleTemplates = async () => {
+      try {
+        setTemplatesLoading(true);
+
+        const subjectCodeCandidates = getSubjectCodeCandidates(
+          formValues.subjectName,
+          formValues.subjectCode,
+        );
+
+        if (subjectCodeCandidates.length === 0) {
+          if (mounted) {
+            setCompatibleTemplates([]);
+          }
+          return;
+        }
+
+        const responses = await Promise.allSettled(
+          subjectCodeCandidates.map((subjectCode) =>
+            classTemplateService.getCompatible(subjectCode, formValues.subjectGradeLevel),
+          ),
+        );
+
+        if (!mounted) return;
+
+        const mergedTemplates = new Map<string, ClassTemplate>();
+        for (const response of responses) {
+          if (response.status !== 'fulfilled') continue;
+          for (const template of response.value.data || []) {
+            mergedTemplates.set(template.id, template);
+          }
+        }
+
+        const filtered = Array.from(mergedTemplates.values()).filter(
+          (template) =>
+            template.status === 'published' &&
+            template.subjectGradeLevel === formValues.subjectGradeLevel,
+        );
+
+        if (filtered.length > 0) {
+          setCompatibleTemplates(filtered);
+          return;
+        }
+
+        const fallbackResponse = await classTemplateService.getAll({
+          subjectGradeLevel: formValues.subjectGradeLevel,
+        });
+
+        const fallbackFiltered = (fallbackResponse.data || []).filter(
+          (template) =>
+            template.status === 'published' &&
+            template.subjectGradeLevel === formValues.subjectGradeLevel &&
+            matchesTemplateToSubject(template, formValues.subjectName, formValues.subjectCode),
+        );
+
+        setCompatibleTemplates(fallbackFiltered);
+
+        if (responses.every((response) => response.status === 'rejected')) {
+          toast.error('Failed to load compatible templates');
+        }
+      } catch {
+        if (mounted) {
+          setCompatibleTemplates([]);
+          toast.error('Failed to load compatible templates');
+        }
+      } finally {
+        if (mounted) {
+          setTemplatesLoading(false);
+        }
+      }
+    };
+
+    void loadCompatibleTemplates();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    formValues.subjectCode,
+    formValues.subjectGradeLevel,
+    formValues.subjectName,
+    templateSelectionReady,
+  ]);
+
+  useEffect(() => {
+    if (!selectedTemplateId) return;
+    const selectedStillCompatible = compatibleTemplates.some((template) => template.id === selectedTemplateId);
+    if (!selectedStillCompatible) {
+      setSelectedTemplateId('');
+    }
+  }, [compatibleTemplates, selectedTemplateId]);
+
   const handleSubmit = async (values: ClassFormValues) => {
     try {
       setSaving(true);
+      const selectedTemplate = compatibleTemplates.find((template) => template.id === selectedTemplateId);
+      const validatedTemplateId =
+        selectedTemplate &&
+        isTemplateExactlyCompatible(
+          selectedTemplate,
+          values.subjectCode,
+          values.subjectGradeLevel,
+        )
+          ? selectedTemplateId
+          : '';
+
+      if (selectedTemplateId && !validatedTemplateId) {
+        toast.warning(
+          'Selected template was skipped because its subject code does not exactly match this class.',
+        );
+      }
+
       await classService.create({
         subjectName: values.subjectName,
         subjectCode: values.subjectCode,
@@ -64,6 +266,7 @@ export default function CreateClassPage() {
         teacherId: values.teacherId,
         schoolYear: values.schoolYear,
         room: values.room || undefined,
+        templateId: validatedTemplateId || undefined,
         schedules: values.schedules,
       });
       toast.success('Class created');
@@ -129,6 +332,11 @@ export default function CreateClassPage() {
           teachers={teachers}
           schoolYears={schoolYears}
           saving={saving}
+          templateOptions={compatibleTemplates}
+          selectedTemplateId={selectedTemplateId}
+          templatesLoading={templatesLoading}
+          onTemplateChange={setSelectedTemplateId}
+          onValuesChange={setFormValues}
           submitLabel="Create Class"
           onSubmit={handleSubmit}
           onCancel={() => router.push('/dashboard/admin/classes')}

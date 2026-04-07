@@ -485,6 +485,11 @@ export const assessments = pgTable('assessments', {
   isPublished: boolean('is_published').default(false),
   feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
   feedbackDelayHours: integer('feedback_delay_hours').default(24),
+  isCoreTemplateAsset: boolean('is_core_template_asset')
+    .notNull()
+    .default(false),
+  templateId: uuid('template_id'),
+  templateSourceId: uuid('template_source_id'),
   classRecordCategory: classRecordCategoryEnum('class_record_category'),
   quarter: gradingPeriodEnum('quarter'),
   aiOrigin: text('ai_origin'),
@@ -672,6 +677,11 @@ export const classModules = pgTable(
     imagePositionX: integer('image_position_x').notNull().default(50),
     imagePositionY: integer('image_position_y').notNull().default(50),
     imageScale: integer('image_scale').notNull().default(120),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -729,6 +739,11 @@ export const moduleItems = pgTable(
     isVisible: boolean('is_visible').notNull().default(true),
     isRequired: boolean('is_required').notNull().default(false),
     isGiven: boolean('is_given').notNull().default(true),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
     metadata: json('metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

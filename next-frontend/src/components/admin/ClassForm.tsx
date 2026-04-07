@@ -12,6 +12,7 @@ import {
   type ExistingScheduleSlot,
 } from '@/components/admin/ScheduleCalendarCreator';
 import type { ClassItem } from '@/types/class';
+import type { ClassTemplate } from '@/types/class-template';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
 
@@ -64,6 +65,11 @@ type ClassFormProps = {
   submitLabel: string;
   /** When editing, pass the class ID so we exclude it from existing section slots */
   editingClassId?: string;
+  templateOptions?: ClassTemplate[];
+  selectedTemplateId?: string;
+  templatesLoading?: boolean;
+  onTemplateChange?: (templateId: string) => void;
+  onValuesChange?: (values: ClassFormValues) => void;
 };
 
 export default function ClassForm({
@@ -76,6 +82,11 @@ export default function ClassForm({
   onCancel,
   submitLabel,
   editingClassId,
+  templateOptions = [],
+  selectedTemplateId = '',
+  templatesLoading = false,
+  onTemplateChange,
+  onValuesChange,
 }: ClassFormProps) {
   const [form, setForm] = useState<ClassFormValues>(initialValues);
   const [existingSlots, setExistingSlots] = useState<ExistingScheduleSlot[]>([]);
@@ -84,6 +95,10 @@ export default function ClassForm({
   useEffect(() => {
     setForm(initialValues);
   }, [initialValues]);
+
+  useEffect(() => {
+    onValuesChange?.(form);
+  }, [form, onValuesChange]);
 
   const setField = (field: keyof ClassFormValues, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -101,6 +116,12 @@ export default function ClassForm({
       schedules: [],
     }));
     setExistingSlots([]);
+    onTemplateChange?.('');
+  };
+
+  const handleSubjectNameChange = (value: string) => {
+    setField('subjectName', value);
+    onTemplateChange?.('');
   };
 
   const handleSectionChange = (sectionId: string) => {
@@ -134,6 +155,8 @@ export default function ClassForm({
     form.sectionId &&
     form.schoolYear,
   );
+
+  const isTemplateReady = Boolean(form.subjectName && form.subjectGradeLevel);
 
   // ─── Fetch existing section schedules when prerequisites are met ────────────
   const fetchSectionSchedules = useCallback(
@@ -227,18 +250,55 @@ export default function ClassForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Subject Name">
-          <select
-            value={form.subjectName}
-            onChange={(event) => setField('subjectName', event.target.value)}
-            className={SELECT_CLS}
-          >
-            <option value="">Select subject</option>
-            {subjectOptions.map((subject) => (
-              <option key={subject} value={subject}>
-                {subject}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-3">
+            <select
+              value={form.subjectName}
+              onChange={(event) => handleSubjectNameChange(event.target.value)}
+              className={SELECT_CLS}
+            >
+              <option value="">Select subject</option>
+              {subjectOptions.map((subject) => (
+                <option key={subject} value={subject}>
+                  {subject}
+                </option>
+              ))}
+            </select>
+
+            {onTemplateChange ? (
+              <div className="rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] p-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--admin-text-muted)]">
+                  Template Apply (Optional)
+                </p>
+                <p className="mt-1 text-xs text-[var(--admin-text-muted)]">
+                  Applies only templates that match the selected subject and grade level.
+                </p>
+                <select
+                  className="admin-select mt-2 h-10 w-full rounded-xl px-3"
+                  value={selectedTemplateId}
+                  onChange={(event) => onTemplateChange(event.target.value)}
+                  disabled={!isTemplateReady || templatesLoading}
+                >
+                  {!isTemplateReady ? (
+                    <option value="">Select subject and grade level first</option>
+                  ) : templatesLoading ? (
+                    <option value="">Loading compatible templates...</option>
+                  ) : (
+                    <option value="">No template</option>
+                  )}
+                  {templateOptions.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} ({template.subjectCode} - Grade {template.subjectGradeLevel})
+                    </option>
+                  ))}
+                </select>
+                {isTemplateReady && !templatesLoading && templateOptions.length === 0 ? (
+                  <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
+                    No compatible templates found for this subject and grade level.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </Field>
         <Field label="Subject Code">
           <Input

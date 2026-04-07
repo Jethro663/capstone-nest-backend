@@ -41,6 +41,14 @@ export const moduleService = {
     return data;
   },
 
+  async releaseCoreModule(
+    moduleId: string,
+    dto: { isVisible?: boolean },
+  ): Promise<{ success: boolean; message: string; data: ClassModule }> {
+    const { data } = await api.patch(`/modules/${moduleId}/core-release`, dto);
+    return data;
+  },
+
   async delete(
     moduleId: string,
   ): Promise<{ success: boolean; message: string; data: ClassModule }> {
@@ -104,6 +112,14 @@ export const moduleService = {
     dto: UpdateModuleItemDto,
   ): Promise<{ success: boolean; message: string; data: unknown }> {
     const { data } = await api.patch(`/modules/items/${itemId}`, dto);
+    return data;
+  },
+
+  async releaseCoreItem(
+    itemId: string,
+    dto: { isVisible?: boolean; isGiven?: boolean },
+  ): Promise<{ success: boolean; message: string; data: unknown }> {
+    const { data } = await api.patch(`/modules/items/${itemId}/core-release`, dto);
     return data;
   },
 

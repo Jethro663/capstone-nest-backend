@@ -3,14 +3,17 @@ import { aiApi } from "./services/ai";
 import { announcementsApi } from "./services/announcements";
 import { assessmentsApi } from "./services/assessments";
 import { classesApi } from "./services/classes";
+import { jaApi } from "./services/ja";
 import { lessonsApi } from "./services/lessons";
 import { lxpApi } from "./services/lxp";
+import { modulesApi } from "./services/modules";
 import { performanceApi } from "./services/performance";
 import { profileApi } from "./services/profile";
 
 export const queryKeys = {
   classes: (studentId: string) => ["classes", studentId] as const,
   classDetail: (classId: string) => ["class-detail", classId] as const,
+  classModules: (classId: string) => ["class-modules", classId] as const,
   lessons: (classId: string) => ["lessons", classId] as const,
   lessonCompletions: (classId: string) => ["lesson-completions", classId] as const,
   assessments: (classId: string) => ["assessments", classId] as const,
@@ -24,6 +27,8 @@ export const queryKeys = {
   profile: ["profile"] as const,
   tutorBootstrap: (classId?: string) => ["tutor-bootstrap", classId ?? "all"] as const,
   tutorSession: (sessionId?: string) => ["tutor-session", sessionId ?? "missing"] as const,
+  jaHub: (classId?: string) => ["ja-hub", classId ?? "all"] as const,
+  jaAskThread: (threadId?: string) => ["ja-ask-thread", threadId ?? "missing"] as const,
 };
 
 export const useStudentClasses = (studentId?: string) =>
@@ -44,6 +49,13 @@ export const useLessons = (classId?: string) =>
   useQuery({
     queryKey: classId ? queryKeys.lessons(classId) : ["lessons", "missing"],
     queryFn: () => lessonsApi.getByClass(classId!),
+    enabled: !!classId,
+  });
+
+export const useClassModules = (classId?: string) =>
+  useQuery({
+    queryKey: classId ? queryKeys.classModules(classId) : ["class-modules", "missing"],
+    queryFn: () => modulesApi.getByClass(classId!),
     enabled: !!classId,
   });
 
@@ -125,6 +137,19 @@ export const useTutorSession = (sessionId?: string) =>
     queryKey: queryKeys.tutorSession(sessionId),
     queryFn: () => aiApi.getTutorSession(sessionId!),
     enabled: !!sessionId,
+  });
+
+export const useJaHub = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.jaHub(classId),
+    queryFn: () => jaApi.getHub(classId),
+  });
+
+export const useJaAskThread = (threadId?: string) =>
+  useQuery({
+    queryKey: queryKeys.jaAskThread(threadId),
+    queryFn: () => jaApi.getAskThread(threadId!),
+    enabled: !!threadId,
   });
 
 export function useLessonCompleteMutation(classId?: string) {

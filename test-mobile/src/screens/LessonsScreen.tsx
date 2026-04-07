@@ -28,7 +28,7 @@ import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
 
 type Props = CompositeScreenProps<
-  BottomTabScreenProps<MainTabParamList, "Lessons">,
+  BottomTabScreenProps<MainTabParamList, "Classes">,
   NativeStackScreenProps<RootStackParamList>
 >;
 
@@ -137,9 +137,9 @@ export function LessonsScreen({ navigation }: Props) {
   return (
     <ScreenScroll refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}>
       <GradientHeader
-        colors={gradients.lessons}
-        eyebrow={`Welcome back, ${user?.firstName || "Student"} 👋`}
-        title="Student Home"
+        colors={gradients.classes}
+        eyebrow={`Welcome back, ${user?.firstName || "Student"} ðŸ‘‹`}
+        title="My Classes"
         rightContent={<FloatingIconButton icon="refresh" onPress={handleRefresh} />}
       >
         <View style={{ marginTop: 16, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.18)", padding: 16 }}>
@@ -176,7 +176,7 @@ export function LessonsScreen({ navigation }: Props) {
 
       <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 22 }}>
         {classesQuery.isLoading ? (
-          <EmptyState emoji="⏳" title="Loading workspace" subtitle="Pulling your classes and student data now." />
+          <EmptyState emoji="â³" title="Loading workspace" subtitle="Pulling your classes and student data now." />
         ) : (
           <>
             {primaryError ? (
@@ -189,7 +189,7 @@ export function LessonsScreen({ navigation }: Props) {
             ) : null}
             <View>
               <SectionTitle
-                title="Continue Learning 🎯"
+                title="Continue Learning ðŸŽ¯"
                 right={<Pill label={`${continueLearning.length} live`} backgroundColor={colors.paleAmber} color={colors.amber} />}
               />
               {continueLearning.length === 0 ? (
@@ -204,7 +204,7 @@ export function LessonsScreen({ navigation }: Props) {
                   {continueLearning.map(({ lesson, subject }, index) => (
                     <AnimatedEntrance key={lesson.id} delay={index * 80}>
                       <Pressable
-                        onPress={() => navigation.navigate("SubjectLessons", { classId: subject.id })}
+                        onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}
                         style={[
                           {
                             flexDirection: "row",
@@ -255,7 +255,7 @@ export function LessonsScreen({ navigation }: Props) {
 
             <View>
               <SectionTitle
-                title="Announcements 📢"
+                title="Announcements ðŸ“¢"
                 right={<Pill label={`${announcements.length} updates`} backgroundColor={colors.paleBlue} color={colors.blueDeep} />}
               />
               {announcements.length === 0 ? (
@@ -274,7 +274,7 @@ export function LessonsScreen({ navigation }: Props) {
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>{announcement.title}</Text>
                             <Text style={{ marginTop: 2, fontSize: 11, color: colors.textSecondary }}>
-                              {announcement.subject} • {announcement.createdAt}
+                              {announcement.subject} â€¢ {announcement.createdAt}
                             </Text>
                           </View>
                           {announcement.isPinned ? (
@@ -293,16 +293,16 @@ export function LessonsScreen({ navigation }: Props) {
 
             <View>
               <SectionTitle
-                title="My Classes 📚"
+                title="My Classes ðŸ“š"
                 right={<Pill label={`${subjectCards.length} classes`} backgroundColor={colors.paleIndigo} color={colors.indigo} />}
               />
               {filteredSubjects.length === 0 ? (
-                <EmptyState emoji="🔎" title="No matches found" subtitle="Try a different class or subject keyword." />
+                <EmptyState emoji="ðŸ”Ž" title="No matches found" subtitle="Try a different class or subject keyword." />
               ) : (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
                   {filteredSubjects.map((subject, index) => (
                     <AnimatedEntrance key={subject.id} delay={index * 70} style={{ width: "48%" }}>
-                      <Pressable onPress={() => navigation.navigate("SubjectLessons", { classId: subject.id })}>
+                      <Pressable onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}>
                         <Card style={{ minHeight: 190 }}>
                           <View
                             style={{
@@ -331,7 +331,7 @@ export function LessonsScreen({ navigation }: Props) {
                             {subject.name}
                           </Text>
                           <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-                            {subject.subjectCode} • {subject.section}
+                            {subject.subjectCode} â€¢ {subject.section}
                           </Text>
                           <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>{subject.teacherName}</Text>
                           <View style={{ marginTop: 12 }}>

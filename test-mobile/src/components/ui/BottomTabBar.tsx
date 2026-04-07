@@ -13,8 +13,8 @@ const routeConfig: Record<
   keyof MainTabParamList,
   { label: string; activeIcon: IconName; inactiveIcon: IconName }
 > = {
-  Lessons: {
-    label: "Lessons",
+  Classes: {
+    label: "Classes",
     activeIcon: "book-open-variant",
     inactiveIcon: "book-open-variant-outline",
   },
@@ -22,6 +22,21 @@ const routeConfig: Record<
     label: "Assessments",
     activeIcon: "clipboard-text",
     inactiveIcon: "clipboard-text-outline",
+  },
+  JA: {
+    label: "JA",
+    activeIcon: "robot-happy",
+    inactiveIcon: "robot-happy-outline",
+  },
+  Announcements: {
+    label: "Updates",
+    activeIcon: "bullhorn",
+    inactiveIcon: "bullhorn-outline",
+  },
+  Profile: {
+    label: "Profile",
+    activeIcon: "account-circle",
+    inactiveIcon: "account-circle-outline",
   },
   LXP: {
     label: "LXP",
@@ -33,10 +48,10 @@ const routeConfig: Record<
     activeIcon: "chart-box",
     inactiveIcon: "chart-box-outline",
   },
-  Profile: {
-    label: "Profile",
-    activeIcon: "account-circle",
-    inactiveIcon: "account-circle-outline",
+  Lessons: {
+    label: "Lessons",
+    activeIcon: "book-open-variant",
+    inactiveIcon: "book-open-variant-outline",
   },
 };
 
@@ -74,7 +89,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         {state.routes.map((route, index) => {
           const focused = state.index === index;
           const config = routeConfig[route.name as keyof MainTabParamList];
-          const isCenter = route.name === "LXP";
+          const isCenter = route.name === "JA";
           const onPress = () => {
             const event = navigation.emit({
               type: "tabPress",
@@ -106,7 +121,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   style={{ alignItems: "center", width: "100%" }}
                 >
                   <LinearGradient
-                    colors={focused ? gradients.lxp : gradients.lessons}
+                    colors={focused ? gradients.ja : gradients.classes}
                     style={{
                       width: 62,
                       height: 62,
