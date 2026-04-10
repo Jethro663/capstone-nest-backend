@@ -57,6 +57,10 @@ export function TopBar({
     user?.teacherProfile?.profilePicture ??
     user?.profilePicture;
   const profileHref = getProfileRoute(effectiveRole);
+  const notificationsLabel =
+    unreadCount > 0
+      ? `Open notifications (${unreadCount > 9 ? '9+' : unreadCount} unread)`
+      : 'Open notifications';
 
   if (isAdminShell) {
     return (
@@ -83,7 +87,8 @@ export function TopBar({
             type="button"
             className="admin-topbar__notif"
             onClick={() => router.push('/dashboard/notifications')}
-            title="Notifications"
+            title={notificationsLabel}
+            aria-label={notificationsLabel}
           >
             <div className="relative">
               <Bell className="h-5 w-5" />
@@ -158,7 +163,8 @@ export function TopBar({
             type="button"
             className="teacher-topbar-shell__notif"
             onClick={() => router.push('/dashboard/notifications')}
-            title="Notifications"
+            title={notificationsLabel}
+            aria-label={notificationsLabel}
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 ? (
@@ -240,7 +246,8 @@ export function TopBar({
             type="button"
             className="student-topbar-shell__notif"
             onClick={() => router.push('/dashboard/notifications')}
-            title="Notifications"
+            title={notificationsLabel}
+            aria-label={notificationsLabel}
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 ? (
@@ -306,7 +313,8 @@ export function TopBar({
           variant="ghost"
           size="icon"
           onClick={() => router.push('/dashboard/notifications')}
-          title="Notifications"
+          title={notificationsLabel}
+          aria-label={notificationsLabel}
           className={
             isTeacherShell
                 ? 'text-[var(--teacher-text-muted)] hover:bg-white/10 hover:text-[var(--teacher-text-strong)]'

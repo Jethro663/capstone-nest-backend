@@ -1,0 +1,20 @@
+
+> next-frontend@0.1.0 dev
+> next dev -p 3001
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://26.144.237.3:3001
+- Environments: .env.local
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 3s
+○ Compiling /dashboard ...
+ GET /dashboard 200 in 6.3s (compile: 5.8s, proxy.ts: 113ms, render: 439ms)
+(node:5224) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ GET /login 200 in 31.7s (compile: 18.6s, proxy.ts: 3.2s, render: 9.8s)
+ GET /dashboard/teacher 200 in 113s (compile: 22.6s, proxy.ts: 18ms, render: 90s)
+ GET /dashboard/teacher 200 in 2.1min (compile: 17.9s, proxy.ts: 3.4s, render: 105s)
+[?25h

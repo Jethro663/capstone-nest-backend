@@ -15,16 +15,36 @@ const PUBLIC_ROUTES = ['/', '/login', '/verify-email', '/forgot-password', '/res
 // Routes that require authentication
 const PROTECTED_PREFIXES = ['/dashboard'];
 
+function matchesRoute(pathname: string, route: string): boolean {
+  if (route === '/') {
+    return pathname === '/';
+  }
+
+  return pathname === route || pathname.startsWith(`${route}/`);
+}
+
 function hasRefreshCookie(request: NextRequest): boolean {
   return !!request.cookies.get('refreshToken')?.value;
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  const isPublic = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
-  const isProtected = PROTECTED_PREFIXES.some((r) => pathname.startsWith(r));
   const hasSession = hasRefreshCookie(request);
+
+  if (pathname === '/') {
+    return NextResponse.redirect(
+      new URL(hasSession ? '/dashboard' : '/login', request.url),
+    );
+  }
+
+  if (pathname === '/login' && hasSession) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  const isPublic = PUBLIC_ROUTES.some((route) => matchesRoute(pathname, route));
+  const isProtected = PROTECTED_PREFIXES.some((prefix) =>
+    matchesRoute(pathname, prefix),
+  );
 
   // Public route → allow (login page handles already-authenticated redirect itself)
   if (isPublic) return NextResponse.next();
@@ -34,11 +54,6 @@ export function middleware(request: NextRequest) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // Root → redirect based on session
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL(hasSession ? '/dashboard' : '/login', request.url));
   }
 
   return NextResponse.next();

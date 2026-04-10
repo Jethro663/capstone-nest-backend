@@ -21,6 +21,7 @@ import {
   type ReactNode,
 } from 'react';
 import axios from 'axios';
+import { usePathname } from 'next/navigation';
 import { getCurrentUserAction } from '@/lib/auth-actions';
 import { setAccessToken } from '@/lib/api-client';
 import { getRoleName } from '@/utils/helpers';
@@ -37,10 +38,17 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AUTH_REFRESH_TIMEOUT_MS = 10_000;
+
+function shouldBootstrapAuth(pathname: string | null): boolean {
+  return pathname === '/dashboard' || pathname?.startsWith('/dashboard/') || false;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const pathname = usePathname();
+  const shouldRefreshSession = shouldBootstrapAuth(pathname);
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -49,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const refreshRes = await axios.post(
         '/api/auth/refresh',
         {},
-        { withCredentials: true },
+        { withCredentials: true, timeout: AUTH_REFRESH_TIMEOUT_MS },
       );
       const newToken =
         refreshRes.data?.data?.accessToken ?? refreshRes.data?.accessToken;
@@ -73,8 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshAuth();
-  }, [refreshAuth]);
+    if (!shouldRefreshSession) {
+      setAccessToken(null);
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    void refreshAuth();
+  }, [refreshAuth, shouldRefreshSession]);
 
   const isAuthenticated = !!user;
   const role = getRoleName(user?.roles?.[0]) || null;
@@ -115,3 +131,6 @@ export function useUserRole(): string | null {
   const { role } = useAuth();
   return role;
 }
+
+export { shouldBootstrapAuth };
+export { AUTH_REFRESH_TIMEOUT_MS };

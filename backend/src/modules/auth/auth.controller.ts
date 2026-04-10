@@ -240,6 +240,7 @@ export class AuthController {
   // Logout
   // --------------------------------------------------------------------------
 
+  @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @SkipThrottle()

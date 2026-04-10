@@ -67,7 +67,7 @@ export async function login(data: {
 
 export async function logout(): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/logout', {});
+    const response = await api.post('/auth/logout', {}, publicAuthRequestConfig);
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Logout failed');
@@ -76,7 +76,7 @@ export async function logout(): Promise<AuthResponse> {
 
 export async function logoutAll(): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/logout-all', {});
+    const response = await api.post('/auth/logout-all', {}, publicAuthRequestConfig);
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Logout all failed');

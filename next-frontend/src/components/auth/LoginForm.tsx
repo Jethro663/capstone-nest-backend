@@ -87,6 +87,7 @@ export function LoginForm() {
           id="email"
           type="email"
           placeholder="you@example.com"
+          autoComplete="username"
           disabled={isSubmitting}
           className="auth-input"
           {...register('email')}
@@ -102,6 +103,7 @@ export function LoginForm() {
           id="password"
           type="password"
           placeholder="********"
+          autoComplete="current-password"
           disabled={isSubmitting}
           className="auth-input"
           {...register('password')}
