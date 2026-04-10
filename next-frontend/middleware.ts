@@ -37,10 +37,6 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  if (pathname === '/login' && hasSession) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
   const isPublic = PUBLIC_ROUTES.some((route) => matchesRoute(pathname, route));
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     matchesRoute(pathname, prefix),

@@ -17,14 +17,12 @@ describe('middleware', () => {
     expect(response.headers.get('location')).toBe('http://localhost:3001/login');
   });
 
-  it('redirects login to dashboard when a refresh cookie exists', () => {
+  it('allows login when a refresh cookie exists (stale cookie safe)', () => {
     const response = middleware(
       createRequest('http://localhost:3001/login', 'refresh-token'),
     );
 
-    expect(response.headers.get('location')).toBe(
-      'http://localhost:3001/dashboard',
-    );
+    expect(response.headers.get('location')).toBeNull();
   });
 
   it('redirects protected routes to login with a from param when unauthenticated', () => {
