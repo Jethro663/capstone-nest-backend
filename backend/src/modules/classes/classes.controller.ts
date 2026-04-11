@@ -612,6 +612,17 @@ export class ClassesController {
     @Query('gradeLevel') gradeLevel?: string,
     @Query('sectionId') sectionId?: string,
     @Query('search') search?: string,
+    @Query('eligibility') eligibility?: 'all' | 'eligible' | 'mismatch',
+    @Query('sortBy')
+    sortBy?:
+      | 'lastName'
+      | 'firstName'
+      | 'email'
+      | 'gradeLevel'
+      | 'lrn'
+      | 'eligibility',
+    @Query('sortDirection') sortDirection?: 'asc' | 'desc',
+    @Query('prioritizeEligible') prioritizeEligible?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -623,6 +634,13 @@ export class ClassesController {
         gradeLevel,
         sectionId,
         search,
+        eligibility,
+        sortBy,
+        sortDirection,
+        prioritizeEligible:
+          prioritizeEligible !== undefined
+            ? prioritizeEligible !== 'false'
+            : undefined,
         page: parsePositiveIntQuery(page, 'page'),
         limit: parsePositiveIntQuery(limit, 'limit'),
       },

@@ -61,6 +61,12 @@ const studentNav: NavItem[] = [
     href: "/dashboard/student/announcements",
     icon: Megaphone,
   },
+  { label: "Transcript", href: "/dashboard/student/transcript", icon: History },
+  {
+    label: "Assessment History",
+    href: "/dashboard/student/assessment-history",
+    icon: ClipboardCheck,
+  },
   { label: "Profile", href: "/dashboard/student/profile", icon: User },
 ];
 

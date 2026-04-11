@@ -76,6 +76,12 @@ export const lessonContentTypeEnum = pgEnum('lesson_content_type', [
   'divider',
 ]);
 
+export const lessonVersionTypeEnum = pgEnum('lesson_version_type', [
+  'auto',
+  'manual',
+  'restore',
+]);
+
 export const questionTypeEnum = pgEnum('question_type', [
   'multiple_choice',
   'multiple_select',
@@ -445,6 +451,31 @@ export const lessonCompletions = pgTable(
     uniqueCompletion: unique('lesson_completions_student_lesson_unique').on(
       table.studentId,
       table.lessonId,
+    ),
+  }),
+);
+
+export const lessonVersions = pgTable(
+  'lesson_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    lessonId: uuid('lesson_id')
+      .notNull()
+      .references(() => lessons.id, { onDelete: 'cascade' }),
+    versionNumber: integer('version_number').notNull(),
+    type: lessonVersionTypeEnum('type').notNull().default('auto'),
+    label: text('label'),
+    snapshot: json('snapshot').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    lessonIdIdx: index('lesson_versions_lesson_id_idx').on(table.lessonId),
+    lessonVersionUnique: unique('lesson_versions_lesson_version_unique').on(
+      table.lessonId,
+      table.versionNumber,
     ),
   }),
 );
@@ -922,6 +953,7 @@ export const lessonsRelations = relations(lessons, ({ one, many }) => ({
   }),
   contentBlocks: many(lessonContentBlocks),
   completions: many(lessonCompletions),
+  versions: many(lessonVersions),
   moduleItems: many(moduleItems),
 }));
 
@@ -948,6 +980,17 @@ export const lessonCompletionsRelations = relations(
     }),
   }),
 );
+
+export const lessonVersionsRelations = relations(lessonVersions, ({ one }) => ({
+  lesson: one(lessons, {
+    fields: [lessonVersions.lessonId],
+    references: [lessons.id],
+  }),
+  creator: one(users, {
+    fields: [lessonVersions.createdBy],
+    references: [users.id],
+  }),
+}));
 
 export const assessmentsRelations = relations(assessments, ({ one, many }) => ({
   class: one(classes, {

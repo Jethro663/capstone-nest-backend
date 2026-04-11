@@ -26,6 +26,7 @@ import {
   ReorderLessonsDto,
   BulkLessonDraftStateDto,
   BulkLessonIdsDto,
+  CreateLessonVersionDto,
 } from './DTO/lesson.dto';
 
 @ApiTags('Lessons')
@@ -176,6 +177,67 @@ export class LessonsController {
       success: true,
       message: 'Lesson published successfully',
       data: lesson,
+    };
+  }
+
+  @Get(':id/versions')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getLessonVersions(
+    @Param('id') lessonId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.lessonsService.getLessonVersions(
+      lessonId,
+      user.userId,
+      user.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Lesson versions retrieved successfully',
+      data,
+      count: data.length,
+    };
+  }
+
+  @Post(':id/versions')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async createLessonVersion(
+    @Param('id') lessonId: string,
+    @Body() dto: CreateLessonVersionDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.lessonsService.createManualVersion(
+      lessonId,
+      user.userId,
+      user.roles ?? [],
+      dto.label,
+    );
+    return {
+      success: true,
+      message: 'Lesson snapshot created successfully',
+      data,
+      count: data.length,
+    };
+  }
+
+  @Post(':id/versions/:versionId/restore')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async restoreLessonVersion(
+    @Param('id') lessonId: string,
+    @Param('versionId') versionId: string,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.lessonsService.restoreLessonVersion(
+      lessonId,
+      versionId,
+      user.userId,
+      user.roles ?? [],
+    );
+    return {
+      success: true,
+      message: 'Lesson restored from version successfully',
+      data,
     };
   }
 

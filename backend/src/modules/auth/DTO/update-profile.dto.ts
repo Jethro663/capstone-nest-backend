@@ -4,26 +4,32 @@ import {
   IsDateString,
   IsIn,
   Matches,
+  MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+
+const PH_MOBILE_REGEX = /^(?:\+63|0)9\d{9}$/;
 
 export class UpdateProfileDto {
   @ApiProperty({ example: 'Juan', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   @Transform(({ value }: { value: string }) => value?.trim())
   firstName?: string;
 
   @ApiProperty({ example: 'Santos', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   @Transform(({ value }: { value: string }) => value?.trim())
   middleName?: string;
 
   @ApiProperty({ example: 'Dela Cruz', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   @Transform(({ value }: { value: string }) => value?.trim())
   lastName?: string;
 
@@ -39,8 +45,10 @@ export class UpdateProfileDto {
 
   @ApiProperty({ example: 'Male', required: false })
   @IsOptional()
-  @IsString()
-  gender?: string;
+  @IsIn(['Male', 'Female'], {
+    message: 'Gender must be either Male or Female',
+  })
+  gender?: 'Male' | 'Female';
 
   @ApiProperty({ example: '202401230001', required: false })
   @IsOptional()
@@ -53,16 +61,22 @@ export class UpdateProfileDto {
   @ApiProperty({ example: '+639171234567', required: false })
   @IsOptional()
   @IsString()
+  @Matches(PH_MOBILE_REGEX, {
+    message:
+      'Student contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+  })
   phone?: string;
 
   @ApiProperty({ example: '123 Main St, Manila', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(180)
   address?: string;
 
   @ApiProperty({ example: 'Dela Cruz', required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   familyName?: string;
 
   @ApiProperty({
@@ -80,6 +94,10 @@ export class UpdateProfileDto {
   @ApiProperty({ example: '+639179876543', required: false })
   @IsOptional()
   @IsString()
+  @Matches(PH_MOBILE_REGEX, {
+    message:
+      'Guardian contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+  })
   familyContact?: string;
 
   @ApiProperty({

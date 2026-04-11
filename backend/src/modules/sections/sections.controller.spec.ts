@@ -522,7 +522,13 @@ describe('SectionsController', () => {
     ];
 
     it('returns candidate data with count', async () => {
-      mockSectionsService.getCandidates.mockResolvedValue(candidateRows);
+      mockSectionsService.getCandidates.mockResolvedValue({
+        data: candidateRows,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       const result = await controller.getCandidates(
         SECTION_ID,
@@ -531,11 +537,25 @@ describe('SectionsController', () => {
         'juan',
       );
 
-      expect(result).toEqual({ success: true, data: candidateRows, count: 1 });
+      expect(result).toEqual({
+        success: true,
+        data: candidateRows,
+        count: 1,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
     });
 
     it('passes filters to the service', async () => {
-      mockSectionsService.getCandidates.mockResolvedValue([]);
+      mockSectionsService.getCandidates.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       await controller.getCandidates(SECTION_ID, ADMIN_USER, '8', 'dela');
 
@@ -550,7 +570,13 @@ describe('SectionsController', () => {
     });
 
     it('passes an empty object when no filters are given', async () => {
-      mockSectionsService.getCandidates.mockResolvedValue([]);
+      mockSectionsService.getCandidates.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       await controller.getCandidates(SECTION_ID, ADMIN_USER);
 

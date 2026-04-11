@@ -370,18 +370,61 @@ export class SectionsController {
     @CurrentUser() user: { userId: string; roles: string[] },
     @Query('gradeLevel') gradeLevel?: string,
     @Query('search') search?: string,
+    @Query('assignedSectionId') assignedSectionId?: string,
+    @Query('eligibility') eligibility?: 'all' | 'eligible' | 'mismatch',
+    @Query('sortBy')
+    sortBy?:
+      | 'lastName'
+      | 'firstName'
+      | 'email'
+      | 'gradeLevel'
+      | 'lrn'
+      | 'eligibility',
+    @Query('sortDirection') sortDirection?: 'asc' | 'desc',
+    @Query('prioritizeEligible') prioritizeEligible?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    const filters: { gradeLevel?: string; search?: string } = {};
+    const filters: {
+      gradeLevel?: string;
+      search?: string;
+      assignedSectionId?: string;
+      eligibility?: 'all' | 'eligible' | 'mismatch';
+      sortBy?:
+        | 'lastName'
+        | 'firstName'
+        | 'email'
+        | 'gradeLevel'
+        | 'lrn'
+        | 'eligibility';
+      sortDirection?: 'asc' | 'desc';
+      prioritizeEligible?: boolean;
+      page?: number;
+      limit?: number;
+    } = {};
     if (gradeLevel) filters.gradeLevel = gradeLevel;
     if (search) filters.search = search;
+    if (assignedSectionId) filters.assignedSectionId = assignedSectionId;
+    if (eligibility) filters.eligibility = eligibility;
+    if (sortBy) filters.sortBy = sortBy;
+    if (sortDirection) filters.sortDirection = sortDirection;
+    if (prioritizeEligible !== undefined) {
+      filters.prioritizeEligible = prioritizeEligible !== 'false';
+    }
+    filters.page = parsePositiveIntQuery(page, 'page');
+    filters.limit = parsePositiveIntQuery(limit, 'limit');
 
-    const candidates = await this.sectionsService.getCandidates(
+    const result = await this.sectionsService.getCandidates(
       id,
       filters,
       user,
     );
 
-    return { success: true, data: candidates, count: candidates.length };
+    if (Array.isArray(result)) {
+      return { success: true, data: result, count: result.length };
+    }
+
+    return { ...result, success: true, data: result.data, count: result.data.length };
   }
 
   /**

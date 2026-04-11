@@ -117,11 +117,36 @@ export interface SectionCandidate {
   firstName?: string;
   lastName?: string;
   email?: string;
+  lrn?: string | null;
   gradeLevel?: string;
   profilePicture?: string;
+  isEligible?: boolean;
+  eligibilityReason?: string | null;
   hasActiveSectionEnrollment?: boolean;
   enrolledSectionId?: string | null;
   enrolledSectionName?: string | null;
+}
+
+export interface SectionCandidatesQuery {
+  gradeLevel?: string;
+  search?: string;
+  assignedSectionId?: string;
+  eligibility?: 'all' | 'eligible' | 'mismatch';
+  sortBy?: 'lastName' | 'firstName' | 'email' | 'gradeLevel' | 'lrn' | 'eligibility';
+  sortDirection?: 'asc' | 'desc';
+  prioritizeEligible?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface SectionCandidatesResponse {
+  success: boolean;
+  data: SectionCandidate[];
+  count: number;
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export type BulkSectionLifecycleAction = 'archive' | 'restore' | 'purge';
@@ -256,7 +281,7 @@ export const sectionService = {
   },
 
   /** GET /sections/:id/candidates — Admin, Teacher */
-  async getCandidates(id: string, query?: { gradeLevel?: string; search?: string }): Promise<{ success: boolean; data: SectionCandidate[]; count: number }> {
+  async getCandidates(id: string, query?: SectionCandidatesQuery): Promise<SectionCandidatesResponse> {
     const { data } = await api.get(`/sections/${id}/candidates`, { params: query });
     return data;
   },

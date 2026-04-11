@@ -4,22 +4,28 @@ import {
   IsDateString,
   IsIn,
   Matches,
+  MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+
+const PH_MOBILE_REGEX = /^(?:\+63|0)9\d{9}$/;
 
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   @Transform(({ value }: { value: string }) => value?.trim())
   firstName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   @Transform(({ value }: { value: string }) => value?.trim())
   middleName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   @Transform(({ value }: { value: string }) => value?.trim())
   lastName?: string;
 
@@ -39,19 +45,27 @@ export class UpdateProfileDto {
   dateOfBirth?: string;
 
   @IsOptional()
-  @IsString()
-  gender?: string;
+  @IsIn(['Male', 'Female'], {
+    message: 'Gender must be either Male or Female',
+  })
+  gender?: 'Male' | 'Female';
 
   @IsOptional()
   @IsString()
+  @Matches(PH_MOBILE_REGEX, {
+    message:
+      'Student contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+  })
   phone?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(180)
   address?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   familyName?: string;
 
   @IsOptional()
@@ -63,6 +77,10 @@ export class UpdateProfileDto {
 
   @IsOptional()
   @IsString()
+  @Matches(PH_MOBILE_REGEX, {
+    message:
+      'Guardian contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+  })
   familyContact?: string;
 
   @IsOptional()

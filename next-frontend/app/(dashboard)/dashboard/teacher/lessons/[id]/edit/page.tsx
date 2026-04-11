@@ -7,12 +7,14 @@ import {
   BookOpenText,
   CircleHelp,
   FileStack,
+  History,
   ImageIcon,
   Minus,
   Paperclip,
   PencilLine,
   Plus,
   Rocket,
+  RotateCcw,
   Sparkles,
   Trash2,
   Video,
@@ -36,6 +38,7 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { plainTextToRichHtml } from '@/lib/rich-text';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
+import type { LessonVersion } from '@/types/lesson';
 
 const BLOCK_TYPES = [
   {
@@ -141,6 +144,10 @@ export default function LessonEditorPage() {
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
+  const [versions, setVersions] = useState<LessonVersion[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string>('');
+  const [creatingVersion, setCreatingVersion] = useState(false);
+  const [restoringVersion, setRestoringVersion] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -148,15 +155,30 @@ export default function LessonEditorPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await lessonService.getById(lessonId);
+      const [res, versionsRes] = await Promise.all([
+        lessonService.getById(lessonId),
+        lessonService.getVersions(lessonId),
+      ]);
       setLesson(res.data);
       setTitle(res.data.title);
       setDescription(normalizeRichValue(res.data.description));
       setBlocks((res.data.contentBlocks || []).sort((a, b) => a.order - b.order));
+      setVersions(versionsRes.data || []);
+      setSelectedVersionId((versionsRes.data || [])[0]?.id ?? '');
     } catch {
       toast.error('Failed to load lesson');
     } finally {
       setLoading(false);
+    }
+  }, [lessonId]);
+
+  const refreshVersions = useCallback(async () => {
+    try {
+      const response = await lessonService.getVersions(lessonId);
+      setVersions(response.data || []);
+      setSelectedVersionId((response.data || [])[0]?.id ?? '');
+    } catch {
+      // keep silent; editor should remain usable even if version feed fails
     }
   }, [lessonId]);
 
@@ -168,6 +190,7 @@ export default function LessonEditorPage() {
     try {
       setSaving(true);
       await lessonService.update(lessonId, { title, description });
+      await refreshVersions();
       toast.success('Lesson details saved');
     } catch {
       toast.error('Failed to save lesson details');
@@ -180,6 +203,7 @@ export default function LessonEditorPage() {
     try {
       await lessonService.publish(lessonId);
       setLesson((prev) => (prev ? { ...prev, isDraft: false } : prev));
+      await refreshVersions();
       toast.success('Lesson published');
     } catch {
       toast.error('Failed to publish lesson');
@@ -195,6 +219,7 @@ export default function LessonEditorPage() {
       };
       const res = await lessonService.createBlock(lessonId, dto);
       setBlocks((prev) => [...prev, res.data]);
+      await refreshVersions();
       setShowAddMenu(false);
       if (type !== 'divider') setEditingBlockId(res.data.id);
       toast.success('Block added');
@@ -210,6 +235,7 @@ export default function LessonEditorPage() {
         block.id === blockId ? { ...block, content } : block
       )));
       setEditingBlockId(null);
+      await refreshVersions();
       toast.success('Block updated');
     } catch {
       toast.error('Failed to update block');
@@ -226,9 +252,48 @@ export default function LessonEditorPage() {
         try {
           await lessonService.deleteBlock(blockId);
           setBlocks((prev) => prev.filter((block) => block.id !== blockId));
+          await refreshVersions();
           toast.success('Block deleted');
         } catch {
           toast.error('Failed to delete block');
+        }
+      },
+    });
+  };
+
+  const handleCreateManualSnapshot = async () => {
+    try {
+      setCreatingVersion(true);
+      await lessonService.createVersion(lessonId, {
+        label: `Manual snapshot - ${new Date().toLocaleString()}`,
+      });
+      await refreshVersions();
+      toast.success('Lesson snapshot created');
+    } catch {
+      toast.error('Failed to create lesson snapshot');
+    } finally {
+      setCreatingVersion(false);
+    }
+  };
+
+  const handleRestoreVersion = async () => {
+    if (!selectedVersionId) return;
+    setConfirmation({
+      title: 'Restore selected lesson snapshot?',
+      description:
+        'This will replace current lesson details and content blocks with the selected snapshot.',
+      confirmLabel: 'Restore Snapshot',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          setRestoringVersion(true);
+          await lessonService.restoreVersion(lessonId, selectedVersionId);
+          await fetchData();
+          toast.success('Lesson restored from snapshot');
+        } catch {
+          toast.error('Failed to restore lesson snapshot');
+        } finally {
+          setRestoringVersion(false);
         }
       },
     });
@@ -262,6 +327,16 @@ export default function LessonEditorPage() {
               Back
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCreateManualSnapshot}
+              disabled={creatingVersion}
+              className="teacher-button-outline rounded-xl font-black"
+            >
+              <History className="h-4 w-4" />
+              {creatingVersion ? 'Saving Snapshot...' : 'Save Snapshot'}
+            </Button>
+            <Button
               variant={lesson.isDraft ? 'teacher' : 'secondary'}
               onClick={handlePublish}
               disabled={!lesson.isDraft}
@@ -280,6 +355,40 @@ export default function LessonEditorPage() {
           </>
         )}
       >
+        <TeacherSectionCard
+          title="Lesson Version Management"
+          description="Use snapshots to rollback lesson details and block content safely."
+        >
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="space-y-2">
+              <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Available Snapshots</Label>
+              <select
+                value={selectedVersionId}
+                onChange={(event) => setSelectedVersionId(event.target.value)}
+                className="teacher-input h-12 w-full rounded-2xl"
+              >
+                {versions.length === 0 ? (
+                  <option value="">No snapshots yet</option>
+                ) : (
+                  versions.map((version) => (
+                    <option key={version.id} value={version.id}>
+                      v{version.versionNumber} • {version.type.toUpperCase()} • {new Date(version.createdAt).toLocaleString()}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            <Button
+              onClick={handleRestoreVersion}
+              disabled={!selectedVersionId || restoringVersion || versions.length === 0}
+              className="teacher-button-solid rounded-xl font-black"
+            >
+              <RotateCcw className="h-4 w-4" />
+              {restoringVersion ? 'Restoring...' : 'Restore Snapshot'}
+            </Button>
+          </div>
+        </TeacherSectionCard>
+
         <TeacherSectionCard
           title="Lesson Details"
           description="Keep the lesson title and overview clear before you work through the learning blocks."

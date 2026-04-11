@@ -12,6 +12,7 @@ import type {
   BulkLessonIdsDto,
   LessonCompletion,
   LessonCompleteResponseData,
+  LessonVersion,
   LessonsResponse,
   LessonListQuery,
 } from '@/types/lesson';
@@ -125,6 +126,32 @@ export const lessonService = {
   /** GET /lessons/:lessonId/completion-status — Student */
   async getCompletionStatus(lessonId: string): Promise<{ success: boolean; data: { completed: boolean; completedAt?: string } }> {
     const { data } = await api.get(`/lessons/${lessonId}/completion-status`);
+    return data;
+  },
+
+  /** GET /lessons/:id/versions — Admin, Teacher */
+  async getVersions(
+    lessonId: string,
+  ): Promise<{ success: boolean; message: string; data: LessonVersion[]; count: number }> {
+    const { data } = await api.get(`/lessons/${lessonId}/versions`);
+    return data;
+  },
+
+  /** POST /lessons/:id/versions — Admin, Teacher */
+  async createVersion(
+    lessonId: string,
+    dto?: { label?: string },
+  ): Promise<{ success: boolean; message: string; data: LessonVersion[]; count: number }> {
+    const { data } = await api.post(`/lessons/${lessonId}/versions`, dto ?? {});
+    return data;
+  },
+
+  /** POST /lessons/:id/versions/:versionId/restore — Admin, Teacher */
+  async restoreVersion(
+    lessonId: string,
+    versionId: string,
+  ): Promise<{ success: boolean; message: string; data: Lesson }> {
+    const { data } = await api.post(`/lessons/${lessonId}/versions/${versionId}/restore`);
     return data;
   },
 };

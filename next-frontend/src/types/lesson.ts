@@ -112,3 +112,14 @@ export interface LessonCompleteResponseData {
   lessonPoints?: number;
   moduleProgress?: LessonCompletionModuleProgress | null;
 }
+
+export interface LessonVersion {
+  id: string;
+  lessonId: string;
+  versionNumber: number;
+  type: 'auto' | 'manual' | 'restore';
+  label?: string | null;
+  createdBy?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+}

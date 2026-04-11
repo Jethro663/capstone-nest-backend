@@ -350,7 +350,7 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('getCandidates', () => {
-    it('returns an empty array when no users have the student role', async () => {
+    it('returns an empty paginated result when no users have the student role', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
 
       // Role lookup returns nothing
@@ -358,7 +358,13 @@ describe('SectionsService', () => {
 
       const result = await service.getCandidates(SECTION_ID);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
     });
 
     it('executes a SQL-level join query and returns candidate rows', async () => {
@@ -380,14 +386,22 @@ describe('SectionsService', () => {
 
       const result = await service.getCandidates(SECTION_ID);
 
-      expect(result).toEqual([
-        {
-          ...candidateRow,
-          hasActiveSectionEnrollment: false,
-          enrolledSectionId: null,
-          enrolledSectionName: null,
-        },
-      ]);
+      expect(result).toEqual({
+        data: [
+          {
+            ...candidateRow,
+            isEligible: true,
+            eligibilityReason: null,
+            hasActiveSectionEnrollment: false,
+            enrolledSectionId: null,
+            enrolledSectionName: null,
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
     });
 
     it('throws NotFoundException when the section does not exist', async () => {

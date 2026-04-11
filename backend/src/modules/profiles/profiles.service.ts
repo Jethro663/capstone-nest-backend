@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import {
+  assessments,
   assessmentAttempts,
+  classes,
   classRecordFinalGrades,
   enrollments,
   interventionCases,
   lxpProgress,
   performanceSnapshots,
+  sections,
   studentProfiles,
 } from '../../drizzle/schema';
 import { UpdateProfileDto } from './DTO/update-profile.dto';
@@ -302,6 +305,199 @@ export class ProfilesService {
         computedAt: row.computedAt,
         classRecord: row.classRecord,
       })),
+    };
+  }
+
+  async getTranscript(
+    userId: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      status?: 'all' | 'enrolled' | 'dropped' | 'completed';
+      search?: string;
+    },
+  ) {
+    const page = Math.max(1, Number(filters?.page ?? 1));
+    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20), 100));
+    const offset = (page - 1) * limit;
+    const status = filters?.status ?? 'all';
+    const search = filters?.search?.trim();
+
+    const whereConditions = [eq(enrollments.studentId, userId)];
+    if (status !== 'all') {
+      whereConditions.push(eq(enrollments.status, status));
+    }
+
+    const searchCondition = search
+      ? or(
+          ilike(classes.subjectName, `%${search}%`),
+          ilike(classes.subjectCode, `%${search}%`),
+          ilike(sections.name, `%${search}%`),
+          ilike(sections.schoolYear, `%${search}%`),
+        )
+      : undefined;
+
+    const [rows, totalRows] = await Promise.all([
+      this.db
+        .select({
+          id: enrollments.id,
+          studentId: enrollments.studentId,
+          classId: enrollments.classId,
+          sectionId: enrollments.sectionId,
+          status: enrollments.status,
+          enrolledAt: enrollments.enrolledAt,
+          class: {
+            id: classes.id,
+            subjectName: classes.subjectName,
+            subjectCode: classes.subjectCode,
+            schoolYear: classes.schoolYear,
+          },
+          section: {
+            id: sections.id,
+            name: sections.name,
+            gradeLevel: sections.gradeLevel,
+            schoolYear: sections.schoolYear,
+          },
+        })
+        .from(enrollments)
+        .leftJoin(classes, eq(classes.id, enrollments.classId))
+        .leftJoin(sections, eq(sections.id, enrollments.sectionId))
+        .where(
+          and(
+            ...whereConditions,
+            ...(searchCondition ? [searchCondition] : []),
+          ),
+        )
+        .orderBy(desc(enrollments.enrolledAt))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(enrollments)
+        .leftJoin(classes, eq(classes.id, enrollments.classId))
+        .leftJoin(sections, eq(sections.id, enrollments.sectionId))
+        .where(
+          and(
+            ...whereConditions,
+            ...(searchCondition ? [searchCondition] : []),
+          ),
+        ),
+    ]);
+
+    const total = totalRows[0]?.total ?? 0;
+    return {
+      data: rows,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  }
+
+  async getAssessmentHistory(
+    userId: string,
+    filters?: {
+      page?: number;
+      limit?: number;
+      submission?: 'all' | 'submitted' | 'in_progress';
+      search?: string;
+    },
+  ) {
+    const page = Math.max(1, Number(filters?.page ?? 1));
+    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20), 100));
+    const offset = (page - 1) * limit;
+    const submission = filters?.submission ?? 'all';
+    const search = filters?.search?.trim();
+
+    const whereConditions = [eq(assessmentAttempts.studentId, userId)];
+    if (submission === 'submitted') {
+      whereConditions.push(eq(assessmentAttempts.isSubmitted, true));
+    } else if (submission === 'in_progress') {
+      whereConditions.push(eq(assessmentAttempts.isSubmitted, false));
+    }
+
+    const searchCondition = search
+      ? or(
+          ilike(assessments.title, `%${search}%`),
+          ilike(classes.subjectName, `%${search}%`),
+          ilike(classes.subjectCode, `%${search}%`),
+        )
+      : undefined;
+
+    const [rows, totalRows] = await Promise.all([
+      this.db
+        .select({
+          id: assessmentAttempts.id,
+          assessmentId: assessmentAttempts.assessmentId,
+          attemptNumber: assessmentAttempts.attemptNumber,
+          score: assessmentAttempts.score,
+          isSubmitted: assessmentAttempts.isSubmitted,
+          submittedAt: assessmentAttempts.submittedAt,
+          startedAt: assessmentAttempts.startedAt,
+          returnedAt: assessmentAttempts.returnedAt,
+          passed: assessmentAttempts.passed,
+          assessment: {
+            id: assessments.id,
+            title: assessments.title,
+            classId: assessments.classId,
+            dueDate: assessments.dueDate,
+            quarter: assessments.quarter,
+            type: assessments.type,
+            totalPoints: assessments.totalPoints,
+            classRefId: classes.id,
+            classSubjectName: classes.subjectName,
+            classSubjectCode: classes.subjectCode,
+          },
+        })
+        .from(assessmentAttempts)
+        .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+        .leftJoin(classes, eq(classes.id, assessments.classId))
+        .where(
+          and(
+            ...whereConditions,
+            ...(searchCondition ? [searchCondition] : []),
+          ),
+        )
+        .orderBy(desc(assessmentAttempts.startedAt))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ total: sql<number>`count(*)`.mapWith(Number) })
+        .from(assessmentAttempts)
+        .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+        .leftJoin(classes, eq(classes.id, assessments.classId))
+        .where(
+          and(
+            ...whereConditions,
+            ...(searchCondition ? [searchCondition] : []),
+          ),
+        ),
+    ]);
+
+    const mappedRows = rows.map((row) => {
+      const { classRefId, classSubjectName, classSubjectCode, ...assessment } = row.assessment;
+      return {
+        ...row,
+        assessment: {
+          ...assessment,
+          class: classRefId
+            ? {
+                id: classRefId,
+                subjectName: classSubjectName,
+                subjectCode: classSubjectCode,
+              }
+            : null,
+        },
+      };
+    });
+
+    const total = totalRows[0]?.total ?? 0;
+    return {
+      data: mappedRows,
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   }
 }

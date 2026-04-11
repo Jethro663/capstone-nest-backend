@@ -7,6 +7,7 @@ import {
   Body,
   UseGuards,
   Put,
+  Query,
   ForbiddenException,
   Res,
   UploadedFile,
@@ -61,6 +62,48 @@ export class ProfilesController {
     return {
       success: true,
       data,
+    };
+  }
+
+  @Get('me/transcript')
+  @Roles(RoleName.Student)
+  async getMyTranscript(
+    @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: 'all' | 'enrolled' | 'dropped' | 'completed',
+    @Query('search') search?: string,
+  ) {
+    const data = await this.profilesService.getTranscript(user.userId, {
+      page: page ? Number.parseInt(page, 10) : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      status,
+      search,
+    });
+    return {
+      success: true,
+      ...data,
+    };
+  }
+
+  @Get('me/assessment-history')
+  @Roles(RoleName.Student)
+  async getMyAssessmentHistory(
+    @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('submission') submission?: 'all' | 'submitted' | 'in_progress',
+    @Query('search') search?: string,
+  ) {
+    const data = await this.profilesService.getAssessmentHistory(user.userId, {
+      page: page ? Number.parseInt(page, 10) : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      submission,
+      search,
+    });
+    return {
+      success: true,
+      ...data,
     };
   }
 

@@ -37,6 +37,40 @@ export const profileService = {
     return data;
   },
 
+  async getTranscript(query?: {
+    page?: number;
+    limit?: number;
+    status?: 'all' | 'enrolled' | 'dropped' | 'completed';
+    search?: string;
+  }): Promise<{
+    success: boolean;
+    data: AcademicSummary['enrollmentHistory'];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  }> {
+    const { data } = await api.get('/profiles/me/transcript', { params: query });
+    return data;
+  },
+
+  async getAssessmentHistory(query?: {
+    page?: number;
+    limit?: number;
+    submission?: 'all' | 'submitted' | 'in_progress';
+    search?: string;
+  }): Promise<{
+    success: boolean;
+    data: AcademicSummary['assessmentHistory'];
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  }> {
+    const { data } = await api.get('/profiles/me/assessment-history', { params: query });
+    return data;
+  },
+
   /** PUT /profiles/update/:userId — updates a student's profile fields */
   async update(userId: string, dto: UpdateProfileDto): Promise<UpdateProfileResponse> {
     const { data } = await api.put(`/profiles/update/${userId}`, dto);

@@ -341,10 +341,26 @@ export class SectionsService {
 
   async getCandidates(
     sectionId: string,
-    filters?: { gradeLevel?: string; search?: string },
+    filters?: {
+      gradeLevel?: string;
+      search?: string;
+      assignedSectionId?: string;
+      eligibility?: 'all' | 'eligible' | 'mismatch';
+      sortBy?:
+        | 'lastName'
+        | 'firstName'
+        | 'email'
+        | 'gradeLevel'
+        | 'lrn'
+        | 'eligibility';
+      sortDirection?: 'asc' | 'desc';
+      prioritizeEligible?: boolean;
+      page?: number;
+      limit?: number;
+    },
     requestingUser?: RequestingUser,
   ) {
-    await this.findById(sectionId, requestingUser);
+    const section = await this.findById(sectionId, requestingUser);
 
     // Build a subquery for actively-enrolled students in this section.
     // Using a subquery instead of loading all student IDs into Node.js memory:
@@ -373,6 +389,7 @@ export class SectionsService {
         ilike(users.firstName, `%${filters.search}%`),
         ilike(users.lastName, `%${filters.search}%`),
         ilike(users.email, `%${filters.search}%`),
+        ilike(studentProfiles.lrn, `%${filters.search}%`),
       );
       if (searchCond) extraConditions.push(searchCond);
     }
@@ -384,6 +401,7 @@ export class SectionsService {
         firstName: users.firstName,
         lastName: users.lastName,
         email: users.email,
+        lrn: studentProfiles.lrn,
         gradeLevel: studentProfiles.gradeLevel,
         profilePicture: studentProfiles.profilePicture,
       })
@@ -395,11 +413,16 @@ export class SectionsService {
         and(eq(roles.id, userRoles.roleId), eq(roles.name, 'student')),
       )
       .where(and(notInArray(users.id, enrolledSubquery), ...extraConditions))
-      .orderBy(users.lastName, users.firstName)
-      .limit(200);
+      .orderBy(users.lastName, users.firstName);
 
     if (results.length === 0) {
-      return [];
+      return {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: Math.max(1, Math.min(Number(filters?.limit ?? 20), 100)),
+        totalPages: 1,
+      };
     }
 
     const studentIds = results.map((student) => student.id);
@@ -432,14 +455,25 @@ export class SectionsService {
       });
     }
 
-    return results.map((candidate) => {
+    const mapped = results.map((candidate) => {
       const membership = membershipByStudentId.get(candidate.id);
       const hasActiveSectionEnrollment = Boolean(
         membership && membership.sectionId !== sectionId,
       );
+      const hasGradeMismatch = Boolean(
+        candidate.gradeLevel && candidate.gradeLevel !== section.gradeLevel,
+      );
+      const isEligible = !hasActiveSectionEnrollment && !hasGradeMismatch;
+      const eligibilityReason = hasActiveSectionEnrollment
+        ? `Already in section ${membership?.sectionName ?? 'another section'}`
+        : hasGradeMismatch
+          ? `Grade mismatch (${candidate.gradeLevel ?? 'N/A'} vs ${section.gradeLevel})`
+          : null;
 
       return {
         ...candidate,
+        isEligible,
+        eligibilityReason,
         hasActiveSectionEnrollment,
         enrolledSectionId: hasActiveSectionEnrollment
           ? membership?.sectionId ?? null
@@ -449,6 +483,68 @@ export class SectionsService {
           : null,
       };
     });
+
+    const eligibilityFilter = filters?.eligibility ?? 'all';
+    const eligibleFiltered = mapped.filter((row) => {
+      if (eligibilityFilter === 'eligible') return row.isEligible;
+      if (eligibilityFilter === 'mismatch') return !row.isEligible;
+      return true;
+    });
+
+    const sectionFiltered = filters?.assignedSectionId
+      ? eligibleFiltered.filter(
+          (row) => row.enrolledSectionId === filters.assignedSectionId,
+        )
+      : eligibleFiltered;
+
+    const sortBy = filters?.sortBy ?? 'lastName';
+    const sortDirection = filters?.sortDirection ?? 'asc';
+    const directionFactor = sortDirection === 'desc' ? -1 : 1;
+    const prioritizeEligible = filters?.prioritizeEligible !== false;
+
+    const getSortValue = (row: (typeof mapped)[number]) => {
+      switch (sortBy) {
+        case 'firstName':
+          return String(row.firstName ?? '').toLowerCase();
+        case 'email':
+          return String(row.email ?? '').toLowerCase();
+        case 'gradeLevel':
+          return String(row.gradeLevel ?? '').toLowerCase();
+        case 'lrn':
+          return String(row.lrn ?? '').toLowerCase();
+        case 'eligibility':
+          return row.isEligible ? '0' : '1';
+        case 'lastName':
+        default:
+          return String(row.lastName ?? '').toLowerCase();
+      }
+    };
+
+    const sorted = [...sectionFiltered].sort((left, right) => {
+      if (prioritizeEligible && left.isEligible !== right.isEligible) {
+        return left.isEligible ? -1 : 1;
+      }
+
+      const leftValue = getSortValue(left);
+      const rightValue = getSortValue(right);
+      if (leftValue < rightValue) return -1 * directionFactor;
+      if (leftValue > rightValue) return 1 * directionFactor;
+      return 0;
+    });
+
+    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20), 100));
+    const page = Math.max(1, Number(filters?.page ?? 1));
+    const total = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const offset = (page - 1) * limit;
+
+    return {
+      data: sorted.slice(offset, offset + limit),
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   // ─── addStudentsToSection ─────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import {
   IsArray,
   ArrayNotEmpty,
   ValidateNested,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -142,4 +143,11 @@ export class BulkLessonIdsDto {
 export class BulkLessonDraftStateDto extends BulkLessonIdsDto {
   @IsBoolean()
   isDraft: boolean;
+}
+
+export class CreateLessonVersionDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  label?: string;
 }

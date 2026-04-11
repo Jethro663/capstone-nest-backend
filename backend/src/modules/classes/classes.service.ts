@@ -2010,6 +2010,16 @@ export class ClassesService {
       gradeLevel?: string;
       sectionId?: string;
       search?: string;
+      eligibility?: 'all' | 'eligible' | 'mismatch';
+      sortBy?:
+        | 'lastName'
+        | 'firstName'
+        | 'email'
+        | 'gradeLevel'
+        | 'lrn'
+        | 'eligibility';
+      sortDirection?: 'asc' | 'desc';
+      prioritizeEligible?: boolean;
       page?: number;
       limit?: number;
     },
@@ -2071,12 +2081,6 @@ export class ClassesService {
 
     const whereClause = and(...whereConditions);
 
-    const [totalRow] = await this.db
-      .select({ total: count() })
-      .from(users)
-      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
-      .where(whereClause);
-
     const students = await this.db
       .select({
         id: users.id,
@@ -2092,9 +2096,7 @@ export class ClassesService {
       .from(users)
       .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
       .where(whereClause)
-      .orderBy(users.lastName, users.firstName)
-      .limit(limit)
-      .offset(offset);
+      .orderBy(users.lastName, users.firstName);
 
     const studentIds = students.map((student) => student.id);
 
@@ -2193,17 +2195,62 @@ export class ClassesService {
       };
     });
 
+    const eligibility = filters?.eligibility ?? 'all';
+    const filteredByEligibility = data.filter((student) => {
+      if (eligibility === 'eligible') return student.isEligible;
+      if (eligibility === 'mismatch') return !student.isEligible;
+      return true;
+    });
+
+    const sortBy = filters?.sortBy ?? 'lastName';
+    const sortDirection = filters?.sortDirection ?? 'asc';
+    const directionFactor = sortDirection === 'desc' ? -1 : 1;
+    const prioritizeEligible = filters?.prioritizeEligible !== false;
+
+    const getSortValue = (student: (typeof filteredByEligibility)[number]) => {
+      switch (sortBy) {
+        case 'firstName':
+          return String(student.firstName ?? '').toLowerCase();
+        case 'email':
+          return String(student.email ?? '').toLowerCase();
+        case 'gradeLevel':
+          return String(student.gradeLevel ?? '').toLowerCase();
+        case 'lrn':
+          return String(student.lrn ?? '').toLowerCase();
+        case 'eligibility':
+          return student.isEligible ? '0' : '1';
+        case 'lastName':
+        default:
+          return String(student.lastName ?? '').toLowerCase();
+      }
+    };
+
+    const sorted = [...filteredByEligibility].sort((left, right) => {
+      if (prioritizeEligible && left.isEligible !== right.isEligible) {
+        return left.isEligible ? -1 : 1;
+      }
+      const leftValue = getSortValue(left);
+      const rightValue = getSortValue(right);
+      if (leftValue < rightValue) return -1 * directionFactor;
+      if (leftValue > rightValue) return 1 * directionFactor;
+      return 0;
+    });
+
+    const total = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const paged = sorted.slice(offset, offset + limit);
+
     return {
       classContext: {
         classId: classRecord.id,
         sectionId: classRecord.sectionId,
         classGradeLevel,
       },
-      data,
-      total: Number(totalRow?.total ?? 0),
+      data: paged,
+      total,
       page,
       limit,
-      totalPages: Math.max(1, Math.ceil(Number(totalRow?.total ?? 0) / limit)),
+      totalPages,
     };
   }
 
