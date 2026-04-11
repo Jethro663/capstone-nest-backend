@@ -23,7 +23,7 @@ describe('lxpService', () => {
       },
     });
 
-    const result = await lxpService.getEvaluations('lxp');
+    const result = await lxpService.getEvaluations({ targetModule: 'lxp' });
 
     expect(mockedApi.get).toHaveBeenCalledWith('/lxp/evaluations', {
       params: { targetModule: 'lxp' },
@@ -84,6 +84,31 @@ describe('lxpService', () => {
     });
   });
 
+  it('requests evaluation list with ai mentor metadata filters when provided', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: { count: 0, rows: [] },
+      },
+    });
+
+    await lxpService.getEvaluations({
+      targetModule: 'ai_mentor',
+      aiClassId: 'class-1',
+      aiSessionType: 'mistake_explanation',
+      aiSourceFlow: 'assessment_results',
+    });
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/lxp/evaluations', {
+      params: {
+        targetModule: 'ai_mentor',
+        aiClassId: 'class-1',
+        aiSessionType: 'mistake_explanation',
+        aiSourceFlow: 'assessment_results',
+      },
+    });
+  });
+
   it('normalizes non-envelope evaluation submit responses', async () => {
     mockedApi.post.mockResolvedValue({
       data: {
@@ -98,6 +123,10 @@ describe('lxpService', () => {
       functionalityScore: 4,
       performanceScore: 4,
       satisfactionScore: 5,
+      aiContextMetadata: {
+        sessionType: 'mistake_explanation',
+        attemptId: 'attempt-1',
+      },
     });
 
     expect(mockedApi.post).toHaveBeenCalledWith('/lxp/evaluations', {
@@ -106,6 +135,10 @@ describe('lxpService', () => {
       functionalityScore: 4,
       performanceScore: 4,
       satisfactionScore: 5,
+      aiContextMetadata: {
+        sessionType: 'mistake_explanation',
+        attemptId: 'attempt-1',
+      },
     });
     expect(result).toEqual({
       data: {
@@ -139,5 +172,76 @@ describe('lxpService', () => {
         note: 'AI adjusted plan',
       },
     );
+  });
+
+  it('loads teacher pending intervention count', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          pendingCount: 3,
+          classBreakdown: [
+            {
+              classId: 'class-1',
+              subjectName: 'Math',
+              subjectCode: 'MATH-7',
+              pendingCount: 3,
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await lxpService.getTeacherPendingInterventionCount();
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/lxp/teacher/interventions/pending-count',
+    );
+    expect(result.data.pendingCount).toBe(3);
+  });
+
+  it('loads teacher intervention case detail payload', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: 'case-1',
+          classId: 'class-1',
+          studentId: 'student-1',
+          status: 'pending',
+          openedAt: '2026-01-01T00:00:00.000Z',
+          closedAt: null,
+          triggerScore: 55,
+          thresholdApplied: 74,
+          note: null,
+          completion: {
+            totalCheckpoints: 2,
+            completedCheckpoints: 1,
+            completionPercent: 50,
+          },
+          progress: {
+            xpTotal: 20,
+            starsTotal: 0,
+            streakDays: 1,
+            checkpointsCompleted: 1,
+            lastActivityAt: null,
+          },
+          assignments: [],
+          latestSnapshot: null,
+          weakConcepts: [],
+          recentRiskTransitions: [],
+          links: {
+            performancePage: '/dashboard/teacher/performance',
+          },
+        },
+      },
+    });
+
+    const result = await lxpService.getTeacherCaseDetail('case-1');
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/lxp/teacher/interventions/case-1/detail',
+    );
+    expect(result.data.id).toBe('case-1');
   });
 });

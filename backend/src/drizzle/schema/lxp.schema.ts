@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  json,
   numeric,
   pgEnum,
   pgTable,
@@ -31,6 +32,11 @@ export const systemEvaluationTargetEnum = pgEnum('system_evaluation_target', [
   'ai_mentor',
   'intervention',
   'overall',
+]);
+
+export const aiPolicySourceScopeEnum = pgEnum('ai_policy_source_scope', [
+  'recommended_only',
+  'class_materials',
 ]);
 
 export const interventionCases = pgTable(
@@ -146,6 +152,7 @@ export const systemEvaluations = pgTable(
     performanceScore: integer('performance_score').notNull(),
     satisfactionScore: integer('satisfaction_score').notNull(),
     feedback: text('feedback'),
+    aiContextMetadata: json('ai_context_metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
@@ -154,6 +161,26 @@ export const systemEvaluations = pgTable(
       table.createdAt,
     ),
     userIdx: index('system_evaluations_submitted_by_idx').on(table.submittedBy),
+  }),
+);
+
+export const classAiPolicies = pgTable(
+  'class_ai_policies',
+  {
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    mentorExplainEnabled: boolean('mentor_explain_enabled').notNull().default(true),
+    maxFollowUpTurns: integer('max_follow_up_turns').notNull().default(3),
+    sourceScope: aiPolicySourceScopeEnum('source_scope').notNull().default('class_materials'),
+    strictGrounding: boolean('strict_grounding').notNull().default(false),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.classId] }),
+    updatedByIdx: index('class_ai_policies_updated_by_idx').on(table.updatedBy),
   }),
 );
 
@@ -206,6 +233,20 @@ export const systemEvaluationsRelations = relations(
   ({ one }) => ({
     submitter: one(users, {
       fields: [systemEvaluations.submittedBy],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const classAiPoliciesRelations = relations(
+  classAiPolicies,
+  ({ one }) => ({
+    class: one(classes, {
+      fields: [classAiPolicies.classId],
+      references: [classes.id],
+    }),
+    updatedByUser: one(users, {
+      fields: [classAiPolicies.updatedBy],
       references: [users.id],
     }),
   }),

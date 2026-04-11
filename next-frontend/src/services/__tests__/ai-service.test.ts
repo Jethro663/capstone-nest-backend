@@ -145,6 +145,12 @@ describe('aiService', () => {
     expect(result.data.result.structuredOutput.aiSummary.teacherActions).toEqual(
       [],
     );
+    expect(
+      result.data.result.structuredOutput.suggestedAssignmentPayload,
+    ).toEqual({
+      lessonIds: [],
+      assessmentIds: [],
+    });
   });
 
   it('normalizes cached degraded job-result payloads that already include job/result objects', async () => {

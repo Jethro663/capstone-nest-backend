@@ -29,6 +29,7 @@ jest.mock("@/services/lxp-service", () => ({
     getClassReport: jest.fn(),
     resolveIntervention: jest.fn(),
     activateIntervention: jest.fn(),
+    getTeacherCaseDetail: jest.fn(),
   },
 }));
 
@@ -102,6 +103,80 @@ describe("TeacherInterventionsPage", () => {
         leaderboard: [],
       },
     } as any);
+    mockedLxpService.getTeacherCaseDetail.mockResolvedValue({
+      data: {
+        id: "case-1",
+        classId: "class-1",
+        studentId: "student-1",
+        student: {
+          id: "student-1",
+          firstName: "Liam",
+          lastName: "Navarro",
+          email: "liam@example.com",
+        },
+        status: "pending",
+        openedAt: "2026-01-01T00:00:00.000Z",
+        closedAt: null,
+        triggerScore: 50,
+        thresholdApplied: 74,
+        note: null,
+        completion: {
+          totalCheckpoints: 2,
+          completedCheckpoints: 0,
+          completionPercent: 0,
+        },
+        progress: {
+          xpTotal: 0,
+          starsTotal: 0,
+          streakDays: 0,
+          checkpointsCompleted: 0,
+          lastActivityAt: null,
+        },
+        assignments: [
+          {
+            id: "assignment-1",
+            type: "lesson_review",
+            label: "Review: Fractions",
+            order: 1,
+            isCompleted: false,
+            completedAt: null,
+            xpAwarded: 20,
+          },
+        ],
+        latestSnapshot: {
+          assessmentAverage: 55,
+          classRecordAverage: 52,
+          blendedScore: 53,
+          thresholdApplied: 74,
+          isAtRisk: true,
+          lastComputedAt: "2026-01-02T00:00:00.000Z",
+        },
+        weakConcepts: [
+          {
+            concept: "Fractions",
+            masteryScore: 38,
+            evidenceCount: 4,
+            errorCount: 3,
+            updatedAt: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+        recentRiskTransitions: [
+          {
+            id: "log-1",
+            previousIsAtRisk: false,
+            currentIsAtRisk: true,
+            blendedScore: 53,
+            thresholdApplied: 74,
+            triggerSource: "performance_status_changed",
+            createdAt: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+        links: {
+          performancePage:
+            "/dashboard/teacher/performance?classId=class-1&studentId=student-1",
+        },
+      },
+    } as any);
   });
 
   it("hides AI Plan action when queue entry is not AI-eligible", async () => {
@@ -115,5 +190,20 @@ describe("TeacherInterventionsPage", () => {
       screen.queryByRole("button", { name: "AI Plan" }),
     ).not.toBeInTheDocument();
   });
-});
 
+  it("opens student detail side panel from queue action", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    screen.getByRole("button", { name: "View" }).click();
+
+    expect(
+      await screen.findByText("Intervention Student Detail"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Review: Fractions")).toBeInTheDocument();
+    expect(mockedLxpService.getTeacherCaseDetail).toHaveBeenCalledWith("case-1");
+  });
+});

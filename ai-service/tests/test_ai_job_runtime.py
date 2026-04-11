@@ -1,6 +1,12 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
-from app.main import _run_with_retries, _runtime_progress_for_status
+from app.main import (
+    _normalize_intervention_structured_output,
+    _run_with_retries,
+    _runtime_progress_for_status,
+    _should_mark_job_stale,
+)
 
 
 class AiJobRuntimeTests(unittest.IsolatedAsyncioTestCase):
@@ -58,6 +64,64 @@ class AiJobRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaisesRegex(RuntimeError, "persistent"):
             await _run_with_retries(operation, max_attempts=3, delay_seconds=0)
+
+    def test_normalize_intervention_output_ensures_assignment_payload(self) -> None:
+        normalized = _normalize_intervention_structured_output(
+            {"caseId": "case-1", "suggestedAssignmentPayload": None}
+        )
+        self.assertEqual(
+            normalized["suggestedAssignmentPayload"],
+            {"lessonIds": [], "assessmentIds": []},
+        )
+
+        normalized_with_values = _normalize_intervention_structured_output(
+            {
+                "caseId": "case-2",
+                "suggestedAssignmentPayload": {
+                    "lessonIds": ["lesson-1", None],
+                    "assessmentIds": ["assessment-1"],
+                    "note": "Keep this note",
+                },
+            }
+        )
+        self.assertEqual(
+            normalized_with_values["suggestedAssignmentPayload"]["lessonIds"],
+            ["lesson-1"],
+        )
+        self.assertEqual(
+            normalized_with_values["suggestedAssignmentPayload"]["assessmentIds"],
+            ["assessment-1"],
+        )
+        self.assertEqual(
+            normalized_with_values["suggestedAssignmentPayload"]["note"],
+            "Keep this note",
+        )
+
+    def test_should_mark_job_stale_for_pending_jobs_with_old_runtime_heartbeat(self) -> None:
+        stale_runtime = {
+            "updatedAt": (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+        }
+        self.assertTrue(
+            _should_mark_job_stale(
+                status="pending",
+                updated_at=datetime.now(timezone.utc),
+                runtime=stale_runtime,
+                stale_after_seconds=60,
+            )
+        )
+
+    def test_should_not_mark_job_stale_for_recent_runtime_heartbeat(self) -> None:
+        fresh_runtime = {
+            "updatedAt": (datetime.now(timezone.utc) - timedelta(seconds=20)).isoformat()
+        }
+        self.assertFalse(
+            _should_mark_job_stale(
+                status="processing",
+                updated_at=datetime.now(timezone.utc),
+                runtime=fresh_runtime,
+                stale_after_seconds=120,
+            )
+        )
 
 
 if __name__ == "__main__":

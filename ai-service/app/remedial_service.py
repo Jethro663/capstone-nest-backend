@@ -164,6 +164,18 @@ async def recommend_intervention_case(
                 "chunkId": chunk["id"],
                 "scoreBreakdown": chunk.get("scoreBreakdown") or {},
                 "sourceReference": chunk.get("sourceReference"),
+                "confidence": round(
+                    float(chunk.get("scoreBreakdown", {}).get("combined", 0.62))
+                    if isinstance(chunk.get("scoreBreakdown"), dict)
+                    else 0.62,
+                    2,
+                ),
+                "evidence": {
+                    "policy": "retrieval.remedial",
+                    "selectionReason": chunk.get("selectionReason"),
+                    "chunkId": chunk.get("id"),
+                    "sourceReference": chunk.get("sourceReference"),
+                },
             }
         )
         if len(recommended_lessons) >= 3:
@@ -177,19 +189,83 @@ async def recommend_intervention_case(
             WHERE class_id = :classId
               AND is_published = true
             ORDER BY created_at DESC
-            LIMIT 3
+            LIMIT 12
             """
         ),
         {"classId": str(intervention_case["class_id"])},
     )
-    recommended_assessments = [
+    assessment_candidates = [
         {
             "assessmentId": str(row["id"]),
             "title": row["title"],
             "reason": "Recent published assessment available for retry and checking mastery.",
+            "confidence": 0.45,
+            "evidence": {
+                "policy": "class.published.fallback",
+                "conceptMatches": [],
+            },
         }
         for row in assessment_rows.mappings()
-    ][:2]
+    ]
+    concept_rows = await db.execute(
+        sa_text(
+            """
+            SELECT assessment_id, concept_tags
+            FROM assessment_questions
+            WHERE assessment_id = ANY(:assessmentIds::uuid[])
+            """
+        ),
+        {
+            "assessmentIds": [
+                candidate["assessmentId"]
+                for candidate in assessment_candidates
+                if candidate["assessmentId"]
+            ],
+        },
+    )
+    concept_map: dict[str, set[str]] = {}
+    for row in concept_rows.mappings():
+        assessment_id = str(row.get("assessment_id") or "")
+        if not assessment_id:
+            continue
+        tags = row.get("concept_tags") or []
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except json.JSONDecodeError:
+                tags = []
+        normalized = {str(tag).strip().lower() for tag in tags if str(tag).strip()}
+        if assessment_id not in concept_map:
+            concept_map[assessment_id] = set()
+        concept_map[assessment_id].update(normalized)
+
+    weak_set = {concept.lower() for concept in weak_concepts}
+    for candidate in assessment_candidates:
+        concept_tags = concept_map.get(candidate["assessmentId"], set())
+        overlap = sorted(
+            {
+                weak
+                for weak in weak_set
+                if any(weak in tag or tag in weak for tag in concept_tags)
+            }
+        )
+        if overlap:
+            candidate["reason"] = (
+                f"Concept-aligned retry targeting: {', '.join(overlap[:2])}."
+            )
+            candidate["confidence"] = 0.7
+            candidate["evidence"] = {
+                "policy": "assessment.concept_match",
+                "conceptMatches": overlap,
+            }
+
+    concept_aligned = [
+        candidate for candidate in assessment_candidates if candidate["confidence"] > 0.6
+    ]
+    fallback_candidates = [
+        candidate for candidate in assessment_candidates if candidate["confidence"] <= 0.6
+    ]
+    recommended_assessments = (concept_aligned + fallback_candidates)[:2]
 
     lesson_evidence = "\n".join(
         f"- {item['title']}: {item['reason']}" for item in recommended_lessons
@@ -337,6 +413,28 @@ Recommended lesson evidence:
         )
         job_id = job_row.scalar_one()
 
+    suggested_assignment_payload = {
+        "lessonIds": [item["lessonId"] for item in recommended_lessons],
+        "assessmentIds": [item["assessmentId"] for item in recommended_assessments],
+        "lessonAssignments": [
+            {
+                "lessonId": item["lessonId"],
+                "xpAwarded": 20,
+                "label": f"AI plan: {item['title']}",
+            }
+            for item in recommended_lessons
+        ],
+        "assessmentAssignments": [
+            {
+                "assessmentId": item["assessmentId"],
+                "xpAwarded": 30,
+                "label": f"AI plan: {item['title']}",
+            }
+            for item in recommended_assessments
+        ],
+        "note": f"AI recommendation based on weak concepts: {', '.join(weak_concepts[:3])}",
+    }
+
     structured_output = {
         "caseId": case_id,
         "weakConcepts": weak_concepts,
@@ -344,6 +442,7 @@ Recommended lesson evidence:
         "recommendedAssessments": recommended_assessments,
         "aiSummary": ai_summary,
         "evidencePacket": evidence_packet,
+        "suggestedAssignmentPayload": suggested_assignment_payload,
         "note": note,
     }
     output_row = await db.execute(
@@ -406,9 +505,5 @@ Recommended lesson evidence:
         "recommendedAssessments": recommended_assessments,
         "aiSummary": ai_summary,
         "evidencePacket": evidence_packet,
-        "suggestedAssignmentPayload": {
-            "lessonIds": [item["lessonId"] for item in recommended_lessons],
-            "assessmentIds": [item["assessmentId"] for item in recommended_assessments],
-            "note": f"AI recommendation based on weak concepts: {', '.join(weak_concepts[:3])}",
-        },
+        "suggestedAssignmentPayload": suggested_assignment_payload,
     }

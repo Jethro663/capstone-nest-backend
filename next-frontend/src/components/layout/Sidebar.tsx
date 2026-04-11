@@ -4,6 +4,7 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
@@ -33,6 +34,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { logoutAction } from "@/lib/auth-actions";
 import { Button } from "@/components/ui/button";
 import { getProfileRoute } from "@/utils/profile";
+import { lxpService } from "@/services/lxp-service";
 import {
   normalizeDashboardRole,
   type DashboardRole,
@@ -209,6 +211,33 @@ export function Sidebar({
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ""}`.toUpperCase()
     : "U";
+  const [teacherPendingInterventionCount, setTeacherPendingInterventionCount] =
+    useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isTeacherShell) {
+      setTeacherPendingInterventionCount(0);
+      return;
+    }
+
+    void lxpService
+      .getTeacherPendingInterventionCount()
+      .then((response) => {
+        if (!mounted) return;
+        setTeacherPendingInterventionCount(
+          Math.max(0, response.data.pendingCount ?? 0),
+        );
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setTeacherPendingInterventionCount(0);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isTeacherShell, user?.id]);
 
   const handleLogout = async () => {
     await logoutAction();
@@ -399,7 +428,18 @@ export function Sidebar({
                   isStudentShell && "student-sidebar__item-icon",
                 )}
               />
-              {item.label}
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{item.label}</span>
+                {isTeacherShell &&
+                item.href === "/dashboard/teacher/interventions" &&
+                teacherPendingInterventionCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    {teacherPendingInterventionCount > 99
+                      ? "99+"
+                      : teacherPendingInterventionCount}
+                  </span>
+                ) : null}
+              </span>
             </button>
           );
         })}

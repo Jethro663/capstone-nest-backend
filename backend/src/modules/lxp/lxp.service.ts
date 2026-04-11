@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, or } from 'drizzle-orm';
+import { SQL, and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -17,6 +17,8 @@ import {
   lessons,
   lxpProgress,
   performanceSnapshots,
+  performanceLogs,
+  studentConceptMastery,
   systemEvaluationTargetEnum,
   systemEvaluations,
   users,
@@ -24,6 +26,7 @@ import {
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import {
   AssignInterventionDto,
+  ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
   SubmitSystemEvaluationDto,
 } from './dto/lxp.dto';
@@ -1722,6 +1725,56 @@ export class LxpService {
     return this.getTeacherQueue(interventionCase.classId, user);
   }
 
+  async getTeacherPendingInterventionCount(user: UserContext) {
+    const classRows = await this.db.query.classes.findMany({
+      where: this.isAdmin(user.roles)
+        ? undefined
+        : eq(classes.teacherId, user.userId),
+      columns: {
+        id: true,
+        subjectName: true,
+        subjectCode: true,
+      },
+    });
+
+    if (classRows.length === 0) {
+      return {
+        pendingCount: 0,
+        classBreakdown: [],
+      };
+    }
+
+    const classIds = classRows.map((row) => row.id);
+    const pendingRows = await this.db.query.interventionCases.findMany({
+      where: and(
+        inArray(interventionCases.classId, classIds),
+        eq(interventionCases.status, 'pending'),
+      ),
+      columns: {
+        id: true,
+        classId: true,
+      },
+    });
+
+    const countsByClassId = new Map<string, number>();
+    for (const row of pendingRows) {
+      countsByClassId.set(row.classId, (countsByClassId.get(row.classId) ?? 0) + 1);
+    }
+
+    return {
+      pendingCount: pendingRows.length,
+      classBreakdown: classRows
+        .map((cls) => ({
+          classId: cls.id,
+          subjectName: cls.subjectName,
+          subjectCode: cls.subjectCode,
+          pendingCount: countsByClassId.get(cls.id) ?? 0,
+        }))
+        .filter((row) => row.pendingCount > 0)
+        .sort((a, b) => b.pendingCount - a.pendingCount),
+    };
+  }
+
   async activateIntervention(caseId: string, user: UserContext) {
     const interventionCase = await this.db.query.interventionCases.findFirst({
       where: eq(interventionCases.id, caseId),
@@ -1843,6 +1896,203 @@ export class LxpService {
             checkpointsCompleted: 0,
             lastActivityAt: null,
           },
+    };
+  }
+
+  async getTeacherInterventionCaseDetail(caseId: string, user: UserContext) {
+    const interventionCase = await this.db.query.interventionCases.findFirst({
+      where: eq(interventionCases.id, caseId),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+    if (!interventionCase)
+      throw new NotFoundException('Intervention case not found');
+    await this.assertTeacherClassAccess(interventionCase.classId, user);
+
+    const [assignmentRows, progress, snapshot, conceptRows, recentLogs] =
+      await Promise.all([
+        this.db.query.interventionAssignments.findMany({
+          where: eq(interventionAssignments.caseId, interventionCase.id),
+          columns: {
+            id: true,
+            assignmentType: true,
+            checkpointLabel: true,
+            orderIndex: true,
+            isCompleted: true,
+            completedAt: true,
+            xpAwarded: true,
+          },
+          with: {
+            lesson: {
+              columns: {
+                id: true,
+                title: true,
+                description: true,
+              },
+            },
+            assessment: {
+              columns: {
+                id: true,
+                title: true,
+                type: true,
+                passingScore: true,
+                dueDate: true,
+              },
+            },
+          },
+          orderBy: [asc(interventionAssignments.orderIndex)],
+        }),
+        this.db.query.lxpProgress.findFirst({
+          where: and(
+            eq(lxpProgress.classId, interventionCase.classId),
+            eq(lxpProgress.studentId, interventionCase.studentId),
+          ),
+          columns: {
+            xpTotal: true,
+            streakDays: true,
+            checkpointsCompleted: true,
+            lastActivityAt: true,
+          },
+        }),
+        this.db.query.performanceSnapshots.findFirst({
+          where: and(
+            eq(performanceSnapshots.classId, interventionCase.classId),
+            eq(performanceSnapshots.studentId, interventionCase.studentId),
+          ),
+          columns: {
+            assessmentAverage: true,
+            classRecordAverage: true,
+            blendedScore: true,
+            isAtRisk: true,
+            thresholdApplied: true,
+            lastComputedAt: true,
+          },
+        }),
+        this.db.query.studentConceptMastery.findMany({
+          where: and(
+            eq(studentConceptMastery.classId, interventionCase.classId),
+            eq(studentConceptMastery.studentId, interventionCase.studentId),
+          ),
+          columns: {
+            conceptKey: true,
+            evidenceCount: true,
+            errorCount: true,
+            masteryScore: true,
+            updatedAt: true,
+          },
+          orderBy: [
+            asc(studentConceptMastery.masteryScore),
+            desc(studentConceptMastery.errorCount),
+            desc(studentConceptMastery.updatedAt),
+          ],
+          limit: 6,
+        }),
+        this.db.query.performanceLogs.findMany({
+          where: and(
+            eq(performanceLogs.classId, interventionCase.classId),
+            eq(performanceLogs.studentId, interventionCase.studentId),
+          ),
+          columns: {
+            id: true,
+            previousIsAtRisk: true,
+            currentIsAtRisk: true,
+            blendedScore: true,
+            thresholdApplied: true,
+            triggerSource: true,
+            createdAt: true,
+          },
+          orderBy: [desc(performanceLogs.createdAt)],
+          limit: 6,
+        }),
+      ]);
+
+    const totalCheckpoints = assignmentRows.length;
+    const completedCheckpoints = assignmentRows.filter(
+      (row) => row.isCompleted,
+    ).length;
+
+    return {
+      id: interventionCase.id,
+      classId: interventionCase.classId,
+      studentId: interventionCase.studentId,
+      student: interventionCase.student,
+      status: interventionCase.status,
+      openedAt: interventionCase.openedAt,
+      closedAt: interventionCase.closedAt,
+      triggerScore: this.toNumber(interventionCase.triggerScore),
+      thresholdApplied:
+        this.toNumber(interventionCase.thresholdApplied) ??
+        INTERVENTION_THRESHOLD,
+      note: interventionCase.note,
+      completion: {
+        totalCheckpoints,
+        completedCheckpoints,
+        completionPercent:
+          totalCheckpoints > 0
+            ? Math.round((completedCheckpoints / totalCheckpoints) * 100)
+            : 0,
+      },
+      progress: progress
+        ? {
+            ...progress,
+            starsTotal: this.xpToStars(progress.xpTotal),
+          }
+        : {
+            xpTotal: 0,
+            starsTotal: 0,
+            streakDays: 0,
+            checkpointsCompleted: 0,
+            lastActivityAt: null,
+          },
+      assignments: assignmentRows.map((row) => ({
+        id: row.id,
+        type: row.assignmentType,
+        label: row.checkpointLabel,
+        order: row.orderIndex,
+        isCompleted: row.isCompleted,
+        completedAt: row.completedAt,
+        xpAwarded: row.xpAwarded,
+        lesson: row.lesson,
+        assessment: row.assessment,
+      })),
+      latestSnapshot: snapshot
+        ? {
+            assessmentAverage: this.toNumber(snapshot.assessmentAverage),
+            classRecordAverage: this.toNumber(snapshot.classRecordAverage),
+            blendedScore: this.toNumber(snapshot.blendedScore),
+            thresholdApplied:
+              this.toNumber(snapshot.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+            isAtRisk: snapshot.isAtRisk,
+            lastComputedAt: snapshot.lastComputedAt,
+          }
+        : null,
+      weakConcepts: conceptRows.map((row) => ({
+        concept: row.conceptKey,
+        masteryScore: row.masteryScore,
+        evidenceCount: row.evidenceCount,
+        errorCount: row.errorCount,
+        updatedAt: row.updatedAt,
+      })),
+      recentRiskTransitions: recentLogs.map((row) => ({
+        id: row.id,
+        previousIsAtRisk: row.previousIsAtRisk,
+        currentIsAtRisk: row.currentIsAtRisk,
+        blendedScore: this.toNumber(row.blendedScore),
+        thresholdApplied: this.toNumber(row.thresholdApplied),
+        triggerSource: row.triggerSource,
+        createdAt: row.createdAt,
+      })),
+      links: {
+        performancePage: `/dashboard/teacher/performance?classId=${interventionCase.classId}&studentId=${interventionCase.studentId}`,
+      },
     };
   }
 
@@ -1969,6 +2219,7 @@ export class LxpService {
         performanceScore: dto.performanceScore,
         satisfactionScore: dto.satisfactionScore,
         feedback: dto.feedback ?? null,
+        aiContextMetadata: dto.aiContextMetadata ?? null,
       })
       .returning();
 
@@ -1984,19 +2235,24 @@ export class LxpService {
         performanceScore: dto.performanceScore,
         satisfactionScore: dto.satisfactionScore,
         hasFeedback: Boolean(dto.feedback?.trim()),
+        hasAiContextMetadata: Boolean(dto.aiContextMetadata),
       },
     });
 
     return created;
   }
 
-  async listSystemEvaluations(user: UserContext, targetModule?: string) {
+  async listSystemEvaluations(
+    user: UserContext,
+    query: ListSystemEvaluationsQueryDto = {},
+  ) {
     if (!this.isAdmin(user.roles) && !user.roles.includes('teacher')) {
       throw new ForbiddenException(
         'Only teachers and admins can view evaluation results.',
       );
     }
 
+    const targetModule = query.targetModule;
     let targetFilter: SystemEvaluationTarget | undefined;
     if (targetModule !== undefined) {
       if (
@@ -2011,10 +2267,28 @@ export class LxpService {
       targetFilter = targetModule as SystemEvaluationTarget;
     }
 
+    const conditions: SQL[] = [];
+    if (targetFilter) {
+      conditions.push(eq(systemEvaluations.targetModule, targetFilter));
+    }
+    if (query.aiClassId) {
+      conditions.push(
+        sql`${systemEvaluations.aiContextMetadata} ->> 'classId' = ${query.aiClassId}`,
+      );
+    }
+    if (query.aiSessionType) {
+      conditions.push(
+        sql`${systemEvaluations.aiContextMetadata} ->> 'sessionType' = ${query.aiSessionType}`,
+      );
+    }
+    if (query.aiSourceFlow) {
+      conditions.push(
+        sql`${systemEvaluations.aiContextMetadata} ->> 'sourceFlow' = ${query.aiSourceFlow}`,
+      );
+    }
+
     const rows = await this.db.query.systemEvaluations.findMany({
-      where: targetFilter
-        ? eq(systemEvaluations.targetModule, targetFilter)
-        : undefined,
+      where: conditions.length > 0 ? and(...conditions) : undefined,
       with: {
         submitter: {
           columns: { id: true, firstName: true, lastName: true, email: true },

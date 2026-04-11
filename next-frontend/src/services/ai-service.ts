@@ -8,6 +8,7 @@ import type {
   InterventionStructuredOutput,
   InterventionRecommendation,
   InterventionRecommendationDto,
+  ClassAiPolicy,
   MentorExplainDto,
   MentorExplainResponse,
   IndexingSummary,
@@ -18,6 +19,7 @@ import type {
   StudentTutorRecommendation,
   StudentTutorSessionResponse,
   StudentTutorSessionStartResponse,
+  UpdateClassAiPolicyDto,
 } from '@/types/ai';
 
 type Envelope<T> = {
@@ -363,5 +365,18 @@ export const aiService = {
       },
     );
     return normalizeEnvelope<StudentTutorAnswerResponse>(data);
+  },
+
+  async getTeacherClassPolicy(classId: string): Promise<Envelope<ClassAiPolicy>> {
+    const { data } = await api.get(`/ai/teacher/classes/${classId}/policy`);
+    return normalizeEnvelope<ClassAiPolicy>(data);
+  },
+
+  async updateTeacherClassPolicy(
+    classId: string,
+    payload: UpdateClassAiPolicyDto,
+  ): Promise<Envelope<ClassAiPolicy>> {
+    const { data } = await api.patch(`/ai/teacher/classes/${classId}/policy`, payload);
+    return normalizeEnvelope<ClassAiPolicy>(data);
   },
 };

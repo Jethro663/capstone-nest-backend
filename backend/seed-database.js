@@ -866,11 +866,20 @@ async function seedDatabase() {
         const score = index === 0 ? 45 : 82;
         await client.query(
           `INSERT INTO assessment_attempts (
-             id, student_id, assessment_id, attempt_number, is_submitted, submitted_at, score, passed
+             id, student_id, assessment_id, attempt_number, is_submitted, submitted_at, score, passed, is_returned, returned_at, teacher_feedback
            )
-           VALUES ($1, $2, $3, 1, true, NOW() - INTERVAL '${index + 1} day', $4, $5)
+           VALUES ($1, $2, $3, 1, true, NOW() - INTERVAL '${index + 1} day', $4, $5, true, NOW() - INTERVAL '${index} hour', $6)
            ON CONFLICT (student_id, assessment_id, attempt_number) DO NOTHING`,
-          [attemptId, studentId, assessmentId, score, score >= 75],
+          [
+            attemptId,
+            studentId,
+            assessmentId,
+            score,
+            score >= 75,
+            index === 0
+              ? 'Re-check factoring signs and sum-product pairing.'
+              : 'Good recovery. Keep your process organized.',
+          ],
         );
 
         const latestAttempt = await client.query(
@@ -962,6 +971,91 @@ async function seedDatabase() {
         [completedCaseId],
       );
 
+      const classMeta = await client.query(
+        `SELECT teacher_id FROM classes WHERE id = $1 LIMIT 1`,
+        [targetClassId],
+      );
+      const targetTeacherId = classMeta.rows[0]?.teacher_id || null;
+      if (targetTeacherId) {
+        const existingAiJob = await client.query(
+          `SELECT id
+           FROM ai_generation_jobs
+           WHERE class_id = $1
+             AND teacher_id = $2
+             AND job_type = 'remedial_plan_generation'
+             AND status IN ('completed', 'approved')
+           ORDER BY updated_at DESC
+           LIMIT 1`,
+          [targetClassId, targetTeacherId],
+        );
+        if (existingAiJob.rows.length === 0) {
+          const seededJobId = uuid();
+          const seededOutputId = uuid();
+          const runtime = {
+            progressPercent: 100,
+            statusMessage: 'Recommendation ready for teacher review',
+            retryState: { attempt: 1, maxAttempts: 3 },
+            resultSummary: {
+              outputId: seededOutputId,
+              caseId: pendingCaseId,
+            },
+          };
+          await client.query(
+            `INSERT INTO ai_generation_jobs (
+               id, job_type, class_id, teacher_id, status, source_filters, error_message, created_at, updated_at
+             )
+             VALUES ($1, 'remedial_plan_generation', $2, $3, 'completed', $4::jsonb, NULL, NOW() - INTERVAL '4 hour', NOW() - INTERVAL '3 hour')`,
+            [
+              seededJobId,
+              targetClassId,
+              targetTeacherId,
+              JSON.stringify({ caseId: pendingCaseId, runtime }),
+            ],
+          );
+          await client.query(
+            `INSERT INTO ai_generation_outputs (
+               id, job_id, output_type, target_class_id, target_teacher_id, source_filters, structured_output, status, created_at, updated_at
+             )
+             VALUES ($1, $2, 'intervention_recommendation', $3, $4, $5::jsonb, $6::jsonb, 'completed', NOW() - INTERVAL '3 hour', NOW() - INTERVAL '3 hour')`,
+            [
+              seededOutputId,
+              seededJobId,
+              targetClassId,
+              targetTeacherId,
+              JSON.stringify({ source: 'seed-fixture' }),
+              JSON.stringify({
+                caseId: pendingCaseId,
+                weakConcepts: ['quadratic formulas'],
+                recommendedLessons: [
+                  {
+                    lessonId,
+                    title: lessonTitle,
+                    reason: 'Seeded recommendation for deterministic demo readiness.',
+                    chunkId,
+                  },
+                ],
+                recommendedAssessments: [
+                  {
+                    assessmentId,
+                    title: assessmentTitle,
+                    reason: 'Seeded reassessment recommendation.',
+                  },
+                ],
+                aiSummary: {
+                  summary: 'Focus on factoring sign checks before retrying quiz items.',
+                  teacherActions: ['Assign lesson review then quick retry.'],
+                  studentFocus: ['Factoring with sign discipline.'],
+                },
+                suggestedAssignmentPayload: {
+                  lessonIds: [lessonId],
+                  assessmentIds: [assessmentId],
+                },
+              }),
+            ],
+          );
+        }
+      }
+
       await client.query(
         `INSERT INTO student_concept_mastery (
            id, student_id, class_id, concept_key, evidence_count, error_count, mastery_score, last_seen_at, created_at, updated_at
@@ -979,7 +1073,7 @@ async function seedDatabase() {
         [uuid(), studentA, targetClassId, uuid(), studentB],
       );
 
-      log('  - Seeded attempts, incorrect responses, chunks/embeddings, snapshots/logs, and intervention cases', 'success');
+      log('  - Seeded returned attempts, incorrect responses, terminal AI jobs, chunks/embeddings, snapshots/logs, and intervention cases', 'success');
     } else {
       log('  - Skipped performance fixtures: missing deterministic class/student prerequisites', 'warning');
     }

@@ -25,10 +25,12 @@ describe('LxpController', () => {
     getStudentOverview: jest.fn(),
     completeCheckpoint: jest.fn(),
     getTeacherQueue: jest.fn(),
+    getTeacherPendingInterventionCount: jest.fn(),
     assignIntervention: jest.fn(),
     activateIntervention: jest.fn(),
     resolveIntervention: jest.fn(),
     getTeacherInterventionCase: jest.fn(),
+    getTeacherInterventionCaseDetail: jest.fn(),
     getClassReport: jest.fn(),
     submitSystemEvaluation: jest.fn(),
     listSystemEvaluations: jest.fn(),
@@ -117,6 +119,53 @@ describe('LxpController', () => {
     expect(mockLxpService.submitSystemEvaluation).toHaveBeenCalledWith(
       STUDENT_USER,
       dto,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('returns pending intervention count for teacher/admin', async () => {
+    const data = {
+      pendingCount: 2,
+      classBreakdown: [
+        {
+          classId: '00000000-0000-0000-0000-000000000201',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          pendingCount: 2,
+        },
+      ],
+    };
+    mockLxpService.getTeacherPendingInterventionCount.mockResolvedValue(data);
+
+    const res = await controller.getTeacherPendingInterventionCount(
+      TEACHER_USER,
+    );
+
+    expect(mockLxpService.getTeacherPendingInterventionCount).toHaveBeenCalledWith(
+      TEACHER_USER,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('returns intervention case detail in a success envelope', async () => {
+    const data = {
+      id: '00000000-0000-0000-0000-000000000501',
+      classId: '00000000-0000-0000-0000-000000000201',
+      studentId: '00000000-0000-0000-0000-000000000101',
+      weakConcepts: [],
+      recentRiskTransitions: [],
+      assignments: [],
+    };
+    mockLxpService.getTeacherInterventionCaseDetail.mockResolvedValue(data);
+
+    const res = await controller.getTeacherInterventionCaseDetail(
+      '00000000-0000-0000-0000-000000000501',
+      TEACHER_USER,
+    );
+
+    expect(mockLxpService.getTeacherInterventionCaseDetail).toHaveBeenCalledWith(
+      '00000000-0000-0000-0000-000000000501',
+      TEACHER_USER,
     );
     expect(res).toEqual({ success: true, data });
   });

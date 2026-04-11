@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bot, Sparkles, Target, Trophy } from 'lucide-react';
+import { Bot, ExternalLink, Sparkles, Target, Trophy } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
@@ -12,6 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Table,
   TableBody,
@@ -52,6 +59,12 @@ export default function TeacherInterventionsPage() {
   const [report, setReport] = useState<LxpClassReport | null>(null);
   const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
   const [activatingCaseId, setActivatingCaseId] = useState<string | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [selectedCaseDetail, setSelectedCaseDetail] = useState<
+    Awaited<ReturnType<typeof lxpService.getTeacherCaseDetail>>['data'] | null
+  >(null);
 
   const selectedClass = useMemo(
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
@@ -123,6 +136,26 @@ export default function TeacherInterventionsPage() {
       ? `/dashboard/teacher/interventions/${caseId}?classId=${selectedClassId}`
       : `/dashboard/teacher/interventions/${caseId}`;
     router.push(target);
+  };
+
+  const handleOpenDetail = async (caseId: string) => {
+    setDetailOpen(true);
+    setSelectedCaseId(caseId);
+    setLoadingDetail(true);
+    try {
+      const detailRes = await lxpService.getTeacherCaseDetail(caseId);
+      setSelectedCaseDetail(detailRes.data);
+    } catch {
+      toast.error('Failed to load intervention case detail');
+      setSelectedCaseDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
+
+  const handleOpenPerformance = () => {
+    if (!selectedCaseDetail?.links.performancePage) return;
+    router.push(selectedCaseDetail.links.performancePage);
   };
 
   const handleActivate = async (caseId: string) => {
@@ -258,7 +291,13 @@ export default function TeacherInterventionsPage() {
                       {(queue?.queue ?? []).map((entry) => (
                         <TableRow key={entry.id} className="teacher-table-row border-white/10">
                           <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                            {studentName(entry.student ?? {})}
+                            <button
+                              type="button"
+                              onClick={() => void handleOpenDetail(entry.id)}
+                              className="text-left underline-offset-2 hover:underline"
+                            >
+                              {studentName(entry.student ?? {})}
+                            </button>
                           </TableCell>
                           <TableCell className="text-[var(--teacher-text-strong)]">
                             {entry.triggerScore !== null && entry.triggerScore !== undefined
@@ -312,6 +351,14 @@ export default function TeacherInterventionsPage() {
                                   {activatingCaseId === entry.id ? 'Activating...' : 'Activate'}
                                 </Button>
                               ) : null}
+                              <Button
+                                size="sm"
+                                variant="teacherOutline"
+                                className="rounded-lg"
+                                onClick={() => void handleOpenDetail(entry.id)}
+                              >
+                                View
+                              </Button>
                               <Button
                                 size="sm"
                                 variant="teacherOutline"
@@ -426,6 +473,153 @@ export default function TeacherInterventionsPage() {
           </TeacherSectionCard>
         </>
       ) : null}
+
+      <Sheet
+        open={detailOpen}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) {
+            setSelectedCaseId(null);
+            setSelectedCaseDetail(null);
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          className="w-full max-w-[36rem] overflow-y-auto bg-[#0f1a2b] text-white sm:max-w-[36rem]"
+        >
+          <SheetHeader>
+            <SheetTitle className="text-white">Intervention Student Detail</SheetTitle>
+            <SheetDescription className="text-[#8ea0bc]">
+              {selectedCaseDetail?.student
+                ? `${studentName(selectedCaseDetail.student)} • ${selectedCaseDetail.status}`
+                : selectedCaseId
+                  ? `Case ${selectedCaseId}`
+                  : 'Select an intervention case'}
+            </SheetDescription>
+          </SheetHeader>
+
+          {loadingDetail ? (
+            <div className="mt-6 space-y-3">
+              <Skeleton className="h-24 rounded-lg bg-white/10" />
+              <Skeleton className="h-32 rounded-lg bg-white/10" />
+              <Skeleton className="h-32 rounded-lg bg-white/10" />
+            </div>
+          ) : !selectedCaseDetail ? (
+            <div className="mt-6 rounded-lg border border-white/10 p-4 text-sm text-[#8ea0bc]">
+              No case detail available.
+            </div>
+          ) : (
+            <div className="mt-6 space-y-4 text-sm">
+              <div className="rounded-lg border border-white/10 p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Current Status</p>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[#8ea0bc]">Case status</p>
+                    <p className="font-semibold">{selectedCaseDetail.status}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#8ea0bc]">Completion</p>
+                    <p className="font-semibold">{selectedCaseDetail.completion.completionPercent}%</p>
+                  </div>
+                  <div>
+                    <p className="text-[#8ea0bc]">Trigger</p>
+                    <p className="font-semibold">
+                      {selectedCaseDetail.triggerScore !== null
+                        ? `${selectedCaseDetail.triggerScore.toFixed(1)}%`
+                        : '--'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[#8ea0bc]">Latest blended</p>
+                    <p className="font-semibold">
+                      {selectedCaseDetail.latestSnapshot?.blendedScore !== null &&
+                      selectedCaseDetail.latestSnapshot?.blendedScore !== undefined
+                        ? `${selectedCaseDetail.latestSnapshot.blendedScore.toFixed(1)}%`
+                        : '--'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Checkpoints</p>
+                <div className="mt-2 space-y-2">
+                  {selectedCaseDetail.assignments.length === 0 ? (
+                    <p className="text-[#8ea0bc]">No assigned checkpoints yet.</p>
+                  ) : (
+                    selectedCaseDetail.assignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className="flex items-center justify-between rounded-md bg-white/5 px-3 py-2"
+                      >
+                        <div>
+                          <p className="font-medium">{assignment.label}</p>
+                          <p className="text-xs text-[#8ea0bc]">
+                            {assignment.type === 'lesson_review' ? 'Lesson Review' : 'Assessment Retry'}
+                          </p>
+                        </div>
+                        <Badge
+                          className={
+                            assignment.isCompleted
+                              ? 'teacher-badge-success border-0'
+                              : 'teacher-badge-danger border-0'
+                          }
+                        >
+                          {assignment.isCompleted ? 'Done' : 'Pending'}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Weak Concepts</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedCaseDetail.weakConcepts.length === 0 ? (
+                    <p className="text-[#8ea0bc]">No concept evidence captured yet.</p>
+                  ) : (
+                    selectedCaseDetail.weakConcepts.map((concept) => (
+                      <Badge key={concept.concept} variant="secondary">
+                        {concept.concept} ({concept.masteryScore}%)
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 p-4">
+                <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Latest Evidence Snippets</p>
+                <div className="mt-2 space-y-2">
+                  {selectedCaseDetail.recentRiskTransitions.length === 0 ? (
+                    <p className="text-[#8ea0bc]">No recent risk transition logs.</p>
+                  ) : (
+                    selectedCaseDetail.recentRiskTransitions.map((log) => (
+                      <div key={log.id} className="rounded-md bg-white/5 px-3 py-2">
+                        <p className="font-medium">{log.triggerSource}</p>
+                        <p className="text-xs text-[#8ea0bc]">
+                          {log.blendedScore !== null ? `${log.blendedScore.toFixed(1)}%` : '--'} against threshold{' '}
+                          {log.thresholdApplied !== null ? `${log.thresholdApplied.toFixed(1)}%` : '--'}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <Button
+                variant="teacherOutline"
+                className="w-full rounded-lg"
+                onClick={handleOpenPerformance}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Open Full Performance Analysis
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </TeacherPageShell>
   );
 }

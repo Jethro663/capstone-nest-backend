@@ -35,6 +35,26 @@ export interface MentorExplainDto {
   message?: string;
 }
 
+export type AiPolicySourceScope = 'recommended_only' | 'class_materials';
+
+export interface ClassAiPolicy {
+  classId: string;
+  mentorExplainEnabled: boolean;
+  maxFollowUpTurns: number;
+  sourceScope: AiPolicySourceScope;
+  strictGrounding: boolean;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateClassAiPolicyDto {
+  mentorExplainEnabled?: boolean;
+  maxFollowUpTurns?: number;
+  sourceScope?: AiPolicySourceScope;
+  strictGrounding?: boolean;
+}
+
 export interface IndexingSummary {
   classId: string;
   chunksIndexed: number;

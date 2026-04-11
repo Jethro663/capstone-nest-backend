@@ -82,7 +82,9 @@ export function SystemEvaluationsPage({
   const fetchEvaluations = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await lxpService.getEvaluations(targetModule || undefined);
+      const res = await lxpService.getEvaluations(
+        targetModule ? { targetModule } : undefined,
+      );
       setRows(res.data.rows ?? []);
       setCount(res.data.count ?? 0);
       setSummary(res.data.summary ?? null);

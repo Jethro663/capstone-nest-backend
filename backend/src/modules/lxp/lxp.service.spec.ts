@@ -12,11 +12,13 @@ describe('LxpService', () => {
 
   const mockDb: any = {
     query: {
-      classes: { findFirst: jest.fn() },
+      classes: { findFirst: jest.fn(), findMany: jest.fn() },
       enrollments: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
+      performanceLogs: { findMany: jest.fn() },
       interventionCases: { findFirst: jest.fn(), findMany: jest.fn() },
       interventionAssignments: { findFirst: jest.fn(), findMany: jest.fn() },
+      studentConceptMastery: { findMany: jest.fn() },
       lxpProgress: { findFirst: jest.fn(), findMany: jest.fn() },
       systemEvaluations: { findMany: jest.fn() },
       lessons: { findMany: jest.fn() },
@@ -137,6 +139,149 @@ describe('LxpService', () => {
       id: 'case-2',
       isCurrentlyAtRisk: false,
       aiPlanEligible: false,
+    });
+  });
+
+  it('aggregates pending intervention counts across teacher classes', async () => {
+    mockDb.query.classes.findMany.mockResolvedValue([
+      {
+        id: 'class-1',
+        subjectName: 'Mathematics',
+        subjectCode: 'MATH-7',
+      },
+      {
+        id: 'class-2',
+        subjectName: 'Science',
+        subjectCode: 'SCI-7',
+      },
+    ]);
+    mockDb.query.interventionCases.findMany.mockResolvedValue([
+      { id: 'case-1', classId: 'class-1' },
+      { id: 'case-2', classId: 'class-1' },
+    ]);
+
+    const result = await service.getTeacherPendingInterventionCount({
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(result).toEqual({
+      pendingCount: 2,
+      classBreakdown: [
+        {
+          classId: 'class-1',
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-7',
+          pendingCount: 2,
+        },
+      ],
+    });
+  });
+
+  it('returns rich intervention case detail with weak concepts and transitions', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-1',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'active',
+      openedAt: new Date('2026-03-01T00:00:00.000Z'),
+      closedAt: null,
+      triggerScore: '62',
+      thresholdApplied: '74',
+      note: 'Needs sustained support',
+      student: {
+        id: 'student-1',
+        firstName: 'Liam',
+        lastName: 'Navarro',
+        email: 'liam@example.com',
+      },
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        assignmentType: 'lesson_review',
+        checkpointLabel: 'Review quadratic forms',
+        orderIndex: 1,
+        isCompleted: false,
+        completedAt: null,
+        xpAwarded: 20,
+        lesson: {
+          id: 'lesson-1',
+          title: 'Quadratic Expressions Refresher',
+          description: 'Review fundamentals.',
+        },
+        assessment: null,
+      },
+    ]);
+    mockDb.query.lxpProgress.findFirst.mockResolvedValue({
+      xpTotal: 20,
+      streakDays: 1,
+      checkpointsCompleted: 0,
+      lastActivityAt: null,
+    });
+    mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
+      assessmentAverage: '58',
+      classRecordAverage: '66',
+      blendedScore: '62',
+      isAtRisk: true,
+      thresholdApplied: '74',
+      lastComputedAt: new Date('2026-03-02T00:00:00.000Z'),
+    });
+    mockDb.query.studentConceptMastery.findMany.mockResolvedValue([
+      {
+        conceptKey: 'quadratic formulas',
+        evidenceCount: 3,
+        errorCount: 3,
+        masteryScore: 40,
+        updatedAt: new Date('2026-03-02T00:00:00.000Z'),
+      },
+    ]);
+    mockDb.query.performanceLogs.findMany.mockResolvedValue([
+      {
+        id: 'log-1',
+        previousIsAtRisk: false,
+        currentIsAtRisk: true,
+        blendedScore: '62',
+        thresholdApplied: '74',
+        triggerSource: 'assessment_posted',
+        createdAt: new Date('2026-03-02T01:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.getTeacherInterventionCaseDetail('case-1', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(result).toMatchObject({
+      id: 'case-1',
+      classId: 'class-1',
+      studentId: 'student-1',
+      completion: {
+        totalCheckpoints: 1,
+        completedCheckpoints: 0,
+        completionPercent: 0,
+      },
+      weakConcepts: [
+        expect.objectContaining({
+          concept: 'quadratic formulas',
+          masteryScore: 40,
+        }),
+      ],
+      recentRiskTransitions: [
+        expect.objectContaining({
+          id: 'log-1',
+          currentIsAtRisk: true,
+        }),
+      ],
+      links: {
+        performancePage:
+          '/dashboard/teacher/performance?classId=class-1&studentId=student-1',
+      },
     });
   });
 
@@ -470,7 +615,7 @@ describe('LxpService', () => {
 
     const result = await service.listSystemEvaluations(
       { userId: 'teacher-1', roles: ['teacher'] },
-      'lxp',
+      { targetModule: 'lxp' },
     );
 
     expect(mockDb.query.systemEvaluations.findMany).toHaveBeenCalledTimes(1);
@@ -544,7 +689,7 @@ describe('LxpService', () => {
 
     const result = await service.listSystemEvaluations(
       { userId: 'admin-1', roles: ['admin'] },
-      undefined,
+      {},
     );
 
     expect(result.summary).toEqual({
@@ -584,7 +729,7 @@ describe('LxpService', () => {
     await expect(
       service.listSystemEvaluations(
         { userId: 'teacher-1', roles: ['teacher'] },
-        'not-a-real-module',
+        { targetModule: 'not-a-real-module' as never },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -593,7 +738,7 @@ describe('LxpService', () => {
     await expect(
       service.listSystemEvaluations(
         { userId: 'student-1', roles: ['student'] },
-        undefined,
+        {},
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });

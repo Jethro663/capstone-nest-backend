@@ -1232,6 +1232,10 @@ describe('AiMentorController', () => {
             structuredOutput: {
               caseId: 'case-1',
               weakConcepts: ['Fractions'],
+              suggestedAssignmentPayload: {
+                lessonIds: [],
+                assessmentIds: [],
+              },
               runtime: { caseId: 'case-1' },
             },
           },

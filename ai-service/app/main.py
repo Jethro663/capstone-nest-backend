@@ -8,7 +8,7 @@ User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import math
@@ -70,6 +70,10 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
+AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
+AI_JOB_STALE_FAILURE_MESSAGE = (
+    "AI generation timed out before completion. Please retry this job."
+)
 
 DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT = """You generate concise, practical demo intervention plans for a school LMS.
 
@@ -224,6 +228,65 @@ def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) ->
     }.get(status, 0)
 
 
+def _parse_iso_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _should_mark_job_stale(
+    *,
+    status: str,
+    updated_at: Any,
+    runtime: dict[str, Any] | None,
+    stale_after_seconds: int = AI_JOB_STALE_TIMEOUT_SECONDS,
+) -> bool:
+    if status not in {"pending", "processing"}:
+        return False
+
+    now = datetime.now(timezone.utc)
+    runtime_updated_at = _parse_iso_utc((runtime or {}).get("updatedAt"))
+    db_updated_at = (
+        updated_at.astimezone(timezone.utc)
+        if isinstance(updated_at, datetime)
+        else _parse_iso_utc(updated_at)
+    )
+    freshest = runtime_updated_at or db_updated_at
+    if freshest is None:
+        return False
+    return now - freshest > timedelta(seconds=stale_after_seconds)
+
+
+def _normalize_intervention_structured_output(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    suggested_payload = normalized.get("suggestedAssignmentPayload")
+    if not isinstance(suggested_payload, dict):
+        suggested_payload = {}
+    lesson_ids = suggested_payload.get("lessonIds")
+    assessment_ids = suggested_payload.get("assessmentIds")
+    if not isinstance(lesson_ids, list):
+        lesson_ids = []
+    if not isinstance(assessment_ids, list):
+        assessment_ids = []
+    suggested_payload["lessonIds"] = [str(item) for item in lesson_ids if item]
+    suggested_payload["assessmentIds"] = [str(item) for item in assessment_ids if item]
+    normalized["suggestedAssignmentPayload"] = suggested_payload
+    return normalized
+
+
 async def _create_ai_generation_job(
     db: AsyncSession,
     *,
@@ -341,7 +404,48 @@ async def _load_ai_job_context(
         db_runtime = source_filters.get("runtime") or {}
     memory_runtime = AI_JOB_RUNTIME.get(job_id) or {}
     merged_runtime = {**db_runtime, **memory_runtime} if (db_runtime or memory_runtime) else None
-    return dict(record), merged_runtime, assessment_id
+    normalized_record = dict(record)
+
+    if _should_mark_job_stale(
+        status=str(normalized_record.get("status") or ""),
+        updated_at=normalized_record.get("updated_at"),
+        runtime=merged_runtime,
+    ):
+        now = datetime.now(timezone.utc)
+        stale_runtime_patch = {
+            "progressPercent": 100,
+            "statusMessage": "Generation timed out",
+            "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
+            "staleTimeoutAt": now.isoformat(),
+        }
+        _set_ai_job_runtime(job_id, **stale_runtime_patch)
+        merged_runtime = await _persist_ai_job_runtime(
+            db,
+            job_id=job_id,
+            runtime_patch=stale_runtime_patch,
+        )
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'failed',
+                  error_message = :errorMessage,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ),
+            {
+                "jobId": job_id,
+                "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
+            },
+        )
+        await db.commit()
+        normalized_record["status"] = "failed"
+        normalized_record["error_message"] = AI_JOB_STALE_FAILURE_MESSAGE
+        normalized_record["updated_at"] = now
+
+    return normalized_record, merged_runtime, assessment_id
 
 
 async def _run_quiz_generation_job(
@@ -2572,6 +2676,8 @@ async def get_teacher_ai_job_result(
     result_data = dict(job["structured_output"] or {})
     if job["output_type"] == "assessment_draft":
         result_data["assessmentId"] = assessment_id
+    if job["output_type"] == "intervention_recommendation":
+        result_data = _normalize_intervention_structured_output(result_data)
     if runtime and runtime.get("resultSummary"):
         result_data["runtime"] = runtime["resultSummary"]
 

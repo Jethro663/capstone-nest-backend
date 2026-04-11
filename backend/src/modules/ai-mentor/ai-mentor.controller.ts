@@ -37,6 +37,7 @@ import {
 import { GenerateQuizDraftDto } from './DTO/quiz-generation.dto';
 import { InterventionRecommendationDto } from './DTO/intervention-recommendation.dto';
 import { DemoInterventionPlanDto } from './DTO/demo-intervention-plan.dto';
+import { UpdateClassAiPolicyDto } from './DTO/class-ai-policy.dto';
 import {
   StudentTutorAnswersDto,
   StudentTutorBootstrapQueryDto,
@@ -53,7 +54,10 @@ import { DatabaseService } from '../../database/database.service';
 import {
   aiGenerationJobs,
   aiGenerationOutputs,
+  aiInteractionLogs,
   assessments,
+  assessmentAttempts,
+  classAiPolicies,
   classes,
   classModules,
   enrollments,
@@ -62,7 +66,7 @@ import {
   performanceSnapshots,
   uploadedFiles,
 } from '../../drizzle/schema';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 @ApiTags('AI Mentor')
 @ApiBearerAuth('token')
@@ -70,6 +74,12 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AiMentorController {
   private readonly logger = new Logger(AiMentorController.name);
+  private readonly defaultClassAiPolicy = {
+    mentorExplainEnabled: true,
+    maxFollowUpTurns: 3,
+    sourceScope: 'class_materials',
+    strictGrounding: false,
+  } as const;
 
   constructor(
     private readonly proxy: AiProxyService,
@@ -257,6 +267,159 @@ export class AiMentorController {
     }
   }
 
+  private normalizeClassAiPolicy(
+    classId: string,
+    policy?: {
+      mentorExplainEnabled: boolean;
+      maxFollowUpTurns: number;
+      sourceScope: string;
+      strictGrounding: boolean;
+      updatedBy: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    } | null,
+  ) {
+    return {
+      classId,
+      mentorExplainEnabled:
+        policy?.mentorExplainEnabled ?? this.defaultClassAiPolicy.mentorExplainEnabled,
+      maxFollowUpTurns:
+        policy?.maxFollowUpTurns ?? this.defaultClassAiPolicy.maxFollowUpTurns,
+      sourceScope: policy?.sourceScope ?? this.defaultClassAiPolicy.sourceScope,
+      strictGrounding:
+        policy?.strictGrounding ?? this.defaultClassAiPolicy.strictGrounding,
+      updatedBy: policy?.updatedBy ?? null,
+      createdAt: this.toIsoDate(policy?.createdAt),
+      updatedAt: this.toIsoDate(policy?.updatedAt),
+    };
+  }
+
+  private async getClassAiPolicy(classId: string) {
+    const policy = await this.db.query.classAiPolicies.findFirst({
+      where: eq(classAiPolicies.classId, classId),
+      columns: {
+        mentorExplainEnabled: true,
+        maxFollowUpTurns: true,
+        sourceScope: true,
+        strictGrounding: true,
+        updatedBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return this.normalizeClassAiPolicy(classId, policy);
+  }
+
+  private async assertMentorExplainPolicy(
+    dto: MentorExplainDto,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: eq(assessmentAttempts.id, dto.attemptId),
+      columns: {
+        id: true,
+        studentId: true,
+        assessmentId: true,
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException(
+        `Assessment attempt with ID "${dto.attemptId}" not found`,
+      );
+    }
+
+    if (!this.hasRole(user.roles, RoleName.Admin) && attempt.studentId !== user.id) {
+      throw new ForbiddenException(
+        'You can only request mentoring help for your own assessment attempts.',
+      );
+    }
+
+    const assessment = await this.db.query.assessments.findFirst({
+      where: eq(assessments.id, attempt.assessmentId),
+      columns: { classId: true },
+    });
+
+    if (!assessment?.classId) {
+      throw new NotFoundException(
+        `Assessment with ID "${attempt.assessmentId}" not found`,
+      );
+    }
+
+    const policy = await this.getClassAiPolicy(assessment.classId);
+    if (!policy.mentorExplainEnabled) {
+      throw new ForbiddenException(
+        'AI mentor help is currently disabled by your teacher for this class.',
+      );
+    }
+
+    if (
+      dto.message?.trim() &&
+      policy.maxFollowUpTurns >= 0 &&
+      !this.hasRole(user.roles, RoleName.Admin)
+    ) {
+      const followUpCount = await this.db
+        .select({
+          total: sql<number>`count(*)::int`,
+        })
+        .from(aiInteractionLogs)
+        .where(
+          and(
+            eq(aiInteractionLogs.userId, user.id),
+            eq(aiInteractionLogs.sessionType, 'mistake_explanation'),
+            sql`${aiInteractionLogs.contextMetadata} ->> 'attemptId' = ${dto.attemptId}`,
+            sql`${aiInteractionLogs.contextMetadata} ->> 'questionId' = ${dto.questionId}`,
+          ),
+        );
+      const total = Number(followUpCount[0]?.total ?? 0);
+      if (total >= policy.maxFollowUpTurns) {
+        throw new BadRequestException(
+          `This class allows up to ${policy.maxFollowUpTurns} AI follow-up turn(s) per question.`,
+        );
+      }
+    }
+
+    return policy;
+  }
+
+  private async assertStudentTutorClassPolicy(
+    classId: string,
+    user: { id: string; email: string; roles: string[] },
+    options?: { sessionId?: string; messageText?: string },
+  ) {
+    const policy = await this.getClassAiPolicy(classId);
+    if (!policy.mentorExplainEnabled) {
+      throw new ForbiddenException(
+        'AI tutor assistance is currently disabled by your teacher for this class.',
+      );
+    }
+
+    if (
+      options?.messageText?.trim() &&
+      options?.sessionId &&
+      policy.maxFollowUpTurns >= 0
+    ) {
+      const followUpCount = await this.db
+        .select({
+          total: sql<number>`count(*)::int`,
+        })
+        .from(aiInteractionLogs)
+        .where(
+          and(
+            eq(aiInteractionLogs.userId, user.id),
+            eq(aiInteractionLogs.sessionType, 'mentor_chat'),
+            eq(aiInteractionLogs.sessionId, options.sessionId),
+          ),
+        );
+      const total = Number(followUpCount[0]?.total ?? 0);
+      if (total >= policy.maxFollowUpTurns) {
+        throw new BadRequestException(
+          `This class allows up to ${policy.maxFollowUpTurns} AI follow-up turn(s) per session.`,
+        );
+      }
+    }
+  }
+
   private async assertTeacherJobAccess(
     jobId: string,
     user: { id: string; email: string; roles: string[] },
@@ -334,6 +497,34 @@ export class AiMentorController {
       },
     });
     return assessment?.id ?? null;
+  }
+
+  private normalizeInterventionStructuredOutput(
+    payload: Record<string, unknown>,
+  ) {
+    const normalized = { ...payload };
+    const rawSuggestedPayload =
+      payload.suggestedAssignmentPayload &&
+      typeof payload.suggestedAssignmentPayload === 'object'
+        ? (payload.suggestedAssignmentPayload as Record<string, unknown>)
+        : {};
+
+    const lessonIds = Array.isArray(rawSuggestedPayload.lessonIds)
+      ? rawSuggestedPayload.lessonIds
+          .filter((value): value is string => typeof value === 'string')
+      : [];
+    const assessmentIds = Array.isArray(rawSuggestedPayload.assessmentIds)
+      ? rawSuggestedPayload.assessmentIds
+          .filter((value): value is string => typeof value === 'string')
+      : [];
+
+    normalized.suggestedAssignmentPayload = {
+      ...rawSuggestedPayload,
+      lessonIds,
+      assessmentIds,
+    };
+
+    return normalized;
   }
 
   private isTutorItemVisible(item: {
@@ -633,7 +824,105 @@ export class AiMentorController {
     @Body() dto: MentorExplainDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/mentor/explain', user, dto);
+    const policy = await this.assertMentorExplainPolicy(dto, user);
+    return this.proxy.forward('POST', '/mentor/explain', user, {
+      ...dto,
+      policy: {
+        sourceScope: policy.sourceScope,
+        strictGrounding: policy.strictGrounding,
+      },
+    });
+  }
+
+  @Get('teacher/classes/:classId/policy')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get class-level AI mentor assistance policy' })
+  async getTeacherClassAiPolicy(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherClassAccess(classId, user);
+    return {
+      success: true,
+      message: 'Class AI policy retrieved',
+      data: await this.getClassAiPolicy(classId),
+    };
+  }
+
+  @Patch('teacher/classes/:classId/policy')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Update class-level AI mentor assistance policy' })
+  async updateTeacherClassAiPolicy(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Body() dto: UpdateClassAiPolicyDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherClassAccess(classId, user);
+    if (
+      dto.mentorExplainEnabled === undefined &&
+      dto.maxFollowUpTurns === undefined &&
+      dto.sourceScope === undefined &&
+      dto.strictGrounding === undefined
+    ) {
+      throw new BadRequestException('Provide at least one policy field to update.');
+    }
+
+    const [updated] = await this.db
+      .insert(classAiPolicies)
+      .values({
+        classId,
+        mentorExplainEnabled:
+          dto.mentorExplainEnabled ?? this.defaultClassAiPolicy.mentorExplainEnabled,
+        maxFollowUpTurns:
+          dto.maxFollowUpTurns ?? this.defaultClassAiPolicy.maxFollowUpTurns,
+        sourceScope: dto.sourceScope ?? this.defaultClassAiPolicy.sourceScope,
+        strictGrounding:
+          dto.strictGrounding ?? this.defaultClassAiPolicy.strictGrounding,
+        updatedBy: user.id,
+      })
+      .onConflictDoUpdate({
+        target: classAiPolicies.classId,
+        set: {
+          mentorExplainEnabled:
+            dto.mentorExplainEnabled ??
+            sql`${classAiPolicies.mentorExplainEnabled}`,
+          maxFollowUpTurns:
+            dto.maxFollowUpTurns ?? sql`${classAiPolicies.maxFollowUpTurns}`,
+          sourceScope: dto.sourceScope ?? sql`${classAiPolicies.sourceScope}`,
+          strictGrounding:
+            dto.strictGrounding ?? sql`${classAiPolicies.strictGrounding}`,
+          updatedBy: user.id,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({
+        mentorExplainEnabled: classAiPolicies.mentorExplainEnabled,
+        maxFollowUpTurns: classAiPolicies.maxFollowUpTurns,
+        sourceScope: classAiPolicies.sourceScope,
+        strictGrounding: classAiPolicies.strictGrounding,
+        updatedBy: classAiPolicies.updatedBy,
+        createdAt: classAiPolicies.createdAt,
+        updatedAt: classAiPolicies.updatedAt,
+      });
+
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.class_policy.updated',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        mentorExplainEnabled: updated.mentorExplainEnabled,
+        maxFollowUpTurns: updated.maxFollowUpTurns,
+        sourceScope: updated.sourceScope,
+        strictGrounding: updated.strictGrounding,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Class AI policy updated',
+      data: this.normalizeClassAiPolicy(classId, updated),
+    };
   }
 
   @Get('student/tutor/bootstrap')
@@ -718,6 +1007,8 @@ export class AiMentorController {
         'Selected tutor recommendation is no longer available to the student.',
       );
     }
+
+    await this.assertStudentTutorClassPolicy(dto.classId, user);
 
     const payload = await this.proxy.forward(
       'POST',
@@ -833,6 +1124,17 @@ export class AiMentorController {
     @Body() dto: StudentTutorMessageDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
+    const classId = await this.resolveTutorSessionClassId(sessionId, user);
+    if (!classId) {
+      throw new NotFoundException(
+        `Student tutor session with ID "${sessionId}" not found`,
+      );
+    }
+    await this.assertStudentTutorClassPolicy(classId, user, {
+      sessionId,
+      messageText: dto.message,
+    });
+
     const payload = await this.proxy.forward(
       'POST',
       `/student/tutor/session/${sessionId}/message`,
@@ -844,9 +1146,6 @@ export class AiMentorController {
       (unwrapped.data && typeof unwrapped.data === 'object'
         ? (unwrapped.data as Record<string, unknown>)
         : {}) ?? {};
-    const classId = await this.resolveTutorSessionClassId(sessionId, user);
-    if (!classId) return payload;
-
     const { allowedLessonIds, allowedAssessmentIds } =
       await this.getAllowedTutorSourceIds(user.id, classId);
 
@@ -876,6 +1175,14 @@ export class AiMentorController {
     @Body() dto: StudentTutorAnswersDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
+    const classId = await this.resolveTutorSessionClassId(sessionId, user);
+    if (!classId) {
+      throw new NotFoundException(
+        `Student tutor session with ID "${sessionId}" not found`,
+      );
+    }
+    await this.assertStudentTutorClassPolicy(classId, user);
+
     const payload = await this.proxy.forward(
       'POST',
       `/student/tutor/session/${sessionId}/answers`,
@@ -887,9 +1194,6 @@ export class AiMentorController {
       (unwrapped.data && typeof unwrapped.data === 'object'
         ? (unwrapped.data as Record<string, unknown>)
         : {}) ?? {};
-    const classId = await this.resolveTutorSessionClassId(sessionId, user);
-    if (!classId) return payload;
-
     const { allowedLessonIds, allowedAssessmentIds } =
       await this.getAllowedTutorSourceIds(user.id, classId);
 
@@ -1838,9 +2142,21 @@ export class AiMentorController {
           result: {
             outputId: cachedOutput.id,
             outputType: cachedOutput.outputType,
-            structuredOutput: {
-              ...((cachedOutput.structuredOutput as Record<string, unknown>) ??
-                {}),
+            structuredOutput:
+              cachedOutput.outputType === 'intervention_recommendation'
+                ? this.normalizeInterventionStructuredOutput({
+                    ...((cachedOutput.structuredOutput as Record<string, unknown>) ??
+                      {}),
+                    ...(assessmentId ? { assessmentId } : {}),
+                    ...(runtime &&
+                    runtime.resultSummary &&
+                    typeof runtime.resultSummary === 'object'
+                      ? { runtime: runtime.resultSummary }
+                      : {}),
+                  })
+                : {
+                    ...((cachedOutput.structuredOutput as Record<string, unknown>) ??
+                      {}),
               ...(assessmentId ? { assessmentId } : {}),
               ...(runtime &&
               runtime.resultSummary &&

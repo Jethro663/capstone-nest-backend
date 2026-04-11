@@ -191,6 +191,94 @@ export interface TeacherInterventionQueueResponse {
   queue: TeacherInterventionQueueItem[];
 }
 
+export interface TeacherPendingInterventionCountResponse {
+  pendingCount: number;
+  classBreakdown: Array<{
+    classId: string;
+    subjectName: string;
+    subjectCode: string;
+    pendingCount: number;
+  }>;
+}
+
+export interface TeacherInterventionCaseDetail {
+  id: string;
+  classId: string;
+  studentId: string;
+  student?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  status: 'pending' | 'active' | 'completed' | 'dismissed';
+  openedAt: string;
+  closedAt: string | null;
+  triggerScore: number | null;
+  thresholdApplied: number;
+  note: string | null;
+  completion: {
+    totalCheckpoints: number;
+    completedCheckpoints: number;
+    completionPercent: number;
+  };
+  progress: {
+    xpTotal: number;
+    starsTotal: number;
+    streakDays: number;
+    checkpointsCompleted: number;
+    lastActivityAt: string | null;
+  };
+  assignments: Array<{
+    id: string;
+    type: 'lesson_review' | 'assessment_retry';
+    label: string;
+    order: number;
+    isCompleted: boolean;
+    completedAt: string | null;
+    xpAwarded: number;
+    lesson?: {
+      id: string;
+      title: string;
+      description: string | null;
+    } | null;
+    assessment?: {
+      id: string;
+      title: string;
+      type: string | null;
+      passingScore: number | null;
+      dueDate: string | null;
+    } | null;
+  }>;
+  latestSnapshot: {
+    assessmentAverage: number | null;
+    classRecordAverage: number | null;
+    blendedScore: number | null;
+    thresholdApplied: number;
+    isAtRisk: boolean;
+    lastComputedAt: string;
+  } | null;
+  weakConcepts: Array<{
+    concept: string;
+    masteryScore: number;
+    evidenceCount: number;
+    errorCount: number;
+    updatedAt: string;
+  }>;
+  recentRiskTransitions: Array<{
+    id: string;
+    previousIsAtRisk: boolean | null;
+    currentIsAtRisk: boolean;
+    blendedScore: number | null;
+    thresholdApplied: number | null;
+    triggerSource: string;
+    createdAt: string;
+  }>;
+  links: {
+    performancePage: string;
+  };
+}
+
 export interface LxpClassReport {
   classId: string;
   threshold: number;
@@ -251,6 +339,13 @@ export interface SystemEvaluationRow {
   performanceScore: number | string;
   satisfactionScore: number | string;
   feedback: string | null;
+  aiContextMetadata?: {
+    sessionType?: 'mentor_chat' | 'mistake_explanation' | 'student_tutor';
+    attemptId?: string;
+    questionId?: string;
+    classId?: string;
+    sourceFlow?: string;
+  } | null;
   createdAt: string;
   submitter?: {
     id: string;

@@ -6,6 +6,8 @@ import type {
   PlaylistResponse,
   SystemEvaluationListResponse,
   SystemEvaluationTargetModule,
+  TeacherInterventionCaseDetail,
+  TeacherPendingInterventionCountResponse,
   TeacherInterventionQueueResponse,
 } from '@/types/lxp';
 
@@ -64,6 +66,13 @@ export const lxpService = {
     return normalizeEnvelope<TeacherInterventionQueueResponse>(data);
   },
 
+  async getTeacherPendingInterventionCount(): Promise<
+    Envelope<TeacherPendingInterventionCountResponse>
+  > {
+    const { data } = await api.get('/lxp/teacher/interventions/pending-count');
+    return normalizeEnvelope<TeacherPendingInterventionCountResponse>(data);
+  },
+
   async activateIntervention(
     caseId: string,
   ): Promise<Envelope<TeacherInterventionQueueResponse>> {
@@ -95,6 +104,13 @@ export const lxpService = {
     return normalizeEnvelope<TeacherInterventionQueueResponse['queue'][number]>(data);
   },
 
+  async getTeacherCaseDetail(
+    caseId: string,
+  ): Promise<Envelope<TeacherInterventionCaseDetail>> {
+    const { data } = await api.get(`/lxp/teacher/interventions/${caseId}/detail`);
+    return normalizeEnvelope<TeacherInterventionCaseDetail>(data);
+  },
+
   async submitEvaluation(payload: {
     targetModule: SystemEvaluationTargetModule;
     usabilityScore: number;
@@ -102,16 +118,28 @@ export const lxpService = {
     performanceScore: number;
     satisfactionScore: number;
     feedback?: string;
+    aiContextMetadata?: {
+      sessionType?: 'mentor_chat' | 'mistake_explanation' | 'student_tutor';
+      attemptId?: string;
+      questionId?: string;
+      classId?: string;
+      sourceFlow?: string;
+    };
   }) {
     const { data } = await api.post('/lxp/evaluations', payload);
     return normalizeEnvelope(data);
   },
 
   async getEvaluations(
-    targetModule?: SystemEvaluationTargetModule,
+    filters?: {
+      targetModule?: SystemEvaluationTargetModule;
+      aiClassId?: string;
+      aiSessionType?: 'mentor_chat' | 'mistake_explanation' | 'student_tutor';
+      aiSourceFlow?: string;
+    },
   ): Promise<Envelope<SystemEvaluationListResponse>> {
     const { data } = await api.get('/lxp/evaluations', {
-      params: targetModule ? { targetModule } : undefined,
+      params: filters && Object.keys(filters).length > 0 ? filters : undefined,
     });
     return normalizeEnvelope<SystemEvaluationListResponse>(data);
   },

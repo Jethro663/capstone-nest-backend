@@ -4,15 +4,26 @@ import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, CircleCheckBig, CircleX, Hourglass } from 'lucide-react';
+import {
+  ArrowLeft,
+  CircleCheckBig,
+  CircleX,
+  Hourglass,
+  Lightbulb,
+  Rocket,
+  Target,
+  Star,
+} from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { aiService } from '@/services/ai-service';
+import { lxpService } from '@/services/lxp-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -26,6 +37,28 @@ import { getMotionProps } from '@/components/student/student-motion';
 import { toast } from 'sonner';
 import type { AttemptResult } from '@/types/assessment';
 import type { MentorExplainResponse } from '@/types/ai';
+
+function buildHintSteps(response: MentorExplainResponse | null): string[] {
+  if (!response) return [];
+  const packet = response.analysisPacket;
+  const hints: string[] = [];
+
+  if (packet?.likelyMisconceptions?.length) {
+    hints.push(...packet.likelyMisconceptions.slice(0, 2).map((item) => `Watch out: ${item}`));
+  }
+  if (packet?.requiredEvidence?.length) {
+    hints.push(...packet.requiredEvidence.slice(0, 2).map((item) => `Use this clue: ${item}`));
+  }
+  if (packet?.answerGuardrail) {
+    hints.push(`Guardrail: ${packet.answerGuardrail}`);
+  }
+
+  if (hints.length === 0) {
+    return ['Re-read the prompt slowly and mark the keywords before solving.', 'Check your method step by step before finalizing your answer.'];
+  }
+
+  return hints;
+}
 
 export default function StudentAssessmentResultsPage() {
   const params = useParams();
@@ -42,6 +75,13 @@ export default function StudentAssessmentResultsPage() {
   const [mentorPrompt, setMentorPrompt] = useState('');
   const [mentorLoading, setMentorLoading] = useState(false);
   const [mentorResponse, setMentorResponse] = useState<MentorExplainResponse | null>(null);
+  const [hintRevealCount, setHintRevealCount] = useState(1);
+
+  const [ratingOpen, setRatingOpen] = useState(false);
+  const [rating, setRating] = useState<number>(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [ratedQuestionIds, setRatedQuestionIds] = useState<Record<string, true>>({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -59,15 +99,23 @@ export default function StudentAssessmentResultsPage() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!mentorResponse || !mentorQuestionId) return;
+    if (ratedQuestionIds[mentorQuestionId]) return;
+    setRatingOpen(true);
+  }, [mentorResponse, mentorQuestionId, ratedQuestionIds]);
+
   const handleAskJa = async (questionId: string) => {
     try {
       setMentorQuestionId(questionId);
       setMentorResponse(null);
       setMentorPrompt('');
+      setHintRevealCount(1);
       setMentorOpen(true);
       setMentorLoading(true);
       const res = await aiService.explainMistake({ attemptId, questionId });
       setMentorResponse(res.data);
+      setHintRevealCount(1);
     } catch {
       toast.error('Failed to get AI mentoring help');
     } finally {
@@ -85,10 +133,45 @@ export default function StudentAssessmentResultsPage() {
         message: mentorPrompt.trim() || undefined,
       });
       setMentorResponse(res.data);
+      setHintRevealCount(1);
     } catch {
       toast.error('Failed to refresh AI mentoring help');
     } finally {
       setMentorLoading(false);
+    }
+  };
+
+  const handleSubmitRating = async () => {
+    if (!mentorQuestionId || rating < 1 || rating > 5) {
+      toast.error('Select a rating from 1 to 5 stars first.');
+      return;
+    }
+
+    try {
+      setRatingSubmitting(true);
+      await lxpService.submitEvaluation({
+        targetModule: 'ai_mentor',
+        usabilityScore: rating,
+        functionalityScore: rating,
+        performanceScore: rating,
+        satisfactionScore: rating,
+        feedback: ratingComment.trim() || undefined,
+        aiContextMetadata: {
+          sessionType: 'mistake_explanation',
+          attemptId,
+          questionId: mentorQuestionId,
+          sourceFlow: 'assessment_results',
+        },
+      });
+      setRatedQuestionIds((current) => ({ ...current, [mentorQuestionId]: true }));
+      setRatingOpen(false);
+      setRatingComment('');
+      setRating(0);
+      toast.success('Thanks. Your AI mentor feedback is saved.');
+    } catch {
+      toast.error('Failed to save your AI mentor feedback.');
+    } finally {
+      setRatingSubmitting(false);
     }
   };
 
@@ -109,6 +192,8 @@ export default function StudentAssessmentResultsPage() {
   const { responses, score, passed, isReturned, attemptNumber, teacherFeedback } = result;
   const pct = score ?? 0;
   const correctCount = responses.filter((r) => r.isCorrect === true).length;
+  const hintSteps = buildHintSteps(mentorResponse);
+  const revealedHints = hintSteps.slice(0, hintRevealCount);
 
   if (isReturned === false) {
     return (
@@ -145,7 +230,7 @@ export default function StudentAssessmentResultsPage() {
         </motion.div>
 
         <motion.div {...motionProps.item}>
-          <StudentActionCard className="border-0 bg-[var(--student-accent)] text-[var(--student-accent-contrast)]">
+          <StudentActionCard className="border-0 bg-[linear-gradient(130deg,var(--student-accent),#2456da)] text-[var(--student-accent-contrast)]">
             <StudentSectionHeader
               title="Assessment Results"
               subtitle={`You answered ${correctCount} out of ${responses.length} correctly.`}
@@ -179,7 +264,7 @@ export default function StudentAssessmentResultsPage() {
         )}
 
         <motion.section {...motionProps.item} className="space-y-3">
-          <StudentSectionHeader title="Question Review" subtitle="Check which answers were correct and learn from the feedback." />
+          <StudentSectionHeader title="Question Review" subtitle="Check which answers were correct and launch Ja for mission-mode guided feedback." />
           <motion.div {...motionProps.container} className="space-y-3">
             {responses.map((response, i) => (
               <motion.div key={response.questionId} {...motionProps.item}>
@@ -283,32 +368,14 @@ export default function StudentAssessmentResultsPage() {
             ))}
           </motion.div>
         </motion.section>
-
-        <motion.div {...motionProps.item}>
-          <StudentActionCard className={passed ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)]' : 'border-[var(--student-outline)] bg-[var(--student-surface-soft)]'}>
-            <p className="font-semibold text-[var(--student-text-strong)]">{passed ? 'Great Work' : 'Study Tips'}</p>
-            {passed ? (
-              <ul className="mt-2 space-y-1 text-sm student-muted-text">
-                <li>Keep your momentum and continue to the next lesson.</li>
-                <li>Review feedback notes to sharpen weak spots.</li>
-              </ul>
-            ) : (
-              <ul className="mt-2 space-y-1 text-sm student-muted-text">
-                <li>Review lesson materials for missed topics.</li>
-                <li>Practice similar questions before your next attempt.</li>
-                <li>Ask your teacher for help on difficult items.</li>
-              </ul>
-            )}
-          </StudentActionCard>
-        </motion.div>
       </motion.div>
 
       <Dialog open={mentorOpen} onOpenChange={setMentorOpen}>
-        <DialogContent variant="student" className="max-w-2xl">
+        <DialogContent variant="student" className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Ask Ja About This Mistake</DialogTitle>
+            <DialogTitle>Ja Mission Control</DialogTitle>
             <DialogDescription>
-              Ja is grounded on your returned assessment and related lesson content.
+              Guided breakdown of the mistake with progressive hints and grounded sources.
             </DialogDescription>
           </DialogHeader>
 
@@ -316,7 +383,7 @@ export default function StudentAssessmentResultsPage() {
             <Textarea
               value={mentorPrompt}
               onChange={(e) => setMentorPrompt(e.target.value)}
-              placeholder="Optional follow-up: What part do you want Ja to explain more clearly?"
+              placeholder="Optional follow-up: what part do you want Ja to unpack next?"
               rows={3}
             />
 
@@ -326,40 +393,111 @@ export default function StudentAssessmentResultsPage() {
               </Button>
             </div>
 
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+                <p className="flex items-center gap-2 text-sm font-semibold text-[var(--student-text-strong)]">
+                  <Target className="h-4 w-4" />
+                  What Went Wrong
+                </p>
+                <p className="mt-2 text-sm text-[var(--student-text-muted)] whitespace-pre-wrap">
+                  {mentorLoading && !mentorResponse
+                    ? 'Ja is analyzing your response pattern...'
+                    : mentorResponse?.analysisPacket?.mistakeSummary || mentorResponse?.reply || 'No explanation available yet.'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+                <p className="flex items-center gap-2 text-sm font-semibold text-[var(--student-text-strong)]">
+                  <Rocket className="h-4 w-4" />
+                  Next Remedial Action
+                </p>
+                <p className="mt-2 text-sm text-[var(--student-text-muted)]">
+                  {mentorResponse?.suggestedNext?.label || 'Review this item once, then retry a related example with the same structure.'}
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
-              {mentorLoading && !mentorResponse ? (
-                <p className="text-sm student-muted-text">Ja is reviewing your mistake...</p>
-              ) : mentorResponse ? (
-                <div className="space-y-4">
-                  <div className="whitespace-pre-wrap text-sm text-[var(--student-text-strong)]">
-                    {mentorResponse.reply}
-                  </div>
+              <p className="flex items-center gap-2 text-sm font-semibold text-[var(--student-text-strong)]">
+                <Lightbulb className="h-4 w-4" />
+                Guided Hints
+              </p>
+              <ol className="mt-2 space-y-2 text-sm text-[var(--student-text-muted)]">
+                {revealedHints.map((hint, index) => (
+                  <li key={`${hint}-${index}`} className="rounded-lg border border-[var(--student-outline)] bg-white/60 px-3 py-2">
+                    <span className="font-semibold text-[var(--student-text-strong)]">Step {index + 1}:</span> {hint}
+                  </li>
+                ))}
+              </ol>
+              {hintRevealCount < hintSteps.length && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => setHintRevealCount((current) => Math.min(current + 1, hintSteps.length))}
+                >
+                  Reveal Next Hint
+                </Button>
+              )}
+            </div>
 
-                  {mentorResponse.suggestedNext?.label && (
-                    <div className="rounded-lg border border-[var(--student-outline)] bg-white/60 p-3 text-sm">
-                      <p className="font-semibold text-[var(--student-text-strong)]">Suggested next review</p>
-                      <p className="mt-1 text-[var(--student-text-muted)]">
-                        {mentorResponse.suggestedNext.label}
-                      </p>
-                    </div>
-                  )}
-
-                  {mentorResponse.citations.length > 0 && (
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--student-text-strong)]">Grounded sources</p>
-                      <ul className="mt-2 space-y-1 text-sm text-[var(--student-text-muted)]">
-                        {mentorResponse.citations.map((citation) => (
-                          <li key={citation.chunkId}>{citation.label}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+            <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+              <p className="text-sm font-semibold text-[var(--student-text-strong)]">Grounded Sources</p>
+              {mentorResponse?.citations?.length ? (
+                <ul className="mt-2 space-y-1 text-sm text-[var(--student-text-muted)]">
+                  {mentorResponse.citations.map((citation) => (
+                    <li key={citation.chunkId}>{citation.label}</li>
+                  ))}
+                </ul>
               ) : (
-                <p className="text-sm student-muted-text">No explanation available yet.</p>
+                <p className="mt-2 text-sm text-[var(--student-text-muted)]">No citations available yet.</p>
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ratingOpen} onOpenChange={setRatingOpen}>
+        <DialogContent variant="student" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rate Ja&apos;s Help</DialogTitle>
+            <DialogDescription>
+              Your feedback helps teachers and admins monitor AI mentoring quality.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setRating(value)}
+                  className="rounded-md p-1 transition hover:scale-105"
+                  aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                >
+                  <Star
+                    className={`h-7 w-7 ${rating >= value ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}`}
+                  />
+                </button>
+              ))}
+            </div>
+            <Textarea
+              value={ratingComment}
+              onChange={(event) => setRatingComment(event.target.value)}
+              rows={3}
+              placeholder="Optional: what made this explanation clear or unclear?"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRatingOpen(false)} disabled={ratingSubmitting}>
+              Maybe Later
+            </Button>
+            <Button onClick={handleSubmitRating} disabled={ratingSubmitting || rating === 0}>
+              {ratingSubmitting ? 'Saving...' : 'Submit Feedback'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
