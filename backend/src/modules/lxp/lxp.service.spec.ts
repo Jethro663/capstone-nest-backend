@@ -29,6 +29,7 @@ describe('LxpService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -52,6 +53,7 @@ describe('LxpService', () => {
         id: 'case-1',
         studentId: 'student-1',
         classId: 'class-1',
+        status: 'pending',
         openedAt: new Date('2026-01-01'),
         triggerScore: '70',
         thresholdApplied: '74',
@@ -66,6 +68,7 @@ describe('LxpService', () => {
         id: 'case-2',
         studentId: 'student-2',
         classId: 'class-1',
+        status: 'active',
         openedAt: new Date('2026-01-02'),
         triggerScore: '69',
         thresholdApplied: '74',
@@ -98,6 +101,20 @@ describe('LxpService', () => {
         lastActivityAt: null,
       },
     ]);
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValue([
+      {
+        studentId: 'student-1',
+        isAtRisk: true,
+        blendedScore: '68',
+        thresholdApplied: '74',
+      },
+      {
+        studentId: 'student-2',
+        isAtRisk: false,
+        blendedScore: '82',
+        thresholdApplied: '74',
+      },
+    ]);
 
     const result = await service.getTeacherQueue('class-1', {
       userId: 'teacher-1',
@@ -113,6 +130,13 @@ describe('LxpService', () => {
       id: 'case-1',
       totalCheckpoints: 2,
       completedCheckpoints: 1,
+      isCurrentlyAtRisk: true,
+      aiPlanEligible: true,
+    });
+    expect(result.queue[1]).toMatchObject({
+      id: 'case-2',
+      isCurrentlyAtRisk: false,
+      aiPlanEligible: false,
     });
   });
 
@@ -355,201 +379,26 @@ describe('LxpService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('logs and notifies when overview access bootstraps a new intervention case', async () => {
+  it('blocks overview access when intervention is pending approval', async () => {
     mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
     mockDb.query.interventionCases.findFirst
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-    mockDb.query.performanceSnapshots.findFirst
-      .mockResolvedValueOnce({
-        isAtRisk: true,
-        blendedScore: '66',
-        thresholdApplied: '74',
-        lastComputedAt: new Date('2026-02-05T00:00:00.000Z'),
-      })
-      .mockResolvedValueOnce({ blendedScore: '66', thresholdApplied: '74' });
-    mockDb.query.lxpProgress.findFirst.mockResolvedValue({
-      studentId: 'student-1',
-      classId: 'class-1',
-      xpTotal: 5,
-      streakDays: 1,
-      checkpointsCompleted: 0,
-      lastActivityAt: null,
-    });
-    mockDb.query.enrollments.findMany.mockResolvedValue([
-      {
-        classId: 'class-1',
-        class: {
-          id: 'class-1',
-          subjectName: 'Mathematics',
-          subjectCode: 'MATH-7',
-          section: { id: 'sec-1', name: 'Rizal', gradeLevel: '7' },
-        },
-      },
-    ]);
-    mockDb.query.performanceSnapshots.findMany.mockResolvedValue([
-      {
-        classId: 'class-1',
-        blendedScore: '66',
-        thresholdApplied: '74',
-        isAtRisk: true,
-        lastComputedAt: new Date('2026-02-05T00:00:00.000Z'),
-      },
-    ]);
-    mockDb.query.interventionAssignments.findMany
-      .mockResolvedValueOnce([{ id: 'seeded-assignment' }])
-      .mockResolvedValueOnce([
-        {
-          id: 'assignment-1',
-          assignmentType: 'lesson_review',
-          checkpointLabel: 'Review Fractions',
-          orderIndex: 1,
-          isCompleted: false,
-          completedAt: null,
-          xpAwarded: 20,
-          lesson: {
-            id: 'lesson-1',
-            title: 'Fractions Refresher',
-            description: 'Review fraction basics.',
-            order: 1,
-          },
-          assessment: null,
-        },
-      ]);
-    mockDb.query.classes.findFirst.mockResolvedValue({
-      id: 'class-1',
-      teacherId: 'teacher-1',
-      subjectName: 'Mathematics',
-      subjectCode: 'MATH-7',
-    });
+      .mockResolvedValueOnce({ id: 'pending-case-1' });
 
-    const returning = jest.fn().mockResolvedValue([
-      {
-        id: 'case-overview-new',
-        classId: 'class-1',
-        studentId: 'student-1',
-        status: 'active',
-        triggerSource: 'student_lxp_open',
-        triggerScore: '66',
-        thresholdApplied: '74',
-        openedAt: new Date('2026-02-20T00:00:00.000Z'),
-      },
-    ]);
-    const values = jest.fn().mockReturnValue({ returning });
-    mockDb.insert.mockReturnValue({ values });
-
-    const result = await service.getStudentOverview('student-1', 'class-1');
-
-    expect(result.interventionStatus.caseId).toBe('case-overview-new');
-    expect(mockNotificationsService.createBulk).toHaveBeenCalledWith([
-      expect.objectContaining({
-        userId: 'student-1',
-        title: 'LXP unlocked',
-      }),
-      expect.objectContaining({
-        userId: 'teacher-1',
-        title: 'Student flagged for intervention',
-      }),
-    ]);
-    expect(mockAuditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: 'student-1',
-        action: 'lxp.intervention.opened_on_student_access',
-        targetType: 'intervention_case',
-        targetId: 'case-overview-new',
-        metadata: expect.objectContaining({
-          classId: 'class-1',
-          studentId: 'student-1',
-          triggerSource: 'student_lxp_open',
-        }),
-      }),
-    );
+    await expect(
+      service.getStudentOverview('student-1', 'class-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('logs and notifies when a student opens LXP and triggers case bootstrap', async () => {
+  it('blocks playlist access when intervention is pending approval', async () => {
     mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
     mockDb.query.interventionCases.findFirst
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null);
-    mockDb.query.performanceSnapshots.findFirst
-      .mockResolvedValueOnce({ isAtRisk: true })
-      .mockResolvedValueOnce({ blendedScore: '61', thresholdApplied: '74' });
-    mockDb.query.interventionAssignments.findMany
-      .mockResolvedValueOnce([{ id: 'seeded-assignment' }])
-      .mockResolvedValueOnce([
-        {
-          id: 'assignment-1',
-          assignmentType: 'lesson_review',
-          checkpointLabel: 'Review Fractions',
-          orderIndex: 1,
-          isCompleted: false,
-          completedAt: null,
-          xpAwarded: 20,
-          lesson: {
-            id: 'lesson-1',
-            title: 'Fractions Refresher',
-            description: 'Review fraction basics.',
-            order: 1,
-          },
-          assessment: null,
-        },
-      ]);
-    mockDb.query.lxpProgress.findFirst.mockResolvedValue({
-      studentId: 'student-1',
-      classId: 'class-1',
-      xpTotal: 10,
-      streakDays: 1,
-      checkpointsCompleted: 0,
-      lastActivityAt: null,
-    });
-    mockDb.query.classes.findFirst.mockResolvedValue({
-      id: 'class-1',
-      teacherId: 'teacher-1',
-      subjectName: 'Mathematics',
-      subjectCode: 'MATH-7',
-    });
+      .mockResolvedValueOnce({ id: 'pending-case-1' });
 
-    const returning = jest.fn().mockResolvedValue([
-      {
-        id: 'case-new',
-        classId: 'class-1',
-        studentId: 'student-1',
-        status: 'active',
-        triggerSource: 'student_lxp_open',
-        triggerScore: '61',
-        thresholdApplied: '74',
-        openedAt: new Date('2026-02-20T00:00:00.000Z'),
-      },
-    ]);
-    const values = jest.fn().mockReturnValue({ returning });
-    mockDb.insert.mockReturnValue({ values });
-
-    const result = await service.getStudentPlaylist('student-1', 'class-1');
-
-    expect(result.interventionCase.id).toBe('case-new');
-    expect(mockNotificationsService.createBulk).toHaveBeenCalledWith([
-      expect.objectContaining({
-        userId: 'student-1',
-        title: 'LXP unlocked',
-      }),
-      expect.objectContaining({
-        userId: 'teacher-1',
-        title: 'Student flagged for intervention',
-      }),
-    ]);
-    expect(mockAuditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: 'student-1',
-        action: 'lxp.intervention.opened_on_student_access',
-        targetType: 'intervention_case',
-        targetId: 'case-new',
-        metadata: expect.objectContaining({
-          classId: 'class-1',
-          studentId: 'student-1',
-          triggerSource: 'student_lxp_open',
-        }),
-      }),
-    );
+    await expect(
+      service.getStudentPlaylist('student-1', 'class-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('submits a system evaluation tied to the requesting user', async () => {
@@ -972,7 +821,7 @@ describe('LxpService', () => {
       .spyOn(service as any, 'getOrCreateProgress')
       .mockResolvedValue({ id: 'progress-1' });
     jest
-      .spyOn(service as any, 'notifyInterventionOpened')
+      .spyOn(service as any, 'notifyInterventionPending')
       .mockResolvedValue(undefined);
 
     await service.handlePerformanceStatusChanged({
@@ -987,7 +836,7 @@ describe('LxpService', () => {
     expect(mockAuditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: 'teacher-1',
-        action: 'lxp.intervention.auto_opened',
+        action: 'lxp.intervention.pending_created',
         targetType: 'intervention_case',
         targetId: 'case-auto-opened',
         metadata: expect.objectContaining({
@@ -1146,5 +995,106 @@ describe('LxpService', () => {
     ]);
     expect(playlistSpy).toHaveBeenCalledWith('student-1', 'class-1');
     expect(result).toEqual(playlistResponse);
+  });
+
+  it('blocks manual completion for assessment retry checkpoints', async () => {
+    jest
+      .spyOn(service as any, 'assertStudentEnrollment')
+      .mockResolvedValue(undefined);
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-retry',
+      assignmentType: 'assessment_retry',
+      isCompleted: false,
+      xpAwarded: 30,
+      interventionCase: {
+        id: 'case-1',
+        studentId: 'student-1',
+        classId: 'class-1',
+        status: 'active',
+        note: null,
+      },
+    });
+
+    await expect(
+      service.completeCheckpoint('student-1', 'class-1', 'assignment-retry'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('completes assessment retry checkpoint via JA review session evidence', async () => {
+    jest
+      .spyOn(service as any, 'assertStudentEnrollment')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'getOrCreateProgress').mockResolvedValue({
+      studentId: 'student-1',
+      classId: 'class-1',
+      xpTotal: 10,
+      streakDays: 1,
+      checkpointsCompleted: 0,
+      lastActivityAt: null,
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-retry',
+        assignmentType: 'assessment_retry',
+        assessmentId: 'assessment-1',
+        orderIndex: 1,
+        isCompleted: false,
+        xpAwarded: 30,
+        interventionCase: {
+          id: 'case-1',
+          studentId: 'student-1',
+          classId: 'class-1',
+          status: 'active',
+          note: null,
+        },
+      },
+    ]);
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+      subjectCode: 'MATH-7',
+    });
+
+    const txUpdateSet = jest.fn().mockReturnValue({
+      where: jest.fn().mockResolvedValue(undefined),
+    });
+    const tx = {
+      update: jest.fn().mockReturnValue({
+        set: txUpdateSet,
+      }),
+      query: {
+        interventionAssignments: {
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'assignment-retry', isCompleted: true },
+          ]),
+        },
+      },
+    };
+    mockDb.transaction.mockImplementation(async (handler: (trx: any) => any) =>
+      handler(tx),
+    );
+
+    const result = await service.completeAssessmentRetryFromJaReview(
+      'student-1',
+      'class-1',
+      'assessment-1',
+      'ja-session-1',
+    );
+
+    expect(result).toMatchObject({
+      completed: true,
+      assignmentId: 'assignment-retry',
+    });
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 'student-1',
+        action: 'lxp.checkpoint.completed',
+        targetId: 'assignment-retry',
+        metadata: expect.objectContaining({
+          source: 'ja_review',
+          jaSessionId: 'ja-session-1',
+        }),
+      }),
+    );
   });
 });

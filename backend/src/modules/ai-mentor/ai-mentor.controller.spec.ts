@@ -44,6 +44,7 @@ const mockDb = {
     aiGenerationOutputs: { findFirst: jest.fn() },
     assessments: { findFirst: jest.fn() },
     interventionCases: { findFirst: jest.fn() },
+    performanceSnapshots: { findFirst: jest.fn() },
     extractedModules: { findFirst: jest.fn(), findMany: jest.fn() },
     uploadedFiles: { findFirst: jest.fn() },
   },
@@ -67,6 +68,7 @@ describe('AiMentorController', () => {
     mockDb.query.aiGenerationOutputs.findFirst.mockReset();
     mockDb.query.assessments.findFirst.mockReset();
     mockDb.query.interventionCases.findFirst.mockReset();
+    mockDb.query.performanceSnapshots.findFirst.mockReset();
     mockDb.query.extractedModules.findFirst.mockReset();
     mockDb.query.extractedModules.findMany.mockReset();
     mockDb.query.uploadedFiles.findFirst.mockReset();
@@ -90,7 +92,11 @@ describe('AiMentorController', () => {
     mockDb.query.interventionCases.findFirst.mockResolvedValue({
       id: JOB_ID,
       classId: CLASS_ID,
+      studentId: 'student-1',
       status: 'active',
+    });
+    mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
+      isAtRisk: true,
     });
     mockDb.query.extractedModules.findFirst.mockResolvedValue({
       id: EXTRACTION_ID,
@@ -798,13 +804,34 @@ describe('AiMentorController', () => {
       mockDb.query.interventionCases.findFirst.mockResolvedValue({
         id: JOB_ID,
         classId: CLASS_ID,
+        studentId: 'student-1',
         status: 'completed',
       });
 
       await expect(
         controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
       ).rejects.toThrow(
-        'AI recommendations are only available for active intervention cases.',
+        'AI recommendations are only available for pending or active intervention cases.',
+      );
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+
+    it('should block queue when student is no longer at risk', async () => {
+      const dto = { note: 'Focus on fractions' };
+      mockDb.query.interventionCases.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        classId: CLASS_ID,
+        studentId: 'student-1',
+        status: 'active',
+      });
+      mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
+        isAtRisk: false,
+      });
+
+      await expect(
+        controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow(
+        'AI recommendations are only available when the student is currently at risk.',
       );
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });
@@ -869,13 +896,14 @@ describe('AiMentorController', () => {
       mockDb.query.interventionCases.findFirst.mockResolvedValue({
         id: JOB_ID,
         classId: CLASS_ID,
+        studentId: 'student-1',
         status: 'completed',
       });
 
       await expect(
         controller.recommendIntervention(JOB_ID, dto, TEACHER_USER),
       ).rejects.toThrow(
-        'AI recommendations are only available for active intervention cases.',
+        'AI recommendations are only available for pending or active intervention cases.',
       );
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });

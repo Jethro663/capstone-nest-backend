@@ -42,6 +42,9 @@ TUTOR_PACKET_FORMAT: dict[str, Any] = {
             "maxItems": 3,
         },
         "lessonBody": {"type": "string"},
+        "analogy": {"type": "string"},
+        "misconceptionCorrection": {"type": "string"},
+        "citationGrounding": {"type": "string"},
         "questions": {
             "type": "array",
             "minItems": 3,
@@ -58,7 +61,14 @@ TUTOR_PACKET_FORMAT: dict[str, Any] = {
             },
         },
     },
-    "required": ["lessonPlan", "lessonBody", "questions"],
+    "required": [
+        "lessonPlan",
+        "lessonBody",
+        "analogy",
+        "misconceptionCorrection",
+        "citationGrounding",
+        "questions",
+    ],
 }
 
 TUTOR_PLAN_FORMAT: dict[str, Any] = {
@@ -284,6 +294,12 @@ def _fallback_tutor_packet(
             f"Use this evidence as a reference point: {evidence}\n\n"
             "If a detail still feels unclear, ask Ja to explain it in a simpler way before answering the practice questions."
         ),
+        "analogy": f"Think of {title} like a step-by-step checklist: each step supports the next one.",
+        "misconceptionCorrection": (
+            "A common mistake is jumping to the final answer too early. "
+            "Slow down and verify each step against the class evidence first."
+        ),
+        "citationGrounding": f"Grounded in class evidence: {evidence}",
         "questions": [
             {
                 "id": "q1",
@@ -1046,6 +1062,9 @@ Return valid JSON with this shape:
 {{
   "lessonPlan": ["short step 1", "short step 2", "short step 3"],
   "lessonBody": "2-4 short paragraphs that teach the concept simply",
+  "analogy": "one plain-language analogy linked to the focus topic",
+  "misconceptionCorrection": "short correction for one likely misconception",
+  "citationGrounding": "short line that cites the class evidence used",
   "questions": [
     {{
       "id": "q1",
@@ -1060,8 +1079,11 @@ Constraints:
 - Exactly 3 questions.
 - Questions must be easier than a normal graded assessment.
 - expectedAnswer must be short and should not include long answer-key wording.
+- Include exactly one plain-language analogy in `analogy`.
+- Include exactly one short misconception correction in `misconceptionCorrection`.
+- Include explicit citation grounding in `citationGrounding`, and only cite provided evidence.
 - Use only evidence that matches the planner's requiredEvidence.
-- If evidence is weak, keep the lesson body conservative and say what idea the student should verify.
+- If evidence is weak, be conservative, avoid confident claims, and tell the student what to verify next.
 """
         raw = await ollama_client.generate(
             prompt,
@@ -1077,6 +1099,9 @@ Constraints:
             "plan": plan,
             "lessonPlan": parsed.get("lessonPlan") or [],
             "lessonBody": parsed.get("lessonBody") or "",
+            "analogy": parsed.get("analogy") or "",
+            "misconceptionCorrection": parsed.get("misconceptionCorrection") or "",
+            "citationGrounding": parsed.get("citationGrounding") or "",
             "questions": questions,
         }
     except Exception:
@@ -1332,6 +1357,9 @@ def _build_start_message(payload: dict[str, Any]) -> str:
         "I reviewed the clues from your class activity and built a short tutoring path for you.\n\n"
         f"Lesson plan:\n{plan_lines}\n\n"
         f"{payload.get('lessonBody')}\n\n"
+        f"Analogy: {payload.get('analogy')}\n"
+        f"Misconception check: {payload.get('misconceptionCorrection')}\n"
+        f"Evidence used: {payload.get('citationGrounding')}\n\n"
         "Try these 3 guided questions next:\n"
         f"{question_lines}"
     )

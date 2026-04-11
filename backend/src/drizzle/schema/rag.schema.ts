@@ -35,6 +35,7 @@ export const contentSourceTypeEnum = pgEnum('content_source_type', [
 export const aiGenerationJobTypeEnum = pgEnum('ai_generation_job_type', [
   'quiz_generation',
   'remedial_plan_generation',
+  'performance_diagnostics',
   'reindexing',
   'backfill',
 ]);
@@ -42,6 +43,7 @@ export const aiGenerationJobTypeEnum = pgEnum('ai_generation_job_type', [
 export const aiGenerationOutputTypeEnum = pgEnum('ai_generation_output_type', [
   'assessment_draft',
   'intervention_recommendation',
+  'performance_diagnostic',
 ]);
 
 export const aiGenerationStatusEnum = pgEnum('ai_generation_status', [

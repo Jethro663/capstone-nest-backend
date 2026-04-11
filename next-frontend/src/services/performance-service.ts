@@ -1,8 +1,12 @@
 import { api } from '@/lib/api-client';
 import type {
+  AdminPerformanceAnalyticsResponse,
+  ClassDiagnosticsResponse,
   ClassAtRiskResponse,
   ClassPerformanceLogsResponse,
   ClassPerformanceSummary,
+  PerformanceAnalysisJob,
+  PerformanceAnalysisStructuredOutput,
   StudentOwnPerformanceSummary,
 } from '@/types/performance';
 
@@ -58,10 +62,61 @@ export const performanceService = {
     return normalizeEnvelope<ClassPerformanceLogsResponse>(data);
   },
 
+  async createAnalysisJob(
+    classId: string,
+    payload?: { studentId?: string; note?: string },
+  ): Promise<Envelope<PerformanceAnalysisJob>> {
+    const { data } = await api.post(
+      `/performance/classes/${classId}/analysis/jobs`,
+      payload ?? {},
+    );
+    return normalizeEnvelope<PerformanceAnalysisJob>(data);
+  },
+
+  async getAnalysisJobStatus(
+    jobId: string,
+  ): Promise<Envelope<PerformanceAnalysisJob>> {
+    const { data } = await api.get(`/performance/analysis/jobs/${jobId}`);
+    return normalizeEnvelope<PerformanceAnalysisJob>(data);
+  },
+
+  async getAnalysisJobResult(
+    jobId: string,
+  ): Promise<
+    Envelope<{
+      job: {
+        jobId: string;
+        jobType: string;
+        status: PerformanceAnalysisJob['status'];
+        outputId: string;
+        updatedAt?: string | null;
+      };
+      result: {
+        outputId: string;
+        outputType: string;
+        structuredOutput: PerformanceAnalysisStructuredOutput;
+      };
+    }>
+  > {
+    const { data } = await api.get(`/performance/analysis/jobs/${jobId}/result`);
+    return normalizeEnvelope(data);
+  },
+
+  async getClassDiagnostics(
+    classId: string,
+  ): Promise<Envelope<ClassDiagnosticsResponse>> {
+    const { data } = await api.get(`/performance/classes/${classId}/diagnostics`);
+    return normalizeEnvelope<ClassDiagnosticsResponse>(data);
+  },
+
+  async getAdminAnalytics(): Promise<Envelope<AdminPerformanceAnalyticsResponse>> {
+    const { data } = await api.get('/performance/admin/analytics');
+    return normalizeEnvelope<AdminPerformanceAnalyticsResponse>(data);
+  },
+
   /** GET /performance/students/me/summary */
   async getStudentOwnSummary(): Promise<Envelope<StudentOwnPerformanceSummary>> {
     const { data } = await api.get('/performance/students/me/summary');
     return normalizeEnvelope<StudentOwnPerformanceSummary>(data);
   },
 };
-

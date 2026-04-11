@@ -8,6 +8,7 @@ import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { AiProxyService } from '../ai-mentor/ai-proxy.service';
+import { LxpService } from '../lxp/lxp.service';
 import {
   assessmentAttempts,
   assessments,
@@ -71,6 +72,7 @@ export class JaService {
     private readonly databaseService: DatabaseService,
     private readonly aiProxyService: AiProxyService,
     private readonly auditService: AuditService,
+    private readonly lxpService: LxpService,
   ) {}
 
   private get db() {
@@ -1082,6 +1084,7 @@ export class JaService {
     const attempt = await this.db
       .select({
         attemptId: assessmentAttempts.id,
+        assessmentId: assessments.id,
       })
       .from(assessmentAttempts)
       .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
@@ -1153,6 +1156,7 @@ export class JaService {
         sourceSnapshotJson: {
           ...(data.sourceSnapshot ?? {}),
           attemptId: dto.attemptId,
+          assessmentId: attempt[0].assessmentId,
         },
         groundingStatus: data.groundingStatus ?? 'grounded',
       })
@@ -1512,6 +1516,31 @@ export class JaService {
       },
     });
 
+    let lxpCheckpointCompletion: {
+      completed: boolean;
+      reason?: string;
+      assignmentId?: string;
+      caseId?: string;
+      interventionCompletedByStudent?: boolean;
+    } | null = null;
+    if (session.mode === 'review') {
+      const sourceSnapshot = (session.sourceSnapshotJson ??
+        {}) as Record<string, unknown>;
+      const linkedAssessmentId =
+        typeof sourceSnapshot.assessmentId === 'string'
+          ? sourceSnapshot.assessmentId
+          : null;
+      if (linkedAssessmentId) {
+        lxpCheckpointCompletion =
+          await this.lxpService.completeAssessmentRetryFromJaReview(
+            studentId,
+            session.classId,
+            linkedAssessmentId,
+            sessionId,
+          );
+      }
+    }
+
     await this.auditService.log({
       actorId: studentId,
       action: 'ja.session.completed',
@@ -1524,6 +1553,7 @@ export class JaService {
         questionCount: session.questionCount,
         awardedNow,
         xpAwarded,
+        lxpCheckpointCompletion,
       },
     });
 
@@ -1533,6 +1563,7 @@ export class JaService {
       questionCount: session.questionCount,
       awardedNow,
       xpAwarded,
+      lxpCheckpointCompletion,
     };
   }
 

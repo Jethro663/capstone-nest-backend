@@ -156,6 +156,8 @@ export interface LxpOverviewResponse {
 
 export interface TeacherInterventionQueueItem {
   id: string;
+  classId: string;
+  status: 'pending' | 'active' | 'completed' | 'dismissed';
   studentId: string;
   student?: {
     id: string;
@@ -166,6 +168,10 @@ export interface TeacherInterventionQueueItem {
   openedAt: string;
   triggerScore: number | null;
   thresholdApplied: number;
+  isCurrentlyAtRisk: boolean;
+  latestBlendedScore: number | null;
+  latestThreshold: number;
+  aiPlanEligible: boolean;
   totalCheckpoints: number;
   completedCheckpoints: number;
   completionPercent: number;
@@ -190,6 +196,7 @@ export interface LxpClassReport {
   threshold: number;
   summary: {
     totalCases: number;
+    pendingCases: number;
     activeCases: number;
     completedCases: number;
     interventionParticipation: number;

@@ -64,6 +64,13 @@ export const lxpService = {
     return normalizeEnvelope<TeacherInterventionQueueResponse>(data);
   },
 
+  async activateIntervention(
+    caseId: string,
+  ): Promise<Envelope<TeacherInterventionQueueResponse>> {
+    const { data } = await api.post(`/lxp/teacher/interventions/${caseId}/activate`);
+    return normalizeEnvelope<TeacherInterventionQueueResponse>(data);
+  },
+
   async assignIntervention(
     caseId: string,
     payload: {
@@ -81,6 +88,11 @@ export const lxpService = {
   async getClassReport(classId: string): Promise<Envelope<LxpClassReport>> {
     const { data } = await api.get(`/lxp/teacher/classes/${classId}/reports/summary`);
     return normalizeEnvelope<LxpClassReport>(data);
+  },
+
+  async getTeacherCase(caseId: string) {
+    const { data } = await api.get(`/lxp/teacher/interventions/${caseId}`);
+    return normalizeEnvelope<TeacherInterventionQueueResponse['queue'][number]>(data);
   },
 
   async submitEvaluation(payload: {

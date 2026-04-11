@@ -12,6 +12,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { QueryPerformanceLogsDto } from './DTO/query-performance-logs.dto';
+import { CreatePerformanceAnalysisJobDto } from './DTO/create-performance-analysis-job.dto';
 import { PerformanceService } from './performance.service';
 
 @Controller('performance')
@@ -73,6 +74,74 @@ export class PerformanceController {
       user.userId,
       user.roles,
       query,
+    );
+    return { success: true, data };
+  }
+
+  @Post('classes/:classId/analysis/jobs')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async createPerformanceAnalysisJob(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Body() dto: CreatePerformanceAnalysisJobDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.performanceService.createPerformanceAnalysisJob(
+      classId,
+      dto,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
+  @Get('analysis/jobs/:jobId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getPerformanceAnalysisJobStatus(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.performanceService.getPerformanceAnalysisJobStatus(
+      jobId,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
+  @Get('analysis/jobs/:jobId/result')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getPerformanceAnalysisJobResult(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.performanceService.getPerformanceAnalysisJobResult(
+      jobId,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
+  @Get('classes/:classId/diagnostics')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getClassDiagnostics(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.performanceService.getClassDiagnostics(
+      classId,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
+  @Get('admin/analytics')
+  @Roles(RoleName.Admin)
+  async getAdminAnalytics(@CurrentUser() user: { userId: string; roles: string[] }) {
+    const data = await this.performanceService.getAdminAnalytics(
+      user.userId,
+      user.roles,
     );
     return { success: true, data };
   }

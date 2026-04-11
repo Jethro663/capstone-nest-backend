@@ -60,6 +60,10 @@ function buildQueueEntry(caseId: string = 'case-1') {
     openedAt: '2026-04-04T00:00:00.000Z',
     triggerScore: 54.2,
     thresholdApplied: 60,
+    isCurrentlyAtRisk: true,
+    latestBlendedScore: 54.2,
+    latestThreshold: 60,
+    aiPlanEligible: true,
     totalCheckpoints: 2,
     completedCheckpoints: 0,
     completionPercent: 0,
@@ -70,6 +74,15 @@ function buildQueueEntry(caseId: string = 'case-1') {
       checkpointsCompleted: 0,
       lastActivityAt: null,
     },
+  };
+}
+
+function buildIneligibleQueueEntry(caseId: string = 'case-1') {
+  return {
+    ...buildQueueEntry(caseId),
+    isCurrentlyAtRisk: false,
+    aiPlanEligible: false,
+    latestBlendedScore: 84.2,
   };
 }
 
@@ -259,6 +272,27 @@ describe('TeacherInterventionWorkspacePage', () => {
 
     fireEvent.click(generateButton);
 
+    expect(mockedAiService.createInterventionJob).not.toHaveBeenCalled();
+  });
+
+  it('blocks plan generation when queue case is no longer AI-eligible', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [buildIneligibleQueueEntry()],
+      },
+    });
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/is no longer at-risk, so AI planning is disabled/i),
+      ).toBeInTheDocument();
+    });
+
+    const generateButton = screen.getByRole('button', { name: /generate plan/i });
+    expect(generateButton).toBeDisabled();
+    fireEvent.click(generateButton);
     expect(mockedAiService.createInterventionJob).not.toHaveBeenCalled();
   });
 

@@ -1,24 +1,34 @@
 import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
+  aiGenerationJobs,
+  aiGenerationOutputs,
   assessments,
+  assessmentQuestions,
   assessmentAttempts,
+  assessmentResponses,
   classRecords,
   classes,
+  contentChunks,
   enrollments,
+  interventionCases,
   performanceLogs,
   performanceSnapshots,
+  studentConceptMastery,
   users,
 } from '../../drizzle/schema';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { QueryPerformanceLogsDto } from './DTO/query-performance-logs.dto';
 import { AuditService } from '../audit/audit.service';
+import { CreatePerformanceAnalysisJobDto } from './DTO/create-performance-analysis-job.dto';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
 
@@ -49,6 +59,19 @@ type SnapshotData = {
   thresholdApplied: number;
   lastComputedAt: Date;
   updatedAt: Date;
+};
+
+type LearningGapRow = {
+  concept: string;
+  wrongCount: number;
+  evidenceCount: number;
+  masteryScore: number;
+  lessonEvidence: Array<{
+    chunkId: string;
+    lessonId: string | null;
+    excerpt: string;
+    sourceType: string;
+  }>;
 };
 
 @Injectable()
@@ -690,6 +713,622 @@ export class PerformanceService {
         triggerSource: log.triggerSource,
         createdAt: log.createdAt,
       })),
+    };
+  }
+
+  private normalizeConceptKey(raw: string): string {
+    const normalized = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!normalized) return '';
+    return normalized.slice(0, 120);
+  }
+
+  private extractConceptCandidates(
+    conceptTags: unknown,
+    questionContent: string,
+  ): string[] {
+    if (Array.isArray(conceptTags)) {
+      const tags = conceptTags
+        .map((tag) => this.normalizeConceptKey(String(tag)))
+        .filter((tag) => tag.length > 0);
+      if (tags.length > 0) return tags;
+    }
+
+    const fallback = questionContent
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 5)
+      .join(' ');
+    const normalizedFallback = this.normalizeConceptKey(fallback);
+    return normalizedFallback ? [normalizedFallback] : ['unknown concept'];
+  }
+
+  private runtimeProgressForStatus(status: string): number {
+    switch (status) {
+      case 'pending':
+        return 5;
+      case 'processing':
+        return 60;
+      case 'completed':
+      case 'approved':
+      case 'rejected':
+      case 'failed':
+        return 100;
+      default:
+        return 0;
+    }
+  }
+
+  private async assertAnalysisJobAccess(
+    jobId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    const job = await this.db.query.aiGenerationJobs.findFirst({
+      where: eq(aiGenerationJobs.id, jobId),
+      columns: {
+        id: true,
+        classId: true,
+        teacherId: true,
+        jobType: true,
+        status: true,
+        errorMessage: true,
+        updatedAt: true,
+      },
+    });
+    if (!job || job.jobType !== 'performance_diagnostics') {
+      throw new NotFoundException(`Analysis job "${jobId}" not found`);
+    }
+
+    if (this.isAdmin(roles)) {
+      return job;
+    }
+
+    if (job.teacherId === userId) {
+      return job;
+    }
+
+    if (!job.classId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    await this.assertClassAccess(job.classId, userId, roles);
+    return job;
+  }
+
+  private async buildPerformanceDiagnostics(
+    classId: string,
+    studentId?: string,
+    teacherNote?: string,
+  ) {
+    const incorrectResponses = await this.db.query.assessmentResponses.findMany({
+      where: eq(assessmentResponses.isCorrect, false),
+      with: {
+        attempt: {
+          columns: {
+            id: true,
+            studentId: true,
+            assessmentId: true,
+            submittedAt: true,
+            isSubmitted: true,
+            score: true,
+          },
+          with: {
+            assessment: {
+              columns: {
+                id: true,
+                classId: true,
+                title: true,
+                type: true,
+              },
+            },
+          },
+        },
+        question: {
+          columns: {
+            id: true,
+            content: true,
+            conceptTags: true,
+          },
+        },
+      },
+      orderBy: [desc(assessmentResponses.createdAt)],
+      limit: 500,
+    });
+
+    const filteredMistakes = incorrectResponses.filter((response) => {
+      const attempt = response.attempt;
+      if (!attempt?.isSubmitted) return false;
+      if (attempt.assessment?.classId !== classId) return false;
+      if (studentId && attempt.studentId !== studentId) return false;
+      return true;
+    });
+
+    const conceptMap = new Map<string, { wrongCount: number; evidenceCount: number }>();
+    const perStudentConcept = new Map<
+      string,
+      Map<string, { wrongCount: number; evidenceCount: number }>
+    >();
+    const scoreBreakdownMap = new Map<
+      string,
+      { assessmentId: string; title: string; scores: number[]; type: string | null }
+    >();
+
+    for (const response of filteredMistakes) {
+      const attempt = response.attempt;
+      const assessment = attempt?.assessment;
+      const question = response.question;
+      if (!attempt || !assessment || !question) continue;
+
+      const scoreBucket = scoreBreakdownMap.get(assessment.id) ?? {
+        assessmentId: assessment.id,
+        title: assessment.title,
+        scores: [],
+        type: assessment.type,
+      };
+      if (typeof attempt.score === 'number') {
+        scoreBucket.scores.push(attempt.score);
+      }
+      scoreBreakdownMap.set(assessment.id, scoreBucket);
+
+      const concepts = this.extractConceptCandidates(
+        question.conceptTags,
+        question.content,
+      );
+      for (const concept of concepts) {
+        const existing = conceptMap.get(concept) ?? { wrongCount: 0, evidenceCount: 0 };
+        existing.wrongCount += 1;
+        existing.evidenceCount += 1;
+        conceptMap.set(concept, existing);
+
+        const studentKey = attempt.studentId;
+        const studentConceptMap = perStudentConcept.get(studentKey) ?? new Map();
+        const studentConcept =
+          studentConceptMap.get(concept) ?? { wrongCount: 0, evidenceCount: 0 };
+        studentConcept.wrongCount += 1;
+        studentConcept.evidenceCount += 1;
+        studentConceptMap.set(concept, studentConcept);
+        perStudentConcept.set(studentKey, studentConceptMap);
+      }
+    }
+
+    const conceptsSorted = [...conceptMap.entries()]
+      .sort((a, b) => b[1].wrongCount - a[1].wrongCount)
+      .slice(0, 8);
+
+    const learningGaps: LearningGapRow[] = [];
+    for (const [concept, values] of conceptsSorted) {
+      const likePattern = `%${concept}%`;
+      const evidenceRows = await this.db.execute(sql`
+        SELECT id, lesson_id, source_type, chunk_text
+        FROM content_chunks
+        WHERE class_id = ${classId}
+          AND lower(chunk_text) LIKE ${likePattern}
+        ORDER BY updated_at DESC
+        LIMIT 3
+      `);
+
+      const lessonEvidence = evidenceRows.rows.map((row: any) => ({
+        chunkId: String(row.id),
+        lessonId: row.lesson_id ? String(row.lesson_id) : null,
+        sourceType: String(row.source_type),
+        excerpt: String(row.chunk_text ?? '').slice(0, 220),
+      }));
+
+      const masteryScore = Math.max(0, 100 - values.wrongCount * 12);
+      learningGaps.push({
+        concept,
+        wrongCount: values.wrongCount,
+        evidenceCount: values.evidenceCount,
+        masteryScore,
+        lessonEvidence,
+      });
+    }
+
+    for (const [studentKey, concepts] of perStudentConcept.entries()) {
+      for (const [concept, values] of concepts.entries()) {
+        const masteryScore = Math.max(0, 100 - values.wrongCount * 12);
+        await this.db.execute(sql`
+          INSERT INTO student_concept_mastery (
+            student_id,
+            class_id,
+            concept_key,
+            evidence_count,
+            error_count,
+            mastery_score,
+            last_seen_at,
+            updated_at
+          )
+          VALUES (
+            ${studentKey},
+            ${classId},
+            ${concept},
+            ${values.evidenceCount},
+            ${values.wrongCount},
+            ${masteryScore},
+            NOW(),
+            NOW()
+          )
+          ON CONFLICT (student_id, class_id, concept_key)
+          DO UPDATE SET
+            evidence_count = GREATEST(student_concept_mastery.evidence_count, EXCLUDED.evidence_count),
+            error_count = GREATEST(student_concept_mastery.error_count, EXCLUDED.error_count),
+            mastery_score = LEAST(student_concept_mastery.mastery_score, EXCLUDED.mastery_score),
+            last_seen_at = NOW(),
+            updated_at = NOW()
+        `);
+      }
+    }
+
+    const scoreBreakdown = [...scoreBreakdownMap.values()]
+      .map((item) => {
+        const average =
+          item.scores.length > 0
+            ? this.round(item.scores.reduce((sum, score) => sum + score, 0) / item.scores.length)
+            : null;
+        return {
+          assessmentId: item.assessmentId,
+          title: item.title,
+          category: item.type ?? 'quiz',
+          averageScore: average,
+          attemptCount: item.scores.length,
+        };
+      })
+      .sort((a, b) => (a.averageScore ?? Number.POSITIVE_INFINITY) - (b.averageScore ?? Number.POSITIVE_INFINITY))
+      .slice(0, 10);
+
+    const evidence = filteredMistakes.slice(0, 8).map((entry) => ({
+      studentId: entry.attempt?.studentId ?? null,
+      assessmentId: entry.attempt?.assessmentId ?? null,
+      assessmentTitle: entry.attempt?.assessment?.title ?? null,
+      questionId: entry.questionId,
+      questionText: entry.question?.content ?? '',
+      studentAnswer: entry.studentAnswer,
+      submittedAt: entry.attempt?.submittedAt ?? null,
+    }));
+
+    const insufficientEvidence = filteredMistakes.length < 2 || learningGaps.length === 0;
+    const teacherActions = insufficientEvidence
+      ? [
+          'Collect more submitted attempts before relying on AI learning-gap signals.',
+          'Recompute performance after the next graded assessment.',
+        ]
+      : [
+          'Start intervention with the top two weak concepts and verify improvement after one retry.',
+          'Use lesson evidence references to align remediation to exact misconceptions.',
+        ];
+
+    const recommendedIntervention = {
+      shouldOpenCase:
+        !insufficientEvidence &&
+        learningGaps.length > 0 &&
+        learningGaps.some((gap) => gap.masteryScore < PERFORMANCE_RISK_THRESHOLD),
+      status: insufficientEvidence ? 'insufficient_evidence' : 'actionable',
+      topConcepts: learningGaps.slice(0, 3).map((gap) => gap.concept),
+    };
+
+    return {
+      classId,
+      studentId: studentId ?? null,
+      generatedAt: new Date().toISOString(),
+      insufficientEvidence,
+      teacherNote: teacherNote?.trim() || null,
+      learningGaps,
+      scoreBreakdown,
+      evidence,
+      teacherActions,
+      recommendedIntervention,
+    };
+  }
+
+  private async runPerformanceAnalysisJob(
+    jobId: string,
+    classId: string,
+    teacherId: string,
+    studentId?: string,
+    note?: string,
+  ) {
+    try {
+      await this.db
+        .update(aiGenerationJobs)
+        .set({
+          status: 'processing',
+          errorMessage: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(aiGenerationJobs.id, jobId));
+
+      const diagnostics = await this.buildPerformanceDiagnostics(
+        classId,
+        studentId,
+        note,
+      );
+
+      await this.db.insert(aiGenerationOutputs).values({
+        jobId,
+        outputType: 'performance_diagnostic',
+        targetClassId: classId,
+        targetTeacherId: teacherId,
+        sourceFilters: { classId, studentId: studentId ?? null },
+        structuredOutput: diagnostics,
+        status: 'completed',
+      });
+
+      await this.db
+        .update(aiGenerationJobs)
+        .set({
+          status: 'completed',
+          updatedAt: new Date(),
+          errorMessage: null,
+        })
+        .where(eq(aiGenerationJobs.id, jobId));
+    } catch (error) {
+      await this.db
+        .update(aiGenerationJobs)
+        .set({
+          status: 'failed',
+          updatedAt: new Date(),
+          errorMessage:
+            error instanceof Error ? error.message : 'Performance analysis failed',
+        })
+        .where(eq(aiGenerationJobs.id, jobId));
+    }
+  }
+
+  async createPerformanceAnalysisJob(
+    classId: string,
+    dto: CreatePerformanceAnalysisJobDto,
+    userId: string,
+    roles: string[],
+  ) {
+    await this.assertClassAccess(classId, userId, roles);
+
+    if (dto.studentId) {
+      const enrollment = await this.db.query.enrollments.findFirst({
+        where: and(
+          eq(enrollments.classId, classId),
+          eq(enrollments.studentId, dto.studentId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+        columns: { studentId: true },
+      });
+      if (!enrollment) {
+        throw new BadRequestException('Selected student is not enrolled in this class.');
+      }
+    }
+
+    const [job] = await this.db
+      .insert(aiGenerationJobs)
+      .values({
+        jobType: 'performance_diagnostics',
+        classId,
+        teacherId: userId,
+        status: 'pending',
+        sourceFilters: {
+          classId,
+          studentId: dto.studentId ?? null,
+          note: dto.note ?? null,
+        },
+      })
+      .returning({
+        id: aiGenerationJobs.id,
+      });
+
+    setTimeout(() => {
+      void this.runPerformanceAnalysisJob(
+        job.id,
+        classId,
+        userId,
+        dto.studentId,
+        dto.note,
+      );
+    }, 0);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'performance.analysis.queued',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        jobId: job.id,
+        studentId: dto.studentId ?? null,
+      },
+    });
+
+    return {
+      jobId: job.id,
+      jobType: 'performance_diagnostics',
+      status: 'pending',
+      progressPercent: 5,
+      statusMessage: 'Queued',
+    };
+  }
+
+  async getPerformanceAnalysisJobStatus(
+    jobId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    const job = await this.assertAnalysisJobAccess(jobId, userId, roles);
+    const output = await this.db.query.aiGenerationOutputs.findFirst({
+      where: and(
+        eq(aiGenerationOutputs.jobId, job.id),
+        eq(aiGenerationOutputs.outputType, 'performance_diagnostic'),
+      ),
+      columns: { id: true, createdAt: true },
+      orderBy: [desc(aiGenerationOutputs.createdAt)],
+    });
+
+    return {
+      jobId: job.id,
+      jobType: job.jobType,
+      status: job.status,
+      progressPercent: this.runtimeProgressForStatus(job.status),
+      statusMessage:
+        job.status === 'failed'
+          ? 'Analysis failed'
+          : job.status === 'completed'
+            ? 'Analysis ready'
+            : 'Analyzing performance evidence',
+      errorMessage: job.errorMessage,
+      outputId: output?.id ?? null,
+      updatedAt: job.updatedAt,
+    };
+  }
+
+  async getPerformanceAnalysisJobResult(
+    jobId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    const job = await this.assertAnalysisJobAccess(jobId, userId, roles);
+    if (!['completed', 'approved'].includes(job.status)) {
+      throw new ConflictException('Analysis result is not ready yet.');
+    }
+
+    const output = await this.db.query.aiGenerationOutputs.findFirst({
+      where: and(
+        eq(aiGenerationOutputs.jobId, job.id),
+        eq(aiGenerationOutputs.outputType, 'performance_diagnostic'),
+      ),
+      columns: {
+        id: true,
+        outputType: true,
+        structuredOutput: true,
+      },
+      orderBy: [desc(aiGenerationOutputs.createdAt)],
+    });
+    if (!output) {
+      throw new NotFoundException('Analysis result not found.');
+    }
+
+    return {
+      job: {
+        jobId: job.id,
+        jobType: job.jobType,
+        status: job.status,
+        outputId: output.id,
+        updatedAt: job.updatedAt,
+      },
+      result: {
+        outputId: output.id,
+        outputType: output.outputType,
+        structuredOutput: output.structuredOutput,
+      },
+    };
+  }
+
+  async getClassDiagnostics(classId: string, userId: string, roles: string[]) {
+    await this.assertClassAccess(classId, userId, roles);
+    const summary = await this.getClassSummary(classId, userId, roles);
+    const diagnostics = await this.buildPerformanceDiagnostics(classId);
+
+    const lowestAssessments = diagnostics.scoreBreakdown.slice(0, 5);
+    const conceptHotspots = diagnostics.learningGaps.slice(0, 5).map((gap) => ({
+      concept: gap.concept,
+      wrongCount: gap.wrongCount,
+      masteryScore: gap.masteryScore,
+      evidenceCount: gap.evidenceCount,
+    }));
+
+    return {
+      classId,
+      threshold: summary.threshold,
+      lowestAssessments,
+      conceptHotspots,
+      studentCount: summary.totalStudents,
+      atRiskCount: summary.atRiskCount,
+      insufficientEvidence: diagnostics.insufficientEvidence,
+    };
+  }
+
+  async getAdminAnalytics(userId: string, roles: string[]) {
+    if (!this.isAdmin(roles)) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const masteryRows = await this.db.query.studentConceptMastery.findMany({
+      columns: {
+        id: true,
+        classId: true,
+        studentId: true,
+        conceptKey: true,
+        errorCount: true,
+        masteryScore: true,
+        updatedAt: true,
+      },
+      orderBy: [desc(studentConceptMastery.updatedAt)],
+      limit: 120,
+    });
+
+    const recommendationRows = await this.db.query.aiGenerationOutputs.findMany({
+      where: inArray(aiGenerationOutputs.outputType, [
+        'intervention_recommendation',
+        'performance_diagnostic',
+      ]),
+      columns: {
+        id: true,
+        outputType: true,
+        targetClassId: true,
+        targetTeacherId: true,
+        createdAt: true,
+      },
+      orderBy: [desc(aiGenerationOutputs.createdAt)],
+      limit: 100,
+    });
+
+    const recentLogs = await this.db.query.performanceLogs.findMany({
+      columns: {
+        id: true,
+        classId: true,
+        studentId: true,
+        previousIsAtRisk: true,
+        currentIsAtRisk: true,
+        triggerSource: true,
+        createdAt: true,
+      },
+      orderBy: [desc(performanceLogs.createdAt)],
+      limit: 150,
+    });
+
+    const transitionSummary = recentLogs.reduce(
+      (acc, row) => {
+        if (row.previousIsAtRisk === false && row.currentIsAtRisk === true) {
+          acc.riskIncrements += 1;
+        } else if (
+          row.previousIsAtRisk === true &&
+          row.currentIsAtRisk === false
+        ) {
+          acc.riskRecoveries += 1;
+        } else {
+          acc.otherTransitions += 1;
+        }
+        return acc;
+      },
+      { riskIncrements: 0, riskRecoveries: 0, otherTransitions: 0 },
+    );
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'performance.admin.analytics_viewed',
+      targetType: 'system',
+      targetId: 'performance',
+      metadata: {
+        conceptRows: masteryRows.length,
+        recommendationRows: recommendationRows.length,
+        performanceLogRows: recentLogs.length,
+      },
+    });
+
+    return {
+      conceptMasterySnapshots: masteryRows,
+      recommendationHistory: recommendationRows,
+      performanceLogTransitions: {
+        total: recentLogs.length,
+        summary: transitionSummary,
+        rows: recentLogs,
+      },
     };
   }
 

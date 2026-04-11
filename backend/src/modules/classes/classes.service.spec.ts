@@ -271,6 +271,7 @@ describe('ClassesService', () => {
           teacherId: TEACHER_ID,
           schoolYear: SCHOOL_YEAR,
           hasSchedules: false,
+          templateId: null,
         },
       });
     });

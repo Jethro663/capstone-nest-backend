@@ -59,6 +59,7 @@ import {
   enrollments,
   extractedModules,
   interventionCases,
+  performanceSnapshots,
   uploadedFiles,
 } from '../../drizzle/schema';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -222,6 +223,7 @@ export class AiMentorController {
       columns: {
         id: true,
         classId: true,
+        studentId: true,
         status: true,
       },
     });
@@ -232,9 +234,25 @@ export class AiMentorController {
 
     await this.assertTeacherClassAccess(interventionCase.classId, user);
 
-    if (interventionCase.status !== 'active') {
+    if (!['pending', 'active'].includes(interventionCase.status)) {
       throw new BadRequestException(
-        'AI recommendations are only available for active intervention cases.',
+        'AI recommendations are only available for pending or active intervention cases.',
+      );
+    }
+
+    const latestSnapshot = await this.db.query.performanceSnapshots.findFirst({
+      where: and(
+        eq(performanceSnapshots.studentId, interventionCase.studentId),
+        eq(performanceSnapshots.classId, interventionCase.classId),
+      ),
+      columns: {
+        isAtRisk: true,
+      },
+    });
+
+    if (!latestSnapshot?.isAtRisk) {
+      throw new BadRequestException(
+        'AI recommendations are only available when the student is currently at risk.',
       );
     }
   }

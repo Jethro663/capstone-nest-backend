@@ -34,9 +34,6 @@ export default function TeacherInterventionWorkspacePage() {
   const searchParams = useSearchParams();
   const caseId = params.caseId as string;
   const classId = searchParams.get('classId') ?? '';
-  const interventionsRoute = classId
-    ? `/dashboard/teacher/interventions?classId=${classId}`
-    : '/dashboard/teacher/interventions';
 
   const [loading, setLoading] = useState(true);
   const [creatingJob, setCreatingJob] = useState(false);
@@ -50,16 +47,23 @@ export default function TeacherInterventionWorkspacePage() {
   const [statusWarning, setStatusWarning] = useState<string | null>(null);
   const [loadingResult, setLoadingResult] = useState(false);
   const statusFailuresRef = useRef(0);
+  const interventionsRoute = useMemo(() => {
+    const activeClassId = classId || queueEntry?.classId || '';
+    return activeClassId
+      ? `/dashboard/teacher/interventions?classId=${activeClassId}`
+      : '/dashboard/teacher/interventions';
+  }, [classId, queueEntry?.classId]);
 
   const fetchCase = useCallback(async () => {
-    if (!classId) {
-      setLoading(false);
-      return;
-    }
     try {
       setLoading(true);
-      const queueRes = await lxpService.getTeacherQueue(classId);
-      setQueueEntry(queueRes.data.queue.find((entry) => entry.id === caseId) ?? null);
+      if (classId) {
+        const queueRes = await lxpService.getTeacherQueue(classId);
+        setQueueEntry(queueRes.data.queue.find((entry) => entry.id === caseId) ?? null);
+      } else {
+        const caseRes = await lxpService.getTeacherCase(caseId);
+        setQueueEntry(caseRes.data ?? null);
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to load intervention workspace'));
     } finally {
@@ -166,7 +170,7 @@ export default function TeacherInterventionWorkspacePage() {
     () => result?.recommendedAssessments ?? [],
     [result],
   );
-  const hasCaseContext = Boolean(classId && queueEntry);
+  const hasCaseContext = Boolean(queueEntry && queueEntry.aiPlanEligible !== false);
   const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
 
   const handleRemoveLesson = (lessonId: string) => {
@@ -256,7 +260,11 @@ export default function TeacherInterventionWorkspacePage() {
             AI Intervention Workspace
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            {queueEntry ? `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%` : 'Select a case from the intervention queue first.'}
+            {queueEntry
+              ? queueEntry.aiPlanEligible === false
+                ? `${studentName(queueEntry.student)} is no longer at-risk, so AI planning is disabled for this case.`
+                : `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%`
+              : 'Select a case from the intervention queue first.'}
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 lg:grid-cols-2">

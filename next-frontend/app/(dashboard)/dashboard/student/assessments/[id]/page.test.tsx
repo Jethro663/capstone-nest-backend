@@ -24,6 +24,7 @@ jest.mock('sonner', () => ({
 
 jest.mock('framer-motion', () => ({
   motion: {
+    main: ({ children }: { children: ReactNode }) => <main>{children}</main>,
     div: ({ children }: { children: ReactNode }) => <div>{children}</div>,
     section: ({ children }: { children: ReactNode }) => <section>{children}</section>,
   },

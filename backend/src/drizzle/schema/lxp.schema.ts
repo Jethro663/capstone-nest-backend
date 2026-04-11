@@ -14,6 +14,7 @@ import { relations } from 'drizzle-orm';
 import { assessments, classes, lessons, users } from './base.schema';
 
 export const interventionCaseStatusEnum = pgEnum('intervention_case_status', [
+  'pending',
   'active',
   'completed',
   'dismissed',
@@ -42,7 +43,7 @@ export const interventionCases = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    status: interventionCaseStatusEnum('status').notNull().default('active'),
+    status: interventionCaseStatusEnum('status').notNull().default('pending'),
     triggerSource: text('trigger_source')
       .notNull()
       .default('performance_event'),

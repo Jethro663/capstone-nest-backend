@@ -112,12 +112,20 @@ function classLabel(item: EligibleClass): string {
   return `${item.class.subjectName} (${item.class.subjectCode})`;
 }
 
-function checkpointHref(checkpoint: LxpCheckpoint): string {
+function checkpointHref(checkpoint: LxpCheckpoint, classId?: string): string {
   if (checkpoint.lesson?.id)
     return `/dashboard/student/lessons/${checkpoint.lesson.id}`;
-  if (checkpoint.assessment?.id)
-    return `/dashboard/student/assessments/${checkpoint.assessment.id}`;
+  if (checkpoint.assessment?.id && classId) {
+    return `/dashboard/student/ja?mode=review&classId=${classId}`;
+  }
+  if (checkpoint.assessment?.id) return "/dashboard/student/ja?mode=review";
   return "/dashboard/student/ja";
+}
+
+function checkpointProvenance(checkpoint: LxpCheckpoint): string {
+  return checkpoint.type === "lesson_review"
+    ? "LMS lesson source"
+    : "LMS assessment source via JA replay";
 }
 
 function checkpointSummary(checkpoint: LxpCheckpoint): string {
@@ -825,6 +833,9 @@ export default function StudentLxpExperience() {
                               : "Assessment Retry"}
                           </Badge>
                           <Badge className="student-badge">
+                            {checkpointProvenance(checkpoint)}
+                          </Badge>
+                          <Badge className="student-badge">
                             +{checkpoint.xpAwarded} XP
                           </Badge>
                         </div>
@@ -835,25 +846,37 @@ export default function StudentLxpExperience() {
                           variant="outline"
                           className="rounded-2xl"
                         >
-                          <Link href={checkpointHref(checkpoint)}>Open</Link>
+                          <Link href={checkpointHref(checkpoint, selectedClassId)}>
+                            {checkpoint.type === "lesson_review"
+                              ? "Open Lesson"
+                              : "Open JA Replay"}
+                          </Link>
                         </Button>
-                        <Button
-                          type="button"
-                          className="rounded-2xl"
-                          onClick={() =>
-                            handleCompleteCheckpoint(checkpoint.id)
-                          }
-                          disabled={
-                            checkpoint.isCompleted ||
-                            completingId === checkpoint.id
-                          }
-                        >
-                          {checkpoint.isCompleted
-                            ? "Completed"
-                            : completingId === checkpoint.id
-                              ? "Saving..."
-                              : "Mark Complete"}
-                        </Button>
+                        {checkpoint.type === "lesson_review" ? (
+                          <Button
+                            type="button"
+                            className="rounded-2xl"
+                            onClick={() =>
+                              handleCompleteCheckpoint(checkpoint.id)
+                            }
+                            disabled={
+                              checkpoint.isCompleted ||
+                              completingId === checkpoint.id
+                            }
+                          >
+                            {checkpoint.isCompleted
+                              ? "Completed"
+                              : completingId === checkpoint.id
+                                ? "Saving..."
+                                : "Mark Complete"}
+                          </Button>
+                        ) : (
+                          <Badge className="student-badge">
+                            {checkpoint.isCompleted
+                              ? "Completed via JA"
+                              : "Complete in JA replay"}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -888,6 +911,9 @@ export default function StudentLxpExperience() {
                             {checkpoint.assessment?.type ?? "assessment"}
                           </Badge>
                           <Badge className="student-badge">
+                            {checkpointProvenance(checkpoint)}
+                          </Badge>
+                          <Badge className="student-badge">
                             +{checkpoint.xpAwarded} XP
                           </Badge>
                         </div>
@@ -914,27 +940,15 @@ export default function StudentLxpExperience() {
                           variant="outline"
                           className="rounded-2xl"
                         >
-                          <Link href={checkpointHref(checkpoint)}>
-                            Open Assessment
+                          <Link href={checkpointHref(checkpoint, selectedClassId)}>
+                            Open JA Replay
                           </Link>
                         </Button>
-                        <Button
-                          type="button"
-                          className="rounded-2xl"
-                          onClick={() =>
-                            handleCompleteCheckpoint(checkpoint.id)
-                          }
-                          disabled={
-                            checkpoint.isCompleted ||
-                            completingId === checkpoint.id
-                          }
-                        >
+                        <Badge className="student-badge">
                           {checkpoint.isCompleted
-                            ? "Completed"
-                            : completingId === checkpoint.id
-                              ? "Saving..."
-                              : "Mark Complete"}
-                        </Button>
+                            ? "Completed via JA"
+                            : "Complete in JA replay"}
+                        </Badge>
                       </div>
                     </div>
                   </div>

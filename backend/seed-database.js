@@ -369,6 +369,20 @@ async function seedDatabase() {
   try {
     await client.connect();
     log('Connected to database');
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_enum e
+          JOIN pg_type t ON t.oid = e.enumtypid
+          WHERE t.typname = 'intervention_case_status'
+            AND e.enumlabel = 'pending'
+        ) THEN
+          ALTER TYPE intervention_case_status ADD VALUE 'pending';
+        END IF;
+      END $$;
+    `);
     await client.query('BEGIN');
 
     log('Creating roles...');
@@ -737,6 +751,237 @@ async function seedDatabase() {
           log(`  - ${student.email} already enrolled`, 'info');
         }
       }
+    }
+
+    log('Seeding deterministic performance + AI fixtures...');
+    const targetClassId = classesByGradeLevel['7']?.[0] || null;
+    const grade7Students = STUDENTS.filter((student) => student.gradeLevel === '7')
+      .slice(0, 2)
+      .map((student) => users[student.email])
+      .filter(Boolean);
+
+    if (targetClassId && grade7Students.length >= 2) {
+      const [studentA, studentB] = grade7Students;
+
+      const lessonTitle = 'Quadratic Expressions Refresher';
+      const existingLesson = await client.query(
+        `SELECT id FROM lessons WHERE class_id = $1 AND title = $2 LIMIT 1`,
+        [targetClassId, lessonTitle],
+      );
+      const lessonId = existingLesson.rows[0]?.id || uuid();
+      if (!existingLesson.rows[0]) {
+        await client.query(
+          `INSERT INTO lessons (id, title, description, class_id, "order", is_draft)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            lessonId,
+            lessonTitle,
+            'Focus on factoring and standard form transformations.',
+            targetClassId,
+            1,
+            false,
+          ],
+        );
+      }
+
+      const assessmentTitle = 'Quadratic Formula Checkpoint';
+      const existingAssessment = await client.query(
+        `SELECT id FROM assessments WHERE class_id = $1 AND title = $2 LIMIT 1`,
+        [targetClassId, assessmentTitle],
+      );
+      const assessmentId = existingAssessment.rows[0]?.id || uuid();
+      if (!existingAssessment.rows[0]) {
+        await client.query(
+          `INSERT INTO assessments (
+             id, title, description, class_id, type, total_points, passing_score, max_attempts, is_published
+           )
+           VALUES ($1, $2, $3, $4, 'quiz', 20, 75, 2, true)`,
+          [
+            assessmentId,
+            assessmentTitle,
+            'Deterministic seed checkpoint for performance analytics demo.',
+            targetClassId,
+          ],
+        );
+      }
+
+      const existingQuestion = await client.query(
+        `SELECT id FROM assessment_questions WHERE assessment_id = $1 LIMIT 1`,
+        [assessmentId],
+      );
+      const questionId = existingQuestion.rows[0]?.id || uuid();
+      if (!existingQuestion.rows[0]) {
+        await client.query(
+          `INSERT INTO assessment_questions (
+             id, assessment_id, type, content, points, "order", concept_tags
+           )
+           VALUES ($1, $2, 'multiple_choice', $3, 10, 1, $4::jsonb)`,
+          [
+            questionId,
+            assessmentId,
+            'Solve x^2 + 5x + 6 = 0 using factoring.',
+            JSON.stringify(['quadratic formulas', 'factoring', 'roots']),
+          ],
+        );
+      }
+
+      const existingChunk = await client.query(
+        `SELECT id FROM content_chunks WHERE class_id = $1 AND lesson_id = $2 LIMIT 1`,
+        [targetClassId, lessonId],
+      );
+      const chunkId = existingChunk.rows[0]?.id || uuid();
+      if (!existingChunk.rows[0]) {
+        await client.query(
+          `INSERT INTO content_chunks (
+             id, source_type, source_id, class_id, lesson_id, chunk_text, chunk_order, token_count, content_hash, metadata_json
+           )
+           VALUES ($1, 'lesson_block', $2, $3, $2, $4, 1, 120, $5, $6::jsonb)`,
+          [
+            chunkId,
+            lessonId,
+            targetClassId,
+            'Quadratic formulas connect roots and coefficients. Use factoring when b and c allow clean integer roots.',
+            `seed-hash-${targetClassId}-quadratic-1`,
+            JSON.stringify({ lessonTitle, concept: 'quadratic formulas' }),
+          ],
+        );
+      }
+
+      const existingEmbedding = await client.query(
+        `SELECT chunk_id FROM content_chunk_embeddings WHERE chunk_id = $1`,
+        [chunkId],
+      );
+      if (!existingEmbedding.rows[0]) {
+        const vectorLiteral = `[${new Array(768).fill('0.001').join(',')}]`;
+        await client.query(
+          `INSERT INTO content_chunk_embeddings (chunk_id, embedding, embedding_model)
+           VALUES ($1, $2::vector, 'seed-deterministic-v1')`,
+          [chunkId, vectorLiteral],
+        );
+      }
+
+      const now = new Date();
+      for (const [index, studentId] of [studentA, studentB].entries()) {
+        const attemptId = uuid();
+        const score = index === 0 ? 45 : 82;
+        await client.query(
+          `INSERT INTO assessment_attempts (
+             id, student_id, assessment_id, attempt_number, is_submitted, submitted_at, score, passed
+           )
+           VALUES ($1, $2, $3, 1, true, NOW() - INTERVAL '${index + 1} day', $4, $5)
+           ON CONFLICT (student_id, assessment_id, attempt_number) DO NOTHING`,
+          [attemptId, studentId, assessmentId, score, score >= 75],
+        );
+
+        const latestAttempt = await client.query(
+          `SELECT id FROM assessment_attempts
+           WHERE student_id = $1 AND assessment_id = $2
+           ORDER BY submitted_at DESC NULLS LAST, created_at DESC
+           LIMIT 1`,
+          [studentId, assessmentId],
+        );
+        const resolvedAttemptId = latestAttempt.rows[0]?.id;
+        if (resolvedAttemptId) {
+          await client.query(
+            `DELETE FROM assessment_responses WHERE attempt_id = $1 AND question_id = $2`,
+            [resolvedAttemptId, questionId],
+          );
+          await client.query(
+            `INSERT INTO assessment_responses (
+               id, attempt_id, question_id, student_answer, is_correct, points_earned
+             )
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              uuid(),
+              resolvedAttemptId,
+              questionId,
+              index === 0 ? 'x = 1 and x = 6' : 'x = -2 and x = -3',
+              index !== 0,
+              index === 0 ? 0 : 10,
+            ],
+          );
+        }
+
+        await client.query(
+          `INSERT INTO performance_snapshots (
+             id, class_id, student_id, assessment_average, class_record_average, blended_score,
+             assessment_sample_size, class_record_sample_size, has_data, is_at_risk, threshold_applied,
+             last_computed_at, created_at, updated_at
+           )
+           VALUES (
+             $1, $2, $3, $4, $5, $6, 1, 1, true, $7, 74, NOW(), NOW(), NOW()
+           )
+           ON CONFLICT (class_id, student_id)
+           DO UPDATE SET
+             assessment_average = EXCLUDED.assessment_average,
+             class_record_average = EXCLUDED.class_record_average,
+             blended_score = EXCLUDED.blended_score,
+             has_data = EXCLUDED.has_data,
+             is_at_risk = EXCLUDED.is_at_risk,
+             threshold_applied = EXCLUDED.threshold_applied,
+             last_computed_at = EXCLUDED.last_computed_at,
+             updated_at = NOW()`,
+          [
+            uuid(),
+            targetClassId,
+            studentId,
+            score,
+            index === 0 ? 55 : 80,
+            index === 0 ? 50 : 81,
+            index === 0,
+          ],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO performance_logs (
+           id, class_id, student_id, previous_is_at_risk, current_is_at_risk, assessment_average,
+           class_record_average, blended_score, threshold_applied, trigger_source, created_at
+         )
+         VALUES ($1, $2, $3, false, true, 45, 55, 50, 74, 'seed_transition', NOW() - INTERVAL '2 hour')
+         ON CONFLICT DO NOTHING`,
+        [uuid(), targetClassId, studentA],
+      );
+
+      const pendingCaseId = uuid();
+      const completedCaseId = uuid();
+      await client.query(
+        `INSERT INTO intervention_cases (
+           id, class_id, student_id, status, trigger_source, trigger_score, threshold_applied, note, opened_at, created_at, updated_at
+         )
+         VALUES
+           ($1, $2, $3, 'pending', 'seed_fixture', 50, 74, 'Pending approval demo case', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day', NOW()),
+           ($4, $2, $5, 'completed', 'seed_fixture', 68, 74, 'Completed intervention demo case', NOW() - INTERVAL '10 day', NOW() - INTERVAL '10 day', NOW())
+         ON CONFLICT DO NOTHING`,
+        [pendingCaseId, targetClassId, studentA, completedCaseId, studentB],
+      );
+      await client.query(
+        `UPDATE intervention_cases
+         SET closed_at = NOW() - INTERVAL '3 day'
+         WHERE id = $1 AND status = 'completed'`,
+        [completedCaseId],
+      );
+
+      await client.query(
+        `INSERT INTO student_concept_mastery (
+           id, student_id, class_id, concept_key, evidence_count, error_count, mastery_score, last_seen_at, created_at, updated_at
+         )
+         VALUES
+           ($1, $2, $3, 'quadratic formulas', 4, 3, 52, NOW(), NOW(), NOW()),
+           ($4, $5, $3, 'factoring', 3, 2, 61, NOW(), NOW(), NOW())
+         ON CONFLICT (student_id, class_id, concept_key)
+         DO UPDATE SET
+           evidence_count = EXCLUDED.evidence_count,
+           error_count = EXCLUDED.error_count,
+           mastery_score = EXCLUDED.mastery_score,
+           last_seen_at = NOW(),
+           updated_at = NOW()`,
+        [uuid(), studentA, targetClassId, uuid(), studentB],
+      );
+
+      log('  - Seeded attempts, incorrect responses, chunks/embeddings, snapshots/logs, and intervention cases', 'success');
+    } else {
+      log('  - Skipped performance fixtures: missing deterministic class/student prerequisites', 'warning');
     }
 
     await client.query('COMMIT');

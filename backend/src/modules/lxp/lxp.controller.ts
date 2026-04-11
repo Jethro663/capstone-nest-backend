@@ -99,6 +99,26 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Post('teacher/interventions/:caseId/activate')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async activateIntervention(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.activateIntervention(caseId, user);
+    return { success: true, data };
+  }
+
+  @Get('teacher/interventions/:caseId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherInterventionCase(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getTeacherInterventionCase(caseId, user);
+    return { success: true, data };
+  }
+
   @Get('teacher/classes/:classId/reports/summary')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getClassReport(

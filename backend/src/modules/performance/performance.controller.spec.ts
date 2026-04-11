@@ -12,6 +12,11 @@ describe('PerformanceController', () => {
       getClassSummary: jest.fn(),
       getAtRiskStudents: jest.fn(),
       getClassLogs: jest.fn(),
+      createPerformanceAnalysisJob: jest.fn(),
+      getPerformanceAnalysisJobStatus: jest.fn(),
+      getPerformanceAnalysisJobResult: jest.fn(),
+      getClassDiagnostics: jest.fn(),
+      getAdminAnalytics: jest.fn(),
       getStudentOwnSummary: jest.fn(),
     };
 

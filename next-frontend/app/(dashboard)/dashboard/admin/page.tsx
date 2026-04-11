@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { adminService, type AdminOverviewResponse } from '@/services/admin-service';
+import { performanceService } from '@/services/performance-service';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -190,6 +191,41 @@ export default function AdminDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [healthReadiness, setHealthReadiness] = useState<HealthReadiness | null>(null);
+  const [performanceAnalytics, setPerformanceAnalytics] = useState<{
+    conceptMasterySnapshots: Array<{
+      id: string;
+      classId: string;
+      studentId: string;
+      conceptKey: string;
+      errorCount: number;
+      masteryScore: number;
+      updatedAt: string;
+    }>;
+    recommendationHistory: Array<{
+      id: string;
+      outputType: string;
+      targetClassId: string | null;
+      targetTeacherId: string | null;
+      createdAt: string;
+    }>;
+    performanceLogTransitions: {
+      total: number;
+      summary: {
+        riskIncrements: number;
+        riskRecoveries: number;
+        otherTransitions: number;
+      };
+      rows: Array<{
+        id: string;
+        classId: string;
+        studentId: string;
+        previousIsAtRisk: boolean | null;
+        currentIsAtRisk: boolean;
+        triggerSource: string;
+        createdAt: string;
+      }>;
+    };
+  } | null>(null);
   const interval = 60000;
 
   const fetchData = useCallback(async (options?: { force?: boolean }) => {
@@ -201,10 +237,23 @@ export default function AdminDashboardPage() {
     setError(null);
 
     try {
-      const overview = await adminService.getOverview({ force: options?.force });
-      setStats(overview.data.stats);
-      setUsageSummary(overview.data.usageSummary);
-      setHealthReadiness(overview.data.readiness);
+      const [overview, perfAnalytics] = await Promise.allSettled([
+        adminService.getOverview({ force: options?.force }),
+        performanceService.getAdminAnalytics(),
+      ]);
+      if (overview.status === 'fulfilled') {
+        setStats(overview.value.data.stats);
+        setUsageSummary(overview.value.data.usageSummary);
+        setHealthReadiness(overview.value.data.readiness);
+      }
+      if (perfAnalytics.status === 'fulfilled') {
+        setPerformanceAnalytics(perfAnalytics.value.data);
+      } else {
+        setPerformanceAnalytics(null);
+      }
+      if (overview.status === 'rejected') {
+        throw new Error('overview_failed');
+      }
       setLastUpdated(new Date());
     } catch {
       setError('Dashboard services are temporarily unavailable.');
@@ -410,6 +459,48 @@ export default function AdminDashboardPage() {
           <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-[#7f93b4]">
             {lastUpdated ? <span className="admin-chip">Last updated {lastUpdated.toLocaleTimeString()}</span> : null}
             {error ? <span className="admin-chip">{error}</span> : null}
+          </div>
+        </AdminSectionCard>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <AdminSectionCard title="Concept Mastery Snapshots">
+          {performanceAnalytics?.conceptMasterySnapshots?.length ? (
+            <div className="space-y-2 text-sm">
+              {performanceAnalytics.conceptMasterySnapshots.slice(0, 8).map((row) => (
+                <div key={row.id} className="flex items-center justify-between rounded-[0.9rem] bg-[#f5f8fe] px-3 py-2">
+                  <span className="text-[#617595]">{row.conceptKey}</span>
+                  <span className="font-bold text-[var(--admin-text-strong)]">
+                    {row.masteryScore}% ({row.errorCount} errors)
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[#8da0bf]">No concept mastery snapshots available yet.</p>
+          )}
+        </AdminSectionCard>
+
+        <AdminSectionCard title="Performance Transitions">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-[0.9rem] bg-[#f5f8fe] px-3 py-3">
+              <p className="text-xs uppercase tracking-[0.08em] text-[#7b8ead]">Risk Increments</p>
+              <p className="text-xl font-black text-[var(--admin-text-strong)]">
+                {performanceAnalytics?.performanceLogTransitions.summary.riskIncrements ?? 0}
+              </p>
+            </div>
+            <div className="rounded-[0.9rem] bg-[#f5f8fe] px-3 py-3">
+              <p className="text-xs uppercase tracking-[0.08em] text-[#7b8ead]">Risk Recoveries</p>
+              <p className="text-xl font-black text-[var(--admin-text-strong)]">
+                {performanceAnalytics?.performanceLogTransitions.summary.riskRecoveries ?? 0}
+              </p>
+            </div>
+            <div className="rounded-[0.9rem] bg-[#f5f8fe] px-3 py-3">
+              <p className="text-xs uppercase tracking-[0.08em] text-[#7b8ead]">AI Outputs</p>
+              <p className="text-xl font-black text-[var(--admin-text-strong)]">
+                {performanceAnalytics?.recommendationHistory.length ?? 0}
+              </p>
+            </div>
           </div>
         </AdminSectionCard>
       </div>

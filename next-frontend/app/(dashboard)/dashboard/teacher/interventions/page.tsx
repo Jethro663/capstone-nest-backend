@@ -51,6 +51,7 @@ export default function TeacherInterventionsPage() {
   const [queue, setQueue] = useState<TeacherInterventionQueueResponse | null>(null);
   const [report, setReport] = useState<LxpClassReport | null>(null);
   const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
+  const [activatingCaseId, setActivatingCaseId] = useState<string | null>(null);
 
   const selectedClass = useMemo(
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
@@ -118,7 +119,23 @@ export default function TeacherInterventionsPage() {
   };
 
   const handleRecommend = (caseId: string) => {
-    router.push(`/dashboard/teacher/interventions/${caseId}`);
+    const target = selectedClassId
+      ? `/dashboard/teacher/interventions/${caseId}?classId=${selectedClassId}`
+      : `/dashboard/teacher/interventions/${caseId}`;
+    router.push(target);
+  };
+
+  const handleActivate = async (caseId: string) => {
+    try {
+      setActivatingCaseId(caseId);
+      await lxpService.activateIntervention(caseId);
+      toast.success('Intervention case activated');
+      await fetchInterventionData();
+    } catch {
+      toast.error('Failed to activate intervention case');
+    } finally {
+      setActivatingCaseId(null);
+    }
   };
 
   if (loadingClasses) {
@@ -262,18 +279,39 @@ export default function TeacherInterventionsPage() {
                           </TableCell>
                           <TableCell className="text-[var(--teacher-text-strong)]">{entry.progress.xpTotal}</TableCell>
                           <TableCell>
-                            <Badge className="teacher-badge-danger border-0">Active</Badge>
+                            <Badge
+                              className={
+                                entry.status === 'pending'
+                                  ? 'teacher-badge-success border-0'
+                                  : 'teacher-badge-danger border-0'
+                              }
+                            >
+                              {entry.status}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button
-                                size="sm"
-                                variant="teacher"
-                                className="rounded-lg"
-                                onClick={() => handleRecommend(entry.id)}
-                              >
-                                AI Plan
-                              </Button>
+                              {entry.aiPlanEligible ? (
+                                <Button
+                                  size="sm"
+                                  variant="teacher"
+                                  className="rounded-lg"
+                                  onClick={() => handleRecommend(entry.id)}
+                                >
+                                  AI Plan
+                                </Button>
+                              ) : null}
+                              {entry.status === 'pending' ? (
+                                <Button
+                                  size="sm"
+                                  variant="teacherOutline"
+                                  className="rounded-lg"
+                                  disabled={activatingCaseId === entry.id}
+                                  onClick={() => handleActivate(entry.id)}
+                                >
+                                  {activatingCaseId === entry.id ? 'Activating...' : 'Activate'}
+                                </Button>
+                              ) : null}
                               <Button
                                 size="sm"
                                 variant="teacherOutline"
@@ -391,4 +429,3 @@ export default function TeacherInterventionsPage() {
     </TeacherPageShell>
   );
 }
-
