@@ -66,7 +66,8 @@ Optional for local non-Docker infra:
 From repository root:
 
 ```bash
-docker compose up --build
+cp .env.compose.example .env.compose
+docker compose --env-file .env.compose up --build
 ```
 
 Services started by compose:
@@ -89,12 +90,53 @@ docker compose logs -f ollama
 
 ### Compose Notes
 
+- Root compose env template: `.env.compose.example`
+- Runtime compose env file (local, untracked): `.env.compose`
 - Backend compose env file: `backend/.env.docker`
 - AI service compose env file: `ai-service/.env.docker`
+- Required vars are fail-fast (`docker compose config` errors if missing):
+  - `POSTGRES_PASSWORD`
+  - `BACKEND_DATABASE_URL`
+  - `AI_DATABASE_URL`
+  - `JWT_SECRET`
+  - `JWT_REFRESH_SECRET`
+  - `OTP_PEPPER`
+  - `AI_SERVICE_SHARED_SECRET`
+- `BACKEND_DATABASE_URL` and `AI_DATABASE_URL` should use URL-encoded passwords.
 - Ollama pulls configured models at startup:
   - text: `qwen2.5:3b`
   - vision: `gemma3:4b`
   - embedding: `nomic-embed-text`
+- Backend no longer waits for `ai-service` health before starting; DB and Redis gate backend readiness.
+
+## Docker First Run and Reset Run
+
+### First Run (portable, deterministic)
+
+```bash
+cp .env.compose.example .env.compose
+# edit .env.compose and set strong secrets + aligned DB URLs
+docker compose --env-file .env.compose config
+docker compose --env-file .env.compose up --build
+```
+
+### Safe Reset When DB Password Changes
+
+If PostgreSQL was already initialized and you changed `POSTGRES_PASSWORD`, the old password remains in the `postgres_data` volume. Reset intentionally:
+
+```bash
+docker compose down
+docker volume rm capstone-nest-react-lms_postgres_data
+docker compose --env-file .env.compose up --build
+```
+
+### Troubleshooting Matrix
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| `password authentication failed for user "postgres"` in backend logs | `POSTGRES_PASSWORD` and DB URL credentials are out of sync, or `postgres_data` volume was initialized with an older password | Verify `POSTGRES_PASSWORD`, `BACKEND_DATABASE_URL`, `AI_DATABASE_URL` all match. If password was changed after first run, reset `postgres_data` using the commands above. |
+| Backend healthy but `ai-service` unhealthy | Ollama/model pull delay, missing model, or AI-only failure | Backend should still serve core LMS APIs. Check `docker compose logs -f ollama` and `docker compose logs -f ai-service`; AI endpoints recover once Ollama/model pulls are ready. |
+| Stack appears stuck while starting | Ollama is pulling models on first run, which can take several minutes | Wait for Ollama pull completion in logs. You can still verify backend independently via `http://localhost:3000/api/health/ready`. |
 
 ## Local Development (Service-by-Service)
 
@@ -209,6 +251,7 @@ npm run typecheck
 
 Primary templates:
 
+- `.env.compose.example`
 - `backend/.env.example`
 - `ai-service/.env.example`
 - `test-mobile/.env.example`

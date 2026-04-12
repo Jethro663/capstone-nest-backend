@@ -1,5 +1,6 @@
 /.npm-cache
 /next-FrontendToRecover
+.env.compose
 
 # Prevent accidental in-place transpilation artifacts in the TS backend source tree.
 /backend/src/**/*.js
