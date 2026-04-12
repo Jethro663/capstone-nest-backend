@@ -3171,6 +3171,24 @@ body {
   padding: 1rem 1.2rem;
 }
 
+.admin-diagnostics-banner--warning {
+  border-color: #ffe0b5;
+  background: #fff7eb;
+}
+
+.admin-diagnostics-banner--issue {
+  border-color: #ffd4d4;
+  background: #fff2f2;
+}
+
+.admin-diagnostics-banner--warning .admin-diagnostics-banner__title {
+  color: #b45309;
+}
+
+.admin-diagnostics-banner--issue .admin-diagnostics-banner__title {
+  color: #b91c1c;
+}
+
 .admin-diagnostics-banner__title {
   color: #16a34a;
   font-size: 1rem;
@@ -3212,6 +3230,40 @@ body {
   color: var(--admin-text-strong);
   font-size: 0.94rem;
   font-weight: 700;
+}
+
+.admin-diagnostics-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  border: 1px solid #ffe0b5;
+  border-radius: 1rem;
+  background: #fff8ef;
+  padding: 0.85rem 0.95rem;
+}
+
+.admin-diagnostics-alert--critical {
+  border-color: #ffd4d4;
+  background: #fff2f2;
+}
+
+.admin-diagnostics-alert__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.admin-diagnostics-alert__title {
+  color: var(--admin-text-strong);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.admin-diagnostics-alert__message {
+  margin-top: 0.15rem;
+  color: #6d809e;
+  font-size: 0.82rem;
 }
 
 .admin-diagnostic-row {

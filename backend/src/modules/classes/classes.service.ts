@@ -63,6 +63,10 @@ import {
 } from './DTO/update-student-course-view.dto';
 import { normalizeGradeLevel } from '../../common/utils/grade-level.util';
 import {
+  areSubjectCodesEquivalent,
+  normalizeSubjectCode,
+} from '../../common/utils/subject-code.util';
+import {
   toCalendarSlot,
   timeToMinutes,
 } from '../../common/utils/schedule.util';
@@ -347,6 +351,11 @@ export class ClassesService {
     actorId?: string,
     actorRoles: string[] = [],
   ) {
+    const normalizedSubjectCode = normalizeSubjectCode(createClassDto.subjectCode);
+    const normalizedSubjectGradeLevel = normalizeGradeLevel(
+      createClassDto.subjectGradeLevel,
+    );
+
     // Section check
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, createClassDto.sectionId),
@@ -386,67 +395,80 @@ export class ClassesService {
       );
     }
 
-    // Check if class already exists (same subject, section, and school year)
-    const existingClass = await this.db.query.classes.findFirst({
-      where: and(
-        eq(classes.subjectCode, createClassDto.subjectCode),
-        eq(classes.sectionId, createClassDto.sectionId),
-        eq(classes.schoolYear, createClassDto.schoolYear),
-      ),
-    });
-
-    if (existingClass) {
-      throw new ConflictException(
-        `Class already exists for this subject, section, and school year`,
-      );
-    }
-
-    // Build a typed payload for insertion
-    const insertPayload: any = {
-      subjectName: createClassDto.subjectName,
-      subjectCode: createClassDto.subjectCode?.toUpperCase(),
-      subjectGradeLevel: normalizeGradeLevel(createClassDto.subjectGradeLevel),
-      sectionId: createClassDto.sectionId,
-      teacherId: createClassDto.teacherId,
-      schoolYear: createClassDto.schoolYear,
-      room: createClassDto.room,
-      cardPreset: createClassDto.cardPreset ?? 'aurora',
-      cardBannerUrl: createClassDto.cardBannerUrl ?? null,
-    };
-
-    const [newClass] = await this.db
-      .insert(classes)
-      .values(insertPayload)
-      .returning();
-
-    // Insert schedule slots (run collision check first)
-    if (createClassDto.schedules?.length) {
-      await this.checkCollisions({
-        classId: newClass.id,
-        sectionId: createClassDto.sectionId,
-        teacherId: createClassDto.teacherId,
-        room: createClassDto.room,
-        slots: createClassDto.schedules,
+    const newClassId = await this.db.transaction(async (tx) => {
+      const classesForSectionYear = await tx.query.classes.findMany({
+        where: and(
+          eq(classes.sectionId, createClassDto.sectionId),
+          eq(classes.schoolYear, createClassDto.schoolYear),
+        ),
+        columns: {
+          id: true,
+          subjectCode: true,
+        },
       });
 
-      await this.db.insert(classSchedules).values(
-        createClassDto.schedules.map((slot) => ({
-          classId: newClass.id,
-          days: slot.days,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-        })),
+      const existingClass = classesForSectionYear.find((entry) =>
+        areSubjectCodesEquivalent(entry.subjectCode, normalizedSubjectCode),
       );
-    }
 
-    if (createClassDto.templateId) {
-      await this.applyTemplateToClass(
-        createClassDto.templateId,
-        newClass.id,
-        createClassDto,
-        actorId ?? createClassDto.teacherId,
-      );
-    }
+      if (existingClass) {
+        throw new ConflictException(
+          `Class already exists for this subject, section, and school year`,
+        );
+      }
+
+      const insertPayload: any = {
+        subjectName: createClassDto.subjectName,
+        subjectCode: normalizedSubjectCode,
+        subjectGradeLevel: normalizedSubjectGradeLevel,
+        sectionId: createClassDto.sectionId,
+        teacherId: createClassDto.teacherId,
+        schoolYear: createClassDto.schoolYear,
+        room: createClassDto.room,
+        cardPreset: createClassDto.cardPreset ?? 'aurora',
+        cardBannerUrl: createClassDto.cardBannerUrl ?? null,
+      };
+
+      const [newClass] = await tx.insert(classes).values(insertPayload).returning();
+
+      if (createClassDto.schedules?.length) {
+        await this.checkCollisions(
+          {
+            classId: newClass.id,
+            sectionId: createClassDto.sectionId,
+            teacherId: createClassDto.teacherId,
+            room: createClassDto.room,
+            slots: createClassDto.schedules,
+          },
+          tx,
+        );
+
+        await tx.insert(classSchedules).values(
+          createClassDto.schedules.map((slot) => ({
+            classId: newClass.id,
+            days: slot.days,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+          })),
+        );
+      }
+
+      if (createClassDto.templateId) {
+        await this.applyTemplateToClass(
+          tx,
+          createClassDto.templateId,
+          newClass.id,
+          {
+            ...createClassDto,
+            subjectCode: normalizedSubjectCode,
+            subjectGradeLevel: normalizedSubjectGradeLevel,
+          },
+          actorId ?? createClassDto.teacherId,
+        );
+      }
+
+      return newClass.id;
+    });
 
     const actorRole = actorRoles.includes('admin')
       ? 'admin'
@@ -458,7 +480,7 @@ export class ClassesService {
       actorId: actorId ?? createClassDto.teacherId ?? 'system',
       action: 'class.created',
       targetType: 'class',
-      targetId: newClass.id,
+      targetId: newClassId,
       metadata: {
         actorRole,
         sectionId: createClassDto.sectionId,
@@ -469,16 +491,17 @@ export class ClassesService {
       },
     });
 
-    return this.findById(newClass.id);
+    return this.findById(newClassId);
   }
 
   private async applyTemplateToClass(
+    database: any,
     templateId: string,
     classId: string,
     createClassDto: CreateClassDto,
     actorId: string,
   ) {
-    const template = await this.db.query.classTemplates.findFirst({
+    const template = await database.query.classTemplates.findFirst({
       where: eq(classTemplates.id, templateId),
     });
 
@@ -491,8 +514,9 @@ export class ClassesService {
     }
 
     if (
-      template.subjectCode.toUpperCase() !== createClassDto.subjectCode.toUpperCase() ||
-      template.subjectGradeLevel !== createClassDto.subjectGradeLevel
+      !areSubjectCodesEquivalent(template.subjectCode, createClassDto.subjectCode) ||
+      normalizeGradeLevel(template.subjectGradeLevel) !==
+        normalizeGradeLevel(createClassDto.subjectGradeLevel)
     ) {
       throw new BadRequestException(
         'Template subjectCode and subjectGradeLevel must exactly match class subject',
@@ -501,15 +525,15 @@ export class ClassesService {
 
     const [templateAssessments, templateModules, templateAnnouncements] =
       await Promise.all([
-        this.db.query.classTemplateAssessments.findMany({
+        database.query.classTemplateAssessments.findMany({
           where: eq(classTemplateAssessments.templateId, templateId),
           orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
         }),
-        this.db.query.classTemplateModules.findMany({
+        database.query.classTemplateModules.findMany({
           where: eq(classTemplateModules.templateId, templateId),
           orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
         }),
-        this.db.query.classTemplateAnnouncements.findMany({
+        database.query.classTemplateAnnouncements.findMany({
           where: eq(classTemplateAnnouncements.templateId, templateId),
           orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
         }),
@@ -527,7 +551,7 @@ export class ClassesService {
           ? new Date(Date.now() + dueOffset * 24 * 60 * 60 * 1000)
           : null;
 
-      const [assessment] = await this.db
+      const [assessment] = await database
         .insert(assessments)
         .values({
           classId,
@@ -559,7 +583,7 @@ export class ClassesService {
 
       for (let questionIndex = 0; questionIndex < questionRows.length; questionIndex += 1) {
         const templateQuestion = questionRows[questionIndex];
-        const [question] = await this.db
+        const [question] = await database
           .insert(assessmentQuestions)
           .values({
             assessmentId: assessment.id,
@@ -577,7 +601,7 @@ export class ClassesService {
           ? templateQuestion.options
           : [];
         if (options.length > 0) {
-          await this.db.insert(assessmentQuestionOptions).values(
+          await database.insert(assessmentQuestionOptions).values(
             options.map((option: any, optionIndex: number) => ({
               questionId: question.id,
               text: option.text ?? '',
@@ -593,7 +617,7 @@ export class ClassesService {
 
     const templateModuleIds = templateModules.map((module) => module.id);
     const templateSections = templateModuleIds.length
-      ? await this.db.query.classTemplateModuleSections.findMany({
+      ? await database.query.classTemplateModuleSections.findMany({
           where: inArray(
             classTemplateModuleSections.templateModuleId,
             templateModuleIds,
@@ -603,7 +627,7 @@ export class ClassesService {
       : [];
     const templateSectionIds = templateSections.map((section) => section.id);
     const templateItems = templateSectionIds.length
-      ? await this.db.query.classTemplateModuleItems.findMany({
+      ? await database.query.classTemplateModuleItems.findMany({
           where: inArray(
             classTemplateModuleItems.templateSectionId,
             templateSectionIds,
@@ -614,7 +638,7 @@ export class ClassesService {
 
     const moduleIdMap = new Map<string, string>();
     for (const templateModule of templateModules) {
-      const [module] = await this.db
+      const [module] = await database
         .insert(classModules)
         .values({
           classId,
@@ -642,7 +666,7 @@ export class ClassesService {
     for (const templateSection of templateSections) {
       const moduleId = moduleIdMap.get(templateSection.templateModuleId);
       if (!moduleId) continue;
-      const [section] = await this.db
+      const [section] = await database
         .insert(moduleSections)
         .values({
           moduleId,
@@ -661,7 +685,7 @@ export class ClassesService {
         ? assessmentIdMap.get(templateItem.templateAssessmentId) ?? null
         : null;
 
-      await this.db.insert(moduleItems).values({
+      await database.insert(moduleItems).values({
         moduleSectionId: sectionId,
         itemType: templateItem.itemType as any,
         assessmentId: mappedAssessmentId,
@@ -677,7 +701,7 @@ export class ClassesService {
     }
 
     for (const templateAnnouncement of templateAnnouncements) {
-      await this.db.insert(announcements).values({
+      await database.insert(announcements).values({
         classId,
         authorId: actorId,
         title: templateAnnouncement.title,
@@ -2467,7 +2491,7 @@ export class ClassesService {
     room?: string | null;
     slots: ScheduleSlotDto[];
     excludeClassId?: string;
-  }): Promise<void> {
+  }, database: any = this.db): Promise<void> {
     const { sectionId, teacherId, room, slots, excludeClassId } = params;
     const conflicts: any[] = [];
 
@@ -2509,7 +2533,7 @@ export class ClassesService {
         );
       }
 
-      const conflictRows = await this.db
+      const conflictRows = await database
         .select({
           slotId: classSchedules.id,
           classId: classSchedules.classId,

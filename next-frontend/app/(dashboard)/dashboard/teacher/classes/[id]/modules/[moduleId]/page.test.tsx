@@ -35,6 +35,8 @@ jest.mock('@/services/module-service', () => ({
     deleteSection: jest.fn(),
     reorderSections: jest.fn(),
     updateItem: jest.fn(),
+    releaseCoreItem: jest.fn(),
+    releaseCoreModule: jest.fn(),
     detachItem: jest.fn(),
     reorderItems: jest.fn(),
     update: jest.fn(),
@@ -196,6 +198,68 @@ describe('TeacherModuleDetailPage', () => {
     expect(pushMock).toHaveBeenCalledWith(
       '/dashboard/teacher/lessons/lesson-new/edit',
     );
+  });
+
+  it('renders default-core module content as immutable with release controls', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: false,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [
+            {
+              id: 'section-1',
+              moduleId: 'module-1',
+              title: 'Section A',
+              description: '',
+              order: 1,
+              items: [
+                {
+                  id: 'item-1',
+                  moduleSectionId: 'section-1',
+                  itemType: 'assessment',
+                  assessmentId: 'assessment-existing',
+                  order: 1,
+                  isVisible: false,
+                  isRequired: true,
+                  isGiven: false,
+                  isCoreTemplateAsset: true,
+                  assessment: {
+                    id: 'assessment-existing',
+                    classId: 'class-1',
+                    title: 'Core Quiz',
+                    type: 'quiz',
+                    totalPoints: 10,
+                    isPublished: false,
+                  },
+                },
+              ],
+            },
+          ],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    expect(screen.getByText('Default module')).toBeInTheDocument();
+    expect(screen.getByText('Default item')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Release Item' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Visibility' }));
+    expect(screen.getByRole('button', { name: 'Release Module' })).toBeInTheDocument();
   });
 
   it('creates and attaches a new assessment block then opens assessment editor', async () => {

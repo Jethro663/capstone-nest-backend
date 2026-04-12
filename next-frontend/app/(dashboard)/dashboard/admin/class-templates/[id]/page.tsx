@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   buildIndexKey,
   buildLessonItemKey,
@@ -30,6 +29,7 @@ import type {
   ClassTemplateModuleSection,
   ClassTemplateQuestion,
 } from '@/types/class-template';
+import '../../../teacher/classes/[id]/workspace.css';
 import '../../../teacher/classes/[id]/modules/[moduleId]/module-workspace.css';
 
 type WorkspaceTab = 'modules' | 'assessments' | 'announcements';
@@ -417,61 +417,95 @@ export default function ClassTemplateEditorPage() {
   }
 
   return (
-    <div className="admin-template-editor space-y-6">
-      <div className="rounded-2xl border border-[var(--admin-outline)] bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-2">
-            <div className="text-xs font-black uppercase tracking-[0.2em] text-[var(--admin-text-muted)]">
-              Template Workspace
-            </div>
-            <Input
-              data-testid="template-workspace-name-input"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="h-11 max-w-xl text-lg font-black"
-            />
-            <p className="text-xs text-[var(--admin-text-muted)]">
-              {template?.subjectCode} | Grade {template?.subjectGradeLevel} | status: {template?.status}
-            </p>
+    <div className="teacher-class-workspace admin-template-editor">
+      <header className="teacher-class-workspace__hero">
+        <button
+          type="button"
+          className="teacher-class-workspace__back"
+          onClick={() => router.push('/dashboard/admin/class-templates')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Templates
+        </button>
+        <div className="teacher-class-workspace__hero-row">
+          <div className="teacher-class-workspace__hero-icon">
+            <BookOpen className="h-6 w-6" />
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={() => router.push('/dashboard/admin/class-templates')}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <Button
-              data-testid="save-draft-button"
-              onClick={() => void saveNow()}
-              disabled={saving}
-              className="admin-button-outline rounded-xl font-black"
-              variant="outline"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? 'Saving...' : 'Save Draft'}
-            </Button>
-            <Button
-              data-testid="publish-template-button"
-              onClick={() => void publishNow()}
-              disabled={publishing}
-              className="admin-button-solid rounded-xl font-black"
-            >
-              {publishing ? 'Publishing...' : 'Publish'}
-            </Button>
+          <div className="teacher-class-workspace__hero-copy">
+            <h1>{name || template?.name || 'Template Workspace'}</h1>
+            <p>
+              Shape this template with the same workspace rhythm teachers use in live classes:
+              modules first, then assessments, then announcements.
+            </p>
+            <div className="teacher-class-workspace__hero-meta">
+              <span>{template?.subjectCode} / Grade {template?.subjectGradeLevel}</span>
+              <span>{modules.length} modules</span>
+              <span>{assessments.length} assessments</span>
+              <span>{announcements.length} announcements</span>
+              <span>Status: {template?.status || 'draft'}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as WorkspaceTab)} className="space-y-4">
-        <TabsList className="admin-tab-list h-auto">
-          <TabsTrigger data-testid="workspace-tab-modules" value="modules" className="admin-tab">Modules</TabsTrigger>
-          <TabsTrigger data-testid="workspace-tab-assessments" value="assessments" className="admin-tab">Assessments</TabsTrigger>
-          <TabsTrigger data-testid="workspace-tab-announcements" value="announcements" className="admin-tab">Announcements</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <nav className="teacher-class-workspace__tabs" aria-label="Template workspace tabs">
+        {([
+          { key: 'modules', label: 'Modules', icon: BookOpen },
+          { key: 'assessments', label: 'Assessments', icon: ClipboardList },
+          { key: 'announcements', label: 'Announcements', icon: FileText },
+        ] as const).map((entry) => {
+          const Icon = entry.icon;
+          return (
+            <button
+              key={entry.key}
+              type="button"
+              data-testid={`workspace-tab-${entry.key}`}
+              className="teacher-class-workspace__tab"
+              data-active={tab === entry.key}
+              onClick={() => setTab(entry.key)}
+            >
+              <Icon className="h-4 w-4" />
+              {entry.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <section className="teacher-class-workspace__body">
+        <div className="teacher-class-workspace__panel">
+          <div className="teacher-class-workspace__panel-head">
+            <div>
+              <h2 className="teacher-class-workspace__section-title">Template Setup</h2>
+              <p>Rename the template, save your draft locally and remotely, then publish when the default content is ready.</p>
+            </div>
+            <div className="teacher-class-workspace__head-actions">
+              <Input
+                data-testid="template-workspace-name-input"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="h-11 min-w-[18rem] max-w-xl bg-white font-black"
+              />
+              <Button
+                data-testid="save-draft-button"
+                onClick={() => void saveNow()}
+                disabled={saving}
+                className="teacher-class-workspace__outline"
+                variant="outline"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? 'Saving...' : 'Save Draft'}
+              </Button>
+              <Button
+                data-testid="publish-template-button"
+                onClick={() => void publishNow()}
+                disabled={publishing}
+                className="teacher-class-workspace__solid"
+              >
+                {publishing ? 'Publishing...' : 'Publish'}
+              </Button>
+            </div>
+          </div>
+        </div>
 
       {tab === 'modules' ? (
         <section className="teacher-module-detail__content">
@@ -801,7 +835,8 @@ export default function ClassTemplateEditorPage() {
       ) : null}
 
       {tab === 'assessments' ? (
-        <div className="space-y-4">
+        <div className="teacher-class-workspace__panel">
+          <div className="space-y-4">
           {assessments.map((assessment, assessmentIndex) => (
             <article key={`${assessment.id ?? 'new'}-${assessmentIndex}`} className="rounded-2xl border border-[var(--admin-outline)] bg-white p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -888,18 +923,20 @@ export default function ClassTemplateEditorPage() {
           ))}
           <Button
             data-testid="add-assessment-button"
-            className="admin-button-outline rounded-xl font-black"
+            className="teacher-class-workspace__outline"
             variant="outline"
             onClick={addAssessment}
           >
             <Plus className="mr-1 h-4 w-4" />
             Add Assessment
           </Button>
+          </div>
         </div>
       ) : null}
 
       {tab === 'announcements' ? (
-        <div className="space-y-3">
+        <div className="teacher-class-workspace__panel">
+          <div className="space-y-3">
           {announcements.map((announcement, index) => (
             <div key={`${announcement.id ?? 'new'}-${index}`} className="rounded-xl border border-[var(--admin-outline)] bg-white p-4">
               <div className="mb-2 flex items-center gap-2">
@@ -934,23 +971,25 @@ export default function ClassTemplateEditorPage() {
               />
             </div>
           ))}
-          <Button className="admin-button-outline rounded-xl font-black" variant="outline" onClick={addAnnouncement}>
+          <Button className="teacher-class-workspace__outline" variant="outline" onClick={addAnnouncement}>
             <Plus className="mr-1 h-4 w-4" />
             Add Announcement
           </Button>
-          <Button className="admin-button-solid rounded-xl font-black" onClick={openNewAnnouncementStudio}>
+          <Button className="teacher-class-workspace__solid" onClick={openNewAnnouncementStudio}>
             <Plus className="mr-1 h-4 w-4" />
             Create In Studio
           </Button>
+          </div>
         </div>
       ) : null}
 
       {tab === 'assessments' ? (
-        <Button className="admin-button-solid rounded-xl font-black" onClick={openNewAssessmentStudio}>
+        <Button className="teacher-class-workspace__solid" onClick={openNewAssessmentStudio}>
           <Plus className="mr-1 h-4 w-4" />
           Create In Studio
         </Button>
       ) : null}
+      </section>
     </div>
   );
 }

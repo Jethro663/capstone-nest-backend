@@ -1010,6 +1010,33 @@ export default function TeacherClassDetailPage() {
     });
   };
 
+  const toggleCoreAssessmentRelease = async (assessment: Assessment) => {
+    if (busyAssessmentId) return;
+
+    try {
+      setBusyAssessmentId(assessment.id);
+      const response = await assessmentService.releaseCore(assessment.id, {
+        isPublished: !assessment.isPublished,
+      });
+      setAssessments((current) =>
+        current.map((entry) =>
+          entry.id === assessment.id ? response.data : entry,
+        ),
+      );
+      toast.success(
+        response.data.isPublished
+          ? 'Default assessment released to students'
+          : 'Default assessment hidden from students',
+      );
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, 'Failed to update default assessment release'),
+      );
+    } finally {
+      setBusyAssessmentId(null);
+    }
+  };
+
   const handleAssignmentCardClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>, assessmentId: string) => {
       const target = event.target as HTMLElement;
@@ -1490,6 +1517,7 @@ export default function TeacherClassDetailPage() {
               {filteredAssignments.map((assessment) => {
                 const filter = deriveAssignmentFilter(assessment);
                 const isSelected = selectedAssessmentIds.includes(assessment.id);
+                const isCoreAssessment = Boolean(assessment.isCoreTemplateAsset);
                 return (
                   <article key={assessment.id} className="teacher-class-workspace__assignment-card" data-selected={isSelected}>
                     <div
@@ -1514,6 +1542,7 @@ export default function TeacherClassDetailPage() {
                             <span data-status={assessment.isPublished ? 'published' : 'draft'}>
                               {assessment.isPublished ? 'Published' : 'Draft'}
                             </span>
+                            {isCoreAssessment ? <span>Default</span> : null}
                           </div>
                           <h3>{assessment.title}</h3>
                           <p>
@@ -1523,18 +1552,31 @@ export default function TeacherClassDetailPage() {
                       </Link>
                     </div>
                     <div className="teacher-class-workspace__assignment-actions">
-                      <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
-                        Edit
-                      </Link>
-                      <button
-                        type="button"
-                        className="teacher-class-workspace__ghost-icon"
-                        onClick={() => handleDeleteAssessment(assessment.id)}
-                        disabled={busyAssessmentId === assessment.id}
-                        aria-label="Delete assessment"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {isCoreAssessment ? (
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          onClick={() => void toggleCoreAssessmentRelease(assessment)}
+                          disabled={busyAssessmentId === assessment.id}
+                        >
+                          {assessment.isPublished ? 'Hide Core' : 'Release Core'}
+                        </button>
+                      ) : (
+                        <>
+                          <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
+                            Edit
+                          </Link>
+                          <button
+                            type="button"
+                            className="teacher-class-workspace__ghost-icon"
+                            onClick={() => handleDeleteAssessment(assessment.id)}
+                            disabled={busyAssessmentId === assessment.id}
+                            aria-label="Delete assessment"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </article>
                 );

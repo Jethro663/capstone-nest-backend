@@ -11,79 +11,15 @@ import { classService } from '@/services/class-service';
 import { classTemplateService } from '@/services/class-template-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
+import {
+  getSubjectCodeCandidates,
+  isTemplateCompatibleWithClass,
+  matchesTemplateToSubject,
+} from '@/lib/class-template-compat';
 import type { Section } from '@/types/section';
 import type { ClassTemplate } from '@/types/class-template';
 import type { User } from '@/types/user';
 import { toast } from 'sonner';
-
-const SUBJECT_CODE_HINTS: Record<string, string[]> = {
-  science: ['SCI', 'SCIENCE'],
-  'araling panlipunan': ['AP', 'ARALING', 'PANLIPUNAN'],
-  mathematics: ['MATH', 'MATHEMATICS'],
-  english: ['ENG', 'ENGLISH'],
-  fili: ['FIL', 'FILI', 'FILIPINO'],
-  tle: ['TLE'],
-  values: ['VALUES', 'ESP'],
-  mapeh: ['MAPEH'],
-};
-
-function normalizeToken(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-}
-
-function getSubjectCodeCandidates(subjectName: string, subjectCodeInput: string) {
-  const candidates = new Set<string>();
-
-  const explicitCode = normalizeToken(subjectCodeInput);
-  if (explicitCode) {
-    candidates.add(explicitCode);
-  }
-
-  const key = subjectName.trim().toLowerCase();
-  const hints = SUBJECT_CODE_HINTS[key] ?? [subjectName];
-
-  for (const hint of hints) {
-    const token = normalizeToken(hint);
-    if (!token) continue;
-    candidates.add(token);
-  }
-
-  return Array.from(candidates);
-}
-
-function matchesTemplateToSubject(
-  template: ClassTemplate,
-  subjectName: string,
-  subjectCodeInput: string,
-) {
-  const templateCode = normalizeToken(template.subjectCode || '');
-  const templateName = normalizeToken(template.name || '');
-  const candidates = getSubjectCodeCandidates(subjectName, subjectCodeInput);
-
-  return candidates.some((candidate) => {
-    const token = normalizeToken(candidate);
-    if (!token) return false;
-
-    return (
-      templateCode === token ||
-      templateCode.includes(token) ||
-      token.includes(templateCode) ||
-      templateName.includes(token)
-    );
-  });
-}
-
-function isTemplateExactlyCompatible(
-  template: ClassTemplate,
-  subjectCodeInput: string,
-  subjectGradeLevel: string,
-) {
-  return (
-    template.status === 'published' &&
-    template.subjectGradeLevel === subjectGradeLevel &&
-    template.subjectCode.trim().toUpperCase() === subjectCodeInput.trim().toUpperCase()
-  );
-}
 
 export default function CreateClassPage() {
   const router = useRouter();
@@ -244,17 +180,19 @@ export default function CreateClassPage() {
       const selectedTemplate = compatibleTemplates.find((template) => template.id === selectedTemplateId);
       const validatedTemplateId =
         selectedTemplate &&
-        isTemplateExactlyCompatible(
+        isTemplateCompatibleWithClass(
           selectedTemplate,
-          values.subjectCode,
-          values.subjectGradeLevel,
+          {
+            subjectCode: values.subjectCode,
+            subjectGradeLevel: values.subjectGradeLevel,
+          },
         )
           ? selectedTemplateId
           : '';
 
       if (selectedTemplateId && !validatedTemplateId) {
         toast.warning(
-          'Selected template was skipped because its subject code does not exactly match this class.',
+          'Selected template was skipped because it is no longer compatible with this class setup.',
         );
       }
 

@@ -95,6 +95,12 @@ describe('ClassesService', () => {
   const mockDb: any = {
     query: {
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
+      classTemplates: { findFirst: jest.fn(), findMany: jest.fn() },
+      classTemplateAssessments: { findMany: jest.fn() },
+      classTemplateModules: { findMany: jest.fn() },
+      classTemplateAnnouncements: { findMany: jest.fn() },
+      classTemplateModuleSections: { findMany: jest.fn() },
+      classTemplateModuleItems: { findMany: jest.fn() },
       classVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
       studentClassPresentationPreferences: {
         findFirst: jest.fn(),
@@ -125,8 +131,18 @@ describe('ClassesService', () => {
   const mockAuditService = { log: jest.fn() };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockDb.transaction.mockImplementation(async (callback: (tx: any) => Promise<any>) =>
+      callback(mockDb),
+    );
     mockAuditService.log.mockResolvedValue(undefined);
+    mockDb.query.classTemplates.findFirst.mockResolvedValue(null);
+    mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateModules.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateAnnouncements.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateModuleSections.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateModuleItems.findMany.mockResolvedValue([]);
+    mockDb.query.classes.findMany.mockResolvedValue([]);
     mockDb.query.classVisibilityPreferences.findMany.mockResolvedValue([]);
     mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue(null);
     mockDb.query.studentClassPresentationPreferences.findMany.mockResolvedValue(
@@ -240,9 +256,8 @@ describe('ClassesService', () => {
     const setupHappyPath = () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
     };
 
@@ -286,6 +301,43 @@ describe('ClassesService', () => {
       expect(insertValues.subjectCode).toBe('MATH-7');
     });
 
+    it('creates template-based classes inside a transaction', async () => {
+      setupHappyPath();
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-1',
+        status: 'published',
+        subjectCode: 'MATH-7',
+        subjectGradeLevel: '7',
+      });
+
+      const result = await service.create(
+        { ...dto, templateId: 'template-uuid-1' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(result).toEqual(makeClass());
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts template subject code variants that normalize to the same subject', async () => {
+      setupHappyPath();
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-2',
+        status: 'published',
+        subjectCode: 'MATH-07',
+        subjectGradeLevel: '7',
+      });
+
+      await expect(
+        service.create(
+          { ...dto, templateId: 'template-uuid-2' } as any,
+          'admin-actor-1',
+          ['admin'],
+        ),
+      ).resolves.toEqual(makeClass());
+    });
+
     it('throws BadRequestException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
@@ -319,9 +371,8 @@ describe('ClassesService', () => {
       mockDb.query.users.findFirst.mockResolvedValue(
         makeTeacher({ userRoles: [{ role: { name: 'admin' } }] }),
       );
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
 
       await expect(service.create(dto as any)).resolves.toBeDefined();
@@ -330,7 +381,9 @@ describe('ClassesService', () => {
     it('throws ConflictException when the same subject+section+year already exists', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([
+        { id: CLASS_ID, subjectCode: 'MATH-7' },
+      ]);
 
       await expect(service.create(dto as any)).rejects.toThrow(
         ConflictException,
@@ -358,9 +411,8 @@ describe('ClassesService', () => {
     it('inserts schedule slots into class_schedules when schedules are provided', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null) // duplicate check
-        .mockResolvedValueOnce(makeClass()); // findById after insert
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       // First insert: classes table; second: class_schedules
       mockDb.insert
         .mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]))
@@ -377,7 +429,7 @@ describe('ClassesService', () => {
     it('throws ConflictException when a slot collides with another class in the same section', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst.mockResolvedValueOnce(null); // no duplicate
+      mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
 
       // Collision check returns a conflicting slot
@@ -409,7 +461,7 @@ describe('ClassesService', () => {
     it('throws ConflictException when a slot collides on the same teacher across sections', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst.mockResolvedValueOnce(null);
+      mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
 
       mockDb.select.mockReturnValue({
@@ -445,9 +497,8 @@ describe('ClassesService', () => {
       };
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
 
       await service.create(dtoNoSlots as any);

@@ -8,6 +8,28 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 type HealthReadiness = Awaited<ReturnType<typeof adminService.getHealthReadiness>>;
+type DependencyStatus = { ok: boolean; degraded?: boolean; message?: string };
+
+function statusMeta(status?: DependencyStatus) {
+  if (status?.degraded) {
+    return {
+      label: 'Degraded',
+      tone: 'admin-status-pill admin-status-pill--pending',
+    };
+  }
+
+  if (status?.ok) {
+    return {
+      label: 'Operational',
+      tone: 'admin-status-pill admin-status-pill--active',
+    };
+  }
+
+  return {
+    label: 'Down',
+    tone: 'admin-status-pill admin-status-pill--archived',
+  };
+}
 
 function healthyTone(ok?: boolean, degraded?: boolean) {
   if (degraded) return 'admin-status-pill admin-status-pill--pending';
@@ -51,13 +73,103 @@ export default function AdminDiagnosticsPage() {
   }
 
   const dependencies = readiness?.data?.dependencies;
+  const databaseStatus = statusMeta(dependencies?.database);
+  const redisStatus = statusMeta(dependencies?.redis);
+  const aiStatus = statusMeta(dependencies?.aiService);
+
+  const dependencyAlerts = [
+    {
+      id: 'database',
+      label: 'Database Connection Pool',
+      severity: dependencies?.database?.ok ? null : ('critical' as const),
+      message: dependencies?.database?.message ?? 'Database health check failed. API writes may fail.',
+      icon: Database,
+    },
+    {
+      id: 'redis',
+      label: 'Redis Cache',
+      severity: dependencies?.redis?.ok ? null : ('critical' as const),
+      message: dependencies?.redis?.message ?? 'Redis is unavailable. Queues and cached operations may fail.',
+      icon: HardDrive,
+    },
+    {
+      id: 'aiService',
+      label: 'AI Service',
+      severity: !dependencies?.aiService
+        ? ('critical' as const)
+        : dependencies.aiService.degraded
+          ? ('warning' as const)
+          : dependencies.aiService.ok
+            ? null
+            : ('critical' as const),
+      message:
+        dependencies?.aiService?.message ??
+        'AI service is unavailable. AI-powered interventions are currently affected.',
+      icon: Bot,
+    },
+  ].filter((item) => item.severity !== null);
+
+  if (error) {
+    dependencyAlerts.unshift({
+      id: 'health-fetch',
+      label: 'Diagnostics API',
+      severity: 'critical',
+      message: 'Failed to load diagnostics endpoints. Current health status may be stale.',
+      icon: Activity,
+    });
+  }
+
+  const hasCriticalAlerts = dependencyAlerts.some((item) => item.severity === 'critical');
+  const hasWarningAlerts = dependencyAlerts.some((item) => item.severity === 'warning');
+  const bannerVariant = hasCriticalAlerts ? 'issue' : hasWarningAlerts ? 'warning' : 'healthy';
+
+  const bannerTitle = hasCriticalAlerts
+    ? 'Critical dependency issue detected'
+    : hasWarningAlerts
+      ? 'System is running in degraded mode'
+      : 'All systems operational';
+
+  const bannerPillClass = hasCriticalAlerts
+    ? 'admin-status-pill admin-status-pill--archived'
+    : hasWarningAlerts
+      ? 'admin-status-pill admin-status-pill--pending'
+      : 'admin-status-pill admin-status-pill--active';
+
+  const bannerPillLabel = hasCriticalAlerts ? 'Issue' : hasWarningAlerts ? 'Warning' : 'Healthy';
+  const alertCountCopy =
+    dependencyAlerts.length > 0
+      ? `${dependencyAlerts.length} active ${dependencyAlerts.length === 1 ? 'alert' : 'alerts'}`
+      : 'No active dependency alerts';
+
   const dependencyRows = [
-    { label: 'Environment Variables', status: 'OK', tone: 'admin-status-pill admin-status-pill--active', icon: Shield },
-    { label: 'Database Connection Pool', status: dependencies?.database?.ok ? 'OK' : 'Issue', tone: dependencies?.database?.ok ? 'admin-status-pill admin-status-pill--active' : 'admin-status-pill admin-status-pill--archived', icon: Database },
-    { label: 'Redis Connection', status: dependencies?.redis?.ok ? 'OK' : 'Issue', tone: dependencies?.redis?.ok ? 'admin-status-pill admin-status-pill--active' : 'admin-status-pill admin-status-pill--archived', icon: HardDrive },
-    { label: 'AI API Key', status: dependencies?.aiService?.ok ? 'OK' : 'Issue', tone: dependencies?.aiService?.ok ? 'admin-status-pill admin-status-pill--active' : 'admin-status-pill admin-status-pill--archived', icon: Bot },
-    { label: 'File Storage', status: 'OK', tone: 'admin-status-pill admin-status-pill--active', icon: HardDrive },
-    { label: 'Email Service', status: 'Warning', tone: 'admin-status-pill admin-status-pill--pending', icon: Shield },
+    {
+      label: 'Environment Variables',
+      status: 'Operational',
+      tone: 'admin-status-pill admin-status-pill--active',
+      message: 'Required server variables are loaded.',
+      icon: Shield,
+    },
+    {
+      label: 'Database Connection Pool',
+      status: databaseStatus.label,
+      tone: databaseStatus.tone,
+      message: dependencies?.database?.message ?? 'Database health checks are passing.',
+      icon: Database,
+    },
+    {
+      label: 'Redis Connection',
+      status: redisStatus.label,
+      tone: redisStatus.tone,
+      message: dependencies?.redis?.message ?? 'Redis is reachable and responding to ping.',
+      icon: HardDrive,
+    },
+    {
+      label: 'AI Service',
+      status: aiStatus.label,
+      tone: aiStatus.tone,
+      message: dependencies?.aiService?.message ?? 'AI service health checks are passing.',
+      icon: Bot,
+    },
   ];
 
   return (
@@ -73,19 +185,47 @@ export default function AdminDiagnosticsPage() {
         </Button>
       )}
     >
-      <div className="admin-diagnostics-banner">
+      <div className={`admin-diagnostics-banner admin-diagnostics-banner--${bannerVariant}`}>
         <div>
-          <p className="admin-diagnostics-banner__title">
-            {error ? 'System checks need attention' : 'All Systems Operational'}
-          </p>
+          <p className="admin-diagnostics-banner__title">{bannerTitle}</p>
           <p className="admin-diagnostics-banner__copy">
-            Last checked: {live?.timestamp ? new Date(live.timestamp).toLocaleTimeString() : 'Unavailable'}
+            Last checked: {live?.timestamp ? new Date(live.timestamp).toLocaleTimeString() : 'Unavailable'} • {alertCountCopy}
           </p>
         </div>
-        <span className={readiness?.data?.ready ? 'admin-status-pill admin-status-pill--active' : 'admin-status-pill admin-status-pill--archived'}>
-          {readiness?.data?.ready ? 'Healthy' : 'Issue'}
-        </span>
+        <span className={bannerPillClass}>{bannerPillLabel}</span>
       </div>
+
+      {dependencyAlerts.length > 0 && (
+        <AdminSectionCard title="Active Alerts" contentClassName="space-y-3">
+          {dependencyAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`admin-diagnostics-alert admin-diagnostics-alert--${alert.severity}`}
+              role="alert"
+              aria-live="polite"
+            >
+              <div className="admin-diagnostics-alert__header">
+                <div className="inline-flex h-8 w-8 items-center justify-center rounded-[0.8rem] bg-white/70 text-[#b45309]">
+                  <alert.icon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="admin-diagnostics-alert__title">{alert.label}</p>
+                  <p className="admin-diagnostics-alert__message">{alert.message}</p>
+                </div>
+              </div>
+              <span
+                className={
+                  alert.severity === 'critical'
+                    ? 'admin-status-pill admin-status-pill--archived'
+                    : 'admin-status-pill admin-status-pill--pending'
+                }
+              >
+                {alert.severity === 'critical' ? 'Critical' : 'Warning'}
+              </span>
+            </div>
+          ))}
+        </AdminSectionCard>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[
@@ -116,7 +256,11 @@ export default function AdminDiagnosticsPage() {
             ok: Boolean(dependencies?.aiService?.ok),
             degraded: dependencies?.aiService?.degraded,
             detail: dependencies?.aiService?.message ?? 'AI service connected',
-            value: dependencies?.aiService?.ok ? 'Ready' : 'Offline',
+            value: dependencies?.aiService?.degraded
+              ? 'Degraded'
+              : dependencies?.aiService?.ok
+                ? 'Ready'
+                : 'Offline',
           },
         ].map((item) => (
           <div key={item.title} className="admin-service-card">
@@ -146,7 +290,10 @@ export default function AdminDiagnosticsPage() {
               <div className="inline-flex h-9 w-9 items-center justify-center rounded-[0.9rem] bg-[#f5f8fe] text-[#8ea0bc]">
                 <item.icon className="h-4 w-4" />
               </div>
-              <span className="font-semibold text-[var(--admin-text-strong)]">{item.label}</span>
+              <div>
+                <p className="font-semibold text-[var(--admin-text-strong)]">{item.label}</p>
+                <p className="text-xs text-[#7b90b3]">{item.message}</p>
+              </div>
             </div>
             <span className={item.tone}>{item.status}</span>
           </div>

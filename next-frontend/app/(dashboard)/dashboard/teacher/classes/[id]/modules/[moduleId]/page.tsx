@@ -136,7 +136,13 @@ function iconForItemType(itemType: ModuleItemType) {
 }
 
 function titleForItem(item: ModuleItem) {
-  if (item.itemType === 'lesson') return item.lesson?.title || 'Untitled lesson';
+  if (item.itemType === 'lesson') {
+    const metadataTitle =
+      typeof item.metadata?.lessonTitle === 'string'
+        ? item.metadata.lessonTitle
+        : undefined;
+    return item.lesson?.title || metadataTitle || 'Untitled lesson';
+  }
   if (item.itemType === 'assessment') return item.assessment?.title || 'Untitled assessment';
   return item.file?.originalName || 'Untitled file';
 }
@@ -159,7 +165,9 @@ function itemMeta(item: ModuleItem) {
   if (item.itemType === 'file') {
     return item.file?.mimeType || 'File';
   }
-  return 'Lesson';
+  return typeof item.metadata?.lessonSummary === 'string'
+    ? item.metadata.lessonSummary
+    : 'Lesson';
 }
 
 function getItemEditorHref(item: ModuleItem, classId: string, moduleId: string) {
@@ -377,6 +385,7 @@ export default function TeacherModuleDetailPage() {
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
     0,
   );
+  const isCoreModule = Boolean(module?.isCoreTemplateAsset);
 
   const runModulePatch = async (patch: { isVisible?: boolean; isLocked?: boolean; teacherNotes?: string }) => {
     if (!module) return;
@@ -391,6 +400,26 @@ export default function TeacherModuleDetailPage() {
     } catch {
       setModule(previous);
       toast.error('Unable to update module settings');
+    } finally {
+      setUpdatingModule(false);
+    }
+  };
+
+  const handleReleaseCoreModule = async (isVisible: boolean) => {
+    if (!module || updatingModule) return;
+
+    const previous = module;
+    const next = { ...module, isVisible };
+    setModule(next);
+
+    try {
+      setUpdatingModule(true);
+      const response = await moduleService.releaseCoreModule(module.id, { isVisible });
+      setModule(response.data);
+      toast.success(isVisible ? 'Default module released to students' : 'Default module hidden from students');
+    } catch {
+      setModule(previous);
+      toast.error('Unable to update default module release');
     } finally {
       setUpdatingModule(false);
     }
@@ -583,6 +612,47 @@ export default function TeacherModuleDetailPage() {
     } catch {
       setModule(snapshot);
       toast.error('Unable to update item setting');
+    } finally {
+      setPendingItemIds((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+    }
+  };
+
+  const handleReleaseCoreItem = async (
+    sectionId: string,
+    itemId: string,
+    patch: { isVisible?: boolean; isGiven?: boolean },
+  ) => {
+    if (!module || pendingItemIds[itemId]) return;
+
+    const snapshot = module;
+    setPendingItemIds((current) => ({ ...current, [itemId]: true }));
+    setModule((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sections: current.sections.map((section) =>
+          section.id === sectionId
+            ? {
+                ...section,
+                items: section.items.map((item) =>
+                  item.id === itemId ? { ...item, ...patch } : item,
+                ),
+              }
+            : section,
+        ),
+      };
+    });
+
+    try {
+      await moduleService.releaseCoreItem(itemId, patch);
+      toast.success('Default item release updated');
+    } catch {
+      setModule(snapshot);
+      toast.error('Unable to update default item release');
     } finally {
       setPendingItemIds((current) => {
         const next = { ...current };
@@ -837,6 +907,12 @@ export default function TeacherModuleDetailPage() {
             <h1>{module.title}</h1>
             <p>{module.description || 'No module description yet.'}</p>
             <div className="teacher-module-detail__hero-meta">
+              {isCoreModule ? (
+                <span data-tone="warn">
+                  <Lock className="h-3.5 w-3.5" />
+                  Default module
+                </span>
+              ) : null}
               <span data-tone={module.isVisible ? 'good' : 'muted'}>
                 {module.isVisible ? (
                   <>
@@ -898,24 +974,30 @@ export default function TeacherModuleDetailPage() {
                 <h2>Sections</h2>
                 <p>{sectionList.length} sections</p>
               </div>
-              <div className="teacher-module-detail__section-creator">
-                <Input
-                  value={sectionTitle}
-                  onChange={(event) => setSectionTitle(event.target.value)}
-                  placeholder="Add section title"
-                  maxLength={120}
-                />
-                <Button
-                  type="button"
-                  className="teacher-module-detail__primary"
-                  data-priority="primary"
-                  onClick={() => void handleCreateSection()}
-                  disabled={creatingSection}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Section
-                </Button>
-              </div>
+              {isCoreModule ? (
+                <div className="teacher-module-detail__tip" data-tone="warning">
+                  <strong>Default module:</strong> Section structure is inherited from the template and cannot be edited here.
+                </div>
+              ) : (
+                <div className="teacher-module-detail__section-creator">
+                  <Input
+                    value={sectionTitle}
+                    onChange={(event) => setSectionTitle(event.target.value)}
+                    placeholder="Add section title"
+                    maxLength={120}
+                  />
+                  <Button
+                    type="button"
+                    className="teacher-module-detail__primary"
+                    data-priority="primary"
+                    onClick={() => void handleCreateSection()}
+                    disabled={creatingSection}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Section
+                  </Button>
+                </div>
+              )}
             </div>
 
             {sectionList.map((section) => {
@@ -929,18 +1011,24 @@ export default function TeacherModuleDetailPage() {
                   data-dragging={draggingSectionId === section.id}
                 >
                   <header className="teacher-module-detail__section-card-head">
-                    <ActionTooltip label="Drag to reorder section">
-                      <button
-                        type="button"
-                        className="teacher-module-detail__drag-handle"
-                        draggable
-                        onDragStart={() => setDraggingSectionId(section.id)}
-                        onDragEnd={() => setDraggingSectionId(null)}
-                        aria-label="Reorder section"
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </button>
-                    </ActionTooltip>
+                    {isCoreModule ? (
+                      <span className="teacher-module-detail__drag-handle" aria-hidden="true">
+                        <Lock className="h-4 w-4" />
+                      </span>
+                    ) : (
+                      <ActionTooltip label="Drag to reorder section">
+                        <button
+                          type="button"
+                          className="teacher-module-detail__drag-handle"
+                          draggable
+                          onDragStart={() => setDraggingSectionId(section.id)}
+                          onDragEnd={() => setDraggingSectionId(null)}
+                          aria-label="Reorder section"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </button>
+                      </ActionTooltip>
+                    )}
                     <div className="teacher-module-detail__section-main">
                       {editingSectionId === section.id ? (
                         <div className="teacher-module-detail__section-edit">
@@ -968,29 +1056,33 @@ export default function TeacherModuleDetailPage() {
                       )}
                     </div>
                     <div className="teacher-module-detail__section-actions">
-                      <ActionTooltip label="Rename section">
-                        <button
-                          type="button"
-                          className="teacher-module-detail__ghost"
-                          onClick={() => {
-                            setEditingSectionId(section.id);
-                            setEditingSectionTitle(section.title);
-                          }}
-                          aria-label="Edit section title"
-                        >
-                          <NotebookPen className="h-4 w-4" />
-                        </button>
-                      </ActionTooltip>
-                      <ActionTooltip label="Delete section">
-                        <button
-                          type="button"
-                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                          onClick={() => confirmDeleteSection(section.id)}
-                          aria-label="Delete section"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </ActionTooltip>
+                      {!isCoreModule ? (
+                        <>
+                          <ActionTooltip label="Rename section">
+                            <button
+                              type="button"
+                              className="teacher-module-detail__ghost"
+                              onClick={() => {
+                                setEditingSectionId(section.id);
+                                setEditingSectionTitle(section.title);
+                              }}
+                              aria-label="Edit section title"
+                            >
+                              <NotebookPen className="h-4 w-4" />
+                            </button>
+                          </ActionTooltip>
+                          <ActionTooltip label="Delete section">
+                            <button
+                              type="button"
+                              className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                              onClick={() => confirmDeleteSection(section.id)}
+                              aria-label="Delete section"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </ActionTooltip>
+                        </>
+                      ) : null}
                       <ActionTooltip label={expanded ? 'Collapse items' : 'Expand items'}>
                         <button
                           type="button"
@@ -1019,6 +1111,7 @@ export default function TeacherModuleDetailPage() {
                           const pending = pendingItemIds[item.id] || false;
                           const status = statusForItem(item);
                           const itemEditorHref = getItemEditorHref(item, classId, moduleId);
+                          const isCoreItem = Boolean(item.isCoreTemplateAsset);
                           return (
                             <div
                               key={item.id}
@@ -1039,7 +1132,7 @@ export default function TeacherModuleDetailPage() {
                                 </button>
                               </ActionTooltip>
 
-                              {itemEditorHref ? (
+                              {itemEditorHref && !isCoreItem ? (
                                 <Link
                                   href={itemEditorHref}
                                   className="teacher-module-detail__item-main"
@@ -1054,6 +1147,7 @@ export default function TeacherModuleDetailPage() {
                                       <span data-kind={status === 'Published' ? 'published' : status === 'Draft' ? 'draft' : 'file'}>
                                         {status}
                                       </span>
+                                      {isCoreItem ? <span data-kind="draft">Default item</span> : null}
                                     </div>
                                     <h4>{titleForItem(item)}</h4>
                                     <p>{itemMeta(item)}</p>
@@ -1070,6 +1164,7 @@ export default function TeacherModuleDetailPage() {
                                       <span data-kind={status === 'Published' ? 'published' : status === 'Draft' ? 'draft' : 'file'}>
                                         {status}
                                       </span>
+                                      {isCoreItem ? <span data-kind="draft">Default item</span> : null}
                                     </div>
                                     <h4>{titleForItem(item)}</h4>
                                     <p>{itemMeta(item)}</p>
@@ -1077,68 +1172,94 @@ export default function TeacherModuleDetailPage() {
                                 </div>
                               )}
                               <div className="teacher-module-detail__item-controls">
-                                <label className="teacher-module-detail__control-toggle">
-                                  <input
-                                    type="checkbox"
-                                    checked={item.isRequired}
-                                    disabled={pending}
-                                    onChange={(event) =>
-                                      void handleUpdateItem(section.id, item.id, { isRequired: event.target.checked })
-                                    }
-                                  />
-                                  Required
-                                </label>
-                                <label className="teacher-module-detail__control-toggle">
-                                  <input
-                                    type="checkbox"
-                                    checked={!item.isVisible}
-                                    disabled={pending}
-                                    onChange={(event) =>
-                                      void handleUpdateItem(section.id, item.id, { isVisible: !event.target.checked })
-                                    }
-                                  />
-                                  Hide
-                                </label>
-                                {item.itemType === 'assessment' ? (
-                                  <label className="teacher-module-detail__control-toggle">
-                                    <input
-                                      type="checkbox"
-                                      checked={item.isGiven}
+                                {isCoreItem ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="teacher-module-detail__outline"
+                                      onClick={() => void handleReleaseCoreItem(section.id, item.id, { isVisible: !item.isVisible })}
                                       disabled={pending}
-                                      onChange={(event) =>
-                                        void handleUpdateItem(section.id, item.id, { isGiven: event.target.checked })
-                                      }
-                                    />
-                                    Give
-                                  </label>
-                                ) : null}
-                                {item.itemType === 'lesson' ? (
-                                  <label className="teacher-module-detail__points-field">
-                                    Points
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={10000}
-                                      value={String(item.lessonPoints ?? Number((item.metadata as Record<string, unknown> | null)?.points ?? 0))}
-                                      disabled={pending}
-                                      onChange={(event) =>
-                                        void handleUpdateItem(section.id, item.id, {
-                                          points: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
-                                        })
-                                      }
-                                    />
-                                  </label>
-                                ) : null}
-                                <ActionTooltip label="Remove item from section">
-                                  <button
-                                    type="button"
-                                    className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                                    onClick={() => confirmDetachItem(item.id)}
-                                    aria-label="Remove item"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </ActionTooltip>
+                                      aria-label={item.isVisible ? 'Hide Item' : 'Release Item'}
+                                    >
+                                      {item.isVisible ? 'Hide Item' : 'Release Item'}
+                                    </button>
+                                    {item.itemType === 'assessment' ? (
+                                      <button
+                                        type="button"
+                                        className="teacher-module-detail__outline"
+                                        onClick={() => void handleReleaseCoreItem(section.id, item.id, { isGiven: !item.isGiven })}
+                                        disabled={pending}
+                                      >
+                                        {item.isGiven ? 'Ungive Assessment' : 'Give Assessment'}
+                                      </button>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  <>
+                                    <label className="teacher-module-detail__control-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.isRequired}
+                                        disabled={pending}
+                                        onChange={(event) =>
+                                          void handleUpdateItem(section.id, item.id, { isRequired: event.target.checked })
+                                        }
+                                      />
+                                      Required
+                                    </label>
+                                    <label className="teacher-module-detail__control-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={!item.isVisible}
+                                        disabled={pending}
+                                        onChange={(event) =>
+                                          void handleUpdateItem(section.id, item.id, { isVisible: !event.target.checked })
+                                        }
+                                      />
+                                      Hide
+                                    </label>
+                                    {item.itemType === 'assessment' ? (
+                                      <label className="teacher-module-detail__control-toggle">
+                                        <input
+                                          type="checkbox"
+                                          checked={item.isGiven}
+                                          disabled={pending}
+                                          onChange={(event) =>
+                                            void handleUpdateItem(section.id, item.id, { isGiven: event.target.checked })
+                                          }
+                                        />
+                                        Give
+                                      </label>
+                                    ) : null}
+                                    {item.itemType === 'lesson' ? (
+                                      <label className="teacher-module-detail__points-field">
+                                        Points
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={10000}
+                                          value={String(item.lessonPoints ?? Number((item.metadata as Record<string, unknown> | null)?.points ?? 0))}
+                                          disabled={pending}
+                                          onChange={(event) =>
+                                            void handleUpdateItem(section.id, item.id, {
+                                              points: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                    ) : null}
+                                    <ActionTooltip label="Remove item from section">
+                                      <button
+                                        type="button"
+                                        className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                                        onClick={() => confirmDetachItem(item.id)}
+                                        aria-label="Remove item"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </ActionTooltip>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -1148,25 +1269,31 @@ export default function TeacherModuleDetailPage() {
                   ) : null}
 
                   <footer className="teacher-module-detail__section-footer">
-                    <button
-                      type="button"
-                      className="teacher-module-detail__outline"
-                      data-priority="section-add"
-                      onClick={() =>
-                        setAttachState({
-                          open: true,
-                          sectionId: section.id,
-                          itemType: null,
-                          assessmentMode: 'create-new',
-                          itemId: '',
-                          lessonPoints: '0',
-                          file: null,
-                        })
-                      }
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Block
-                    </button>
+                    {isCoreModule ? (
+                      <div className="teacher-module-detail__tip" data-tone="warning">
+                        <strong>Default module:</strong> Add or remove blocks in the template workspace, then create a fresh class from that template.
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="teacher-module-detail__outline"
+                        data-priority="section-add"
+                        onClick={() =>
+                          setAttachState({
+                            open: true,
+                            sectionId: section.id,
+                            itemType: null,
+                            assessmentMode: 'create-new',
+                            itemId: '',
+                            lessonPoints: '0',
+                            file: null,
+                          })
+                        }
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Block
+                      </button>
+                    )}
                   </footer>
                 </article>
               );
@@ -1234,20 +1361,31 @@ export default function TeacherModuleDetailPage() {
           <div className="teacher-module-detail__stack" data-animate="fade">
             <h2>Module Visibility</h2>
             <p className="teacher-module-detail__lead">
-              Control whether students can see this module in their course view.
+              {isCoreModule
+                ? 'Default modules stay immutable. You can only control whether students can see them.'
+                : 'Control whether students can see this module in their course view.'}
             </p>
             <div className="teacher-module-detail__choice-grid">
               <button
                 type="button"
                 className="teacher-module-detail__choice"
                 data-active={module.isVisible}
-                onClick={() => void runModulePatch({ isVisible: true })}
+                onClick={() =>
+                  void (isCoreModule
+                    ? handleReleaseCoreModule(true)
+                    : runModulePatch({ isVisible: true }))
+                }
                 disabled={updatingModule}
+                aria-label={isCoreModule ? 'Release Module' : undefined}
               >
                 <Eye className="h-5 w-5" />
                 <div>
-                  <h3>Visible</h3>
-                  <p>Students can see this module and access its content.</p>
+                  <h3>{isCoreModule ? 'Release Module' : 'Visible'}</h3>
+                  <p>
+                    {isCoreModule
+                      ? 'Students can see this default module and access its locked template content.'
+                      : 'Students can see this module and access its content.'}
+                  </p>
                 </div>
                 {module.isVisible ? <span><Eye className="h-4 w-4" /></span> : null}
               </button>
@@ -1255,13 +1393,21 @@ export default function TeacherModuleDetailPage() {
                 type="button"
                 className="teacher-module-detail__choice"
                 data-active={!module.isVisible}
-                onClick={() => void runModulePatch({ isVisible: false })}
+                onClick={() =>
+                  void (isCoreModule
+                    ? handleReleaseCoreModule(false)
+                    : runModulePatch({ isVisible: false }))
+                }
                 disabled={updatingModule}
               >
                 <EyeOff className="h-5 w-5" />
                 <div>
-                  <h3>Hidden</h3>
-                  <p>This module is hidden from students. Only teachers can see it.</p>
+                  <h3>{isCoreModule ? 'Hide Module' : 'Hidden'}</h3>
+                  <p>
+                    {isCoreModule
+                      ? 'Keep this default module in teacher-only view until you are ready to release it.'
+                      : 'This module is hidden from students. Only teachers can see it.'}
+                  </p>
                 </div>
                 {!module.isVisible ? <span><EyeOff className="h-4 w-4" /></span> : null}
               </button>
@@ -1275,42 +1421,55 @@ export default function TeacherModuleDetailPage() {
         {activeTab === 'locking' ? (
           <div className="teacher-module-detail__stack" data-animate="fade">
             <h2>Module Locking</h2>
-            <p className="teacher-module-detail__lead">
-              Lock this module to prevent students from opening content until you unlock it.
-            </p>
-            <div className="teacher-module-detail__choice-grid">
-              <button
-                type="button"
-                className="teacher-module-detail__choice"
-                data-active={!module.isLocked}
-                onClick={() => void runModulePatch({ isLocked: false })}
-                disabled={updatingModule}
-              >
-                <Unlock className="h-5 w-5" />
-                <div>
-                  <h3>Unlocked</h3>
-                  <p>Students can access all lessons and assessments in this module.</p>
+            {isCoreModule ? (
+              <>
+                <p className="teacher-module-detail__lead">
+                  Default modules remain locked and immutable in the class. Change the template if the structure needs to evolve.
+                </p>
+                <div className="teacher-module-detail__tip" data-tone="warning">
+                  <strong>Default module:</strong> Locking is enforced by the template copy. Only student visibility can be changed here.
                 </div>
-                {!module.isLocked ? <span><Unlock className="h-4 w-4" /></span> : null}
-              </button>
-              <button
-                type="button"
-                className="teacher-module-detail__choice"
-                data-active={module.isLocked}
-                onClick={() => void runModulePatch({ isLocked: true })}
-                disabled={updatingModule}
-              >
-                <Lock className="h-5 w-5" />
-                <div>
-                  <h3>Locked</h3>
-                  <p>Students see the module but cannot open lessons or assessments.</p>
+              </>
+            ) : (
+              <>
+                <p className="teacher-module-detail__lead">
+                  Lock this module to prevent students from opening content until you unlock it.
+                </p>
+                <div className="teacher-module-detail__choice-grid">
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={!module.isLocked}
+                    onClick={() => void runModulePatch({ isLocked: false })}
+                    disabled={updatingModule}
+                  >
+                    <Unlock className="h-5 w-5" />
+                    <div>
+                      <h3>Unlocked</h3>
+                      <p>Students can access all lessons and assessments in this module.</p>
+                    </div>
+                    {!module.isLocked ? <span><Unlock className="h-4 w-4" /></span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={module.isLocked}
+                    onClick={() => void runModulePatch({ isLocked: true })}
+                    disabled={updatingModule}
+                  >
+                    <Lock className="h-5 w-5" />
+                    <div>
+                      <h3>Locked</h3>
+                      <p>Students see the module but cannot open lessons or assessments.</p>
+                    </div>
+                    {module.isLocked ? <span><Lock className="h-4 w-4" /></span> : null}
+                  </button>
                 </div>
-                {module.isLocked ? <span><Lock className="h-4 w-4" /></span> : null}
-              </button>
-            </div>
-            <div className="teacher-module-detail__tip" data-tone="info">
-              <strong>Tip:</strong> Use locking to release modules progressively.
-            </div>
+                <div className="teacher-module-detail__tip" data-tone="info">
+                  <strong>Tip:</strong> Use locking to release modules progressively.
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 

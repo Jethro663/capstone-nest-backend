@@ -16,6 +16,7 @@ import {
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
+import { areSubjectCodesEquivalent, normalizeSubjectCode } from '../../common/utils/subject-code.util';
 import {
   ClassTemplateStatus,
   CreateClassTemplateDto,
@@ -62,7 +63,7 @@ export class ClassTemplatesService {
     this.assertAdmin(actorRoles);
     const payload = {
       name: dto.name.trim(),
-      subjectCode: dto.subjectCode.trim().toUpperCase(),
+      subjectCode: normalizeSubjectCode(dto.subjectCode),
       subjectGradeLevel: dto.subjectGradeLevel,
       createdBy: actorId,
     };
@@ -248,6 +249,7 @@ export class ClassTemplatesService {
         if (dto.assessments.length > 0) {
           await tx.insert(classTemplateAssessments).values(
             dto.assessments.map((assessment, index) => ({
+              ...(assessment.id ? { id: assessment.id } : {}),
               templateId: id,
               title: assessment.title,
               description: assessment.description ?? null,
@@ -269,6 +271,7 @@ export class ClassTemplatesService {
             .insert(classTemplateModules)
             .values(
               dto.modules.map((module, index) => ({
+                ...(module.id ? { id: module.id } : {}),
                 templateId: id,
                 title: module.title,
                 description: module.description ?? null,
@@ -293,6 +296,7 @@ export class ClassTemplatesService {
               .insert(classTemplateModuleSections)
               .values(
                 sectionInputs.map((section, sectionIndex) => ({
+                  ...(section.id ? { id: section.id } : {}),
                   templateModuleId: moduleRow.id,
                   title: section.title,
                   description: section.description ?? null,
@@ -313,6 +317,7 @@ export class ClassTemplatesService {
 
               await tx.insert(classTemplateModuleItems).values(
                 itemInputs.map((item, itemIndex) => ({
+                  ...(item.id ? { id: item.id } : {}),
                   templateSectionId: sectionRow.id,
                   itemType: item.itemType,
                   templateAssessmentId: item.templateAssessmentId ?? null,
@@ -372,13 +377,16 @@ export class ClassTemplatesService {
       );
     }
 
-    return this.db.query.classTemplates.findMany({
+    const rows = await this.db.query.classTemplates.findMany({
       where: and(
-        eq(classTemplates.subjectCode, subjectCode.toUpperCase()),
         eq(classTemplates.subjectGradeLevel, subjectGradeLevel),
         eq(classTemplates.status, ClassTemplateStatus.Published),
       ),
       orderBy: [asc(classTemplates.name)],
     });
+
+    return rows.filter((row) =>
+      areSubjectCodesEquivalent(row.subjectCode, subjectCode),
+    );
   }
 }
