@@ -250,6 +250,14 @@ export function Sidebar({
     if (typeof window === 'undefined') return;
 
     let cancelled = false;
+    const requestIdleCallback =
+      typeof window.requestIdleCallback === "function"
+        ? window.requestIdleCallback.bind(window)
+        : null;
+    const cancelIdleCallback =
+      typeof window.cancelIdleCallback === "function"
+        ? window.cancelIdleCallback.bind(window)
+        : null;
     const warmTargets = Array.from(
       new Set([
         ...items.map((item) => item.href),
@@ -284,14 +292,14 @@ export function Sidebar({
       });
     };
 
-    if ('requestIdleCallback' in window) {
-      const idleHandle = window.requestIdleCallback(() => {
+    if (requestIdleCallback && cancelIdleCallback) {
+      const idleHandle = requestIdleCallback(() => {
         warmRoutes();
       });
 
       return () => {
         cancelled = true;
-        window.cancelIdleCallback(idleHandle);
+        cancelIdleCallback(idleHandle);
       };
     }
 

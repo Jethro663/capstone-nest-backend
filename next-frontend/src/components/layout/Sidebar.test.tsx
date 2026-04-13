@@ -75,4 +75,17 @@ describe('Sidebar route warmup', () => {
       expect(prefetchMock).toHaveBeenCalledWith('/dashboard/notifications');
     });
   });
+
+  it('falls back to timer warmup when requestIdleCallback is unavailable', async () => {
+    Reflect.deleteProperty(window, 'requestIdleCallback');
+    Reflect.deleteProperty(window, 'cancelIdleCallback');
+
+    render(<Sidebar shellRole="admin" />);
+    jest.advanceTimersByTime(1000);
+
+    await waitFor(() => {
+      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/admin/diagnostics');
+      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/notifications');
+    });
+  });
 });
