@@ -16,9 +16,10 @@ import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
-import { TeacherUnsupportedScreen } from "../screens/TeacherUnsupportedScreen";
+import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { colors } from "../theme/tokens";
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
+import { resolveMobileRole } from "./role-resolver";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -134,7 +135,7 @@ function AuthNavigator() {
   );
 }
 
-function MainTabs() {
+function StudentTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
       <Tab.Screen name="Classes" component={ClassesScreen} />
@@ -149,7 +150,7 @@ function MainTabs() {
 function StudentNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="MainTabs" component={MainTabs} />
+      <RootStack.Screen name="MainTabs" component={StudentTabs} />
       <RootStack.Screen name="ClassWorkspace" component={ClassWorkspaceScreen} />
       <RootStack.Screen name="AssessmentDetail" component={AssessmentDetailScreen} />
       <RootStack.Screen name="AssessmentTake" component={AssessmentTakeScreen} />
@@ -159,15 +160,16 @@ function StudentNavigator() {
   );
 }
 
-function hasTeacherRole(roles: unknown): boolean {
-  if (!Array.isArray(roles)) return false;
-  return roles.some((role) => {
-    if (typeof role === "string") return role.toLowerCase() === "teacher";
-    if (role && typeof role === "object" && "name" in role) {
-      return typeof role.name === "string" && role.name.toLowerCase() === "teacher";
-    }
-    return false;
-  });
+function RoleTabs({ role }: { role: "teacher" | "admin" }) {
+  return (
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+      <Tab.Screen name="Home">{() => <RoleWorkspaceScreen role={role} section="overview" />}</Tab.Screen>
+      <Tab.Screen name="Classes">{() => <RoleWorkspaceScreen role={role} section="classes" />}</Tab.Screen>
+      <Tab.Screen name="Assessments">{() => <RoleWorkspaceScreen role={role} section="assessments" />}</Tab.Screen>
+      <Tab.Screen name="Announcements">{() => <RoleWorkspaceScreen role={role} section="announcements" />}</Tab.Screen>
+      <Tab.Screen name="Profile">{() => <RoleWorkspaceScreen role={role} section="profile" />}</Tab.Screen>
+    </Tab.Navigator>
+  );
 }
 
 function getActiveRouteName(state: any): string {
@@ -185,20 +187,23 @@ function getActiveRouteName(state: any): string {
 
 export function AppNavigator() {
   const { isAuthenticated, loading, user } = useAuth();
-  const [currentRouteName, setCurrentRouteName] = useState("Classes");
-  const isTeacher = hasTeacherRole(user?.roles);
+  const [currentRouteName, setCurrentRouteName] = useState("Home");
+  const mobileRole = resolveMobileRole(user?.roles);
   const navigator = useMemo(
-    () =>
-      isAuthenticated && !isTeacher ? (
+    () => {
+      if (!isAuthenticated) return <AuthNavigator />;
+
+      if (mobileRole === "student") {
+        return (
         <NavigationErrorBoundary currentRouteName={currentRouteName}>
           <StudentNavigator />
         </NavigationErrorBoundary>
-      ) : isAuthenticated && isTeacher ? (
-        <TeacherUnsupportedScreen />
-      ) : (
-        <AuthNavigator />
-      ),
-    [currentRouteName, isAuthenticated, isTeacher],
+        );
+      }
+
+      return <RoleTabs role={mobileRole} />;
+    },
+    [currentRouteName, isAuthenticated, mobileRole],
   );
 
   if (loading) {
@@ -208,7 +213,13 @@ export function AppNavigator() {
   return (
     <NavigationContainer
       theme={navigationTheme}
-      onReady={() => setCurrentRouteName(isAuthenticated ? (isTeacher ? "TeacherUnsupported" : "Classes") : "Login")}
+      onReady={() => {
+        if (!isAuthenticated) {
+          setCurrentRouteName("Login");
+          return;
+        }
+        setCurrentRouteName(mobileRole === "student" ? "Classes" : "Home");
+      }}
       onStateChange={(state) => setCurrentRouteName(getActiveRouteName(state))}
     >
       {navigator}

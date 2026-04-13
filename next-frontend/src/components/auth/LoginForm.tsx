@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { loginSchema, type LoginFormValues } from '@/schemas/auth';
 import { loginAction, validateCredentialsAction } from '@/lib/auth-actions';
 import { useAuth } from '@/providers/AuthProvider';
+import { resolvePostLoginDestination } from '@/lib/dashboard-route-access';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,15 +18,16 @@ import { Label } from '@/components/ui/label';
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, role } = useAuth();
   const [serverError, setServerError] = useState('');
+  const requestedPath = searchParams.get('from');
 
   // If already authenticated (e.g. page reload with valid cookie), skip login.
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace(searchParams.get('from') || '/dashboard');
+      router.replace(resolvePostLoginDestination(role, requestedPath));
     }
-  }, [authLoading, isAuthenticated, router, searchParams]);
+  }, [authLoading, isAuthenticated, requestedPath, role, router]);
 
   // Show success toast when redirected here after account activation.
   useEffect(() => {
@@ -64,10 +66,9 @@ export function LoginForm() {
       return;
     }
 
-    if (result.user) setUser(result.user);
-
-    const from = searchParams.get('from') || '/dashboard';
-    router.push(from);
+    router.push(
+      resolvePostLoginDestination(result.user?.roles?.[0] ?? null, requestedPath),
+    );
   };
 
   return (

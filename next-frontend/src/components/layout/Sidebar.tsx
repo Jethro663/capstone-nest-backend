@@ -2,10 +2,10 @@
  * Sidebar - role-aware navigation
  */
 
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
   LayoutDashboard,
@@ -28,13 +28,13 @@ import {
   Library,
   Upload,
   CalendarDays,
-} from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useAuth } from "@/providers/AuthProvider";
-import { logoutAction } from "@/lib/auth-actions";
-import { Button } from "@/components/ui/button";
-import { getProfileRoute } from "@/utils/profile";
-import { lxpService } from "@/services/lxp-service";
+} from 'lucide-react';
+import { cn } from '@/utils/cn';
+import { useAuth } from '@/providers/AuthProvider';
+import { logoutAction } from '@/lib/auth-actions';
+import { Button } from '@/components/ui/button';
+import { getProfileRoute } from '@/utils/profile';
+import { lxpService } from '@/services/lxp-service';
 import {
   normalizeDashboardRole,
   type DashboardRole,
@@ -143,9 +143,9 @@ const adminNav: NavItem[] = [
 
 function getNavItems(role: string | null): NavItem[] {
   switch (role) {
-    case "teacher":
+    case 'teacher':
       return teacherNav;
-    case "admin":
+    case 'admin':
       return adminNav;
     default:
       return studentNav;
@@ -155,11 +155,11 @@ function getNavItems(role: string | null): NavItem[] {
 function getRoleLabel(role: string | null): string {
   switch (role) {
     case "teacher":
-      return "Teacher Portal";
-    case "admin":
-      return "Admin Portal";
+      return 'Teacher Portal';
+    case 'admin':
+      return 'Admin Portal';
     default:
-      return "Student Portal";
+      return 'Student Portal';
   }
 }
 
@@ -203,10 +203,14 @@ export function Sidebar({
   const router = useRouter();
   const { role, user } = useAuth();
   const effectiveRole = shellRole ?? normalizeDashboardRole(role);
-  const items = getNavItems(effectiveRole).map((item) =>
-    item.label === "Profile"
+  const items = useMemo(
+    () =>
+      getNavItems(effectiveRole).map((item) =>
+        item.label === 'Profile'
       ? { ...item, href: getProfileRoute(effectiveRole) }
       : item,
+      ),
+    [effectiveRole],
   );
   const isStudentShell = effectiveRole === "student";
   const isTeacherShell = effectiveRole === "teacher";
@@ -222,10 +226,7 @@ export function Sidebar({
 
   useEffect(() => {
     let mounted = true;
-    if (!isTeacherShell) {
-      setTeacherPendingInterventionCount(0);
-      return;
-    }
+    if (!isTeacherShell) return;
 
     void lxpService
       .getTeacherPendingInterventionCount()
@@ -244,6 +245,65 @@ export function Sidebar({
       mounted = false;
     };
   }, [isTeacherShell, user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let cancelled = false;
+    const warmTargets = Array.from(
+      new Set([
+        ...items.map((item) => item.href),
+        '/dashboard/notifications',
+      ]),
+    ).filter((href) => href !== pathname);
+
+    const warmRoute = async (href: string) => {
+      router.prefetch(href);
+
+      if (process.env.NODE_ENV !== 'development') return;
+
+      try {
+        await fetch(href, {
+          credentials: 'include',
+          cache: 'no-store',
+          headers: {
+            'x-nexora-route-warm': '1',
+          },
+        });
+      } catch {
+        // Background warmup is best-effort in development.
+      }
+    };
+
+    const warmRoutes = () => {
+      warmTargets.forEach((href, index) => {
+        window.setTimeout(() => {
+          if (cancelled) return;
+          void warmRoute(href);
+        }, index * 120);
+      });
+    };
+
+    if ('requestIdleCallback' in window) {
+      const idleHandle = window.requestIdleCallback(() => {
+        warmRoutes();
+      });
+
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(idleHandle);
+      };
+    }
+
+    const fallbackHandle = window.setTimeout(() => {
+      warmRoutes();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallbackHandle);
+    };
+  }, [items, pathname, router]);
 
   const handleLogout = async () => {
     await logoutAction();
@@ -403,6 +463,7 @@ export function Sidebar({
           return (
             <button
               key={item.href}
+              type="button"
               onClick={() => {
                 router.push(item.href);
                 onClose?.();

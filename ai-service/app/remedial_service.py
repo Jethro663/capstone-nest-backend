@@ -9,7 +9,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
-from .retrieval_service import similarity_search
+from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser
 
 INTERVENTION_RECOMMENDATION_SYSTEM_PROMPT = """You generate concise, grounded intervention recommendations for teachers in a high-school LMS.
@@ -141,6 +141,13 @@ async def recommend_intervention_case(
         db,
         query_text=retrieval_query,
         class_id=str(intervention_case["class_id"]),
+        subject_key=normalize_library_subject_key(
+            intervention_case["subject_code"],
+            intervention_case["subject_name"],
+        ),
+        grade_level=str(intervention_case["grade_level"])
+        if intervention_case["grade_level"]
+        else None,
         top_k=10,
         only_published=True,
         policy_name="remedial",

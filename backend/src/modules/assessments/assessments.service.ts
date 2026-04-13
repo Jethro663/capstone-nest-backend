@@ -39,6 +39,7 @@ import {
 import { FeedbackService } from './feedback.service';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
+import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -105,6 +106,7 @@ export class AssessmentsService {
     private readonly feedbackService: FeedbackService,
     private readonly auditService: AuditService,
     private readonly ragIndexingService: RagIndexingService,
+    private readonly assessmentNotificationDispatch: AssessmentNotificationDispatchService,
   ) {}
 
   private get db() {
@@ -1458,6 +1460,10 @@ export class AssessmentsService {
 
     const nextType = updateAssessmentDto.type ?? existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
+    const wasPublished = Boolean(existingAssessment.isPublished);
+    const shouldRescheduleDueReminder =
+      updateAssessmentDto.dueDate !== undefined ||
+      updateAssessmentDto.isPublished !== undefined;
 
     this.ensureValidFileUploadSettings({
       type: nextType,
@@ -1636,6 +1642,24 @@ export class AssessmentsService {
       source: 'assessments.updateAssessment',
     });
 
+    if (!wasPublished && assessment.isPublished) {
+      await this.assessmentNotificationDispatch.enqueueAssessmentAssigned(
+        assessment,
+      );
+    }
+
+    if (assessment.isPublished && (!wasPublished || shouldRescheduleDueReminder)) {
+      await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
+        assessment,
+      );
+    }
+
+    if (wasPublished && !assessment.isPublished) {
+      await this.assessmentNotificationDispatch.removeAssessmentDueReminder(
+        assessment.id,
+      );
+    }
+
     return assessment;
   }
 
@@ -1683,6 +1707,21 @@ export class AssessmentsService {
         isPublished: updated.isPublished,
       },
     });
+
+    if (!assessment.isPublished && updated.isPublished) {
+      await this.assessmentNotificationDispatch.enqueueAssessmentAssigned(
+        updated,
+      );
+      await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
+        updated,
+      );
+    }
+
+    if (assessment.isPublished && !updated.isPublished) {
+      await this.assessmentNotificationDispatch.removeAssessmentDueReminder(
+        updated.id,
+      );
+    }
 
     return this.getAssessmentById(assessmentId);
   }

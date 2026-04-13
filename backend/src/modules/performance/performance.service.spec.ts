@@ -13,6 +13,8 @@ function buildMockDb() {
       assessments: { findFirst: jest.fn() },
       assessmentAttempts: { findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
+      studentConceptMastery: { findMany: jest.fn() },
+      aiGenerationOutputs: { findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       enrollments: { findMany: jest.fn() },
@@ -400,5 +402,63 @@ describe('PerformanceService', () => {
     expect(result.classes).toHaveLength(2);
     expect(result.overall.atRiskClasses).toBe(1);
     expect(result.overall.averageBlendedScore).toBe(71.5);
+  });
+
+  it('getAdminAnalytics should return analytics datasets and log audit with uuid target', async () => {
+    db.query.studentConceptMastery.findMany.mockResolvedValue([
+      {
+        id: 'mastery-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        conceptKey: 'linear-equation',
+        errorCount: 3,
+        masteryScore: 64,
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    db.query.aiGenerationOutputs.findMany.mockResolvedValue([
+      {
+        id: 'output-1',
+        outputType: 'performance_diagnostic',
+        targetClassId: 'class-1',
+        targetTeacherId: 'teacher-1',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    db.query.performanceLogs.findMany.mockResolvedValue([
+      {
+        id: 'log-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        previousIsAtRisk: false,
+        currentIsAtRisk: true,
+        triggerSource: 'manual_recompute',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+
+    const result = await service.getAdminAnalytics('admin-1', ['admin']);
+
+    expect(result.conceptMasterySnapshots).toHaveLength(1);
+    expect(result.recommendationHistory).toHaveLength(1);
+    expect(result.performanceLogTransitions.total).toBe(1);
+    expect(result.performanceLogTransitions.summary.riskIncrements).toBe(1);
+    expect(auditService.log).toHaveBeenCalledWith({
+      actorId: 'admin-1',
+      action: 'performance.admin.analytics_viewed',
+      targetType: 'system',
+      targetId: 'admin-1',
+      metadata: {
+        conceptRows: 1,
+        recommendationRows: 1,
+        performanceLogRows: 1,
+      },
+    });
+  });
+
+  it('getAdminAnalytics should reject non-admin roles', async () => {
+    await expect(
+      service.getAdminAnalytics('teacher-1', ['teacher']),
+    ).rejects.toThrow(ForbiddenException);
   });
 });

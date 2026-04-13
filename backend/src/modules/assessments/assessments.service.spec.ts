@@ -10,6 +10,7 @@ import { DatabaseService } from '../../database/database.service';
 import { FeedbackService } from './feedback.service';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
+import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
 
 // ─── Fixture IDs ─────────────────────────────────────────────────────────────
 
@@ -168,6 +169,11 @@ describe('AssessmentsService', () => {
   let db: any;
   let eventEmitter: EventEmitter2;
   let feedbackService: { applyFeedbackFiltering: jest.Mock };
+  let assessmentNotificationDispatch: {
+    enqueueAssessmentAssigned: jest.Mock;
+    rescheduleAssessmentDueReminder: jest.Mock;
+    removeAssessmentDueReminder: jest.Mock;
+  };
   const mockAuditService = {
     log: jest.fn(),
     logAction: jest.fn(),
@@ -183,6 +189,11 @@ describe('AssessmentsService', () => {
     jest.clearAllMocks();
     feedbackService = {
       applyFeedbackFiltering: jest.fn((attempt: any) => attempt),
+    };
+    assessmentNotificationDispatch = {
+      enqueueAssessmentAssigned: jest.fn().mockResolvedValue(undefined),
+      rescheduleAssessmentDueReminder: jest.fn().mockResolvedValue(undefined),
+      removeAssessmentDueReminder: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -203,6 +214,10 @@ describe('AssessmentsService', () => {
           useValue: {
             queueClassReindex: jest.fn(),
           },
+        },
+        {
+          provide: AssessmentNotificationDispatchService,
+          useValue: assessmentNotificationDispatch,
         },
       ],
     }).compile();
@@ -463,9 +478,14 @@ describe('AssessmentsService', () => {
     });
 
     it('should allow publish when assessment has valid questions', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(
-        MOCK_PUBLISHED_ASSESSMENT,
-      );
+      const publishableDraft = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isPublished: false,
+      };
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(publishableDraft)
+        .mockResolvedValueOnce(publishableDraft)
+        .mockResolvedValueOnce(MOCK_PUBLISHED_ASSESSMENT);
       mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT }]);
 
       const result = await service.updateAssessment(
@@ -477,6 +497,43 @@ describe('AssessmentsService', () => {
       );
 
       expect(result.isPublished).toBe(true);
+      expect(assessmentNotificationDispatch.enqueueAssessmentAssigned).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: ASSESSMENT_ID,
+          classId: CLASS_ID,
+          title: 'Test Quiz',
+        }),
+      );
+      expect(assessmentNotificationDispatch.rescheduleAssessmentDueReminder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: ASSESSMENT_ID,
+          classId: CLASS_ID,
+          title: 'Test Quiz',
+          isPublished: true,
+        }),
+      );
+    });
+
+    it('reschedules due reminders when a published assessment due date changes', async () => {
+      const updated = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        dueDate: new Date('2026-06-18T00:00:00.000Z'),
+      };
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(MOCK_PUBLISHED_ASSESSMENT)
+        .mockResolvedValueOnce(updated);
+      mockUpdateReturning(db, [updated]);
+
+      await service.updateAssessment(
+        ASSESSMENT_ID,
+        { dueDate: '2026-06-18T00:00:00.000Z' } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(assessmentNotificationDispatch.enqueueAssessmentAssigned).not.toHaveBeenCalled();
+      expect(assessmentNotificationDispatch.rescheduleAssessmentDueReminder).toHaveBeenCalledWith(
+        expect.objectContaining({ id: ASSESSMENT_ID, isPublished: true }),
+      );
     });
 
     it('should reject publish for file upload assessment without instructions', async () => {

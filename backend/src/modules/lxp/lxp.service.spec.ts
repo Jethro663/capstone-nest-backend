@@ -901,14 +901,6 @@ describe('LxpService', () => {
     expect(mockAuditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
         actorId: 'teacher-1',
-        action: 'lxp.intervention.approved',
-        targetType: 'intervention_case',
-        targetId: 'case-1',
-      }),
-    );
-    expect(mockAuditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: 'teacher-1',
         action: 'lxp.intervention.assigned',
         targetType: 'intervention_case',
         targetId: 'case-1',
@@ -919,6 +911,31 @@ describe('LxpService', () => {
       roles: ['teacher'],
     });
     expect(result).toEqual(queueResponse);
+  });
+
+  it('blocks intervention assignment when case is pending approval', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-1',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'pending',
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+
+    await expect(
+      service.assignIntervention(
+        'case-1',
+        { lessonIds: ['lesson-1'] },
+        { userId: 'teacher-1', roles: ['teacher'] },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+    expect(mockAuditService.log).not.toHaveBeenCalled();
+    expect(mockNotificationsService.createBulk).not.toHaveBeenCalled();
   });
 
   it('blocks intervention reassignment once checkpoint progress already exists', async () => {

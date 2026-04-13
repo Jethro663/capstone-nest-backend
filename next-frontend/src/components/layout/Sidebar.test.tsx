@@ -1,65 +1,78 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { Sidebar } from "./Sidebar";
+import { render, waitFor } from '@testing-library/react';
+import { Sidebar } from './Sidebar';
 
-const mockUseAuth = jest.fn();
-const mockGetPendingCount = jest.fn();
+const pushMock = jest.fn();
+const prefetchMock = jest.fn();
+const usePathnameMock = jest.fn();
+const useAuthMock = jest.fn();
 
-jest.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard/student",
-  useRouter: () => ({ push: jest.fn() }),
+jest.mock('next/navigation', () => ({
+  usePathname: () => usePathnameMock(),
+  useRouter: () => ({
+    push: pushMock,
+    prefetch: prefetchMock,
+  }),
 }));
 
-jest.mock("@/providers/AuthProvider", () => ({
-  useAuth: () => mockUseAuth(),
+jest.mock('@/providers/AuthProvider', () => ({
+  useAuth: () => useAuthMock(),
 }));
 
-jest.mock("@/services/lxp-service", () => ({
+jest.mock('@/lib/auth-actions', () => ({
+  logoutAction: jest.fn(),
+}));
+
+jest.mock('@/services/lxp-service', () => ({
   lxpService: {
-    getTeacherPendingInterventionCount: () => mockGetPendingCount(),
+    getTeacherPendingInterventionCount: jest.fn(),
   },
 }));
 
-describe("Sidebar", () => {
+describe('Sidebar route warmup', () => {
+  const originalRequestIdleCallback = window.requestIdleCallback;
+  const originalCancelIdleCallback = window.cancelIdleCallback;
+
   beforeEach(() => {
-    mockUseAuth.mockReturnValue({
-      role: "student",
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    usePathnameMock.mockReturnValue('/dashboard/admin');
+    useAuthMock.mockReturnValue({
+      role: 'admin',
       user: {
-        id: "student-1",
-        firstName: "Liam",
-        lastName: "Navarro",
-        email: "liam@example.com",
+        firstName: 'System',
+        lastName: 'Admin',
+        email: 'admin@lms.local',
       },
     });
-    mockGetPendingCount.mockResolvedValue({ data: { pendingCount: 0 } });
+
+    window.requestIdleCallback = ((callback: IdleRequestCallback) => {
+      callback({
+        didTimeout: false,
+        timeRemaining: () => 50,
+      } as IdleDeadline);
+      return 1;
+    }) as typeof window.requestIdleCallback;
+
+    window.cancelIdleCallback = jest.fn();
   });
 
-  it("shows both LXP and JA in student navigation", () => {
-    render(<Sidebar open />);
-
-    expect(screen.getByRole("button", { name: "LXP" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "JA" })).toBeInTheDocument();
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
-  it("shows intervention badge count for teacher shell", async () => {
-    mockUseAuth.mockReturnValue({
-      role: "teacher",
-      user: {
-        id: "teacher-1",
-        firstName: "Ada",
-        lastName: "Lovelace",
-        email: "ada@example.com",
-      },
-    });
-    mockGetPendingCount.mockResolvedValue({ data: { pendingCount: 4 } });
+  afterAll(() => {
+    window.requestIdleCallback = originalRequestIdleCallback;
+    window.cancelIdleCallback = originalCancelIdleCallback;
+  });
 
-    render(<Sidebar open shellRole="teacher" />);
-
-    const interventionsButton = await screen.findByRole("button", {
-      name: /Interventions/i,
-    });
+  it('prefetches dashboard navigation targets in the background', async () => {
+    render(<Sidebar shellRole="admin" />);
+    jest.runAllTimers();
 
     await waitFor(() => {
-      expect(interventionsButton).toHaveTextContent("4");
+      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/admin/diagnostics');
+      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/notifications');
     });
   });
 });

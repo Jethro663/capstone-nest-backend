@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
-from .retrieval_service import similarity_search
+from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import GenerateQuizDraftRequest, RequestUser
 
 logger = logging.getLogger(__name__)
@@ -282,12 +282,20 @@ async def generate_quiz_draft(
     if not is_admin and str(class_info["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only generate quizzes for your own classes")
 
+    library_subject_key = normalize_library_subject_key(
+        class_info["subject_code"],
+        class_info["subject_name"],
+    )
+    library_grade_level = str(class_info["grade_level"]) if class_info["grade_level"] else None
+
     source_chunks: list[dict[str, Any]]
     if body.lesson_ids:
         source_chunks = await similarity_search(
             db,
             query_text=body.teacher_note or class_info["subject_name"],
             class_id=body.class_id,
+            subject_key=library_subject_key,
+            grade_level=library_grade_level,
             top_k=max(8, body.question_count * 2),
             lesson_ids=body.lesson_ids,
             only_published=False,
@@ -298,6 +306,8 @@ async def generate_quiz_draft(
             db,
             query_text=body.teacher_note or class_info["subject_name"],
             class_id=body.class_id,
+            subject_key=library_subject_key,
+            grade_level=library_grade_level,
             top_k=max(8, body.question_count * 2),
             source_types=["extracted_module"],
             policy_name="quiz_generation",
@@ -310,6 +320,8 @@ async def generate_quiz_draft(
             db,
             query_text=body.teacher_note or class_info["subject_name"],
             class_id=body.class_id,
+            subject_key=library_subject_key,
+            grade_level=library_grade_level,
             top_k=max(8, body.question_count * 2),
             only_published=True,
             policy_name="quiz_generation",

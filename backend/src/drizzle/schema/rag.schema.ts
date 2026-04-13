@@ -15,7 +15,10 @@ import {
   assessmentQuestions,
   assessments,
   classes,
+  gradeLevelEnum,
+  librarySubjectKeyEnum,
   lessons,
+  uploadedFiles,
   users,
 } from './base.schema';
 import { extractedModules } from './ai-mentor.schema';
@@ -30,6 +33,7 @@ export const contentSourceTypeEnum = pgEnum('content_source_type', [
   'lesson_block',
   'extracted_module',
   'assessment_question',
+  'library_file',
 ]);
 
 export const aiGenerationJobTypeEnum = pgEnum('ai_generation_job_type', [
@@ -62,8 +66,12 @@ export const contentChunks = pgTable(
     sourceType: contentSourceTypeEnum('source_type').notNull(),
     sourceId: uuid('source_id').notNull(),
     classId: uuid('class_id')
-      .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
+    libraryFileId: uuid('library_file_id').references(() => uploadedFiles.id, {
+      onDelete: 'cascade',
+    }),
+    subjectKey: librarySubjectKeyEnum('subject_key'),
+    gradeLevel: gradeLevelEnum('grade_level'),
     lessonId: uuid('lesson_id').references(() => lessons.id, {
       onDelete: 'cascade',
     }),
@@ -97,6 +105,12 @@ export const contentChunks = pgTable(
     questionIdx: index('content_chunks_question_id_idx').on(table.questionId),
     extractionIdx: index('content_chunks_extraction_id_idx').on(
       table.extractionId,
+    ),
+    libraryFileIdx: index('content_chunks_library_file_idx').on(
+      table.sourceType,
+      table.libraryFileId,
+      table.subjectKey,
+      table.gradeLevel,
     ),
   }),
 );
@@ -224,6 +238,10 @@ export const contentChunksRelations = relations(contentChunks, ({ one }) => ({
   extraction: one(extractedModules, {
     fields: [contentChunks.extractionId],
     references: [extractedModules.id],
+  }),
+  libraryFile: one(uploadedFiles, {
+    fields: [contentChunks.libraryFileId],
+    references: [uploadedFiles.id],
   }),
 }));
 

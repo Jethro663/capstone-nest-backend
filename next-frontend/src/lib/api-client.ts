@@ -14,6 +14,7 @@ import axios, {
   AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from 'axios';
+import { refreshSessionAccessToken } from './session-refresh';
 
 let accessToken: string | null = null;
 
@@ -91,7 +92,7 @@ export function createApiClient(): AxiosInstance {
 
         // Prevent multiple refresh attempts
         if (!refreshPromise) {
-          refreshPromise = refreshAccessToken();
+          refreshPromise = refreshSessionAccessToken();
         }
 
         try {
@@ -130,29 +131,6 @@ export function createApiClient(): AxiosInstance {
   );
 
   return api;
-}
-
-/**
- * Refresh access token using refresh token from cookie
- */
-async function refreshAccessToken(): Promise<string | null> {
-  try {
-    const response = await axios.post(
-      '/api/auth/refresh',
-      {},
-      { withCredentials: true }
-    );
-
-    const newToken = response.data.data?.accessToken || response.data.accessToken;
-    if (newToken) {
-      accessToken = newToken;
-      return newToken;
-    }
-    return null;
-  } catch {
-    accessToken = null;
-    return null;
-  }
 }
 
 /**

@@ -20,6 +20,7 @@ import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StudentAnnouncementBoardDialog } from '@/components/student/StudentAnnouncementBoardDialog';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
@@ -310,7 +311,9 @@ export default function StudentDashboardPage() {
   }
 
   return (
-    <motion.div className="student-v2-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+    <>
+      <StudentAnnouncementBoardDialog events={schoolEvents} />
+      <motion.div className="student-v2-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
       <div className="student-v2-main">
         <div className="student-v2-column">
           <section className="student-v2-hero">
@@ -561,6 +564,7 @@ export default function StudentDashboardPage() {
           </section>
         </aside>
       </div>
-    </motion.div>
+      </motion.div>
+    </>
   );
 }

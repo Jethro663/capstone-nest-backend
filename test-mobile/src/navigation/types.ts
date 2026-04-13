@@ -8,6 +8,7 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
+  Home: undefined;
   Classes: undefined;
   Assessments: undefined;
   JA: undefined;

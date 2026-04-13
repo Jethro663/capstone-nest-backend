@@ -3,11 +3,13 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   classes,
+  contentChunks,
   enrollments,
   libraryFolders,
   uploadedFiles,
@@ -16,9 +18,14 @@ import { AuditService } from '../audit/audit.service';
 import {
   FileQueryDto,
   FileScopeDto,
+  GradeLevelDto,
+  LibraryFileKindDto,
+  LibraryIndexStatusDto,
+  LibrarySubjectKeyDto,
   UpdateFileMetadataDto,
   UpdateLibraryFolderDto,
 } from './dto/file-upload.dto';
+import { LibraryIndexingService } from './library-indexing.service';
 
 interface SaveFileRecordDto {
   teacherId: string;
@@ -30,6 +37,11 @@ interface SaveFileRecordDto {
   mimeType: string;
   sizeBytes: number;
   filePath: string;
+  subjectKey?: LibrarySubjectKeyDto;
+  gradeLevel?: GradeLevelDto;
+  teacherVisible?: boolean;
+  contentHash?: string;
+  fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx';
 }
 
 interface CreateFolderDto {
@@ -49,6 +61,8 @@ export class FileUploadService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    @Optional()
+    private readonly libraryIndexingService?: LibraryIndexingService,
   ) {}
 
   private get db() {
@@ -68,7 +82,7 @@ export class FileUploadService {
   }
 
   private ensureCanWriteScope(
-    scope: FileScopeDto | undefined,
+    scope: FileScopeDto | 'private' | 'general' | undefined,
     user: RequestUser,
   ) {
     if (scope === FileScopeDto.General && !this.isAdmin(user)) {
@@ -136,6 +150,35 @@ export class FileUploadService {
     }
   }
 
+  private ensureGeneralPartition(input: {
+    scope?: FileScopeDto | 'private' | 'general' | null;
+    subjectKey?: LibrarySubjectKeyDto | string | null;
+    gradeLevel?: GradeLevelDto | string | null;
+  }) {
+    if (input.scope !== FileScopeDto.General) return;
+
+    if (!input.subjectKey || !input.gradeLevel) {
+      throw new BadRequestException(
+        'General module uploads must specify subjectKey and gradeLevel.',
+      );
+    }
+  }
+
+  private async logFileAction(
+    actorId: string,
+    action: string,
+    targetId: string,
+    metadata: Record<string, unknown>,
+  ) {
+    await this.auditService.log({
+      actorId,
+      action,
+      targetType: 'uploaded_file',
+      targetId,
+      metadata,
+    });
+  }
+
   private async ensureFolderWritable(id: string, user: RequestUser) {
     const folder = await this.ensureFolderAccessible(id, user);
 
@@ -191,6 +234,14 @@ export class FileUploadService {
     }
 
     if (
+      !this.isAdmin(user) &&
+      record.scope === FileScopeDto.General &&
+      record.teacherVisible === false
+    ) {
+      throw new ForbiddenException('This general module is hidden from teachers and students');
+    }
+
+    if (
       this.isStudent(user) &&
       record.scope !== FileScopeDto.General &&
       !record.classId
@@ -223,6 +274,11 @@ export class FileUploadService {
     };
 
     this.ensureCanWriteScope(dto.scope, actingUser);
+    this.ensureGeneralPartition({
+      scope: dto.scope ?? FileScopeDto.Private,
+      subjectKey: dto.subjectKey,
+      gradeLevel: dto.gradeLevel,
+    });
 
     if (dto.classId) {
       await this.ensureClassOwnedByUser(dto.classId, actingUser);
@@ -249,22 +305,40 @@ export class FileUploadService {
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
         filePath: dto.filePath,
+        subjectKey: dto.subjectKey ?? null,
+        gradeLevel: dto.gradeLevel ?? null,
+        teacherVisible: dto.teacherVisible ?? true,
+        indexStatus:
+          (dto.scope ?? FileScopeDto.Private) === FileScopeDto.General
+            ? LibraryIndexStatusDto.Pending
+            : LibraryIndexStatusDto.NotIndexed,
+        indexError: null,
+        contentHash: dto.contentHash ?? null,
+        fileKind: dto.fileKind ?? LibraryFileKindDto.Pdf,
       })
       .returning();
 
-    await this.auditService.log({
-      actorId: actingUser.id,
-      action: 'file.uploaded',
-      targetType: 'uploaded_file',
-      targetId: record.id,
-      metadata: {
-        classId: record.classId,
-        folderId: record.folderId,
-        scope: record.scope,
-        mimeType: record.mimeType,
-        sizeBytes: record.sizeBytes,
-      },
+    await this.logFileAction(actingUser.id, 'file.uploaded', record.id, {
+      classId: record.classId,
+      folderId: record.folderId,
+      scope: record.scope,
+      subjectKey: record.subjectKey,
+      gradeLevel: record.gradeLevel,
+      mimeType: record.mimeType,
+      sizeBytes: record.sizeBytes,
     });
+
+    if (record.scope === FileScopeDto.General) {
+      await this.libraryIndexingService?.queueFileIndex(record.id, {
+        actorId: actingUser.id,
+        reason: 'upload',
+      });
+      await this.logFileAction(actingUser.id, 'file.index_queued', record.id, {
+        reason: 'upload',
+        subjectKey: record.subjectKey,
+        gradeLevel: record.gradeLevel,
+      });
+    }
 
     return record;
   }
@@ -326,6 +400,28 @@ export class FileUploadService {
       );
     }
 
+    if (!isAdmin && query.scope === FileScopeDto.General) {
+      filters.push(eq(uploadedFiles.teacherVisible, true));
+    }
+
+    if (!isAdmin && !isStudent && !query.scope) {
+      filters.push(
+        or(
+          eq(uploadedFiles.scope, FileScopeDto.Private),
+          eq(uploadedFiles.teacherVisible, true),
+        )!,
+      );
+    }
+
+    if (!isAdmin && isStudent) {
+      filters.push(
+        or(
+          eq(uploadedFiles.scope, FileScopeDto.Private),
+          eq(uploadedFiles.teacherVisible, true),
+        )!,
+      );
+    }
+
     if (!isAdmin && !isStudent && query.scope === FileScopeDto.Private) {
       filters.push(eq(uploadedFiles.teacherId, user.id));
     }
@@ -341,6 +437,25 @@ export class FileUploadService {
 
     if (query.classId) {
       filters.push(eq(uploadedFiles.classId, query.classId));
+    }
+
+    if (query.subjectKey) {
+      filters.push(eq(uploadedFiles.subjectKey, query.subjectKey));
+    }
+
+    if (query.gradeLevel) {
+      filters.push(eq(uploadedFiles.gradeLevel, query.gradeLevel));
+    }
+
+    if (query.indexStatus) {
+      filters.push(eq(uploadedFiles.indexStatus, query.indexStatus));
+    }
+
+    if (typeof query.teacherVisible === 'boolean') {
+      if (!isAdmin && query.teacherVisible === false) {
+        throw new ForbiddenException('Only admins can list hidden general modules');
+      }
+      filters.push(eq(uploadedFiles.teacherVisible, query.teacherVisible));
     }
 
     if (query.folderId) {
@@ -411,7 +526,22 @@ export class FileUploadService {
     user: RequestUser,
   ) {
     const record = await this.ensureFileWritable(id, user);
-    this.ensureCanWriteScope(dto.scope, user);
+    const nextScope = dto.scope ?? record.scope;
+    const nextSubjectKey =
+      dto.subjectKey === undefined ? record.subjectKey : dto.subjectKey;
+    const nextGradeLevel =
+      dto.gradeLevel === undefined ? record.gradeLevel : dto.gradeLevel;
+    const normalizedNextScope = nextScope as FileScopeDto;
+    const normalizedSubjectKey =
+      nextSubjectKey as LibrarySubjectKeyDto | null;
+    const normalizedGradeLevel = nextGradeLevel as GradeLevelDto | null;
+
+    this.ensureCanWriteScope(normalizedNextScope, user);
+    this.ensureGeneralPartition({
+      scope: normalizedNextScope,
+      subjectKey: normalizedSubjectKey,
+      gradeLevel: normalizedGradeLevel,
+    });
 
     if (dto.classId) {
       await this.ensureClassOwnedByUser(dto.classId, user);
@@ -419,7 +549,7 @@ export class FileUploadService {
 
     if (dto.folderId) {
       const folder = await this.ensureFolderWritable(dto.folderId, user);
-      const targetScope = dto.scope ?? record.scope;
+      const targetScope = nextScope;
       if (folder.scope !== targetScope) {
         throw new BadRequestException(
           'File scope must match the target folder scope',
@@ -435,9 +565,47 @@ export class FileUploadService {
           dto.folderId === undefined ? record.folderId : (dto.folderId ?? null),
         classId:
           dto.classId === undefined ? record.classId : (dto.classId ?? null),
-        scope: dto.scope ?? record.scope,
+        scope: normalizedNextScope,
+        subjectKey:
+          normalizedNextScope === FileScopeDto.General
+            ? normalizedSubjectKey
+            : null,
+        gradeLevel:
+          normalizedNextScope === FileScopeDto.General
+            ? normalizedGradeLevel
+            : null,
+        teacherVisible:
+          dto.teacherVisible === undefined
+            ? record.teacherVisible
+            : dto.teacherVisible,
       })
       .where(eq(uploadedFiles.id, id));
+
+    const partitionChanged =
+      record.subjectKey !== nextSubjectKey || record.gradeLevel !== nextGradeLevel;
+    if (normalizedNextScope === FileScopeDto.General && partitionChanged) {
+      await this.db
+        .update(contentChunks)
+        .set({
+          subjectKey: normalizedSubjectKey,
+          gradeLevel: normalizedGradeLevel,
+          updatedAt: new Date(),
+        })
+        .where(eq(contentChunks.libraryFileId, id));
+    }
+
+    await this.logFileAction(user.id, 'file.updated', id, {
+      previousScope: record.scope,
+      nextScope,
+      previousSubjectKey: record.subjectKey,
+      nextSubjectKey,
+      previousGradeLevel: record.gradeLevel,
+      nextGradeLevel,
+      teacherVisible:
+        dto.teacherVisible === undefined
+          ? record.teacherVisible
+          : dto.teacherVisible,
+    });
 
     return this.findOne(id, user);
   }
@@ -450,22 +618,67 @@ export class FileUploadService {
       .set({ deletedAt: new Date() })
       .where(eq(uploadedFiles.id, id));
 
-    await this.auditService.log({
-      actorId: user.id,
-      action: 'file.deleted',
-      targetType: 'uploaded_file',
-      targetId: id,
-      metadata: {
-        classId: record.classId,
-        folderId: record.folderId,
-        scope: record.scope,
-      },
+    await this.db
+      .delete(contentChunks)
+      .where(eq(contentChunks.libraryFileId, id));
+
+    await this.logFileAction(user.id, 'file.deleted', id, {
+      classId: record.classId,
+      folderId: record.folderId,
+      scope: record.scope,
+      subjectKey: record.subjectKey,
+      gradeLevel: record.gradeLevel,
     });
   }
 
   async getFilePath(id: string, user: RequestUser): Promise<string> {
     const record = await this.ensureFileAccessible(id, user);
     return record.filePath;
+  }
+
+  async getFileForDownload(id: string, user: RequestUser) {
+    const record = await this.ensureFileAccessible(id, user);
+    await this.logFileAction(user.id, 'file.downloaded', id, {
+      scope: record.scope,
+      subjectKey: record.subjectKey,
+      gradeLevel: record.gradeLevel,
+      mimeType: record.mimeType,
+    });
+    return record;
+  }
+
+  async retryIndex(id: string, user: RequestUser) {
+    const record = await this.ensureFileWritable(id, user);
+    if (record.scope !== FileScopeDto.General) {
+      throw new BadRequestException('Only general module files can be indexed.');
+    }
+    this.ensureGeneralPartition({
+      scope: record.scope as FileScopeDto,
+      subjectKey: record.subjectKey as LibrarySubjectKeyDto | null,
+      gradeLevel: record.gradeLevel as GradeLevelDto | null,
+    });
+
+    await this.db
+      .update(uploadedFiles)
+      .set({
+        indexStatus: LibraryIndexStatusDto.Pending,
+        indexError: null,
+        indexedAt: null,
+      })
+      .where(eq(uploadedFiles.id, id));
+
+    await this.libraryIndexingService?.queueFileIndex(id, {
+      actorId: user.id,
+      reason: 'retry',
+    });
+
+    await this.logFileAction(user.id, 'file.index_queued', id, {
+      reason: 'retry',
+      subjectKey: record.subjectKey,
+      gradeLevel: record.gradeLevel,
+    });
+
+    return this.findOne(id, user);
   }
 
   async listFolders(user: RequestUser, query: FileQueryDto = {}) {

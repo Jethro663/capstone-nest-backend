@@ -5,6 +5,7 @@ const replaceMock = jest.fn();
 const usePathnameMock = jest.fn();
 const useAuthMock = jest.fn();
 const logoutActionMock = jest.fn();
+const notificationProviderMock = jest.fn();
 
 jest.mock('next/navigation', () => ({
   usePathname: () => usePathnameMock(),
@@ -43,6 +44,13 @@ jest.mock('@/components/shared/AppOrbitLoader', () => ({
   ),
 }));
 
+jest.mock('@/providers/NotificationProvider', () => ({
+  NotificationProvider: ({ children }: { children: React.ReactNode }) => {
+    notificationProviderMock();
+    return <div data-testid="notification-provider">{children}</div>;
+  },
+}));
+
 describe('DashboardLayout loading behavior', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -60,6 +68,7 @@ describe('DashboardLayout loading behavior', () => {
     render(<DashboardLayout><div>content</div></DashboardLayout>);
 
     expect(screen.getByTestId('app-orbit-loader')).toHaveAttribute('data-variant', 'student');
+    expect(screen.queryByTestId('notification-provider')).not.toBeInTheDocument();
   });
 
   it('shows the calm loader variant when auth is loading on non-student routes', () => {
@@ -120,6 +129,8 @@ describe('DashboardLayout role-path enforcement', () => {
     render(<DashboardLayout><div>content</div></DashboardLayout>);
 
     expect(logoutActionMock).not.toHaveBeenCalled();
+    expect(notificationProviderMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('notification-provider')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByText('content')).toBeInTheDocument();
   });

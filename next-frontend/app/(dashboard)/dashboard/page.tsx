@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
+import { getDefaultDashboardRouteForRole } from '@/lib/dashboard-route-access';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -11,16 +12,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (loading) return;
-    switch (role) {
-      case 'admin':
-        router.replace('/dashboard/admin');
-        break;
-      case 'teacher':
-        router.replace('/dashboard/teacher');
-        break;
-      default:
-        router.replace('/dashboard/student');
-    }
+    router.replace(getDefaultDashboardRouteForRole(role));
   }, [role, loading, router]);
 
   return (

@@ -1,11 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import axios from 'axios';
-import {
-  AuthProvider,
-  useAuth,
-  shouldBootstrapAuth,
-} from './AuthProvider';
+import { AuthProvider, useAuth } from './AuthProvider';
+import { AUTH_REFRESH_TIMEOUT_MS, shouldBootstrapAuth } from '@/lib/auth-bootstrap';
 
 const usePathnameMock = jest.fn();
 const getCurrentUserActionMock = jest.fn();
@@ -28,11 +25,12 @@ jest.mock('@/lib/api-client', () => ({
 }));
 
 function AuthProbe({ children }: { children?: ReactNode }) {
-  const { loading, isAuthenticated, role } = useAuth();
+  const { loading, isAuthenticated, role, status } = useAuth();
   return (
     <div>
       <div data-testid="loading">{loading ? 'loading' : 'ready'}</div>
       <div data-testid="authenticated">{isAuthenticated ? 'yes' : 'no'}</div>
+      <div data-testid="status">{status}</div>
       <div data-testid="role">{role ?? 'none'}</div>
       {children}
     </div>
@@ -70,6 +68,7 @@ describe('AuthProvider', () => {
 
     expect(mockedAxios.post).not.toHaveBeenCalled();
     expect(screen.getByTestId('authenticated')).toHaveTextContent('no');
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
   });
 
   it('bootstraps auth on dashboard routes', async () => {
@@ -103,9 +102,10 @@ describe('AuthProvider', () => {
     expect(mockedAxios.post).toHaveBeenCalledWith(
       '/api/auth/refresh',
       {},
-      expect.objectContaining({ withCredentials: true, timeout: 10000 }),
+      expect.objectContaining({ withCredentials: true, timeout: AUTH_REFRESH_TIMEOUT_MS }),
     );
     expect(setAccessTokenMock).toHaveBeenCalledWith('access-token');
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
     expect(screen.getByTestId('role')).toHaveTextContent('student');
   });
 
@@ -125,5 +125,70 @@ describe('AuthProvider', () => {
 
     expect(screen.getByTestId('authenticated')).toHaveTextContent('no');
     expect(setAccessTokenMock).toHaveBeenCalledWith(null);
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+  });
+
+  it('exits loading when refresh is aborted by the browser', async () => {
+    usePathnameMock.mockReturnValue('/dashboard');
+    mockedAxios.post.mockRejectedValue(new DOMException('aborted', 'AbortError'));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('ready');
+    });
+
+    expect(screen.getByTestId('authenticated')).toHaveTextContent('no');
+    expect(setAccessTokenMock).toHaveBeenCalledWith(null);
+    expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated');
+  });
+
+  it('does not re-bootstrap on in-dashboard route changes once authenticated', async () => {
+    usePathnameMock.mockReturnValue('/dashboard/admin');
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        data: {
+          accessToken: 'access-token',
+        },
+      },
+    } as never);
+    getCurrentUserActionMock.mockResolvedValue({
+      success: true,
+      user: {
+        firstName: 'System',
+        lastName: 'Admin',
+        roles: ['admin'],
+      },
+    });
+
+    const { rerender } = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated')).toHaveTextContent('yes');
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+
+    usePathnameMock.mockReturnValue('/dashboard/admin/diagnostics');
+
+    rerender(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
   });
 });

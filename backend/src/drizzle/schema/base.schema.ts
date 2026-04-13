@@ -98,6 +98,28 @@ export const feedbackLevelEnum = pgEnum('feedback_level', [
 ]);
 
 export const fileScopeEnum = pgEnum('file_scope', ['private', 'general']);
+export const librarySubjectKeyEnum = pgEnum('library_subject_key', [
+  'math',
+  'science',
+  'english',
+  'filipino',
+  'ap',
+  'tle',
+  'mapeh',
+  'esp',
+]);
+export const libraryIndexStatusEnum = pgEnum('library_index_status', [
+  'not_indexed',
+  'pending',
+  'processing',
+  'completed',
+  'failed',
+]);
+export const libraryFileKindEnum = pgEnum('library_file_kind', [
+  'pdf',
+  'txt',
+  'pptx',
+]);
 export const moduleItemTypeEnum = pgEnum('module_item_type', [
   'lesson',
   'assessment',
@@ -1121,6 +1143,16 @@ export const uploadedFiles = pgTable(
       onDelete: 'cascade',
     }),
     scope: fileScopeEnum('scope').notNull().default('private'),
+    subjectKey: librarySubjectKeyEnum('subject_key'),
+    gradeLevel: gradeLevelEnum('grade_level'),
+    teacherVisible: boolean('teacher_visible').notNull().default(true),
+    indexStatus: libraryIndexStatusEnum('index_status')
+      .notNull()
+      .default('not_indexed'),
+    indexError: text('index_error'),
+    indexedAt: timestamp('indexed_at'),
+    contentHash: text('content_hash'),
+    fileKind: libraryFileKindEnum('file_kind').notNull().default('pdf'),
     originalName: varchar('original_name', { length: 255 }).notNull(),
     storedName: varchar('stored_name', { length: 255 }).notNull(),
     mimeType: varchar('mime_type', { length: 100 }).notNull(),
@@ -1134,6 +1166,16 @@ export const uploadedFiles = pgTable(
     teacherIdx: index('uploaded_files_teacher_idx').on(table.teacherId),
     classIdx: index('uploaded_files_class_idx').on(table.classId),
     scopeIdx: index('uploaded_files_scope_idx').on(table.scope),
+    generalPartitionIdx: index('uploaded_files_general_partition_idx').on(
+      table.scope,
+      table.subjectKey,
+      table.gradeLevel,
+      table.teacherVisible,
+      table.deletedAt,
+    ),
+    indexStatusIdx: index('uploaded_files_index_status_idx').on(
+      table.indexStatus,
+    ),
     uploadedAtIdx: index('uploaded_files_uploaded_at_idx').on(table.uploadedAt),
   }),
 );

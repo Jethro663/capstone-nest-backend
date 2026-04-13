@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/providers/AuthProvider';
-import { NotificationProvider } from '@/providers/NotificationProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -25,10 +24,8 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <AuthProvider>
-            <NotificationProvider>
-              {children}
-              <Toaster />
-            </NotificationProvider>
+            {children}
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
       </body>

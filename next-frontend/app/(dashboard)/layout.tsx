@@ -8,6 +8,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { StudentTutorLauncher } from '@/components/student/StudentTutorLauncher';
 import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemptNotifier';
 import { AppOrbitLoader } from '@/components/shared/AppOrbitLoader';
+import { NotificationProvider } from '@/providers/NotificationProvider';
 import { resolveLoaderVariant } from '@/utils/loader-variant';
 import { logoutAction } from '@/lib/auth-actions';
 import {
@@ -49,7 +50,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!shouldRedirect) return;
-    router.replace(!isAuthenticated ? '/login' : '/complete-profile');
+    const target = !isAuthenticated ? '/login' : '/complete-profile';
+    router.replace(target);
+
+    const fallback = window.setTimeout(() => {
+      if (window.location.pathname.startsWith('/dashboard')) {
+        window.location.assign(target);
+      }
+    }, 750);
+
+    return () => window.clearTimeout(fallback);
   }, [shouldRedirect, isAuthenticated, router]);
 
   useEffect(() => {
@@ -135,7 +145,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={`flex h-screen overflow-hidden ${shellClass}`}>
+    <NotificationProvider>
+      <div className={`flex h-screen overflow-hidden ${shellClass}`}>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -171,8 +182,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      <UnfinishedAttemptNotifier />
-      <StudentTutorLauncher />
-    </div>
+        <UnfinishedAttemptNotifier />
+        <StudentTutorLauncher />
+      </div>
+    </NotificationProvider>
   );
 }

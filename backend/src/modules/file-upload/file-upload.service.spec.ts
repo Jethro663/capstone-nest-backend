@@ -77,6 +77,10 @@ const makeUpdateChain = () => ({
   where: jest.fn().mockResolvedValue(undefined),
 });
 
+const makeDeleteChain = () => ({
+  where: jest.fn().mockResolvedValue(undefined),
+});
+
 const makeSelectChain = (rows: any[]) => ({
   from: jest.fn().mockReturnValue({
     where: jest.fn().mockResolvedValue(rows),
@@ -103,6 +107,7 @@ describe('FileUploadService', () => {
     },
     insert: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
     select: jest.fn(),
   };
 
@@ -112,6 +117,7 @@ describe('FileUploadService', () => {
     jest.clearAllMocks();
     mockAuditService = { log: jest.fn().mockResolvedValue(undefined) };
     mockDb.select.mockReturnValue(makeSelectChain([{ total: 0 }]));
+    mockDb.delete.mockReturnValue(makeDeleteChain());
     mockDb.query.classes.findFirst.mockResolvedValue({
       id: CLASS_ID,
       teacherId: TEACHER_ID,
@@ -166,6 +172,48 @@ describe('FileUploadService', () => {
           mimeType: 'application/pdf',
         }),
       );
+    });
+
+    it('rejects admin general uploads without subject and grade partition', async () => {
+      await expect(
+        service.saveFileRecord(
+          makeSaveDto({
+            teacherId: ADMIN_ID,
+            scope: 'general',
+            classId: undefined,
+          }),
+          ADMIN_USER,
+        ),
+      ).rejects.toThrow('General module uploads must specify subjectKey and gradeLevel');
+    });
+
+    it('queues indexing for admin general uploads with a partition', async () => {
+      const record = makeFileRecord({
+        scope: 'general',
+        subjectKey: 'science',
+        gradeLevel: '7',
+        indexStatus: 'pending',
+      });
+      mockDb.insert.mockReturnValue(makeInsertChain([record]));
+      const queueFileIndex = jest.fn().mockResolvedValue(undefined);
+      (service as any).libraryIndexingService = { queueFileIndex };
+
+      await service.saveFileRecord(
+        makeSaveDto({
+          teacherId: ADMIN_ID,
+          scope: 'general',
+          classId: undefined,
+          subjectKey: 'science',
+          gradeLevel: '7',
+          fileKind: 'txt',
+        }),
+        ADMIN_USER,
+      );
+
+      expect(queueFileIndex).toHaveBeenCalledWith(record.id, {
+        actorId: ADMIN_ID,
+        reason: 'upload',
+      });
     });
   });
 
@@ -268,6 +316,7 @@ describe('FileUploadService', () => {
       await service.softDelete(FILE_ID, TEACHER_USER);
 
       expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(mockDb.delete).toHaveBeenCalledTimes(1);
       expect(updateChain.set).toHaveBeenCalledWith(
         expect.objectContaining({ deletedAt: expect.any(Date) }),
       );

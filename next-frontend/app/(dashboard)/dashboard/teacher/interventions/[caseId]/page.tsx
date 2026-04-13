@@ -349,6 +349,7 @@ export default function TeacherInterventionWorkspacePage() {
   );
   const hasCaseContext = Boolean(queueEntry && queueEntry.aiPlanEligible !== false);
   const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
+  const isCaseActive = queueEntry?.status === 'active';
 
   const handleRemoveLesson = (lessonId: string) => {
     setResult((current) => current
@@ -450,6 +451,10 @@ export default function TeacherInterventionWorkspacePage() {
       if (hasCaseContext && !hasAssignableItems) {
         toast.error('Add at least one lesson or assessment before assigning this intervention plan.');
       }
+      return;
+    }
+    if (!isCaseActive) {
+      toast.error('Activate this intervention case first before assigning a plan.');
       return;
     }
     const safeResult = result ?? createManualStructuredOutput(caseId);
@@ -686,7 +691,7 @@ export default function TeacherInterventionWorkspacePage() {
               <Button
                 variant="outline"
                 onClick={handleAssign}
-                disabled={assigning || !hasCaseContext || !hasAssignableItems}
+                disabled={assigning || !hasCaseContext || !hasAssignableItems || !isCaseActive}
               >
                 {assigning ? 'Assigning...' : 'Assign suggested path'}
               </Button>

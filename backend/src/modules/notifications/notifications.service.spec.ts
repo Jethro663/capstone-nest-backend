@@ -200,6 +200,48 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('createBulkDeduped()', () => {
+    it('skips notifications that already exist for the same user, type, and reference', async () => {
+      const insertChain = {
+        values: jest.fn().mockResolvedValue(undefined),
+      };
+      mockDb.insert.mockReturnValue(insertChain);
+      mockDb.query.notifications.findMany.mockResolvedValue([
+        {
+          userId: 'u1',
+          type: 'assessment_assigned',
+          referenceId: 'assessment-1',
+        },
+      ]);
+
+      const inserted = await service.createBulkDeduped([
+        {
+          userId: 'u1',
+          type: 'assessment_assigned',
+          referenceId: 'assessment-1',
+          title: 'New assessment',
+          body: 'A new assessment is available.',
+        },
+        {
+          userId: 'u2',
+          type: 'assessment_assigned',
+          referenceId: 'assessment-1',
+          title: 'New assessment',
+          body: 'A new assessment is available.',
+        },
+      ]);
+
+      expect(inserted.map((item) => item.userId)).toEqual(['u2']);
+      expect(insertChain.values).toHaveBeenCalledWith([
+        expect.objectContaining({
+          userId: 'u2',
+          type: 'assessment_assigned',
+          referenceId: 'assessment-1',
+        }),
+      ]);
+    });
+  });
+
   // ══════════════════════════════════════════════════════════════════════════
   // getUnreadCount()
   // ══════════════════════════════════════════════════════════════════════════

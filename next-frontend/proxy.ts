@@ -1,18 +1,22 @@
 /**
- * Next.js Middleware
+ * Next.js Proxy
  *
- * - Route protection (redirect unauthenticated → /login)
- * - Auth‑only cookie check (no role enforcement in middleware — AuthProvider handles that)
- * - No /signup route — accounts are created by admin
+ * - Route protection (redirect unauthenticated -> /login)
+ * - Auth-only cookie check (no role enforcement in proxy; AuthProvider handles that)
+ * - No /signup route; accounts are created by admin
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// Routes that do NOT require authentication
-// Include root '/' so the public landing page can load without forcing /login
-const PUBLIC_ROUTES = ['/', '/login', '/verify-email', '/forgot-password', '/reset-password', '/set-initial-password'];
+const PUBLIC_ROUTES = [
+  '/',
+  '/login',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+  '/set-initial-password',
+];
 
-// Routes that require authentication
 const PROTECTED_PREFIXES = ['/dashboard'];
 
 function matchesRoute(pathname: string, route: string): boolean {
@@ -27,7 +31,7 @@ function hasRefreshCookie(request: NextRequest): boolean {
   return !!request.cookies.get('refreshToken')?.value;
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = hasRefreshCookie(request);
 
@@ -42,10 +46,8 @@ export function middleware(request: NextRequest) {
     matchesRoute(pathname, prefix),
   );
 
-  // Public route → allow (login page handles already-authenticated redirect itself)
   if (isPublic) return NextResponse.next();
 
-  // Protected route without session → redirect to login
   if (isProtected && !hasSession) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);

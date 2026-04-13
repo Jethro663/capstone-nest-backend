@@ -67,9 +67,13 @@ const mockedAssessmentService = assessmentService as jest.Mocked<
 >;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
-function buildQueueEntry(caseId: string = 'case-1') {
+function buildQueueEntry(
+  caseId: string = 'case-1',
+  status: 'pending' | 'active' | 'completed' | 'dismissed' = 'active',
+) {
   return {
     id: caseId,
+    status,
     studentId: 'student-1',
     student: {
       id: 'student-1',
@@ -505,24 +509,30 @@ describe('TeacherInterventionWorkspacePage', () => {
     });
 
     const manualSelectors = screen.getAllByRole('combobox');
-    fireEvent.change(manualSelectors[0], {
+    const lessonSelector = manualSelectors[manualSelectors.length - 2];
+    const assessmentSelector = manualSelectors[manualSelectors.length - 1];
+    fireEvent.change(lessonSelector, {
       target: { value: 'lesson-manual' },
     });
     fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[0]);
 
-    fireEvent.change(manualSelectors[1], {
+    fireEvent.change(assessmentSelector, {
       target: { value: 'assessment-manual' },
     });
     fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[1]);
 
     await waitFor(() => {
-      expect(screen.getByText('Manual Fraction Drill')).toBeInTheDocument();
-      expect(
-        screen.getByText('Manual Fraction Exit Check'),
-      ).toBeInTheDocument();
+      expect(screen.getAllByText('Manual Fraction Drill').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Manual Fraction Exit Check').length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /assign suggested path/i }));
+    const assignButton = screen.getByRole('button', {
+      name: /assign suggested path/i,
+    });
+    await waitFor(() => {
+      expect(assignButton).toBeEnabled();
+    });
+    fireEvent.click(assignButton);
 
     await waitFor(() => {
       expect(mockedLxpService.assignIntervention).toHaveBeenCalledWith(
@@ -583,5 +593,39 @@ describe('TeacherInterventionWorkspacePage', () => {
     await waitFor(() => {
       expect(mockedLxpService.assignIntervention).toHaveBeenCalled();
     });
+  });
+
+  it('keeps assignment disabled while intervention case is pending activation', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [buildQueueEntry('case-1', 'pending')],
+      },
+    });
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Manual selector')).toBeInTheDocument();
+    });
+
+    const manualSelectors = screen.getAllByRole('combobox');
+    const lessonSelector = manualSelectors[manualSelectors.length - 2];
+    const assessmentSelector = manualSelectors[manualSelectors.length - 1];
+    fireEvent.change(lessonSelector, {
+      target: { value: 'lesson-manual' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[0]);
+
+    fireEvent.change(assessmentSelector, {
+      target: { value: 'assessment-manual' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[1]);
+
+    const assignButton = screen.getByRole('button', {
+      name: /assign suggested path/i,
+    });
+    expect(assignButton).toBeDisabled();
+    fireEvent.click(assignButton);
+    expect(mockedLxpService.assignIntervention).not.toHaveBeenCalled();
   });
 });

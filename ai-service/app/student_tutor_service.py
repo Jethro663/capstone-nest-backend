@@ -14,7 +14,7 @@ from . import ollama_client
 from .config import settings
 from .media_utils import normalize_attachment_images
 from .objective_grading import ObjectiveVerdict, evaluate_objective_answer
-from .retrieval_service import similarity_search
+from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser, TutorRecommendationDto
 
 TUTOR_SESSION_KIND = "student_tutor"
@@ -970,7 +970,7 @@ async def _build_context_bundle(
     class_row = await db.execute(
         sa_text(
             """
-            SELECT c.subject_name, c.subject_code, s.name AS section_name
+            SELECT c.subject_name, c.subject_code, s.name AS section_name, s.grade_level
             FROM classes c
             LEFT JOIN sections s ON s.id = c.section_id
             WHERE c.id = :classId
@@ -987,6 +987,11 @@ async def _build_context_bundle(
             db,
             query_text=focus_text,
             class_id=class_id,
+            subject_key=normalize_library_subject_key(
+                class_info["subject_code"],
+                class_info["subject_name"],
+            ),
+            grade_level=str(class_info["grade_level"]) if class_info["grade_level"] else None,
             top_k=5,
             lesson_ids=[lesson_id] if lesson_id else None,
             assessment_ids=[assessment_id] if assessment_id else None,

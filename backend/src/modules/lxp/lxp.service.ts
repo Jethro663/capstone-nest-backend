@@ -1494,12 +1494,9 @@ export class LxpService {
     if (!interventionCase)
       throw new NotFoundException('Intervention case not found');
     await this.assertTeacherClassAccess(interventionCase.classId, user);
-    if (
-      interventionCase.status !== 'active' &&
-      interventionCase.status !== 'pending'
-    ) {
+    if (interventionCase.status !== 'active') {
       throw new BadRequestException(
-        'Only pending or active intervention cases can be assigned.',
+        'Only active intervention cases can be assigned.',
       );
     }
 
@@ -1633,20 +1630,6 @@ export class LxpService {
         body: 'Your teacher updated your LXP intervention tasks. Open LXP to continue.',
       },
     ]);
-
-    await this.auditService.log({
-      actorId: user.userId,
-      action: 'lxp.intervention.approved',
-      targetType: 'intervention_case',
-      targetId: interventionCase.id,
-      metadata: {
-        classId: interventionCase.classId,
-        studentId: interventionCase.studentId,
-        approvalSource: 'teacher_assignment',
-        previousAssignmentsCount: existingAssignments.length,
-        hasTeacherNote: Boolean(dto.note?.trim()),
-      },
-    });
 
     await this.auditService.log({
       actorId: user.userId,

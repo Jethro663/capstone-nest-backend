@@ -26,6 +26,11 @@ from .database import AsyncSessionLocal, get_db
 from . import ollama_client
 from .extraction_pipeline import run_extraction
 from .indexing_pipeline import reindex_class_content
+from .library_indexing_pipeline import (
+    backfill_library_files,
+    delete_library_file_chunks,
+    index_library_file,
+)
 from .media_utils import normalize_attachment_images
 from .mentor_service import explain_mistake
 from .quiz_generation_service import generate_quiz_draft
@@ -1282,6 +1287,9 @@ async def internal_retrieval_preview(
     query_text: str = Query(..., alias="query"),
     policy: str = Query("general"),
     top_k: int = Query(8, alias="topK"),
+    subject_key: str | None = Query(None, alias="subjectKey"),
+    grade_level: str | None = Query(None, alias="gradeLevel"),
+    include_library: bool = Query(True, alias="includeLibrary"),
     db: AsyncSession = Depends(get_db),
     _auth: None = Depends(require_internal_service),
 ):
@@ -1289,6 +1297,9 @@ async def internal_retrieval_preview(
         db,
         query_text=query_text,
         class_id=class_id,
+        subject_key=subject_key,
+        grade_level=grade_level,
+        include_library=include_library,
         top_k=top_k,
         policy_name=policy,
     )
@@ -1388,6 +1399,55 @@ async def internal_index_class(
     return {
         "success": True,
         "message": "Class content indexed via internal service",
+        "data": {
+            **data,
+            "requestedBy": payload or {},
+        },
+    }
+
+
+@app.post("/internal/index/library-files/{file_id}")
+async def internal_index_library_file(
+    file_id: str,
+    payload: dict[str, Any] | None = Body(default=None),
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await index_library_file(db, file_id)
+    return {
+        "success": True,
+        "message": "Library file indexed via internal service",
+        "data": {
+            **data,
+            "requestedBy": payload or {},
+        },
+    }
+
+
+@app.delete("/internal/index/library-files/{file_id}/chunks")
+async def internal_delete_library_file_chunks(
+    file_id: str,
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await delete_library_file_chunks(db, file_id)
+    return {
+        "success": True,
+        "message": "Library file chunks deleted",
+        "data": data,
+    }
+
+
+@app.post("/internal/index/library/backfill")
+async def internal_backfill_library_index(
+    payload: dict[str, Any] | None = Body(default=None),
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await backfill_library_files(db)
+    return {
+        "success": True,
+        "message": "Library indexing backfill completed",
         "data": {
             **data,
             "requestedBy": payload or {},

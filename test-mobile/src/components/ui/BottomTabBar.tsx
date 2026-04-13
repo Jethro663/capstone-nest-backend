@@ -13,6 +13,11 @@ const routeConfig: Record<
   keyof MainTabParamList,
   { label: string; activeIcon: IconName; inactiveIcon: IconName }
 > = {
+  Home: {
+    label: "Home",
+    activeIcon: "view-dashboard",
+    inactiveIcon: "view-dashboard-outline",
+  },
   Classes: {
     label: "Classes",
     activeIcon: "book-open-variant",

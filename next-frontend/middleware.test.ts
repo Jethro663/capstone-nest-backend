@@ -1,7 +1,7 @@
 /** @jest-environment node */
 
 import { NextRequest } from 'next/server';
-import { middleware } from './middleware';
+import { proxy } from './proxy';
 
 function createRequest(url: string, refreshToken?: string) {
   const headers = refreshToken
@@ -10,15 +10,15 @@ function createRequest(url: string, refreshToken?: string) {
   return new NextRequest(url, { headers });
 }
 
-describe('middleware', () => {
+describe('proxy', () => {
   it('redirects the root route to login when no session cookie exists', () => {
-    const response = middleware(createRequest('http://localhost:3001/'));
+    const response = proxy(createRequest('http://localhost:3001/'));
 
     expect(response.headers.get('location')).toBe('http://localhost:3001/login');
   });
 
   it('allows login when a refresh cookie exists (stale cookie safe)', () => {
-    const response = middleware(
+    const response = proxy(
       createRequest('http://localhost:3001/login', 'refresh-token'),
     );
 
@@ -26,7 +26,7 @@ describe('middleware', () => {
   });
 
   it('redirects protected routes to login with a from param when unauthenticated', () => {
-    const response = middleware(
+    const response = proxy(
       createRequest('http://localhost:3001/dashboard/student'),
     );
 
@@ -36,7 +36,7 @@ describe('middleware', () => {
   });
 
   it('allows protected routes through when a refresh cookie exists', () => {
-    const response = middleware(
+    const response = proxy(
       createRequest('http://localhost:3001/dashboard/student', 'refresh-token'),
     );
 

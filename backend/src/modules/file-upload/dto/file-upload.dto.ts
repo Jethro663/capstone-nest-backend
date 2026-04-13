@@ -7,12 +7,51 @@ import {
   IsInt,
   Min,
   Max,
+  IsBoolean,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 
 export enum FileScopeDto {
   Private = 'private',
   General = 'general',
+}
+
+export enum GradeLevelDto {
+  Grade7 = '7',
+  Grade8 = '8',
+  Grade9 = '9',
+  Grade10 = '10',
+}
+
+export enum LibrarySubjectKeyDto {
+  Math = 'math',
+  Science = 'science',
+  English = 'english',
+  Filipino = 'filipino',
+  AralingPanlipunan = 'ap',
+  Tle = 'tle',
+  Mapeh = 'mapeh',
+  Esp = 'esp',
+}
+
+export enum LibraryIndexStatusDto {
+  NotIndexed = 'not_indexed',
+  Pending = 'pending',
+  Processing = 'processing',
+  Completed = 'completed',
+  Failed = 'failed',
+}
+
+export enum LibraryFileKindDto {
+  Pdf = 'pdf',
+  Txt = 'txt',
+  Pptx = 'pptx',
+}
+
+function toBoolean(value: unknown) {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return value;
 }
 
 export class UploadFileDto {
@@ -27,6 +66,24 @@ export class UploadFileDto {
   @IsEnum(FileScopeDto, { message: 'scope must be private or general' })
   @IsOptional()
   scope?: FileScopeDto;
+
+  @IsEnum(LibrarySubjectKeyDto, {
+    message:
+      'subjectKey must be one of math, science, english, filipino, ap, tle, mapeh, esp',
+  })
+  @IsOptional()
+  subjectKey?: LibrarySubjectKeyDto;
+
+  @IsEnum(GradeLevelDto, {
+    message: 'gradeLevel must be one of 7, 8, 9, 10',
+  })
+  @IsOptional()
+  gradeLevel?: GradeLevelDto;
+
+  @Transform(({ value }) => toBoolean(value))
+  @IsBoolean()
+  @IsOptional()
+  teacherVisible?: boolean;
 }
 
 export class FileQueryDto {
@@ -45,6 +102,28 @@ export class FileQueryDto {
   @IsEnum(FileScopeDto, { message: 'scope must be private or general' })
   @IsOptional()
   scope?: FileScopeDto;
+
+  @IsEnum(LibrarySubjectKeyDto, {
+    message:
+      'subjectKey must be one of math, science, english, filipino, ap, tle, mapeh, esp',
+  })
+  @IsOptional()
+  subjectKey?: LibrarySubjectKeyDto;
+
+  @IsEnum(GradeLevelDto, {
+    message: 'gradeLevel must be one of 7, 8, 9, 10',
+  })
+  @IsOptional()
+  gradeLevel?: GradeLevelDto;
+
+  @IsEnum(LibraryIndexStatusDto)
+  @IsOptional()
+  indexStatus?: LibraryIndexStatusDto;
+
+  @Transform(({ value }) => toBoolean(value))
+  @IsBoolean()
+  @IsOptional()
+  teacherVisible?: boolean;
 
   @IsString()
   @IsOptional()
@@ -110,4 +189,21 @@ export class UpdateFileMetadataDto {
   @IsEnum(FileScopeDto, { message: 'scope must be private or general' })
   @IsOptional()
   scope?: FileScopeDto;
+
+  @IsEnum(LibrarySubjectKeyDto, {
+    message:
+      'subjectKey must be one of math, science, english, filipino, ap, tle, mapeh, esp',
+  })
+  @IsOptional()
+  subjectKey?: LibrarySubjectKeyDto;
+
+  @IsEnum(GradeLevelDto, {
+    message: 'gradeLevel must be one of 7, 8, 9, 10',
+  })
+  @IsOptional()
+  gradeLevel?: GradeLevelDto;
+
+  @IsBoolean()
+  @IsOptional()
+  teacherVisible?: boolean;
 }

@@ -7,8 +7,9 @@ import {
   boolean,
   pgEnum,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { users } from './base.schema';
 import { classes } from './base.schema';
 
@@ -18,6 +19,7 @@ import { classes } from './base.schema';
 
 export const notificationTypeEnum = pgEnum('notification_type', [
   'announcement_posted',
+  'assessment_assigned',
   'grade_updated',
   'assessment_due',
   'assessment_graded',
@@ -101,6 +103,11 @@ export const notifications = pgTable(
       table.userId,
       table.createdAt,
     ),
+    userTypeReferenceUniqueIdx: uniqueIndex(
+      'notifications_user_type_reference_unique_idx',
+    )
+      .on(table.userId, table.type, table.referenceId)
+      .where(sql`reference_id IS NOT NULL`),
   }),
 );
 

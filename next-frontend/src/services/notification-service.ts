@@ -1,5 +1,5 @@
 import { api } from '@/lib/api-client';
-import type { NotificationsResponse } from '@/types/notification';
+import type { Notification, NotificationsResponse } from '@/types/notification';
 
 export interface NotificationsQuery {
   page?: number;
@@ -7,11 +7,33 @@ export interface NotificationsQuery {
   isRead?: boolean;
 }
 
+type ApiNotification = Omit<Notification, 'message'> & {
+  body?: string;
+  message?: string;
+};
+
+export function normalizeNotification(raw: ApiNotification): Notification {
+  const referenceId = raw.referenceId ?? raw.metadata?.referenceId;
+
+  return {
+    ...raw,
+    message: raw.message ?? raw.body ?? '',
+    metadata: referenceId
+      ? { ...(raw.metadata ?? {}), referenceId }
+      : raw.metadata,
+  };
+}
+
 export const notificationService = {
   /** GET /notifications — All roles */
   async getAll(query?: NotificationsQuery): Promise<NotificationsResponse> {
     const { data } = await api.get('/notifications', { params: query });
-    return data;
+    return {
+      ...data,
+      data: Array.isArray(data.data)
+        ? data.data.map((item: ApiNotification) => normalizeNotification(item))
+        : [],
+    };
   },
 
   /** GET /notifications/unread-count — All roles */

@@ -1313,7 +1313,8 @@ export class PerformanceService {
       actorId: userId,
       action: 'performance.admin.analytics_viewed',
       targetType: 'system',
-      targetId: 'performance',
+      // audit_logs.target_id is UUID; use actor id for system-level analytics view tracking.
+      targetId: userId,
       metadata: {
         conceptRows: masteryRows.length,
         recommendationRows: recommendationRows.length,

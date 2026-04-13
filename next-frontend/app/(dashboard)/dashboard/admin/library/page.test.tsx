@@ -43,6 +43,7 @@ jest.mock('@/services/file-service', () => ({
     createFolder: jest.fn(),
     updateFolder: jest.fn(),
     update: jest.fn(),
+    retryIndex: jest.fn(),
     delete: jest.fn(),
     deleteFolder: jest.fn(),
     download: jest.fn(),
@@ -98,6 +99,10 @@ describe('DashboardAdminLibraryPage', () => {
           originalName: 'Lab Manual Q3.pdf',
           sizeBytes: 3 * 1024 * 1024,
           scope: 'general',
+          subjectKey: 'science',
+          gradeLevel: '7',
+          teacherVisible: true,
+          indexStatus: 'completed',
           uploadedAt: '2026-03-27T00:00:00.000Z',
           class: { subjectName: 'Science' },
         },
@@ -115,24 +120,33 @@ describe('DashboardAdminLibraryPage', () => {
     } as UploadResponse);
   });
 
-  it('renders admin library page and uploads selected PDF', async () => {
+  it('requires a subject-grade partition before uploading an admin library file', async () => {
     const { container } = render(<DashboardAdminLibraryPage />);
 
     expect(await screen.findByRole('heading', { name: 'Nexora Library' })).toBeInTheDocument();
     expect(await screen.findByText('Lab Manual Q3.pdf')).toBeInTheDocument();
+    expect(mockedClassService.getAll).not.toHaveBeenCalled();
 
     const fileInput = container.querySelector('[data-testid="library-upload-input"]') as HTMLInputElement;
-    const file = new File(['pdf'], 'admin-module.pdf', { type: 'application/pdf' });
+    const file = new File(['hello'], 'admin-module.txt', { type: 'text/plain' });
 
     fireEvent.change(fileInput, { target: { files: [file] } });
+    expect(screen.getByText('Select a subject and grade partition before uploading.')).toBeInTheDocument();
 
-    const uploadButtons = await screen.findAllByRole('button', { name: 'Upload PDF' });
+    fireEvent.change(screen.getByLabelText('Subject filter'), { target: { value: 'science' } });
+    fireEvent.change(screen.getByLabelText('Grade filter'), { target: { value: '7' } });
+
+    const uploadButtons = await screen.findAllByRole('button', { name: 'Upload File' });
     fireEvent.click(uploadButtons[uploadButtons.length - 1]);
 
     await waitFor(() =>
       expect(mockedFileService.upload).toHaveBeenCalledWith(
         file,
-        expect.objectContaining({ scope: 'private' }),
+        expect.objectContaining({
+          scope: 'general',
+          subjectKey: 'science',
+          gradeLevel: '7',
+        }),
       ),
     );
   });
