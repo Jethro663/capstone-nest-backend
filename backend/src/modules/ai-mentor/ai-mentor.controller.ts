@@ -28,6 +28,7 @@ import {
 
 import { AiProxyService } from './ai-proxy.service';
 import { ChatRequestDto } from './DTO/chat.dto';
+import { AdminAnalyticsChatRequestDto } from './DTO/admin-chat.dto';
 import { MentorExplainDto } from './DTO/mentor-explain.dto';
 import {
   ExtractModuleDto,
@@ -51,6 +52,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { AuditService } from '../audit/audit.service';
 import { DatabaseService } from '../../database/database.service';
+import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
 import {
   aiGenerationJobs,
   aiGenerationOutputs,
@@ -85,6 +87,7 @@ export class AiMentorController {
     private readonly proxy: AiProxyService,
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly adminAnalyticsChatService: AdminAnalyticsChatService,
   ) {}
 
   private get db() {
@@ -137,6 +140,21 @@ export class AiMentorController {
 
   private hasRole(userRoles: string[] | undefined, role: RoleName) {
     return Array.isArray(userRoles) && userRoles.includes(role);
+  }
+
+  private async assertAdminAnalyticsAccess(user: {
+    id: string;
+    email: string;
+    roles: string[];
+  }, route: string) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+
+    await this.adminAnalyticsChatService.logDeniedAttempt(user, route);
+    throw new ForbiddenException(
+      'Admin analytics chat is restricted to admin accounts.',
+    );
   }
 
   private async assertTeacherClassAccess(
@@ -1848,6 +1866,42 @@ export class AiMentorController {
         data: [],
       };
     }
+  }
+
+  @Post('admin/chat')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Chat with the admin analytics assistant' })
+  async adminChat(
+    @Body() dto: AdminAnalyticsChatRequestDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(user, '/api/ai/admin/chat');
+    return this.adminAnalyticsChatService.chat(user, dto);
+  }
+
+  @Get('admin/history')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get admin analytics chat history' })
+  async adminHistory(
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(user, '/api/ai/admin/history');
+    return this.adminAnalyticsChatService.history(user);
+  }
+
+  @Get('admin/sessions/:sessionId')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get an admin analytics chat session' })
+  async getAdminSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(
+      user,
+      `/api/ai/admin/sessions/${sessionId}`,
+    );
+    return this.adminAnalyticsChatService.getSession(user, sessionId);
   }
 
   @Post('teacher/interventions/:caseId/recommend')

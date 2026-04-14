@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
+import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -35,6 +36,12 @@ const ADMIN_USER = {
 
 const mockProxy = { forward: jest.fn() };
 const mockAudit = { log: jest.fn() };
+const mockAdminAnalyticsChat = {
+  chat: jest.fn(),
+  history: jest.fn(),
+  getSession: jest.fn(),
+  logDeniedAttempt: jest.fn(),
+};
 const mockDb = {
   query: {
     enrollments: { findMany: jest.fn() },
@@ -61,6 +68,11 @@ describe('AiMentorController', () => {
     jest.clearAllMocks();
     mockAudit.log.mockReset();
     mockAudit.log.mockResolvedValue(undefined);
+    mockAdminAnalyticsChat.chat.mockReset();
+    mockAdminAnalyticsChat.history.mockReset();
+    mockAdminAnalyticsChat.getSession.mockReset();
+    mockAdminAnalyticsChat.logDeniedAttempt.mockReset();
+    mockAdminAnalyticsChat.logDeniedAttempt.mockResolvedValue(undefined);
     mockDb.query.enrollments.findMany.mockReset();
     mockDb.query.classModules.findMany.mockReset();
     mockDb.query.classes.findFirst.mockReset();
@@ -127,6 +139,10 @@ describe('AiMentorController', () => {
       controllers: [AiMentorController],
       providers: [
         { provide: AiProxyService, useValue: mockProxy },
+        {
+          provide: AdminAnalyticsChatService,
+          useValue: mockAdminAnalyticsChat,
+        },
         { provide: DatabaseService, useValue: { db: mockDb } },
         { provide: AuditService, useValue: mockAudit },
       ],
@@ -1317,6 +1333,106 @@ describe('AiMentorController', () => {
         degraded: true,
         message: 'AI history unavailable; returning an empty list.',
         data: [],
+      });
+    });
+  });
+
+  describe('adminChat()', () => {
+    it('should delegate admin analytics chat requests for admins', async () => {
+      const dto = { message: 'Show me current at-risk trends.' };
+      mockAdminAnalyticsChat.chat.mockResolvedValue({
+        success: true,
+        message: 'Admin analytics response generated.',
+        data: {
+          reply: '2 students are currently flagged as at risk.',
+          sessionId: 'admin-session-1',
+          chart: null,
+          sources: [],
+        },
+      });
+
+      const result = await controller.adminChat(dto, ADMIN_USER);
+
+      expect(mockAdminAnalyticsChat.chat).toHaveBeenCalledWith(ADMIN_USER, dto);
+      expect(result).toEqual({
+        success: true,
+        message: 'Admin analytics response generated.',
+        data: {
+          reply: '2 students are currently flagged as at risk.',
+          sessionId: 'admin-session-1',
+          chart: null,
+          sources: [],
+        },
+      });
+    });
+
+    it('should audit and reject non-admin admin chat attempts', async () => {
+      await expect(
+        controller.adminChat({ message: 'Show me audit anomalies.' }, STUDENT_USER),
+      ).rejects.toThrow('Admin analytics chat is restricted to admin accounts.');
+
+      expect(mockAdminAnalyticsChat.logDeniedAttempt).toHaveBeenCalledWith(
+        STUDENT_USER,
+        '/api/ai/admin/chat',
+      );
+      expect(mockAudit.log).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: STUDENT_USER.id,
+          action: 'admin_ai_access_denied',
+          targetType: 'ai_admin_chat',
+          targetId: STUDENT_USER.id,
+        }),
+      );
+      expect(mockAdminAnalyticsChat.chat).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('adminHistory()', () => {
+    it('should delegate admin history requests for admins', async () => {
+      mockAdminAnalyticsChat.history.mockResolvedValue({
+        success: true,
+        message: 'Admin chat history loaded.',
+        data: [{ sessionId: 'admin-session-1', title: 'At-risk trends' }],
+      });
+
+      const result = await controller.adminHistory(ADMIN_USER);
+
+      expect(mockAdminAnalyticsChat.history).toHaveBeenCalledWith(ADMIN_USER);
+      expect(result).toEqual({
+        success: true,
+        message: 'Admin chat history loaded.',
+        data: [{ sessionId: 'admin-session-1', title: 'At-risk trends' }],
+      });
+    });
+  });
+
+  describe('getAdminSession()', () => {
+    it('should delegate admin session loading for admins', async () => {
+      mockAdminAnalyticsChat.getSession.mockResolvedValue({
+        success: true,
+        message: 'Admin chat session loaded.',
+        data: {
+          sessionId: '11111111-1111-1111-1111-111111111111',
+          messages: [],
+        },
+      });
+
+      const result = await controller.getAdminSession(
+        '11111111-1111-1111-1111-111111111111',
+        ADMIN_USER,
+      );
+
+      expect(mockAdminAnalyticsChat.getSession).toHaveBeenCalledWith(
+        ADMIN_USER,
+        '11111111-1111-1111-1111-111111111111',
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Admin chat session loaded.',
+        data: {
+          sessionId: '11111111-1111-1111-1111-111111111111',
+          messages: [],
+        },
       });
     });
   });

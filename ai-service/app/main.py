@@ -54,6 +54,7 @@ from .ja_practice_service import (
 )
 from .schemas import (
     ApplyExtractionRequest,
+    AdminChatRequest,
     ChatRequest,
     DemoInterventionPlanRequest,
     ExtractRequest,
@@ -79,6 +80,7 @@ AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
 AI_JOB_STALE_FAILURE_MESSAGE = (
     "AI generation timed out before completion. Please retry this job."
 )
+ADMIN_ANALYTICS_SESSION_TYPE = "admin_analytics_chat"
 
 DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT = """You generate concise, practical demo intervention plans for a school LMS.
 
@@ -128,6 +130,91 @@ DEMO_INTERVENTION_PLAN_FORMAT: dict[str, Any] = {
         },
     },
     "required": ["weakConcepts", "recommendedModules", "teacherSummary", "lxpQuestions"],
+}
+
+ADMIN_ANALYTICS_SYSTEM_PROMPT = """You are Nexora's admin analytics assistant.
+
+Rules:
+- Output valid JSON only.
+- You are speaking to LMS administrators, not students.
+- Use a concise operations and reporting tone.
+- Answer only from the supplied analytics context and prior session turns.
+- If the context does not support a claim, say that the data is unavailable.
+- Never invent totals, names, time windows, or trends.
+- Do not provide study tips, tutoring language, or student-facing advice.
+- Charts are optional and must use only bar, line, pie, or donut.
+- Sources must name the approved LMS source that supports the answer.
+"""
+
+ADMIN_ANALYTICS_RESPONSE_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "chart": {
+            "anyOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": ["bar", "line", "pie", "donut"]},
+                        "title": {"type": "string"},
+                        "labels": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
+                            "maxItems": 16,
+                        },
+                        "series": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "data": {
+                                        "type": "array",
+                                        "items": {"type": "number"},
+                                        "minItems": 1,
+                                        "maxItems": 16,
+                                    },
+                                },
+                                "required": ["name", "data"],
+                            },
+                            "minItems": 1,
+                            "maxItems": 4,
+                        },
+                        "yAxisLabel": {"type": ["string", "null"]},
+                        "xAxisLabel": {"type": ["string", "null"]},
+                    },
+                    "required": ["type", "title", "labels", "series"],
+                },
+            ]
+        },
+        "sources": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string"},
+                    "filters": {"type": "object"},
+                    "window": {"type": ["string", "null"]},
+                },
+                "required": ["source", "filters"],
+            },
+            "maxItems": 8,
+        },
+    },
+    "required": ["reply", "sources"],
+}
+APPROVED_ADMIN_SOURCE_IDS = {
+    "student-performance-report",
+    "assessment-summary-report",
+    "intervention-participation-report",
+    "system-usage-report",
+    "audit-log",
+    "admin-dashboard-overview",
+    "admin-overview-analytics",
+    "performance-admin-analytics",
+    "system-evaluations",
 }
 
 
@@ -658,6 +745,466 @@ def require_internal_service(
         raise HTTPException(401, "Invalid internal service token")
 
 
+def _is_admin(user: RequestUser) -> bool:
+    return "admin" in [role.lower() for role in user.roles]
+
+
+def _assert_admin_analytics_access(user: RequestUser) -> None:
+    if not _is_admin(user):
+        raise HTTPException(403, "Admin analytics chat is restricted to admin accounts.")
+
+
+def _normalize_admin_chart(chart: Any) -> dict[str, Any] | None:
+    if not isinstance(chart, dict):
+        return None
+
+    chart_type = chart.get("type")
+    title = chart.get("title")
+    labels = chart.get("labels")
+    series = chart.get("series")
+    if chart_type not in {"bar", "line", "pie", "donut"}:
+        return None
+    if not isinstance(title, str) or not title.strip():
+        return None
+    if not isinstance(labels, list) or not labels:
+        return None
+    normalized_labels = [str(item).strip() for item in labels if str(item).strip()]
+    if not normalized_labels:
+        return None
+    if not isinstance(series, list) or not series:
+        return None
+
+    normalized_series: list[dict[str, Any]] = []
+    for item in series[:4]:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        data = item.get("data")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        if not isinstance(data, list) or not data:
+            continue
+        numeric_data: list[float] = []
+        for value in data[: len(normalized_labels)]:
+            if isinstance(value, (int, float)):
+                numeric_data.append(float(value))
+            else:
+                try:
+                    numeric_data.append(float(value))
+                except Exception:
+                    numeric_data.append(0.0)
+        if numeric_data:
+            normalized_series.append(
+                {
+                    "name": name.strip(),
+                    "data": numeric_data,
+                }
+            )
+
+    if not normalized_series:
+        return None
+
+    return {
+        "type": chart_type,
+        "title": title.strip(),
+        "labels": normalized_labels,
+        "series": normalized_series,
+        "yAxisLabel": chart.get("yAxisLabel") if isinstance(chart.get("yAxisLabel"), str) else None,
+        "xAxisLabel": chart.get("xAxisLabel") if isinstance(chart.get("xAxisLabel"), str) else None,
+    }
+
+
+def _normalize_admin_sources(sources: Any) -> list[dict[str, Any]]:
+    if not isinstance(sources, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in sources[:8]:
+        if not isinstance(item, dict):
+            continue
+        source = item.get("source")
+        if not isinstance(source, str) or not source.strip():
+            continue
+        filters = item.get("filters")
+        window = item.get("window")
+        normalized.append(
+            {
+                "source": source.strip(),
+                "filters": filters if isinstance(filters, dict) else {},
+                "window": window.strip() if isinstance(window, str) and window.strip() else None,
+            }
+        )
+    return normalized
+
+
+def _build_admin_analytics_prompt(
+    message: str,
+    context: dict[str, Any],
+    history_rows: list[dict[str, Any]],
+) -> str:
+    prior_turns = [
+        {
+            "user": row.get("input_text", ""),
+            "assistant": row.get("output_text", ""),
+        }
+        for row in history_rows[-6:]
+    ]
+    return (
+        "Produce one JSON object that matches the required format exactly.\n\n"
+        f"Admin question:\n{message.strip()}\n\n"
+        f"Prior session turns:\n{json.dumps(prior_turns, ensure_ascii=False)}\n\n"
+        f"Approved analytics context:\n{json.dumps(context, ensure_ascii=False, default=str)}"
+    )
+
+
+def _get_context_dict(context: dict[str, Any], *keys: str) -> dict[str, Any]:
+    current: Any = context
+    for key in keys:
+        if not isinstance(current, dict):
+            return {}
+        current = current.get(key)
+    return current if isinstance(current, dict) else {}
+
+
+def _get_context_rows(context: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
+    current: Any = context
+    for key in keys:
+        if not isinstance(current, dict):
+            return []
+        current = current.get(key)
+    if not isinstance(current, list):
+        return []
+    return [item for item in current if isinstance(item, dict)]
+
+
+def _normalize_admin_sources_with_context(
+    message: str,
+    context: dict[str, Any],
+    sources: Any,
+) -> list[dict[str, Any]]:
+    normalized_sources = [
+        source
+        for source in _normalize_admin_sources(sources)
+        if source["source"] in APPROVED_ADMIN_SOURCE_IDS
+    ]
+    if normalized_sources:
+        return normalized_sources
+
+    prompt = message.lower()
+    fallback_sources: list[dict[str, Any]] = []
+    if "risk" in prompt or "at-risk" in prompt:
+        report = _get_context_dict(context, "reports", "studentPerformance")
+        fallback_sources.append(
+            {
+                "source": "student-performance-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "usage" in prompt or "activity" in prompt:
+        report = _get_context_dict(context, "reports", "systemUsage")
+        fallback_sources.append(
+            {
+                "source": "system-usage-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "assessment" in prompt or "subject" in prompt or "performance" in prompt:
+        report = _get_context_dict(context, "reports", "assessmentSummary")
+        fallback_sources.append(
+            {
+                "source": "assessment-summary-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "intervention" in prompt:
+        report = _get_context_dict(context, "reports", "interventionParticipation")
+        fallback_sources.append(
+            {
+                "source": "intervention-participation-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "audit" in prompt or "log" in prompt:
+        fallback_sources.append(
+            {
+                "source": "audit-log",
+                "filters": {"limit": 10},
+                "window": context.get("fetchedAt"),
+            }
+        )
+    if not fallback_sources:
+        fallback_sources.append(
+            {
+                "source": "admin-dashboard-overview",
+                "filters": {},
+                "window": context.get("fetchedAt"),
+            }
+        )
+    return fallback_sources
+
+
+def _build_risk_snapshot_chart(context: dict[str, Any]) -> dict[str, Any] | None:
+    rows = _get_context_rows(context, "reports", "studentPerformance", "rows")
+    counts: dict[str, int] = {}
+    for row in rows:
+        if not row.get("isAtRisk"):
+            continue
+        label = str(row.get("subjectCode") or row.get("classId") or "Unknown").strip()
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return None
+
+    labels = list(counts.keys())[:6]
+    return {
+        "type": "bar",
+        "title": "At-risk learners by subject",
+        "labels": labels,
+        "series": [
+            {
+                "name": "At-risk learners",
+                "data": [counts[label] for label in labels],
+            }
+        ],
+        "yAxisLabel": "Learners",
+        "xAxisLabel": "Subject",
+    }
+
+
+def _build_system_usage_chart(context: dict[str, Any]) -> dict[str, Any] | None:
+    usage = _get_context_dict(context, "reports", "systemUsage", "data")
+    metrics = [
+        ("Lessons", usage.get("lessonCompletions")),
+        ("Submissions", usage.get("assessmentSubmissions")),
+        ("Opens", usage.get("interventionOpens")),
+        ("Closures", usage.get("interventionClosures")),
+    ]
+    values = []
+    labels = []
+    for label, value in metrics:
+        if isinstance(value, (int, float)):
+            labels.append(label)
+            values.append(float(value))
+    if not values:
+        return None
+
+    return {
+        "type": "bar",
+        "title": "Weekly system usage snapshot",
+        "labels": labels,
+        "series": [{"name": "Events", "data": values}],
+        "yAxisLabel": "Count",
+        "xAxisLabel": "Metric",
+    }
+
+
+def _build_assessment_chart(context: dict[str, Any]) -> dict[str, Any] | None:
+    rows = _get_context_rows(context, "reports", "assessmentSummary", "rows")
+    values: list[tuple[str, float]] = []
+    for row in rows:
+        score = row.get("averageScore")
+        if not isinstance(score, (int, float)):
+            continue
+        label = str(row.get("subjectCode") or row.get("title") or "Assessment").strip()
+        values.append((label, float(score)))
+    if not values:
+        return None
+
+    labels = [label for label, _ in values[:6]]
+    return {
+        "type": "bar",
+        "title": "Assessment averages by subject",
+        "labels": labels,
+        "series": [{"name": "Average score", "data": [score for _, score in values[:6]]}],
+        "yAxisLabel": "Average score",
+        "xAxisLabel": "Subject",
+    }
+
+
+def _infer_admin_chart(
+    message: str,
+    context: dict[str, Any],
+    chart: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if chart is not None:
+        return chart
+    prompt = message.lower()
+    if "risk" in prompt or "at-risk" in prompt:
+        return _build_risk_snapshot_chart(context)
+    if "usage" in prompt or "activity" in prompt:
+        return _build_system_usage_chart(context)
+    if "assessment" in prompt or "subject" in prompt or "performance" in prompt:
+        return _build_assessment_chart(context)
+    return None
+
+
+def _needs_admin_reply_rewrite(reply: str) -> bool:
+    lowered = reply.lower()
+    return "json structure" in lowered or "provided in your json" in lowered
+
+
+def _infer_admin_reply(message: str, context: dict[str, Any]) -> str | None:
+    prompt = message.lower()
+    if "risk" in prompt or "at-risk" in prompt:
+        rows = _get_context_rows(context, "reports", "studentPerformance", "rows")
+        at_risk_rows = [row for row in rows if row.get("isAtRisk")]
+        if at_risk_rows:
+            subject_count = len(
+                {
+                    str(row.get("subjectCode") or row.get("classId") or "Unknown")
+                    for row in at_risk_rows
+                }
+            )
+            return (
+                f"The latest student performance sample shows {len(at_risk_rows)} at-risk learner records "
+                f"across {subject_count} subject groupings. Use the chart to see where the current concentration is highest."
+            )
+    if "usage" in prompt or "activity" in prompt:
+        usage = _get_context_dict(context, "reports", "systemUsage", "data")
+        submissions = usage.get("assessmentSubmissions")
+        completions = usage.get("lessonCompletions")
+        if isinstance(submissions, (int, float)) and isinstance(completions, (int, float)):
+            return (
+                f"Current usage shows {int(submissions)} assessment submissions and {int(completions)} lesson completions "
+                "in the active reporting window. The chart compares the main activity counters returned by the LMS."
+            )
+    if "assessment" in prompt or "subject" in prompt:
+        rows = _get_context_rows(context, "reports", "assessmentSummary", "rows")
+        if rows:
+            top = rows[0]
+            return (
+                f"Assessment summary data is available for {len(rows)} rows. "
+                f"The leading visible row is {top.get('subjectCode') or top.get('title') or 'the latest assessment'} "
+                f"with an average score of {top.get('averageScore')}. The chart compares the available subject averages."
+            )
+    return None
+
+
+async def _parse_or_repair_admin_analytics_response(raw: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(_extract_json_payload(raw))
+    except Exception as parse_err:
+        logger.warning(
+            "[admin-analytics] Initial JSON parse failed, requesting repair: %s",
+            parse_err,
+        )
+        repair_prompt = f"""
+Repair this malformed JSON into valid JSON that strictly matches the required admin analytics schema.
+Do not add commentary. Return one JSON object only.
+
+Malformed JSON:
+{raw}
+"""
+        repaired_raw = await ollama_client.generate(
+            repair_prompt,
+            ADMIN_ANALYTICS_SYSTEM_PROMPT,
+            task="chat",
+            response_format=ADMIN_ANALYTICS_RESPONSE_FORMAT,
+            num_predict=768,
+        )
+        parsed = json.loads(_extract_json_payload(repaired_raw))
+
+    reply = parsed.get("reply")
+    if not isinstance(reply, str) or not reply.strip():
+        raise ValueError("Admin analytics response did not contain a usable reply.")
+
+    return {
+        "reply": reply.strip(),
+        "chart": _normalize_admin_chart(parsed.get("chart")),
+        "sources": _normalize_admin_sources(parsed.get("sources")),
+    }
+
+
+def _normalize_admin_history_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sessions: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        session_id_value = row.get("session_id")
+        session_id = str(session_id_value).strip() if session_id_value is not None else ""
+        if not session_id:
+            continue
+        created_at = row.get("created_at")
+        input_text = (row.get("input_text") or "").strip()
+        output_text = (row.get("output_text") or "").strip()
+        existing = sessions.get(session_id)
+        if existing is None:
+            existing = {
+                "sessionId": session_id,
+                "sessionType": row.get("session_type"),
+                "title": (input_text[:72] or "Admin analytics chat").strip(),
+                "preview": (output_text[:140] or input_text[:140] or "No preview available").strip(),
+                "updatedAt": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+                "messageCount": 0,
+            }
+        existing["messageCount"] += 2
+        normalized_created_at = (
+            created_at.isoformat() if isinstance(created_at, datetime) else created_at
+        )
+        if normalized_created_at and (
+            existing["updatedAt"] is None or str(normalized_created_at) > str(existing["updatedAt"])
+        ):
+            existing["updatedAt"] = normalized_created_at
+            existing["preview"] = (output_text[:140] or input_text[:140] or existing["preview"]).strip()
+        sessions[session_id] = existing
+
+    return sorted(
+        sessions.values(),
+        key=lambda item: str(item.get("updatedAt") or ""),
+        reverse=True,
+    )
+
+
+def _build_admin_session_payload(
+    session_id: str,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    messages: list[dict[str, Any]] = []
+    title = "Admin analytics chat"
+    updated_at = None
+
+    for index, row in enumerate(rows):
+        created_at = row.get("created_at")
+        updated_at = created_at or updated_at
+        input_text = (row.get("input_text") or "").strip()
+        output_text = (row.get("output_text") or "").strip()
+        context_metadata = row.get("context_metadata")
+        if not isinstance(context_metadata, dict):
+            context_metadata = {}
+
+        if input_text:
+            if title == "Admin analytics chat":
+                title = input_text[:72].strip() or title
+            messages.append(
+                {
+                    "id": f"{session_id}-user-{index}",
+                    "role": "user",
+                    "content": input_text,
+                    "createdAt": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+                }
+            )
+
+        if output_text:
+            messages.append(
+                {
+                    "id": f"{session_id}-assistant-{index}",
+                    "role": "assistant",
+                    "content": output_text,
+                    "createdAt": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+                    "chart": _normalize_admin_chart(context_metadata.get("chart")),
+                    "sources": _normalize_admin_sources(context_metadata.get("sources")),
+                }
+            )
+
+    return {
+        "sessionId": session_id,
+        "title": title,
+        "updatedAt": updated_at.isoformat() if isinstance(updated_at, datetime) else updated_at,
+        "messages": messages,
+    }
+
+
 async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     database_status = {"ok": True}
     try:
@@ -835,6 +1382,122 @@ async def chat(
             "reply": reply,
             "sessionId": chat_session_id,
             "modelUsed": model_used,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /admin/chat
+# ---------------------------------------------------------------------------
+
+
+@app.post("/admin/chat")
+async def admin_chat(
+    body: AdminChatRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _assert_admin_analytics_access(user)
+
+    import time
+
+    chat_session_id = body.session_id or str(uuid.uuid4())
+    history_rows: list[dict[str, Any]] = []
+    if body.session_id:
+        rows = await db.execute(
+            sa_text(
+                "SELECT input_text, output_text, created_at FROM ai_interaction_logs "
+                "WHERE user_id = :uid AND session_id = :sid "
+                "AND session_type = :sessionType "
+                "ORDER BY created_at ASC LIMIT 12"
+            ),
+            {
+                "uid": user.id,
+                "sid": body.session_id,
+                "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+            },
+        )
+        history_rows = [dict(r) for r in rows.mappings()]
+
+    prompt = _build_admin_analytics_prompt(
+        body.message,
+        body.context if isinstance(body.context, dict) else {},
+        history_rows,
+    )
+
+    start = time.time()
+    try:
+        raw = await ollama_client.generate(
+            prompt,
+            ADMIN_ANALYTICS_SYSTEM_PROMPT,
+            task="chat",
+            response_format=ADMIN_ANALYTICS_RESPONSE_FORMAT,
+            num_predict=768,
+        )
+        parsed = await _parse_or_repair_admin_analytics_response(raw)
+        degraded = False
+        reply = parsed["reply"]
+        chart = _infer_admin_chart(body.message, body.context, parsed["chart"])
+        sources = _normalize_admin_sources_with_context(
+            body.message,
+            body.context,
+            parsed["sources"],
+        )
+        fallback_reply = _infer_admin_reply(body.message, body.context)
+        if _needs_admin_reply_rewrite(reply) and fallback_reply:
+            reply = fallback_reply
+        message = "Admin analytics response generated."
+    except Exception as err:
+        logger.warning("[admin-analytics] Falling back to deterministic reply: %s", err)
+        degraded = True
+        reply = (
+            "Admin analytics is temporarily unavailable. The request was recorded, but I could not "
+            "generate a grounded summary from the current context."
+        )
+        chart = _infer_admin_chart(body.message, body.context, None)
+        sources = _normalize_admin_sources_with_context(body.message, body.context, [])
+        message = "Admin analytics fallback response generated."
+
+    response_time_ms = int((time.time() - start) * 1000)
+    model_used = ollama_client.get_task_model_name("chat")
+    context_metadata = {
+        "sessionId": chat_session_id,
+        "sources": sources,
+        "chart": chart,
+        "contextKeys": sorted(list(body.context.keys())) if isinstance(body.context, dict) else [],
+    }
+
+    await db.execute(
+        sa_text(
+            "INSERT INTO ai_interaction_logs "
+            "(user_id, session_type, input_text, output_text, model_used, "
+            "response_time_ms, session_id, context_metadata) "
+            "VALUES (:userId, :sessionType, :inputText, :outputText, "
+            ":modelUsed, :responseTimeMs, :sessionId, :ctx)"
+        ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
+        {
+            "userId": user.id,
+            "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+            "inputText": body.message[:2000],
+            "outputText": reply[:5000],
+            "modelUsed": model_used,
+            "responseTimeMs": response_time_ms,
+            "sessionId": chat_session_id,
+            "ctx": context_metadata,
+        },
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "degraded": degraded,
+        "message": message,
+        "data": {
+            "reply": reply,
+            "sessionId": chat_session_id,
+            "modelUsed": model_used,
+            "chart": chart,
+            "sources": sources,
         },
     }
 
@@ -2556,6 +3219,67 @@ async def interaction_history(
         "success": True,
         "message": f"Found {len(data)} interaction(s)",
         "data": data,
+    }
+
+
+@app.get("/admin/history")
+async def admin_chat_history(
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _assert_admin_analytics_access(user)
+
+    rows = await db.execute(
+        sa_text(
+            "SELECT session_id, session_type, input_text, output_text, created_at, context_metadata "
+            "FROM ai_interaction_logs "
+            "WHERE user_id = :uid AND session_type = :sessionType "
+            "ORDER BY created_at DESC LIMIT 60"
+        ),
+        {
+            "uid": user.id,
+            "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+        },
+    )
+    data = _normalize_admin_history_summary([dict(r) for r in rows.mappings()])
+
+    return {
+        "success": True,
+        "message": "Admin chat history loaded.",
+        "data": data,
+    }
+
+
+@app.get("/admin/sessions/{session_id}")
+async def admin_chat_session(
+    session_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _assert_admin_analytics_access(user)
+
+    rows = await db.execute(
+        sa_text(
+            "SELECT id, session_id, session_type, input_text, output_text, created_at, context_metadata "
+            "FROM ai_interaction_logs "
+            "WHERE user_id = :uid AND session_id = :sid "
+            "AND session_type = :sessionType "
+            "ORDER BY created_at ASC"
+        ),
+        {
+            "uid": user.id,
+            "sid": session_id,
+            "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+        },
+    )
+    data = [dict(r) for r in rows.mappings()]
+    if not data:
+        raise HTTPException(404, "Admin analytics session not found.")
+
+    return {
+        "success": True,
+        "message": "Admin chat session loaded.",
+        "data": _build_admin_session_payload(session_id, data),
     }
 
 

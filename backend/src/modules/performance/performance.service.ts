@@ -1243,11 +1243,7 @@ export class PerformanceService {
     };
   }
 
-  async getAdminAnalytics(userId: string, roles: string[]) {
-    if (!this.isAdmin(roles)) {
-      throw new ForbiddenException('Access denied');
-    }
-
+  async getAdminAnalyticsSnapshot() {
     const masteryRows = await this.db.query.studentConceptMastery.findMany({
       columns: {
         id: true,
@@ -1309,19 +1305,6 @@ export class PerformanceService {
       { riskIncrements: 0, riskRecoveries: 0, otherTransitions: 0 },
     );
 
-    await this.auditService.log({
-      actorId: userId,
-      action: 'performance.admin.analytics_viewed',
-      targetType: 'system',
-      // audit_logs.target_id is UUID; use actor id for system-level analytics view tracking.
-      targetId: userId,
-      metadata: {
-        conceptRows: masteryRows.length,
-        recommendationRows: recommendationRows.length,
-        performanceLogRows: recentLogs.length,
-      },
-    });
-
     return {
       conceptMasterySnapshots: masteryRows,
       recommendationHistory: recommendationRows,
@@ -1331,6 +1314,29 @@ export class PerformanceService {
         rows: recentLogs,
       },
     };
+  }
+
+  async getAdminAnalytics(userId: string, roles: string[]) {
+    if (!this.isAdmin(roles)) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const data = await this.getAdminAnalyticsSnapshot();
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'performance.admin.analytics_viewed',
+      targetType: 'system',
+      // audit_logs.target_id is UUID; use actor id for system-level analytics view tracking.
+      targetId: userId,
+      metadata: {
+        conceptRows: data.conceptMasterySnapshots.length,
+        recommendationRows: data.recommendationHistory.length,
+        performanceLogRows: data.performanceLogTransitions.rows.length,
+      },
+    });
+
+    return data;
   }
 
   async getStudentOwnSummary(studentId: string) {

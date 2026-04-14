@@ -33,6 +33,36 @@ class ChatData(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class AdminAnalyticsSource(BaseModel):
+    source: str
+    filters: dict[str, Any] = Field(default_factory=dict)
+    window: str | None = None
+
+
+class AdminAnalyticsChartSeries(BaseModel):
+    name: str
+    data: list[float | int]
+
+
+class AdminAnalyticsChart(BaseModel):
+    type: str
+    title: str
+    labels: list[str]
+    series: list[AdminAnalyticsChartSeries]
+    y_axis_label: str | None = Field(default=None, alias="yAxisLabel")
+    x_axis_label: str | None = Field(default=None, alias="xAxisLabel")
+
+    model_config = {"populate_by_name": True}
+
+
+class AdminChatRequest(BaseModel):
+    message: str = Field(..., max_length=2000)
+    session_id: str | None = Field(None, alias="sessionId")
+    context: dict[str, Any]
+
+    model_config = {"populate_by_name": True}
+
+
 # ---------------------------------------------------------------------------
 # Extraction
 # ---------------------------------------------------------------------------
