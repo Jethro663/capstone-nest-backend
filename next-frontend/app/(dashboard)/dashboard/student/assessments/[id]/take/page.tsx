@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -12,15 +13,43 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StudentStatusChip } from '@/components/student/student-primitives';
-import { SharedAnswerInput, type SharedQuestionType } from '@/components/assessment/shared-answer-input';
-import { SharedQuestionNavigator } from '@/components/assessment/shared-question-navigator';
+import type { SharedQuestionType } from '@/components/assessment/shared-answer-input';
 import { toast } from 'sonner';
 import {
   getLatestReturnedAttempt,
   getSubmittedAttempts,
 } from '@/utils/student-assessment-routing';
 import type { Assessment, AssessmentQuestion, UpdateAttemptProgressDto } from '@/types/assessment';
+
+const StudentStatusChip = dynamic(
+  () =>
+    import('@/components/student/student-primitives').then(
+      (mod) => mod.StudentStatusChip,
+    ),
+  {
+    loading: () => <Skeleton className="h-6 w-24 rounded-full" />,
+  },
+);
+
+const SharedAnswerInput = dynamic(
+  () =>
+    import('@/components/assessment/shared-answer-input').then(
+      (mod) => mod.SharedAnswerInput,
+    ),
+  {
+    loading: () => <Skeleton className="h-40 w-full rounded-[1.75rem]" />,
+  },
+);
+
+const SharedQuestionNavigator = dynamic(
+  () =>
+    import('@/components/assessment/shared-question-navigator').then(
+      (mod) => mod.SharedQuestionNavigator,
+    ),
+  {
+    loading: () => <Skeleton className="h-16 w-full rounded-[1.75rem]" />,
+  },
+);
 
 export default function StudentAssessmentTakePage() {
   const params = useParams();

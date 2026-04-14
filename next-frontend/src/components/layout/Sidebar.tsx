@@ -217,18 +217,44 @@ export function Sidebar({
     : "U";
   const [teacherPendingInterventionCount, setTeacherPendingInterventionCount] =
     useState(0);
+  const teacherPendingCountCacheKey = user?.id
+    ? `nexora.teacherPendingInterventionCount:${user.id}`
+    : null;
 
   useEffect(() => {
     let mounted = true;
-    if (!isTeacherShell) return;
+    if (!isTeacherShell || !teacherPendingCountCacheKey) return;
+
+    if (typeof window !== 'undefined') {
+      const cachedValue = window.sessionStorage.getItem(
+        teacherPendingCountCacheKey,
+      );
+      if (cachedValue !== null) {
+        const parsedValue = Number(cachedValue);
+        if (Number.isFinite(parsedValue)) {
+          const frame = window.requestAnimationFrame(() => {
+            setTeacherPendingInterventionCount(Math.max(0, parsedValue));
+          });
+          return () => {
+            mounted = false;
+            window.cancelAnimationFrame(frame);
+          };
+        }
+      }
+    }
 
     void lxpService
       .getTeacherPendingInterventionCount()
       .then((response) => {
         if (!mounted) return;
-        setTeacherPendingInterventionCount(
-          Math.max(0, response.data.pendingCount ?? 0),
-        );
+        const pendingCount = Math.max(0, response.data.pendingCount ?? 0);
+        setTeacherPendingInterventionCount(pendingCount);
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(
+            teacherPendingCountCacheKey,
+            String(pendingCount),
+          );
+        }
       })
       .catch(() => {
         if (!mounted) return;
@@ -238,74 +264,7 @@ export function Sidebar({
     return () => {
       mounted = false;
     };
-  }, [isTeacherShell, user?.id]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    let cancelled = false;
-    const requestIdleCallback =
-      typeof window.requestIdleCallback === "function"
-        ? window.requestIdleCallback.bind(window)
-        : null;
-    const cancelIdleCallback =
-      typeof window.cancelIdleCallback === "function"
-        ? window.cancelIdleCallback.bind(window)
-        : null;
-    const warmTargets = Array.from(
-      new Set([
-        ...items.map((item) => item.href),
-        '/dashboard/notifications',
-      ]),
-    ).filter((href) => href !== pathname);
-
-    const warmRoute = async (href: string) => {
-      router.prefetch(href);
-
-      if (process.env.NODE_ENV !== 'development') return;
-
-      try {
-        await fetch(href, {
-          credentials: 'include',
-          cache: 'no-store',
-          headers: {
-            'x-nexora-route-warm': '1',
-          },
-        });
-      } catch {
-        // Background warmup is best-effort in development.
-      }
-    };
-
-    const warmRoutes = () => {
-      warmTargets.forEach((href, index) => {
-        window.setTimeout(() => {
-          if (cancelled) return;
-          void warmRoute(href);
-        }, index * 120);
-      });
-    };
-
-    if (requestIdleCallback && cancelIdleCallback) {
-      const idleHandle = requestIdleCallback(() => {
-        warmRoutes();
-      });
-
-      return () => {
-        cancelled = true;
-        cancelIdleCallback(idleHandle);
-      };
-    }
-
-    const fallbackHandle = window.setTimeout(() => {
-      warmRoutes();
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(fallbackHandle);
-    };
-  }, [items, pathname, router]);
+  }, [isTeacherShell, teacherPendingCountCacheKey]);
 
   const handleLogout = async () => {
     await logoutAction();

@@ -29,9 +29,6 @@ jest.mock('@/services/lxp-service', () => ({
 }));
 
 describe('Sidebar route warmup', () => {
-  const originalRequestIdleCallback = window.requestIdleCallback;
-  const originalCancelIdleCallback = window.cancelIdleCallback;
-
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
@@ -44,16 +41,6 @@ describe('Sidebar route warmup', () => {
         email: 'admin@lms.local',
       },
     });
-
-    window.requestIdleCallback = ((callback: IdleRequestCallback) => {
-      callback({
-        didTimeout: false,
-        timeRemaining: () => 50,
-      } as IdleDeadline);
-      return 1;
-    }) as typeof window.requestIdleCallback;
-
-    window.cancelIdleCallback = jest.fn();
   });
 
   afterEach(() => {
@@ -61,31 +48,12 @@ describe('Sidebar route warmup', () => {
     jest.useRealTimers();
   });
 
-  afterAll(() => {
-    window.requestIdleCallback = originalRequestIdleCallback;
-    window.cancelIdleCallback = originalCancelIdleCallback;
-  });
-
-  it('prefetches dashboard navigation targets in the background', async () => {
+  it('does not prefetch dashboard navigation targets on initial render', async () => {
     render(<Sidebar shellRole="admin" />);
-    jest.runAllTimers();
+    jest.advanceTimersByTime(1500);
 
     await waitFor(() => {
-      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/admin/diagnostics');
-      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/notifications');
-    });
-  });
-
-  it('falls back to timer warmup when requestIdleCallback is unavailable', async () => {
-    Reflect.deleteProperty(window, 'requestIdleCallback');
-    Reflect.deleteProperty(window, 'cancelIdleCallback');
-
-    render(<Sidebar shellRole="admin" />);
-    jest.advanceTimersByTime(1000);
-
-    await waitFor(() => {
-      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/admin/diagnostics');
-      expect(prefetchMock).toHaveBeenCalledWith('/dashboard/notifications');
+      expect(prefetchMock).not.toHaveBeenCalled();
     });
   });
 });

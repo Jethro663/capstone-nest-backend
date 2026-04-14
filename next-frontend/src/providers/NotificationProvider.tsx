@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
@@ -34,7 +33,7 @@ export function useNotifications() {
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuth();
-  const router = useRouter();
+  const sessionUserId = isAuthenticated ? user?.id ?? null : null;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -82,21 +81,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Fetch notifications when user is authenticated
   useEffect(() => {
-    if (isAuthenticated && user) {
-      fetchNotifications();
+    if (sessionUserId) {
+      void fetchNotifications();
     } else {
       setNotifications([]);
       setUnreadCount(0);
     }
-  }, [isAuthenticated, user, fetchNotifications]);
+  }, [fetchNotifications, sessionUserId]);
 
   // WebSocket connection
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!sessionUserId) return;
 
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || getFrontendApiOrigin();
     const token = getAccessToken();
     if (!token) return;
+    const activeUserId = sessionUserId;
 
     const socket = io(`${wsUrl}/notifications`, {
       auth: { token: `Bearer ${token}` },
@@ -120,7 +120,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }) => {
       const newNotification = normalizeNotification({
         id: payload.id,
-        userId: user.id,
+        userId: activeUserId,
         type: payload.type,
         title: payload.title,
         body: payload.body,
@@ -134,7 +134,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         description: payload.body,
         action: {
           label: 'View',
-          onClick: () => router.push('/dashboard/notifications'),
+          onClick: () => {
+            window.location.assign('/dashboard/notifications');
+          },
         },
       });
     });
@@ -153,7 +155,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated, router, user]);
+  }, [sessionUserId]);
 
   return (
     <NotificationContext.Provider

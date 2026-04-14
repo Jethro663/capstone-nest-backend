@@ -15,7 +15,7 @@ import {
 } from 'react';
 import { usePathname } from 'next/navigation';
 import { getCurrentUserAction } from '@/lib/auth-actions';
-import { setAccessToken } from '@/lib/api-client';
+import { getAccessToken, setAccessToken } from '@/lib/api-client';
 import {
   AUTH_ME_TIMEOUT_MS,
   shouldBootstrapAuth,
@@ -120,10 +120,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const runId = bootstrapRunIdRef.current + 1;
     bootstrapRunIdRef.current = runId;
+    const existingUser = latestUserRef.current;
+    const existingToken = getAccessToken();
 
     if (!shouldRefreshSession) {
-      setStatus(latestUserRef.current ? 'authenticated' : 'unauthenticated');
+      setStatus(existingUser ? 'authenticated' : 'unauthenticated');
       logBootstrap('bootstrap.skipped');
+      return;
+    }
+
+    if (existingUser && existingToken) {
+      setStatus('authenticated');
+      logBootstrap('bootstrap.reused-session', {
+        pathname: latestPathnameRef.current,
+      });
       return;
     }
 

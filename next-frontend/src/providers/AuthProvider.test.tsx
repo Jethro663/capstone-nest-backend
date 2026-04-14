@@ -7,6 +7,7 @@ import { AUTH_REFRESH_TIMEOUT_MS, shouldBootstrapAuth } from '@/lib/auth-bootstr
 const usePathnameMock = jest.fn();
 const getCurrentUserActionMock = jest.fn();
 const setAccessTokenMock = jest.fn();
+const getAccessTokenMock = jest.fn();
 
 jest.mock('axios', () => ({
   post: jest.fn(),
@@ -22,6 +23,7 @@ jest.mock('@/lib/auth-actions', () => ({
 
 jest.mock('@/lib/api-client', () => ({
   setAccessToken: (token: string | null) => setAccessTokenMock(token),
+  getAccessToken: () => getAccessTokenMock(),
 }));
 
 function AuthProbe({ children }: { children?: ReactNode }) {
@@ -51,6 +53,7 @@ describe('AuthProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getAccessTokenMock.mockReturnValue(null);
   });
 
   it('skips refresh bootstrap on public auth routes', async () => {
@@ -156,6 +159,7 @@ describe('AuthProvider', () => {
         },
       },
     } as never);
+    getAccessTokenMock.mockReturnValue('access-token');
     getCurrentUserActionMock.mockResolvedValue({
       success: true,
       user: {
@@ -179,6 +183,62 @@ describe('AuthProvider', () => {
 
     usePathnameMock.mockReturnValue('/dashboard/admin/diagnostics');
 
+    rerender(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh again when an authenticated session re-enters the dashboard from a public route', async () => {
+    usePathnameMock.mockReturnValue('/dashboard/admin');
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        data: {
+          accessToken: 'access-token',
+        },
+      },
+    } as never);
+    getAccessTokenMock.mockReturnValue('access-token');
+    getCurrentUserActionMock.mockResolvedValue({
+      success: true,
+      user: {
+        firstName: 'System',
+        lastName: 'Admin',
+        roles: ['admin'],
+      },
+    });
+
+    const { rerender } = render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated')).toHaveTextContent('yes');
+    });
+
+    expect(mockedAxios.post).toHaveBeenCalledTimes(1);
+
+    usePathnameMock.mockReturnValue('/login');
+    rerender(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+    });
+
+    usePathnameMock.mockReturnValue('/dashboard/admin/diagnostics');
     rerender(
       <AuthProvider>
         <AuthProbe />

@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import {
   useCallback,
   useEffect,
@@ -48,9 +49,6 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
-import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
-import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
-import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
@@ -61,6 +59,36 @@ import type { ClassRecord } from '@/types/class-record';
 import type { Extraction } from '@/types/extraction';
 import type { ClassModule } from '@/types/module';
 import './workspace.css';
+
+const RichTextEditor = dynamic(
+  () =>
+    import('@/components/shared/rich-text/RichTextEditor').then(
+      (mod) => mod.RichTextEditor,
+    ),
+  {
+    loading: () => <Skeleton className="h-48 w-full rounded-[1.75rem]" />,
+  },
+);
+
+const RichTextRenderer = dynamic(
+  () =>
+    import('@/components/shared/rich-text/RichTextRenderer').then(
+      (mod) => mod.RichTextRenderer,
+    ),
+  {
+    loading: () => <Skeleton className="h-24 w-full rounded-[1.75rem]" />,
+  },
+);
+
+const TeacherClassRecordWorkbook = dynamic(
+  () =>
+    import('@/components/teacher/class-record/TeacherClassRecordWorkbook').then(
+      (mod) => mod.TeacherClassRecordWorkbook,
+    ),
+  {
+    loading: () => <Skeleton className="h-[32rem] w-full rounded-[1.75rem]" />,
+  },
+);
 
 type WorkspaceTab = 'modules' | 'assignments' | 'extraction' | 'announcements' | 'class-record' | 'students' | 'calendar';
 type AssignmentFilter = 'all' | 'written' | 'performance' | 'quarterly' | 'discussion' | 'drafts';

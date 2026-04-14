@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack -p 3001",
+    "dev": "next dev -p 3001",
     "dev:smoke": "node scripts/dev-with-smoke.js",
     "dev:webpack": "next dev --webpack -p 3001",
     "dev:turbo": "next dev -p 3001",
     "perf:auth-smoke": "node scripts/auth-perf-smoke.js",
+    "perf:nav-smoke": "node scripts/nav-perf-smoke.js",
     "build": "next build",
     "start": "node scripts/start-standalone.js",
     "lint": "eslint",
