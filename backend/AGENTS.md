@@ -14,6 +14,7 @@ Scope: `backend/` only.
 - Dev: `npm run start:dev`
 - Build: `npm run build`
 - Lint: `npm run lint`
+- Seed smoke: `npm run seed:smoke`
 - Unit tests: `npm run test`
 - E2E: `npm run test:e2e`
 - Boot: `src/main.ts`
@@ -37,6 +38,7 @@ Scope: `backend/` only.
 - Respect `AUTH-1` and `AUTH-2`: JWT auth is global; role checks stay explicit; `@Public()` must be intentional.
 - Respect `VALID-1`: DTOs use `class-validator`; validation assumptions come from `src/main.ts`.
 - Respect `AUD-1`: writes to grades, enrollment, interventions, and similar academic surfaces should be auditable.
+- Use Serena first for symbol-aware backend discovery, reference tracing, and narrowing edits before broad text search.
 
 ## Change Workflow
 
@@ -45,7 +47,7 @@ Scope: `backend/` only.
 3. Keep business logic in the service and persistence in Drizzle calls through `DatabaseService`.
 4. Update `src/drizzle/schema/*` plus `drizzle/*` when the persistent model changes.
 5. Register feature wiring in `<feature>.module.ts`; only touch `AppModule` for top-level wiring.
-6. If the API contract changes, trace impact into `next-frontend` or `test-mobile`.
+6. If DTOs, schema, or the `success/message/data` envelope change, trace impact into `next-frontend`, `test-mobile`, and `ai-service` when those consumers are in play.
 
 ## Current Repo Anchors
 
@@ -66,6 +68,7 @@ Scope: `backend/` only.
 ## Verification
 
 - Prefer targeted specs under `src/modules/**/**/*.spec.ts`.
+- Run `npm run seed:smoke` after touching seeded auth, enrollment, grading, or other high-signal API flows that benefit from a fast sanity pass.
 - Run `npm run build` after structural backend edits.
 - Run `npm run lint` after TypeScript refactors.
 - Run `npm run test` and `npm run test:e2e` when behavior changes are broad or high risk.

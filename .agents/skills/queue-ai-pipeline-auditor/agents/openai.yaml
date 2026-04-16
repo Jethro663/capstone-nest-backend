@@ -1,0 +1,4 @@
+interface:
+  display_name: "Queue AI Pipeline Auditor"
+  short_description: "Audit BullMQ and backend-to-AI orchestration correctness"
+  default_prompt: "Use $queue-ai-pipeline-auditor to audit a BullMQ or AI pipeline flow in this repo."

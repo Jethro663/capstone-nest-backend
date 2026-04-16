@@ -1604,10 +1604,12 @@ async def run_extraction(
         pages = _extract_pdf_pages(doc)
         embedded_images = _extract_pdf_embedded_images(doc)
         raw_text = "\f".join(page["text"] for page in pages if page["text"])
-        vision_images = _render_pdf_pages_to_images(doc)
+        uses_vision_extraction = not raw_text or len(raw_text.strip()) < 20
+        vision_images: list[dict[str, str]] = []
+        if uses_vision_extraction:
+            vision_images = _render_pdf_pages_to_images(doc)
         doc.close()
 
-        uses_vision_extraction = not raw_text or len(raw_text.strip()) < 20
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
 

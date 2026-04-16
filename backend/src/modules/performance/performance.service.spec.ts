@@ -1,16 +1,27 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { sql } from 'drizzle-orm';
 import { PerformanceService } from './performance.service';
 import { DatabaseService } from '../../database/database.service';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
 
 function buildMockDb() {
+  const subqueryWhere = jest.fn((condition: any) => {
+    const query = sql`select 1`;
+    (query as any).__condition = condition;
+    return query;
+  });
+  const innerJoin = jest.fn().mockReturnValue({ where: subqueryWhere });
+  const from = jest.fn().mockReturnValue({ innerJoin });
+  const select = jest.fn().mockReturnValue({ from });
+
   return {
     query: {
       classes: { findFirst: jest.fn() },
       assessments: { findFirst: jest.fn() },
+      assessmentResponses: { findMany: jest.fn() },
       assessmentAttempts: { findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
       studentConceptMastery: { findMany: jest.fn() },
@@ -22,7 +33,36 @@ function buildMockDb() {
     },
     insert: jest.fn(),
     update: jest.fn(),
+    execute: jest.fn(),
+    select,
+    __subqueryWhere: subqueryWhere,
   };
+}
+
+function collectSqlParams(node: any): any[] {
+  const params: any[] = [];
+  const stack = [node];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') continue;
+
+    if (Array.isArray(current)) {
+      stack.push(...current);
+      continue;
+    }
+
+    if ('queryChunks' in current && Array.isArray(current.queryChunks)) {
+      stack.push(...current.queryChunks);
+      continue;
+    }
+
+    if ('value' in current && !Array.isArray(current.value)) {
+      params.push(current.value);
+    }
+  }
+
+  return params;
 }
 
 function mockInsertReturning(db: any, rows: any[]) {
@@ -237,6 +277,97 @@ describe('PerformanceService', () => {
     expect(summary.atRiskCount).toBe(1);
     expect(summary.averages.blended).toBe(70.5);
     expect(summary.students[0].studentId).toBe('student-2');
+  });
+
+  it('getClassSummary should bulk recompute missing snapshots before building rows', async () => {
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    db.query.enrollments.findMany.mockResolvedValue([
+      {
+        studentId: 'student-1',
+        student: {
+          firstName: 'Alice',
+          lastName: 'Lee',
+          email: 'alice@test.com',
+        },
+      },
+      {
+        studentId: 'student-2',
+        student: { firstName: 'Bob', lastName: 'Tan', email: 'bob@test.com' },
+      },
+    ]);
+    db.query.performanceSnapshots.findMany
+      .mockResolvedValueOnce([
+        {
+          studentId: 'student-1',
+          assessmentAverage: '80',
+          classRecordAverage: '78',
+          blendedScore: '79',
+          assessmentSampleSize: 3,
+          classRecordSampleSize: 5,
+          hasData: true,
+          isAtRisk: false,
+          thresholdApplied: '74',
+          lastComputedAt: new Date(),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          studentId: 'student-1',
+          assessmentAverage: '80',
+          classRecordAverage: '78',
+          blendedScore: '79',
+          assessmentSampleSize: 3,
+          classRecordSampleSize: 5,
+          hasData: true,
+          isAtRisk: false,
+          thresholdApplied: '74',
+          lastComputedAt: new Date(),
+        },
+        {
+          studentId: 'student-2',
+          assessmentAverage: '60',
+          classRecordAverage: '64',
+          blendedScore: '62',
+          assessmentSampleSize: 3,
+          classRecordSampleSize: 5,
+          hasData: true,
+          isAtRisk: true,
+          thresholdApplied: '74',
+          lastComputedAt: new Date(),
+        },
+      ]);
+
+    const bulkSpy = jest
+      .spyOn(service as any, 'recomputeStudentsForClass')
+      .mockResolvedValue({ recomputed: 1 });
+    const singleSpy = jest
+      .spyOn(service, 'recomputeStudent')
+      .mockResolvedValue({
+        id: 'snap-2',
+        studentId: 'student-2',
+        classId: 'class-1',
+        assessmentAverage: 60,
+        classRecordAverage: 64,
+        blendedScore: 62,
+        assessmentSampleSize: 3,
+        classRecordSampleSize: 5,
+        hasData: true,
+        isAtRisk: true,
+        thresholdApplied: 74,
+        lastComputedAt: new Date(),
+      } as any);
+
+    const summary = await service.getClassSummary('class-1', 'teacher-1', [
+      'teacher',
+    ]);
+
+    expect(bulkSpy).toHaveBeenCalledWith('class-1', ['student-2'], 'view_refresh');
+    expect(singleSpy).not.toHaveBeenCalled();
+    expect(summary.totalStudents).toBe(2);
+    expect(summary.atRiskCount).toBe(1);
   });
 
   it('getClassSummary should enforce teacher ownership', async () => {
@@ -462,5 +593,25 @@ describe('PerformanceService', () => {
     await expect(
       service.getAdminAnalytics('teacher-1', ['teacher']),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('buildPerformanceDiagnostics should scope the initial query to class and student filters', async () => {
+    db.query.assessmentResponses.findMany.mockResolvedValue([]);
+
+    await (service as any).buildPerformanceDiagnostics(
+      'class-1',
+      'student-1',
+      'Focus on algebra mistakes',
+    );
+
+    const queryArg = db.query.assessmentResponses.findMany.mock.calls[0][0];
+    const collectedParams = [
+      ...collectSqlParams(queryArg.where),
+      ...collectSqlParams(db.__subqueryWhere.mock.calls[0][0]),
+    ];
+
+    expect(collectedParams).toEqual(
+      expect.arrayContaining([false, true, 'class-1', 'student-1']),
+    );
   });
 });

@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.extraction_pipeline import (
     _attach_images_to_sections,
     _derive_section_assessment_draft,
     _detect_structure_with_rules,
     _merge_structured_chunks,
+    run_extraction,
 )
 from app.pdf_chunker import TextChunk
 
@@ -224,6 +226,51 @@ class ExtractionPipelineTests(unittest.TestCase):
             return
         self.assertIsNone(draft["questions"][0]["imageUrl"])
         self.assertEqual(draft["questions"][1]["imageUrl"], "data:image/png;base64,ZmFrZQ==")
+
+
+class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_run_extraction_skips_page_rendering_for_text_rich_pdf(self) -> None:
+        db = MagicMock()
+        upload_row = MagicMock()
+        upload_row.mappings.return_value.first.return_value = {
+            "file_path": "uploads/test.pdf",
+            "original_name": "Biology.pdf",
+        }
+        db.execute = AsyncMock(return_value=upload_row)
+        db.commit = AsyncMock()
+
+        doc = MagicMock()
+
+        with (
+            patch("app.extraction_pipeline._update_extraction", new=AsyncMock()),
+            patch("app.extraction_pipeline.resolve_uploaded_file_path", return_value="uploads/test.pdf"),
+            patch("app.extraction_pipeline.os.path.exists", return_value=True),
+            patch("app.extraction_pipeline.fitz.open", return_value=doc),
+            patch(
+                "app.extraction_pipeline._extract_pdf_pages",
+                return_value=[
+                    {
+                        "pageNumber": 1,
+                        "text": "This PDF already has enough extractable text for the text-first path.",
+                        "charCount": 68,
+                    }
+                ],
+            ),
+            patch("app.extraction_pipeline._extract_pdf_embedded_images", return_value=[]),
+            patch("app.extraction_pipeline._render_pdf_pages_to_images") as render_pages,
+            patch(
+                "app.extraction_pipeline.ollama_client.is_available",
+                new=AsyncMock(return_value={"available": False}),
+            ),
+            patch(
+                "app.extraction_pipeline.sanitize_extracted_text",
+                side_effect=RuntimeError("stop-after-branch-selection"),
+            ),
+        ):
+            await run_extraction(db, "extract-1", "file-1", "user-1")
+
+        render_pages.assert_not_called()
+        doc.close.assert_called_once()
 
 
 if __name__ == "__main__":

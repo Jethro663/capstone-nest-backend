@@ -1,0 +1,168 @@
+{
+  "runMeta": {
+    "date": "2026-04-16",
+    "repo": "capstone-nest-react-lms",
+    "backendRoot": "backend",
+    "aiRoot": "ai-service"
+  },
+  "baselineFindings": [
+    "Inventory captured for all 31 backend modules and 22 ai-service app files via .agents/skills/backend-ai-performance-remediator/scripts/discover_targets.py.",
+    "Backend baseline: `npm run build` passed in approximately 51s.",
+    "Backend baseline: non-mutating `npx eslint \"{src,apps,libs,test}/**/*.ts\"` failed in approximately 67s with substantial pre-existing type-safety and test-mock lint debt, so lint is not a clean regression gate for this audit run.",
+    "AI baseline: `python scripts/run_tests.py` passed 35 tests in 0.681s.",
+    "AI baseline: `python -c \"from app.main import app; print(app.title)\"` passed and reported `Nexora AI Service`."
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "backend",
+      "files": [
+        "backend/src/modules/performance/performance.service.ts"
+      ],
+      "title": "Performance diagnostics read the global incorrect-response table then filter in memory",
+      "category": "overfetching",
+      "rationale": "The diagnostics path is on a teacher-facing request surface and currently pays database and heap cost proportional to all incorrect responses, not just the requested class or student.",
+      "evidence": "In `buildPerformanceDiagnostics`, the query at lines 805-840 fetches every `assessmentResponses` row where `isCorrect = false`, then lines 842-848 discard rows whose attempt does not match the target class or optional student.",
+      "expectedImpact": "Reducing the query to the target class and student should materially lower diagnostics latency and memory pressure as response history grows.",
+      "verificationTarget": "Targeted performance service diagnostics coverage plus backend build; compare diagnostics latency on a populated class.",
+      "status": "fixed"
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "backend",
+      "files": [
+        "backend/src/modules/performance/performance.service.ts"
+      ],
+      "title": "Class summary serializes missing snapshot recomputation on the read path",
+      "category": "serialized-awaits",
+      "rationale": "Cold or partially-populated performance summaries slow down linearly with class size because each missing snapshot is recomputed one after another before the summary can return.",
+      "evidence": "Lines 483-530 in `buildClassRows` loop over every enrolled student and await `recomputeStudent` sequentially for missing snapshots; `getClassSummary` calls this method directly at lines 596-598. The same service already has a parallel helper in lines 427-439 (`recomputeStudentsForClass`) that uses `Promise.all`.",
+      "expectedImpact": "Reusing bounded parallel recomputation or a batched preload path should reduce cold-summary latency for larger classes without changing the snapshot contract.",
+      "verificationTarget": "Performance service summary specs plus backend build; approximate before-vs-after timing on a class with many missing snapshots.",
+      "status": "fixed"
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "ai-service",
+      "files": [
+        "ai-service/app/extraction_pipeline.py"
+      ],
+      "title": "Extraction renders vision images for every PDF before deciding whether vision extraction is needed",
+      "category": "unnecessary-recomputation",
+      "rationale": "Rendering page images is one of the heaviest extraction steps, but it runs even for text-rich PDFs that never enter the vision branch.",
+      "evidence": "Lines 1603-1607 open the PDF, extract pages and embedded images, then call `_render_pdf_pages_to_images(doc)` unconditionally. The rendered `vision_images` are only consumed inside the `if uses_vision_extraction:` branch beginning at line 1618.",
+      "expectedImpact": "Deferring page-image rendering until the vision branch should lower extraction CPU, memory use, and wall-clock time for the common text-first path.",
+      "verificationTarget": "Extraction pipeline tests plus AI import/startup sanity; compare approximate extraction time on a text-rich PDF.",
+      "status": "fixed"
+    },
+    {
+      "priority": "P2",
+      "severity": "high",
+      "subsystem": "backend",
+      "files": [
+        "backend/src/modules/performance/performance.service.ts"
+      ],
+      "title": "Diagnostics fan out into per-concept reads and per-student mastery upserts",
+      "category": "redundant-queries",
+      "rationale": "After the initial diagnostics read, the service issues extra SQL inside loops for each top concept and again for each student-concept pair, which scales poorly on classes with broad mistake distributions.",
+      "evidence": "Lines 917-926 execute a `content_chunks` lookup once per concept in `conceptsSorted`, and lines 945-971 perform nested `INSERT ... ON CONFLICT` writes to `student_concept_mastery` for every student/concept combination.",
+      "expectedImpact": "Batching evidence lookups and mastery writes would reduce query chatter and make the diagnostics path less sensitive to class size and concept cardinality.",
+      "verificationTarget": "Targeted diagnostics tests plus backend build; inspect query count on a seeded diagnostics run.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "high",
+      "subsystem": "ai-service",
+      "files": [
+        "ai-service/app/main.py",
+        "ai-service/app/indexing_pipeline.py",
+        "ai-service/app/library_indexing_pipeline.py",
+        "ai-service/app/quiz_generation_service.py"
+      ],
+      "title": "Extraction and indexing flows perform large row-by-row writes and synchronous reindex work before returning",
+      "category": "blocking-request-path",
+      "rationale": "Teacher and internal indexing flows spend most of their time in repeated single-row inserts and then wait for a full class reindex synchronously, which increases tail latency and holds database sessions open for long stretches.",
+      "evidence": "In `apply_extraction`, lines 2922-2939 insert lesson blocks one row at a time, lines 3019-3072 insert each assessment question one at a time, lines 3075-3101 insert options one at a time, and line 3134 waits for `reindex_class_content` before responding. `reindex_class_content` in `indexing_pipeline.py` inserts every content chunk one-by-one at lines 470-477, and `index_library_file` in `library_indexing_pipeline.py` does the same for library chunks at lines 187-209. `quiz_generation_service.py` repeats the row-by-row question and option inserts at lines 548-608.",
+      "expectedImpact": "Using executemany-style inserts or SQLAlchemy bulk execution and moving the post-apply reindex behind a job boundary would shrink request latency and database round trips.",
+      "verificationTarget": "Extraction/indexing targeted tests plus AI import/startup sanity; compare approximate apply-extraction and reindex durations on a representative payload.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "ai-service",
+      "files": [
+        "ai-service/app/main.py",
+        "ai-service/app/indexing_pipeline.py",
+        "ai-service/app/library_indexing_pipeline.py"
+      ],
+      "title": "Backfill indexing paths serialize whole workloads and repeat chunk construction",
+      "category": "maintenance-flow-waste",
+      "rationale": "Administrative backfills are forced through single-item loops, and class reindexing rebuilds the same chunk collections twice just to compute count metadata.",
+      "evidence": "`/internal/index/backfill` loops over every class and awaits `reindex_class_content` sequentially at lines 2137-2140 in `main.py`. `backfill_library_files` does the same for every uploaded file at lines 328-331 in `library_indexing_pipeline.py`. Inside `reindex_class_content`, lines 444-448 build lesson, extraction, and question chunks, then lines 464-466 call the same chunk builders again just to derive counts before embedding.",
+      "expectedImpact": "Caching per-run chunk lists and adding bounded concurrency to maintenance-only backfills would reduce administrative wall-clock time without changing public contracts.",
+      "verificationTarget": "Internal indexing route smoke checks plus AI import/startup sanity; compare approximate backfill duration on a multi-class dataset.",
+      "status": "candidate"
+    }
+  ],
+  "plan": {
+    "safeImmediateFixes": [
+      "Push `buildPerformanceDiagnostics` filtering into the initial incorrect-response query so only the target class and optional student are loaded.",
+      "Replace `buildClassRows` sequential snapshot recomputation with the existing bounded parallel recompute helper or a batched preload path.",
+      "Move `_render_pdf_pages_to_images(doc)` behind the `uses_vision_extraction` check in `extraction_pipeline.py`.",
+      "Stop rebuilding lesson/extraction/question chunk lists twice inside `reindex_class_content`; reuse the first computed lists for counts.",
+      "Batch `content_chunks`, `lesson_content_blocks`, `assessment_questions`, `assessment_question_options`, and `student_concept_mastery` writes where shapes are already normalized."
+    ],
+    "conditionalRefactors": [
+      "Shift synchronous extraction reindexing onto the existing AI job/runtime pattern so long-running indexing work stops blocking teacher-facing HTTP responses.",
+      "Replace per-concept evidence lookups in backend diagnostics with one broader read plus in-memory grouping or a dedicated SQL aggregation query."
+    ],
+    "deferredItems": [
+      "Any schema-level indexing or full-text-search strategy for `content_chunks.chunk_text` should be decided explicitly because it affects persistence and operations policy.",
+      "Broader decomposition of `ai-service/app/main.py` into route families and service modules would improve extension safety, but it is larger than a bounded performance pass."
+    ]
+  },
+  "changesMade": [
+    "Scoped backend performance diagnostics at the initial `assessmentResponses` read by constraining `attemptId` through a submitted-attempt subquery joined to the target class and optional student.",
+    "Changed backend class-summary row assembly to bulk recompute missing snapshots with `recomputeStudentsForClass` and then re-read persisted snapshots instead of serial per-student recomputes on the response path.",
+    "Changed AI extraction to render PDF page images only when the vision extraction branch is actually selected for low-text PDFs.",
+    "Added backend regression tests for diagnostics query scoping and bulk snapshot recomputation, plus an AI extraction runtime regression test proving text-rich PDFs skip page rendering."
+  ],
+  "verification": [
+    "Inventory: `python .agents/skills/backend-ai-performance-remediator/scripts/discover_targets.py`",
+    "Backend baseline: `npm run build`",
+    "Backend baseline: `npx eslint \"{src,apps,libs,test}/**/*.ts\"`",
+    "AI baseline: `python scripts/run_tests.py`",
+    "AI baseline: `python -c \"from app.main import app; print(app.title)\"`",
+    "Static hotspot scan: oversized-file, loop-plus-await, and call-site searches via `rg` and targeted file reads",
+    "Backend targeted verification after edits: `npm test -- performance.service.spec.ts`",
+    "Backend structural verification after edits: `npm run build`",
+    "AI targeted verification after edits: `python -m unittest ai-service.tests.test_extraction_pipeline`",
+    "AI structural verification after edits: `python scripts/run_tests.py`",
+    "AI import/startup verification after edits: `python -c \"from app.main import app; print(app.title)\"`"
+  ],
+  "comparison": {
+    "improved": [
+      "Performance diagnostics no longer start from the global incorrect-response set; the initial backend read is now constrained to submitted attempts in the requested class and optional student scope.",
+      "Cold class summaries no longer recompute missing snapshots one-by-one inside `buildClassRows`; they reuse the existing bulk recompute helper and then read the refreshed snapshot set.",
+      "Text-rich PDF extractions no longer pay the cost of page-image rendering before the pipeline decides whether the vision branch is needed."
+    ],
+    "unchanged": [
+      "Backend build remained green and AI tests/import remained green.",
+      "Backend lint remains noisy due to existing unrelated violations, so post-fix verification should favor build plus targeted tests unless lint debt is cleaned first."
+    ],
+    "remainingRisks": [
+      "The heaviest backend and AI orchestration files remain large and will continue to attract duplicate logic until some flows are split out behind narrower helpers.",
+      "Because no benchmark harness exists for these routes, several impacts are reasoned from query shape and control flow rather than measured with a dedicated latency suite."
+    ]
+  },
+  "secondPassCleanCheck": [
+    "Re-scanned the touched backend and AI files plus their direct regression tests after verification: `performance.service.ts`, `performance.service.spec.ts`, `extraction_pipeline.py`, and `test_extraction_pipeline.py`.",
+    "Confirmed the implemented fixes stay within existing contracts: controller/service boundaries are unchanged, response envelopes are unchanged, and no official academic-record write path or auth surface was broadened.",
+    "Confirmed the new backend query scope and bulk snapshot refresh do not move the original work elsewhere on the same request path, and the AI extraction guard simply defers an expensive step until the existing vision branch is chosen."
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Contract Change Orchestrator"
+  short_description: "Trace schema and API contract changes across all consumers"
+  default_prompt: "Use $contract-change-orchestrator to update a backend contract and keep web, mobile, and AI consumers aligned in this repo."

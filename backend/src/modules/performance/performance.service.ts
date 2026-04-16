@@ -488,52 +488,35 @@ export class PerformanceService {
 
     const studentIds = enrolledStudents.map((entry) => entry.studentId);
 
-    const existingSnapshots = await this.db.query.performanceSnapshots.findMany(
-      {
+    let snapshots = await this.db.query.performanceSnapshots.findMany({
+      where: and(
+        eq(performanceSnapshots.classId, classId),
+        inArray(performanceSnapshots.studentId, studentIds),
+      ),
+    });
+
+    const missingStudentIds = studentIds.filter(
+      (studentId) =>
+        !snapshots.some((snapshot) => snapshot.studentId === studentId),
+    );
+
+    if (missingStudentIds.length > 0) {
+      await this.recomputeStudentsForClass(
+        classId,
+        missingStudentIds,
+        'view_refresh',
+      );
+      snapshots = await this.db.query.performanceSnapshots.findMany({
         where: and(
           eq(performanceSnapshots.classId, classId),
           inArray(performanceSnapshots.studentId, studentIds),
         ),
-      },
-    );
-
-    const snapshotByStudent = new Map(
-      existingSnapshots.map((snapshot) => [snapshot.studentId, snapshot]),
-    );
-
-    for (const studentId of studentIds) {
-      if (snapshotByStudent.has(studentId)) continue;
-      const recomputed = await this.recomputeStudent(
-        classId,
-        studentId,
-        'view_refresh',
-      );
-      snapshotByStudent.set(studentId, {
-        id: recomputed.id,
-        classId,
-        studentId,
-        assessmentAverage:
-          recomputed.assessmentAverage !== null
-            ? recomputed.assessmentAverage.toString()
-            : null,
-        classRecordAverage:
-          recomputed.classRecordAverage !== null
-            ? recomputed.classRecordAverage.toString()
-            : null,
-        blendedScore:
-          recomputed.blendedScore !== null
-            ? recomputed.blendedScore.toString()
-            : null,
-        assessmentSampleSize: recomputed.assessmentSampleSize,
-        classRecordSampleSize: recomputed.classRecordSampleSize,
-        hasData: recomputed.hasData,
-        isAtRisk: recomputed.isAtRisk,
-        thresholdApplied: recomputed.thresholdApplied.toString(),
-        lastComputedAt: recomputed.lastComputedAt,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       });
     }
+
+    const snapshotByStudent = new Map(
+      snapshots.map((snapshot) => [snapshot.studentId, snapshot]),
+    );
 
     const rows = enrolledStudents.map((entry) => {
       const snapshot = snapshotByStudent.get(entry.studentId);
@@ -804,7 +787,28 @@ export class PerformanceService {
   ) {
     const incorrectResponses = await this.db.query.assessmentResponses.findMany(
       {
-        where: eq(assessmentResponses.isCorrect, false),
+        where: and(
+          eq(assessmentResponses.isCorrect, false),
+          inArray(
+            assessmentResponses.attemptId,
+            this.db
+              .select({ id: assessmentAttempts.id })
+              .from(assessmentAttempts)
+              .innerJoin(
+                assessments,
+                eq(assessmentAttempts.assessmentId, assessments.id),
+              )
+              .where(
+                and(
+                  eq(assessmentAttempts.isSubmitted, true),
+                  eq(assessments.classId, classId),
+                  studentId
+                    ? eq(assessmentAttempts.studentId, studentId)
+                    : undefined,
+                ),
+              ),
+          ),
+        ),
         with: {
           attempt: {
             columns: {
@@ -839,13 +843,9 @@ export class PerformanceService {
       },
     );
 
-    const filteredMistakes = incorrectResponses.filter((response) => {
-      const attempt = response.attempt;
-      if (!attempt?.isSubmitted) return false;
-      if (attempt.assessment?.classId !== classId) return false;
-      if (studentId && attempt.studentId !== studentId) return false;
-      return true;
-    });
+    const filteredMistakes = incorrectResponses.filter(
+      (response) => response.attempt?.assessment && response.question,
+    );
 
     const conceptMap = new Map<
       string,

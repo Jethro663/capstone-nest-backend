@@ -13,9 +13,12 @@ This is the default mobile target for generic Nexora mobile work.
 - Install: `npm install`
 - Start Expo: `npm run start`
 - Android: `npm run android`
+- Android emulator: `npm run android:emulator`
+- Android emulator clean start: `npm run android:emulator:clean`
 - iOS: `npm run ios`
 - Web: `npm run web`
 - Typecheck: `npm run typecheck`
+- Tests: `npm run test`
 - App boot: `App.tsx`
 - Root composition: `src/bootstrap/AppRoot.tsx`
 
@@ -36,6 +39,7 @@ This is the default mobile target for generic Nexora mobile work.
 - Tokens live in secure storage; do not assume web cookie behavior here.
 - Keep `src/types/*`, `src/api/services/*`, and screen expectations aligned with backend contracts.
 - Prefer React Query hooks and shared theme tokens over one-off fetch or styling patterns.
+- Use Serena first for navigation, service, and type ownership discovery before broad file dumping.
 
 ## Do Not Break
 
@@ -48,6 +52,8 @@ This is the default mobile target for generic Nexora mobile work.
 ## Verification
 
 - Required: `npm run typecheck`
+- Run `npm run test` for touched React Native logic and screen behavior that already has Jest coverage.
 - Run Expo after navigation, auth bootstrap, or API-config changes.
+- Prefer `npm run android:emulator` for Android-specific auth, storage, or deep-link issues; use `npm run android:emulator:clean` when port `8081` is wedged.
 - Verify login, refresh, logout, and one data-backed student flow after auth or API edits.
 - Recheck route params and query invalidation after screen or mutation changes.

@@ -11,9 +11,12 @@ Scope: `next-frontend/` only.
 
 - Install: `npm install`
 - Dev: `npm run dev`
+- Dev smoke: `npm run dev:smoke`
+- Perf smokes: `npm run perf:auth-smoke`, `npm run perf:nav-smoke`, `npm run perf:discussion-smoke`
 - Build: `npm run build`
 - Lint: `npm run lint`
 - Tests: `npm run test`
+- E2E: `npm run test:e2e`
 - Root layout: `app/layout.tsx`
 - Protected shell: `app/(dashboard)/layout.tsx`
 - Middleware: `middleware.ts`
@@ -37,6 +40,8 @@ Scope: `next-frontend/` only.
 - Web auth uses refresh-token cookies plus an in-memory access token in `src/lib/api-client.ts`; never manually write cookies.
 - Keep route and auth gating aligned across `middleware.ts`, `app/(dashboard)/layout.tsx`, and `src/providers/AuthProvider.tsx`.
 - Preserve role route conventions under `/dashboard/student`, `/dashboard/teacher`, `/dashboard/admin`.
+- Use Serena first for route discovery, ownership lookup, and symbol-aware inspection before broad file dumping.
+- Use Playwright for browser reproduction, auth flow checks, and UI evidence when the task depends on runtime web behavior.
 
 ## Change Workflow
 
@@ -45,6 +50,7 @@ Scope: `next-frontend/` only.
 3. If the change is form-driven, align `src/schemas/*`, component props, and submit payload together.
 4. If auth or session behavior changes, trace `src/providers/AuthProvider.tsx`, `src/lib/auth-actions.ts`, `src/lib/auth-service.ts`, and `src/lib/api-client.ts`.
 5. If route gating changes, check both middleware and the protected layout.
+6. If the frontend contract or dashboard behavior changes, pick the smallest repo-native smoke or perf script that exercises the affected path before broadening verification.
 
 ## Do Not Break
 
@@ -58,5 +64,8 @@ Scope: `next-frontend/` only.
 
 - Run `npm run build` or at minimum `npm run lint` after TS, route, or service changes.
 - Run `npm run test` for touched Jest-covered areas.
+- Run `npm run dev:smoke` for route, app-shell, or API wiring changes that should survive a real dev boot.
+- Use `npm run perf:auth-smoke`, `npm run perf:nav-smoke`, or `npm run perf:discussion-smoke` when the touched path matches those flows.
+- Run `npm run test:e2e` for browser-level regressions or route transitions that unit tests will not prove.
 - Manually verify login, refresh, logout, and one protected dashboard path after auth/client changes.
 - Recheck theme switching after shell or `globals.css` changes.

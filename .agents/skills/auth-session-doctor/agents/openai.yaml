@@ -1,0 +1,4 @@
+interface:
+  display_name: "Auth Session Doctor"
+  short_description: "Diagnose login, refresh, cookie, and session-loop issues"
+  default_prompt: "Use $auth-session-doctor to fix a refresh-token or session bug across backend and client flows in this repo."

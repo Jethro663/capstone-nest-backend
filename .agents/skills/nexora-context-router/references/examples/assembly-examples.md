@@ -1,5 +1,47 @@
 # Assembly Examples
 
+## Fix a Refresh Loop in Student Dashboard
+
+- Include: kernel, `auth-session-doctor`, frontend, backend, security
+- Optional: debugging and testing
+- Exclude by default: ai-service, unrelated slices
+
+## Add an Assessment Column and Wire It to Mobile
+
+- Include: kernel, `contract-change-orchestrator`, backend, schema, `test-mobile`
+- Optional: `next-frontend` if the shared API contract also feeds web, plus testing and security as needed
+- Exclude by default: unrelated slices
+
+## Docker Compose Starts but AI Service Is Unhealthy
+
+- Include: kernel, `dev-stack-doctor`, backend, ai-service
+- Optional: next-frontend or `test-mobile` only if the failure symptom names them
+- Exclude by default: unrelated slices
+
+## Run the Safest Checks After Changing Submission Flow
+
+- Include: kernel, `workflow-smoke-orchestrator`, affected slice, testing
+- Optional: security when auth or data exposure is involved
+- Exclude by default: unrelated slices
+
+## Audit Student Mobile Login and Navigation
+
+- Include: kernel, `mobile-flow-auditor`, `test-mobile`, backend, testing
+- Optional: security for refresh or secure-storage symptoms
+- Exclude by default: `mobile/`, `betamochi/`, unrelated slices
+
+## Optimize Backend and AI Latency
+
+- Include: kernel, `backend-ai-performance-remediator`, backend, ai-service
+- Optional: schema, security, testing when the hotspot crosses those boundaries
+- Exclude by default: frontend, mobile
+
+## Fix Stale Agent Docs or Wrong Commands
+
+- Include: kernel, affected slice docs
+- Optional: testing, schema, or security refs only when validating the drift
+- Exclude by default: unrelated subsystem slices
+
 ## Add a NestJS Endpoint
 
 - Include: kernel, backend, security

@@ -12,7 +12,8 @@ Scope: `ai-service/` only.
 
 - Install: `pip install -r requirements.txt`
 - Dev server: `uvicorn app.main:app --reload --port 8000`
-- Tests: `python -m unittest ai-service.tests.test_student_tutor_service`
+- Tests: `python scripts/run_tests.py`
+- Eval suite: `python scripts/run_eval_suite.py`
 - App entry: `app/main.py`
 - Config: `app/config.py`
 - Schemas: `app/schemas.py`
@@ -35,6 +36,7 @@ Scope: `ai-service/` only.
 - Respect `AI-3`: AI logs and AI-generated state stay separate from official academic records.
 - Respect `RESP-1`: preserve the backend-compatible envelope.
 - Header contract with backend proxy is part of the API: `X-User-Id`, `X-User-Email`, `X-User-Roles`, optional `X-Internal-Service-Token`.
+- Use Serena first for symbol-aware service, route, and reference discovery before broad file reads.
 
 ## Change Workflow
 
@@ -53,7 +55,8 @@ Scope: `ai-service/` only.
 
 ## Verification
 
-- Run targeted Python tests in `tests/`.
+- Run `python scripts/run_tests.py` as the default verification entrypoint.
+- Use `python scripts/run_eval_suite.py` when prompt or model behavior changes warrant a deeper AI-specific pass.
 - At minimum verify the import/start path with `uvicorn app.main:app --reload --port 8000`.
 - Recheck env usage after `app/config.py` changes.
 - Verify backend proxy compatibility whenever an endpoint path, header, or envelope field changes.
