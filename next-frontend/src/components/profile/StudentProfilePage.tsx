@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import {
   AlertTriangle,
   GraduationCap,
@@ -48,6 +48,46 @@ type StudentProfileForm = {
   profilePicture: string;
 };
 
+const FIELD_LIMITS = {
+  phone: 13,
+  address: 180,
+  familyName: 80,
+  familyContact: 13,
+} as const;
+
+const NAME_LIKE_REGEX = /^[a-zA-Z\s.'-]*$/;
+
+function sanitizePhoneInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const hasPlusPrefix = trimmed.startsWith('+');
+  const body = trimmed.replace(/[^\d]/g, '');
+  const normalized = hasPlusPrefix ? `+${body}` : body;
+  return normalized.slice(0, FIELD_LIMITS.phone);
+}
+
+function sanitizeNameLikeInput(value: string, maxLength: number) {
+  return value.replace(/[^a-zA-Z\s.'-]/g, '').slice(0, maxLength);
+}
+
+function sanitizeAddressInput(value: string) {
+  return value.replace(/\s+/g, ' ').slice(0, FIELD_LIMITS.address);
+}
+
+function getInlineFieldError(form: StudentProfileForm) {
+  const errors: Partial<Record<keyof StudentProfileForm, string>> = {};
+  if (form.familyName && !NAME_LIKE_REGEX.test(form.familyName)) {
+    errors.familyName = 'Guardian name can only use letters and basic punctuation.';
+  }
+  if (form.phone && !normalizePhilippinePhone(form.phone)) {
+    errors.phone = 'Use 09XXXXXXXXX or +639XXXXXXXXX.';
+  }
+  if (form.familyContact && !normalizePhilippinePhone(form.familyContact)) {
+    errors.familyContact = 'Use 09XXXXXXXXX or +639XXXXXXXXX.';
+  }
+  return errors;
+}
+
 function toDateInputValue(value: string | null | undefined): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
@@ -84,6 +124,7 @@ export default function StudentProfilePage() {
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [missingDialogOpen, setMissingDialogOpen] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const inlineErrors = useMemo(() => getInlineFieldError(form), [form]);
 
   useEffect(() => {
     let mounted = true;
@@ -150,7 +191,15 @@ export default function StudentProfilePage() {
   const isComplete = missingRequiredFields.length === 0;
 
   const handleFieldChange = (field: keyof StudentProfileForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    let nextValue = value;
+    if (field === 'phone' || field === 'familyContact') {
+      nextValue = sanitizePhoneInput(value);
+    } else if (field === 'familyName') {
+      nextValue = sanitizeNameLikeInput(value, FIELD_LIMITS.familyName);
+    } else if (field === 'address') {
+      nextValue = sanitizeAddressInput(value);
+    }
+    setForm((current) => ({ ...current, [field]: nextValue }));
   };
 
   const handleChooseAvatar = () => {
@@ -390,7 +439,10 @@ export default function StudentProfilePage() {
                     onChange={(event) => handleFieldChange('phone', event.target.value)}
                     disabled={isLocked}
                     placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                    maxLength={FIELD_LIMITS.phone}
+                    inputMode="tel"
                   />
+                  {inlineErrors.phone ? <p className="text-xs text-rose-600">{inlineErrors.phone}</p> : null}
                 </ProfileField>
                 <ProfileField label="Home Address" icon={MapPin}>
                   <Input
@@ -398,6 +450,7 @@ export default function StudentProfilePage() {
                     value={form.address}
                     onChange={(event) => handleFieldChange('address', event.target.value)}
                     disabled={isLocked}
+                    maxLength={FIELD_LIMITS.address}
                   />
                 </ProfileField>
               </div>
@@ -412,7 +465,9 @@ export default function StudentProfilePage() {
                     value={form.familyName}
                     onChange={(event) => handleFieldChange('familyName', event.target.value)}
                     disabled={isLocked}
+                    maxLength={FIELD_LIMITS.familyName}
                   />
+                  {inlineErrors.familyName ? <p className="text-xs text-rose-600">{inlineErrors.familyName}</p> : null}
                 </ProfileField>
                 <ProfileField label="Relationship" icon={UserRound}>
                   <select
@@ -436,7 +491,10 @@ export default function StudentProfilePage() {
                     onChange={(event) => handleFieldChange('familyContact', event.target.value)}
                     disabled={isLocked}
                     placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                    maxLength={FIELD_LIMITS.familyContact}
+                    inputMode="tel"
                   />
+                  {inlineErrors.familyContact ? <p className="text-xs text-rose-600">{inlineErrors.familyContact}</p> : null}
                 </ProfileField>
               </div>
             </div>
@@ -491,6 +549,22 @@ export default function StudentProfilePage() {
                 Your profile information is visible to administrators and relevant staff to support
                 official school records.
               </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push('/dashboard/student/transcript')}
+                >
+                  View Transcript
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push('/dashboard/student/assessment-history')}
+                >
+                  Assessment History
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </section>

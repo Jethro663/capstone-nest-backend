@@ -71,6 +71,34 @@ export class ClassesController {
   constructor(private classesService: ClassesService) {}
 
   /**
+   * Backward-compatible classes listing endpoint.
+   * Some legacy clients still call GET /classes.
+   */
+  @Get()
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getAllClassesLegacy(
+    @Query('subjectId') subjectId?: string,
+    @Query('sectionId') sectionId?: string,
+    @Query('teacherId') teacherId?: string,
+    @Query('schoolYear') schoolYear?: string,
+    @Query('isActive') isActive?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.getAllClasses(
+      subjectId,
+      sectionId,
+      teacherId,
+      schoolYear,
+      isActive,
+      search,
+      page,
+      limit,
+    );
+  }
+
+  /**
    * Get all classes with optional filters
    * Admin and Teacher can access
    */
@@ -229,12 +257,13 @@ export class ClassesController {
     @Body() dto: UpdateStudentClassPresentationDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.classesService.updateStudentClassPresentationPreference(
-      id,
-      user?.userId,
-      user?.roles ?? [],
-      dto,
-    );
+    const data =
+      await this.classesService.updateStudentClassPresentationPreference(
+        id,
+        user?.userId,
+        user?.roles ?? [],
+        dto,
+      );
 
     return {
       success: true,
@@ -288,8 +317,12 @@ export class ClassesController {
    */
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getClassById(@Param('id') id: string) {
-    const classRecord = await this.classesService.findById(id);
+  async getClassById(@Param('id') id: string, @CurrentUser() user: any) {
+    const classRecord = await this.classesService.findById(
+      id,
+      user?.userId,
+      user?.roles,
+    );
 
     return {
       success: true,
@@ -305,8 +338,15 @@ export class ClassesController {
   @Post()
   @Roles(RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
-  async createClass(@Body() createClassDto: CreateClassDto) {
-    const newClass = await this.classesService.create(createClassDto);
+  async createClass(
+    @Body() createClassDto: CreateClassDto,
+    @CurrentUser() user: any,
+  ) {
+    const newClass = await this.classesService.create(
+      createClassDto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -324,8 +364,14 @@ export class ClassesController {
   async updateClass(
     @Param('id') id: string,
     @Body() updateClassDto: UpdateClassDto,
+    @CurrentUser() user: any,
   ) {
-    const updatedClass = await this.classesService.update(id, updateClassDto);
+    const updatedClass = await this.classesService.update(
+      id,
+      updateClassDto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -395,8 +441,12 @@ export class ClassesController {
    */
   @Put(':id/toggle-status')
   @Roles(RoleName.Admin)
-  async toggleClassStatus(@Param('id') id: string) {
-    const updatedClass = await this.classesService.toggleActive(id);
+  async toggleClassStatus(@Param('id') id: string, @CurrentUser() user: any) {
+    const updatedClass = await this.classesService.toggleActive(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -407,8 +457,15 @@ export class ClassesController {
 
   @Post('bulk/lifecycle')
   @Roles(RoleName.Admin)
-  async bulkLifecycle(@Body() dto: BulkClassLifecycleDto) {
-    const result = await this.classesService.bulkLifecycleAction(dto);
+  async bulkLifecycle(
+    @Body() dto: BulkClassLifecycleDto,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.classesService.bulkLifecycleAction(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -423,8 +480,8 @@ export class ClassesController {
    */
   @Delete(':id/purge')
   @Roles(RoleName.Admin)
-  async purgeClass(@Param('id') id: string) {
-    await this.classesService.purge(id);
+  async purgeClass(@Param('id') id: string, @CurrentUser() user: any) {
+    await this.classesService.purge(id, user?.userId, user?.roles ?? []);
 
     return {
       success: true,
@@ -439,8 +496,11 @@ export class ClassesController {
   @Delete(':id')
   @Roles(RoleName.Admin)
   @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteClass(@Param('id') id: string): Promise<void> {
-    await this.classesService.delete(id);
+  async deleteClass(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ): Promise<void> {
+    await this.classesService.delete(id, user?.userId, user?.roles ?? []);
     // 204 No Content — must not return a body
   }
 
@@ -557,6 +617,17 @@ export class ClassesController {
     @Query('gradeLevel') gradeLevel?: string,
     @Query('sectionId') sectionId?: string,
     @Query('search') search?: string,
+    @Query('eligibility') eligibility?: 'all' | 'eligible' | 'mismatch',
+    @Query('sortBy')
+    sortBy?:
+      | 'lastName'
+      | 'firstName'
+      | 'email'
+      | 'gradeLevel'
+      | 'lrn'
+      | 'eligibility',
+    @Query('sortDirection') sortDirection?: 'asc' | 'desc',
+    @Query('prioritizeEligible') prioritizeEligible?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -568,6 +639,13 @@ export class ClassesController {
         gradeLevel,
         sectionId,
         search,
+        eligibility,
+        sortBy,
+        sortDirection,
+        prioritizeEligible:
+          prioritizeEligible !== undefined
+            ? prioritizeEligible !== 'false'
+            : undefined,
         page: parsePositiveIntQuery(page, 'page'),
         limit: parsePositiveIntQuery(limit, 'limit'),
       },
@@ -652,10 +730,7 @@ export class ClassesController {
 export class ClassesPublicController {
   @Public()
   @Get('banners/:filename')
-  async serveClassBanner(
-    @Param('filename') filename: string,
-    @Res() res: any,
-  ) {
+  async serveClassBanner(@Param('filename') filename: string, @Res() res: any) {
     const sanitized = path.basename(filename);
     const filePath = path.join(CLASS_BANNER_UPLOAD_DEST, sanitized);
 

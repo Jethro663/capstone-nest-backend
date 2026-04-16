@@ -20,6 +20,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { AuditService } from '../audit/audit.service';
 import {
   sections,
   classes,
@@ -50,10 +51,21 @@ export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
 
 @Injectable()
 export class SectionsService {
-  constructor(private databaseService: DatabaseService) {}
+  constructor(
+    private databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private resolveActorRole(
+    actorRoles: string[] = [],
+  ): 'admin' | 'teacher' | 'system' {
+    if (actorRoles.includes('admin')) return 'admin';
+    if (actorRoles.includes('teacher')) return 'teacher';
+    return 'system';
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -87,19 +99,23 @@ export class SectionsService {
     }
   }
 
-  private async getHiddenSectionIdsForUser(userId: string, sectionIds: string[]) {
+  private async getHiddenSectionIdsForUser(
+    userId: string,
+    sectionIds: string[],
+  ) {
     if (!userId || sectionIds.length === 0) return new Set<string>();
 
-    const preferences = await this.db.query.sectionVisibilityPreferences.findMany({
-      where: and(
-        eq(sectionVisibilityPreferences.userId, userId),
-        inArray(sectionVisibilityPreferences.sectionId, sectionIds),
-        eq(sectionVisibilityPreferences.isHidden, true),
-      ),
-      columns: {
-        sectionId: true,
-      },
-    });
+    const preferences =
+      await this.db.query.sectionVisibilityPreferences.findMany({
+        where: and(
+          eq(sectionVisibilityPreferences.userId, userId),
+          inArray(sectionVisibilityPreferences.sectionId, sectionIds),
+          eq(sectionVisibilityPreferences.isHidden, true),
+        ),
+        columns: {
+          sectionId: true,
+        },
+      });
 
     return new Set(preferences.map((preference) => preference.sectionId));
   }
@@ -235,7 +251,9 @@ export class SectionsService {
         limit,
         total: status === 'hidden' ? data.length : total,
         totalPages:
-          status === 'hidden' ? Math.ceil(data.length / limit) : Math.ceil(total / limit),
+          status === 'hidden'
+            ? Math.ceil(data.length / limit)
+            : Math.ceil(total / limit),
       },
     };
   }
@@ -331,10 +349,26 @@ export class SectionsService {
 
   async getCandidates(
     sectionId: string,
-    filters?: { gradeLevel?: string; search?: string },
+    filters?: {
+      gradeLevel?: string;
+      search?: string;
+      assignedSectionId?: string;
+      eligibility?: 'all' | 'eligible' | 'mismatch';
+      sortBy?:
+        | 'lastName'
+        | 'firstName'
+        | 'email'
+        | 'gradeLevel'
+        | 'lrn'
+        | 'eligibility';
+      sortDirection?: 'asc' | 'desc';
+      prioritizeEligible?: boolean;
+      page?: number;
+      limit?: number;
+    },
     requestingUser?: RequestingUser,
   ) {
-    await this.findById(sectionId, requestingUser);
+    const section = await this.findById(sectionId, requestingUser);
 
     // Build a subquery for actively-enrolled students in this section.
     // Using a subquery instead of loading all student IDs into Node.js memory:
@@ -363,6 +397,7 @@ export class SectionsService {
         ilike(users.firstName, `%${filters.search}%`),
         ilike(users.lastName, `%${filters.search}%`),
         ilike(users.email, `%${filters.search}%`),
+        ilike(studentProfiles.lrn, `%${filters.search}%`),
       );
       if (searchCond) extraConditions.push(searchCond);
     }
@@ -374,6 +409,7 @@ export class SectionsService {
         firstName: users.firstName,
         lastName: users.lastName,
         email: users.email,
+        lrn: studentProfiles.lrn,
         gradeLevel: studentProfiles.gradeLevel,
         profilePicture: studentProfiles.profilePicture,
       })
@@ -385,11 +421,16 @@ export class SectionsService {
         and(eq(roles.id, userRoles.roleId), eq(roles.name, 'student')),
       )
       .where(and(notInArray(users.id, enrolledSubquery), ...extraConditions))
-      .orderBy(users.lastName, users.firstName)
-      .limit(200);
+      .orderBy(users.lastName, users.firstName);
 
     if (results.length === 0) {
-      return [];
+      return {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: Math.max(1, Math.min(Number(filters?.limit ?? 20), 100)),
+        totalPages: 1,
+      };
     }
 
     const studentIds = results.map((student) => student.id);
@@ -422,23 +463,96 @@ export class SectionsService {
       });
     }
 
-    return results.map((candidate) => {
+    const mapped = results.map((candidate) => {
       const membership = membershipByStudentId.get(candidate.id);
       const hasActiveSectionEnrollment = Boolean(
         membership && membership.sectionId !== sectionId,
       );
+      const hasGradeMismatch = Boolean(
+        candidate.gradeLevel && candidate.gradeLevel !== section.gradeLevel,
+      );
+      const isEligible = !hasActiveSectionEnrollment && !hasGradeMismatch;
+      const eligibilityReason = hasActiveSectionEnrollment
+        ? `Already in section ${membership?.sectionName ?? 'another section'}`
+        : hasGradeMismatch
+          ? `Grade mismatch (${candidate.gradeLevel ?? 'N/A'} vs ${section.gradeLevel})`
+          : null;
 
       return {
         ...candidate,
+        isEligible,
+        eligibilityReason,
         hasActiveSectionEnrollment,
         enrolledSectionId: hasActiveSectionEnrollment
-          ? membership?.sectionId ?? null
+          ? (membership?.sectionId ?? null)
           : null,
         enrolledSectionName: hasActiveSectionEnrollment
-          ? membership?.sectionName ?? null
+          ? (membership?.sectionName ?? null)
           : null,
       };
     });
+
+    const eligibilityFilter = filters?.eligibility ?? 'all';
+    const eligibleFiltered = mapped.filter((row) => {
+      if (eligibilityFilter === 'eligible') return row.isEligible;
+      if (eligibilityFilter === 'mismatch') return !row.isEligible;
+      return true;
+    });
+
+    const sectionFiltered = filters?.assignedSectionId
+      ? eligibleFiltered.filter(
+          (row) => row.enrolledSectionId === filters.assignedSectionId,
+        )
+      : eligibleFiltered;
+
+    const sortBy = filters?.sortBy ?? 'lastName';
+    const sortDirection = filters?.sortDirection ?? 'asc';
+    const directionFactor = sortDirection === 'desc' ? -1 : 1;
+    const prioritizeEligible = filters?.prioritizeEligible !== false;
+
+    const getSortValue = (row: (typeof mapped)[number]) => {
+      switch (sortBy) {
+        case 'firstName':
+          return String(row.firstName ?? '').toLowerCase();
+        case 'email':
+          return String(row.email ?? '').toLowerCase();
+        case 'gradeLevel':
+          return String(row.gradeLevel ?? '').toLowerCase();
+        case 'lrn':
+          return String(row.lrn ?? '').toLowerCase();
+        case 'eligibility':
+          return row.isEligible ? '0' : '1';
+        case 'lastName':
+        default:
+          return String(row.lastName ?? '').toLowerCase();
+      }
+    };
+
+    const sorted = [...sectionFiltered].sort((left, right) => {
+      if (prioritizeEligible && left.isEligible !== right.isEligible) {
+        return left.isEligible ? -1 : 1;
+      }
+
+      const leftValue = getSortValue(left);
+      const rightValue = getSortValue(right);
+      if (leftValue < rightValue) return -1 * directionFactor;
+      if (leftValue > rightValue) return 1 * directionFactor;
+      return 0;
+    });
+
+    const limit = Math.max(1, Math.min(Number(filters?.limit ?? 20), 100));
+    const page = Math.max(1, Number(filters?.page ?? 1));
+    const total = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const offset = (page - 1) * limit;
+
+    return {
+      data: sorted.slice(offset, offset + limit),
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   // ─── addStudentsToSection ─────────────────────────────────────────────────
@@ -615,7 +729,11 @@ export class SectionsService {
 
   // ─── createSection ────────────────────────────────────────────────────────
 
-  async createSection(createSectionDto: CreateSectionDto) {
+  async createSection(
+    createSectionDto: CreateSectionDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     const existingSection = await this.db.query.sections.findFirst({
       where: and(
         eq(sections.name, createSectionDto.name),
@@ -659,6 +777,20 @@ export class SectionsService {
         })
         .returning();
 
+      await this.auditService.log({
+        actorId: actorId ?? createSectionDto.adviserId ?? 'system',
+        action: 'section.created',
+        targetType: 'section',
+        targetId: newSection.id,
+        metadata: {
+          actorRole: this.resolveActorRole(actorRoles),
+          gradeLevel: createSectionDto.gradeLevel,
+          schoolYear: createSectionDto.schoolYear,
+          adviserId: createSectionDto.adviserId ?? null,
+          capacity: createSectionDto.capacity,
+        },
+      });
+
       return this.findById(newSection.id);
     } catch (err: any) {
       // Surface DB-level unique constraint violations (23505) as a friendly 409 instead
@@ -675,7 +807,12 @@ export class SectionsService {
 
   // ─── updateSection ────────────────────────────────────────────────────────
 
-  async updateSection(id: string, updateSectionDto: UpdateSectionDto) {
+  async updateSection(
+    id: string,
+    updateSectionDto: UpdateSectionDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     const existingSection = await this.findById(id);
 
     if (
@@ -770,6 +907,24 @@ export class SectionsService {
 
     try {
       await this.db.update(sections).set(updateData).where(eq(sections.id, id));
+
+      const changedFields = Object.keys(updateData).filter(
+        (key) => key !== 'updatedAt',
+      );
+      await this.auditService.log({
+        actorId: actorId ?? existingSection.adviserId ?? 'system',
+        action: 'section.updated',
+        targetType: 'section',
+        targetId: id,
+        metadata: {
+          actorRole: this.resolveActorRole(actorRoles),
+          changedFields,
+          adviserId: updateSectionDto.adviserId ?? existingSection.adviserId,
+          gradeLevel: updateSectionDto.gradeLevel ?? existingSection.gradeLevel,
+          schoolYear: updateSectionDto.schoolYear ?? existingSection.schoolYear,
+        },
+      });
+
       return this.findById(id);
     } catch (err: any) {
       if (err?.code === '23505') {
@@ -813,6 +968,20 @@ export class SectionsService {
     }
 
     await this.db.update(sections).set(payload).where(eq(sections.id, id));
+
+    const actorRole = this.resolveActorRole(requesterRoles ?? []);
+    await this.auditService.log({
+      actorId: requesterId ?? sectionRecord.adviserId ?? 'system',
+      action: 'section.presentation.updated',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole,
+        changedFields:
+          presentation.cardBannerUrl !== undefined ? ['cardBannerUrl'] : [],
+        cardBannerUrl: presentation.cardBannerUrl,
+      },
+    });
 
     return this.findById(
       id,
@@ -858,14 +1027,29 @@ export class SectionsService {
       });
     }
 
+    await this.auditService.log({
+      actorId: userId,
+      action: 'section.visibility.updated',
+      targetType: 'section',
+      targetId: sectionId,
+      metadata: {
+        actorRole: this.resolveActorRole(userRoles),
+        hidden,
+      },
+    });
+
     return {
       sectionId,
       isHidden: hidden,
     };
   }
 
-  async archiveSection(id: string) {
-    await this.findById(id);
+  async archiveSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const section = await this.findById(id);
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -883,24 +1067,52 @@ export class SectionsService {
         .set({ isActive: false, updatedAt: new Date() })
         .where(eq(sections.id, id));
     });
+
+    await this.auditService.log({
+      actorId: actorId ?? section.adviserId ?? 'system',
+      action: 'section.archived',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        previousIsActive: section.isActive,
+      },
+    });
   }
 
-  async restoreSection(id: string) {
-    await this.findById(id);
+  async restoreSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const section = await this.findById(id);
 
     await this.db
       .update(sections)
       .set({ isActive: true, updatedAt: new Date() })
       .where(eq(sections.id, id));
+
+    await this.auditService.log({
+      actorId: actorId ?? section.adviserId ?? 'system',
+      action: 'section.restored',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        previousIsActive: section.isActive,
+      },
+    });
   }
 
-  async deleteSection(id: string) {
-    await this.archiveSection(id);
+  async deleteSection(id: string, actorId?: string, actorRoles: string[] = []) {
+    await this.archiveSection(id, actorId, actorRoles);
   }
 
   private async performBulkLifecycleAction(
     action: BulkSectionLifecycleAction,
     sectionId: string,
+    actorId?: string,
+    actorRoles: string[] = [],
   ) {
     const section = await this.findById(sectionId);
 
@@ -909,13 +1121,13 @@ export class SectionsService {
         if (!section.isActive) {
           throw new ConflictException('Section is already archived.');
         }
-        await this.archiveSection(sectionId);
+        await this.archiveSection(sectionId, actorId, actorRoles);
         return;
       case 'restore':
         if (section.isActive) {
           throw new ConflictException('Section is already active.');
         }
-        await this.restoreSection(sectionId);
+        await this.restoreSection(sectionId, actorId, actorRoles);
         return;
       case 'purge':
         if (section.isActive) {
@@ -923,7 +1135,7 @@ export class SectionsService {
             'Only archived sections can be permanently deleted. Archive the section first.',
           );
         }
-        await this.permanentlyDeleteSection(sectionId);
+        await this.permanentlyDeleteSection(sectionId, actorId, actorRoles);
         return;
       default: {
         throw new BadRequestException(
@@ -955,6 +1167,8 @@ export class SectionsService {
 
   async bulkLifecycleAction(
     dto: BulkSectionLifecycleDto,
+    actorId?: string,
+    actorRoles: string[] = [],
   ): Promise<BulkSectionLifecycleResult> {
     const sectionIds = [...new Set(dto.sectionIds)];
     const succeeded: string[] = [];
@@ -962,7 +1176,12 @@ export class SectionsService {
 
     for (const sectionId of sectionIds) {
       try {
-        await this.performBulkLifecycleAction(dto.action, sectionId);
+        await this.performBulkLifecycleAction(
+          dto.action,
+          sectionId,
+          actorId,
+          actorRoles,
+        );
         succeeded.push(sectionId);
       } catch (error) {
         failed.push({
@@ -1063,9 +1282,13 @@ export class SectionsService {
 
   // ─── permanentlyDeleteSection ─────────────────────────────────────────────
 
-  async permanentlyDeleteSection(id: string) {
+  async permanentlyDeleteSection(
+    id: string,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     // Verify section exists first
-    await this.findById(id);
+    const section = await this.findById(id);
 
     // Wrap the pre-flight count checks and the delete in a single transaction
     // to prevent a TOCTOU race where new enrolments are inserted between the
@@ -1098,6 +1321,17 @@ export class SectionsService {
       }
 
       await tx.delete(sections).where(eq(sections.id, id));
+    });
+
+    await this.auditService.log({
+      actorId: actorId ?? section.adviserId ?? 'system',
+      action: 'section.purged',
+      targetType: 'section',
+      targetId: id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        previousIsActive: section.isActive,
+      },
     });
   }
 

@@ -38,6 +38,8 @@ import { RagModule } from './modules/rag/rag.module';
 import { ContentModulesModule } from './modules/content-modules/content-modules.module';
 import { SchoolEventsModule } from './modules/school-events/school-events.module';
 import { JaModule } from './modules/ja/ja.module';
+import { ClassTemplatesModule } from './modules/class-templates/class-templates.module';
+import { DiscussionBoardModule } from './modules/discussion-board/discussion-board.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
@@ -95,6 +97,8 @@ import ollamaConfig from './config/ollama.config';
     ContentModulesModule,
     SchoolEventsModule,
     JaModule,
+    ClassTemplatesModule,
+    DiscussionBoardModule,
   ],
   providers: [
     {

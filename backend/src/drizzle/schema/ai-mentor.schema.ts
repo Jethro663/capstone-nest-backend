@@ -20,6 +20,7 @@ import { users, uploadedFiles, classes } from './base.schema';
 export const aiSessionTypeEnum = pgEnum('ai_session_type', [
   'module_extraction',
   'mentor_chat',
+  'admin_analytics_chat',
   'mistake_explanation',
 ]);
 

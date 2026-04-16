@@ -20,6 +20,7 @@ import {
   AssessmentSubmittedEvent,
   ClassRecordScoresUpdatedEvent,
 } from '../../common/events';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ClassRecordSyncService {
@@ -28,10 +29,40 @@ export class ClassRecordSyncService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly auditService: AuditService,
   ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private async logAuditSafe(params: {
+    actorId?: string | null;
+    action: string;
+    targetType: string;
+    targetId: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    if (!params.actorId) {
+      this.logger.warn(
+        `Skipped class-record sync audit log for "${params.action}" due to missing actorId`,
+      );
+      return;
+    }
+
+    try {
+      await this.auditService.log({
+        actorId: params.actorId,
+        action: params.action,
+        targetType: params.targetType,
+        targetId: params.targetId,
+        metadata: params.metadata,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Failed to write class-record sync audit log: ${(err as Error).message}`,
+      );
+    }
   }
 
   /**
@@ -233,6 +264,7 @@ export class ClassRecordSyncService {
           eq(classRecordItems.assessmentId, event.assessmentId),
         ),
       });
+      let autoLinkedNewItem = false;
 
       if (!item) {
         // Find the first empty (unlinked) item slot in this category
@@ -255,6 +287,7 @@ export class ClassRecordSyncService {
               maxScore: (assessment.totalPoints || 0).toString(),
             })
             .where(eq(classRecordItems.id, item.id));
+          autoLinkedNewItem = true;
         }
       }
 
@@ -295,6 +328,22 @@ export class ClassRecordSyncService {
         }),
       );
 
+      await this.logAuditSafe({
+        actorId: record.teacherId,
+        action: 'class_record.scores.auto_synced_assessment',
+        targetType: 'class_record_item',
+        targetId: item.id,
+        metadata: {
+          classRecordId: record.id,
+          classId: assessment.classId,
+          assessmentId: event.assessmentId,
+          studentId: event.studentId,
+          classRecordCategory: event.classRecordCategory,
+          quarter: event.quarter,
+          autoLinkedNewItem,
+        },
+      });
+
       this.logger.log(
         `Auto-synced score for student "${event.studentId}" → ` +
           `item "${item.id}" (${categoryName}, ${event.quarter})`,
@@ -316,7 +365,9 @@ export class ClassRecordSyncService {
     const linkedItems = await this.db.query.classRecordItems.findMany({
       where: eq(classRecordItems.assessmentId, event.assessmentId),
       with: {
-        classRecord: { columns: { status: true, id: true } },
+        classRecord: {
+          columns: { status: true, id: true, classId: true, teacherId: true },
+        },
       },
     });
 
@@ -339,6 +390,20 @@ export class ClassRecordSyncService {
               triggerSource: 'assessment_sync',
             }),
           );
+
+          await this.logAuditSafe({
+            actorId: item.classRecord.teacherId,
+            action: 'class_record.scores.legacy_synced_assessment',
+            targetType: 'class_record_item',
+            targetId: item.id,
+            metadata: {
+              classRecordId: item.classRecord.id,
+              classId: result.classId ?? item.classRecord.classId,
+              assessmentId: event.assessmentId,
+              synced: result.synced,
+              studentIds: result.studentIds,
+            },
+          });
         }
         this.logger.log(
           `Legacy sync: ${result.synced} scores for item "${item.id}"`,

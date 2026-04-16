@@ -67,7 +67,9 @@ export function TeacherEvaluationsFigmaPage() {
   const fetchEvaluations = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await lxpService.getEvaluations(targetModule || undefined);
+      const response = await lxpService.getEvaluations(
+        targetModule ? { targetModule } : undefined,
+      );
       setRows(response.data.rows ?? []);
     } catch {
       toast.error('Failed to load evaluations');
@@ -247,4 +249,3 @@ export function TeacherEvaluationsFigmaPage() {
     </TeacherPageShell>
   );
 }
-

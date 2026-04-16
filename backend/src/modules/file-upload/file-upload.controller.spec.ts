@@ -38,10 +38,10 @@ const makeFile = (
     originalname: 'lecture.pdf',
     encoding: '7bit',
     mimetype: 'application/pdf',
-    path: './uploads/pdfs/uuid_1700000000.pdf',
+    path: './uploads/library/uuid_1700000000.pdf',
     filename: 'uuid_1700000000.pdf',
     size: 1_048_576,
-    destination: './uploads/pdfs',
+    destination: './uploads/library',
     buffer: Buffer.alloc(0),
     stream: null as any,
     ...overrides,
@@ -78,6 +78,8 @@ const mockFileUploadService = {
   findOne: jest.fn(),
   softDelete: jest.fn(),
   getFilePath: jest.fn(),
+  getFileForDownload: jest.fn(),
+  retryIndex: jest.fn(),
   getStorageSummary: jest.fn(),
 };
 
@@ -126,7 +128,7 @@ describe('FileUploadController', () => {
 
       expect(result).toEqual({
         success: true,
-        message: 'PDF uploaded successfully',
+        message: 'Library file uploaded successfully',
         data: record,
       });
     });
@@ -146,9 +148,14 @@ describe('FileUploadController', () => {
           storedName: file.filename,
           mimeType: file.mimetype,
           sizeBytes: 2_097_152,
-          filePath: 'uploads/pdfs/uuid_1700000000.pdf',
+          filePath: 'uploads/library/uuid_1700000000.pdf',
           folderId: undefined,
           scope: 'private',
+          subjectKey: undefined,
+          gradeLevel: undefined,
+          teacherVisible: undefined,
+          contentHash: expect.any(String),
+          fileKind: 'pdf',
         },
         TEACHER_USER,
       );
@@ -312,7 +319,9 @@ describe('FileUploadController', () => {
 
     it('calls sendFile with the resolved absolute path and sets PDF header', async () => {
       const storedRelPath = './uploads/pdfs/uuid_1700000000.pdf';
-      mockFileUploadService.getFilePath.mockResolvedValue(storedRelPath);
+      mockFileUploadService.getFileForDownload.mockResolvedValue(
+        makeRecord({ filePath: storedRelPath, mimeType: 'application/pdf' }),
+      );
 
       const res = makeMockRes();
       await controller.downloadFile(FILE_ID, TEACHER_USER, res as any);
@@ -326,8 +335,8 @@ describe('FileUploadController', () => {
 
     it('returns 404 JSON when the file does not exist on disk', async () => {
       mockExistsSync.mockReturnValue(false);
-      mockFileUploadService.getFilePath.mockResolvedValue(
-        './uploads/pdfs/missing.pdf',
+      mockFileUploadService.getFileForDownload.mockResolvedValue(
+        makeRecord({ filePath: './uploads/pdfs/missing.pdf' }),
       );
 
       const res = makeMockRes();
@@ -340,7 +349,7 @@ describe('FileUploadController', () => {
     });
 
     it('propagates NotFoundException from service before touching disk', async () => {
-      mockFileUploadService.getFilePath.mockRejectedValue(
+      mockFileUploadService.getFileForDownload.mockRejectedValue(
         new NotFoundException(`File with ID "${FILE_ID}" not found`),
       );
 

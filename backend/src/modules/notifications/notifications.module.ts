@@ -6,12 +6,17 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { NotificationsGateway } from './notifications.gateway';
 import { AnnouncementFanOutProcessor } from './processors/announcement-fan-out.processor';
+import { AssessmentNotificationDispatchService } from './assessment-notification-dispatch.service';
+import { AssessmentNotificationProcessor } from './processors/assessment-notification.processor';
 
 @Module({
   imports: [
     // Consume the same 'announcements' queue that AnnouncementsModule enqueues into
     BullModule.registerQueue({
       name: 'announcements',
+    }),
+    BullModule.registerQueue({
+      name: 'notifications',
     }),
     // JwtService needed by the WebSocket gateway for token verification
     JwtModule.registerAsync({
@@ -25,8 +30,14 @@ import { AnnouncementFanOutProcessor } from './processors/announcement-fan-out.p
   providers: [
     NotificationsService,
     NotificationsGateway,
+    AssessmentNotificationDispatchService,
     AnnouncementFanOutProcessor,
+    AssessmentNotificationProcessor,
   ],
-  exports: [NotificationsService, NotificationsGateway],
+  exports: [
+    NotificationsService,
+    NotificationsGateway,
+    AssessmentNotificationDispatchService,
+  ],
 })
 export class NotificationsModule {}

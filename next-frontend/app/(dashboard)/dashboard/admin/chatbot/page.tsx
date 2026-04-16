@@ -7,77 +7,69 @@ import {
   Loader2,
   RefreshCw,
   SendHorizontal,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { AdminAnalyticsChatChart } from '@/components/admin/AdminAnalyticsChatChart';
 import { AdminPageShell } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
-import { createApiClient } from '@/lib/api-client';
+import { adminChatbotService } from '@/services/admin-chatbot-service';
+import type {
+  AdminAnalyticsHealthStatus,
+  AdminAnalyticsHistorySummary,
+  AdminAnalyticsSessionMessage,
+  AdminAnalyticsSource,
+} from '@/types/admin-chatbot';
 import { useAuth } from '@/providers/AuthProvider';
 import { cn } from '@/utils/cn';
-
-type HealthStatus = {
-  online: boolean;
-  model: string;
-};
 
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   createdAt: Date;
+  chart?: AdminAnalyticsSessionMessage['chart'];
+  sources?: AdminAnalyticsSource[];
   kind?: 'greeting' | 'chat';
 };
 
-type ChatReplyPayload = {
-  reply?: string;
-  sessionId?: string | null;
-};
-
-type ChatHistoryEntry = {
-  id?: string;
-  sessionId?: string | null;
-  inputText?: string | null;
-  outputText?: string | null;
-  createdAt?: string | null;
-  sessionType?: string | null;
-};
-
-type ChatHistoryConversation = {
-  id: string;
-  sessionId: string | null;
-  title: string;
-  preview: string;
-  updatedAt: Date;
-  messages: ChatMessage[];
-};
-
 const QUICK_PROMPTS = [
-  'How many active users are there?',
-  'Show me class performance trends',
-  'Which students are at risk?',
-  'Summarize recent activity',
+  'Give me a class-by-class risk snapshot.',
+  'Summarize weekly system usage.',
+  'Which interventions need attention this week?',
+  'Compare assessment performance by subject.',
 ];
-
-const normalizeHealth = (payload: Record<string, unknown> | undefined): HealthStatus => ({
-  online:
-    payload?.ollamaOnline === true ||
-    payload?.ollamaAvailable === true,
-  model:
-    (typeof payload?.model === 'string' && payload.model) ||
-    (typeof payload?.configuredModel === 'string' && payload.configuredModel) ||
-    'unknown',
-});
 
 const formatTime = (value: Date) =>
   value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+function toDate(value?: string | Date | null) {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' && value.trim()) return new Date(value);
+  return new Date();
+}
 
 function buildGreeting(firstName?: string): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role: 'assistant',
-    content: `Hello, ${firstName || 'Admin'}! I'm your Nexora AI assistant. I can help you analyze platform data, generate reports, and answer questions about your school system. What would you like to know?`,
+    content: `Hello, ${firstName || 'Admin'}. Ask for trends, risk signals, audit patterns, evaluation summaries, or usage snapshots and I'll stay grounded to the admin analytics data available in Nexora.`,
     createdAt: new Date(),
     kind: 'greeting',
+    sources: [],
+  };
+}
+
+function toChatMessage(message: AdminAnalyticsSessionMessage): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    createdAt: toDate(message.createdAt),
+    chart: message.chart ?? null,
+    sources: message.sources ?? [],
+    kind: 'chat',
   };
 }
 
@@ -86,156 +78,116 @@ function truncateText(value: string, max = 54) {
   return `${value.slice(0, max - 3).trimEnd()}...`;
 }
 
-function buildConversationFromMessages({
-  conversationId,
-  sessionId,
-  messages,
-}: {
-  conversationId: string;
-  sessionId: string | null;
-  messages: ChatMessage[];
-}): ChatHistoryConversation | null {
+function buildSummaryFromMessages(
+  conversationId: string,
+  sessionId: string | null,
+  messages: ChatMessage[],
+): AdminAnalyticsHistorySummary | null {
   const transcript = messages.filter((message) => message.kind !== 'greeting');
-  if (transcript.length === 0) return null;
+  if (!transcript.length) return null;
 
   const firstUser = transcript.find((message) => message.role === 'user');
   const lastMessage = transcript[transcript.length - 1];
 
   return {
-    id: conversationId,
-    sessionId,
-    title: truncateText(firstUser?.content || 'New chat'),
-    preview: truncateText(lastMessage?.content || 'No messages yet', 72),
-    updatedAt: lastMessage?.createdAt ?? new Date(),
-    messages: transcript,
+    sessionId: sessionId ?? conversationId,
+    title: truncateText(firstUser?.content || 'Admin analytics chat'),
+    preview: `Latest: ${truncateText(lastMessage?.content || 'No preview available', 80)}`,
+    updatedAt: lastMessage.createdAt.toISOString(),
   };
 }
 
-function upsertConversation(
-  conversations: ChatHistoryConversation[],
-  nextConversation: ChatHistoryConversation | null,
-): ChatHistoryConversation[] {
-  if (!nextConversation) return conversations;
+function upsertHistorySummary(
+  summaries: AdminAnalyticsHistorySummary[],
+  nextSummary: AdminAnalyticsHistorySummary | null,
+) {
+  if (!nextSummary) return summaries;
 
-  const filtered = conversations.filter(
-    (conversation) =>
-      conversation.id !== nextConversation.id &&
-      !(
-        conversation.sessionId &&
-        nextConversation.sessionId &&
-        conversation.sessionId === nextConversation.sessionId
-      ),
+  const filtered = summaries.filter(
+    (summary) => summary.sessionId !== nextSummary.sessionId,
   );
 
-  return [nextConversation, ...filtered].sort(
-    (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
+  return [nextSummary, ...filtered].sort(
+    (left, right) =>
+      toDate(right.updatedAt).getTime() - toDate(left.updatedAt).getTime(),
   );
 }
 
-function normalizeHistoryConversations(payload: unknown): ChatHistoryConversation[] {
-  const rows = Array.isArray(payload) ? (payload as ChatHistoryEntry[]) : [];
-  const groups = new Map<string, ChatHistoryConversation>();
+function renderSourceFilters(filters: Record<string, unknown>) {
+  const entries = Object.entries(filters).filter(
+    ([, value]) => value !== null && value !== undefined && value !== '',
+  );
+  if (!entries.length) return null;
 
-  for (const row of rows) {
-    if (!row) continue;
-    if (row.sessionType && row.sessionType !== 'mentor_chat') continue;
-
-    const inputText = row.inputText?.trim();
-    const outputText = row.outputText?.trim();
-    if (!inputText && !outputText) continue;
-
-    const createdAt = row.createdAt ? new Date(row.createdAt) : new Date();
-    const groupKey = row.sessionId || row.id || crypto.randomUUID();
-    const existing = groups.get(groupKey) ?? {
-      id: groupKey,
-      sessionId: row.sessionId ?? null,
-      title: truncateText(inputText || 'AI conversation'),
-      preview: truncateText(outputText || inputText || 'No preview available', 72),
-      updatedAt: createdAt,
-      messages: [],
-    };
-
-    if (inputText) {
-      existing.messages.push({
-        id: `${groupKey}-user-${existing.messages.length}`,
-        role: 'user',
-        content: inputText,
-        createdAt,
-        kind: 'chat',
-      });
-    }
-
-    if (outputText) {
-      existing.messages.push({
-        id: `${groupKey}-assistant-${existing.messages.length}`,
-        role: 'assistant',
-        content: outputText,
-        createdAt,
-        kind: 'chat',
-      });
-    }
-
-    existing.preview = truncateText(outputText || inputText || existing.preview, 72);
-    existing.updatedAt = createdAt > existing.updatedAt ? createdAt : existing.updatedAt;
-    groups.set(groupKey, existing);
-  }
-
-  return Array.from(groups.values()).sort(
-    (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {entries.map(([key, value]) => (
+        <span
+          key={`${key}-${String(value)}`}
+          className="rounded-full bg-black/5 px-2.5 py-1 text-[11px] text-[var(--admin-text-muted)]"
+        >
+          {key}: {String(value)}
+        </span>
+      ))}
+    </div>
   );
 }
 
 export default function AdminChatbotPage() {
-  const { user } = useAuth();
-  const api = useRef(createApiClient()).current;
+  const { user, loading } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const [healthLoading, setHealthLoading] = useState(true);
-  const [health, setHealth] = useState<HealthStatus>({
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [health, setHealth] = useState<AdminAnalyticsHealthStatus>({
     online: false,
     model: 'unknown',
   });
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyItems, setHistoryItems] = useState<ChatHistoryConversation[]>([]);
-  const [messages, setMessages] = useState<ChatMessage[]>(() =>
-    [buildGreeting(user?.firstName)],
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(
+    null,
   );
+  const [historyItems, setHistoryItems] = useState<
+    AdminAnalyticsHistorySummary[]
+  >([]);
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    buildGreeting(user?.firstName),
+  ]);
 
   const checkHealth = useCallback(async () => {
     setHealthLoading(true);
     try {
-      const { data } = await api.get('/ai/health');
-      setHealth(normalizeHealth(data?.data));
+      setHealth(await adminChatbotService.getHealth());
     } catch {
       setHealth({ online: false, model: 'unknown' });
     } finally {
       setHealthLoading(false);
     }
-  }, [api]);
+  }, []);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const { data } = await api.get('/ai/history');
-      setHistoryItems(normalizeHistoryConversations(data?.data ?? data));
+      setHistoryItems(await adminChatbotService.getHistory());
     } catch {
       setHistoryItems([]);
     } finally {
       setHistoryLoading(false);
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
+    if (loading || !user) return;
+
     checkHealth();
     loadHistory();
     const interval = window.setInterval(checkHealth, 30_000);
     return () => window.clearInterval(interval);
-  }, [checkHealth, loadHistory]);
+  }, [checkHealth, loadHistory, loading, user]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -244,7 +196,14 @@ export default function AdminChatbotPage() {
       top: container.scrollHeight,
       behavior: 'smooth',
     });
-  }, [messages, sending]);
+  }, [messages, sending, sessionLoading]);
+
+  useEffect(() => {
+    const inputElement = inputRef.current;
+    if (!inputElement) return;
+    inputElement.style.height = '0px';
+    inputElement.style.height = `${Math.min(inputElement.scrollHeight, 220)}px`;
+  }, [input]);
 
   const startNewChat = useCallback(() => {
     setSessionId(null);
@@ -254,20 +213,40 @@ export default function AdminChatbotPage() {
     inputRef.current?.focus();
   }, [user?.firstName]);
 
-  const openConversation = useCallback((conversation: ChatHistoryConversation) => {
-    setActiveConversationId(conversation.id);
-    setSessionId(conversation.sessionId);
-    setMessages(conversation.messages.length ? conversation.messages : [buildGreeting(user?.firstName)]);
-    setInput('');
-    inputRef.current?.focus();
-  }, [user?.firstName]);
+  const openConversation = useCallback(
+    async (conversation: AdminAnalyticsHistorySummary) => {
+      setSessionLoading(true);
+      setActiveConversationId(conversation.sessionId);
+      setSessionId(conversation.sessionId);
+      setInput('');
+
+      try {
+        const session = await adminChatbotService.getSession(conversation.sessionId);
+        const nextMessages = session.messages.length
+          ? session.messages.map(toChatMessage)
+          : [buildGreeting(user?.firstName)];
+        setMessages(nextMessages);
+      } catch (error: unknown) {
+        const message =
+          (error as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message || 'Failed to load the selected conversation.';
+        toast.error(message);
+        setMessages([buildGreeting(user?.firstName)]);
+      } finally {
+        setSessionLoading(false);
+        inputRef.current?.focus();
+      }
+    },
+    [user?.firstName],
+  );
 
   const sendMessage = useCallback(
     async (seed?: string) => {
       const content = (seed ?? input).trim();
-      if (!content || sending) return;
+      if (!content || sending || sessionLoading) return;
 
-      const currentConversationId = activeConversationId ?? `local-${crypto.randomUUID()}`;
+      const localConversationId =
+        activeConversationId ?? `local-${crypto.randomUUID()}`;
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -275,118 +254,84 @@ export default function AdminChatbotPage() {
         createdAt: new Date(),
         kind: 'chat',
       };
-      const userMessages = [...messages, userMessage];
-      setMessages(userMessages);
-      setActiveConversationId(currentConversationId);
+      const optimisticMessages = [...messages, userMessage];
+      setMessages(optimisticMessages);
+      setActiveConversationId(localConversationId);
       setInput('');
 
-      if (healthLoading) {
-        const pendingMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: 'Nexora AI is still checking service status. Please try again in a moment.',
-          createdAt: new Date(),
-          kind: 'chat',
-        };
-        const pendingMessages = [...userMessages, pendingMessage];
-        setMessages(pendingMessages);
-        setHistoryItems((current) =>
-          upsertConversation(
-            current,
-            buildConversationFromMessages({
-              conversationId: currentConversationId,
-              sessionId,
-              messages: pendingMessages,
-            }),
-          ),
-        );
-        return;
-      }
-
-      if (!health.online) {
+      if (!healthLoading && !health.online) {
         const offlineMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: 'Nexora AI is offline right now. Try again when the service is available.',
+          content:
+            'Admin analytics is offline right now. Retry once the AI service is available.',
           createdAt: new Date(),
           kind: 'chat',
+          sources: [],
         };
-        const offlineMessages = [...userMessages, offlineMessage];
-        setMessages(offlineMessages);
-        setHistoryItems((current) =>
-          upsertConversation(
-            current,
-            buildConversationFromMessages({
-              conversationId: currentConversationId,
-              sessionId,
-              messages: offlineMessages,
-            }),
-          ),
-        );
+        setMessages([...optimisticMessages, offlineMessage]);
         return;
       }
 
       try {
         setSending(true);
-        const payload: Record<string, string> = { message: content };
-        if (sessionId) payload.sessionId = sessionId;
-        const { data } = await api.post('/ai/chat', payload);
-        const replyData = (data?.data ?? {}) as ChatReplyPayload;
-        const nextSessionId = replyData.sessionId ?? sessionId ?? null;
-        const nextConversationId = nextSessionId ?? currentConversationId;
-        if (nextSessionId) {
-          setSessionId(nextSessionId);
-        }
-        setActiveConversationId(nextConversationId);
+        const response = await adminChatbotService.sendMessage({
+          message: content,
+          sessionId,
+        });
+
+        const nextSessionId = response.sessionId ?? sessionId ?? localConversationId;
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: replyData.reply || 'No response returned from the AI service.',
+          content: response.reply,
           createdAt: new Date(),
           kind: 'chat',
+          chart: response.chart ?? null,
+          sources: response.sources ?? [],
         };
-        const nextMessages = [...userMessages, assistantMessage];
+        const nextMessages = [...optimisticMessages, assistantMessage];
+
         setMessages(nextMessages);
+        setSessionId(nextSessionId);
+        setActiveConversationId(nextSessionId);
         setHistoryItems((current) =>
-          upsertConversation(
+          upsertHistorySummary(
             current,
-            buildConversationFromMessages({
-              conversationId: nextConversationId,
-              sessionId: nextSessionId,
-              messages: nextMessages,
-            }),
+            buildSummaryFromMessages(nextSessionId, nextSessionId, nextMessages),
           ),
         );
       } catch (error: unknown) {
         const message =
-          (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-          'Failed to send your message.';
+          (error as { response?: { data?: { message?: string } } })?.response?.data
+            ?.message || 'Failed to send your message.';
         toast.error(message);
-        const warningMessage: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Warning: ${message}`,
-          createdAt: new Date(),
-          kind: 'chat',
-        };
-        const nextMessages = [...userMessages, warningMessage];
-        setMessages(nextMessages);
-        setHistoryItems((current) =>
-          upsertConversation(
-            current,
-            buildConversationFromMessages({
-              conversationId: currentConversationId,
-              sessionId,
-              messages: nextMessages,
-            }),
-          ),
-        );
+        setMessages([
+          ...optimisticMessages,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: `Warning: ${message}`,
+            createdAt: new Date(),
+            kind: 'chat',
+            sources: [],
+          },
+        ]);
       } finally {
         setSending(false);
         inputRef.current?.focus();
       }
     },
-    [activeConversationId, api, health.online, healthLoading, input, messages, sending, sessionId],
+    [
+      activeConversationId,
+      health.online,
+      healthLoading,
+      input,
+      messages,
+      sending,
+      sessionId,
+      sessionLoading,
+    ],
   );
 
   const statusText = useMemo(() => {
@@ -394,119 +339,198 @@ export default function AdminChatbotPage() {
     return health.online ? 'AI Online' : 'AI Offline';
   }, [health.online, healthLoading]);
 
+  const transcriptMessages = useMemo(
+    () => messages.filter((message) => message.kind !== 'greeting'),
+    [messages],
+  );
+
+  const activeSummary = useMemo(
+    () =>
+      historyItems.find(
+        (conversation) => conversation.sessionId === activeConversationId,
+      ) ?? null,
+    [activeConversationId, historyItems],
+  );
+
+  const threadTitle = useMemo(() => {
+    if (activeSummary?.title) return activeSummary.title;
+    const firstPrompt = transcriptMessages.find(
+      (message) => message.role === 'user',
+    );
+    return firstPrompt?.content || 'New admin analytics thread';
+  }, [activeSummary?.title, transcriptMessages]);
+
+  const threadSubtitle = useMemo(() => {
+    if (transcriptMessages.length > 0) {
+      return 'Responses stay grounded to approved admin reports, evaluation data, audit activity, and system analytics.';
+    }
+
+    return 'Use this workspace to inspect reports, evaluations, audit events, and platform usage without leaving the dashboard.';
+  }, [transcriptMessages.length]);
+
   return (
     <AdminPageShell
       badge="Admin AI Chatbot"
       title="AI Chatbot"
-      description="Your intelligent platform assistant"
+      description="Grounded analytics assistant for admin-only LMS insights"
       icon={Bot}
-      actions={(
-        <Button className="admin-chatbot-new-chat" onClick={startNewChat}>
-          <CirclePlus className="h-4 w-4" />
-          New Chat
-        </Button>
-      )}
     >
-      <div className="admin-chatbot-layout">
-        <aside className="admin-chatbot-rail">
-          <section className="admin-chatbot-panel">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="admin-chatbot-panel-title">Chat History</h2>
-              <span className="admin-chatbot-history-count">
-                {historyLoading ? '...' : historyItems.length}
-              </span>
+      <div className="admin-chatbot-app">
+        <aside className="admin-chatbot-sidebar">
+          <div className="admin-chatbot-sidebar-top">
+            <Button className="admin-chatbot-new-chat" onClick={startNewChat}>
+              <CirclePlus className="h-4 w-4" />
+              New chat
+            </Button>
+
+            <div className="admin-chatbot-sidebar-copy">
+              <p className="admin-chatbot-section-eyebrow">Admin analytics</p>
+              <p className="admin-chatbot-sidebar-note">
+                Private history, grounded answers, read-only access.
+              </p>
             </div>
-            {historyLoading ? (
-              <p className="text-sm text-[var(--admin-text-muted)]">Loading recent conversations...</p>
-            ) : historyItems.length === 0 ? (
-              <p className="text-sm text-[var(--admin-text-muted)]">No saved chats yet. Start a conversation to see it here.</p>
-            ) : (
-              <div className="admin-chatbot-history-list">
-                {historyItems.map((conversation) => (
+          </div>
+
+          <div className="admin-chatbot-sidebar-body">
+            <section className="admin-chatbot-sidebar-section admin-chatbot-sidebar-section--history">
+              <div className="admin-chatbot-sidebar-section-header">
+                <div>
+                  <p className="admin-chatbot-section-eyebrow">
+                    Recent conversations
+                  </p>
+                  <h2 className="admin-chatbot-section-title">
+                    Recent conversations
+                  </h2>
+                </div>
+                <span className="admin-chatbot-history-count">
+                  {historyLoading ? '...' : historyItems.length}
+                </span>
+              </div>
+
+              {historyLoading ? (
+                <p className="text-sm text-[var(--admin-text-muted)]">
+                  Loading admin sessions...
+                </p>
+              ) : historyItems.length === 0 ? (
+                <p className="text-sm text-[var(--admin-text-muted)]">
+                  No saved chats yet. Start a conversation to see it here.
+                </p>
+              ) : (
+                <div className="admin-chatbot-history-list">
+                  {historyItems.map((conversation) => (
+                    <button
+                      key={conversation.sessionId}
+                      type="button"
+                      className={cn(
+                        'admin-chatbot-history-item',
+                        activeConversationId === conversation.sessionId &&
+                          'is-active',
+                      )}
+                      onClick={() => openConversation(conversation)}
+                    >
+                      <div className="admin-chatbot-history-header">
+                        <p className="admin-chatbot-history-title">
+                          {conversation.title}
+                        </p>
+                        <time className="admin-chatbot-history-time">
+                          {formatTime(toDate(conversation.updatedAt))}
+                        </time>
+                      </div>
+                      <p className="admin-chatbot-history-preview">
+                        {conversation.preview}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="admin-chatbot-sidebar-section">
+              <div className="admin-chatbot-sidebar-section-header">
+                <div>
+                  <p className="admin-chatbot-section-eyebrow">Suggested asks</p>
+                  <h2 className="admin-chatbot-section-title">Suggested asks</h2>
+                </div>
+              </div>
+              <div className="admin-chatbot-prompt-list space-y-2">
+                {QUICK_PROMPTS.map((prompt) => (
                   <button
-                    key={conversation.id}
+                    key={prompt}
                     type="button"
-                    className={cn(
-                      'admin-chatbot-history-item',
-                      activeConversationId === conversation.id && 'is-active',
-                    )}
-                    onClick={() => openConversation(conversation)}
+                    className="admin-chatbot-prompt"
+                    onClick={() => void sendMessage(prompt)}
                   >
-                    <div className="admin-chatbot-history-header">
-                      <p className="admin-chatbot-history-title">{conversation.title}</p>
-                      <time className="admin-chatbot-history-time">
-                        {formatTime(conversation.updatedAt)}
-                      </time>
-                    </div>
-                    <p className="admin-chatbot-history-preview">{conversation.preview}</p>
+                    {prompt}
                   </button>
                 ))}
               </div>
-            )}
-          </section>
-          <section className="admin-chatbot-panel">
-            <h2 className="admin-chatbot-panel-title">Quick Prompts</h2>
-            <div className="space-y-2">
-              {QUICK_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  className="admin-chatbot-prompt"
-                  onClick={() => sendMessage(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </section>
-          <section className="admin-chatbot-panel">
-            <h2 className="admin-chatbot-panel-title">Chat Status</h2>
+            </section>
+          </div>
+
+          <div className="admin-chatbot-sidebar-footer">
             <div className="admin-chatbot-status">
               <span
                 className={cn(
                   'admin-chatbot-status-dot',
-                  health.online && !healthLoading && 'admin-chatbot-status-dot--online',
+                  health.online &&
+                    !healthLoading &&
+                    'admin-chatbot-status-dot--online',
                 )}
               />
               <span>{statusText}</span>
             </div>
-          </section>
+            <p className="admin-chatbot-sidebar-meta">Model: {health.model}</p>
+            <p className="admin-chatbot-sidebar-meta">
+              Answers are constrained to approved admin-facing LMS data sources.
+            </p>
+          </div>
         </aside>
 
-        <section className="admin-chatbot-workspace">
-          <header className="admin-chatbot-workspace-header">
-            <div className="flex items-center gap-3">
-              <div className="admin-chatbot-brand-icon">
-                <Bot className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="admin-chatbot-brand-title">Nexora AI</p>
-                <p className={cn('admin-chatbot-brand-status', health.online && !healthLoading && 'is-online')}>
-                  {healthLoading ? 'Checking model...' : health.online ? 'Online' : 'Offline'}
-                </p>
-              </div>
+        <section className="admin-chatbot-stage">
+          <header className="admin-chatbot-stage-header">
+            <div className="admin-chatbot-stage-copy">
+              <p className="admin-chatbot-stage-kicker">
+                Admin-only analytics workspace
+              </p>
+              <h2 className="admin-chatbot-stage-title">{threadTitle}</h2>
+              <p className="admin-chatbot-stage-description">
+                {threadSubtitle}
+              </p>
             </div>
-            <button
-              type="button"
-              className="admin-chatbot-refresh"
-              onClick={checkHealth}
-              aria-label="Refresh AI status"
-            >
-              {healthLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </button>
+
+            <div className="admin-chatbot-stage-tools">
+              <div className="admin-chatbot-model-pill">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>
+                  {healthLoading
+                    ? 'Refreshing model status'
+                    : `${statusText} - ${health.model}`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="admin-chatbot-refresh"
+                onClick={checkHealth}
+                aria-label="Refresh AI status"
+              >
+                {healthLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </header>
 
-          <div ref={scrollRef} className="admin-chatbot-messages">
+          <div ref={scrollRef} className="admin-chatbot-thread">
             {messages.map((message) => (
               <article
                 key={message.id}
                 className={cn(
                   'admin-chatbot-message',
-                  message.role === 'user' ? 'admin-chatbot-message--user' : 'admin-chatbot-message--assistant',
+                  message.role === 'user'
+                    ? 'admin-chatbot-message--user'
+                    : 'admin-chatbot-message--assistant',
                 )}
               >
                 {message.role === 'assistant' ? (
@@ -514,56 +538,122 @@ export default function AdminChatbotPage() {
                     <Bot className="h-3.5 w-3.5" />
                   </div>
                 ) : null}
+
                 <div className="admin-chatbot-bubble">
+                  <div className="admin-chatbot-message-meta">
+                    <span className="admin-chatbot-message-author">
+                      {message.role === 'assistant'
+                        ? 'Nexora Admin Analytics'
+                        : 'You'}
+                    </span>
+                    <time className="admin-chatbot-time">
+                      {formatTime(message.createdAt)}
+                    </time>
+                  </div>
+
                   <p>{message.content}</p>
-                  <time className="admin-chatbot-time">{formatTime(message.createdAt)}</time>
+
+                  {message.chart ? (
+                    <AdminAnalyticsChatChart chart={message.chart} />
+                  ) : null}
+
+                  {message.sources && message.sources.length > 0 ? (
+                    <div className="admin-chatbot-source-block">
+                      <p className="admin-chatbot-source-heading">Sources</p>
+                      <div className="mt-2 space-y-2">
+                        {message.sources.map((source, index) => (
+                          <div
+                            key={`${source.source}-${index}`}
+                            className="admin-chatbot-source-card"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-[var(--admin-text-primary)]">
+                                {source.source}
+                              </span>
+                              {source.window ? (
+                                <span className="admin-chatbot-source-window">
+                                  {source.window}
+                                </span>
+                              ) : null}
+                            </div>
+                            {renderSourceFilters(source.filters)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </article>
             ))}
-            {sending ? (
+
+            {sending || sessionLoading ? (
               <article className="admin-chatbot-message admin-chatbot-message--assistant">
                 <div className="admin-chatbot-message-icon">
                   <Bot className="h-3.5 w-3.5" />
                 </div>
                 <div className="admin-chatbot-bubble">
+                  <div className="admin-chatbot-message-meta">
+                    <span className="admin-chatbot-message-author">
+                      Nexora Admin Analytics
+                    </span>
+                  </div>
                   <p className="inline-flex items-center gap-2 text-[var(--admin-text-muted)]">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Thinking...
+                    {sessionLoading ? 'Loading conversation...' : 'Thinking...'}
                   </p>
                 </div>
               </article>
             ) : null}
           </div>
 
-          <footer className="admin-chatbot-input-row">
-            <textarea
-              ref={inputRef}
-              className="admin-chatbot-input"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask anything about your platform..."
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  sendMessage();
-                }
-              }}
-              rows={1}
-              disabled={sending}
-            />
-            <Button
-              size="icon"
-              className="admin-chatbot-send"
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || sending}
-              aria-label="Send message"
-            >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <SendHorizontal className="h-4 w-4" />
-              )}
-            </Button>
+          <footer className="admin-chatbot-composer">
+            <div className="admin-chatbot-composer-shell">
+              <textarea
+                ref={inputRef}
+                className="admin-chatbot-input"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ask about reports, evaluations, audit events, or usage trends..."
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendMessage();
+                  }
+                }}
+                rows={1}
+                disabled={sending || sessionLoading}
+              />
+
+              <div className="admin-chatbot-composer-bar">
+                <div className="admin-chatbot-composer-hints">
+                  <span className="admin-chatbot-hint-pill">
+                    <ShieldCheck className="h-3 w-3" />
+                    Admin only
+                  </span>
+                  <span className="admin-chatbot-hint-pill">
+                    <Sparkles className="h-3 w-3" />
+                    Grounded sources
+                  </span>
+                  <span className="admin-chatbot-hint-pill">
+                    Read-only analytics
+                  </span>
+                </div>
+
+                <Button
+                  className="admin-chatbot-send"
+                  onClick={() => void sendMessage()}
+                  disabled={!input.trim() || sending || sessionLoading}
+                  aria-label="Send message"
+                >
+                  {sending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SendHorizontal className="h-4 w-4" />
+                  )}
+                  Send
+                </Button>
+              </div>
+            </div>
           </footer>
         </section>
       </div>

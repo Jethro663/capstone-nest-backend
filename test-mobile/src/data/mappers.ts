@@ -19,9 +19,9 @@ import { colors, gradients } from "../theme/tokens";
 
 const subjectVisuals = [
   { match: ["math", "algebra", "geometry", "statistics"], emoji: "📐", color: colors.red, bgColor: colors.paleRed, gradient: gradients.assessments },
-  { match: ["science", "biology", "chemistry", "physics"], emoji: "🔬", color: colors.green, bgColor: colors.paleGreen, gradient: gradients.progress },
-  { match: ["english", "reading", "literature"], emoji: "📚", color: colors.blue, bgColor: colors.paleBlue, gradient: gradients.lessons },
-  { match: ["history", "social", "civics"], emoji: "🏛️", color: colors.orange, bgColor: colors.paleOrange, gradient: gradients.lessons },
+  { match: ["science", "biology", "chemistry", "physics"], emoji: "🔬", color: colors.green, bgColor: colors.paleGreen, gradient: gradients.announcements },
+  { match: ["english", "reading", "literature"], emoji: "📚", color: colors.blue, bgColor: colors.paleBlue, gradient: gradients.classes },
+  { match: ["history", "social", "civics"], emoji: "🏛️", color: colors.orange, bgColor: colors.paleOrange, gradient: gradients.classes },
   { match: ["filipino", "language"], emoji: "🌺", color: colors.purple, bgColor: colors.palePurple, gradient: gradients.profile },
 ];
 

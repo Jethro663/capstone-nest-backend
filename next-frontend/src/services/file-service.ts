@@ -2,6 +2,8 @@ import { api } from '@/lib/api-client';
 import type {
   FileLibraryResponse,
   FileLibraryQuery,
+  LibraryGradeLevel,
+  LibrarySubjectKey,
   LibraryFolder,
   StorageSummary,
   UploadedFile,
@@ -14,6 +16,9 @@ export const fileService = {
       classId?: string;
       folderId?: string;
       scope?: 'private' | 'general';
+      subjectKey?: LibrarySubjectKey;
+      gradeLevel?: LibraryGradeLevel;
+      teacherVisible?: boolean;
     } = {},
   ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const formData = new FormData();
@@ -79,6 +84,9 @@ export const fileService = {
       folderId?: string | null;
       classId?: string | null;
       scope?: 'private' | 'general';
+      subjectKey?: LibrarySubjectKey;
+      gradeLevel?: LibraryGradeLevel;
+      teacherVisible?: boolean;
     },
   ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const { data } = await api.patch(`/files/${id}`, dto);
@@ -87,6 +95,11 @@ export const fileService = {
 
   async download(id: string): Promise<Blob> {
     const { data } = await api.get(`/files/${id}/download`, { responseType: 'blob' });
+    return data;
+  },
+
+  async retryIndex(id: string): Promise<{ success: boolean; message: string; data: UploadedFile }> {
+    const { data } = await api.post(`/files/${id}/index/retry`);
     return data;
   },
 

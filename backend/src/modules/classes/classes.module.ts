@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
-import { ClassesController, ClassesPublicController } from './classes.controller';
+import {
+  ClassesController,
+  ClassesPublicController,
+} from './classes.controller';
 import { ClassesService } from './classes.service';
 import { DatabaseModule } from '../../database/database.module';
 import { AuditModule } from '../audit/audit.module';

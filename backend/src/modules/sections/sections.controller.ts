@@ -113,12 +113,7 @@ export class SectionsController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getMySections(
     @Query('status')
-    statusQuery:
-      | 'active'
-      | 'archived'
-      | 'hidden'
-      | 'all'
-      | undefined,
+    statusQuery: 'active' | 'archived' | 'hidden' | 'all' | undefined,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const normalizedStatus = statusQuery ?? 'all';
@@ -152,8 +147,15 @@ export class SectionsController {
    */
   @Post('create')
   @Roles(RoleName.Admin)
-  async createSection(@Body() createSectionDto: CreateSectionDto) {
-    const section = await this.sectionsService.createSection(createSectionDto);
+  async createSection(
+    @Body() createSectionDto: CreateSectionDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const section = await this.sectionsService.createSection(
+      createSectionDto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -171,10 +173,13 @@ export class SectionsController {
   async updateSection(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSectionDto: UpdateSectionDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const updatedSection = await this.sectionsService.updateSection(
       id,
       updateSectionDto,
+      user?.userId,
+      user?.roles ?? [],
     );
 
     return {
@@ -245,8 +250,15 @@ export class SectionsController {
    */
   @Delete('delete/:id')
   @Roles(RoleName.Admin)
-  async deleteSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.archiveSection(id);
+  async deleteSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    await this.sectionsService.archiveSection(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -258,8 +270,13 @@ export class SectionsController {
   @Roles(RoleName.Admin)
   async bulkLifecycle(
     @Body() dto: BulkSectionLifecycleDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const result = await this.sectionsService.bulkLifecycleAction(dto);
+    const result = await this.sectionsService.bulkLifecycleAction(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -314,8 +331,15 @@ export class SectionsController {
    */
   @Put(':id/restore')
   @Roles(RoleName.Admin)
-  async restoreSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.restoreSection(id);
+  async restoreSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    await this.sectionsService.restoreSection(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -349,18 +373,62 @@ export class SectionsController {
     @CurrentUser() user: { userId: string; roles: string[] },
     @Query('gradeLevel') gradeLevel?: string,
     @Query('search') search?: string,
+    @Query('assignedSectionId') assignedSectionId?: string,
+    @Query('eligibility') eligibility?: 'all' | 'eligible' | 'mismatch',
+    @Query('sortBy')
+    sortBy?:
+      | 'lastName'
+      | 'firstName'
+      | 'email'
+      | 'gradeLevel'
+      | 'lrn'
+      | 'eligibility',
+    @Query('sortDirection') sortDirection?: 'asc' | 'desc',
+    @Query('prioritizeEligible') prioritizeEligible?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    const filters: { gradeLevel?: string; search?: string } = {};
+    const filters: {
+      gradeLevel?: string;
+      search?: string;
+      assignedSectionId?: string;
+      eligibility?: 'all' | 'eligible' | 'mismatch';
+      sortBy?:
+        | 'lastName'
+        | 'firstName'
+        | 'email'
+        | 'gradeLevel'
+        | 'lrn'
+        | 'eligibility';
+      sortDirection?: 'asc' | 'desc';
+      prioritizeEligible?: boolean;
+      page?: number;
+      limit?: number;
+    } = {};
     if (gradeLevel) filters.gradeLevel = gradeLevel;
     if (search) filters.search = search;
+    if (assignedSectionId) filters.assignedSectionId = assignedSectionId;
+    if (eligibility) filters.eligibility = eligibility;
+    if (sortBy) filters.sortBy = sortBy;
+    if (sortDirection) filters.sortDirection = sortDirection;
+    if (prioritizeEligible !== undefined) {
+      filters.prioritizeEligible = prioritizeEligible !== 'false';
+    }
+    filters.page = parsePositiveIntQuery(page, 'page');
+    filters.limit = parsePositiveIntQuery(limit, 'limit');
 
-    const candidates = await this.sectionsService.getCandidates(
-      id,
-      filters,
-      user,
-    );
+    const result = await this.sectionsService.getCandidates(id, filters, user);
 
-    return { success: true, data: candidates, count: candidates.length };
+    if (Array.isArray(result)) {
+      return { success: true, data: result, count: result.length };
+    }
+
+    return {
+      ...result,
+      success: true,
+      data: result.data,
+      count: result.data.length,
+    };
   }
 
   /**
@@ -415,8 +483,15 @@ export class SectionsController {
    */
   @Delete('permanent/:id')
   @Roles(RoleName.Admin)
-  async permanentlyDeleteSection(@Param('id', ParseUUIDPipe) id: string) {
-    await this.sectionsService.permanentlyDeleteSection(id);
+  async permanentlyDeleteSection(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    await this.sectionsService.permanentlyDeleteSection(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return { success: true, message: 'Section permanently deleted' };
   }

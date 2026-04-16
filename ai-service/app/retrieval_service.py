@@ -41,47 +41,73 @@ class RetrievalPolicy:
 
 RETRIEVAL_POLICIES: dict[str, RetrievalPolicy] = {
     "general": RetrievalPolicy(
-        preferred_source_types=("lesson_block", "extracted_module", "assessment_question"),
+        preferred_source_types=("lesson_block", "extracted_module", "assessment_question", "library_file"),
         source_weights={
             "lesson_block": 1.0,
             "extracted_module": 0.85,
             "assessment_question": 0.65,
+            "library_file": 0.9,
         },
     ),
     "student_tutor": RetrievalPolicy(
-        preferred_source_types=("lesson_block", "extracted_module", "assessment_question"),
+        preferred_source_types=("lesson_block", "extracted_module", "assessment_question", "library_file"),
         source_weights={
             "lesson_block": 1.25,
             "extracted_module": 1.0,
             "assessment_question": 0.45,
+            "library_file": 0.85,
         },
         require_lesson_bias=True,
     ),
     "mentor_explain": RetrievalPolicy(
-        preferred_source_types=("assessment_question", "lesson_block", "extracted_module"),
+        preferred_source_types=("assessment_question", "lesson_block", "extracted_module", "library_file"),
         source_weights={
             "assessment_question": 1.35,
             "lesson_block": 1.0,
             "extracted_module": 0.75,
+            "library_file": 0.8,
         },
     ),
     "quiz_generation": RetrievalPolicy(
-        preferred_source_types=("lesson_block", "extracted_module", "assessment_question"),
+        preferred_source_types=("lesson_block", "extracted_module", "assessment_question", "library_file"),
         source_weights={
             "lesson_block": 1.2,
             "extracted_module": 1.0,
             "assessment_question": 0.55,
+            "library_file": 1.05,
         },
     ),
     "remedial": RetrievalPolicy(
-        preferred_source_types=("lesson_block", "assessment_question", "extracted_module"),
+        preferred_source_types=("lesson_block", "assessment_question", "extracted_module", "library_file"),
         source_weights={
             "lesson_block": 1.15,
             "assessment_question": 1.0,
             "extracted_module": 0.8,
+            "library_file": 0.95,
         },
     ),
 }
+
+
+def normalize_library_subject_key(subject_code: str | None, subject_name: str | None = None) -> str | None:
+    raw = f"{subject_code or ''} {subject_name or ''}".lower()
+    if "science" in raw or raw.startswith("sci"):
+        return "science"
+    if "math" in raw:
+        return "math"
+    if "english" in raw or raw.startswith("eng"):
+        return "english"
+    if "filipino" in raw or raw.startswith("fil"):
+        return "filipino"
+    if "araling" in raw or "panlipunan" in raw or raw.startswith("ap"):
+        return "ap"
+    if "tle" in raw or "technology" in raw or "livelihood" in raw:
+        return "tle"
+    if "mapeh" in raw or "music" in raw or "arts" in raw or "physical" in raw or "health" in raw:
+        return "mapeh"
+    if "esp" in raw or "values" in raw or "edukasyon sa pagpapakatao" in raw:
+        return "esp"
+    return None
 
 
 def _keyword_set(text: str) -> set[str]:
@@ -161,6 +187,9 @@ async def _vector_search(
     *,
     query_text: str,
     class_id: str,
+    subject_key: str | None = None,
+    grade_level: str | None = None,
+    include_library: bool = True,
     limit: int,
     lesson_ids: list[str] | None = None,
     assessment_ids: list[str] | None = None,
@@ -173,13 +202,32 @@ async def _vector_search(
         "embedding": embedding_to_vector_literal(embedding),
         "topK": limit,
     }
-    filters = ["c.class_id = :classId"]
+    if include_library and subject_key and grade_level:
+        params["subjectKey"] = subject_key
+        params["gradeLevel"] = grade_level
+        filters = [
+            """
+            (
+              c.class_id = :classId
+              OR (
+                c.source_type = 'library_file'
+                AND c.subject_key = :subjectKey
+                AND c.grade_level = :gradeLevel
+              )
+            )
+            """
+        ]
+    else:
+        filters = ["c.class_id = :classId"]
     query_text_template = """
         SELECT
           c.id,
           c.source_type,
           c.source_id,
           c.class_id,
+          c.library_file_id,
+          c.subject_key,
+          c.grade_level,
           c.lesson_id,
           c.assessment_id,
           c.question_id,
@@ -236,7 +284,10 @@ async def _vector_search(
                 "id": str(row["id"]),
                 "sourceType": row["source_type"],
                 "sourceId": str(row["source_id"]),
-                "classId": str(row["class_id"]),
+                "classId": str(row["class_id"]) if row["class_id"] else None,
+                "libraryFileId": str(row["library_file_id"]) if row["library_file_id"] else None,
+                "subjectKey": row["subject_key"],
+                "gradeLevel": row["grade_level"],
                 "lessonId": str(row["lesson_id"]) if row["lesson_id"] else None,
                 "assessmentId": str(row["assessment_id"]) if row["assessment_id"] else None,
                 "questionId": str(row["question_id"]) if row["question_id"] else None,
@@ -399,6 +450,7 @@ def rerank_chunks(
     seen_source_keys: set[tuple[Any, ...]] = set()
     for item in ranked:
         source_key = (
+            item.get("sourceId"),
             item.get("lessonId"),
             item.get("assessmentId"),
             item.get("questionId"),
@@ -417,6 +469,9 @@ async def similarity_search(
     *,
     query_text: str,
     class_id: str,
+    subject_key: str | None = None,
+    grade_level: str | None = None,
+    include_library: bool = True,
     top_k: int = 8,
     lesson_ids: list[str] | None = None,
     assessment_ids: list[str] | None = None,
@@ -443,6 +498,9 @@ async def similarity_search(
             db,
             query_text=variant,
             class_id=class_id,
+            subject_key=subject_key,
+            grade_level=grade_level,
+            include_library=include_library,
             limit=max(top_k * 4, 12),
             lesson_ids=lesson_ids,
             assessment_ids=assessment_ids,
@@ -477,6 +535,9 @@ async def preview_retrieval(
     *,
     query_text: str,
     class_id: str,
+    subject_key: str | None = None,
+    grade_level: str | None = None,
+    include_library: bool = True,
     top_k: int = 8,
     policy_name: str = "general",
     lesson_ids: list[str] | None = None,
@@ -494,6 +555,9 @@ async def preview_retrieval(
         db,
         query_text=query_text,
         class_id=class_id,
+        subject_key=subject_key,
+        grade_level=grade_level,
+        include_library=include_library,
         top_k=top_k,
         lesson_ids=lesson_ids,
         assessment_ids=assessment_ids,

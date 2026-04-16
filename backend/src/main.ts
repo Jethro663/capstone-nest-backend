@@ -152,7 +152,9 @@ async function bootstrap() {
   logger.log(
     `Application running on http://localhost:3000 [${isProd ? 'production' : 'development'}]`,
   );
-  logger.log(`CORS allowlist: ${allowedOrigins.join(', ') || '[none configured]'}`);
+  logger.log(
+    `CORS allowlist: ${allowedOrigins.join(', ') || '[none configured]'}`,
+  );
 }
 
 bootstrap();

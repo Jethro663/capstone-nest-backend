@@ -1,8 +1,4 @@
-import {
-  Controller,
-  Get,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../auth/decorators/public.decorator';
 import { HealthService } from './health.service';
@@ -37,10 +33,17 @@ export class HealthController {
   @Public()
   @Get('ready')
   @ApiOperation({
-    summary: 'Readiness check covering database, Redis, and AI-service dependencies',
+    summary:
+      'Readiness check covering database, Redis, and AI-service dependencies',
   })
-  @ApiResponse({ status: 200, description: 'Server is ready to receive traffic' })
-  @ApiResponse({ status: 503, description: 'One or more dependencies are not ready' })
+  @ApiResponse({
+    status: 200,
+    description: 'Server is ready to receive traffic',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'One or more dependencies are not ready',
+  })
   async readiness() {
     const status = await this.healthService.getReadiness();
 

@@ -4,11 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
+    "dev:smoke": "node scripts/dev-with-smoke.js",
+    "dev:webpack": "next dev --webpack -p 3001",
+    "dev:turbo": "next dev -p 3001",
+    "perf:auth-smoke": "node scripts/auth-perf-smoke.js",
+    "perf:nav-smoke": "node scripts/nav-perf-smoke.js",
+    "perf:discussion-smoke": "node scripts/discussion-perf-smoke.js",
     "build": "next build",
     "start": "node scripts/start-standalone.js",
     "lint": "eslint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:admin": "playwright test tests/e2e/admin-class-template-editor.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -33,6 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.0.0",
     "dompurify": "^3.3.3",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.33.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.487.0",

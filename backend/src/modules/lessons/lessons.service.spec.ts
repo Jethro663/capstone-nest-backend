@@ -436,6 +436,8 @@ describe('LessonsService', () => {
     it('inserts block and returns the new record', async () => {
       db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+      // First insert is used by auto snapshot version write, second for content block insert.
+      mockInsert(db, []);
       mockInsert(db, [MOCK_BLOCK]);
 
       const result = await service.addContentBlock(blockDto, TEACHER_ID, [
@@ -656,7 +658,9 @@ describe('LessonsService', () => {
           },
         ],
       });
-      db.query.lessonCompletions.findMany.mockResolvedValue([{ lessonId: LESSON_ID }]);
+      db.query.lessonCompletions.findMany.mockResolvedValue([
+        { lessonId: LESSON_ID },
+      ]);
       db.query.assessmentAttempts.findMany.mockResolvedValue([]);
 
       const now = new Date();

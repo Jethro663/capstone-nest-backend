@@ -21,16 +21,21 @@ import type { Response } from 'express';
 import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
+import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { FileUploadService } from './file-upload.service';
-import { PdfValidationPipe } from './pipes/pdf-validation.pipe';
+import {
+  getLibraryFileKind,
+  LibraryFileValidationPipe,
+} from './pipes/library-file-validation.pipe';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   MAX_FILE_SIZE_BYTES,
+  ALLOWED_MIME_TYPES,
   UPLOAD_DEST,
 } from './constants/file-upload.constants';
 import {
@@ -49,7 +54,8 @@ const multerOptions = {
       cb(null, UPLOAD_DEST);
     },
     filename: (_req, _file, cb) => {
-      cb(null, `${uuidv4()}_${Date.now()}.pdf`);
+      const ext = path.extname(_file.originalname).toLowerCase();
+      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
     },
   }),
   limits: {
@@ -61,7 +67,7 @@ const multerOptions = {
     file: Express.Multer.File,
     cb: (error: Error | null, accept: boolean) => void,
   ) => {
-    if (file.mimetype === 'application/pdf') cb(null, true);
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype as any)) cb(null, true);
     else cb(null, false);
   },
 };
@@ -81,18 +87,31 @@ export class FileUploadController {
     };
   }
 
+  private async computeContentHash(filePath: string) {
+    const hash = createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    for await (const chunk of stream) {
+      hash.update(chunk);
+    }
+    return hash.digest('hex');
+  }
+
   @Post('upload')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', multerOptions))
   async uploadFile(
-    @UploadedFile(new PdfValidationPipe()) file: Express.Multer.File,
+    @UploadedFile(new LibraryFileValidationPipe()) file: Express.Multer.File,
     @Query() query: UploadFileDto,
     @CurrentUser() user: any,
   ) {
     const scope = query.scope ?? FileScopeDto.Private;
     const currentUser = this.normalizeUser(user);
+    const fileKind = getLibraryFileKind(file);
+    const contentHash = Buffer.isBuffer(file.buffer)
+      ? createHash('sha256').update(file.buffer).digest('hex')
+      : await this.computeContentHash(file.path);
 
     const record = await this.fileUploadService.saveFileRecord(
       {
@@ -104,24 +123,26 @@ export class FileUploadController {
         storedName: file.filename,
         mimeType: file.mimetype,
         sizeBytes: file.size,
-        filePath: path.posix.join('uploads', 'pdfs', file.filename),
+        filePath: path.posix.join('uploads', 'library', file.filename),
+        subjectKey: query.subjectKey,
+        gradeLevel: query.gradeLevel,
+        teacherVisible: query.teacherVisible,
+        contentHash,
+        fileKind,
       },
       currentUser,
     );
 
     return {
       success: true,
-      message: 'PDF uploaded successfully',
+      message: 'Library file uploaded successfully',
       data: record,
     };
   }
 
   @Get()
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async listFiles(
-    @CurrentUser() user: any,
-    @Query() query: FileQueryDto,
-  ) {
+  async listFiles(@CurrentUser() user: any, @Query() query: FileQueryDto = {}) {
     const files = await this.fileUploadService.findAll(
       this.normalizeUser(user),
       query,
@@ -141,10 +162,7 @@ export class FileUploadController {
 
   @Get('folders')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async listFolders(
-    @CurrentUser() user: any,
-    @Query() query: FileQueryDto,
-  ) {
+  async listFolders(@CurrentUser() user: any, @Query() query: FileQueryDto) {
     const folders = await this.fileUploadService.listFolders(
       this.normalizeUser(user),
       query,
@@ -229,7 +247,10 @@ export class FileUploadController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: any,
   ) {
-    const file = await this.fileUploadService.findOne(id, this.normalizeUser(user));
+    const file = await this.fileUploadService.findOne(
+      id,
+      this.normalizeUser(user),
+    );
 
     return {
       success: true,
@@ -265,12 +286,13 @@ export class FileUploadController {
     @CurrentUser() user: any,
     @Res() res: Response,
   ) {
-    const filePath = await this.fileUploadService.getFilePath(
+    const record = await this.fileUploadService.getFileForDownload(
       id,
       this.normalizeUser(user),
     );
+    const filePath = record.filePath;
     const absolutePath = path.resolve(filePath);
-    const uploadsRoot = path.resolve(UPLOAD_DEST);
+    const uploadsRoot = path.resolve('uploads');
 
     if (!absolutePath.startsWith(uploadsRoot)) {
       res.status(403).json({
@@ -290,12 +312,30 @@ export class FileUploadController {
       return;
     }
 
-    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Type', record.mimeType);
     res.setHeader(
       'Content-Disposition',
-      `inline; filename="${path.basename(absolutePath)}"`,
+      `inline; filename="${record.originalName.replace(/"/g, '')}"`,
     );
     res.sendFile(absolutePath);
+  }
+
+  @Post(':id/index/retry')
+  @Roles(RoleName.Admin)
+  async retryIndex(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: any,
+  ) {
+    const file = await this.fileUploadService.retryIndex(
+      id,
+      this.normalizeUser(user),
+    );
+
+    return {
+      success: true,
+      message: 'Library indexing queued',
+      data: file,
+    };
   }
 
   @Delete(':id')

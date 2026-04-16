@@ -1,6 +1,8 @@
-import {
+﻿import {
+  BadRequestException,
   Controller,
   ForbiddenException,
+  HttpException,
   Get,
   Post,
   Patch,
@@ -13,6 +15,8 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   Logger,
+  NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -24,6 +28,7 @@ import {
 
 import { AiProxyService } from './ai-proxy.service';
 import { ChatRequestDto } from './DTO/chat.dto';
+import { AdminAnalyticsChatRequestDto } from './DTO/admin-chat.dto';
 import { MentorExplainDto } from './DTO/mentor-explain.dto';
 import {
   ExtractModuleDto,
@@ -32,6 +37,8 @@ import {
 } from './DTO/extract-module.dto';
 import { GenerateQuizDraftDto } from './DTO/quiz-generation.dto';
 import { InterventionRecommendationDto } from './DTO/intervention-recommendation.dto';
+import { DemoInterventionPlanDto } from './DTO/demo-intervention-plan.dto';
+import { UpdateClassAiPolicyDto } from './DTO/class-ai-policy.dto';
 import {
   StudentTutorAnswersDto,
   StudentTutorBootstrapQueryDto,
@@ -43,12 +50,25 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { AuditService } from '../audit/audit.service';
 import { DatabaseService } from '../../database/database.service';
+import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
 import {
+  aiGenerationJobs,
+  aiGenerationOutputs,
+  aiInteractionLogs,
+  assessments,
+  assessmentAttempts,
+  classAiPolicies,
+  classes,
   classModules,
   enrollments,
+  extractedModules,
+  interventionCases,
+  performanceSnapshots,
+  uploadedFiles,
 } from '../../drizzle/schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 @ApiTags('AI Mentor')
 @ApiBearerAuth('token')
@@ -56,14 +76,494 @@ import { and, eq, inArray } from 'drizzle-orm';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AiMentorController {
   private readonly logger = new Logger(AiMentorController.name);
+  private readonly defaultClassAiPolicy = {
+    mentorExplainEnabled: true,
+    maxFollowUpTurns: 3,
+    sourceScope: 'class_materials',
+    strictGrounding: false,
+  } as const;
 
   constructor(
     private readonly proxy: AiProxyService,
     private readonly databaseService: DatabaseService,
+    private readonly auditService: AuditService,
+    private readonly adminAnalyticsChatService: AdminAnalyticsChatService,
   ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private toIsoDate(value: unknown) {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string') return value;
+    return new Date().toISOString();
+  }
+
+  private toExtractionFallbackPayload(extraction: {
+    id: string;
+    fileId: string;
+    classId: string;
+    teacherId: string;
+    extractionStatus: string;
+    modelUsed: string | null;
+    errorMessage: string | null;
+    structuredContent: unknown;
+    isApplied: boolean;
+    progressPercent: number;
+    totalChunks: number | null;
+    processedChunks: number;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    file?: { originalName: string } | null;
+  }) {
+    return {
+      id: extraction.id,
+      fileId: extraction.fileId,
+      classId: extraction.classId,
+      teacherId: extraction.teacherId,
+      extractionStatus: extraction.extractionStatus,
+      modelUsed: extraction.modelUsed ?? null,
+      errorMessage: extraction.errorMessage ?? null,
+      structuredContent: extraction.structuredContent ?? null,
+      isApplied: extraction.isApplied,
+      progressPercent: extraction.progressPercent ?? 0,
+      totalChunks: extraction.totalChunks ?? null,
+      processedChunks: extraction.processedChunks ?? 0,
+      createdAt: this.toIsoDate(extraction.createdAt),
+      updatedAt: this.toIsoDate(extraction.updatedAt),
+      originalName: extraction.file?.originalName ?? undefined,
+    };
+  }
+
+  private hasRole(userRoles: string[] | undefined, role: RoleName) {
+    return Array.isArray(userRoles) && userRoles.includes(role);
+  }
+
+  private async assertAdminAnalyticsAccess(
+    user: {
+      id: string;
+      email: string;
+      roles: string[];
+    },
+    route: string,
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+
+    await this.adminAnalyticsChatService.logDeniedAttempt(user, route);
+    throw new ForbiddenException(
+      'Admin analytics chat is restricted to admin accounts.',
+    );
+  }
+
+  private async assertTeacherClassAccess(
+    classId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can access this class.',
+      );
+    }
+
+    const classRecord = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: {
+        id: true,
+        teacherId: true,
+      },
+    });
+
+    if (!classRecord) {
+      throw new NotFoundException(`Class with ID "${classId}" not found`);
+    }
+
+    if (classRecord.teacherId !== user.id) {
+      throw new ForbiddenException('You do not have access to this class.');
+    }
+  }
+
+  private async assertTeacherExtractionAccess(
+    extractionId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can access this extraction.',
+      );
+    }
+
+    const extraction = await this.db.query.extractedModules.findFirst({
+      where: eq(extractedModules.id, extractionId),
+      columns: {
+        id: true,
+        classId: true,
+      },
+    });
+
+    if (!extraction) {
+      throw new NotFoundException(
+        `Extraction with ID "${extractionId}" not found`,
+      );
+    }
+
+    await this.assertTeacherClassAccess(extraction.classId, user);
+  }
+
+  private async assertTeacherFileAccess(
+    fileId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can start module extraction.',
+      );
+    }
+
+    const file = await this.db.query.uploadedFiles.findFirst({
+      where: eq(uploadedFiles.id, fileId),
+      columns: {
+        id: true,
+        classId: true,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID "${fileId}" not found`);
+    }
+    if (!file.classId) {
+      throw new BadRequestException(
+        'Extraction requires a class-scoped uploaded file.',
+      );
+    }
+
+    await this.assertTeacherClassAccess(file.classId, user);
+  }
+
+  private async assertTeacherInterventionCaseAccess(
+    caseId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const interventionCase = await this.db.query.interventionCases.findFirst({
+      where: eq(interventionCases.id, caseId),
+      columns: {
+        id: true,
+        classId: true,
+        studentId: true,
+        status: true,
+      },
+    });
+
+    if (!interventionCase) {
+      throw new NotFoundException(
+        `Intervention case with ID "${caseId}" not found`,
+      );
+    }
+
+    await this.assertTeacherClassAccess(interventionCase.classId, user);
+
+    if (!['pending', 'active'].includes(interventionCase.status)) {
+      throw new BadRequestException(
+        'AI recommendations are only available for pending or active intervention cases.',
+      );
+    }
+
+    const latestSnapshot = await this.db.query.performanceSnapshots.findFirst({
+      where: and(
+        eq(performanceSnapshots.studentId, interventionCase.studentId),
+        eq(performanceSnapshots.classId, interventionCase.classId),
+      ),
+      columns: {
+        isAtRisk: true,
+      },
+    });
+
+    if (!latestSnapshot?.isAtRisk) {
+      throw new BadRequestException(
+        'AI recommendations are only available when the student is currently at risk.',
+      );
+    }
+  }
+
+  private normalizeClassAiPolicy(
+    classId: string,
+    policy?: {
+      mentorExplainEnabled: boolean;
+      maxFollowUpTurns: number;
+      sourceScope: string;
+      strictGrounding: boolean;
+      updatedBy: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    } | null,
+  ) {
+    return {
+      classId,
+      mentorExplainEnabled:
+        policy?.mentorExplainEnabled ??
+        this.defaultClassAiPolicy.mentorExplainEnabled,
+      maxFollowUpTurns:
+        policy?.maxFollowUpTurns ?? this.defaultClassAiPolicy.maxFollowUpTurns,
+      sourceScope: policy?.sourceScope ?? this.defaultClassAiPolicy.sourceScope,
+      strictGrounding:
+        policy?.strictGrounding ?? this.defaultClassAiPolicy.strictGrounding,
+      updatedBy: policy?.updatedBy ?? null,
+      createdAt: this.toIsoDate(policy?.createdAt),
+      updatedAt: this.toIsoDate(policy?.updatedAt),
+    };
+  }
+
+  private async getClassAiPolicy(classId: string) {
+    const policy = await this.db.query.classAiPolicies.findFirst({
+      where: eq(classAiPolicies.classId, classId),
+      columns: {
+        mentorExplainEnabled: true,
+        maxFollowUpTurns: true,
+        sourceScope: true,
+        strictGrounding: true,
+        updatedBy: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    return this.normalizeClassAiPolicy(classId, policy);
+  }
+
+  private async assertMentorExplainPolicy(
+    dto: MentorExplainDto,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: eq(assessmentAttempts.id, dto.attemptId),
+      columns: {
+        id: true,
+        studentId: true,
+        assessmentId: true,
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException(
+        `Assessment attempt with ID "${dto.attemptId}" not found`,
+      );
+    }
+
+    if (
+      !this.hasRole(user.roles, RoleName.Admin) &&
+      attempt.studentId !== user.id
+    ) {
+      throw new ForbiddenException(
+        'You can only request mentoring help for your own assessment attempts.',
+      );
+    }
+
+    const assessment = await this.db.query.assessments.findFirst({
+      where: eq(assessments.id, attempt.assessmentId),
+      columns: { classId: true },
+    });
+
+    if (!assessment?.classId) {
+      throw new NotFoundException(
+        `Assessment with ID "${attempt.assessmentId}" not found`,
+      );
+    }
+
+    const policy = await this.getClassAiPolicy(assessment.classId);
+    if (!policy.mentorExplainEnabled) {
+      throw new ForbiddenException(
+        'AI mentor help is currently disabled by your teacher for this class.',
+      );
+    }
+
+    if (
+      dto.message?.trim() &&
+      policy.maxFollowUpTurns >= 0 &&
+      !this.hasRole(user.roles, RoleName.Admin)
+    ) {
+      const followUpCount = await this.db
+        .select({
+          total: sql<number>`count(*)::int`,
+        })
+        .from(aiInteractionLogs)
+        .where(
+          and(
+            eq(aiInteractionLogs.userId, user.id),
+            eq(aiInteractionLogs.sessionType, 'mistake_explanation'),
+            sql`${aiInteractionLogs.contextMetadata} ->> 'attemptId' = ${dto.attemptId}`,
+            sql`${aiInteractionLogs.contextMetadata} ->> 'questionId' = ${dto.questionId}`,
+          ),
+        );
+      const total = Number(followUpCount[0]?.total ?? 0);
+      if (total >= policy.maxFollowUpTurns) {
+        throw new BadRequestException(
+          `This class allows up to ${policy.maxFollowUpTurns} AI follow-up turn(s) per question.`,
+        );
+      }
+    }
+
+    return policy;
+  }
+
+  private async assertStudentTutorClassPolicy(
+    classId: string,
+    user: { id: string; email: string; roles: string[] },
+    options?: { sessionId?: string; messageText?: string },
+  ) {
+    const policy = await this.getClassAiPolicy(classId);
+    if (!policy.mentorExplainEnabled) {
+      throw new ForbiddenException(
+        'AI tutor assistance is currently disabled by your teacher for this class.',
+      );
+    }
+
+    if (
+      options?.messageText?.trim() &&
+      options?.sessionId &&
+      policy.maxFollowUpTurns >= 0
+    ) {
+      const followUpCount = await this.db
+        .select({
+          total: sql<number>`count(*)::int`,
+        })
+        .from(aiInteractionLogs)
+        .where(
+          and(
+            eq(aiInteractionLogs.userId, user.id),
+            eq(aiInteractionLogs.sessionType, 'mentor_chat'),
+            eq(aiInteractionLogs.sessionId, options.sessionId),
+          ),
+        );
+      const total = Number(followUpCount[0]?.total ?? 0);
+      if (total >= policy.maxFollowUpTurns) {
+        throw new BadRequestException(
+          `This class allows up to ${policy.maxFollowUpTurns} AI follow-up turn(s) per session.`,
+        );
+      }
+    }
+  }
+
+  private async assertTeacherJobAccess(
+    jobId: string,
+    user: { id: string; email: string; roles: string[] },
+  ) {
+    const job = await this.db.query.aiGenerationJobs.findFirst({
+      where: eq(aiGenerationJobs.id, jobId),
+      columns: {
+        id: true,
+        teacherId: true,
+      },
+    });
+
+    if (!job) {
+      throw new NotFoundException(
+        `AI generation job with ID "${jobId}" not found`,
+      );
+    }
+
+    if (this.hasRole(user.roles, RoleName.Admin)) {
+      return;
+    }
+    if (!this.hasRole(user.roles, RoleName.Teacher)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can access AI generation jobs.',
+      );
+    }
+    if (!job.teacherId || job.teacherId !== user.id) {
+      throw new ForbiddenException(
+        'You do not have access to this AI generation job.',
+      );
+    }
+  }
+
+  private extractRuntimeFromSourceFilters(
+    sourceFilters: unknown,
+  ): Record<string, unknown> | null {
+    if (!sourceFilters || typeof sourceFilters !== 'object') {
+      return null;
+    }
+    const runtime = (sourceFilters as Record<string, unknown>).runtime;
+    if (!runtime || typeof runtime !== 'object') {
+      return null;
+    }
+    return runtime as Record<string, unknown>;
+  }
+
+  private runtimeProgressForStatus(
+    status: string,
+    runtime: Record<string, unknown> | null,
+  ): number {
+    const rawPercent = runtime?.progressPercent;
+    if (typeof rawPercent === 'number' && Number.isFinite(rawPercent)) {
+      return Math.max(0, Math.min(100, Math.round(rawPercent)));
+    }
+    if (typeof rawPercent === 'string') {
+      const parsed = Number(rawPercent);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, Math.min(100, Math.round(parsed)));
+      }
+    }
+    return (
+      {
+        pending: 5,
+        processing: 60,
+        completed: 100,
+        approved: 100,
+        rejected: 100,
+        failed: 100,
+      }[status] ?? 0
+    );
+  }
+
+  private async resolveAssessmentIdForOutput(outputId: string | null) {
+    if (!outputId) return null;
+    const assessment = await this.db.query.assessments.findFirst({
+      where: eq(assessments.aiGenerationOutputId, outputId),
+      columns: {
+        id: true,
+      },
+    });
+    return assessment?.id ?? null;
+  }
+
+  private normalizeInterventionStructuredOutput(
+    payload: Record<string, unknown>,
+  ) {
+    const normalized = { ...payload };
+    const rawSuggestedPayload =
+      payload.suggestedAssignmentPayload &&
+      typeof payload.suggestedAssignmentPayload === 'object'
+        ? (payload.suggestedAssignmentPayload as Record<string, unknown>)
+        : {};
+
+    const lessonIds = Array.isArray(rawSuggestedPayload.lessonIds)
+      ? rawSuggestedPayload.lessonIds.filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : [];
+    const assessmentIds = Array.isArray(rawSuggestedPayload.assessmentIds)
+      ? rawSuggestedPayload.assessmentIds.filter(
+          (value): value is string => typeof value === 'string',
+        )
+      : [];
+
+    normalized.suggestedAssignmentPayload = {
+      ...rawSuggestedPayload,
+      lessonIds,
+      assessmentIds,
+    };
+
+    return normalized;
   }
 
   private isTutorItemVisible(item: {
@@ -79,7 +579,9 @@ export class AiMentorController {
       return Boolean(item.lesson && !item.lesson.isDraft);
     }
     if (item.itemType === 'assessment') {
-      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+      return Boolean(
+        item.assessment && item.assessment.isPublished && item.isGiven,
+      );
     }
     return Boolean(item.fileId);
   }
@@ -95,8 +597,69 @@ export class AiMentorController {
     return { isEnvelope: false, envelope: null, data: payload };
   }
 
+  private readStringField(payload: unknown, key: string): string | null {
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      key in payload &&
+      typeof (payload as Record<string, unknown>)[key] === 'string'
+    ) {
+      return (payload as Record<string, string>)[key];
+    }
+    return null;
+  }
+
+  private readNumberField(payload: unknown, key: string): number | null {
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      key in payload &&
+      typeof (payload as Record<string, unknown>)[key] === 'number'
+    ) {
+      return (payload as Record<string, number>)[key];
+    }
+    return null;
+  }
+
+  private extractStringField(payload: unknown, key: string): string | null {
+    const unwrapped = this.unwrapEnvelope(payload);
+    return (
+      this.readStringField(unwrapped.data, key) ??
+      this.readStringField(payload, key)
+    );
+  }
+
+  private extractNumberField(payload: unknown, key: string): number | null {
+    const unwrapped = this.unwrapEnvelope(payload);
+    return (
+      this.readNumberField(unwrapped.data, key) ??
+      this.readNumberField(payload, key)
+    );
+  }
+
+  private async logAuditSafe(params: {
+    actorId: string;
+    action: string;
+    targetType: string;
+    targetId: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    try {
+      await this.auditService.log(params);
+    } catch (error) {
+      this.logger.warn(
+        `Audit logging failed for ${params.action} (${params.targetType}:${params.targetId}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   private isAllowedRecommendation(
-    recommendation: { lessonId?: string | null; assessmentId?: string | null } | null | undefined,
+    recommendation:
+      | { lessonId?: string | null; assessmentId?: string | null }
+      | null
+      | undefined,
     allowedLessonIds: Set<string>,
     allowedAssessmentIds: Set<string>,
   ) {
@@ -131,6 +694,51 @@ export class AiMentorController {
     );
   }
 
+  private buildDemoPlanQuestions(
+    weakConcepts: string[],
+    subjectId: 'english' | 'science',
+  ) {
+    const normalizedConcepts =
+      weakConcepts.length > 0
+        ? weakConcepts
+        : subjectId === 'science'
+          ? ['Scientific reasoning', 'Evidence-based explanation']
+          : ['Reading comprehension', 'Paragraph coherence'];
+
+    const questions = normalizedConcepts.flatMap((concept, conceptIndex) => {
+      return [
+        {
+          id: `demo-plan-${subjectId}-${conceptIndex + 1}-a`,
+          prompt: `Which practice habit best improves "${concept}"?`,
+          options: [
+            `Solve one short task on ${concept} and explain your reasoning.`,
+            'Skip steps and memorize only final answers.',
+            'Switch to unrelated topics without review.',
+            'Wait for quiz day before studying.',
+          ],
+          correctIndex: 0,
+          explanation:
+            'Short, guided retrieval with explanation improves retention and transfer.',
+        },
+        {
+          id: `demo-plan-${subjectId}-${conceptIndex + 1}-b`,
+          prompt: `After studying "${concept}", what should you do next?`,
+          options: [
+            'Check understanding with a fresh question and compare with evidence.',
+            'Assume mastery without testing.',
+            'Rewrite the same sentence repeatedly only.',
+            'Skip feedback and grading notes.',
+          ],
+          correctIndex: 0,
+          explanation:
+            'Immediate self-check verifies understanding and reveals remaining gaps.',
+        },
+      ];
+    });
+
+    return questions.slice(0, 10);
+  }
+
   private async getAllowedTutorSourceIds(studentId: string, classId?: string) {
     const enrollmentRows = await this.db.query.enrollments.findMany({
       where: classId
@@ -152,7 +760,10 @@ export class AiMentorController {
       ),
     );
     if (classIds.length === 0) {
-      return { allowedLessonIds: new Set<string>(), allowedAssessmentIds: new Set<string>() };
+      return {
+        allowedLessonIds: new Set<string>(),
+        allowedAssessmentIds: new Set<string>(),
+      };
     }
 
     const modules = await this.db.query.classModules.findMany({
@@ -199,7 +810,11 @@ export class AiMentorController {
       if (module.isLocked) return;
       module.sections.forEach((section) => {
         section.items.forEach((item) => {
-          if (!this.isTutorItemVisible(item as typeof item & { fileId?: string | null })) {
+          if (
+            !this.isTutorItemVisible(
+              item as typeof item & { fileId?: string | null },
+            )
+          ) {
             return;
           }
           if (item.itemType === 'lesson' && item.lessonId) {
@@ -232,12 +847,12 @@ export class AiMentorController {
     return typeof state.classId === 'string' ? state.classId : undefined;
   }
 
-  // ─── JAKIPIR Chat ──────────────────────────────────────────────────────
+  // â”€â”€â”€ JAKIPIR Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * POST /api/ai/chat
    * Multi-turn AI Mentor chat with JAKIPIR ("Ja").
-   * Students only — Ja is a personalized learning detective.
+   * Students only â€” Ja is a personalized learning detective.
    *
    * First message:   { "message": "Hi Ja!" }
    * Follow-up:       { "message": "Tell me more", "sessionId": "<from-prev>" }
@@ -257,17 +872,122 @@ export class AiMentorController {
   @Post('mentor/explain')
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get grounded mentoring help for a returned assessment question' })
+  @ApiOperation({
+    summary: 'Get grounded mentoring help for a returned assessment question',
+  })
   async explainMistake(
     @Body() dto: MentorExplainDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/mentor/explain', user, dto);
+    const policy = await this.assertMentorExplainPolicy(dto, user);
+    return this.proxy.forward('POST', '/mentor/explain', user, {
+      ...dto,
+      policy: {
+        sourceScope: policy.sourceScope,
+        strictGrounding: policy.strictGrounding,
+      },
+    });
+  }
+
+  @Get('teacher/classes/:classId/policy')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get class-level AI mentor assistance policy' })
+  async getTeacherClassAiPolicy(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherClassAccess(classId, user);
+    return {
+      success: true,
+      message: 'Class AI policy retrieved',
+      data: await this.getClassAiPolicy(classId),
+    };
+  }
+
+  @Patch('teacher/classes/:classId/policy')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Update class-level AI mentor assistance policy' })
+  async updateTeacherClassAiPolicy(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Body() dto: UpdateClassAiPolicyDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherClassAccess(classId, user);
+    if (
+      dto.mentorExplainEnabled === undefined &&
+      dto.maxFollowUpTurns === undefined &&
+      dto.sourceScope === undefined &&
+      dto.strictGrounding === undefined
+    ) {
+      throw new BadRequestException(
+        'Provide at least one policy field to update.',
+      );
+    }
+
+    const [updated] = await this.db
+      .insert(classAiPolicies)
+      .values({
+        classId,
+        mentorExplainEnabled:
+          dto.mentorExplainEnabled ??
+          this.defaultClassAiPolicy.mentorExplainEnabled,
+        maxFollowUpTurns:
+          dto.maxFollowUpTurns ?? this.defaultClassAiPolicy.maxFollowUpTurns,
+        sourceScope: dto.sourceScope ?? this.defaultClassAiPolicy.sourceScope,
+        strictGrounding:
+          dto.strictGrounding ?? this.defaultClassAiPolicy.strictGrounding,
+        updatedBy: user.id,
+      })
+      .onConflictDoUpdate({
+        target: classAiPolicies.classId,
+        set: {
+          mentorExplainEnabled:
+            dto.mentorExplainEnabled ??
+            sql`${classAiPolicies.mentorExplainEnabled}`,
+          maxFollowUpTurns:
+            dto.maxFollowUpTurns ?? sql`${classAiPolicies.maxFollowUpTurns}`,
+          sourceScope: dto.sourceScope ?? sql`${classAiPolicies.sourceScope}`,
+          strictGrounding:
+            dto.strictGrounding ?? sql`${classAiPolicies.strictGrounding}`,
+          updatedBy: user.id,
+          updatedAt: new Date(),
+        },
+      })
+      .returning({
+        mentorExplainEnabled: classAiPolicies.mentorExplainEnabled,
+        maxFollowUpTurns: classAiPolicies.maxFollowUpTurns,
+        sourceScope: classAiPolicies.sourceScope,
+        strictGrounding: classAiPolicies.strictGrounding,
+        updatedBy: classAiPolicies.updatedBy,
+        createdAt: classAiPolicies.createdAt,
+        updatedAt: classAiPolicies.updatedAt,
+      });
+
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.class_policy.updated',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        mentorExplainEnabled: updated.mentorExplainEnabled,
+        maxFollowUpTurns: updated.maxFollowUpTurns,
+        sourceScope: updated.sourceScope,
+        strictGrounding: updated.strictGrounding,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Class AI policy updated',
+      data: this.normalizeClassAiPolicy(classId, updated),
+    };
   }
 
   @Get('student/tutor/bootstrap')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Get student tutor classes, recommendations, and saved sessions' })
+  @ApiOperation({
+    summary: 'Get student tutor classes, recommendations, and saved sessions',
+  })
   async studentTutorBootstrap(
     @Query() query: StudentTutorBootstrapQueryDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -291,7 +1011,10 @@ export class AiMentorController {
       recentLessons: Array.isArray(rawData.recentLessons)
         ? rawData.recentLessons.filter((entry) =>
             this.isAllowedRecommendation(
-              entry as { lessonId?: string | null; assessmentId?: string | null },
+              entry as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
               allowedLessonIds,
               allowedAssessmentIds,
             ),
@@ -300,7 +1023,10 @@ export class AiMentorController {
       recentAttempts: Array.isArray(rawData.recentAttempts)
         ? rawData.recentAttempts.filter((entry) =>
             this.isAllowedRecommendation(
-              entry as { lessonId?: string | null; assessmentId?: string | null },
+              entry as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
               allowedLessonIds,
               allowedAssessmentIds,
             ),
@@ -309,7 +1035,10 @@ export class AiMentorController {
       recommendations: Array.isArray(rawData.recommendations)
         ? rawData.recommendations.filter((entry) =>
             this.isAllowedRecommendation(
-              entry as { lessonId?: string | null; assessmentId?: string | null },
+              entry as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
               allowedLessonIds,
               allowedAssessmentIds,
             ),
@@ -328,7 +1057,9 @@ export class AiMentorController {
 
   @Post('student/tutor/session')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Start a student tutor session from a recommended topic' })
+  @ApiOperation({
+    summary: 'Start a student tutor session from a recommended topic',
+  })
   async startStudentTutorSession(
     @Body() dto: StudentTutorStartDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -347,6 +1078,8 @@ export class AiMentorController {
         'Selected tutor recommendation is no longer available to the student.',
       );
     }
+
+    await this.assertStudentTutorClassPolicy(dto.classId, user);
 
     const payload = await this.proxy.forward(
       'POST',
@@ -412,7 +1145,9 @@ export class AiMentorController {
         ? (rawData.state as Record<string, unknown>)
         : null;
     const classId =
-      typeof sessionState?.classId === 'string' ? sessionState.classId : undefined;
+      typeof sessionState?.classId === 'string'
+        ? sessionState.classId
+        : undefined;
     if (!classId) return payload;
 
     const { allowedLessonIds, allowedAssessmentIds } =
@@ -456,12 +1191,25 @@ export class AiMentorController {
 
   @Post('student/tutor/session/:sessionId/message')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Send a follow-up message to a student tutor session' })
+  @ApiOperation({
+    summary: 'Send a follow-up message to a student tutor session',
+  })
   async messageStudentTutorSession(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() dto: StudentTutorMessageDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
+    const classId = await this.resolveTutorSessionClassId(sessionId, user);
+    if (!classId) {
+      throw new NotFoundException(
+        `Student tutor session with ID "${sessionId}" not found`,
+      );
+    }
+    await this.assertStudentTutorClassPolicy(classId, user, {
+      sessionId,
+      messageText: dto.message,
+    });
+
     const payload = await this.proxy.forward(
       'POST',
       `/student/tutor/session/${sessionId}/message`,
@@ -473,9 +1221,6 @@ export class AiMentorController {
       (unwrapped.data && typeof unwrapped.data === 'object'
         ? (unwrapped.data as Record<string, unknown>)
         : {}) ?? {};
-    const classId = await this.resolveTutorSessionClassId(sessionId, user);
-    if (!classId) return payload;
-
     const { allowedLessonIds, allowedAssessmentIds } =
       await this.getAllowedTutorSourceIds(user.id, classId);
 
@@ -499,12 +1244,22 @@ export class AiMentorController {
 
   @Post('student/tutor/session/:sessionId/answers')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Evaluate the current practice round for a student tutor session' })
+  @ApiOperation({
+    summary: 'Evaluate the current practice round for a student tutor session',
+  })
   async answerStudentTutorSession(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() dto: StudentTutorAnswersDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
+    const classId = await this.resolveTutorSessionClassId(sessionId, user);
+    if (!classId) {
+      throw new NotFoundException(
+        `Student tutor session with ID "${sessionId}" not found`,
+      );
+    }
+    await this.assertStudentTutorClassPolicy(classId, user);
+
     const payload = await this.proxy.forward(
       'POST',
       `/student/tutor/session/${sessionId}/answers`,
@@ -516,9 +1271,6 @@ export class AiMentorController {
       (unwrapped.data && typeof unwrapped.data === 'object'
         ? (unwrapped.data as Record<string, unknown>)
         : {}) ?? {};
-    const classId = await this.resolveTutorSessionClassId(sessionId, user);
-    if (!classId) return payload;
-
     const { allowedLessonIds, allowedAssessmentIds } =
       await this.getAllowedTutorSourceIds(user.id, classId);
 
@@ -540,7 +1292,7 @@ export class AiMentorController {
     };
   }
 
-  // ─── Health check ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/health
@@ -573,11 +1325,156 @@ export class AiMentorController {
     }
   }
 
-  // ─── Module Extraction ─────────────────────────────────────────────────
+  @Post('demo/intervention-plan')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Generate a demo-safe AI intervention plan for public /demo flow (non-authoritative)',
+  })
+  @ApiResponse({ status: 200, description: 'Demo intervention plan generated' })
+  async generateDemoInterventionPlan(@Body() dto: DemoInterventionPlanDto) {
+    const subjectModules: Record<'english' | 'science', string[]> = {
+      english: [
+        'Module 1: Reading for Main Idea and Supporting Details',
+        'Module 2: Context Clues and Vocabulary',
+        'Module 3: Paragraph Writing and Coherence',
+      ],
+      science: [
+        'Module 1: Scientific Inquiry and Variables',
+        'Module 2: Ecosystems and Energy Flow',
+        'Module 3: Cells and Organisms',
+      ],
+    };
+
+    const weakConceptsInput = (dto.weakConcepts ?? [])
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+      .slice(0, 6);
+
+    const moduleScores = (dto.moduleScores ?? [])
+      .map((value) => Math.max(0, Math.min(100, Math.round(value))))
+      .slice(0, 6);
+
+    const sortedModuleTitles = subjectModules[dto.subjectId];
+    const recommendedModules =
+      moduleScores.length > 0
+        ? sortedModuleTitles
+            .map((title, index) => ({
+              title,
+              score: moduleScores[index] ?? 100,
+            }))
+            .sort((a, b) => a.score - b.score)
+            .map((entry) => entry.title)
+            .slice(0, 2)
+        : sortedModuleTitles.slice(0, 2);
+
+    const fallbackWeakConcepts =
+      weakConceptsInput.length > 0
+        ? weakConceptsInput
+        : dto.subjectId === 'science'
+          ? [
+              'Scientific reasoning fundamentals',
+              'Cell and ecosystem concept transfer',
+            ]
+          : ['Main idea extraction', 'Coherent paragraph development'];
+
+    const fallbackPayload = {
+      source: 'fallback' as const,
+      weakConcepts: fallbackWeakConcepts,
+      recommendedModules,
+      teacherSummary:
+        dto.quarterExamScore <= 74
+          ? 'Student is currently below target threshold. Prioritize foundational remediation and short feedback loops.'
+          : 'Student is improving. Use focused reinforcement before the next full assessment.',
+      lxpQuestions: this.buildDemoPlanQuestions(
+        fallbackWeakConcepts,
+        dto.subjectId,
+      ),
+    };
+
+    const userContext = { id: '', email: '', roles: [] as string[] };
+    const payload = {
+      subjectId: dto.subjectId,
+      quarterExamScore: dto.quarterExamScore,
+      weakConcepts: weakConceptsInput,
+      moduleScores,
+    };
+
+    let liveError: unknown = null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const rawResult = await this.proxy.forward(
+          'POST',
+          '/demo/intervention-plan',
+          userContext,
+          payload,
+        );
+        const unwrapped = this.unwrapEnvelope(rawResult);
+        const liveData =
+          unwrapped.data && typeof unwrapped.data === 'object'
+            ? (unwrapped.data as Record<string, unknown>)
+            : rawResult && typeof rawResult === 'object'
+              ? (rawResult as Record<string, unknown>)
+              : null;
+
+        const questions = Array.isArray(liveData?.lxpQuestions)
+          ? liveData?.lxpQuestions
+          : [];
+        if (!liveData || questions.length === 0) {
+          throw new ServiceUnavailableException(
+            'Live demo AI plan payload was empty or invalid.',
+          );
+        }
+
+        return {
+          success: true,
+          message: 'Demo AI intervention plan generated.',
+          data: {
+            source:
+              typeof liveData.source === 'string' &&
+              (liveData.source === 'live' || liveData.source === 'fallback')
+                ? liveData.source
+                : 'live',
+            weakConcepts: Array.isArray(liveData.weakConcepts)
+              ? liveData.weakConcepts
+              : fallbackWeakConcepts,
+            recommendedModules: Array.isArray(liveData.recommendedModules)
+              ? liveData.recommendedModules
+              : recommendedModules,
+            teacherSummary:
+              typeof liveData.teacherSummary === 'string'
+                ? liveData.teacherSummary
+                : fallbackPayload.teacherSummary,
+            lxpQuestions: questions,
+          },
+        };
+      } catch (error) {
+        liveError = error;
+        const status =
+          error instanceof HttpException ? error.getStatus() : undefined;
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(
+          `Demo AI live plan attempt ${attempt} failed${status ? ` (status ${status})` : ''}: ${message}`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      degraded: true,
+      message:
+        'Live AI unavailable. Returning demo fallback intervention plan.',
+      data: fallbackPayload,
+      error: liveError instanceof Error ? liveError.message : undefined,
+    };
+  }
+
+  // â”€â”€â”€ Module Extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * POST /api/ai/extract-module
-   * Queues a PDF → structured lesson extraction job.
+   * Queues a PDF â†’ structured lesson extraction job.
    * Returns immediately with extractionId for polling.
    */
   @Post('extract-module')
@@ -588,16 +1485,43 @@ export class AiMentorController {
   })
   @ApiResponse({
     status: 202,
-    description: 'Extraction queued — poll for status',
+    description: 'Extraction queued â€” poll for status',
   })
   async extractModule(
     @Body() dto: ExtractModuleDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/extract', user, dto);
+    await this.assertTeacherFileAccess(dto.fileId, user);
+    try {
+      const result = await this.proxy.forward('POST', '/extract', user, dto);
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.queued',
+        targetType: 'uploaded_file',
+        targetId: dto.fileId,
+        metadata: {
+          extractionId: this.extractStringField(result, 'extractionId'),
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction queue error';
+      this.logger.warn(
+        `AI extraction queue unavailable for file ${dto.fileId}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction queue is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
-  // ─── Extraction status (polling) ──────────────────────────────────────
+  // â”€â”€â”€ Extraction status (polling) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/extractions/:id/status
@@ -610,10 +1534,57 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/extractions/${id}/status`, user);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      return await this.proxy.forward('GET', `/extractions/${id}/status`, user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction status error';
+      this.logger.warn(
+        `AI extraction status degraded fallback for ${id}: ${message}`,
+      );
+
+      const cachedExtraction = await this.db.query.extractedModules.findFirst({
+        where: eq(extractedModules.id, id),
+        columns: {
+          id: true,
+          extractionStatus: true,
+          progressPercent: true,
+          totalChunks: true,
+          processedChunks: true,
+          modelUsed: true,
+          errorMessage: true,
+        },
+      });
+
+      if (!cachedExtraction) {
+        throw new NotFoundException(`Extraction with ID "${id}" not found`);
+      }
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI extraction status temporarily unavailable; returning last known extraction status.',
+        data: {
+          id,
+          status: cachedExtraction.extractionStatus,
+          progressPercent: cachedExtraction.progressPercent ?? 0,
+          totalChunks: cachedExtraction.totalChunks ?? null,
+          processedChunks: cachedExtraction.processedChunks ?? 0,
+          modelUsed: cachedExtraction.modelUsed ?? null,
+          errorMessage: cachedExtraction.errorMessage ?? message,
+        },
+      };
+    }
   }
 
-  // ─── List extractions ─────────────────────────────────────────────────
+  // â”€â”€â”€ List extractions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/extractions?classId=...
@@ -627,6 +1598,7 @@ export class AiMentorController {
     @Query('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
+    await this.assertTeacherClassAccess(classId, user);
     try {
       return await this.proxy.forward(
         'GET',
@@ -639,16 +1611,48 @@ export class AiMentorController {
           error instanceof Error ? error.message : String(error)
         }`,
       );
+
+      const cachedExtractions = await this.db.query.extractedModules.findMany({
+        where: eq(extractedModules.classId, classId),
+        columns: {
+          id: true,
+          fileId: true,
+          classId: true,
+          teacherId: true,
+          extractionStatus: true,
+          modelUsed: true,
+          errorMessage: true,
+          structuredContent: true,
+          isApplied: true,
+          progressPercent: true,
+          totalChunks: true,
+          processedChunks: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        with: {
+          file: {
+            columns: {
+              originalName: true,
+            },
+          },
+        },
+        orderBy: [desc(extractedModules.createdAt)],
+      });
+
       return {
         success: true,
         degraded: true,
-        message: 'AI extraction history unavailable; returning an empty list.',
-        data: [],
+        message:
+          'AI extraction history unavailable; returning cached extraction list.',
+        data: cachedExtractions.map((entry) =>
+          this.toExtractionFallbackPayload(entry),
+        ),
       };
     }
   }
 
-  // ─── Get single extraction ─────────────────────────────────────────────
+  // â”€â”€â”€ Get single extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/extractions/:id
@@ -661,15 +1665,69 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/extractions/${id}`, user);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      return await this.proxy.forward('GET', `/extractions/${id}`, user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction detail error';
+      this.logger.warn(
+        `AI extraction detail degraded fallback for ${id}: ${message}`,
+      );
+
+      const cachedExtraction = await this.db.query.extractedModules.findFirst({
+        where: eq(extractedModules.id, id),
+        columns: {
+          id: true,
+          fileId: true,
+          classId: true,
+          teacherId: true,
+          extractionStatus: true,
+          modelUsed: true,
+          errorMessage: true,
+          structuredContent: true,
+          isApplied: true,
+          progressPercent: true,
+          totalChunks: true,
+          processedChunks: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        with: {
+          file: {
+            columns: {
+              originalName: true,
+            },
+          },
+        },
+      });
+
+      if (!cachedExtraction) {
+        throw new NotFoundException(`Extraction with ID "${id}" not found`);
+      }
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI extraction detail temporarily unavailable; returning cached extraction record.',
+        data: this.toExtractionFallbackPayload(cachedExtraction),
+      };
+    }
   }
 
-  // ─── Update extraction (edit before applying) ─────────────────────────
+  // â”€â”€â”€ Update extraction (edit before applying) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * PATCH /api/ai/extractions/:id
    * Updates the structured content of a completed extraction.
-   * Teacher can edit lesson titles, block content, reorder, etc. before applying.
+   * Teacher can edit section titles, lesson blocks, and draft assessments before applying.
    */
   @Patch('extractions/:id')
   @Roles(RoleName.Teacher, RoleName.Admin)
@@ -682,32 +1740,144 @@ export class AiMentorController {
     @Body() dto: UpdateExtractionDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('PATCH', `/extractions/${id}`, user, dto);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'PATCH',
+        `/extractions/${id}`,
+        user,
+        dto,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.updated',
+        targetType: 'extraction',
+        targetId: id,
+        metadata: {
+          sectionCount: Array.isArray(dto.sections)
+            ? dto.sections.length
+            : Array.isArray(dto.lessons)
+              ? dto.lessons.length
+              : 0,
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction update error';
+      this.logger.warn(
+        `AI extraction update unavailable for ${id}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction update is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
-  // ─── Apply extraction → create lessons ─────────────────────────────────
+  // â”€â”€â”€ Apply extraction â†’ create lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * POST /api/ai/extractions/:id/apply
-   * Takes a completed extraction and creates actual lesson + content block
-   * records in the database. Supports selective lesson application.
+   * Takes a completed extraction and creates hidden module sections
+   * with draft lessons and optional draft assessments.
    */
   @Post('extractions/:id/apply')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Apply extraction → create lessons (optionally selective)',
+    summary: 'Apply extraction -> create module sections with draft content',
   })
-  @ApiResponse({ status: 201, description: 'Lessons created from extraction' })
+  @ApiResponse({
+    status: 201,
+    description:
+      'Module sections with draft lessons/assessments created from extraction',
+  })
   async applyExtraction(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ApplyExtractionDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', `/extractions/${id}/apply`, user, dto);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/apply`,
+        user,
+        dto,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.applied',
+        targetType: 'extraction',
+        targetId: id,
+        metadata: {
+          sectionIndicesRequested: Array.isArray(dto.sectionIndices)
+            ? dto.sectionIndices.length
+            : null,
+          lessonIndicesRequested: Array.isArray(dto.lessonIndices)
+            ? dto.lessonIndices.length
+            : null,
+          sectionsCreated: this.extractNumberField(result, 'sectionsCreated'),
+          lessonsCreated: this.extractNumberField(result, 'lessonsCreated'),
+          assessmentsCreated: this.extractNumberField(
+            result,
+            'assessmentsCreated',
+          ),
+          moduleId: this.readStringField(result, 'moduleId'),
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction apply error';
+      this.logger.warn(`AI extraction apply unavailable for ${id}: ${message}`);
+
+      const cachedExtraction = await this.db.query.extractedModules.findFirst({
+        where: eq(extractedModules.id, id),
+        columns: {
+          id: true,
+          isApplied: true,
+        },
+      });
+
+      if (!cachedExtraction) {
+        throw new NotFoundException(`Extraction with ID "${id}" not found`);
+      }
+
+      if (cachedExtraction.isApplied) {
+        return {
+          success: true,
+          degraded: true,
+          message:
+            'Extraction was already applied earlier; returning cached completion state.',
+          data: {
+            sectionsCreated: 0,
+            lessonsCreated: 0,
+            assessmentsCreated: 0,
+            lessons: [],
+            sections: [],
+            assessments: [],
+          },
+        };
+      }
+
+      throw new ServiceUnavailableException(
+        'AI extraction apply is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
-  // ─── Delete extraction ─────────────────────────────────────────────────
+  // â”€â”€â”€ Delete extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * DELETE /api/ai/extractions/:id
@@ -720,10 +1890,38 @@ export class AiMentorController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('DELETE', `/extractions/${id}`, user);
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'DELETE',
+        `/extractions/${id}`,
+        user,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.deleted',
+        targetType: 'extraction',
+        targetId: id,
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction delete error';
+      this.logger.warn(
+        `AI extraction delete unavailable for ${id}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction delete is temporarily unavailable. Please retry shortly.',
+      );
+    }
   }
 
-  // ─── AI interaction history ────────────────────────────────────────────
+  // â”€â”€â”€ AI interaction history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * GET /api/ai/history
@@ -750,59 +1948,165 @@ export class AiMentorController {
     }
   }
 
+  @Post('admin/chat')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Chat with the admin analytics assistant' })
+  async adminChat(
+    @Body() dto: AdminAnalyticsChatRequestDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(user, '/api/ai/admin/chat');
+    return this.adminAnalyticsChatService.chat(user, dto);
+  }
+
+  @Get('admin/history')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get admin analytics chat history' })
+  async adminHistory(
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(user, '/api/ai/admin/history');
+    return this.adminAnalyticsChatService.history(user);
+  }
+
+  @Get('admin/sessions/:sessionId')
+  @Roles(RoleName.Student, RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Get an admin analytics chat session' })
+  async getAdminSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertAdminAnalyticsAccess(
+      user,
+      `/api/ai/admin/sessions/${sessionId}`,
+    );
+    return this.adminAnalyticsChatService.getSession(user, sessionId);
+  }
+
   @Post('teacher/interventions/:caseId/recommend')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Generate AI intervention recommendations for an active LXP case' })
+  @ApiOperation({
+    summary: 'Generate AI intervention recommendations for an active LXP case',
+  })
   async recommendIntervention(
     @Param('caseId', ParseUUIDPipe) caseId: string,
     @Body() dto: InterventionRecommendationDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward(
+    await this.assertTeacherInterventionCaseAccess(caseId, user);
+    const result = await this.proxy.forward(
       'POST',
       `/teacher/interventions/${caseId}/recommend`,
       user,
       dto,
     );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.intervention_recommendation.generated',
+      targetType: 'intervention_case',
+      targetId: caseId,
+      metadata: {
+        noteProvided: Boolean(dto.note?.trim()),
+      },
+    });
+    return result;
   }
 
   @Post('teacher/interventions/:caseId/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Queue AI intervention recommendation generation for an active LXP case' })
+  @ApiOperation({
+    summary:
+      'Queue AI intervention recommendation generation for an active LXP case',
+  })
   async queueInterventionRecommendation(
     @Param('caseId', ParseUUIDPipe) caseId: string,
     @Body() dto: InterventionRecommendationDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward(
+    await this.assertTeacherInterventionCaseAccess(caseId, user);
+    const result = await this.proxy.forward(
       'POST',
       `/teacher/interventions/${caseId}/jobs`,
       user,
       dto,
     );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.intervention_recommendation.queued',
+      targetType: 'intervention_case',
+      targetId: caseId,
+      metadata: {
+        jobId: this.extractStringField(result, 'jobId'),
+        noteProvided: Boolean(dto.note?.trim()),
+      },
+    });
+    return result;
   }
 
   @Post('teacher/quizzes/generate-draft')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Generate a grounded draft assessment from lesson/module sources' })
+  @ApiOperation({
+    summary: 'Generate a grounded draft assessment from lesson/module sources',
+  })
   async generateQuizDraft(
     @Body() dto: GenerateQuizDraftDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/teacher/quizzes/generate-draft', user, dto);
+    await this.assertTeacherClassAccess(dto.classId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      '/teacher/quizzes/generate-draft',
+      user,
+      dto,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.generated',
+      targetType: 'class',
+      targetId: dto.classId,
+      metadata: {
+        questionCount: dto.questionCount,
+        questionType: dto.questionType,
+        assessmentType: dto.assessmentType,
+      },
+    });
+    return result;
   }
 
   @Post('teacher/quizzes/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Queue grounded AI draft assessment generation from lesson/module sources' })
+  @ApiOperation({
+    summary:
+      'Queue grounded AI draft assessment generation from lesson/module sources',
+  })
   async queueQuizDraftJob(
     @Body() dto: GenerateQuizDraftDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', '/teacher/quizzes/jobs', user, dto);
+    await this.assertTeacherClassAccess(dto.classId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      '/teacher/quizzes/jobs',
+      user,
+      dto,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.queued',
+      targetType: 'class',
+      targetId: dto.classId,
+      metadata: {
+        jobId: this.extractStringField(result, 'jobId'),
+        questionCount: dto.questionCount,
+        questionType: dto.questionType,
+        assessmentType: dto.assessmentType,
+      },
+    });
+    return result;
   }
 
   @Get('teacher/jobs/:jobId')
@@ -812,26 +2116,243 @@ export class AiMentorController {
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/teacher/jobs/${jobId}`, user);
+    await this.assertTeacherJobAccess(jobId, user);
+    try {
+      return await this.proxy.forward('GET', `/teacher/jobs/${jobId}`, user);
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown AI status error';
+      this.logger.warn(
+        `AI job status degraded fallback for ${jobId}: ${message}`,
+      );
+
+      const cachedJob = await this.db.query.aiGenerationJobs.findFirst({
+        where: eq(aiGenerationJobs.id, jobId),
+        columns: {
+          id: true,
+          jobType: true,
+          status: true,
+          errorMessage: true,
+          sourceFilters: true,
+          updatedAt: true,
+        },
+      });
+      if (!cachedJob) {
+        throw new NotFoundException(
+          `AI generation job with ID "${jobId}" not found`,
+        );
+      }
+
+      const cachedOutput = await this.db.query.aiGenerationOutputs.findFirst({
+        where: eq(aiGenerationOutputs.jobId, jobId),
+        columns: {
+          id: true,
+        },
+        orderBy: [desc(aiGenerationOutputs.createdAt)],
+      });
+      const outputId = cachedOutput?.id ?? null;
+      const assessmentId = await this.resolveAssessmentIdForOutput(outputId);
+      const runtime = this.extractRuntimeFromSourceFilters(
+        cachedJob.sourceFilters,
+      );
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI job status temporarily unavailable; returning cached job status.',
+        data: {
+          jobId: cachedJob.id,
+          jobType: cachedJob.jobType,
+          status: cachedJob.status,
+          progressPercent: this.runtimeProgressForStatus(
+            cachedJob.status,
+            runtime,
+          ),
+          statusMessage:
+            (typeof runtime?.statusMessage === 'string' &&
+              runtime.statusMessage) ||
+            'AI service temporarily unavailable.',
+          errorMessage:
+            cachedJob.errorMessage ??
+            (typeof runtime?.errorMessage === 'string'
+              ? runtime.errorMessage
+              : message),
+          outputId,
+          assessmentId,
+          updatedAt: this.toIsoDate(cachedJob.updatedAt),
+        },
+      };
+    }
   }
 
   @Get('teacher/jobs/:jobId/result')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Get the completed result of a teacher AI generation job' })
+  @ApiOperation({
+    summary: 'Get the completed result of a teacher AI generation job',
+  })
   async getTeacherJobResult(
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('GET', `/teacher/jobs/${jobId}/result`, user);
+    await this.assertTeacherJobAccess(jobId, user);
+    try {
+      return await this.proxy.forward(
+        'GET',
+        `/teacher/jobs/${jobId}/result`,
+        user,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error ? error.message : 'Unknown AI result error';
+      this.logger.warn(
+        `AI job result degraded fallback for ${jobId}: ${message}`,
+      );
+
+      const cachedJob = await this.db.query.aiGenerationJobs.findFirst({
+        where: eq(aiGenerationJobs.id, jobId),
+        columns: {
+          id: true,
+          jobType: true,
+          status: true,
+          errorMessage: true,
+          sourceFilters: true,
+          updatedAt: true,
+        },
+      });
+      if (!cachedJob) {
+        throw new NotFoundException(
+          `AI generation job with ID "${jobId}" not found`,
+        );
+      }
+
+      const runtime = this.extractRuntimeFromSourceFilters(
+        cachedJob.sourceFilters,
+      );
+      const cachedOutput = await this.db.query.aiGenerationOutputs.findFirst({
+        where: eq(aiGenerationOutputs.jobId, jobId),
+        columns: {
+          id: true,
+          outputType: true,
+          structuredOutput: true,
+        },
+        orderBy: [desc(aiGenerationOutputs.createdAt)],
+      });
+      const outputId = cachedOutput?.id ?? null;
+      const assessmentId = await this.resolveAssessmentIdForOutput(outputId);
+
+      if (
+        !['completed', 'approved'].includes(cachedJob.status) ||
+        !cachedOutput
+      ) {
+        return {
+          success: true,
+          degraded: true,
+          message:
+            'AI job result temporarily unavailable; returning cached job state.',
+          data: {
+            jobId: cachedJob.id,
+            status: cachedJob.status,
+            result: null,
+            errorMessage:
+              cachedJob.errorMessage ??
+              (typeof runtime?.errorMessage === 'string'
+                ? runtime.errorMessage
+                : message),
+            updatedAt: this.toIsoDate(cachedJob.updatedAt),
+          },
+        };
+      }
+
+      return {
+        success: true,
+        degraded: true,
+        message:
+          'AI job result temporarily unavailable; returning cached generated result.',
+        data: {
+          job: {
+            jobId: cachedJob.id,
+            jobType: cachedJob.jobType,
+            status: cachedJob.status,
+            outputId: cachedOutput.id,
+            assessmentId,
+            updatedAt: this.toIsoDate(cachedJob.updatedAt),
+            retryState:
+              runtime &&
+              typeof runtime.retryState === 'object' &&
+              runtime.retryState !== null
+                ? runtime.retryState
+                : null,
+          },
+          result: {
+            outputId: cachedOutput.id,
+            outputType: cachedOutput.outputType,
+            structuredOutput:
+              cachedOutput.outputType === 'intervention_recommendation'
+                ? this.normalizeInterventionStructuredOutput({
+                    ...((cachedOutput.structuredOutput as Record<
+                      string,
+                      unknown
+                    >) ?? {}),
+                    ...(assessmentId ? { assessmentId } : {}),
+                    ...(runtime &&
+                    runtime.resultSummary &&
+                    typeof runtime.resultSummary === 'object'
+                      ? { runtime: runtime.resultSummary }
+                      : {}),
+                  })
+                : {
+                    ...((cachedOutput.structuredOutput as Record<
+                      string,
+                      unknown
+                    >) ?? {}),
+                    ...(assessmentId ? { assessmentId } : {}),
+                    ...(runtime &&
+                    runtime.resultSummary &&
+                    typeof runtime.resultSummary === 'object'
+                      ? { runtime: runtime.resultSummary }
+                      : {}),
+                  },
+          },
+          errorMessage:
+            cachedJob.errorMessage ??
+            (typeof runtime?.errorMessage === 'string'
+              ? runtime.errorMessage
+              : message),
+          updatedAt: this.toIsoDate(cachedJob.updatedAt),
+        },
+      };
+    }
   }
 
   @Post('index/classes/:classId')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Reindex class lesson and assessment content for semantic retrieval' })
+  @ApiOperation({
+    summary:
+      'Reindex class lesson and assessment content for semantic retrieval',
+  })
   async reindexClass(
     @Param('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.proxy.forward('POST', `/index/classes/${classId}`, user);
+    await this.assertTeacherClassAccess(classId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/index/classes/${classId}`,
+      user,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.class_content.reindex_queued',
+      targetType: 'class',
+      targetId: classId,
+    });
+    return result;
   }
 }

@@ -4,6 +4,10 @@ export interface Announcement {
   title: string;
   content: string;
   isPinned: boolean;
+  isVisible?: boolean;
+  isCoreTemplateAsset?: boolean;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   scheduledAt?: string;
   isArchived: boolean;
   fileIds?: string[];

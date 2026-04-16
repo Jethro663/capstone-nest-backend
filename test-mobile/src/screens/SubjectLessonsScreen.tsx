@@ -1,94 +1,161 @@
 import { useMemo, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, Text, View } from "react-native";
-import {
-  AnimatedEntrance,
-  EmptyState,
-  GradientHeader,
-  Pill,
-  ProgressBar,
-  Refreshable,
-  ScreenScroll,
-} from "../components/ui/primitives";
-import { useClassDetail, useLessonCompleteMutation, useLessonCompletions, useLessons } from "../api/hooks";
-import { toLessonCards, toSubjectCard } from "../data/mappers";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { AnimatedEntrance, Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
+import { announcementsApi } from "../api/services/announcements";
+import { assessmentsApi } from "../api/services/assessments";
+import { useClassDetail, useClassModules } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
-import { colors, hexToRgba, shadow } from "../theme/tokens";
+import { colors, gradients } from "../theme/tokens";
 
-type Props = NativeStackScreenProps<RootStackParamList, "SubjectLessons">;
+type Props = NativeStackScreenProps<RootStackParamList, "ClassWorkspace">;
+type WorkspaceTab = "modules" | "assignments" | "announcements" | "classmates" | "grades" | "calendar";
+
+const tabs: WorkspaceTab[] = ["modules", "assignments", "announcements", "classmates", "grades", "calendar"];
+
+function formatDate(value?: string | null) {
+  if (!value) return "TBA";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatTime(value?: string) {
+  if (!value) return "";
+  const [h = "0", m = "00"] = value.split(":");
+  const hours = Number.parseInt(h, 10);
+  if (!Number.isFinite(hours)) return value;
+  const meridiem = hours >= 12 ? "PM" : "AM";
+  const normalized = hours % 12 || 12;
+  return `${normalized}:${m} ${meridiem}`;
+}
 
 export function SubjectLessonsScreen({ route, navigation }: Props) {
   const { classId } = route.params;
-  const [completedLessonId, setCompletedLessonId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("modules");
   const classQuery = useClassDetail(classId);
-  const lessonsQuery = useLessons(classId);
-  const completionsQuery = useLessonCompletions(classId);
-  const completeMutation = useLessonCompleteMutation(classId);
+  const modulesQuery = useClassModules(classId);
 
-  const subject = useMemo(() => {
-    if (!classQuery.data) return null;
-    return toSubjectCard(classQuery.data, lessonsQuery.data ?? [], completionsQuery.data ?? [], undefined);
-  }, [classQuery.data, completionsQuery.data, lessonsQuery.data]);
+  const assessmentsQuery = useQueries({
+    queries: [
+      {
+        queryKey: ["class-assessments", classId],
+        queryFn: () => assessmentsApi.getByClass(classId),
+      },
+      {
+        queryKey: ["class-announcements", classId],
+        queryFn: () => announcementsApi.getByClass(classId),
+      },
+    ],
+  });
 
-  const lessonCards = useMemo(
-    () => (subject ? toLessonCards(lessonsQuery.data ?? [], completionsQuery.data ?? [], subject) : []),
-    [completionsQuery.data, lessonsQuery.data, subject],
+  const assessments = assessmentsQuery[0]?.data ?? [];
+  const announcements = assessmentsQuery[1]?.data ?? [];
+
+  const attemptQueries = useQueries({
+    queries: assessments.map((assessment) => ({
+      queryKey: ["class-assessment-attempts", assessment.id],
+      queryFn: () => assessmentsApi.getStudentAttempts(assessment.id),
+      enabled: assessments.length > 0,
+    })),
+  });
+
+  const refreshing =
+    classQuery.isRefetching ||
+    modulesQuery.isRefetching ||
+    assessmentsQuery.some((query) => query.isRefetching) ||
+    attemptQueries.some((query) => query.isRefetching);
+
+  const classmates = classQuery.data?.enrollments ?? [];
+  const scheduleRows = classQuery.data?.schedules ?? [];
+
+  const gradeRows = useMemo(
+    () =>
+      assessments.map((assessment, index) => {
+        const attempts = attemptQueries[index]?.data ?? [];
+        const latest = [...attempts].sort(
+          (left, right) =>
+            new Date(right.submittedAt || right.createdAt || 0).getTime() -
+            new Date(left.submittedAt || left.createdAt || 0).getTime(),
+        )[0];
+
+        const possible = latest?.totalPoints ?? assessment.totalPoints ?? 0;
+        const score = latest?.score;
+        const percent = typeof score === "number" && possible > 0 ? Math.round((score / possible) * 100) : null;
+        return {
+          id: assessment.id,
+          title: assessment.title,
+          scoreText: typeof score === "number" ? `${score}/${possible}` : "Pending",
+          percentText: percent != null ? `${percent}%` : "—",
+          dateText: formatDate(latest?.submittedAt || assessment.dueDate),
+          pending: typeof score !== "number",
+        };
+      }),
+    [assessments, attemptQueries],
   );
 
-  const completedCount = lessonCards.filter((lesson) => lesson.status === "completed").length;
-  const refreshControl = (
-    <Refreshable
-      refreshing={classQuery.isRefetching || lessonsQuery.isRefetching || completionsQuery.isRefetching}
-      onRefresh={() => {
-        void Promise.all([classQuery.refetch(), lessonsQuery.refetch(), completionsQuery.refetch()]);
-      }}
-    />
-  );
+  const calendarRows = useMemo(() => {
+    const assessmentRows = assessments
+      .filter((assessment) => assessment.dueDate)
+      .map((assessment) => ({
+        id: `assessment-${assessment.id}`,
+        title: assessment.title,
+        subtitle: "Assessment due",
+        dateLabel: formatDate(assessment.dueDate),
+      }));
 
-  if (!subject) {
+    const scheduleItems = scheduleRows.map((schedule) => ({
+      id: `schedule-${schedule.id}`,
+      title: `${schedule.days.join("/")}`,
+      subtitle: `${formatTime(schedule.startTime)} - ${formatTime(schedule.endTime)}`,
+      dateLabel: "Weekly schedule",
+    }));
+
+    return [...assessmentRows, ...scheduleItems];
+  }, [assessments, scheduleRows]);
+
+  if (!classQuery.data && classQuery.isLoading) {
     return (
-      <ScreenScroll refreshControl={refreshControl}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 40 }}>
-          <EmptyState emoji="😕" title="Class not found" subtitle="This class could not be loaded from the backend." />
-          <Pressable
-            onPress={() => navigation.goBack()}
-            style={{
-              alignSelf: "center",
-              marginTop: 12,
-              borderRadius: 999,
-              backgroundColor: colors.amber,
-              paddingHorizontal: 18,
-              paddingVertical: 10,
-            }}
-          >
-            <Text style={{ color: colors.white, fontWeight: "800" }}>Go back</Text>
-          </Pressable>
+      <ScreenScroll>
+        <View style={{ paddingTop: 42, paddingHorizontal: 20 }}>
+          <EmptyState emoji="⏳" title="Loading class workspace" subtitle="Preparing your class data." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (!classQuery.data) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 42, paddingHorizontal: 20 }}>
+          <EmptyState emoji="😕" title="Class not found" subtitle="This class is unavailable right now." />
         </View>
       </ScreenScroll>
     );
   }
 
   return (
-    <ScreenScroll refreshControl={refreshControl}>
+    <ScreenScroll
+      refreshControl={
+        <Refreshable
+          refreshing={refreshing}
+          onRefresh={() => {
+            void Promise.all([
+              classQuery.refetch(),
+              modulesQuery.refetch(),
+              ...assessmentsQuery.map((query) => query.refetch()),
+              ...attemptQueries.map((query) => query.refetch()),
+            ]);
+          }}
+        />
+      }
+    >
       <GradientHeader
-        colors={[hexToRgba(subject.color, 0.82), subject.color]}
-        title={subject.name}
-        eyebrow={`${completedCount} of ${lessonCards.length} lessons completed`}
-        rightContent={
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 16,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(255,255,255,0.2)",
-            }}
-          >
-            <Text style={{ fontSize: 28 }}>{subject.emoji}</Text>
-          </View>
-        }
+        colors={gradients.classes}
+        eyebrow={`${classQuery.data.subjectCode} • ${classQuery.data.section?.name || "Class section"}`}
+        title={classQuery.data.subjectName || "Class"}
       >
         <Pressable
           onPress={() => navigation.goBack()}
@@ -104,113 +171,178 @@ export function SubjectLessonsScreen({ route, navigation }: Props) {
         >
           <MaterialCommunityIcons name="chevron-left" size={22} color={colors.white} />
         </Pressable>
-        <View style={{ marginTop: 16 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "rgba(255,255,255,0.86)" }}>Class Progress</Text>
-            <Text style={{ fontSize: 14, fontWeight: "900", color: colors.white }}>{subject.progress}%</Text>
-          </View>
-          <ProgressBar value={subject.progress} color={colors.white} trackColor="rgba(255,255,255,0.3)" height={10} />
-        </View>
       </GradientHeader>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 12 }}>
-        <Text style={{ fontSize: 16, fontWeight: "900", color: colors.text }}>Lesson Path 📘</Text>
-        {lessonCards.map((lesson, index) => {
-          const isCompleted = lesson.status === "completed";
-          const isOngoing = lesson.status === "ongoing";
-          const accentColor = isCompleted ? subject.color : isOngoing ? colors.amber : "#D1D5DB";
-          const iconName: React.ComponentProps<typeof MaterialCommunityIcons>["name"] = isCompleted
-            ? "check-circle"
-            : isOngoing
-              ? "book-open-page-variant"
-              : "lock-outline";
-
-          return (
-            <AnimatedEntrance key={lesson.id} delay={index * 80}>
-              <View
-                style={[
-                  {
-                    position: "relative",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 14,
-                    borderRadius: 22,
-                    padding: 16,
-                    backgroundColor: lesson.status === "locked" ? "#F3F4F6" : colors.white,
-                    opacity: lesson.status === "locked" ? 0.76 : 1,
-                  },
-                  lesson.status !== "locked" ? shadow.card : null,
-                ]}
+      <View style={{ paddingHorizontal: 20, marginTop: 18, gap: 14 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {tabs.map((tab) => (
+            <Pressable
+              key={tab}
+              onPress={() => setActiveTab(tab)}
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderWidth: 1,
+                borderColor: activeTab === tab ? colors.indigo : colors.border,
+                backgroundColor: activeTab === tab ? colors.paleIndigo : colors.white,
+              }}
+            >
+              <Text
+                style={{
+                  textTransform: "capitalize",
+                  fontSize: 12,
+                  fontWeight: "800",
+                  color: activeTab === tab ? colors.indigo : colors.textSecondary,
+                }}
               >
-                <View
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 4,
-                    borderTopLeftRadius: 22,
-                    borderBottomLeftRadius: 22,
-                    backgroundColor: accentColor,
-                  }}
-                />
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: isCompleted ? subject.bgColor : isOngoing ? colors.paleAmber : "#E5E7EB",
-                  }}
-                >
-                  <MaterialCommunityIcons name={iconName} size={24} color={accentColor} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>{lesson.title}</Text>
-                    {isOngoing ? <Pill label="Current" backgroundColor={colors.paleAmber} color={colors.amber} /> : null}
-                    {completedLessonId === lesson.id ? <Pill label="Nice work" backgroundColor={subject.bgColor} color={subject.color} /> : null}
-                  </View>
-                  <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>{lesson.description}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 8 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <MaterialCommunityIcons name="clock-outline" size={12} color={colors.muted} />
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: colors.muted }}>{lesson.duration}</Text>
+                {tab}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        {activeTab === "modules" ? (
+          <Card>
+            <SectionTitle title="Modules" right={<Pill label={`${modulesQuery.data?.length ?? 0}`} backgroundColor={colors.paleIndigo} color={colors.indigo} />} />
+            {(modulesQuery.data ?? []).length === 0 ? (
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>No modules published yet.</Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {(modulesQuery.data ?? []).map((module, index) => (
+                  <AnimatedEntrance key={module.id} delay={index * 70}>
+                    <View style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 12 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>{module.title}</Text>
+                      <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
+                        {module.description || "Learning objectives and activities are inside this module."}
+                      </Text>
                     </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                      <MaterialCommunityIcons name="flash" size={12} color={colors.amber} />
-                      <Text style={{ fontSize: 11, fontWeight: "800", color: colors.amber }}>+{lesson.xp} XP</Text>
-                    </View>
+                  </AnimatedEntrance>
+                ))}
+              </View>
+            )}
+          </Card>
+        ) : null}
+
+        {activeTab === "assignments" ? (
+          <Card>
+            <SectionTitle title="Assignments" right={<Pill label={`${assessments.length}`} backgroundColor={colors.paleBlue} color={colors.blueDeep} />} />
+            {assessments.length === 0 ? (
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>No assignments available for this class.</Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {assessments.map((assessment) => (
+                  <View key={assessment.id} style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 12 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>{assessment.title}</Text>
+                    <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                      Due {formatDate(assessment.dueDate)} • {assessment.totalPoints ?? 0} pts
+                    </Text>
                   </View>
-                </View>
-                {isCompleted ? (
-                  <Pill label="Done ✓" backgroundColor={subject.bgColor} color={subject.color} />
-                ) : isOngoing ? (
-                  <Pressable
-                    disabled={completeMutation.isPending}
-                    onPress={() => {
-                      setCompletedLessonId(lesson.id);
-                      void completeMutation.mutateAsync(lesson.id);
-                    }}
+                ))}
+              </View>
+            )}
+          </Card>
+        ) : null}
+
+        {activeTab === "announcements" ? (
+          <Card>
+            <SectionTitle title="Announcements" right={<Pill label={`${announcements.length}`} backgroundColor={colors.paleGreen} color={colors.green} />} />
+            {announcements.length === 0 ? (
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>No class announcements yet.</Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {announcements.map((announcement) => (
+                  <View key={announcement.id} style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 12 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{announcement.title}</Text>
+                    <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+                      {announcement.content}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        ) : null}
+
+        {activeTab === "classmates" ? (
+          <Card>
+            <SectionTitle title="Classmates" right={<Pill label={`${classmates.length}`} backgroundColor={colors.paleAmber} color={colors.orange} />} />
+            {classmates.length === 0 ? (
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>Classmate data is currently unavailable.</Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {classmates.map((entry) => (
+                  <View key={entry.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 999,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: colors.paleIndigo,
+                      }}
+                    >
+                      <MaterialCommunityIcons name="account" size={16} color={colors.indigo} />
+                    </View>
+                    <Text style={{ fontSize: 12, color: colors.text }}>
+                      {entry.student?.firstName || "Student"} {entry.student?.lastName || ""}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        ) : null}
+
+        {activeTab === "grades" ? (
+          <Card>
+            <SectionTitle title="Grades" />
+            {gradeRows.length === 0 ? (
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>No submitted attempts yet.</Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {gradeRows.map((grade) => (
+                  <View
+                    key={grade.id}
                     style={{
-                      borderRadius: 999,
-                      backgroundColor: colors.amber,
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: grade.pending ? colors.white : colors.paleGreen,
+                      padding: 12,
                     }}
                   >
-                    <Text style={{ color: colors.white, fontSize: 12, fontWeight: "800" }}>
-                      {completeMutation.isPending ? "Saving..." : "Complete"}
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>{grade.title}</Text>
+                    <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                      {grade.scoreText} • {grade.percentText} • {grade.dateText}
                     </Text>
-                  </Pressable>
-                ) : (
-                  <Pill label="Locked" backgroundColor="#E5E7EB" color={colors.muted} />
-                )}
+                  </View>
+                ))}
               </View>
-            </AnimatedEntrance>
-          );
-        })}
+            )}
+          </Card>
+        ) : null}
+
+        {activeTab === "calendar" ? (
+          <Card>
+            <SectionTitle title="Calendar" />
+            {calendarRows.length === 0 ? (
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>No upcoming schedule items.</Text>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {calendarRows.map((item) => (
+                  <View key={item.id} style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 12 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{item.title}</Text>
+                    <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                      {item.subtitle} • {item.dateLabel}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        ) : null}
       </View>
     </ScreenScroll>
   );

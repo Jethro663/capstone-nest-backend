@@ -7,8 +7,9 @@ import {
   boolean,
   pgEnum,
   index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { users } from './base.schema';
 import { classes } from './base.schema';
 
@@ -18,6 +19,9 @@ import { classes } from './base.schema';
 
 export const notificationTypeEnum = pgEnum('notification_type', [
   'announcement_posted',
+  'discussion_thread_posted',
+  'discussion_comment_posted',
+  'assessment_assigned',
   'grade_updated',
   'assessment_due',
   'assessment_graded',
@@ -40,6 +44,12 @@ export const announcements = pgTable(
     title: varchar('title', { length: 255 }).notNull(),
     content: text('content').notNull(),
     isPinned: boolean('is_pinned').notNull().default(false),
+    isVisible: boolean('is_visible').notNull().default(true),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
     scheduledAt: timestamp('scheduled_at'),
     publishedAt: timestamp('published_at'),
     archivedAt: timestamp('archived_at'),
@@ -95,6 +105,11 @@ export const notifications = pgTable(
       table.userId,
       table.createdAt,
     ),
+    userTypeReferenceUniqueIdx: uniqueIndex(
+      'notifications_user_type_reference_unique_idx',
+    )
+      .on(table.userId, table.type, table.referenceId)
+      .where(sql`reference_id IS NOT NULL`),
   }),
 );
 

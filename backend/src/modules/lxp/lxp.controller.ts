@@ -13,6 +13,7 @@ import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   AssignInterventionDto,
+  ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
   SubmitSystemEvaluationDto,
 } from './dto/lxp.dto';
@@ -77,6 +78,15 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Get('teacher/interventions/pending-count')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherPendingInterventionCount(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getTeacherPendingInterventionCount(user);
+    return { success: true, data };
+  }
+
   @Post('teacher/interventions/:caseId/assign')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async assignIntervention(
@@ -96,6 +106,39 @@ export class LxpController {
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.lxpService.resolveIntervention(caseId, dto, user);
+    return { success: true, data };
+  }
+
+  @Post('teacher/interventions/:caseId/activate')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async activateIntervention(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.activateIntervention(caseId, user);
+    return { success: true, data };
+  }
+
+  @Get('teacher/interventions/:caseId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherInterventionCase(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getTeacherInterventionCase(caseId, user);
+    return { success: true, data };
+  }
+
+  @Get('teacher/interventions/:caseId/detail')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherInterventionCaseDetail(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getTeacherInterventionCaseDetail(
+      caseId,
+      user,
+    );
     return { success: true, data };
   }
 
@@ -123,12 +166,9 @@ export class LxpController {
   @Roles(RoleName.Teacher, RoleName.Admin)
   async listEvaluations(
     @CurrentUser() user: { userId: string; roles: string[] },
-    @Query('targetModule') targetModule?: string,
+    @Query() query?: ListSystemEvaluationsQueryDto,
   ) {
-    const data = await this.lxpService.listSystemEvaluations(
-      user,
-      targetModule,
-    );
+    const data = await this.lxpService.listSystemEvaluations(user, query);
     return { success: true, data };
   }
 }

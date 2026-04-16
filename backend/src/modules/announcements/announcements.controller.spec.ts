@@ -98,31 +98,43 @@ describe('AnnouncementsController', () => {
   // ──────────────────────────────────────────────────────────────────────────
 
   describe('findAll()', () => {
-    it('passes isTeacher=true when user has teacher role', async () => {
+    it('passes viewer roles through for teacher user', async () => {
       mockService.findAllByClass.mockResolvedValue([]);
 
       await controller.findAll(CLASS_ID, {} as any, TEACHER_USER);
 
-      const [, , isTeacher] = mockService.findAllByClass.mock.calls[0];
-      expect(isTeacher).toBe(true);
+      expect(mockService.findAllByClass).toHaveBeenCalledWith(
+        CLASS_ID,
+        TEACHER_USER.userId,
+        TEACHER_USER.roles,
+        {},
+      );
     });
 
-    it('passes isTeacher=false when user has student role', async () => {
+    it('passes viewer roles through for student user', async () => {
       mockService.findAllByClass.mockResolvedValue([]);
 
       await controller.findAll(CLASS_ID, {} as any, STUDENT_USER);
 
-      const [, , isTeacher] = mockService.findAllByClass.mock.calls[0];
-      expect(isTeacher).toBe(false);
+      expect(mockService.findAllByClass).toHaveBeenCalledWith(
+        CLASS_ID,
+        STUDENT_USER.userId,
+        STUDENT_USER.roles,
+        {},
+      );
     });
 
-    it('treats admin as a privileged class viewer', async () => {
+    it('passes viewer roles through for admin user', async () => {
       mockService.findAllByClass.mockResolvedValue([]);
 
       await controller.findAll(CLASS_ID, {} as any, ADMIN_USER);
 
-      const [, , isTeacher] = mockService.findAllByClass.mock.calls[0];
-      expect(isTeacher).toBe(true);
+      expect(mockService.findAllByClass).toHaveBeenCalledWith(
+        CLASS_ID,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+        {},
+      );
     });
 
     it('returns standard success envelope with data array', async () => {
@@ -156,16 +168,25 @@ describe('AnnouncementsController', () => {
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(ann);
-      expect(mockService.findOne).toHaveBeenCalledWith(CLASS_ID, ANN_ID, true);
+      expect(mockService.findOne).toHaveBeenCalledWith(
+        CLASS_ID,
+        ANN_ID,
+        TEACHER_USER.userId,
+        TEACHER_USER.roles,
+      );
     });
 
-    it('passes isTeacher=false for student user', async () => {
+    it('passes student viewer identity and roles', async () => {
       mockService.findOne.mockResolvedValue(makeAnnouncement());
 
       await controller.findOne(CLASS_ID, ANN_ID, STUDENT_USER);
 
-      const [, , isTeacher] = mockService.findOne.mock.calls[0];
-      expect(isTeacher).toBe(false);
+      expect(mockService.findOne).toHaveBeenCalledWith(
+        CLASS_ID,
+        ANN_ID,
+        STUDENT_USER.userId,
+        STUDENT_USER.roles,
+      );
     });
   });
 

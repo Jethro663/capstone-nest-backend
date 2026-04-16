@@ -25,9 +25,12 @@ import {
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
 import type {
+  ClassDiagnosticsResponse,
   ClassAtRiskResponse,
   ClassPerformanceLogsResponse,
   ClassPerformanceSummary,
+  PerformanceAnalysisJob,
+  PerformanceAnalysisStructuredOutput,
   PerformanceStudentRow,
 } from '@/types/performance';
 
@@ -88,9 +91,14 @@ export default function TeacherPerformancePage() {
   const [summary, setSummary] = useState<ClassPerformanceSummary | null>(null);
   const [atRisk, setAtRisk] = useState<ClassAtRiskResponse | null>(null);
   const [logs, setLogs] = useState<ClassPerformanceLogsResponse | null>(null);
+  const [diagnostics, setDiagnostics] = useState<ClassDiagnosticsResponse | null>(null);
+  const [analysisJob, setAnalysisJob] = useState<PerformanceAnalysisJob | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<PerformanceAnalysisStructuredOutput | null>(null);
+  const [analysisTargetStudentId, setAnalysisTargetStudentId] = useState<string | null>(null);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [recomputing, setRecomputing] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
@@ -119,22 +127,53 @@ export default function TeacherPerformancePage() {
       setSummary(null);
       setAtRisk(null);
       setLogs(null);
+      setDiagnostics(null);
       return;
     }
 
     try {
       setLoadingData(true);
-      const [summaryRes, atRiskRes, logsRes] = await Promise.all([
+      const [summaryRes, atRiskRes, logsRes, diagnosticsRes] = await Promise.allSettled([
         performanceService.getClassSummary(selectedClassId),
         performanceService.getAtRiskStudents(selectedClassId),
         performanceService.getClassLogs(selectedClassId, { limit: 25 }),
+        performanceService.getClassDiagnostics(selectedClassId),
       ]);
-
-      setSummary(summaryRes.data);
-      setAtRisk(atRiskRes.data);
-      setLogs(logsRes.data);
-    } catch {
-      toast.error('Failed to load performance summary');
+      if (summaryRes.status === 'fulfilled') {
+        setSummary(summaryRes.value.data);
+      } else {
+        setSummary(null);
+      }
+      if (atRiskRes.status === 'fulfilled') {
+        setAtRisk(atRiskRes.value.data);
+      } else {
+        setAtRisk(null);
+      }
+      if (logsRes.status === 'fulfilled') {
+        setLogs(logsRes.value.data);
+      } else {
+        setLogs(null);
+      }
+      if (diagnosticsRes.status === 'fulfilled') {
+        setDiagnostics(diagnosticsRes.value.data);
+      } else {
+        setDiagnostics(null);
+      }
+      if (
+        summaryRes.status === 'rejected' &&
+        atRiskRes.status === 'rejected' &&
+        logsRes.status === 'rejected' &&
+        diagnosticsRes.status === 'rejected'
+      ) {
+        toast.error('Failed to load performance summary');
+      } else if (
+        summaryRes.status === 'rejected' ||
+        atRiskRes.status === 'rejected' ||
+        logsRes.status === 'rejected' ||
+        diagnosticsRes.status === 'rejected'
+      ) {
+        toast.warning('Some performance panels are temporarily unavailable.');
+      }
     } finally {
       setLoadingData(false);
     }
@@ -160,6 +199,57 @@ export default function TeacherPerformancePage() {
       toast.error('Recompute failed');
     } finally {
       setRecomputing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!analysisJob || !['pending', 'processing'].includes(analysisJob.status)) {
+      return;
+    }
+
+    const interval = window.setInterval(async () => {
+      try {
+        const statusRes = await performanceService.getAnalysisJobStatus(analysisJob.jobId);
+        setAnalysisJob(statusRes.data);
+        if (['completed', 'approved'].includes(statusRes.data.status)) {
+          const resultRes = await performanceService.getAnalysisJobResult(statusRes.data.jobId);
+          setAnalysisResult(resultRes.data.result.structuredOutput);
+          setAnalyzing(false);
+          window.clearInterval(interval);
+        }
+        if (statusRes.data.status === 'failed') {
+          setAnalyzing(false);
+          toast.error(statusRes.data.errorMessage || 'Performance analysis failed.');
+          window.clearInterval(interval);
+        }
+      } catch {
+        setAnalyzing(false);
+        toast.error('Failed to refresh analysis job status.');
+        window.clearInterval(interval);
+      }
+    }, 2500);
+
+    return () => window.clearInterval(interval);
+  }, [analysisJob]);
+
+  const handleAnalyze = async (studentId?: string) => {
+    if (!selectedClassId) return;
+    try {
+      setAnalyzing(true);
+      setAnalysisResult(null);
+      setAnalysisTargetStudentId(studentId ?? null);
+      const jobRes = await performanceService.createAnalysisJob(selectedClassId, {
+        studentId,
+      });
+      setAnalysisJob(jobRes.data);
+      if (['completed', 'approved'].includes(jobRes.data.status)) {
+        const resultRes = await performanceService.getAnalysisJobResult(jobRes.data.jobId);
+        setAnalysisResult(resultRes.data.result.structuredOutput);
+        setAnalyzing(false);
+      }
+    } catch {
+      setAnalyzing(false);
+      toast.error('Failed to start performance analysis.');
     }
   };
 
@@ -286,6 +376,7 @@ export default function TeacherPerformancePage() {
                         <TableHead>Class Record</TableHead>
                         <TableHead>Blended</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right">AI</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody className="[&_tr:last-child]:border-0">
@@ -305,6 +396,17 @@ export default function TeacherPerformancePage() {
                           </TableCell>
                           <TableCell>
                             <Badge className="teacher-badge-danger border-0">At Risk</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="teacherOutline"
+                              className="rounded-lg"
+                              disabled={analyzing}
+                              onClick={() => handleAnalyze(student.studentId)}
+                            >
+                              Analyze
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -352,6 +454,47 @@ export default function TeacherPerformancePage() {
                     description="No learners currently require intervention at this threshold."
                   />
                 )}
+              </TeacherSectionCard>
+
+              <TeacherSectionCard
+                title="Score Diagnostics"
+                description="Lowest-performing assessments and concept hotspots."
+              >
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="font-semibold text-[var(--teacher-text-strong)]">Lowest Assessments</p>
+                    {(diagnostics?.lowestAssessments.length ?? 0) === 0 ? (
+                      <p className="text-[var(--teacher-text-muted)]">No assessment diagnostics yet.</p>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {diagnostics?.lowestAssessments.slice(0, 3).map((assessment) => (
+                          <div key={assessment.assessmentId} className="teacher-figma-kv">
+                            <span>{assessment.title}</span>
+                            <strong>
+                              {assessment.averageScore !== null
+                                ? `${assessment.averageScore.toFixed(1)}%`
+                                : '--'}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-[var(--teacher-text-strong)]">Top Concept Hotspots</p>
+                    {(diagnostics?.conceptHotspots.length ?? 0) === 0 ? (
+                      <p className="text-[var(--teacher-text-muted)]">No concept hotspots yet.</p>
+                    ) : (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {diagnostics?.conceptHotspots.slice(0, 4).map((concept) => (
+                          <Badge key={concept.concept} variant="outline">
+                            {concept.concept}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </TeacherSectionCard>
             </div>
           </div>
@@ -404,6 +547,63 @@ export default function TeacherPerformancePage() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+          </TeacherSectionCard>
+
+          <TeacherSectionCard
+            title="AI Learning Gap Analysis"
+            description="Class or student-level AI diagnostics powered by mistakes and lesson evidence."
+            className="teacher-figma-stagger"
+          >
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <Button
+                variant="teacher"
+                className="rounded-lg"
+                disabled={!selectedClassId || analyzing}
+                onClick={() => handleAnalyze()}
+              >
+                {analyzing ? 'Analyzing...' : 'Analyze Whole Class'}
+              </Button>
+              {analysisTargetStudentId ? (
+                <Badge variant="secondary">Student scope</Badge>
+              ) : (
+                <Badge variant="secondary">Class scope</Badge>
+              )}
+              {analysisJob ? (
+                <Badge variant="outline">
+                  {analysisJob.status} ({analysisJob.progressPercent}%)
+                </Badge>
+              ) : null}
+            </div>
+
+            {!analysisResult ? (
+              <TeacherEmptyState
+                title="No AI analysis yet"
+                description="Run an AI analysis to identify learning gaps and evidence-backed interventions."
+              />
+            ) : (
+              <div className="space-y-4">
+                <div className="teacher-soft-panel rounded-[12px] border border-white/15 px-3 py-3 text-sm">
+                  <p className="font-semibold text-[var(--teacher-text-strong)]">
+                    {analysisResult.recommendedIntervention.status === 'insufficient_evidence'
+                      ? 'Insufficient evidence'
+                      : 'Actionable analysis ready'}
+                  </p>
+                  <p className="text-[var(--teacher-text-muted)]">
+                    {analysisResult.teacherActions[0] ?? 'No teacher action provided.'}
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  {analysisResult.learningGaps.slice(0, 6).map((gap) => (
+                    <div key={gap.concept} className="teacher-figma-kv">
+                      <span>{gap.concept}</span>
+                      <strong>
+                        {gap.masteryScore}% mastery · {gap.wrongCount} misses
+                      </strong>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </TeacherSectionCard>

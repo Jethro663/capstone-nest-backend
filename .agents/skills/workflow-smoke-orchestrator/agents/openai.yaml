@@ -1,0 +1,4 @@
+interface:
+  display_name: "Workflow Smoke Orchestrator"
+  short_description: "Choose the smallest valid repo-native smoke suite"
+  default_prompt: "Use $workflow-smoke-orchestrator to decide which smoke checks to run after a change in this repo."

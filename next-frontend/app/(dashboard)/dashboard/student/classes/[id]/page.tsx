@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
@@ -14,6 +15,7 @@ import {
   Grid2X2,
   LayoutPanelTop,
   Megaphone,
+  MessageSquare,
   School,
   Users,
 } from 'lucide-react';
@@ -24,20 +26,25 @@ import { moduleService } from '@/services/module-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
+import { discussionBoardService } from '@/services/discussion-board-service';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import './student-class-detail.css';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
-import type { ClassItem } from '@/types/class';
+import type { ClassItem, Enrollment } from '@/types/class';
 import type { ClassModule } from '@/types/module';
 import type { SchoolEvent } from '@/types/school-event';
+import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
 import { getTeacherName } from '@/utils/helpers';
+import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
 
 type StudentClassTab =
   | 'modules'
   | 'assignments'
   | 'announcements'
+  | 'discussion'
   | 'classmates'
   | 'grades'
   | 'calendar';
@@ -77,6 +84,7 @@ const TABS: Array<{ key: StudentClassTab; label: string; icon: typeof FolderOpen
   { key: 'modules', label: 'Modules', icon: FolderOpen },
   { key: 'assignments', label: 'Assignments', icon: ClipboardList },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'discussion', label: 'Discussion Board', icon: MessageSquare },
   { key: 'classmates', label: 'Classmates', icon: Users },
   { key: 'grades', label: 'Grades', icon: FileSpreadsheet },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -119,11 +127,22 @@ function isStudentClassTab(value: string | null): value is StudentClassTab {
     value === 'modules' ||
     value === 'assignments' ||
     value === 'announcements' ||
+    value === 'discussion' ||
     value === 'classmates' ||
     value === 'grades' ||
     value === 'calendar'
   );
 }
+
+const RichTextRenderer = dynamic(
+  () =>
+    import('@/components/shared/rich-text/RichTextRenderer').then(
+      (mod) => mod.RichTextRenderer,
+    ),
+  {
+    loading: () => <Skeleton className="h-16 w-full rounded-xl" />,
+  },
+);
 
 function getClassId(raw: string | string[] | undefined) {
   if (!raw) return '';
@@ -214,6 +233,11 @@ function formatDateLong(value: Date | null) {
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatStudentName(student?: Enrollment['student']) {
+  const parts = [student?.firstName, student?.lastName].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'Unnamed student';
+}
+
 function formatCalendarDay(value: Date) {
   return {
     day: String(value.getDate()),
@@ -227,15 +251,19 @@ function getEnrollmentRows(classItem: ClassItem | null) {
   const sectionName = classItem?.section?.name || 'Section';
   const sectionLabel = `Grade ${gradeLevel} - ${sectionName}`;
   return rows.map((enrollment) => {
-    const firstName = enrollment.student?.firstName || '';
-    const lastName = enrollment.student?.lastName || '';
-    const fullName = `${firstName} ${lastName}`.trim() || 'Unnamed student';
+    const firstName = enrollment.student?.firstName?.trim() || '';
+    const lastName = enrollment.student?.lastName?.trim() || '';
+    const fullName = formatStudentName(enrollment.student);
+    const initials = [firstName.charAt(0), lastName.charAt(0)]
+      .filter(Boolean)
+      .join('')
+      .toUpperCase();
     return {
       id: enrollment.id,
       fullName,
-      email: enrollment.student?.email || '--',
+      email: enrollment.student?.email?.trim() || '--',
       section: sectionLabel,
-      initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'NA',
+      initials: initials || 'NA',
     };
   });
 }
@@ -261,6 +289,15 @@ function getOpenModuleHref(moduleEntry: ClassModule, classId: string) {
   return `/dashboard/student/classes/${classId}/modules/${moduleEntry.id}`;
 }
 
+function sortDiscussionThreads(threads: DiscussionThreadSummary[]) {
+  return [...threads].sort((left, right) => {
+    if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
+    const leftTs = new Date(left.publishedAt || left.createdAt || 0).getTime();
+    const rightTs = new Date(right.publishedAt || right.createdAt || 0).getTime();
+    return rightTs - leftTs;
+  });
+}
+
 export default function StudentClassDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -276,6 +313,13 @@ export default function StudentClassDetailPage() {
   const [modules, setModules] = useState<ClassModule[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [discussionThreads, setDiscussionThreads] = useState<DiscussionThreadSummary[]>([]);
+  const [selectedDiscussionThreadId, setSelectedDiscussionThreadId] = useState<string | null>(null);
+  const [selectedDiscussionThread, setSelectedDiscussionThread] = useState<DiscussionThreadDetail | null>(null);
+  const [discussionCommentBody, setDiscussionCommentBody] = useState('');
+  const [discussionCommentImages, setDiscussionCommentImages] = useState<File[]>([]);
+  const [discussionSubmitting, setDiscussionSubmitting] = useState(false);
+  const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('all');
@@ -284,28 +328,39 @@ export default function StudentClassDetailPage() {
   const fetchPageData = useCallback(async () => {
     if (!classId) {
       setClassItem(null);
+      setForbiddenMessage(null);
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
+      setForbiddenMessage(null);
+      const shouldLoadFullClassData = currentTab !== 'discussion';
 
       const classResponse = await classService.getById(classId);
       const classData = classResponse.data;
 
       const [modulesResponse, assessmentsResponse, announcementsResponse, schoolEventsResponse] =
         await Promise.all([
-          moduleService.getByClass(classId).catch(() => ({ data: [] as ClassModule[] })),
-          assessmentService
-            .getByClass(classId, { page: 1, limit: 100, status: 'all' })
-            .catch(() => ({ data: [] as Assessment[] })),
-          announcementService
-            .getByClass(classId, { limit: 50 })
-            .catch(() => ({ data: [] as Announcement[] })),
-          schoolEventService
-            .getAll({ schoolYear: classData.schoolYear })
-            .catch(() => ({ data: [] as SchoolEvent[] })),
+          shouldLoadFullClassData
+            ? moduleService.getByClass(classId).catch(() => ({ data: [] as ClassModule[] }))
+            : Promise.resolve({ data: [] as ClassModule[] }),
+          shouldLoadFullClassData
+            ? assessmentService
+                .getByClass(classId, { page: 1, limit: 100, status: 'all' })
+                .catch(() => ({ data: [] as Assessment[] }))
+            : Promise.resolve({ data: [] as Assessment[] }),
+          shouldLoadFullClassData
+            ? announcementService
+                .getByClass(classId, { limit: 50 })
+                .catch(() => ({ data: [] as Announcement[] }))
+            : Promise.resolve({ data: [] as Announcement[] }),
+          shouldLoadFullClassData
+            ? schoolEventService
+                .getAll({ schoolYear: classData.schoolYear })
+                .catch(() => ({ data: [] as SchoolEvent[] }))
+            : Promise.resolve({ data: [] as SchoolEvent[] }),
         ]);
 
       let enrichedClass: ClassItem = classData;
@@ -319,15 +374,19 @@ export default function StudentClassDetailPage() {
         }
       }
 
-      const publishedAssessments = (assessmentsResponse.data || []).filter((entry) => entry.isPublished);
-      const attemptsEntries = await Promise.all(
-        publishedAssessments.map(async (entry) => {
-          const response = await assessmentService
-            .getStudentAttempts(entry.id)
-            .catch(() => ({ data: [] as AssessmentAttempt[] }));
-          return [entry.id, response.data || []] as const;
-        }),
-      );
+      const publishedAssessments = shouldLoadFullClassData
+        ? (assessmentsResponse.data || []).filter((entry) => entry.isPublished)
+        : [];
+      const attemptsEntries = shouldLoadFullClassData
+        ? await Promise.all(
+            publishedAssessments.map(async (entry) => {
+              const response = await assessmentService
+                .getStudentAttempts(entry.id)
+                .catch(() => ({ data: [] as AssessmentAttempt[] }));
+              return [entry.id, response.data || []] as const;
+            }),
+          )
+        : [];
 
       setClassItem(enrichedClass);
       setModules(sortByDateAsc(modulesResponse.data || [], () => null).sort((a, b) => a.order - b.order));
@@ -342,21 +401,54 @@ export default function StudentClassDetailPage() {
       );
       setSchoolEvents(schoolEventsResponse.data || []);
       setAttemptsByAssessment(Object.fromEntries(attemptsEntries));
-    } catch {
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status ?? null;
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        null;
+      if (status === 403) {
+        setForbiddenMessage(message || 'You do not have access to this class.');
+      }
       setClassItem(null);
       setModules([]);
       setAssessments([]);
       setAnnouncements([]);
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
       setSchoolEvents([]);
       setAttemptsByAssessment({});
     } finally {
       setLoading(false);
     }
-  }, [classId, user?.id]);
+  }, [classId, currentTab, user?.id]);
 
   useEffect(() => {
     void fetchPageData();
   }, [fetchPageData]);
+
+  const loadDiscussionThreads = useCallback(async () => {
+    if (!classId) {
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
+      return;
+    }
+
+    try {
+      const response = await discussionBoardService.listThreads(classId, { limit: 50 });
+      setDiscussionThreads(sortDiscussionThreads(response.data.items || []));
+    } catch {
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
+    }
+  }, [classId]);
+
+  useEffect(() => {
+    if (currentTab !== 'discussion') return;
+    void loadDiscussionThreads();
+  }, [currentTab, loadDiscussionThreads]);
 
   useEffect(() => {
     if (!classId) return;
@@ -383,6 +475,107 @@ export default function StudentClassDetailPage() {
       window.localStorage.setItem(storageKey, view);
     },
     [classId],
+  );
+
+  const loadSelectedDiscussionThread = useCallback(
+    async (threadId: string) => {
+      try {
+        const response = await discussionBoardService.getThread(classId, threadId);
+        setSelectedDiscussionThread(response.data);
+      } catch {
+        setSelectedDiscussionThread(null);
+      }
+    },
+    [classId],
+  );
+
+  useEffect(() => {
+    if (!selectedDiscussionThreadId) {
+      setSelectedDiscussionThread(null);
+      return;
+    }
+    void loadSelectedDiscussionThread(selectedDiscussionThreadId);
+  }, [loadSelectedDiscussionThread, selectedDiscussionThreadId]);
+
+  const handleSubmitDiscussionComment = useCallback(async () => {
+    if (!selectedDiscussionThread || discussionSubmitting) return;
+    const safeBody = sanitizeRichTextHtml(
+      plainTextToRichHtml(discussionCommentBody.trim()),
+    ).trim();
+    if (!safeBody && discussionCommentImages.length === 0) return;
+
+    try {
+      setDiscussionSubmitting(true);
+      const uploads = await Promise.all(
+        discussionCommentImages.map((file) =>
+          discussionBoardService.uploadCommentImage(
+            classId,
+            selectedDiscussionThread.id,
+            file,
+          ),
+        ),
+      );
+      const attachmentFileIds = uploads.map((entry) => entry.data.id);
+      await discussionBoardService.createComment(classId, selectedDiscussionThread.id, {
+        bodyHtml: safeBody || undefined,
+        attachmentFileIds,
+      });
+      setDiscussionCommentBody('');
+      setDiscussionCommentImages([]);
+      await loadSelectedDiscussionThread(selectedDiscussionThread.id);
+      await loadDiscussionThreads();
+    } finally {
+      setDiscussionSubmitting(false);
+    }
+  }, [
+    classId,
+    discussionCommentBody,
+    discussionCommentImages,
+    discussionSubmitting,
+    loadDiscussionThreads,
+    loadSelectedDiscussionThread,
+    selectedDiscussionThread,
+  ]);
+
+  const handleDeleteDiscussionComment = useCallback(
+    async (commentId: string) => {
+      if (!selectedDiscussionThread) return;
+      await discussionBoardService.deleteComment(
+        classId,
+        selectedDiscussionThread.id,
+        commentId,
+      );
+      await loadSelectedDiscussionThread(selectedDiscussionThread.id);
+      await loadDiscussionThreads();
+    },
+    [classId, loadDiscussionThreads, loadSelectedDiscussionThread, selectedDiscussionThread],
+  );
+
+  const handleToggleDiscussionReaction = useCallback(
+    async (commentId: string, reactionType: 'like' | 'heart' | 'wow') => {
+      if (!selectedDiscussionThread) return;
+      const comment = selectedDiscussionThread.comments.find(
+        (entry) => entry.id === commentId,
+      );
+      if (!comment) return;
+
+      if (comment.reactions.userReaction === reactionType) {
+        await discussionBoardService.removeReaction(
+          classId,
+          selectedDiscussionThread.id,
+          commentId,
+        );
+      } else {
+        await discussionBoardService.setReaction(
+          classId,
+          selectedDiscussionThread.id,
+          commentId,
+          reactionType,
+        );
+      }
+      await loadSelectedDiscussionThread(selectedDiscussionThread.id);
+    },
+    [classId, loadSelectedDiscussionThread, selectedDiscussionThread],
   );
 
   const workspaceTabs = useMemo(
@@ -518,7 +711,7 @@ export default function StudentClassDetailPage() {
   if (!classItem) {
     return (
       <section className="teacher-class-workspace__not-found">
-        <p>Class not found.</p>
+        <p>{forbiddenMessage || 'Class not found.'}</p>
         <Link href="/dashboard/student/courses">Back to Courses</Link>
       </section>
     );
@@ -747,6 +940,149 @@ export default function StudentClassDetailPage() {
               ))}
             </div>
           )}
+        </motion.section>
+      ) : null}
+
+      {currentTab === 'discussion' ? (
+        <motion.section
+          className="student-class-panel"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <header className="student-class-panel__head">
+            <h2>Discussion Board</h2>
+            <p>{discussionThreads.length} active thread{discussionThreads.length === 1 ? '' : 's'}</p>
+          </header>
+
+          {discussionThreads.length === 0 ? (
+            <div className="teacher-class-workspace__empty">No discussion threads yet.</div>
+          ) : (
+            <div className="student-class-stack">
+              {discussionThreads.map((thread) => (
+                <motion.article
+                  key={thread.id}
+                  className="student-class-announcement-card"
+                  data-pinned={thread.isPinned}
+                  variants={staggerItem}
+                >
+                  {thread.isPinned ? <span className="student-class-announcement-card__pin">Pinned</span> : null}
+                  <h3>{thread.title}</h3>
+                  <RichTextRenderer html={thread.bodyHtml} />
+                  <small>
+                    {thread.commentCount} comments • {thread.status}
+                  </small>
+                  <div className="student-class-assignment-row__chips">
+                    <button
+                      type="button"
+                      className="student-class-assignment-row__take"
+                      onClick={() => setSelectedDiscussionThreadId(thread.id)}
+                    >
+                      Open Thread
+                    </button>
+                  </div>
+                </motion.article>
+              ))}
+            </div>
+          )}
+
+          {selectedDiscussionThread ? (
+            <div className="student-class-panel">
+              <header className="student-class-panel__head">
+                <h2>{selectedDiscussionThread.title}</h2>
+                <p>{selectedDiscussionThread.comments.length} comment{selectedDiscussionThread.comments.length === 1 ? '' : 's'}</p>
+              </header>
+              <div className="student-class-stack">
+                {selectedDiscussionThread.comments.map((comment) => (
+                  <article key={comment.id} className="student-class-announcement-card">
+                    <h3>
+                      {comment.author?.firstName} {comment.author?.lastName}
+                    </h3>
+                    <RichTextRenderer html={comment.bodyHtml || '<p>(Image-only comment)</p>'} />
+                    {comment.attachments.length > 0 ? (
+                      <div className="student-class-assignment-row__chips">
+                        {comment.attachments.map((attachment) => (
+                          <a
+                            key={attachment.id}
+                            href={attachment.inlineUrl || '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {attachment.originalName || 'Image'}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="student-class-assignment-row__chips">
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleDiscussionReaction(comment.id, 'like')}
+                      >
+                        Like {comment.reactions.like}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleDiscussionReaction(comment.id, 'heart')}
+                      >
+                        Heart {comment.reactions.heart}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleToggleDiscussionReaction(comment.id, 'wow')}
+                      >
+                        Wow {comment.reactions.wow}
+                      </button>
+                      {comment.canDelete ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteDiscussionComment(comment.id)}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+                {selectedDiscussionThread.comments.length === 0 ? (
+                  <div className="teacher-class-workspace__empty">No comments yet.</div>
+                ) : null}
+              </div>
+
+              {selectedDiscussionThread.status === 'published' && selectedDiscussionThread.allowComments ? (
+                <div className="teacher-class-workspace__announcement-form">
+                  <textarea
+                    className="teacher-module-modal__textarea"
+                    value={discussionCommentBody}
+                    onChange={(event) => setDiscussionCommentBody(event.target.value)}
+                    placeholder="Write your comment..."
+                    rows={4}
+                  />
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) =>
+                      setDiscussionCommentImages(Array.from(event.target.files || []))
+                    }
+                  />
+                  <div className="teacher-class-workspace__head-actions">
+                    <button
+                      type="button"
+                      className="student-class-assignment-row__take"
+                      onClick={() => void handleSubmitDiscussionComment()}
+                      disabled={discussionSubmitting}
+                    >
+                      {discussionSubmitting ? 'Posting...' : 'Post Comment'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="teacher-class-workspace__empty">
+                  This thread is closed for new comments.
+                </div>
+              )}
+            </div>
+          ) : null}
         </motion.section>
       ) : null}
 

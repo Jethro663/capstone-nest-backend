@@ -48,3 +48,8 @@ Use rule IDs in reasoning, reviews, and implementation notes instead of repeatin
 | `ROUTER-3` | Add a second subsystem slice only for explicit cross-boundary work. |
 | `ROUTER-4` | Keep appendices unloaded unless exact detail is needed. |
 | `ROUTER-5` | Emit `ROUTER_TRACE` before substantive work. |
+| `ROUTER-6` | Specialized workflow skills take precedence over generic subsystem routing. |
+| `ROUTER-7` | Contract changes must trace downstream consumers before the task is considered done. |
+| `ROUTER-8` | Prefer repo-native smoke or perf scripts over generic broad verification when they cover the touched flow. |
+| `ROUTER-9` | Slice docs must name real commands, scripts, and entrypoints that exist in the repo today. |
+| `ROUTER-10` | Prefer available MCP tools when they fit: Serena for code discovery, Playwright for browser execution, shell for command-oriented work. |

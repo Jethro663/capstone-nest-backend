@@ -33,6 +33,36 @@ class ChatData(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class AdminAnalyticsSource(BaseModel):
+    source: str
+    filters: dict[str, Any] = Field(default_factory=dict)
+    window: str | None = None
+
+
+class AdminAnalyticsChartSeries(BaseModel):
+    name: str
+    data: list[float | int]
+
+
+class AdminAnalyticsChart(BaseModel):
+    type: str
+    title: str
+    labels: list[str]
+    series: list[AdminAnalyticsChartSeries]
+    y_axis_label: str | None = Field(default=None, alias="yAxisLabel")
+    x_axis_label: str | None = Field(default=None, alias="xAxisLabel")
+
+    model_config = {"populate_by_name": True}
+
+
+class AdminChatRequest(BaseModel):
+    message: str = Field(..., max_length=2000)
+    session_id: str | None = Field(None, alias="sessionId")
+    context: dict[str, Any]
+
+    model_config = {"populate_by_name": True}
+
+
 # ---------------------------------------------------------------------------
 # Extraction
 # ---------------------------------------------------------------------------
@@ -45,6 +75,7 @@ class ExtractRequest(BaseModel):
 
 
 class ApplyExtractionRequest(BaseModel):
+    section_indices: list[int] | None = Field(None, alias="sectionIndices")
     lesson_indices: list[int] | None = Field(None, alias="lessonIndices")
 
     model_config = {"populate_by_name": True}
@@ -53,7 +84,7 @@ class ApplyExtractionRequest(BaseModel):
 class ExtractionBlockDto(BaseModel):
     type: str
     order: int
-    content: dict[str, Any]
+    content: dict[str, Any] | str
     metadata: dict[str, Any] | None = None
 
 
@@ -63,10 +94,60 @@ class ExtractionLessonDto(BaseModel):
     blocks: list[ExtractionBlockDto]
 
 
+class ExtractionAssessmentOptionDto(BaseModel):
+    text: str
+    is_correct: bool = Field(default=False, alias="isCorrect")
+    order: int | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionAssessmentQuestionDto(BaseModel):
+    content: str
+    type: str = "multiple_choice"
+    points: int = 1
+    order: int | None = None
+    explanation: str | None = None
+    image_url: str | None = Field(default=None, alias="imageUrl")
+    concept_tags: list[str] | None = Field(default=None, alias="conceptTags")
+    options: list[ExtractionAssessmentOptionDto] | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionAssessmentDraftDto(BaseModel):
+    title: str
+    description: str | None = None
+    type: str = "quiz"
+    passing_score: int = Field(default=60, alias="passingScore")
+    feedback_level: str = Field(default="standard", alias="feedbackLevel")
+    question_type: str = Field(default="multiple_choice", alias="questionType")
+    questions: list[ExtractionAssessmentQuestionDto] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionSectionDto(BaseModel):
+    title: str
+    description: str | None = None
+    order: int | None = None
+    lesson_blocks: list[ExtractionBlockDto] = Field(default_factory=list, alias="lessonBlocks")
+    assessment_draft: ExtractionAssessmentDraftDto | None = Field(
+        default=None,
+        alias="assessmentDraft",
+    )
+    confidence: float | None = None
+
+    model_config = {"populate_by_name": True}
+
+
 class UpdateExtractionRequest(BaseModel):
     title: str | None = None
     description: str | None = None
-    lessons: list[ExtractionLessonDto]
+    sections: list[ExtractionSectionDto] | None = None
+    lessons: list[ExtractionLessonDto] | None = None
+
+    model_config = {"populate_by_name": True}
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +166,15 @@ class MentorExplainRequest(BaseModel):
 
 class InterventionRecommendationRequest(BaseModel):
     note: str | None = None
+
+
+class DemoInterventionPlanRequest(BaseModel):
+    subject_id: str = Field(..., alias="subjectId")
+    quarter_exam_score: int = Field(..., alias="quarterExamScore")
+    weak_concepts: list[str] = Field(default_factory=list, alias="weakConcepts")
+    module_scores: list[int] | None = Field(default=None, alias="moduleScores")
+
+    model_config = {"populate_by_name": True}
 
 
 class GenerateQuizDraftRequest(BaseModel):

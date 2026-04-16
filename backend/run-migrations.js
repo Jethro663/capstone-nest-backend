@@ -145,6 +145,24 @@ function isTransactionControl(stmt) {
   return /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;?\s*$/i.test(stmt);
 }
 
+function containsEnumAddValue(statements) {
+  return statements.some((stmt) =>
+    /\bALTER\s+TYPE\b[\s\S]*\bADD\s+VALUE\b/i.test(stmt),
+  );
+}
+
+function isHarmlessMigrationError(err) {
+  const harmless = [
+    '42710', // duplicate_object  (type/constraint already exists)
+    '42P07', // duplicate_table
+    '42701', // duplicate_column
+    '42704', // undefined_object  (constraint/index already dropped)
+    '42P01', // undefined_table
+    '42703', // undefined_column  (old FK refs removed column)
+  ];
+  return harmless.includes(err.code);
+}
+
 /**
  * Applies a single .sql file.
  *
@@ -156,8 +174,29 @@ function isTransactionControl(stmt) {
 async function applyMigrationFile(filePath) {
   const sql = fs.readFileSync(filePath, 'utf-8');
   const statements = splitStatements(sql).filter((s) => !isTransactionControl(s));
+  const requiresNonTransactionalExecution = containsEnumAddValue(statements);
 
   if (statements.length === 0) return;
+
+  if (requiresNonTransactionalExecution) {
+    console.log(
+      '  ℹ Running in non-transaction mode (enum ADD VALUE requires commit before reuse)',
+    );
+
+    for (const statement of statements) {
+      try {
+        await client.query(statement);
+      } catch (err) {
+        if (isHarmlessMigrationError(err)) {
+          console.log(`  ⚠ Skipped (${err.code}): ${err.message.split('\n')[0]}`);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    return;
+  }
 
   await client.query('BEGIN');
 
@@ -167,16 +206,7 @@ async function applyMigrationFile(filePath) {
       await client.query(statement);
       await client.query('RELEASE SAVEPOINT sp');
     } catch (err) {
-      const harmless = [
-        '42710', // duplicate_object  (type/constraint already exists)
-        '42P07', // duplicate_table
-        '42701', // duplicate_column
-        '42704', // undefined_object  (constraint/index already dropped)
-        '42P01', // undefined_table
-        '42703', // undefined_column  (old FK refs removed column)
-      ];
-
-      if (harmless.includes(err.code)) {
+      if (isHarmlessMigrationError(err)) {
         await client.query('ROLLBACK TO SAVEPOINT sp');
         console.log(`  ⚠ Skipped (${err.code}): ${err.message.split('\n')[0]}`);
       } else {

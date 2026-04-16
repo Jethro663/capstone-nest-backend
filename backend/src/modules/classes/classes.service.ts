@@ -22,7 +22,17 @@ import {
 import { DatabaseService } from '../../database/database.service';
 import {
   assessments,
+  assessmentQuestions,
+  assessmentQuestionOptions,
   assessmentAttempts,
+  announcements,
+  classModules,
+  classTemplateAnnouncements,
+  classTemplateAssessments,
+  classTemplateModuleItems,
+  classTemplateModules,
+  classTemplateModuleSections,
+  classTemplates,
   classSchedules,
   studentClassPresentationPreferences,
   studentCourseViewPreferences,
@@ -34,6 +44,8 @@ import {
   classRecordScores,
   classRecords,
   sections,
+  moduleItems,
+  moduleSections,
   users,
   userRoles,
   roles,
@@ -50,6 +62,10 @@ import {
   STUDENT_COURSE_VIEW_MODES,
 } from './DTO/update-student-course-view.dto';
 import { normalizeGradeLevel } from '../../common/utils/grade-level.util';
+import {
+  areSubjectCodesEquivalent,
+  normalizeSubjectCode,
+} from '../../common/utils/subject-code.util';
 import {
   toCalendarSlot,
   timeToMinutes,
@@ -99,7 +115,9 @@ export class ClassesService {
     requesterRoles?: string[],
   ) {
     if (!requesterId || !requesterRoles || requesterRoles.length === 0) {
-      throw new ForbiddenException('Unable to verify student preference access');
+      throw new ForbiddenException(
+        'Unable to verify student preference access',
+      );
     }
 
     if (requesterRoles.includes('student') && requesterId !== studentId) {
@@ -300,7 +318,7 @@ export class ClassesService {
   /**
    * Find a class by ID
    */
-  async findById(id: string) {
+  async findById(id: string, requesterId?: string, requesterRoles?: string[]) {
     const classRecord = await this.db.query.classes.findFirst({
       where: eq(classes.id, id),
       with: {
@@ -314,11 +332,72 @@ export class ClassesService {
             email: true,
           },
         },
+        enrollments: {
+          where: eq(enrollments.status, 'enrolled'),
+          columns: {
+            id: true,
+            studentId: true,
+            classId: true,
+            sectionId: true,
+          },
+          with: {
+            student: {
+              columns: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+              with: {
+                profile: {
+                  columns: {
+                    gradeLevel: true,
+                    lrn: true,
+                    profilePicture: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
     if (!classRecord) {
       throw new NotFoundException(`Class with ID "${id}" not found`);
+    }
+
+    if (
+      requesterId &&
+      Array.isArray(requesterRoles) &&
+      requesterRoles.length > 0
+    ) {
+      const isAdmin = requesterRoles.includes('admin');
+      const isTeacher = requesterRoles.includes('teacher');
+      const isStudent = requesterRoles.includes('student');
+
+      if (!isAdmin && !isTeacher && !isStudent) {
+        throw new ForbiddenException('You do not have access to this class');
+      }
+
+      if (isTeacher && !isAdmin && classRecord.teacherId !== requesterId) {
+        throw new ForbiddenException('You can only access your own classes');
+      }
+
+      if (isStudent && !isAdmin) {
+        const enrollment = await this.db.query.enrollments.findFirst({
+          where: and(
+            eq(enrollments.classId, id),
+            eq(enrollments.studentId, requesterId),
+            eq(enrollments.status, 'enrolled'),
+          ),
+          columns: { id: true },
+        });
+
+        if (!enrollment) {
+          throw new ForbiddenException('You are not enrolled in this class');
+        }
+      }
     }
 
     return {
@@ -330,7 +409,18 @@ export class ClassesService {
   /**
    * Create a new class
    */
-  async create(createClassDto: CreateClassDto) {
+  async create(
+    createClassDto: CreateClassDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const normalizedSubjectCode = normalizeSubjectCode(
+      createClassDto.subjectCode,
+    );
+    const normalizedSubjectGradeLevel = normalizeGradeLevel(
+      createClassDto.subjectGradeLevel,
+    );
+
     // Section check
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, createClassDto.sectionId),
@@ -370,66 +460,352 @@ export class ClassesService {
       );
     }
 
-    // Check if class already exists (same subject, section, and school year)
-    const existingClass = await this.db.query.classes.findFirst({
-      where: and(
-        eq(classes.subjectCode, createClassDto.subjectCode),
-        eq(classes.sectionId, createClassDto.sectionId),
-        eq(classes.schoolYear, createClassDto.schoolYear),
-      ),
-    });
-
-    if (existingClass) {
-      throw new ConflictException(
-        `Class already exists for this subject, section, and school year`,
-      );
-    }
-
-    // Build a typed payload for insertion
-    const insertPayload: any = {
-      subjectName: createClassDto.subjectName,
-      subjectCode: createClassDto.subjectCode?.toUpperCase(),
-      subjectGradeLevel: normalizeGradeLevel(createClassDto.subjectGradeLevel),
-      sectionId: createClassDto.sectionId,
-      teacherId: createClassDto.teacherId,
-      schoolYear: createClassDto.schoolYear,
-      room: createClassDto.room,
-      cardPreset: createClassDto.cardPreset ?? 'aurora',
-      cardBannerUrl: createClassDto.cardBannerUrl ?? null,
-    };
-
-    const [newClass] = await this.db
-      .insert(classes)
-      .values(insertPayload)
-      .returning();
-
-    // Insert schedule slots (run collision check first)
-    if (createClassDto.schedules?.length) {
-      await this.checkCollisions({
-        classId: newClass.id,
-        sectionId: createClassDto.sectionId,
-        teacherId: createClassDto.teacherId,
-        room: createClassDto.room,
-        slots: createClassDto.schedules,
+    const newClassId = await this.db.transaction(async (tx) => {
+      const classesForSectionYear = await tx.query.classes.findMany({
+        where: and(
+          eq(classes.sectionId, createClassDto.sectionId),
+          eq(classes.schoolYear, createClassDto.schoolYear),
+        ),
+        columns: {
+          id: true,
+          subjectCode: true,
+        },
       });
 
-      await this.db.insert(classSchedules).values(
-        createClassDto.schedules.map((slot) => ({
-          classId: newClass.id,
-          days: slot.days,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-        })),
+      const existingClass = classesForSectionYear.find((entry) =>
+        areSubjectCodesEquivalent(entry.subjectCode, normalizedSubjectCode),
+      );
+
+      if (existingClass) {
+        throw new ConflictException(
+          `Class already exists for this subject, section, and school year`,
+        );
+      }
+
+      const insertPayload: any = {
+        subjectName: createClassDto.subjectName,
+        subjectCode: normalizedSubjectCode,
+        subjectGradeLevel: normalizedSubjectGradeLevel,
+        sectionId: createClassDto.sectionId,
+        teacherId: createClassDto.teacherId,
+        schoolYear: createClassDto.schoolYear,
+        room: createClassDto.room,
+        cardPreset: createClassDto.cardPreset ?? 'aurora',
+        cardBannerUrl: createClassDto.cardBannerUrl ?? null,
+      };
+
+      const [newClass] = await tx
+        .insert(classes)
+        .values(insertPayload)
+        .returning();
+
+      if (createClassDto.schedules?.length) {
+        await this.checkCollisions(
+          {
+            classId: newClass.id,
+            sectionId: createClassDto.sectionId,
+            teacherId: createClassDto.teacherId,
+            room: createClassDto.room,
+            slots: createClassDto.schedules,
+          },
+          tx,
+        );
+
+        await tx.insert(classSchedules).values(
+          createClassDto.schedules.map((slot) => ({
+            classId: newClass.id,
+            days: slot.days,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+          })),
+        );
+      }
+
+      if (createClassDto.templateId) {
+        await this.applyTemplateToClass(
+          tx,
+          createClassDto.templateId,
+          newClass.id,
+          {
+            ...createClassDto,
+            subjectCode: normalizedSubjectCode,
+            subjectGradeLevel: normalizedSubjectGradeLevel,
+          },
+          actorId ?? createClassDto.teacherId,
+        );
+      }
+
+      return newClass.id;
+    });
+
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? createClassDto.teacherId ?? 'system',
+      action: 'class.created',
+      targetType: 'class',
+      targetId: newClassId,
+      metadata: {
+        actorRole,
+        sectionId: createClassDto.sectionId,
+        teacherId: createClassDto.teacherId,
+        schoolYear: createClassDto.schoolYear,
+        hasSchedules: Boolean(createClassDto.schedules?.length),
+        templateId: createClassDto.templateId ?? null,
+      },
+    });
+
+    return this.findById(newClassId);
+  }
+
+  private async applyTemplateToClass(
+    database: any,
+    templateId: string,
+    classId: string,
+    createClassDto: CreateClassDto,
+    actorId: string,
+  ) {
+    const template = await database.query.classTemplates.findFirst({
+      where: eq(classTemplates.id, templateId),
+    });
+
+    if (!template) {
+      throw new BadRequestException(
+        `Template with ID "${templateId}" not found`,
       );
     }
 
-    return this.findById(newClass.id);
+    if (template.status !== 'published') {
+      throw new BadRequestException('Only published templates can be applied');
+    }
+
+    if (
+      !areSubjectCodesEquivalent(
+        template.subjectCode,
+        createClassDto.subjectCode,
+      ) ||
+      normalizeGradeLevel(template.subjectGradeLevel) !==
+        normalizeGradeLevel(createClassDto.subjectGradeLevel)
+    ) {
+      throw new BadRequestException(
+        'Template subjectCode and subjectGradeLevel must exactly match class subject',
+      );
+    }
+
+    const [templateAssessments, templateModules, templateAnnouncements] =
+      await Promise.all([
+        database.query.classTemplateAssessments.findMany({
+          where: eq(classTemplateAssessments.templateId, templateId),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        }),
+        database.query.classTemplateModules.findMany({
+          where: eq(classTemplateModules.templateId, templateId),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        }),
+        database.query.classTemplateAnnouncements.findMany({
+          where: eq(classTemplateAnnouncements.templateId, templateId),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        }),
+      ]);
+
+    const assessmentIdMap = new Map<string, string>();
+    for (const templateAssessment of templateAssessments) {
+      const settings = (templateAssessment.settings ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const dueOffset =
+        typeof settings.dueDateOffsetDays === 'number'
+          ? settings.dueDateOffsetDays
+          : templateAssessment.dueDateOffsetDays;
+      const dueDate =
+        typeof dueOffset === 'number'
+          ? new Date(Date.now() + dueOffset * 24 * 60 * 60 * 1000)
+          : null;
+
+      const [assessment] = await database
+        .insert(assessments)
+        .values({
+          classId,
+          title: templateAssessment.title,
+          description: templateAssessment.description,
+          type: templateAssessment.type,
+          dueDate,
+          totalPoints: templateAssessment.totalPoints ?? 0,
+          isPublished: false,
+          randomizeQuestions: Boolean(settings.randomizeQuestions ?? false),
+          closeWhenDue:
+            settings.closeWhenDue === undefined
+              ? true
+              : Boolean(settings.closeWhenDue),
+          passingScore:
+            typeof settings.passingScore === 'number'
+              ? settings.passingScore
+              : undefined,
+          maxAttempts:
+            typeof settings.maxAttempts === 'number' ? settings.maxAttempts : 1,
+          isCoreTemplateAsset: true,
+          templateId,
+          templateSourceId: templateAssessment.id,
+        } as any)
+        .returning();
+
+      const questionRows = Array.isArray(templateAssessment.questions)
+        ? (templateAssessment.questions as any[])
+        : [];
+
+      for (
+        let questionIndex = 0;
+        questionIndex < questionRows.length;
+        questionIndex += 1
+      ) {
+        const templateQuestion = questionRows[questionIndex];
+        const [question] = await database
+          .insert(assessmentQuestions)
+          .values({
+            assessmentId: assessment.id,
+            type: templateQuestion.type ?? 'multiple_choice',
+            content: templateQuestion.content ?? '',
+            points: templateQuestion.points ?? 1,
+            order: templateQuestion.order ?? questionIndex + 1,
+            isRequired: templateQuestion.isRequired ?? true,
+            explanation: templateQuestion.explanation ?? null,
+            imageUrl: templateQuestion.imageUrl ?? null,
+          })
+          .returning();
+
+        const options = Array.isArray(templateQuestion.options)
+          ? templateQuestion.options
+          : [];
+        if (options.length > 0) {
+          await database.insert(assessmentQuestionOptions).values(
+            options.map((option: any, optionIndex: number) => ({
+              questionId: question.id,
+              text: option.text ?? '',
+              isCorrect: option.isCorrect ?? false,
+              order: option.order ?? optionIndex + 1,
+            })),
+          );
+        }
+      }
+
+      assessmentIdMap.set(templateAssessment.id, assessment.id);
+    }
+
+    const templateModuleIds = templateModules.map((module) => module.id);
+    const templateSections = templateModuleIds.length
+      ? await database.query.classTemplateModuleSections.findMany({
+          where: inArray(
+            classTemplateModuleSections.templateModuleId,
+            templateModuleIds,
+          ),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        })
+      : [];
+    const templateSectionIds = templateSections.map((section) => section.id);
+    const templateItems = templateSectionIds.length
+      ? await database.query.classTemplateModuleItems.findMany({
+          where: inArray(
+            classTemplateModuleItems.templateSectionId,
+            templateSectionIds,
+          ),
+          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+        })
+      : [];
+
+    const moduleIdMap = new Map<string, string>();
+    for (const templateModule of templateModules) {
+      const [module] = await database
+        .insert(classModules)
+        .values({
+          classId,
+          title: templateModule.title,
+          description: templateModule.description,
+          order: templateModule.order,
+          themeKind: templateModule.themeKind,
+          gradientId: templateModule.gradientId,
+          coverImageUrl: templateModule.coverImageUrl,
+          imagePositionX: templateModule.imagePositionX,
+          imagePositionY: templateModule.imagePositionY,
+          imageScale: templateModule.imageScale,
+          isVisible: false,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          templateId,
+          templateSourceId: templateModule.id,
+        })
+        .returning();
+
+      moduleIdMap.set(templateModule.id, module.id);
+    }
+
+    const sectionIdMap = new Map<string, string>();
+    for (const templateSection of templateSections) {
+      const moduleId = moduleIdMap.get(templateSection.templateModuleId);
+      if (!moduleId) continue;
+      const [section] = await database
+        .insert(moduleSections)
+        .values({
+          moduleId,
+          title: templateSection.title,
+          description: templateSection.description,
+          order: templateSection.order,
+        })
+        .returning();
+      sectionIdMap.set(templateSection.id, section.id);
+    }
+
+    for (const templateItem of templateItems) {
+      const sectionId = sectionIdMap.get(templateItem.templateSectionId);
+      if (!sectionId) continue;
+      const mappedAssessmentId = templateItem.templateAssessmentId
+        ? (assessmentIdMap.get(templateItem.templateAssessmentId) ?? null)
+        : null;
+
+      await database.insert(moduleItems).values({
+        moduleSectionId: sectionId,
+        itemType: templateItem.itemType,
+        assessmentId: mappedAssessmentId,
+        order: templateItem.order,
+        isVisible: false,
+        isGiven: false,
+        isRequired: templateItem.isRequired,
+        metadata: templateItem.metadata,
+        isCoreTemplateAsset: true,
+        templateId,
+        templateSourceId: templateItem.id,
+      });
+    }
+
+    for (const templateAnnouncement of templateAnnouncements) {
+      await database.insert(announcements).values({
+        classId,
+        authorId: actorId,
+        title: templateAnnouncement.title,
+        content: templateAnnouncement.content,
+        isPinned: templateAnnouncement.isPinned,
+        isVisible: false,
+        publishedAt: null,
+        isCoreTemplateAsset: true,
+        templateId,
+        templateSourceId: templateAnnouncement.id,
+      });
+    }
   }
 
   /**
    * Update a class
    */
-  async update(id: string, updateClassDto: UpdateClassDto) {
+  async update(
+    id: string,
+    updateClassDto: UpdateClassDto,
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
     // Verify class exists
     const existing = await this.findById(id);
 
@@ -517,6 +893,32 @@ export class ClassesService {
       }
     }
 
+    const changedFields = Object.entries(classFields)
+      .filter(([, value]) => value !== undefined)
+      .map(([field]) => field);
+    if (schedules !== undefined) {
+      changedFields.push('schedules');
+    }
+
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? existing.teacherId ?? 'system',
+      action: 'class.updated',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        changedFields,
+        sectionId: updateClassDto.sectionId ?? existing.sectionId,
+        teacherId: updateClassDto.teacherId ?? existing.teacherId,
+      },
+    });
+
     return this.findById(id);
   }
 
@@ -542,6 +944,30 @@ export class ClassesService {
     }
 
     await this.db.update(classes).set(payload).where(eq(classes.id, id));
+
+    const changedFields: string[] = [];
+    if (presentation.cardPreset !== undefined) changedFields.push('cardPreset');
+    if (presentation.cardBannerUrl !== undefined)
+      changedFields.push('cardBannerUrl');
+
+    const actorRole = requesterRoles.includes('admin')
+      ? 'admin'
+      : requesterRoles.includes('teacher')
+        ? 'teacher'
+        : 'unknown';
+
+    await this.auditService.log({
+      actorId: requesterId,
+      action: 'class.presentation.updated',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        changedFields,
+        cardPreset: presentation.cardPreset,
+        cardBannerUrl: presentation.cardBannerUrl,
+      },
+    });
 
     return this.findById(id);
   }
@@ -588,7 +1014,7 @@ export class ClassesService {
    * Delete a class.
    * Blocked when active enrollments OR lessons are attached to prevent data loss.
    */
-  async delete(id: string) {
+  async delete(id: string, actorId?: string, actorRoles: string[] = []) {
     // Verify class exists
     const classRecord = await this.findById(id);
 
@@ -627,6 +1053,24 @@ export class ClassesService {
 
     await this.db.delete(classes).where(eq(classes.id, id));
 
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? classRecord.teacherId ?? 'system',
+      action: 'class.deleted',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        softDelete: true,
+        previousIsActive: classRecord.isActive,
+      },
+    });
+
     return classRecord;
   }
 
@@ -634,7 +1078,7 @@ export class ClassesService {
    * Permanently purge an archived class and all related cascade data.
    * This intentionally bypasses delete blockers used by the regular delete flow.
    */
-  async purge(id: string) {
+  async purge(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
 
     if (classRecord.isActive) {
@@ -645,12 +1089,31 @@ export class ClassesService {
 
     await this.db.delete(classes).where(eq(classes.id, id));
 
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? classRecord.teacherId ?? 'system',
+      action: 'class.purged',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        previousIsActive: classRecord.isActive,
+      },
+    });
+
     return classRecord;
   }
 
   private async performBulkLifecycleAction(
     action: BulkClassLifecycleAction,
     classId: string,
+    actorId?: string,
+    actorRoles: string[] = [],
   ) {
     const classRecord = await this.findById(classId);
 
@@ -659,13 +1122,13 @@ export class ClassesService {
         if (!classRecord.isActive) {
           throw new ConflictException('Class is already archived.');
         }
-        await this.toggleActive(classId);
+        await this.toggleActive(classId, actorId, actorRoles);
         return;
       case 'restore':
         if (classRecord.isActive) {
           throw new ConflictException('Class is already active.');
         }
-        await this.toggleActive(classId);
+        await this.toggleActive(classId, actorId, actorRoles);
         return;
       case 'purge':
         if (classRecord.isActive) {
@@ -673,7 +1136,7 @@ export class ClassesService {
             'Only archived classes can be permanently deleted. Archive the class first.',
           );
         }
-        await this.purge(classId);
+        await this.purge(classId, actorId, actorRoles);
         return;
       default: {
         throw new BadRequestException(
@@ -705,6 +1168,8 @@ export class ClassesService {
 
   async bulkLifecycleAction(
     dto: BulkClassLifecycleDto,
+    actorId?: string,
+    actorRoles: string[] = [],
   ): Promise<BulkClassLifecycleResult> {
     const classIds = [...new Set(dto.classIds)];
     const succeeded: string[] = [];
@@ -712,7 +1177,12 @@ export class ClassesService {
 
     for (const classId of classIds) {
       try {
-        await this.performBulkLifecycleAction(dto.action, classId);
+        await this.performBulkLifecycleAction(
+          dto.action,
+          classId,
+          actorId,
+          actorRoles,
+        );
         succeeded.push(classId);
       } catch (error) {
         failed.push({
@@ -891,9 +1361,31 @@ export class ClassesService {
           },
         },
         enrollments: {
+          where: eq(enrollments.status, 'enrolled'),
           columns: {
             id: true,
             studentId: true,
+            classId: true,
+            sectionId: true,
+          },
+          with: {
+            student: {
+              columns: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+              with: {
+                profile: {
+                  columns: {
+                    gradeLevel: true,
+                    lrn: true,
+                    profilePicture: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -922,7 +1414,11 @@ export class ClassesService {
     requesterId?: string,
     requesterRoles?: string[],
   ) {
-    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+    this.assertStudentPreferenceReadAccess(
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
     const classIds = await this.getEnrolledClassIds(studentId);
     if (classIds.length === 0) return [];
 
@@ -969,7 +1465,9 @@ export class ClassesService {
           styleToken: presentation.styleToken,
           updatedAt: new Date(),
         })
-        .where(eq(studentClassPresentationPreferences.id, existingPreference.id));
+        .where(
+          eq(studentClassPresentationPreferences.id, existingPreference.id),
+        );
     } else {
       await this.db.insert(studentClassPresentationPreferences).values({
         classId,
@@ -991,13 +1489,18 @@ export class ClassesService {
     requesterId?: string,
     requesterRoles?: string[],
   ) {
-    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
-    const preference = await this.db.query.studentCourseViewPreferences.findFirst({
-      where: eq(studentCourseViewPreferences.userId, studentId),
-      columns: {
-        viewMode: true,
-      },
-    });
+    this.assertStudentPreferenceReadAccess(
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
+    const preference =
+      await this.db.query.studentCourseViewPreferences.findFirst({
+        where: eq(studentCourseViewPreferences.userId, studentId),
+        columns: {
+          viewMode: true,
+        },
+      });
 
     return {
       viewMode: preference?.viewMode ?? ('card' as StudentCourseViewMode),
@@ -1010,16 +1513,21 @@ export class ClassesService {
     requesterRoles: string[],
     viewMode: StudentCourseViewMode,
   ) {
-    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+    this.assertStudentPreferenceReadAccess(
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
 
     if (!STUDENT_COURSE_VIEW_MODES.includes(viewMode)) {
       throw new BadRequestException('Unsupported student course view mode');
     }
 
-    const existing =
-      await this.db.query.studentCourseViewPreferences.findFirst({
+    const existing = await this.db.query.studentCourseViewPreferences.findFirst(
+      {
         where: eq(studentCourseViewPreferences.userId, studentId),
-      });
+      },
+    );
 
     if (existing) {
       await this.db
@@ -1094,6 +1602,25 @@ export class ClassesService {
       });
     }
 
+    const actorRole = userRoles.includes('admin')
+      ? 'admin'
+      : userRoles.includes('teacher')
+        ? 'teacher'
+        : userRoles.includes('student')
+          ? 'student'
+          : 'unknown';
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class.visibility.updated',
+      targetType: 'class',
+      targetId: classId,
+      metadata: {
+        actorRole,
+        hidden,
+      },
+    });
+
     return {
       classId,
       isHidden: hidden,
@@ -1103,16 +1630,35 @@ export class ClassesService {
   /**
    * Toggle class active status
    */
-  async toggleActive(id: string) {
+  async toggleActive(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
+    const nextIsActive = !classRecord.isActive;
 
     await this.db
       .update(classes)
       .set({
-        isActive: !classRecord.isActive,
+        isActive: nextIsActive,
         updatedAt: new Date(),
       })
       .where(eq(classes.id, id));
+
+    const actorRole = actorRoles.includes('admin')
+      ? 'admin'
+      : actorRoles.includes('teacher')
+        ? 'teacher'
+        : 'system';
+
+    await this.auditService.log({
+      actorId: actorId ?? classRecord.teacherId ?? 'system',
+      action: 'class.status.toggled',
+      targetType: 'class',
+      targetId: id,
+      metadata: {
+        actorRole,
+        previousIsActive: classRecord.isActive,
+        isActive: nextIsActive,
+      },
+    });
 
     return this.findById(id);
   }
@@ -1316,7 +1862,10 @@ export class ClassesService {
     return null;
   }
 
-  private async getAssessmentHistoryByStatus(classId: string, studentId: string) {
+  private async getAssessmentHistoryByStatus(
+    classId: string,
+    studentId: string,
+  ) {
     const classAssessments = await this.db.query.assessments.findMany({
       where: eq(assessments.classId, classId),
       columns: {
@@ -1354,7 +1903,10 @@ export class ClassesService {
         directScore: true,
         passed: true,
       },
-      orderBy: [desc(assessmentAttempts.submittedAt), desc(assessmentAttempts.createdAt)],
+      orderBy: [
+        desc(assessmentAttempts.submittedAt),
+        desc(assessmentAttempts.createdAt),
+      ],
     });
 
     const attemptsByAssessment = new Map<string, typeof attempts>();
@@ -1415,9 +1967,7 @@ export class ClassesService {
         ? new Date(latestSubmitted.submittedAt)
         : null;
       const isLate = Boolean(
-        dueDate &&
-          submittedAt &&
-          submittedAt.getTime() > dueDate.getTime(),
+        dueDate && submittedAt && submittedAt.getTime() > dueDate.getTime(),
       );
       const lateByMinutes =
         isLate && dueDate && submittedAt
@@ -1607,6 +2157,16 @@ export class ClassesService {
       gradeLevel?: string;
       sectionId?: string;
       search?: string;
+      eligibility?: 'all' | 'eligible' | 'mismatch';
+      sortBy?:
+        | 'lastName'
+        | 'firstName'
+        | 'email'
+        | 'gradeLevel'
+        | 'lrn'
+        | 'eligibility';
+      sortDirection?: 'asc' | 'desc';
+      prioritizeEligible?: boolean;
       page?: number;
       limit?: number;
     },
@@ -1668,12 +2228,6 @@ export class ClassesService {
 
     const whereClause = and(...whereConditions);
 
-    const [totalRow] = await this.db
-      .select({ total: count() })
-      .from(users)
-      .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
-      .where(whereClause);
-
     const students = await this.db
       .select({
         id: users.id,
@@ -1689,9 +2243,7 @@ export class ClassesService {
       .from(users)
       .innerJoin(studentProfiles, eq(studentProfiles.userId, users.id))
       .where(whereClause)
-      .orderBy(users.lastName, users.firstName)
-      .limit(limit)
-      .offset(offset);
+      .orderBy(users.lastName, users.firstName);
 
     const studentIds = students.map((student) => student.id);
 
@@ -1790,17 +2342,62 @@ export class ClassesService {
       };
     });
 
+    const eligibility = filters?.eligibility ?? 'all';
+    const filteredByEligibility = data.filter((student) => {
+      if (eligibility === 'eligible') return student.isEligible;
+      if (eligibility === 'mismatch') return !student.isEligible;
+      return true;
+    });
+
+    const sortBy = filters?.sortBy ?? 'lastName';
+    const sortDirection = filters?.sortDirection ?? 'asc';
+    const directionFactor = sortDirection === 'desc' ? -1 : 1;
+    const prioritizeEligible = filters?.prioritizeEligible !== false;
+
+    const getSortValue = (student: (typeof filteredByEligibility)[number]) => {
+      switch (sortBy) {
+        case 'firstName':
+          return String(student.firstName ?? '').toLowerCase();
+        case 'email':
+          return String(student.email ?? '').toLowerCase();
+        case 'gradeLevel':
+          return String(student.gradeLevel ?? '').toLowerCase();
+        case 'lrn':
+          return String(student.lrn ?? '').toLowerCase();
+        case 'eligibility':
+          return student.isEligible ? '0' : '1';
+        case 'lastName':
+        default:
+          return String(student.lastName ?? '').toLowerCase();
+      }
+    };
+
+    const sorted = [...filteredByEligibility].sort((left, right) => {
+      if (prioritizeEligible && left.isEligible !== right.isEligible) {
+        return left.isEligible ? -1 : 1;
+      }
+      const leftValue = getSortValue(left);
+      const rightValue = getSortValue(right);
+      if (leftValue < rightValue) return -1 * directionFactor;
+      if (leftValue > rightValue) return 1 * directionFactor;
+      return 0;
+    });
+
+    const total = sorted.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const paged = sorted.slice(offset, offset + limit);
+
     return {
       classContext: {
         classId: classRecord.id,
         sectionId: classRecord.sectionId,
         classGradeLevel,
       },
-      data,
-      total: Number(totalRow?.total ?? 0),
+      data: paged,
+      total,
       page,
       limit,
-      totalPages: Math.max(1, Math.ceil(Number(totalRow?.total ?? 0) / limit)),
+      totalPages,
     };
   }
 
@@ -2010,14 +2607,17 @@ export class ClassesService {
    *  - A teacher cannot be in two places at the same time
    *  - A room cannot host two classes at the same time
    */
-  private async checkCollisions(params: {
-    classId: string;
-    sectionId: string;
-    teacherId?: string | null;
-    room?: string | null;
-    slots: ScheduleSlotDto[];
-    excludeClassId?: string;
-  }): Promise<void> {
+  private async checkCollisions(
+    params: {
+      classId: string;
+      sectionId: string;
+      teacherId?: string | null;
+      room?: string | null;
+      slots: ScheduleSlotDto[];
+      excludeClassId?: string;
+    },
+    database: any = this.db,
+  ): Promise<void> {
     const { sectionId, teacherId, room, slots, excludeClassId } = params;
     const conflicts: any[] = [];
 
@@ -2059,7 +2659,7 @@ export class ClassesService {
         );
       }
 
-      const conflictRows = await this.db
+      const conflictRows = await database
         .select({
           slotId: classSchedules.id,
           classId: classSchedules.classId,

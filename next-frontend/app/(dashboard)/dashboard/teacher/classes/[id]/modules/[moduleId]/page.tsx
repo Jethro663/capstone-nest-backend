@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpen,
@@ -41,11 +41,13 @@ import type { ClassModule, ModuleItem, ModuleItemType } from '@/types/module';
 import './module-workspace.css';
 
 type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes' | 'grading';
+type AssessmentAttachMode = 'create-new' | 'attach-existing';
 
 type AttachState = {
   open: boolean;
   sectionId: string;
   itemType: ModuleItemType | null;
+  assessmentMode: AssessmentAttachMode;
   itemId: string;
   lessonPoints: string;
   file: File | null;
@@ -134,7 +136,13 @@ function iconForItemType(itemType: ModuleItemType) {
 }
 
 function titleForItem(item: ModuleItem) {
-  if (item.itemType === 'lesson') return item.lesson?.title || 'Untitled lesson';
+  if (item.itemType === 'lesson') {
+    const metadataTitle =
+      typeof item.metadata?.lessonTitle === 'string'
+        ? item.metadata.lessonTitle
+        : undefined;
+    return item.lesson?.title || metadataTitle || 'Untitled lesson';
+  }
   if (item.itemType === 'assessment') return item.assessment?.title || 'Untitled assessment';
   return item.file?.originalName || 'Untitled file';
 }
@@ -157,7 +165,9 @@ function itemMeta(item: ModuleItem) {
   if (item.itemType === 'file') {
     return item.file?.mimeType || 'File';
   }
-  return 'Lesson';
+  return typeof item.metadata?.lessonSummary === 'string'
+    ? item.metadata.lessonSummary
+    : 'Lesson';
 }
 
 function getItemEditorHref(item: ModuleItem, classId: string, moduleId: string) {
@@ -192,10 +202,12 @@ function buildGradingRows(module: ClassModule | null) {
 
 export default function TeacherModuleDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const classId = toParamValue(params.id);
   const moduleId = toParamValue(params.moduleId);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
+  const [classModules, setClassModules] = useState<ClassModule[]>([]);
   const [module, setModule] = useState<ClassModule | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -213,6 +225,7 @@ export default function TeacherModuleDetailPage() {
     open: false,
     sectionId: '',
     itemType: null,
+    assessmentMode: 'create-new',
     itemId: '',
     lessonPoints: '0',
     file: null,
@@ -239,10 +252,14 @@ export default function TeacherModuleDetailPage() {
       ]);
 
       const resolvedClass = classResponse.data || null;
-      const currentModuleRaw = modulesResponse.data.find((entry) => entry.id === moduleId) || null;
-      const currentModule = currentModuleRaw ? normalizeModule(currentModuleRaw) : null;
+      const normalizedModules = (modulesResponse.data || []).map((entry) =>
+        normalizeModule(entry),
+      );
+      const currentModule =
+        normalizedModules.find((entry) => entry.id === moduleId) || null;
 
       setClassItem(resolvedClass);
+      setClassModules(normalizedModules);
       setModule(currentModule);
       setLessons(lessonResponse.data || []);
       setAssessments(assessmentResponse.data || []);
@@ -258,6 +275,7 @@ export default function TeacherModuleDetailPage() {
       });
     } catch {
       setClassItem(null);
+      setClassModules([]);
       setModule(null);
       setLessons([]);
       setAssessments([]);
@@ -273,14 +291,6 @@ export default function TeacherModuleDetailPage() {
 
   const sectionList = useMemo(() => module?.sections || [], [module]);
 
-  const allAttachedLessonIds = useMemo(() => {
-    return new Set(
-      sectionList.flatMap((section) =>
-        section.items.filter((item) => item.itemType === 'lesson' && item.lessonId).map((item) => item.lessonId as string),
-      ),
-    );
-  }, [sectionList]);
-
   const allAttachedAssessmentIds = useMemo(() => {
     return new Set(
       sectionList.flatMap((section) =>
@@ -292,18 +302,13 @@ export default function TeacherModuleDetailPage() {
   }, [sectionList]);
 
   const availableAttachOptions = useMemo(() => {
-    if (attachState.itemType === 'lesson') {
-      return lessons
-        .filter((lesson) => !allAttachedLessonIds.has(lesson.id))
-        .map((lesson) => ({ id: lesson.id, label: lesson.title }));
-    }
     if (attachState.itemType === 'assessment') {
       return assessments
         .filter((assessment) => !allAttachedAssessmentIds.has(assessment.id))
         .map((assessment) => ({ id: assessment.id, label: assessment.title }));
     }
     return [];
-  }, [assessments, allAttachedAssessmentIds, allAttachedLessonIds, attachState.itemType, lessons]);
+  }, [assessments, allAttachedAssessmentIds, attachState.itemType]);
 
   const attachDialogTitle =
     attachState.itemType === 'lesson'
@@ -316,9 +321,9 @@ export default function TeacherModuleDetailPage() {
 
   const attachDialogDescription =
     attachState.itemType === 'lesson'
-      ? 'Attach an existing lesson from this class into this module section.'
+      ? 'Create a new empty lesson, attach it to this section, then open the lesson editor.'
       : attachState.itemType === 'assessment'
-        ? 'Attach an assessment block. New assessment blocks start with Give unchecked.'
+        ? 'Create a new empty assessment or attach an existing one.'
         : attachState.itemType === 'file'
           ? 'Upload a PDF and attach it as a downloadable module block.'
           : 'Choose the block type you want to add to this section.';
@@ -326,13 +331,24 @@ export default function TeacherModuleDetailPage() {
   const canSubmitAttach =
     attachState.itemType === 'file'
       ? Boolean(attachState.file)
+      : attachState.itemType === 'lesson'
+        ? true
+      : attachState.itemType === 'assessment'
+        ? attachState.assessmentMode === 'create-new' || Boolean(attachState.itemId)
       : attachState.itemType === null
         ? false
-        : Boolean(attachState.itemId);
+        : false;
 
   useEffect(() => {
     if (!attachState.open) return;
-    if (attachState.itemType === 'file' || attachState.itemType === null) return;
+    if (
+      attachState.itemType === 'file' ||
+      attachState.itemType === 'lesson' ||
+      attachState.assessmentMode !== 'attach-existing' ||
+      attachState.itemType === null
+    ) {
+      return;
+    }
     setAttachState((current) => {
       if (current.itemId && availableAttachOptions.some((option) => option.id === current.itemId)) {
         return current;
@@ -342,17 +358,34 @@ export default function TeacherModuleDetailPage() {
         itemId: availableAttachOptions[0]?.id || '',
       };
     });
-  }, [attachState.itemType, attachState.open, availableAttachOptions]);
+  }, [attachState.assessmentMode, attachState.itemType, attachState.open, availableAttachOptions]);
 
   const lessonCount = sectionList.reduce(
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'lesson').length,
     0,
   );
 
+  const attachedLessonIdsAcrossClass = useMemo(() => {
+    return new Set(
+      classModules.flatMap((entry) =>
+        entry.sections.flatMap((section) =>
+          section.items
+            .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
+            .map((item) => item.lessonId as string),
+        ),
+      ),
+    );
+  }, [classModules]);
+
+  const legacyLessons = useMemo(() => {
+    return lessons.filter((lesson) => !attachedLessonIdsAcrossClass.has(lesson.id));
+  }, [attachedLessonIdsAcrossClass, lessons]);
+
   const assessmentCount = sectionList.reduce(
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
     0,
   );
+  const isCoreModule = Boolean(module?.isCoreTemplateAsset);
 
   const runModulePatch = async (patch: { isVisible?: boolean; isLocked?: boolean; teacherNotes?: string }) => {
     if (!module) return;
@@ -367,6 +400,26 @@ export default function TeacherModuleDetailPage() {
     } catch {
       setModule(previous);
       toast.error('Unable to update module settings');
+    } finally {
+      setUpdatingModule(false);
+    }
+  };
+
+  const handleReleaseCoreModule = async (isVisible: boolean) => {
+    if (!module || updatingModule) return;
+
+    const previous = module;
+    const next = { ...module, isVisible };
+    setModule(next);
+
+    try {
+      setUpdatingModule(true);
+      const response = await moduleService.releaseCoreModule(module.id, { isVisible });
+      setModule(response.data);
+      toast.success(isVisible ? 'Default module released to students' : 'Default module hidden from students');
+    } catch {
+      setModule(previous);
+      toast.error('Unable to update default module release');
     } finally {
       setUpdatingModule(false);
     }
@@ -568,6 +621,47 @@ export default function TeacherModuleDetailPage() {
     }
   };
 
+  const handleReleaseCoreItem = async (
+    sectionId: string,
+    itemId: string,
+    patch: { isVisible?: boolean; isGiven?: boolean },
+  ) => {
+    if (!module || pendingItemIds[itemId]) return;
+
+    const snapshot = module;
+    setPendingItemIds((current) => ({ ...current, [itemId]: true }));
+    setModule((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sections: current.sections.map((section) =>
+          section.id === sectionId
+            ? {
+                ...section,
+                items: section.items.map((item) =>
+                  item.id === itemId ? { ...item, ...patch } : item,
+                ),
+              }
+            : section,
+        ),
+      };
+    });
+
+    try {
+      await moduleService.releaseCoreItem(itemId, patch);
+      toast.success('Default item release updated');
+    } catch {
+      setModule(snapshot);
+      toast.error('Unable to update default item release');
+    } finally {
+      setPendingItemIds((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+    }
+  };
+
   const confirmDetachItem = (itemId: string) => {
     setConfirmation({
       title: 'Remove item from module?',
@@ -583,16 +677,37 @@ export default function TeacherModuleDetailPage() {
     });
   };
 
+  const confirmDeleteLegacyLesson = (lesson: Lesson) => {
+    setConfirmation({
+      title: 'Delete legacy lesson?',
+      description:
+        'This lesson is not attached to any module and will be permanently deleted.',
+      tone: 'danger',
+      confirmLabel: 'Delete Lesson',
+      details: 'This action cannot be undone.',
+      onConfirm: async () => {
+        await lessonService.delete(lesson.id);
+        await fetchData();
+        toast.success('Legacy lesson deleted');
+      },
+    });
+  };
+
   const handleAttachItem = async () => {
     if (!attachState.sectionId || !attachState.itemType || attachingItem) return;
 
-    if (attachState.itemType !== 'file' && !attachState.itemId) {
+    if (
+      attachState.itemType === 'assessment' &&
+      attachState.assessmentMode === 'attach-existing' &&
+      !attachState.itemId
+    ) {
       toast.error('Select an item to attach');
       return;
     }
 
     try {
       setAttachingItem(true);
+      let createdAssessmentId: string | null = null;
       let payload:
         | {
             itemType: 'lesson';
@@ -611,18 +726,36 @@ export default function TeacherModuleDetailPage() {
           };
 
       if (attachState.itemType === 'lesson') {
+        const createdLesson = await lessonService.create({
+          classId,
+          title: 'Untitled Lesson',
+          description: '',
+        });
         const parsedPoints = Number.parseInt(attachState.lessonPoints || '0', 10);
         payload = {
           itemType: 'lesson',
-          lessonId: attachState.itemId,
+          lessonId: createdLesson.data.id,
           points: Number.isFinite(parsedPoints) && parsedPoints >= 0 ? parsedPoints : 0,
         };
       } else if (attachState.itemType === 'assessment') {
-        payload = {
-          itemType: 'assessment',
-          assessmentId: attachState.itemId,
-          isGiven: false,
-        };
+        if (attachState.assessmentMode === 'create-new') {
+          const createdAssessment = await assessmentService.create({
+            title: 'Untitled Assessment',
+            classId,
+          });
+          createdAssessmentId = createdAssessment.data.id;
+          payload = {
+            itemType: 'assessment',
+            assessmentId: createdAssessmentId,
+            isGiven: false,
+          };
+        } else {
+          payload = {
+            itemType: 'assessment',
+            assessmentId: attachState.itemId,
+            isGiven: false,
+          };
+        }
       } else {
         if (!attachState.file) {
           toast.error('Upload a PDF file first');
@@ -644,17 +777,32 @@ export default function TeacherModuleDetailPage() {
         open: false,
         sectionId: '',
         itemType: null,
+        assessmentMode: 'create-new',
         itemId: '',
         lessonPoints: '0',
         file: null,
       });
       await fetchData();
+      if (attachState.itemType === 'lesson' && payload.itemType === 'lesson') {
+        toast.success('Lesson block created');
+        router.push(`/dashboard/teacher/lessons/${payload.lessonId}/edit`);
+        return;
+      }
+
+      if (
+        attachState.itemType === 'assessment' &&
+        attachState.assessmentMode === 'create-new' &&
+        createdAssessmentId
+      ) {
+        toast.success('Assessment block created');
+        router.push(`/dashboard/teacher/assessments/${createdAssessmentId}/edit`);
+        return;
+      }
+
       toast.success(
-        attachState.itemType === 'lesson'
-          ? 'Lesson attached'
-          : attachState.itemType === 'assessment'
-            ? 'Assessment attached (not given yet)'
-            : 'PDF block attached',
+        attachState.itemType === 'assessment'
+          ? 'Assessment attached (not given yet)'
+          : 'PDF block attached',
       );
     } catch {
       toast.error('Unable to attach item');
@@ -759,6 +907,12 @@ export default function TeacherModuleDetailPage() {
             <h1>{module.title}</h1>
             <p>{module.description || 'No module description yet.'}</p>
             <div className="teacher-module-detail__hero-meta">
+              {isCoreModule ? (
+                <span data-tone="warn">
+                  <Lock className="h-3.5 w-3.5" />
+                  Default module
+                </span>
+              ) : null}
               <span data-tone={module.isVisible ? 'good' : 'muted'}>
                 {module.isVisible ? (
                   <>
@@ -820,24 +974,30 @@ export default function TeacherModuleDetailPage() {
                 <h2>Sections</h2>
                 <p>{sectionList.length} sections</p>
               </div>
-              <div className="teacher-module-detail__section-creator">
-                <Input
-                  value={sectionTitle}
-                  onChange={(event) => setSectionTitle(event.target.value)}
-                  placeholder="Add section title"
-                  maxLength={120}
-                />
-                <Button
-                  type="button"
-                  className="teacher-module-detail__primary"
-                  data-priority="primary"
-                  onClick={() => void handleCreateSection()}
-                  disabled={creatingSection}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Section
-                </Button>
-              </div>
+              {isCoreModule ? (
+                <div className="teacher-module-detail__tip" data-tone="warning">
+                  <strong>Default module:</strong> Section structure is inherited from the template and cannot be edited here.
+                </div>
+              ) : (
+                <div className="teacher-module-detail__section-creator">
+                  <Input
+                    value={sectionTitle}
+                    onChange={(event) => setSectionTitle(event.target.value)}
+                    placeholder="Add section title"
+                    maxLength={120}
+                  />
+                  <Button
+                    type="button"
+                    className="teacher-module-detail__primary"
+                    data-priority="primary"
+                    onClick={() => void handleCreateSection()}
+                    disabled={creatingSection}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Section
+                  </Button>
+                </div>
+              )}
             </div>
 
             {sectionList.map((section) => {
@@ -851,18 +1011,24 @@ export default function TeacherModuleDetailPage() {
                   data-dragging={draggingSectionId === section.id}
                 >
                   <header className="teacher-module-detail__section-card-head">
-                    <ActionTooltip label="Drag to reorder section">
-                      <button
-                        type="button"
-                        className="teacher-module-detail__drag-handle"
-                        draggable
-                        onDragStart={() => setDraggingSectionId(section.id)}
-                        onDragEnd={() => setDraggingSectionId(null)}
-                        aria-label="Reorder section"
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </button>
-                    </ActionTooltip>
+                    {isCoreModule ? (
+                      <span className="teacher-module-detail__drag-handle" aria-hidden="true">
+                        <Lock className="h-4 w-4" />
+                      </span>
+                    ) : (
+                      <ActionTooltip label="Drag to reorder section">
+                        <button
+                          type="button"
+                          className="teacher-module-detail__drag-handle"
+                          draggable
+                          onDragStart={() => setDraggingSectionId(section.id)}
+                          onDragEnd={() => setDraggingSectionId(null)}
+                          aria-label="Reorder section"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </button>
+                      </ActionTooltip>
+                    )}
                     <div className="teacher-module-detail__section-main">
                       {editingSectionId === section.id ? (
                         <div className="teacher-module-detail__section-edit">
@@ -890,29 +1056,33 @@ export default function TeacherModuleDetailPage() {
                       )}
                     </div>
                     <div className="teacher-module-detail__section-actions">
-                      <ActionTooltip label="Rename section">
-                        <button
-                          type="button"
-                          className="teacher-module-detail__ghost"
-                          onClick={() => {
-                            setEditingSectionId(section.id);
-                            setEditingSectionTitle(section.title);
-                          }}
-                          aria-label="Edit section title"
-                        >
-                          <NotebookPen className="h-4 w-4" />
-                        </button>
-                      </ActionTooltip>
-                      <ActionTooltip label="Delete section">
-                        <button
-                          type="button"
-                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                          onClick={() => confirmDeleteSection(section.id)}
-                          aria-label="Delete section"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </ActionTooltip>
+                      {!isCoreModule ? (
+                        <>
+                          <ActionTooltip label="Rename section">
+                            <button
+                              type="button"
+                              className="teacher-module-detail__ghost"
+                              onClick={() => {
+                                setEditingSectionId(section.id);
+                                setEditingSectionTitle(section.title);
+                              }}
+                              aria-label="Edit section title"
+                            >
+                              <NotebookPen className="h-4 w-4" />
+                            </button>
+                          </ActionTooltip>
+                          <ActionTooltip label="Delete section">
+                            <button
+                              type="button"
+                              className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                              onClick={() => confirmDeleteSection(section.id)}
+                              aria-label="Delete section"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </ActionTooltip>
+                        </>
+                      ) : null}
                       <ActionTooltip label={expanded ? 'Collapse items' : 'Expand items'}>
                         <button
                           type="button"
@@ -941,6 +1111,7 @@ export default function TeacherModuleDetailPage() {
                           const pending = pendingItemIds[item.id] || false;
                           const status = statusForItem(item);
                           const itemEditorHref = getItemEditorHref(item, classId, moduleId);
+                          const isCoreItem = Boolean(item.isCoreTemplateAsset);
                           return (
                             <div
                               key={item.id}
@@ -961,7 +1132,7 @@ export default function TeacherModuleDetailPage() {
                                 </button>
                               </ActionTooltip>
 
-                              {itemEditorHref ? (
+                              {itemEditorHref && !isCoreItem ? (
                                 <Link
                                   href={itemEditorHref}
                                   className="teacher-module-detail__item-main"
@@ -976,6 +1147,7 @@ export default function TeacherModuleDetailPage() {
                                       <span data-kind={status === 'Published' ? 'published' : status === 'Draft' ? 'draft' : 'file'}>
                                         {status}
                                       </span>
+                                      {isCoreItem ? <span data-kind="draft">Default item</span> : null}
                                     </div>
                                     <h4>{titleForItem(item)}</h4>
                                     <p>{itemMeta(item)}</p>
@@ -992,6 +1164,7 @@ export default function TeacherModuleDetailPage() {
                                       <span data-kind={status === 'Published' ? 'published' : status === 'Draft' ? 'draft' : 'file'}>
                                         {status}
                                       </span>
+                                      {isCoreItem ? <span data-kind="draft">Default item</span> : null}
                                     </div>
                                     <h4>{titleForItem(item)}</h4>
                                     <p>{itemMeta(item)}</p>
@@ -999,68 +1172,94 @@ export default function TeacherModuleDetailPage() {
                                 </div>
                               )}
                               <div className="teacher-module-detail__item-controls">
-                                <label className="teacher-module-detail__control-toggle">
-                                  <input
-                                    type="checkbox"
-                                    checked={item.isRequired}
-                                    disabled={pending}
-                                    onChange={(event) =>
-                                      void handleUpdateItem(section.id, item.id, { isRequired: event.target.checked })
-                                    }
-                                  />
-                                  Required
-                                </label>
-                                <label className="teacher-module-detail__control-toggle">
-                                  <input
-                                    type="checkbox"
-                                    checked={!item.isVisible}
-                                    disabled={pending}
-                                    onChange={(event) =>
-                                      void handleUpdateItem(section.id, item.id, { isVisible: !event.target.checked })
-                                    }
-                                  />
-                                  Hide
-                                </label>
-                                {item.itemType === 'assessment' ? (
-                                  <label className="teacher-module-detail__control-toggle">
-                                    <input
-                                      type="checkbox"
-                                      checked={item.isGiven}
+                                {isCoreItem ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="teacher-module-detail__outline"
+                                      onClick={() => void handleReleaseCoreItem(section.id, item.id, { isVisible: !item.isVisible })}
                                       disabled={pending}
-                                      onChange={(event) =>
-                                        void handleUpdateItem(section.id, item.id, { isGiven: event.target.checked })
-                                      }
-                                    />
-                                    Give
-                                  </label>
-                                ) : null}
-                                {item.itemType === 'lesson' ? (
-                                  <label className="teacher-module-detail__points-field">
-                                    Points
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={10000}
-                                      value={String(item.lessonPoints ?? Number((item.metadata as Record<string, unknown> | null)?.points ?? 0))}
-                                      disabled={pending}
-                                      onChange={(event) =>
-                                        void handleUpdateItem(section.id, item.id, {
-                                          points: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
-                                        })
-                                      }
-                                    />
-                                  </label>
-                                ) : null}
-                                <ActionTooltip label="Remove item from section">
-                                  <button
-                                    type="button"
-                                    className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                                    onClick={() => confirmDetachItem(item.id)}
-                                    aria-label="Remove item"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </ActionTooltip>
+                                      aria-label={item.isVisible ? 'Hide Item' : 'Release Item'}
+                                    >
+                                      {item.isVisible ? 'Hide Item' : 'Release Item'}
+                                    </button>
+                                    {item.itemType === 'assessment' ? (
+                                      <button
+                                        type="button"
+                                        className="teacher-module-detail__outline"
+                                        onClick={() => void handleReleaseCoreItem(section.id, item.id, { isGiven: !item.isGiven })}
+                                        disabled={pending}
+                                      >
+                                        {item.isGiven ? 'Ungive Assessment' : 'Give Assessment'}
+                                      </button>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  <>
+                                    <label className="teacher-module-detail__control-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.isRequired}
+                                        disabled={pending}
+                                        onChange={(event) =>
+                                          void handleUpdateItem(section.id, item.id, { isRequired: event.target.checked })
+                                        }
+                                      />
+                                      Required
+                                    </label>
+                                    <label className="teacher-module-detail__control-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={!item.isVisible}
+                                        disabled={pending}
+                                        onChange={(event) =>
+                                          void handleUpdateItem(section.id, item.id, { isVisible: !event.target.checked })
+                                        }
+                                      />
+                                      Hide
+                                    </label>
+                                    {item.itemType === 'assessment' ? (
+                                      <label className="teacher-module-detail__control-toggle">
+                                        <input
+                                          type="checkbox"
+                                          checked={item.isGiven}
+                                          disabled={pending}
+                                          onChange={(event) =>
+                                            void handleUpdateItem(section.id, item.id, { isGiven: event.target.checked })
+                                          }
+                                        />
+                                        Give
+                                      </label>
+                                    ) : null}
+                                    {item.itemType === 'lesson' ? (
+                                      <label className="teacher-module-detail__points-field">
+                                        Points
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={10000}
+                                          value={String(item.lessonPoints ?? Number((item.metadata as Record<string, unknown> | null)?.points ?? 0))}
+                                          disabled={pending}
+                                          onChange={(event) =>
+                                            void handleUpdateItem(section.id, item.id, {
+                                              points: Math.max(0, Number.parseInt(event.target.value || '0', 10) || 0),
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                    ) : null}
+                                    <ActionTooltip label="Remove item from section">
+                                      <button
+                                        type="button"
+                                        className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                                        onClick={() => confirmDetachItem(item.id)}
+                                        aria-label="Remove item"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </ActionTooltip>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -1070,48 +1269,123 @@ export default function TeacherModuleDetailPage() {
                   ) : null}
 
                   <footer className="teacher-module-detail__section-footer">
-                    <button
-                      type="button"
-                      className="teacher-module-detail__outline"
-                      data-priority="section-add"
-                      onClick={() =>
-                        setAttachState({
-                          open: true,
-                          sectionId: section.id,
-                          itemType: null,
-                          itemId: '',
-                          lessonPoints: '0',
-                          file: null,
-                        })
-                      }
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Block
-                    </button>
+                    {isCoreModule ? (
+                      <div className="teacher-module-detail__tip" data-tone="warning">
+                        <strong>Default module:</strong> Add or remove blocks in the template workspace, then create a fresh class from that template.
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="teacher-module-detail__outline"
+                        data-priority="section-add"
+                        onClick={() =>
+                          setAttachState({
+                            open: true,
+                            sectionId: section.id,
+                            itemType: null,
+                            assessmentMode: 'create-new',
+                            itemId: '',
+                            lessonPoints: '0',
+                            file: null,
+                          })
+                        }
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Block
+                      </button>
+                    )}
                   </footer>
                 </article>
               );
             })}
+
+            <article className="teacher-module-detail__section-card">
+              <header className="teacher-module-detail__section-card-head">
+                <div className="teacher-module-detail__section-main">
+                  <h3>Legacy Lessons (Not In Modules)</h3>
+                  <span>{legacyLessons.length} lessons</span>
+                </div>
+              </header>
+              <div className="teacher-module-detail__items">
+                {legacyLessons.length === 0 ? (
+                  <div className="teacher-module-detail__empty">
+                    No legacy lessons found. All class lessons are attached to modules.
+                  </div>
+                ) : (
+                  legacyLessons.map((lesson) => (
+                    <div key={lesson.id} className="teacher-module-detail__item-row">
+                      <div className="teacher-module-detail__item-main">
+                        <div className="teacher-module-detail__item-icon">
+                          <BookOpen className="h-4 w-4" />
+                        </div>
+                        <div className="teacher-module-detail__item-copy">
+                          <div className="teacher-module-detail__chips">
+                            <span data-kind="lesson">lesson</span>
+                            <span data-kind={lesson.isDraft ? 'draft' : 'published'}>
+                              {lesson.isDraft ? 'Draft' : 'Published'}
+                            </span>
+                          </div>
+                          <h4>{lesson.title}</h4>
+                          <p>Legacy lesson not attached to any module section.</p>
+                        </div>
+                      </div>
+                      <div className="teacher-module-detail__item-controls">
+                        <ActionTooltip label="Open lesson editor">
+                          <Link
+                            href={`/dashboard/teacher/lessons/${lesson.id}/edit`}
+                            className="teacher-module-detail__ghost"
+                            aria-label="Open legacy lesson editor"
+                          >
+                            <NotebookPen className="h-4 w-4" />
+                          </Link>
+                        </ActionTooltip>
+                        <ActionTooltip label="Delete legacy lesson">
+                          <button
+                            type="button"
+                            className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                            onClick={() => confirmDeleteLegacyLesson(lesson)}
+                            aria-label="Delete legacy lesson"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </ActionTooltip>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
           </div>
         ) : null}
         {activeTab === 'visibility' ? (
           <div className="teacher-module-detail__stack" data-animate="fade">
             <h2>Module Visibility</h2>
             <p className="teacher-module-detail__lead">
-              Control whether students can see this module in their course view.
+              {isCoreModule
+                ? 'Default modules stay immutable. You can only control whether students can see them.'
+                : 'Control whether students can see this module in their course view.'}
             </p>
             <div className="teacher-module-detail__choice-grid">
               <button
                 type="button"
                 className="teacher-module-detail__choice"
                 data-active={module.isVisible}
-                onClick={() => void runModulePatch({ isVisible: true })}
+                onClick={() =>
+                  void (isCoreModule
+                    ? handleReleaseCoreModule(true)
+                    : runModulePatch({ isVisible: true }))
+                }
                 disabled={updatingModule}
+                aria-label={isCoreModule ? 'Release Module' : undefined}
               >
                 <Eye className="h-5 w-5" />
                 <div>
-                  <h3>Visible</h3>
-                  <p>Students can see this module and access its content.</p>
+                  <h3>{isCoreModule ? 'Release Module' : 'Visible'}</h3>
+                  <p>
+                    {isCoreModule
+                      ? 'Students can see this default module and access its locked template content.'
+                      : 'Students can see this module and access its content.'}
+                  </p>
                 </div>
                 {module.isVisible ? <span><Eye className="h-4 w-4" /></span> : null}
               </button>
@@ -1119,13 +1393,21 @@ export default function TeacherModuleDetailPage() {
                 type="button"
                 className="teacher-module-detail__choice"
                 data-active={!module.isVisible}
-                onClick={() => void runModulePatch({ isVisible: false })}
+                onClick={() =>
+                  void (isCoreModule
+                    ? handleReleaseCoreModule(false)
+                    : runModulePatch({ isVisible: false }))
+                }
                 disabled={updatingModule}
               >
                 <EyeOff className="h-5 w-5" />
                 <div>
-                  <h3>Hidden</h3>
-                  <p>This module is hidden from students. Only teachers can see it.</p>
+                  <h3>{isCoreModule ? 'Hide Module' : 'Hidden'}</h3>
+                  <p>
+                    {isCoreModule
+                      ? 'Keep this default module in teacher-only view until you are ready to release it.'
+                      : 'This module is hidden from students. Only teachers can see it.'}
+                  </p>
                 </div>
                 {!module.isVisible ? <span><EyeOff className="h-4 w-4" /></span> : null}
               </button>
@@ -1139,42 +1421,55 @@ export default function TeacherModuleDetailPage() {
         {activeTab === 'locking' ? (
           <div className="teacher-module-detail__stack" data-animate="fade">
             <h2>Module Locking</h2>
-            <p className="teacher-module-detail__lead">
-              Lock this module to prevent students from opening content until you unlock it.
-            </p>
-            <div className="teacher-module-detail__choice-grid">
-              <button
-                type="button"
-                className="teacher-module-detail__choice"
-                data-active={!module.isLocked}
-                onClick={() => void runModulePatch({ isLocked: false })}
-                disabled={updatingModule}
-              >
-                <Unlock className="h-5 w-5" />
-                <div>
-                  <h3>Unlocked</h3>
-                  <p>Students can access all lessons and assessments in this module.</p>
+            {isCoreModule ? (
+              <>
+                <p className="teacher-module-detail__lead">
+                  Default modules remain locked and immutable in the class. Change the template if the structure needs to evolve.
+                </p>
+                <div className="teacher-module-detail__tip" data-tone="warning">
+                  <strong>Default module:</strong> Locking is enforced by the template copy. Only student visibility can be changed here.
                 </div>
-                {!module.isLocked ? <span><Unlock className="h-4 w-4" /></span> : null}
-              </button>
-              <button
-                type="button"
-                className="teacher-module-detail__choice"
-                data-active={module.isLocked}
-                onClick={() => void runModulePatch({ isLocked: true })}
-                disabled={updatingModule}
-              >
-                <Lock className="h-5 w-5" />
-                <div>
-                  <h3>Locked</h3>
-                  <p>Students see the module but cannot open lessons or assessments.</p>
+              </>
+            ) : (
+              <>
+                <p className="teacher-module-detail__lead">
+                  Lock this module to prevent students from opening content until you unlock it.
+                </p>
+                <div className="teacher-module-detail__choice-grid">
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={!module.isLocked}
+                    onClick={() => void runModulePatch({ isLocked: false })}
+                    disabled={updatingModule}
+                  >
+                    <Unlock className="h-5 w-5" />
+                    <div>
+                      <h3>Unlocked</h3>
+                      <p>Students can access all lessons and assessments in this module.</p>
+                    </div>
+                    {!module.isLocked ? <span><Unlock className="h-4 w-4" /></span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={module.isLocked}
+                    onClick={() => void runModulePatch({ isLocked: true })}
+                    disabled={updatingModule}
+                  >
+                    <Lock className="h-5 w-5" />
+                    <div>
+                      <h3>Locked</h3>
+                      <p>Students see the module but cannot open lessons or assessments.</p>
+                    </div>
+                    {module.isLocked ? <span><Lock className="h-4 w-4" /></span> : null}
+                  </button>
                 </div>
-                {module.isLocked ? <span><Lock className="h-4 w-4" /></span> : null}
-              </button>
-            </div>
-            <div className="teacher-module-detail__tip" data-tone="info">
-              <strong>Tip:</strong> Use locking to release modules progressively.
-            </div>
+                <div className="teacher-module-detail__tip" data-tone="info">
+                  <strong>Tip:</strong> Use locking to release modules progressively.
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -1350,6 +1645,7 @@ export default function TeacherModuleDetailPage() {
                   open: false,
                   sectionId: '',
                   itemType: null,
+                  assessmentMode: 'create-new',
                   itemId: '',
                   lessonPoints: '0',
                   file: null,
@@ -1395,6 +1691,7 @@ export default function TeacherModuleDetailPage() {
                       setAttachState((current) => ({
                         ...current,
                         itemType: option.type,
+                        assessmentMode: option.type === 'assessment' ? 'create-new' : current.assessmentMode,
                         itemId: '',
                         lessonPoints: '0',
                         file: null,
@@ -1454,39 +1751,88 @@ export default function TeacherModuleDetailPage() {
                     <p className="teacher-module-detail__attach-note">
                       Students earn these points after completing the lesson.
                     </p>
+                    <p className="teacher-module-detail__attach-note">
+                      A new empty draft lesson will be created and attached to this section.
+                    </p>
                   </div>
                 ) : null}
-                <label htmlFor="attach-item">Available {attachState.itemType}s</label>
-                <select
-                  id="attach-item"
-                  value={attachState.itemId}
-                  onChange={(event) =>
-                    setAttachState((current) => ({
-                      ...current,
-                      itemId: event.target.value,
-                    }))
-                  }
-                >
-                  {availableAttachOptions.length === 0 ? (
-                    <option value="">No available items</option>
-                  ) : (
-                    availableAttachOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))
-                  )}
-                </select>
-                {availableAttachOptions.length === 0 ? (
-                  <p className="teacher-module-detail__attach-note">
-                    No available {attachState.itemType}s. Create one from{' '}
-                    {attachState.itemType === 'lesson' ? (
-                      <Link href="/dashboard/teacher/lessons">Lessons</Link>
-                    ) : (
-                      <Link href="/dashboard/teacher/assessments">Assessments</Link>
-                    )}
-                    .
-                  </p>
+                {attachState.itemType === 'assessment' ? (
+                  <>
+                    <div className="teacher-module-detail__attach-type-grid">
+                      <button
+                        type="button"
+                        className="teacher-module-detail__attach-type"
+                        data-active={attachState.assessmentMode === 'create-new'}
+                        onClick={() =>
+                          setAttachState((current) => ({
+                            ...current,
+                            assessmentMode: 'create-new',
+                            itemId: '',
+                          }))
+                        }
+                      >
+                        <div>
+                          <strong>Create New Assessment</strong>
+                          <p>Start with a blank assessment and open the editor.</p>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        className="teacher-module-detail__attach-type"
+                        data-active={attachState.assessmentMode === 'attach-existing'}
+                        onClick={() =>
+                          setAttachState((current) => ({
+                            ...current,
+                            assessmentMode: 'attach-existing',
+                            itemId: '',
+                          }))
+                        }
+                      >
+                        <div>
+                          <strong>Attach Existing Assessment</strong>
+                          <p>Reuse an assessment already created for this class.</p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {attachState.assessmentMode === 'create-new' ? (
+                      <p className="teacher-module-detail__attach-note">
+                        A new empty assessment will be created, attached to this section, then opened in the editor.
+                      </p>
+                    ) : null}
+
+                    {attachState.assessmentMode === 'attach-existing' ? (
+                      <>
+                        <label htmlFor="attach-item">Available assessments</label>
+                        <select
+                          id="attach-item"
+                          value={attachState.itemId}
+                          onChange={(event) =>
+                            setAttachState((current) => ({
+                              ...current,
+                              itemId: event.target.value,
+                            }))
+                          }
+                        >
+                          {availableAttachOptions.length === 0 ? (
+                            <option value="">No available items</option>
+                          ) : (
+                            availableAttachOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        {availableAttachOptions.length === 0 ? (
+                          <p className="teacher-module-detail__attach-note">
+                            No available assessments. Create one from{' '}
+                            <Link href="/dashboard/teacher/assessments">Assessments</Link>.
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             ) : (
@@ -1504,6 +1850,7 @@ export default function TeacherModuleDetailPage() {
                   open: false,
                   sectionId: '',
                   itemType: null,
+                  assessmentMode: 'create-new',
                   itemId: '',
                   lessonPoints: '0',
                   file: null,

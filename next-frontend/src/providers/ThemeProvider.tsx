@@ -47,7 +47,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [isHydrated, isStudentRoute]);
 
-  const setTheme = (_nextTheme: ThemeId) => undefined;
+  const setTheme: ThemeContextValue['setTheme'] = () => undefined;
 
   const value = useMemo<ThemeContextValue>(
     () => ({

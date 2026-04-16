@@ -5,6 +5,7 @@ export interface ReportQuery {
   sectionId?: string;
   gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
   studentId?: string;
+  teacherId?: string;
   dateFrom?: Date;
   dateTo?: Date;
   page?: number;

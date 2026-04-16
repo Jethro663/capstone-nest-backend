@@ -1,14 +1,3 @@
-/**
- * Set Activation Password Form
- *
- * Reached after OTP verification has already activated the account.
- * The student can choose a new personal password (replaces the admin-generated
- * temporary password) or skip — in which case they use the temp password to log in.
- *
- * Uses POST /auth/set-activation-password (no OTP code required — account ACTIVE
- * status is the gate). On success, auto-logs the user in and sends them to /dashboard.
- */
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -28,10 +17,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const strengthChecks = [
-  { label: '≥ 8 chars', test: (v: string) => v.length >= 8 },
+  { label: '>= 8 chars', test: (v: string) => v.length >= 8 },
   { label: 'Uppercase', test: (v: string) => /[A-Z]/.test(v) },
-  { label: 'Number',    test: (v: string) => /[0-9]/.test(v) },
-  { label: 'Special',   test: (v: string) => /[^A-Za-z0-9]/.test(v) },
+  { label: 'Number', test: (v: string) => /[0-9]/.test(v) },
+  { label: 'Special', test: (v: string) => /[^A-Za-z0-9]/.test(v) },
 ];
 
 export function SetInitialPasswordForm() {
@@ -50,7 +39,6 @@ export function SetInitialPasswordForm() {
     resolver: zodResolver(setActivationPasswordSchema),
   });
 
-  // Watch password for real-time strength indicator
   const newPassword = useWatch({ control, name: 'newPassword', defaultValue: '' });
 
   useEffect(() => {
@@ -70,7 +58,7 @@ export function SetInitialPasswordForm() {
       return;
     }
 
-    setSuccess('Password set! Redirecting to login…');
+    setSuccess('Password set! Redirecting to login...');
     setTimeout(() => router.push('/login?activated=true'), 1200);
   };
 
@@ -79,46 +67,43 @@ export function SetInitialPasswordForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="auth-form space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Secure your account</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your account is now active! Set a personal password below, or skip and log in with the
-          temporary password sent to your email.
+        <h2 className="auth-title">Secure your account</h2>
+        <p className="auth-subtitle">
+          Your account is active. Set a personal password now, or skip and use the temporary password from your email.
         </p>
       </div>
 
-      {success && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-700">{success}</div>
-      )}
-      {serverError && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {serverError}
-        </div>
-      )}
+      {success && <div className="auth-alert auth-alert-success">{success}</div>}
+      {serverError && <div className="auth-alert auth-alert-error">{serverError}</div>}
 
-      {/* Email — read-only, pre-filled from URL */}
       <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email" className="auth-label">
+          Email
+        </Label>
         <Input
           id="email"
           type="email"
           disabled
           {...register('email')}
-          className="bg-slate-50 text-slate-500"
+          className="auth-input bg-slate-100 text-slate-500"
         />
       </div>
 
-      {/* New Password + real-time strength pills */}
       <div className="space-y-2">
-        <Label htmlFor="newPassword">New password</Label>
+        <Label htmlFor="newPassword" className="auth-label">
+          New password
+        </Label>
         <Input
           id="newPassword"
           type="password"
-          placeholder="••••••••"
+          placeholder="********"
           disabled={isSubmitting}
+          className="auth-input"
           {...register('newPassword')}
         />
+
         <div className="flex flex-wrap gap-2 pt-1">
           {strengthChecks.map(({ label, test }) => {
             const passed = test(newPassword ?? '');
@@ -126,63 +111,58 @@ export function SetInitialPasswordForm() {
               <span
                 key={label}
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
-                  passed ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-400'
+                  passed ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
                 }`}
               >
-                {passed ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : (
-                  <CircleDashed className="h-3 w-3" />
-                )}
+                {passed ? <CheckCircle2 className="h-3 w-3" /> : <CircleDashed className="h-3 w-3" />}
                 {label}
               </span>
             );
           })}
         </div>
-        {errors.newPassword && (
-          <p className="text-xs text-destructive">{errors.newPassword.message}</p>
-        )}
+
+        {errors.newPassword && <p className="auth-error-text">{errors.newPassword.message}</p>}
       </div>
 
-      {/* Confirm Password */}
       <div className="space-y-2">
-        <Label htmlFor="confirmPassword">Confirm password</Label>
+        <Label htmlFor="confirmPassword" className="auth-label">
+          Confirm password
+        </Label>
         <Input
           id="confirmPassword"
           type="password"
-          placeholder="••••••••"
+          placeholder="********"
           disabled={isSubmitting}
+          className="auth-input"
           {...register('confirmPassword')}
         />
-        {errors.confirmPassword && (
-          <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
-        )}
+        {errors.confirmPassword && <p className="auth-error-text">{errors.confirmPassword.message}</p>}
       </div>
 
       <div className="space-y-3">
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <Button type="submit" className="auth-primary-button w-full" disabled={isSubmitting}>
           {isSubmitting ? (
             <span className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Setting password…
+              <Loader2 className="h-4 w-4 animate-spin" /> Setting password...
             </span>
           ) : (
-            'Set password & continue to login'
+            'Set password and continue to login'
           )}
         </Button>
 
         <Button
           type="button"
           variant="outline"
-          className="w-full"
+          className="auth-secondary-button w-full"
           onClick={handleSkip}
           disabled={isSubmitting}
         >
-          Skip — I&apos;ll use my temporary password
+          Skip - I will use my temporary password
         </Button>
       </div>
 
       <div className="text-center">
-        <Link href="/login" className="text-sm text-primary hover:underline">
+        <Link href="/login" className="auth-link">
           Back to login
         </Link>
       </div>

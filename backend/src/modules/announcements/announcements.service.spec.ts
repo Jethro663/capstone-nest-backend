@@ -88,6 +88,7 @@ describe('AnnouncementsService', () => {
     mockDb = {
       query: {
         classes: { findFirst: jest.fn() },
+        enrollments: { findFirst: jest.fn() },
         announcements: {
           findFirst: jest.fn(),
           findMany: jest.fn(),
@@ -107,6 +108,7 @@ describe('AnnouncementsService', () => {
     }).compile();
 
     service = module.get<AnnouncementsService>(AnnouncementsService);
+    mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -219,7 +221,7 @@ describe('AnnouncementsService', () => {
     it('calls findMany with correct pagination offset', async () => {
       mockDb.query.announcements.findMany.mockResolvedValue([]);
 
-      await service.findAllByClass(CLASS_ID, TEACHER_ID, true, {
+      await service.findAllByClass(CLASS_ID, TEACHER_ID, ['teacher'], {
         page: 3,
         limit: 10,
       });
@@ -236,11 +238,19 @@ describe('AnnouncementsService', () => {
       const result = await service.findAllByClass(
         CLASS_ID,
         TEACHER_ID,
-        true,
+        ['teacher'],
         {},
       );
 
       expect(result).toHaveLength(2);
+    });
+
+    it('throws ForbiddenException when student viewer is not enrolled', async () => {
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findAllByClass(CLASS_ID, 'student-uuid-99', ['student'], {}),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -253,16 +263,18 @@ describe('AnnouncementsService', () => {
       const ann = makeAnnouncement();
       mockDb.query.announcements.findFirst.mockResolvedValue(ann);
 
-      const result = await service.findOne(CLASS_ID, ANN_ID, false);
+      const result = await service.findOne(CLASS_ID, ANN_ID, TEACHER_ID, [
+        'teacher',
+      ]);
       expect(result).toEqual(ann);
     });
 
     it('throws NotFoundException when announcement does not exist', async () => {
       mockDb.query.announcements.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne(CLASS_ID, ANN_ID, false)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.findOne(CLASS_ID, ANN_ID, TEACHER_ID, ['teacher']),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -290,6 +302,17 @@ describe('AnnouncementsService', () => {
 
       expect(result.title).toBe('Updated Title');
       expect(result.isPinned).toBe(true);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: TEACHER_ID,
+        action: 'announcement.updated',
+        targetType: 'announcement',
+        targetId: ANN_ID,
+        metadata: expect.objectContaining({
+          classId: CLASS_ID,
+          changedFields: ['title', 'isPinned'],
+          isPinned: true,
+        }),
+      });
     });
 
     it('throws NotFoundException when announcement is not found', async () => {
@@ -299,6 +322,7 @@ describe('AnnouncementsService', () => {
       await expect(
         service.update(CLASS_ID, ANN_ID, TEACHER_ID, { title: 'X' }),
       ).rejects.toThrow(NotFoundException);
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
 
     it('throws ForbiddenException when teacher does not own the announcement', async () => {
@@ -398,8 +422,16 @@ describe('AnnouncementsService', () => {
   describe('publishDueAnnouncements()', () => {
     it('enqueues fan-out jobs for each due announcement', async () => {
       const due = [
-        makeAnnouncement({ id: 'sched-1', publishedAt: null }),
-        makeAnnouncement({ id: 'sched-2', publishedAt: null }),
+        makeAnnouncement({
+          id: 'sched-1',
+          publishedAt: null,
+          authorId: TEACHER_ID,
+        }),
+        makeAnnouncement({
+          id: 'sched-2',
+          publishedAt: null,
+          authorId: OTHER_TEACHER_ID,
+        }),
       ];
       mockDb.query.announcements.findMany.mockResolvedValue(due);
       Object.assign(mockDb, makeUpdateChain([]));
@@ -412,6 +444,19 @@ describe('AnnouncementsService', () => {
         expect.objectContaining({ announcementId: 'sched-1' }),
         expect.anything(),
       );
+      expect(mockAuditService.log).toHaveBeenCalledTimes(2);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_ID,
+          action: 'announcement.published_scheduled',
+          targetType: 'announcement',
+          targetId: 'sched-1',
+          metadata: expect.objectContaining({
+            classId: CLASS_ID,
+            trigger: 'scheduler',
+          }),
+        }),
+      );
     });
 
     it('does nothing when no announcements are due', async () => {
@@ -420,6 +465,7 @@ describe('AnnouncementsService', () => {
       await service.publishDueAnnouncements();
 
       expect(mockQueue.add).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
   });
 });

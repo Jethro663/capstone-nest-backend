@@ -23,6 +23,18 @@ export function normalizeDashboardRole(
   return null;
 }
 
+export function getDefaultDashboardRouteForRole(
+  role: string | null | undefined,
+): string {
+  const normalizedRole = normalizeDashboardRole(role);
+
+  if (!normalizedRole) {
+    return '/dashboard';
+  }
+
+  return DASHBOARD_ROLE_PREFIXES[normalizedRole];
+}
+
 export function getDashboardScopedRoleFromPath(pathname: string): DashboardRole | null {
   if (hasRolePrefix(pathname, DASHBOARD_ROLE_PREFIXES.student)) return 'student';
   if (hasRolePrefix(pathname, DASHBOARD_ROLE_PREFIXES.teacher)) return 'teacher';
@@ -41,4 +53,23 @@ export function isDashboardRolePathAllowed(
   if (!normalizedRole) return false;
 
   return scopedRole === normalizedRole;
+}
+
+export function resolvePostLoginDestination(
+  role: string | null | undefined,
+  requestedPath?: string | null,
+): string {
+  const fallbackPath = getDefaultDashboardRouteForRole(role);
+
+  if (!requestedPath || requestedPath === '/dashboard') {
+    return fallbackPath;
+  }
+
+  if (!requestedPath.startsWith('/dashboard')) {
+    return requestedPath;
+  }
+
+  return isDashboardRolePathAllowed(requestedPath, role)
+    ? requestedPath
+    : fallbackPath;
 }

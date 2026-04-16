@@ -59,6 +59,7 @@ const mockSectionsService = {
   createSection: jest.fn(),
   updateSection: jest.fn(),
   archiveSection: jest.fn(),
+  restoreSection: jest.fn(),
   deleteSection: jest.fn(),
   permanentlyDeleteSection: jest.fn(),
   bulkLifecycleAction: jest.fn(),
@@ -243,13 +244,18 @@ describe('SectionsController', () => {
     it('returns success message and the created section', async () => {
       mockSectionsService.createSection.mockResolvedValue(makeSection());
 
-      const result = await controller.createSection(dto);
+      const result = await controller.createSection(dto, ADMIN_USER);
 
       expect(result).toEqual({
         success: true,
         message: 'Section created successfully',
         data: makeSection(),
       });
+      expect(mockSectionsService.createSection).toHaveBeenCalledWith(
+        dto,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
     });
 
     it('propagates ConflictException from the service', async () => {
@@ -258,7 +264,7 @@ describe('SectionsController', () => {
         new ConflictException('Duplicate section'),
       );
 
-      await expect(controller.createSection(dto)).rejects.toThrow();
+      await expect(controller.createSection(dto, ADMIN_USER)).rejects.toThrow();
     });
   });
 
@@ -271,9 +277,13 @@ describe('SectionsController', () => {
       const updated = makeSection({ name: 'Bonifacio' });
       mockSectionsService.updateSection.mockResolvedValue(updated);
 
-      const result = await controller.updateSection(SECTION_ID, {
-        name: 'Bonifacio',
-      } as UpdateSectionDto);
+      const result = await controller.updateSection(
+        SECTION_ID,
+        {
+          name: 'Bonifacio',
+        } as UpdateSectionDto,
+        ADMIN_USER,
+      );
 
       expect(result).toEqual({
         success: true,
@@ -285,13 +295,17 @@ describe('SectionsController', () => {
         {
           name: 'Bonifacio',
         },
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
       );
     });
   });
 
   describe('updateSectionPresentation', () => {
     it('returns success message and updated section payload', async () => {
-      const updated = makeSection({ cardBannerUrl: '/api/sections/banners/a.png' });
+      const updated = makeSection({
+        cardBannerUrl: '/api/sections/banners/a.png',
+      });
       mockSectionsService.updatePresentation.mockResolvedValue(updated);
 
       const result = await controller.updateSectionPresentation(
@@ -337,7 +351,7 @@ describe('SectionsController', () => {
     it('returns success message on soft delete', async () => {
       mockSectionsService.archiveSection.mockResolvedValue(undefined);
 
-      const result = await controller.deleteSection(SECTION_ID);
+      const result = await controller.deleteSection(SECTION_ID, ADMIN_USER);
 
       expect(result).toEqual({
         success: true,
@@ -345,7 +359,27 @@ describe('SectionsController', () => {
       });
       expect(mockSectionsService.archiveSection).toHaveBeenCalledWith(
         SECTION_ID,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
       );
+    });
+  });
+
+  describe('restoreSection', () => {
+    it('forwards actor context and returns success message', async () => {
+      mockSectionsService.restoreSection.mockResolvedValue(undefined);
+
+      const result = await controller.restoreSection(SECTION_ID, ADMIN_USER);
+
+      expect(mockSectionsService.restoreSection).toHaveBeenCalledWith(
+        SECTION_ID,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Section restored successfully',
+      });
     });
   });
 
@@ -361,15 +395,22 @@ describe('SectionsController', () => {
         },
       });
 
-      const result = await controller.bulkLifecycle({
-        action: 'archive',
-        sectionIds: ['s1', 's2', 's3'],
-      });
+      const result = await controller.bulkLifecycle(
+        {
+          action: 'archive',
+          sectionIds: ['s1', 's2', 's3'],
+        },
+        ADMIN_USER,
+      );
 
-      expect(mockSectionsService.bulkLifecycleAction).toHaveBeenCalledWith({
-        action: 'archive',
-        sectionIds: ['s1', 's2', 's3'],
-      });
+      expect(mockSectionsService.bulkLifecycleAction).toHaveBeenCalledWith(
+        {
+          action: 'archive',
+          sectionIds: ['s1', 's2', 's3'],
+        },
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
       expect(result).toEqual({
         success: true,
         message: '2 sections archived; 1 failed.',
@@ -485,7 +526,13 @@ describe('SectionsController', () => {
     ];
 
     it('returns candidate data with count', async () => {
-      mockSectionsService.getCandidates.mockResolvedValue(candidateRows);
+      mockSectionsService.getCandidates.mockResolvedValue({
+        data: candidateRows,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       const result = await controller.getCandidates(
         SECTION_ID,
@@ -494,11 +541,25 @@ describe('SectionsController', () => {
         'juan',
       );
 
-      expect(result).toEqual({ success: true, data: candidateRows, count: 1 });
+      expect(result).toEqual({
+        success: true,
+        data: candidateRows,
+        count: 1,
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
     });
 
     it('passes filters to the service', async () => {
-      mockSectionsService.getCandidates.mockResolvedValue([]);
+      mockSectionsService.getCandidates.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       await controller.getCandidates(SECTION_ID, ADMIN_USER, '8', 'dela');
 
@@ -513,7 +574,13 @@ describe('SectionsController', () => {
     });
 
     it('passes an empty object when no filters are given', async () => {
-      mockSectionsService.getCandidates.mockResolvedValue([]);
+      mockSectionsService.getCandidates.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
 
       await controller.getCandidates(SECTION_ID, ADMIN_USER);
 
@@ -613,12 +680,20 @@ describe('SectionsController', () => {
     it('returns success message after permanent deletion', async () => {
       mockSectionsService.permanentlyDeleteSection.mockResolvedValue(undefined);
 
-      const result = await controller.permanentlyDeleteSection(SECTION_ID);
+      const result = await controller.permanentlyDeleteSection(
+        SECTION_ID,
+        ADMIN_USER,
+      );
 
       expect(result).toEqual({
         success: true,
         message: 'Section permanently deleted',
       });
+      expect(mockSectionsService.permanentlyDeleteSection).toHaveBeenCalledWith(
+        SECTION_ID,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
     });
 
     it('propagates BadRequestException when section has active data', async () => {
@@ -627,7 +702,7 @@ describe('SectionsController', () => {
       );
 
       await expect(
-        controller.permanentlyDeleteSection(SECTION_ID),
+        controller.permanentlyDeleteSection(SECTION_ID, ADMIN_USER),
       ).rejects.toThrow(BadRequestException);
     });
   });

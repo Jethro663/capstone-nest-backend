@@ -93,7 +93,8 @@ export class GenerateQuizDraftDto {
 
   @ApiPropertyOptional({
     description: 'Optional teacher instruction to guide generation',
-    example: 'Prioritize conceptual understanding and avoid purely memorization-based items.',
+    example:
+      'Prioritize conceptual understanding and avoid purely memorization-based items.',
   })
   @IsOptional()
   @IsString()

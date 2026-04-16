@@ -39,6 +39,7 @@ import {
   UpdateAttemptProgressDto,
   ReturnGradeDto,
   BulkReturnGradesDto,
+  ReleaseCoreAssessmentDto,
 } from './DTO/assessment.dto';
 
 const IMAGE_UPLOAD_DEST = './uploads/question-images';
@@ -110,6 +111,7 @@ export class AssessmentsController {
             ? user.userId
             : undefined,
       },
+      user,
     );
 
     return {
@@ -138,6 +140,7 @@ export class AssessmentsController {
     const assessment = await this.assessmentsService.getAssessmentById(
       id,
       viewerRole,
+      user,
     );
 
     return {
@@ -160,7 +163,7 @@ export class AssessmentsController {
   ) {
     const assessment = await this.assessmentsService.createAssessment(
       createAssessmentDto,
-      user.userId,
+      user,
     );
 
     return {
@@ -184,12 +187,32 @@ export class AssessmentsController {
     const assessment = await this.assessmentsService.updateAssessment(
       id,
       updateAssessmentDto,
-      user.userId,
+      user,
     );
 
     return {
       success: true,
       message: 'Assessment updated successfully',
+      data: assessment,
+    };
+  }
+
+  @Patch(':id/core-release')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async releaseCoreAssessment(
+    @Param('id') id: string,
+    @Body() dto: ReleaseCoreAssessmentDto,
+    @CurrentUser() user: any,
+  ) {
+    const assessment = await this.assessmentsService.releaseCoreAssessment(
+      id,
+      dto,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Core assessment release updated successfully',
       data: assessment,
     };
   }
@@ -202,10 +225,7 @@ export class AssessmentsController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
   async deleteAssessment(@Param('id') id: string, @CurrentUser() user: any) {
-    const result = await this.assessmentsService.deleteAssessment(
-      id,
-      user.userId,
-    );
+    const result = await this.assessmentsService.deleteAssessment(id, user);
 
     return {
       success: result.success,
@@ -220,9 +240,14 @@ export class AssessmentsController {
   @Post('questions')
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.CREATED)
-  async createQuestion(@Body() createQuestionDto: CreateQuestionDto) {
-    const question =
-      await this.assessmentsService.createQuestion(createQuestionDto);
+  async createQuestion(
+    @Body() createQuestionDto: CreateQuestionDto,
+    @CurrentUser() user: any,
+  ) {
+    const question = await this.assessmentsService.createQuestion(
+      createQuestionDto,
+      user,
+    );
 
     return {
       success: true,
@@ -240,10 +265,12 @@ export class AssessmentsController {
   async updateQuestion(
     @Param('id') id: string,
     @Body() updateQuestionDto: UpdateQuestionDto,
+    @CurrentUser() user: any,
   ) {
     const question = await this.assessmentsService.updateQuestion(
       id,
       updateQuestionDto,
+      user,
     );
 
     return {
@@ -260,8 +287,8 @@ export class AssessmentsController {
   @Delete('questions/:id')
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
-  async deleteQuestion(@Param('id') id: string) {
-    const result = await this.assessmentsService.deleteQuestion(id);
+  async deleteQuestion(@Param('id') id: string, @CurrentUser() user: any) {
+    const result = await this.assessmentsService.deleteQuestion(id, user);
 
     return {
       success: result.success,
@@ -305,6 +332,7 @@ export class AssessmentsController {
   )
   async uploadQuestionImage(
     @Param('id') id: string,
+    @CurrentUser() user: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) {
@@ -312,7 +340,7 @@ export class AssessmentsController {
     }
 
     const imageUrl = `/api/assessments/questions/images/${file.filename}`;
-    await this.assessmentsService.updateQuestion(id, { imageUrl });
+    await this.assessmentsService.updateQuestion(id, { imageUrl }, user);
 
     return {
       success: true,
@@ -706,6 +734,7 @@ export class AssessmentsController {
         : undefined;
     const results = await this.assessmentsService.getAttemptResults(
       attemptId,
+      user,
       viewerRole,
     );
 
@@ -729,6 +758,7 @@ export class AssessmentsController {
     const attempts = await this.assessmentsService.getStudentAttempts(
       user.userId,
       assessmentId,
+      user,
     );
 
     return {
@@ -745,9 +775,14 @@ export class AssessmentsController {
    */
   @Get(':assessmentId/all-attempts')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async getAssessmentAttempts(@Param('assessmentId') assessmentId: string) {
-    const attempts =
-      await this.assessmentsService.getAssessmentAttempts(assessmentId);
+  async getAssessmentAttempts(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const attempts = await this.assessmentsService.getAssessmentAttempts(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -763,9 +798,14 @@ export class AssessmentsController {
    */
   @Get(':assessmentId/stats')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async getAssessmentStats(@Param('assessmentId') assessmentId: string) {
-    const stats =
-      await this.assessmentsService.getAssessmentStats(assessmentId);
+  async getAssessmentStats(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const stats = await this.assessmentsService.getAssessmentStats(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -780,9 +820,14 @@ export class AssessmentsController {
    */
   @Get(':assessmentId/question-analytics')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async getQuestionAnalytics(@Param('assessmentId') assessmentId: string) {
-    const analytics =
-      await this.assessmentsService.getQuestionAnalytics(assessmentId);
+  async getQuestionAnalytics(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const analytics = await this.assessmentsService.getQuestionAnalytics(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -801,9 +846,14 @@ export class AssessmentsController {
    */
   @Get(':assessmentId/submissions')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async getAssessmentSubmissions(@Param('assessmentId') assessmentId: string) {
-    const submissions =
-      await this.assessmentsService.getAssessmentSubmissions(assessmentId);
+  async getAssessmentSubmissions(
+    @Param('assessmentId') assessmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    const submissions = await this.assessmentsService.getAssessmentSubmissions(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -822,10 +872,12 @@ export class AssessmentsController {
   async returnGrade(
     @Param('attemptId') attemptId: string,
     @Body() returnGradeDto: ReturnGradeDto,
+    @CurrentUser() user: any,
   ) {
     const result = await this.assessmentsService.returnGrade(
       attemptId,
       returnGradeDto,
+      user,
     );
 
     return {
@@ -845,10 +897,12 @@ export class AssessmentsController {
   async returnAllGrades(
     @Param('assessmentId') assessmentId: string,
     @Body() returnGradeDto: ReturnGradeDto,
+    @CurrentUser() user: any,
   ) {
     const result = await this.assessmentsService.returnAllGrades(
       assessmentId,
       returnGradeDto.teacherFeedback,
+      user,
     );
 
     return {

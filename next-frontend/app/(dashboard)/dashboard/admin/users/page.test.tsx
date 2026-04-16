@@ -32,7 +32,9 @@ jest.mock('@/services/user-service', () => ({
 
 const mockedUserService = userService as jest.Mocked<typeof userService>;
 
-function buildResponse(query?: { status?: string; role?: string }) {
+function buildResponse(
+  query?: { status?: string; role?: string },
+): Awaited<ReturnType<typeof userService.getAll>> {
   const status = query?.status ?? 'ACTIVE';
   const users =
     query?.role === 'teacher'
@@ -76,7 +78,7 @@ function buildResponse(query?: { status?: string; role?: string }) {
 
   return {
     success: true,
-    users: users as any,
+    users,
     page: 1,
     limit: 100,
     total: users.length,
@@ -87,7 +89,7 @@ function buildResponse(query?: { status?: string; role?: string }) {
       SUSPENDED: 1,
       DELETED: 4,
     },
-  };
+  } as Awaited<ReturnType<typeof userService.getAll>>;
 }
 
 describe('UserManagementPage', () => {

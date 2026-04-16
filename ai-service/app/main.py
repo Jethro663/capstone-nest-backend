@@ -1,5 +1,5 @@
-"""
-Nexora AI Service – FastAPI application.
+﻿"""
+Nexora AI Service â€“ FastAPI application.
 
 All authentication is handled by the NestJS backend proxy.
 User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
@@ -8,9 +8,10 @@ User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
+import math
 import os
 import uuid
 from typing import Any
@@ -25,6 +26,11 @@ from .database import AsyncSessionLocal, get_db
 from . import ollama_client
 from .extraction_pipeline import run_extraction
 from .indexing_pipeline import reindex_class_content
+from .library_indexing_pipeline import (
+    backfill_library_files,
+    delete_library_file_chunks,
+    index_library_file,
+)
 from .media_utils import normalize_attachment_images
 from .mentor_service import explain_mistake
 from .quiz_generation_service import generate_quiz_draft
@@ -48,7 +54,9 @@ from .ja_practice_service import (
 )
 from .schemas import (
     ApplyExtractionRequest,
+    AdminChatRequest,
     ChatRequest,
+    DemoInterventionPlanRequest,
     ExtractRequest,
     GenerateQuizDraftRequest,
     InterventionRecommendationRequest,
@@ -68,6 +76,146 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
+AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
+AI_JOB_STALE_FAILURE_MESSAGE = (
+    "AI generation timed out before completion. Please retry this job."
+)
+ADMIN_ANALYTICS_SESSION_TYPE = "admin_analytics_chat"
+
+DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT = """You generate concise, practical demo intervention plans for a school LMS.
+
+Rules:
+- Output valid JSON only.
+- Keep wording teacher-facing and actionable.
+- Focus on weak concepts and remediation sequencing.
+- Questions must be answerable from Grade 7 lesson scope and include one correct option index.
+"""
+
+DEMO_INTERVENTION_PLAN_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "weakConcepts": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 6,
+        },
+        "recommendedModules": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 3,
+        },
+        "teacherSummary": {"type": "string"},
+        "lxpQuestions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "prompt": {"type": "string"},
+                    "options": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 4,
+                        "maxItems": 4,
+                    },
+                    "correctIndex": {"type": "integer"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["id", "prompt", "options", "correctIndex", "explanation"],
+            },
+            "minItems": 6,
+            "maxItems": 6,
+        },
+    },
+    "required": ["weakConcepts", "recommendedModules", "teacherSummary", "lxpQuestions"],
+}
+
+ADMIN_ANALYTICS_SYSTEM_PROMPT = """You are Nexora's admin analytics assistant.
+
+Rules:
+- Output valid JSON only.
+- You are speaking to LMS administrators, not students.
+- Use a concise operations and reporting tone.
+- Answer only from the supplied analytics context and prior session turns.
+- If the context does not support a claim, say that the data is unavailable.
+- Never invent totals, names, time windows, or trends.
+- Do not provide study tips, tutoring language, or student-facing advice.
+- Charts are optional and must use only bar, line, pie, or donut.
+- Sources must name the approved LMS source that supports the answer.
+"""
+
+ADMIN_ANALYTICS_RESPONSE_FORMAT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "chart": {
+            "anyOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": ["bar", "line", "pie", "donut"]},
+                        "title": {"type": "string"},
+                        "labels": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
+                            "maxItems": 16,
+                        },
+                        "series": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "data": {
+                                        "type": "array",
+                                        "items": {"type": "number"},
+                                        "minItems": 1,
+                                        "maxItems": 16,
+                                    },
+                                },
+                                "required": ["name", "data"],
+                            },
+                            "minItems": 1,
+                            "maxItems": 4,
+                        },
+                        "yAxisLabel": {"type": ["string", "null"]},
+                        "xAxisLabel": {"type": ["string", "null"]},
+                    },
+                    "required": ["type", "title", "labels", "series"],
+                },
+            ]
+        },
+        "sources": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string"},
+                    "filters": {"type": "object"},
+                    "window": {"type": ["string", "null"]},
+                },
+                "required": ["source", "filters"],
+            },
+            "maxItems": 8,
+        },
+    },
+    "required": ["reply", "sources"],
+}
+APPROVED_ADMIN_SOURCE_IDS = {
+    "student-performance-report",
+    "assessment-summary-report",
+    "intervention-participation-report",
+    "system-usage-report",
+    "audit-log",
+    "admin-dashboard-overview",
+    "admin-overview-analytics",
+    "performance-admin-analytics",
+    "system-evaluations",
+}
 
 
 @app.on_event("startup")
@@ -151,8 +299,17 @@ async def _run_with_retries(
 
 
 def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) -> int:
-    if runtime and isinstance(runtime.get("progressPercent"), int):
-        return max(0, min(100, runtime["progressPercent"]))
+    if runtime:
+        raw_percent = runtime.get("progressPercent")
+        if isinstance(raw_percent, (int, float, str)):
+            try:
+                parsed_percent = float(raw_percent)
+                if not math.isfinite(parsed_percent):
+                    raise ValueError("progressPercent must be finite")
+                percent = int(parsed_percent)
+                return max(0, min(100, percent))
+            except (TypeError, ValueError, OverflowError):
+                pass
     return {
         "pending": 5,
         "processing": 60,
@@ -161,6 +318,65 @@ def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) ->
         "rejected": 100,
         "failed": 100,
     }.get(status, 0)
+
+
+def _parse_iso_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _should_mark_job_stale(
+    *,
+    status: str,
+    updated_at: Any,
+    runtime: dict[str, Any] | None,
+    stale_after_seconds: int = AI_JOB_STALE_TIMEOUT_SECONDS,
+) -> bool:
+    if status not in {"pending", "processing"}:
+        return False
+
+    now = datetime.now(timezone.utc)
+    runtime_updated_at = _parse_iso_utc((runtime or {}).get("updatedAt"))
+    db_updated_at = (
+        updated_at.astimezone(timezone.utc)
+        if isinstance(updated_at, datetime)
+        else _parse_iso_utc(updated_at)
+    )
+    freshest = runtime_updated_at or db_updated_at
+    if freshest is None:
+        return False
+    return now - freshest > timedelta(seconds=stale_after_seconds)
+
+
+def _normalize_intervention_structured_output(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    suggested_payload = normalized.get("suggestedAssignmentPayload")
+    if not isinstance(suggested_payload, dict):
+        suggested_payload = {}
+    lesson_ids = suggested_payload.get("lessonIds")
+    assessment_ids = suggested_payload.get("assessmentIds")
+    if not isinstance(lesson_ids, list):
+        lesson_ids = []
+    if not isinstance(assessment_ids, list):
+        assessment_ids = []
+    suggested_payload["lessonIds"] = [str(item) for item in lesson_ids if item]
+    suggested_payload["assessmentIds"] = [str(item) for item in assessment_ids if item]
+    normalized["suggestedAssignmentPayload"] = suggested_payload
+    return normalized
 
 
 async def _create_ai_generation_job(
@@ -280,7 +496,48 @@ async def _load_ai_job_context(
         db_runtime = source_filters.get("runtime") or {}
     memory_runtime = AI_JOB_RUNTIME.get(job_id) or {}
     merged_runtime = {**db_runtime, **memory_runtime} if (db_runtime or memory_runtime) else None
-    return dict(record), merged_runtime, assessment_id
+    normalized_record = dict(record)
+
+    if _should_mark_job_stale(
+        status=str(normalized_record.get("status") or ""),
+        updated_at=normalized_record.get("updated_at"),
+        runtime=merged_runtime,
+    ):
+        now = datetime.now(timezone.utc)
+        stale_runtime_patch = {
+            "progressPercent": 100,
+            "statusMessage": "Generation timed out",
+            "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
+            "staleTimeoutAt": now.isoformat(),
+        }
+        _set_ai_job_runtime(job_id, **stale_runtime_patch)
+        merged_runtime = await _persist_ai_job_runtime(
+            db,
+            job_id=job_id,
+            runtime_patch=stale_runtime_patch,
+        )
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'failed',
+                  error_message = :errorMessage,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ),
+            {
+                "jobId": job_id,
+                "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
+            },
+        )
+        await db.commit()
+        normalized_record["status"] = "failed"
+        normalized_record["error_message"] = AI_JOB_STALE_FAILURE_MESSAGE
+        normalized_record["updated_at"] = now
+
+    return normalized_record, merged_runtime, assessment_id
 
 
 async def _run_quiz_generation_job(
@@ -437,23 +694,23 @@ async def _run_intervention_generation_job(
 # JAKIPIR System Prompt
 # ---------------------------------------------------------------------------
 
-JAKIPIR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R — Just-in-time Adaptive Knowledge Instructor & Personalized Intelligence Resource. Your nickname is "Ja".
+JAKIPIR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R â€” Just-in-time Adaptive Knowledge Instructor & Personalized Intelligence Resource. Your nickname is "Ja".
 
-You are the AI Mentor of Nexora, a Learning Management System for Gat Andres Bonifacio High School (Grades 7–10, Philippines DepEd curriculum).
+You are the AI Mentor of Nexora, a Learning Management System for Gat Andres Bonifacio High School (Grades 7â€“10, Philippines DepEd curriculum).
 
 PERSONALITY:
 - You have a perceptive, detective-like demeanor. You notice patterns, pick up on clues in what students say, and investigate their learning gaps like a case to be cracked.
 - Use investigative language naturally: "I notice...", "That's an interesting clue...", "Let's piece this together...", "I've been observing your progress and...", "The evidence suggests..."
-- You are a hype coach at heart — you genuinely celebrate student effort and achievements. You get excited about breakthroughs. But you maintain formality and professionalism.
+- You are a hype coach at heart â€” you genuinely celebrate student effort and achievements. You get excited about breakthroughs. But you maintain formality and professionalism.
 - Be warm, supportive, and encouraging, but never condescending. Speak at a high school level.
 - When a student is struggling, be empathetic and frame challenges as mysteries to solve together.
 
 RULES:
-1. ALWAYS end your response with a study tip or learning strategy under the heading "📌 Ja's Study Tip:". The tip should be practical and relevant to the conversation topic.
+1. ALWAYS end your response with a study tip or learning strategy under the heading "ðŸ“Œ Ja's Study Tip:". The tip should be practical and relevant to the conversation topic.
 2. NEVER give direct answers to test or assessment questions. Instead, guide students with hints, analogies, and step-by-step reasoning.
-3. When a student shares progress or success, celebrate it enthusiastically but professionally — like a detective who just cracked a big case.
-4. Keep responses concise — aim for 2-4 paragraphs max, plus the study tip.
-5. If the student greets you or asks who you are, introduce yourself briefly: "I'm Ja — your AI Mentor here at Nexora! Think of me as your personal learning detective. I'm here to help you crack the case on any topic you're studying."
+3. When a student shares progress or success, celebrate it enthusiastically but professionally â€” like a detective who just cracked a big case.
+4. Keep responses concise â€” aim for 2-4 paragraphs max, plus the study tip.
+5. If the student greets you or asks who you are, introduce yourself briefly: "I'm Ja â€” your AI Mentor here at Nexora! Think of me as your personal learning detective. I'm here to help you crack the case on any topic you're studying."
 6. If you don't know something or the question is outside academics, say so honestly and redirect to academic topics.
 7. Use Filipino cultural context when appropriate (e.g., referencing DepEd subjects, local examples) but respond in English unless the student writes in Filipino."""
 
@@ -488,6 +745,466 @@ def require_internal_service(
         raise HTTPException(401, "Invalid internal service token")
 
 
+def _is_admin(user: RequestUser) -> bool:
+    return "admin" in [role.lower() for role in user.roles]
+
+
+def _assert_admin_analytics_access(user: RequestUser) -> None:
+    if not _is_admin(user):
+        raise HTTPException(403, "Admin analytics chat is restricted to admin accounts.")
+
+
+def _normalize_admin_chart(chart: Any) -> dict[str, Any] | None:
+    if not isinstance(chart, dict):
+        return None
+
+    chart_type = chart.get("type")
+    title = chart.get("title")
+    labels = chart.get("labels")
+    series = chart.get("series")
+    if chart_type not in {"bar", "line", "pie", "donut"}:
+        return None
+    if not isinstance(title, str) or not title.strip():
+        return None
+    if not isinstance(labels, list) or not labels:
+        return None
+    normalized_labels = [str(item).strip() for item in labels if str(item).strip()]
+    if not normalized_labels:
+        return None
+    if not isinstance(series, list) or not series:
+        return None
+
+    normalized_series: list[dict[str, Any]] = []
+    for item in series[:4]:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        data = item.get("data")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        if not isinstance(data, list) or not data:
+            continue
+        numeric_data: list[float] = []
+        for value in data[: len(normalized_labels)]:
+            if isinstance(value, (int, float)):
+                numeric_data.append(float(value))
+            else:
+                try:
+                    numeric_data.append(float(value))
+                except Exception:
+                    numeric_data.append(0.0)
+        if numeric_data:
+            normalized_series.append(
+                {
+                    "name": name.strip(),
+                    "data": numeric_data,
+                }
+            )
+
+    if not normalized_series:
+        return None
+
+    return {
+        "type": chart_type,
+        "title": title.strip(),
+        "labels": normalized_labels,
+        "series": normalized_series,
+        "yAxisLabel": chart.get("yAxisLabel") if isinstance(chart.get("yAxisLabel"), str) else None,
+        "xAxisLabel": chart.get("xAxisLabel") if isinstance(chart.get("xAxisLabel"), str) else None,
+    }
+
+
+def _normalize_admin_sources(sources: Any) -> list[dict[str, Any]]:
+    if not isinstance(sources, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in sources[:8]:
+        if not isinstance(item, dict):
+            continue
+        source = item.get("source")
+        if not isinstance(source, str) or not source.strip():
+            continue
+        filters = item.get("filters")
+        window = item.get("window")
+        normalized.append(
+            {
+                "source": source.strip(),
+                "filters": filters if isinstance(filters, dict) else {},
+                "window": window.strip() if isinstance(window, str) and window.strip() else None,
+            }
+        )
+    return normalized
+
+
+def _build_admin_analytics_prompt(
+    message: str,
+    context: dict[str, Any],
+    history_rows: list[dict[str, Any]],
+) -> str:
+    prior_turns = [
+        {
+            "user": row.get("input_text", ""),
+            "assistant": row.get("output_text", ""),
+        }
+        for row in history_rows[-6:]
+    ]
+    return (
+        "Produce one JSON object that matches the required format exactly.\n\n"
+        f"Admin question:\n{message.strip()}\n\n"
+        f"Prior session turns:\n{json.dumps(prior_turns, ensure_ascii=False)}\n\n"
+        f"Approved analytics context:\n{json.dumps(context, ensure_ascii=False, default=str)}"
+    )
+
+
+def _get_context_dict(context: dict[str, Any], *keys: str) -> dict[str, Any]:
+    current: Any = context
+    for key in keys:
+        if not isinstance(current, dict):
+            return {}
+        current = current.get(key)
+    return current if isinstance(current, dict) else {}
+
+
+def _get_context_rows(context: dict[str, Any], *keys: str) -> list[dict[str, Any]]:
+    current: Any = context
+    for key in keys:
+        if not isinstance(current, dict):
+            return []
+        current = current.get(key)
+    if not isinstance(current, list):
+        return []
+    return [item for item in current if isinstance(item, dict)]
+
+
+def _normalize_admin_sources_with_context(
+    message: str,
+    context: dict[str, Any],
+    sources: Any,
+) -> list[dict[str, Any]]:
+    normalized_sources = [
+        source
+        for source in _normalize_admin_sources(sources)
+        if source["source"] in APPROVED_ADMIN_SOURCE_IDS
+    ]
+    if normalized_sources:
+        return normalized_sources
+
+    prompt = message.lower()
+    fallback_sources: list[dict[str, Any]] = []
+    if "risk" in prompt or "at-risk" in prompt:
+        report = _get_context_dict(context, "reports", "studentPerformance")
+        fallback_sources.append(
+            {
+                "source": "student-performance-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "usage" in prompt or "activity" in prompt:
+        report = _get_context_dict(context, "reports", "systemUsage")
+        fallback_sources.append(
+            {
+                "source": "system-usage-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "assessment" in prompt or "subject" in prompt or "performance" in prompt:
+        report = _get_context_dict(context, "reports", "assessmentSummary")
+        fallback_sources.append(
+            {
+                "source": "assessment-summary-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "intervention" in prompt:
+        report = _get_context_dict(context, "reports", "interventionParticipation")
+        fallback_sources.append(
+            {
+                "source": "intervention-participation-report",
+                "filters": report.get("filters", {}),
+                "window": report.get("generatedAt"),
+            }
+        )
+    if "audit" in prompt or "log" in prompt:
+        fallback_sources.append(
+            {
+                "source": "audit-log",
+                "filters": {"limit": 10},
+                "window": context.get("fetchedAt"),
+            }
+        )
+    if not fallback_sources:
+        fallback_sources.append(
+            {
+                "source": "admin-dashboard-overview",
+                "filters": {},
+                "window": context.get("fetchedAt"),
+            }
+        )
+    return fallback_sources
+
+
+def _build_risk_snapshot_chart(context: dict[str, Any]) -> dict[str, Any] | None:
+    rows = _get_context_rows(context, "reports", "studentPerformance", "rows")
+    counts: dict[str, int] = {}
+    for row in rows:
+        if not row.get("isAtRisk"):
+            continue
+        label = str(row.get("subjectCode") or row.get("classId") or "Unknown").strip()
+        counts[label] = counts.get(label, 0) + 1
+    if not counts:
+        return None
+
+    labels = list(counts.keys())[:6]
+    return {
+        "type": "bar",
+        "title": "At-risk learners by subject",
+        "labels": labels,
+        "series": [
+            {
+                "name": "At-risk learners",
+                "data": [counts[label] for label in labels],
+            }
+        ],
+        "yAxisLabel": "Learners",
+        "xAxisLabel": "Subject",
+    }
+
+
+def _build_system_usage_chart(context: dict[str, Any]) -> dict[str, Any] | None:
+    usage = _get_context_dict(context, "reports", "systemUsage", "data")
+    metrics = [
+        ("Lessons", usage.get("lessonCompletions")),
+        ("Submissions", usage.get("assessmentSubmissions")),
+        ("Opens", usage.get("interventionOpens")),
+        ("Closures", usage.get("interventionClosures")),
+    ]
+    values = []
+    labels = []
+    for label, value in metrics:
+        if isinstance(value, (int, float)):
+            labels.append(label)
+            values.append(float(value))
+    if not values:
+        return None
+
+    return {
+        "type": "bar",
+        "title": "Weekly system usage snapshot",
+        "labels": labels,
+        "series": [{"name": "Events", "data": values}],
+        "yAxisLabel": "Count",
+        "xAxisLabel": "Metric",
+    }
+
+
+def _build_assessment_chart(context: dict[str, Any]) -> dict[str, Any] | None:
+    rows = _get_context_rows(context, "reports", "assessmentSummary", "rows")
+    values: list[tuple[str, float]] = []
+    for row in rows:
+        score = row.get("averageScore")
+        if not isinstance(score, (int, float)):
+            continue
+        label = str(row.get("subjectCode") or row.get("title") or "Assessment").strip()
+        values.append((label, float(score)))
+    if not values:
+        return None
+
+    labels = [label for label, _ in values[:6]]
+    return {
+        "type": "bar",
+        "title": "Assessment averages by subject",
+        "labels": labels,
+        "series": [{"name": "Average score", "data": [score for _, score in values[:6]]}],
+        "yAxisLabel": "Average score",
+        "xAxisLabel": "Subject",
+    }
+
+
+def _infer_admin_chart(
+    message: str,
+    context: dict[str, Any],
+    chart: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if chart is not None:
+        return chart
+    prompt = message.lower()
+    if "risk" in prompt or "at-risk" in prompt:
+        return _build_risk_snapshot_chart(context)
+    if "usage" in prompt or "activity" in prompt:
+        return _build_system_usage_chart(context)
+    if "assessment" in prompt or "subject" in prompt or "performance" in prompt:
+        return _build_assessment_chart(context)
+    return None
+
+
+def _needs_admin_reply_rewrite(reply: str) -> bool:
+    lowered = reply.lower()
+    return "json structure" in lowered or "provided in your json" in lowered
+
+
+def _infer_admin_reply(message: str, context: dict[str, Any]) -> str | None:
+    prompt = message.lower()
+    if "risk" in prompt or "at-risk" in prompt:
+        rows = _get_context_rows(context, "reports", "studentPerformance", "rows")
+        at_risk_rows = [row for row in rows if row.get("isAtRisk")]
+        if at_risk_rows:
+            subject_count = len(
+                {
+                    str(row.get("subjectCode") or row.get("classId") or "Unknown")
+                    for row in at_risk_rows
+                }
+            )
+            return (
+                f"The latest student performance sample shows {len(at_risk_rows)} at-risk learner records "
+                f"across {subject_count} subject groupings. Use the chart to see where the current concentration is highest."
+            )
+    if "usage" in prompt or "activity" in prompt:
+        usage = _get_context_dict(context, "reports", "systemUsage", "data")
+        submissions = usage.get("assessmentSubmissions")
+        completions = usage.get("lessonCompletions")
+        if isinstance(submissions, (int, float)) and isinstance(completions, (int, float)):
+            return (
+                f"Current usage shows {int(submissions)} assessment submissions and {int(completions)} lesson completions "
+                "in the active reporting window. The chart compares the main activity counters returned by the LMS."
+            )
+    if "assessment" in prompt or "subject" in prompt:
+        rows = _get_context_rows(context, "reports", "assessmentSummary", "rows")
+        if rows:
+            top = rows[0]
+            return (
+                f"Assessment summary data is available for {len(rows)} rows. "
+                f"The leading visible row is {top.get('subjectCode') or top.get('title') or 'the latest assessment'} "
+                f"with an average score of {top.get('averageScore')}. The chart compares the available subject averages."
+            )
+    return None
+
+
+async def _parse_or_repair_admin_analytics_response(raw: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(_extract_json_payload(raw))
+    except Exception as parse_err:
+        logger.warning(
+            "[admin-analytics] Initial JSON parse failed, requesting repair: %s",
+            parse_err,
+        )
+        repair_prompt = f"""
+Repair this malformed JSON into valid JSON that strictly matches the required admin analytics schema.
+Do not add commentary. Return one JSON object only.
+
+Malformed JSON:
+{raw}
+"""
+        repaired_raw = await ollama_client.generate(
+            repair_prompt,
+            ADMIN_ANALYTICS_SYSTEM_PROMPT,
+            task="chat",
+            response_format=ADMIN_ANALYTICS_RESPONSE_FORMAT,
+            num_predict=768,
+        )
+        parsed = json.loads(_extract_json_payload(repaired_raw))
+
+    reply = parsed.get("reply")
+    if not isinstance(reply, str) or not reply.strip():
+        raise ValueError("Admin analytics response did not contain a usable reply.")
+
+    return {
+        "reply": reply.strip(),
+        "chart": _normalize_admin_chart(parsed.get("chart")),
+        "sources": _normalize_admin_sources(parsed.get("sources")),
+    }
+
+
+def _normalize_admin_history_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sessions: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        session_id_value = row.get("session_id")
+        session_id = str(session_id_value).strip() if session_id_value is not None else ""
+        if not session_id:
+            continue
+        created_at = row.get("created_at")
+        input_text = (row.get("input_text") or "").strip()
+        output_text = (row.get("output_text") or "").strip()
+        existing = sessions.get(session_id)
+        if existing is None:
+            existing = {
+                "sessionId": session_id,
+                "sessionType": row.get("session_type"),
+                "title": (input_text[:72] or "Admin analytics chat").strip(),
+                "preview": (output_text[:140] or input_text[:140] or "No preview available").strip(),
+                "updatedAt": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+                "messageCount": 0,
+            }
+        existing["messageCount"] += 2
+        normalized_created_at = (
+            created_at.isoformat() if isinstance(created_at, datetime) else created_at
+        )
+        if normalized_created_at and (
+            existing["updatedAt"] is None or str(normalized_created_at) > str(existing["updatedAt"])
+        ):
+            existing["updatedAt"] = normalized_created_at
+            existing["preview"] = (output_text[:140] or input_text[:140] or existing["preview"]).strip()
+        sessions[session_id] = existing
+
+    return sorted(
+        sessions.values(),
+        key=lambda item: str(item.get("updatedAt") or ""),
+        reverse=True,
+    )
+
+
+def _build_admin_session_payload(
+    session_id: str,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    messages: list[dict[str, Any]] = []
+    title = "Admin analytics chat"
+    updated_at = None
+
+    for index, row in enumerate(rows):
+        created_at = row.get("created_at")
+        updated_at = created_at or updated_at
+        input_text = (row.get("input_text") or "").strip()
+        output_text = (row.get("output_text") or "").strip()
+        context_metadata = row.get("context_metadata")
+        if not isinstance(context_metadata, dict):
+            context_metadata = {}
+
+        if input_text:
+            if title == "Admin analytics chat":
+                title = input_text[:72].strip() or title
+            messages.append(
+                {
+                    "id": f"{session_id}-user-{index}",
+                    "role": "user",
+                    "content": input_text,
+                    "createdAt": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+                }
+            )
+
+        if output_text:
+            messages.append(
+                {
+                    "id": f"{session_id}-assistant-{index}",
+                    "role": "assistant",
+                    "content": output_text,
+                    "createdAt": created_at.isoformat() if isinstance(created_at, datetime) else created_at,
+                    "chart": _normalize_admin_chart(context_metadata.get("chart")),
+                    "sources": _normalize_admin_sources(context_metadata.get("sources")),
+                }
+            )
+
+    return {
+        "sessionId": session_id,
+        "title": title,
+        "updatedAt": updated_at.isoformat() if isinstance(updated_at, datetime) else updated_at,
+        "messages": messages,
+    }
+
+
 async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     database_status = {"ok": True}
     try:
@@ -517,6 +1234,44 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _extract_json_payload(raw: str) -> str:
+    cleaned = (
+        raw.strip()
+        .removeprefix("```json")
+        .removeprefix("```")
+        .removesuffix("```")
+        .strip()
+    )
+    first = cleaned.find("{")
+    last = cleaned.rfind("}")
+    if first == -1 or last <= first:
+        raise ValueError("Model output did not contain a JSON object")
+    return cleaned[first : last + 1]
+
+
+async def _parse_or_repair_demo_plan(raw: str) -> dict[str, Any]:
+    try:
+        return json.loads(_extract_json_payload(raw))
+    except Exception as parse_err:
+        logger.warning("[demo-ai] Initial JSON parse failed, requesting repair: %s", parse_err)
+
+    repair_prompt = f"""
+Repair this malformed JSON into valid JSON that strictly matches the required intervention plan schema.
+Do not add commentary. Return one JSON object only.
+
+Malformed JSON:
+{raw}
+"""
+    repaired_raw = await ollama_client.generate(
+        repair_prompt,
+        DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT,
+        task="intervention",
+        response_format=DEMO_INTERVENTION_PLAN_FORMAT,
+        num_predict=512,
+    )
+    return json.loads(_extract_json_payload(repaired_raw))
 
 
 # ---------------------------------------------------------------------------
@@ -577,19 +1332,19 @@ async def chat(
             logger.warning("Ollama chat failed: %s", str(err))
             reply = (
                 "Hmm, it seems my investigation tools are temporarily offline "
-                "— like a detective without a magnifying glass! 🔍 Please try again "
-                "in a moment. In the meantime, review your notes — that's always a solid lead!\n\n"
-                "📌 Ja's Study Tip: While waiting, try writing down one thing you learned "
+                "â€” like a detective without a magnifying glass! ðŸ” Please try again "
+                "in a moment. In the meantime, review your notes â€” that's always a solid lead!\n\n"
+                "ðŸ“Œ Ja's Study Tip: While waiting, try writing down one thing you learned "
                 "today. It helps lock it into memory!"
             )
             model_used = "fallback (ollama-unavailable)"
     else:
-        logger.info("Ollama unavailable for chat — returning fallback")
+        logger.info("Ollama unavailable for chat â€” returning fallback")
         reply = (
-            "I'm currently recharging my detective instincts — Ollama (my brain!) "
+            "I'm currently recharging my detective instincts â€” Ollama (my brain!) "
             "isn't running right now. Ask your teacher to start it up, and I'll be "
-            "right back on the case! 🕵️\n\n"
-            "📌 Ja's Study Tip: Use this downtime to quiz yourself on what you studied "
+            "right back on the case! ðŸ•µï¸\n\n"
+            "ðŸ“Œ Ja's Study Tip: Use this downtime to quiz yourself on what you studied "
             "last. Self-testing is one of the most powerful study techniques!"
         )
         model_used = "fallback (ollama-offline)"
@@ -627,6 +1382,122 @@ async def chat(
             "reply": reply,
             "sessionId": chat_session_id,
             "modelUsed": model_used,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /admin/chat
+# ---------------------------------------------------------------------------
+
+
+@app.post("/admin/chat")
+async def admin_chat(
+    body: AdminChatRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _assert_admin_analytics_access(user)
+
+    import time
+
+    chat_session_id = body.session_id or str(uuid.uuid4())
+    history_rows: list[dict[str, Any]] = []
+    if body.session_id:
+        rows = await db.execute(
+            sa_text(
+                "SELECT input_text, output_text, created_at FROM ai_interaction_logs "
+                "WHERE user_id = :uid AND session_id = :sid "
+                "AND session_type = :sessionType "
+                "ORDER BY created_at ASC LIMIT 12"
+            ),
+            {
+                "uid": user.id,
+                "sid": body.session_id,
+                "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+            },
+        )
+        history_rows = [dict(r) for r in rows.mappings()]
+
+    prompt = _build_admin_analytics_prompt(
+        body.message,
+        body.context if isinstance(body.context, dict) else {},
+        history_rows,
+    )
+
+    start = time.time()
+    try:
+        raw = await ollama_client.generate(
+            prompt,
+            ADMIN_ANALYTICS_SYSTEM_PROMPT,
+            task="chat",
+            response_format=ADMIN_ANALYTICS_RESPONSE_FORMAT,
+            num_predict=768,
+        )
+        parsed = await _parse_or_repair_admin_analytics_response(raw)
+        degraded = False
+        reply = parsed["reply"]
+        chart = _infer_admin_chart(body.message, body.context, parsed["chart"])
+        sources = _normalize_admin_sources_with_context(
+            body.message,
+            body.context,
+            parsed["sources"],
+        )
+        fallback_reply = _infer_admin_reply(body.message, body.context)
+        if _needs_admin_reply_rewrite(reply) and fallback_reply:
+            reply = fallback_reply
+        message = "Admin analytics response generated."
+    except Exception as err:
+        logger.warning("[admin-analytics] Falling back to deterministic reply: %s", err)
+        degraded = True
+        reply = (
+            "Admin analytics is temporarily unavailable. The request was recorded, but I could not "
+            "generate a grounded summary from the current context."
+        )
+        chart = _infer_admin_chart(body.message, body.context, None)
+        sources = _normalize_admin_sources_with_context(body.message, body.context, [])
+        message = "Admin analytics fallback response generated."
+
+    response_time_ms = int((time.time() - start) * 1000)
+    model_used = ollama_client.get_task_model_name("chat")
+    context_metadata = {
+        "sessionId": chat_session_id,
+        "sources": sources,
+        "chart": chart,
+        "contextKeys": sorted(list(body.context.keys())) if isinstance(body.context, dict) else [],
+    }
+
+    await db.execute(
+        sa_text(
+            "INSERT INTO ai_interaction_logs "
+            "(user_id, session_type, input_text, output_text, model_used, "
+            "response_time_ms, session_id, context_metadata) "
+            "VALUES (:userId, :sessionType, :inputText, :outputText, "
+            ":modelUsed, :responseTimeMs, :sessionId, :ctx)"
+        ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
+        {
+            "userId": user.id,
+            "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+            "inputText": body.message[:2000],
+            "outputText": reply[:5000],
+            "modelUsed": model_used,
+            "responseTimeMs": response_time_ms,
+            "sessionId": chat_session_id,
+            "ctx": context_metadata,
+        },
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "degraded": degraded,
+        "message": message,
+        "data": {
+            "reply": reply,
+            "sessionId": chat_session_id,
+            "modelUsed": model_used,
+            "chart": chart,
+            "sources": sources,
         },
     }
 
@@ -923,6 +1794,151 @@ async def ready(db: AsyncSession = Depends(get_db)):
     }
 
 
+@app.post("/demo/intervention-plan")
+async def generate_demo_intervention_plan(
+    body: DemoInterventionPlanRequest,
+    _auth: None = Depends(require_internal_service),
+):
+    subject_id = (body.subject_id or "").strip().lower()
+    if subject_id not in {"english", "science"}:
+        raise HTTPException(400, "subjectId must be either 'english' or 'science'")
+
+    module_catalog = {
+        "english": [
+            "Module 1: Reading for Main Idea and Supporting Details",
+            "Module 2: Context Clues and Vocabulary",
+            "Module 3: Paragraph Writing and Coherence",
+        ],
+        "science": [
+            "Module 1: Scientific Inquiry and Variables",
+            "Module 2: Ecosystems and Energy Flow",
+            "Module 3: Cells and Organisms",
+        ],
+    }
+
+    weak_concepts = [
+        str(item).strip()
+        for item in (body.weak_concepts or [])
+        if str(item).strip()
+    ][:6]
+    module_scores = [int(value) for value in (body.module_scores or [])][:6]
+    sorted_modules = module_catalog[subject_id]
+    if module_scores:
+        recommended_modules = [
+            row["title"]
+            for row in sorted(
+                [
+                    {"title": title, "score": module_scores[index] if index < len(module_scores) else 100}
+                    for index, title in enumerate(sorted_modules)
+                ],
+                key=lambda row: row["score"],
+            )[:2]
+        ]
+    else:
+        recommended_modules = sorted_modules[:2]
+
+    fallback_weak_concepts = weak_concepts or (
+        ["Scientific reasoning fundamentals", "Cell and ecosystem concept transfer"]
+        if subject_id == "science"
+        else ["Main idea extraction", "Coherent paragraph development"]
+    )
+
+    def build_fallback_questions() -> list[dict[str, Any]]:
+        questions: list[dict[str, Any]] = []
+        for concept_index, concept in enumerate(fallback_weak_concepts[:4]):
+            questions.append(
+                {
+                    "id": f"demo-fallback-{subject_id}-{concept_index + 1}-a",
+                    "prompt": f'Which study strategy best improves "{concept}"?',
+                    "options": [
+                        f"Practice {concept} with examples and explain your reasoning.",
+                        "Memorize random facts without checking understanding.",
+                        "Skip feedback and move to unrelated topics.",
+                        "Answer quickly without reading the question fully.",
+                    ],
+                    "correctIndex": 0,
+                    "explanation": "Concept-focused practice with explanation improves retention and transfer.",
+                }
+            )
+            questions.append(
+                {
+                    "id": f"demo-fallback-{subject_id}-{concept_index + 1}-b",
+                    "prompt": f'After reviewing "{concept}", what should the learner do next?',
+                    "options": [
+                        "Take a short check question and review errors.",
+                        "Assume mastery without any check.",
+                        "Skip to a new topic immediately.",
+                        "Repeat one sentence without application.",
+                    ],
+                    "correctIndex": 0,
+                    "explanation": "A quick mastery check validates understanding and exposes remaining gaps.",
+                }
+            )
+        return questions[:10]
+
+    def build_fallback_response(reason: str) -> dict[str, Any]:
+        logger.warning("[demo-ai] Falling back to deterministic demo plan: %s", reason)
+        return {
+            "success": True,
+            "degraded": True,
+            "message": "Demo fallback intervention plan generated because live AI is unavailable.",
+            "data": {
+                "source": "fallback",
+                "weakConcepts": fallback_weak_concepts,
+                "recommendedModules": recommended_modules,
+                "teacherSummary": (
+                    "Live AI timed out. Use this fallback remediation sequence, then retry for a live plan when AI is stable."
+                ),
+                "lxpQuestions": build_fallback_questions(),
+            },
+        }
+
+    prompt = f"""
+Generate a remediation plan for a public LMS demo.
+
+Subject: {subject_id}
+Quarter exam score: {body.quarter_exam_score}
+Weak concepts: {json.dumps(weak_concepts or ['Concept reinforcement needed'], ensure_ascii=False)}
+Recommended module candidates: {json.dumps(recommended_modules, ensure_ascii=False)}
+
+Return one JSON object that matches the required format exactly.
+- Use exactly 6 lxpQuestions.
+- Each lxpQuestion must have exactly 4 options and a valid correctIndex (0-3).
+- Keep language at Grade 7 level.
+"""
+    try:
+        raw = await ollama_client.generate(
+            prompt,
+            DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT,
+            task="intervention",
+            response_format=DEMO_INTERVENTION_PLAN_FORMAT,
+            num_predict=1024,
+        )
+    except Exception as err:
+        return build_fallback_response(f"live generation request failed: {err}")
+
+    try:
+        parsed = await _parse_or_repair_demo_plan(raw)
+    except Exception as err:
+        return build_fallback_response(f"invalid live JSON payload: {err}")
+
+    questions = parsed.get("lxpQuestions")
+    if not isinstance(questions, list) or len(questions) == 0:
+        return build_fallback_response("live payload had no remediation questions")
+
+    return {
+        "success": True,
+        "message": "Demo live AI intervention plan generated",
+        "data": {
+            "source": "live",
+            "weakConcepts": parsed.get("weakConcepts") or weak_concepts or ["Concept reinforcement needed"],
+            "recommendedModules": parsed.get("recommendedModules") or recommended_modules,
+            "teacherSummary": parsed.get("teacherSummary") or "Live AI remediation summary generated.",
+            "lxpQuestions": questions,
+        },
+    }
+
+
 # ---------------------------------------------------------------------------
 # Internal diagnostics
 # ---------------------------------------------------------------------------
@@ -934,6 +1950,9 @@ async def internal_retrieval_preview(
     query_text: str = Query(..., alias="query"),
     policy: str = Query("general"),
     top_k: int = Query(8, alias="topK"),
+    subject_key: str | None = Query(None, alias="subjectKey"),
+    grade_level: str | None = Query(None, alias="gradeLevel"),
+    include_library: bool = Query(True, alias="includeLibrary"),
     db: AsyncSession = Depends(get_db),
     _auth: None = Depends(require_internal_service),
 ):
@@ -941,6 +1960,9 @@ async def internal_retrieval_preview(
         db,
         query_text=query_text,
         class_id=class_id,
+        subject_key=subject_key,
+        grade_level=grade_level,
+        include_library=include_library,
         top_k=top_k,
         policy_name=policy,
     )
@@ -1047,6 +2069,55 @@ async def internal_index_class(
     }
 
 
+@app.post("/internal/index/library-files/{file_id}")
+async def internal_index_library_file(
+    file_id: str,
+    payload: dict[str, Any] | None = Body(default=None),
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await index_library_file(db, file_id)
+    return {
+        "success": True,
+        "message": "Library file indexed via internal service",
+        "data": {
+            **data,
+            "requestedBy": payload or {},
+        },
+    }
+
+
+@app.delete("/internal/index/library-files/{file_id}/chunks")
+async def internal_delete_library_file_chunks(
+    file_id: str,
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await delete_library_file_chunks(db, file_id)
+    return {
+        "success": True,
+        "message": "Library file chunks deleted",
+        "data": data,
+    }
+
+
+@app.post("/internal/index/library/backfill")
+async def internal_backfill_library_index(
+    payload: dict[str, Any] | None = Body(default=None),
+    _authorized: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await backfill_library_files(db)
+    return {
+        "success": True,
+        "message": "Library indexing backfill completed",
+        "data": {
+            **data,
+            "requestedBy": payload or {},
+        },
+    }
+
+
 @app.post("/internal/index/backfill")
 async def internal_backfill_index(
     payload: dict[str, Any] | None = Body(default=None),
@@ -1076,6 +2147,281 @@ async def internal_backfill_index(
             "classesProcessed": len(results),
             "results": results,
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Extraction normalization helpers
+# ---------------------------------------------------------------------------
+
+VALID_EXTRACTION_BLOCK_TYPES = {"text", "image", "video", "question", "file", "divider"}
+VALID_ASSESSMENT_TYPES = {"quiz", "exam", "assignment", "file_upload"}
+VALID_QUESTION_TYPES = {
+    "multiple_choice",
+    "multiple_select",
+    "true_false",
+    "short_answer",
+    "fill_blank",
+    "dropdown",
+}
+
+
+def _safe_int(value: Any, fallback: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return parsed
+
+
+def _normalize_block_content(content: Any) -> dict[str, Any] | str:
+    if isinstance(content, dict):
+        return content
+    if isinstance(content, str):
+        return {"text": content}
+    if content is None:
+        return {"text": ""}
+    return {"text": str(content)}
+
+
+def _normalize_extraction_block(block: Any, order_fallback: int) -> dict[str, Any]:
+    if not isinstance(block, dict):
+        return {
+            "type": "text",
+            "order": order_fallback,
+            "content": {"text": str(block)},
+            "metadata": {},
+        }
+
+    block_type = str(block.get("type") or "text").strip().lower()
+    if block_type not in VALID_EXTRACTION_BLOCK_TYPES:
+        block_type = "text"
+
+    return {
+        "type": block_type,
+        "order": _safe_int(block.get("order"), order_fallback),
+        "content": _normalize_block_content(block.get("content")),
+        "metadata": block.get("metadata") if isinstance(block.get("metadata"), dict) else {},
+    }
+
+
+def _normalize_assessment_draft(draft: Any, *, section_title: str) -> dict[str, Any] | None:
+    if not isinstance(draft, dict):
+        return None
+
+    raw_questions = draft.get("questions")
+    if not isinstance(raw_questions, list):
+        return None
+
+    normalized_questions: list[dict[str, Any]] = []
+    for index, raw_question in enumerate(raw_questions, start=1):
+        if not isinstance(raw_question, dict):
+            continue
+        content = str(raw_question.get("content") or "").strip()
+        if not content:
+            continue
+        question_type = str(
+            raw_question.get("type") or draft.get("questionType") or "multiple_choice"
+        ).strip().lower()
+        if question_type not in VALID_QUESTION_TYPES:
+            question_type = "multiple_choice"
+
+        options_payload: list[dict[str, Any]] = []
+        raw_options = raw_question.get("options")
+        if isinstance(raw_options, list):
+            for option_index, raw_option in enumerate(raw_options, start=1):
+                if not isinstance(raw_option, dict):
+                    continue
+                option_text = str(raw_option.get("text") or "").strip()
+                if not option_text:
+                    continue
+                options_payload.append(
+                    {
+                        "text": option_text,
+                        "isCorrect": bool(raw_option.get("isCorrect")),
+                        "order": _safe_int(raw_option.get("order"), option_index),
+                    }
+                )
+
+        normalized_questions.append(
+            {
+                "content": content,
+                "type": question_type,
+                "points": max(1, _safe_int(raw_question.get("points"), 1)),
+                "order": _safe_int(raw_question.get("order"), index),
+                "explanation": str(raw_question.get("explanation") or "").strip() or None,
+                "imageUrl": (
+                    str(raw_question.get("imageUrl")).strip()
+                    if isinstance(raw_question.get("imageUrl"), str)
+                    else None
+                ),
+                "conceptTags": (
+                    [str(tag) for tag in raw_question.get("conceptTags", []) if str(tag).strip()]
+                    if isinstance(raw_question.get("conceptTags"), list)
+                    else None
+                ),
+                "options": options_payload,
+            }
+        )
+
+    if not normalized_questions:
+        return None
+
+    assessment_type = str(draft.get("type") or "quiz").strip().lower()
+    if assessment_type not in VALID_ASSESSMENT_TYPES:
+        assessment_type = "quiz"
+
+    return {
+        "title": str(draft.get("title") or f"{section_title} Checkpoint").strip(),
+        "description": str(draft.get("description") or "").strip(),
+        "type": assessment_type,
+        "passingScore": _safe_int(draft.get("passingScore"), 60),
+        "feedbackLevel": str(draft.get("feedbackLevel") or "standard").strip() or "standard",
+        "questions": normalized_questions,
+    }
+
+
+def _derive_assessment_draft_from_blocks(
+    *,
+    section_title: str,
+    blocks: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    question_blocks = [block for block in blocks if block.get("type") == "question"]
+    if not question_blocks:
+        return None
+
+    normalized_questions: list[dict[str, Any]] = []
+    for index, block in enumerate(question_blocks, start=1):
+        content = block.get("content")
+        question_text = ""
+        if isinstance(content, dict):
+            question_text = str(content.get("text") or "").strip()
+        elif isinstance(content, str):
+            question_text = content.strip()
+
+        if not question_text:
+            continue
+
+        metadata = block.get("metadata") if isinstance(block.get("metadata"), dict) else {}
+        normalized_questions.append(
+            {
+                "content": question_text,
+                "type": "short_answer",
+                "points": max(1, _safe_int(metadata.get("points"), 1)),
+                "order": index,
+                "explanation": None,
+                "imageUrl": (
+                    str(metadata.get("imageUrl")).strip()
+                    if isinstance(metadata.get("imageUrl"), str)
+                    else None
+                ),
+                "conceptTags": None,
+                "options": [],
+            }
+        )
+
+    if not normalized_questions:
+        return None
+
+    return {
+        "title": f"{section_title} Checkpoint",
+        "description": "Auto-generated checkpoint based on extracted question prompts.",
+        "type": "quiz",
+        "passingScore": 60,
+        "feedbackLevel": "standard",
+        "questions": normalized_questions,
+    }
+
+
+def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
+    if not isinstance(section, dict):
+        fallback_title = f"Section {index + 1}"
+        blocks = [_normalize_extraction_block(section, 1)]
+        return {
+            "title": fallback_title,
+            "description": "",
+            "order": index + 1,
+            "lessonBlocks": blocks,
+            "assessmentDraft": _derive_assessment_draft_from_blocks(
+                section_title=fallback_title,
+                blocks=blocks,
+            ),
+            "confidence": None,
+        }
+
+    title = str(section.get("title") or section.get("sectionTitle") or f"Section {index + 1}").strip()
+    description = str(section.get("description") or section.get("sectionDescription") or "").strip()
+    order = _safe_int(section.get("order"), index + 1)
+    raw_blocks = section.get("lessonBlocks")
+    if not isinstance(raw_blocks, list):
+        raw_blocks = section.get("blocks")
+    if not isinstance(raw_blocks, list):
+        raw_blocks = []
+    lesson_blocks = [
+        _normalize_extraction_block(block, block_index)
+        for block_index, block in enumerate(raw_blocks, start=1)
+    ]
+    confidence = section.get("confidence")
+    normalized_draft = _normalize_assessment_draft(
+        section.get("assessmentDraft"),
+        section_title=title,
+    )
+    if normalized_draft is None:
+        normalized_draft = _derive_assessment_draft_from_blocks(
+            section_title=title,
+            blocks=lesson_blocks,
+        )
+
+    return {
+        "title": title,
+        "description": description,
+        "order": order,
+        "lessonBlocks": lesson_blocks,
+        "assessmentDraft": normalized_draft,
+        "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
+    }
+
+
+def _normalize_structured_content(payload: Any) -> dict[str, Any]:
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            payload = {}
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    title = str(payload.get("title") or "Extracted Module").strip()
+    description = str(payload.get("description") or "").strip()
+    audit = payload.get("audit") if isinstance(payload.get("audit"), dict) else {}
+
+    raw_sections = payload.get("sections")
+    if not isinstance(raw_sections, list):
+        legacy_lessons = payload.get("lessons")
+        if isinstance(legacy_lessons, list):
+            raw_sections = [
+                {
+                    "title": lesson.get("title") if isinstance(lesson, dict) else f"Section {idx + 1}",
+                    "description": lesson.get("description") if isinstance(lesson, dict) else "",
+                    "order": idx + 1,
+                    "lessonBlocks": lesson.get("blocks") if isinstance(lesson, dict) else [],
+                }
+                for idx, lesson in enumerate(legacy_lessons)
+            ]
+        else:
+            raw_sections = []
+
+    sections = [
+        _normalize_extraction_section(section, index)
+        for index, section in enumerate(raw_sections)
+    ]
+
+    return {
+        "title": title,
+        "description": description,
+        "sections": sections,
+        "audit": audit,
     }
 
 
@@ -1141,7 +2487,7 @@ async def extract_module(
 
     return {
         "success": True,
-        "message": "Extraction queued — poll GET /extractions/:id/status for progress",
+        "message": "Extraction queued â€” poll GET /extractions/:id/status for progress",
         "data": {
             "extractionId": extraction_id,
             "status": "pending",
@@ -1176,12 +2522,9 @@ async def get_extraction_status(
     is_admin = "admin" in user.roles
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
-    structured_content = extraction.get("structured_content") or {}
-    if isinstance(structured_content, str):
-        try:
-            structured_content = json.loads(structured_content)
-        except json.JSONDecodeError:
-            structured_content = {}
+    structured_content = _normalize_structured_content(
+        extraction.get("structured_content"),
+    )
     audit = structured_content.get("audit") or {}
 
     return {
@@ -1248,12 +2591,10 @@ async def list_extractions(
     data = []
     for row in rows.mappings():
         item = dict(row)
-        structured_content = item.get("structured_content") or {}
-        if isinstance(structured_content, str):
-            try:
-                structured_content = json.loads(structured_content)
-            except json.JSONDecodeError:
-                structured_content = {}
+        structured_content = _normalize_structured_content(
+            item.get("structured_content"),
+        )
+        item["structured_content"] = structured_content
         audit = structured_content.get("audit") or {}
         item["qualityGate"] = audit.get("qualityGate")
         item["reviewRequired"] = bool(audit.get("reviewRequired"))
@@ -1296,12 +2637,10 @@ async def get_extraction(
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
     extraction_data = dict(extraction)
-    structured_content = extraction_data.get("structured_content") or {}
-    if isinstance(structured_content, str):
-        try:
-            structured_content = json.loads(structured_content)
-        except json.JSONDecodeError:
-            structured_content = {}
+    structured_content = _normalize_structured_content(
+        extraction_data.get("structured_content"),
+    )
+    extraction_data["structured_content"] = structured_content
     audit = structured_content.get("audit") or {}
     extraction_data["qualityGate"] = audit.get("qualityGate")
     extraction_data["reviewRequired"] = bool(audit.get("reviewRequired"))
@@ -1329,7 +2668,7 @@ async def update_extraction(
 ):
     row = await db.execute(
         sa_text(
-            "SELECT id, extraction_status, is_applied, teacher_id "
+            "SELECT id, extraction_status, is_applied, teacher_id, structured_content "
             "FROM extracted_modules WHERE id = :id"
         ),
         {"id": extraction_id},
@@ -1345,31 +2684,47 @@ async def update_extraction(
     if extraction["extraction_status"] != "completed":
         raise HTTPException(
             400,
-            f'Extraction is "{extraction["extraction_status"]}" — only completed extractions can be edited',
+            f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be edited',
         )
     if extraction["is_applied"]:
         raise HTTPException(400, "This extraction has already been applied and cannot be edited")
 
-    structured_content = {
-        "title": body.title or "",
-        "description": body.description or "",
-        "lessons": [
-            {
-                "title": l.title,
-                "description": l.description or "",
-                "blocks": [
-                    {
-                        "type": b.type,
-                        "order": b.order,
-                        "content": b.content,
-                        "metadata": b.metadata or {},
-                    }
-                    for b in l.blocks
-                ],
-            }
-            for l in body.lessons
-        ],
-    }
+    existing_content = _normalize_structured_content(extraction.get("structured_content"))
+    raw_sections: list[Any]
+    if body.sections is not None:
+        raw_sections = [
+            section.model_dump(by_alias=True)
+            if hasattr(section, "model_dump")
+            else dict(section)
+            for section in body.sections
+        ]
+    elif body.lessons is not None:
+        raw_sections = []
+        for index, lesson in enumerate(body.lessons, start=1):
+            lesson_payload = lesson.model_dump() if hasattr(lesson, "model_dump") else dict(lesson)
+            raw_sections.append(
+                {
+                    "title": lesson_payload.get("title") or f"Section {index}",
+                    "description": lesson_payload.get("description") or "",
+                    "order": index,
+                    "lessonBlocks": lesson_payload.get("blocks") or [],
+                }
+            )
+    else:
+        raw_sections = existing_content.get("sections") or []
+
+    structured_content = _normalize_structured_content(
+        {
+            "title": body.title if body.title is not None else existing_content.get("title"),
+            "description": (
+                body.description
+                if body.description is not None
+                else existing_content.get("description")
+            ),
+            "sections": raw_sections,
+            "audit": existing_content.get("audit") or {},
+        }
+    )
 
     await db.execute(
         sa_text(
@@ -1381,7 +2736,6 @@ async def update_extraction(
     )
     await db.commit()
 
-    # Re-fetch
     return await get_extraction(extraction_id, user, db)
 
 
@@ -1414,32 +2768,36 @@ async def apply_extraction(
         raise HTTPException(403, "You can only view your own extractions")
 
     if extraction["extraction_status"] != "completed":
-        raise HTTPException(400, f'Extraction is "{extraction["extraction_status"]}" — only completed extractions can be applied')
+        raise HTTPException(
+            400,
+            f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be applied',
+        )
     if extraction["is_applied"]:
         raise HTTPException(400, "This extraction has already been applied")
 
-    content = extraction["structured_content"]
-    if isinstance(content, str):
-        content = json.loads(content)
-    if not content or not content.get("lessons"):
-        raise HTTPException(400, "No lessons found in extraction result")
+    content = _normalize_structured_content(extraction["structured_content"])
+    all_sections = content.get("sections") or []
+    if not all_sections:
+        raise HTTPException(400, "No sections found in extraction result")
 
-    all_lessons = content["lessons"]
-
-    if body.lesson_indices:
-        invalid = [i for i in body.lesson_indices if i < 0 or i >= len(all_lessons)]
+    selected_indices = (
+        body.section_indices
+        if body.section_indices is not None
+        else body.lesson_indices
+    )
+    if selected_indices:
+        invalid = [i for i in selected_indices if i < 0 or i >= len(all_sections)]
         if invalid:
             raise HTTPException(
                 400,
-                f"Invalid lesson indices: {invalid}. Valid range: 0–{len(all_lessons) - 1}",
+                f"Invalid section indices: {invalid}. Valid range: 0-{len(all_sections) - 1}",
             )
-        lessons_to_apply = [(all_lessons[i], i) for i in body.lesson_indices]
+        sections_to_apply = [(all_sections[i], i) for i in selected_indices]
     else:
-        lessons_to_apply = [(l, i) for i, l in enumerate(all_lessons)]
+        sections_to_apply = [(section, i) for i, section in enumerate(all_sections)]
 
     class_id = extraction["class_id"]
 
-    # Check class exists
     cls_row = await db.execute(
         sa_text("SELECT id FROM classes WHERE id = :id"),
         {"id": class_id},
@@ -1447,43 +2805,122 @@ async def apply_extraction(
     if not cls_row.first():
         raise HTTPException(404, f'Class "{class_id}" not found')
 
-    # Get last lesson order
-    order_row = await db.execute(
+    module_order_row = await db.execute(
+        sa_text(
+            'SELECT "order" FROM class_modules WHERE class_id = :cid ORDER BY "order" DESC LIMIT 1'
+        ),
+        {"cid": class_id},
+    )
+    module_order = (_safe_int(module_order_row.scalar(), 0)) + 1
+
+    raw_module_title = str(content.get("title") or f"Extracted Module {module_order}").strip()
+    module_title = raw_module_title
+    suffix = 2
+    while True:
+        title_row = await db.execute(
+            sa_text(
+                "SELECT id FROM class_modules WHERE class_id = :cid AND lower(title) = lower(:title) LIMIT 1"
+            ),
+            {"cid": class_id, "title": module_title},
+        )
+        if not title_row.first():
+            break
+        module_title = f"{raw_module_title} ({suffix})"
+        suffix += 1
+
+    module_insert = await db.execute(
+        sa_text(
+            'INSERT INTO class_modules (class_id, title, description, "order", is_visible, is_locked, teacher_notes) '
+            "VALUES (:classId, :title, :description, :order, false, true, :teacherNotes) "
+            "RETURNING id, title"
+        ),
+        {
+            "classId": class_id,
+            "title": module_title,
+            "description": str(content.get("description") or "").strip(),
+            "order": module_order,
+            "teacherNotes": (
+                f"Created from extraction {extraction_id}. "
+                "Hidden and locked by default until teacher review."
+            ),
+        },
+    )
+    module_row = module_insert.mappings().first()
+    if not module_row:
+        raise HTTPException(500, "Failed to create class module from extraction")
+    module_id = str(module_row["id"])
+
+    lesson_order_row = await db.execute(
         sa_text(
             'SELECT "order" FROM lessons WHERE class_id = :cid ORDER BY "order" DESC LIMIT 1'
         ),
         {"cid": class_id},
     )
-    last_order_val = order_row.scalar()
-    lesson_order = (last_order_val or 0) + 1
+    lesson_order = (_safe_int(lesson_order_row.scalar(), 0)) + 1
 
-    created_lessons: list[dict] = []
+    created_lessons: list[dict[str, Any]] = []
+    created_sections: list[dict[str, Any]] = []
+    created_assessments: list[dict[str, Any]] = []
+    allowed_feedback_levels = {"immediate", "standard", "detailed"}
 
-    for lesson_data, _ in lessons_to_apply:
-        result = await db.execute(
+    for section_offset, (section_data, source_section_index) in enumerate(
+        sections_to_apply,
+        start=1,
+    ):
+        section_title = str(section_data.get("title") or f"Section {section_offset}").strip()
+        section_description = str(section_data.get("description") or "").strip()
+        section_insert = await db.execute(
+            sa_text(
+                'INSERT INTO module_sections (module_id, title, description, "order") '
+                "VALUES (:moduleId, :title, :description, :order) "
+                "RETURNING id, title"
+            ),
+            {
+                "moduleId": module_id,
+                "title": section_title,
+                "description": section_description,
+                "order": section_offset,
+            },
+        )
+        module_section = section_insert.mappings().first()
+        if not module_section:
+            raise HTTPException(500, "Failed to create module section from extraction")
+        module_section_id = str(module_section["id"])
+        created_sections.append(
+            {
+                "id": module_section_id,
+                "title": str(module_section["title"]),
+                "sourceSectionIndex": source_section_index,
+            }
+        )
+
+        lesson_insert = await db.execute(
             sa_text(
                 'INSERT INTO lessons (title, description, class_id, "order", is_draft, source_extraction_id) '
                 "VALUES (:title, :desc, :classId, :order, true, :extractionId) "
                 "RETURNING id, title"
             ),
             {
-                "title": lesson_data.get("title", f"Lesson {lesson_order}"),
-                "desc": lesson_data.get("description", ""),
+                "title": section_title or f"Lesson {lesson_order}",
+                "desc": section_description,
                 "classId": class_id,
                 "order": lesson_order,
                 "extractionId": extraction_id,
             },
         )
-        new_lesson = result.mappings().first()
+        new_lesson = lesson_insert.mappings().first()
         lesson_order += 1
+        if not new_lesson:
+            raise HTTPException(500, "Failed to create lesson from extracted section")
 
-        blocks = lesson_data.get("blocks", [])
+        blocks = section_data.get("lessonBlocks")
+        if not isinstance(blocks, list):
+            blocks = section_data.get("blocks")
+        if not isinstance(blocks, list):
+            blocks = []
+
         for idx, block in enumerate(blocks):
-            valid_types = {"text", "image", "video", "question", "file", "divider"}
-            block_type = block.get("type", "text")
-            if block_type not in valid_types:
-                block_type = "text"
-
+            normalized_block = _normalize_extraction_block(block, idx + 1)
             await db.execute(
                 sa_text(
                     'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
@@ -1494,40 +2931,229 @@ async def apply_extraction(
                 ),
                 {
                     "lessonId": new_lesson["id"],
-                    "type": block_type,
-                    "order": block.get("order", idx),
-                    "content": block.get("content", {}),
-                    "metadata": block.get("metadata", {}),
+                    "type": normalized_block.get("type"),
+                    "order": _safe_int(normalized_block.get("order"), idx),
+                    "content": normalized_block.get("content") or {},
+                    "metadata": normalized_block.get("metadata") or {},
                 },
             )
 
+        await db.execute(
+            sa_text(
+                'INSERT INTO module_items (module_section_id, item_type, lesson_id, "order", is_visible, is_required, is_given, metadata) '
+                "VALUES (:sectionId, 'lesson', :lessonId, 1, false, false, true, :metadata)"
+            ).bindparams(bindparam("metadata", type_=postgresql.JSONB)),
+            {
+                "sectionId": module_section_id,
+                "lessonId": new_lesson["id"],
+                "metadata": {
+                    "sourceExtractionId": extraction_id,
+                    "sourceSectionIndex": source_section_index,
+                    "sourceSectionTitle": section_title,
+                },
+            },
+        )
+
         created_lessons.append({"id": new_lesson["id"], "title": new_lesson["title"]})
 
-    # Mark extraction as applied
+        assessment_draft = _normalize_assessment_draft(
+            section_data.get("assessmentDraft"),
+            section_title=section_title,
+        )
+        if assessment_draft and isinstance(assessment_draft.get("questions"), list):
+            questions = assessment_draft["questions"]
+            if questions:
+                feedback_level = str(assessment_draft.get("feedbackLevel") or "standard").strip().lower()
+                if feedback_level not in allowed_feedback_levels:
+                    feedback_level = "standard"
+                assessment_type = str(assessment_draft.get("type") or "quiz").strip().lower()
+                if assessment_type not in VALID_ASSESSMENT_TYPES:
+                    assessment_type = "quiz"
+
+                assessment_insert = await db.execute(
+                    sa_text(
+                        """
+                        INSERT INTO assessments (
+                          title,
+                          description,
+                          class_id,
+                          type,
+                          total_points,
+                          passing_score,
+                          feedback_level,
+                          is_published,
+                          ai_origin
+                        )
+                        VALUES (
+                          :title,
+                          :description,
+                          :classId,
+                          :assessmentType,
+                          :totalPoints,
+                          :passingScore,
+                          :feedbackLevel,
+                          false,
+                          'ai_extraction_draft'
+                        )
+                        RETURNING id, title
+                        """
+                    ),
+                    {
+                        "title": str(assessment_draft.get("title") or f"{section_title} Checkpoint"),
+                        "description": str(assessment_draft.get("description") or "").strip(),
+                        "classId": class_id,
+                        "assessmentType": assessment_type,
+                        "totalPoints": sum(
+                            max(1, _safe_int(question.get("points"), 1))
+                            for question in questions
+                        ),
+                        "passingScore": max(1, _safe_int(assessment_draft.get("passingScore"), 60)),
+                        "feedbackLevel": feedback_level,
+                    },
+                )
+                assessment_row = assessment_insert.mappings().first()
+                if not assessment_row:
+                    raise HTTPException(500, "Failed to create assessment from section draft")
+                assessment_id = str(assessment_row["id"])
+
+                for question_index, question in enumerate(questions, start=1):
+                    question_type = str(question.get("type") or "multiple_choice").strip().lower()
+                    if question_type not in VALID_QUESTION_TYPES:
+                        question_type = "short_answer"
+                    question_insert = await db.execute(
+                        sa_text(
+                            """
+                            INSERT INTO assessment_questions (
+                              assessment_id,
+                              type,
+                              content,
+                              points,
+                              "order",
+                              explanation,
+                              image_url,
+                              concept_tags
+                            )
+                            VALUES (
+                              :assessmentId,
+                              :type,
+                              :content,
+                              :points,
+                              :order,
+                              :explanation,
+                              :imageUrl,
+                              :conceptTags
+                            )
+                            RETURNING id
+                            """
+                        ).bindparams(bindparam("conceptTags", type_=postgresql.JSONB)),
+                        {
+                            "assessmentId": assessment_id,
+                            "type": question_type,
+                            "content": str(question.get("content") or "").strip(),
+                            "points": max(1, _safe_int(question.get("points"), 1)),
+                            "order": _safe_int(question.get("order"), question_index),
+                            "explanation": (
+                                str(question.get("explanation")).strip()
+                                if isinstance(question.get("explanation"), str)
+                                else None
+                            ),
+                            "imageUrl": (
+                                str(question.get("imageUrl")).strip()
+                                if isinstance(question.get("imageUrl"), str)
+                                else None
+                            ),
+                            "conceptTags": (
+                                [str(tag).strip() for tag in question.get("conceptTags", []) if str(tag).strip()]
+                                if isinstance(question.get("conceptTags"), list)
+                                else []
+                            ),
+                        },
+                    )
+                    question_id = question_insert.scalar_one()
+                    options = question.get("options")
+                    if isinstance(options, list):
+                        for option_index, option in enumerate(options, start=1):
+                            if not isinstance(option, dict):
+                                continue
+                            option_text = str(option.get("text") or "").strip()
+                            if not option_text:
+                                continue
+                            await db.execute(
+                                sa_text(
+                                    """
+                                    INSERT INTO assessment_question_options (
+                                      question_id,
+                                      text,
+                                      is_correct,
+                                      "order"
+                                    )
+                                    VALUES (
+                                      :questionId,
+                                      :text,
+                                      :isCorrect,
+                                      :order
+                                    )
+                                    """
+                                ),
+                                {
+                                    "questionId": question_id,
+                                    "text": option_text,
+                                    "isCorrect": bool(option.get("isCorrect")),
+                                    "order": _safe_int(option.get("order"), option_index),
+                                },
+                            )
+
+                await db.execute(
+                    sa_text(
+                        'INSERT INTO module_items (module_section_id, item_type, assessment_id, "order", is_visible, is_required, is_given, metadata) '
+                        "VALUES (:sectionId, 'assessment', :assessmentId, 2, false, false, false, :metadata)"
+                    ).bindparams(bindparam("metadata", type_=postgresql.JSONB)),
+                    {
+                        "sectionId": module_section_id,
+                        "assessmentId": assessment_id,
+                        "metadata": {
+                            "sourceExtractionId": extraction_id,
+                            "sourceSectionIndex": source_section_index,
+                            "sourceSectionTitle": section_title,
+                        },
+                    },
+                )
+                created_assessments.append(
+                    {"id": assessment_id, "title": str(assessment_row["title"])}
+                )
+
     await db.execute(
         sa_text(
             "UPDATE extracted_modules "
-            "SET is_applied = true, extraction_status = 'applied', updated_at = NOW() "
+            "SET is_applied = true, extraction_status = 'applied', structured_content = :sc, updated_at = NOW() "
             "WHERE id = :id"
-        ),
-        {"id": extraction_id},
+        ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+        {"id": extraction_id, "sc": content},
     )
     await db.commit()
     index_result = await reindex_class_content(db, str(class_id))
 
     return {
         "success": True,
-        "message": f"Created {len(created_lessons)} lesson(s) from extraction",
+        "message": (
+            f"Created module with {len(created_sections)} section(s), "
+            f"{len(created_lessons)} lesson draft(s), and {len(created_assessments)} assessment draft(s)"
+        ),
         "data": {
             "classId": class_id,
             "extractionId": extraction_id,
+            "moduleId": module_id,
+            "sectionsCreated": len(created_sections),
             "lessonsCreated": len(created_lessons),
-            "totalLessonsAvailable": len(all_lessons),
+            "assessmentsCreated": len(created_assessments),
+            "totalSectionsAvailable": len(all_sections),
+            "totalLessonsAvailable": len(all_sections),
+            "sections": created_sections,
             "lessons": created_lessons,
+            "assessments": created_assessments,
             "indexing": index_result,
         },
     }
-
 
 # ---------------------------------------------------------------------------
 # DELETE /extractions/:id
@@ -1593,6 +3219,67 @@ async def interaction_history(
         "success": True,
         "message": f"Found {len(data)} interaction(s)",
         "data": data,
+    }
+
+
+@app.get("/admin/history")
+async def admin_chat_history(
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _assert_admin_analytics_access(user)
+
+    rows = await db.execute(
+        sa_text(
+            "SELECT session_id, session_type, input_text, output_text, created_at, context_metadata "
+            "FROM ai_interaction_logs "
+            "WHERE user_id = :uid AND session_type = :sessionType "
+            "ORDER BY created_at DESC LIMIT 60"
+        ),
+        {
+            "uid": user.id,
+            "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+        },
+    )
+    data = _normalize_admin_history_summary([dict(r) for r in rows.mappings()])
+
+    return {
+        "success": True,
+        "message": "Admin chat history loaded.",
+        "data": data,
+    }
+
+
+@app.get("/admin/sessions/{session_id}")
+async def admin_chat_session(
+    session_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    _assert_admin_analytics_access(user)
+
+    rows = await db.execute(
+        sa_text(
+            "SELECT id, session_id, session_type, input_text, output_text, created_at, context_metadata "
+            "FROM ai_interaction_logs "
+            "WHERE user_id = :uid AND session_id = :sid "
+            "AND session_type = :sessionType "
+            "ORDER BY created_at ASC"
+        ),
+        {
+            "uid": user.id,
+            "sid": session_id,
+            "sessionType": ADMIN_ANALYTICS_SESSION_TYPE,
+        },
+    )
+    data = [dict(r) for r in rows.mappings()]
+    if not data:
+        raise HTTPException(404, "Admin analytics session not found.")
+
+    return {
+        "success": True,
+        "message": "Admin chat session loaded.",
+        "data": _build_admin_session_payload(session_id, data),
     }
 
 
@@ -1773,6 +3460,8 @@ async def get_teacher_ai_job_result(
     result_data = dict(job["structured_output"] or {})
     if job["output_type"] == "assessment_draft":
         result_data["assessmentId"] = assessment_id
+    if job["output_type"] == "intervention_recommendation":
+        result_data = _normalize_intervention_structured_output(result_data)
     if runtime and runtime.get("resultSummary"):
         result_data["runtime"] = runtime["resultSummary"]
 

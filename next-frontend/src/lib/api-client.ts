@@ -14,6 +14,7 @@ import axios, {
   AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from 'axios';
+import { refreshSessionAccessToken } from './session-refresh';
 
 let accessToken: string | null = null;
 
@@ -62,14 +63,28 @@ export function createApiClient(): AxiosInstance {
     (response) => response,
     async (error: AxiosError) => {
       const originalRequest = error.config as ApiRequestConfig | undefined;
+      const responseStatus = error.response?.status;
+      const responseData = error.response?.data as
+        | { statusCode?: number; message?: string }
+        | undefined;
+      const responseMessage =
+        typeof responseData?.message === 'string'
+          ? responseData.message.toLowerCase()
+          : '';
+      const isAuthExpiredResponse =
+        responseStatus === 401 ||
+        responseData?.statusCode === 401 ||
+        responseMessage.includes('invalid or expired token') ||
+        responseMessage.includes('jwt expired') ||
+        responseMessage.includes('token expired');
 
       if (!originalRequest) {
         return Promise.reject(error);
       }
 
-      // If 401 and not already retried
+      // Retry once when auth has expired, even if backend wraps it in a 400 payload.
       if (
-        error.response?.status === 401 &&
+        isAuthExpiredResponse &&
         !originalRequest._retry &&
         !originalRequest.skipAuthRefresh
       ) {
@@ -77,7 +92,7 @@ export function createApiClient(): AxiosInstance {
 
         // Prevent multiple refresh attempts
         if (!refreshPromise) {
-          refreshPromise = refreshAccessToken();
+          refreshPromise = refreshSessionAccessToken();
         }
 
         try {
@@ -116,29 +131,6 @@ export function createApiClient(): AxiosInstance {
   );
 
   return api;
-}
-
-/**
- * Refresh access token using refresh token from cookie
- */
-async function refreshAccessToken(): Promise<string | null> {
-  try {
-    const response = await axios.post(
-      '/api/auth/refresh',
-      {},
-      { withCredentials: true }
-    );
-
-    const newToken = response.data.data?.accessToken || response.data.accessToken;
-    if (newToken) {
-      accessToken = newToken;
-      return newToken;
-    }
-    return null;
-  } catch (error) {
-    accessToken = null;
-    return null;
-  }
 }
 
 /**

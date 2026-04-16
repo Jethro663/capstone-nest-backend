@@ -112,13 +112,22 @@ function getCategoryTotalHps(
 }
 
 function getGenderGroups(students: SpreadsheetStudentRow[]) {
-  const male = students.filter((student) =>
+  const activeStudents = students.filter(
+    (student) =>
+      !student.isRemoved && student.enrollmentState !== 'removed',
+  );
+  const removed = students.filter(
+    (student) =>
+      student.isRemoved || student.enrollmentState === 'removed',
+  );
+
+  const male = activeStudents.filter((student) =>
     ['male', 'm'].includes((student.gender ?? '').trim().toLowerCase()),
   );
-  const female = students.filter((student) =>
+  const female = activeStudents.filter((student) =>
     ['female', 'f'].includes((student.gender ?? '').trim().toLowerCase()),
   );
-  const other = students.filter(
+  const other = activeStudents.filter(
     (student) =>
       !['male', 'm', 'female', 'f'].includes(
         (student.gender ?? '').trim().toLowerCase(),
@@ -129,6 +138,7 @@ function getGenderGroups(students: SpreadsheetStudentRow[]) {
     { label: 'MALE', students: male },
     { label: 'FEMALE', students: female },
     ...(other.length ? [{ label: 'UNSPECIFIED', students: other }] : []),
+    ...(removed.length ? [{ label: 'REMOVED', students: removed }] : []),
   ];
 }
 
@@ -736,6 +746,8 @@ export function TeacherClassRecordWorkbook({
                           </tr>
                         ) : null}
                         {group.students.map((student, groupIndex) => {
+                          const isRemoved =
+                            student.isRemoved || student.enrollmentState === 'removed';
                           const globalIndex =
                             spreadsheet.students.findIndex(
                               (current) => current.studentId === student.studentId,
@@ -756,6 +768,7 @@ export function TeacherClassRecordWorkbook({
                               key={student.studentId}
                               className={cn(
                                 'transition-colors hover:bg-sky-50/80',
+                                isRemoved && 'bg-slate-100/80 text-slate-500',
                                 (student.remarks === 'For Intervention' || student.quarterlyGrade < 75) &&
                                   'bg-rose-50/40',
                               )}
@@ -765,9 +778,17 @@ export function TeacherClassRecordWorkbook({
                               </td>
                               <td colSpan={4} className="border border-[#374151] px-3 py-1.5 text-left text-slate-900">
                                 <div className="flex flex-col gap-0.5">
-                                  <span>
+                                  <span className={cn(isRemoved && 'line-through')}>
                                     {student.lastName}, {student.firstName}
                                     {student.middleName ? `, ${student.middleName.charAt(0)}.` : ''}
+                                    {isRemoved ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="ml-2 rounded-full border-slate-300 bg-slate-200 text-[10px] text-slate-700"
+                                      >
+                                        Removed
+                                      </Badge>
+                                    ) : null}
                                   </span>
                                   <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
                                     {student.lrn ? <span>LRN: {student.lrn}</span> : null}
@@ -781,6 +802,7 @@ export function TeacherClassRecordWorkbook({
                                 const score = writtenData?.scores[index];
                                 const isEditing =
                                   !!item &&
+                                  !isRemoved &&
                                   editingCell?.itemId === item.id &&
                                   editingCell?.studentId === student.studentId;
 
@@ -789,11 +811,11 @@ export function TeacherClassRecordWorkbook({
                                     key={`${student.studentId}-ww-${item?.id ?? index}`}
                                     className={cn(
                                       'border border-[#374151] px-1 py-1 text-center transition',
-                                      item && selectedRecord.status === 'draft' && 'cursor-pointer hover:bg-sky-100',
+                                      item && selectedRecord.status === 'draft' && !isRemoved && 'cursor-pointer hover:bg-sky-100',
                                       item?.assessmentId && 'bg-indigo-50/40',
                                     )}
                                     onClick={() =>
-                                      item
+                                      item && !isRemoved
                                         ? handleCellClick(item.id, student.studentId, score ?? null, {
                                             maxScore: item.hps,
                                             assessmentId: item.assessmentId,
@@ -835,6 +857,7 @@ export function TeacherClassRecordWorkbook({
                                 const score = performanceData?.scores[index];
                                 const isEditing =
                                   !!item &&
+                                  !isRemoved &&
                                   editingCell?.itemId === item.id &&
                                   editingCell?.studentId === student.studentId;
 
@@ -843,11 +866,11 @@ export function TeacherClassRecordWorkbook({
                                     key={`${student.studentId}-pt-${item?.id ?? index}`}
                                     className={cn(
                                       'border border-[#374151] px-1 py-1 text-center transition',
-                                      item && selectedRecord.status === 'draft' && 'cursor-pointer hover:bg-amber-100',
+                                      item && selectedRecord.status === 'draft' && !isRemoved && 'cursor-pointer hover:bg-amber-100',
                                       item?.assessmentId && 'bg-indigo-50/40',
                                     )}
                                     onClick={() =>
-                                      item
+                                      item && !isRemoved
                                         ? handleCellClick(item.id, student.studentId, score ?? null, {
                                             maxScore: item.hps,
                                             assessmentId: item.assessmentId,
@@ -889,6 +912,7 @@ export function TeacherClassRecordWorkbook({
                                 const score = quarterlyData?.scores[0];
                                 const isEditing =
                                   !!item &&
+                                  !isRemoved &&
                                   editingCell?.itemId === item.id &&
                                   editingCell?.studentId === student.studentId;
 
@@ -896,11 +920,11 @@ export function TeacherClassRecordWorkbook({
                                   <td
                                     className={cn(
                                       'border border-[#374151] px-1 py-1 text-center transition',
-                                      item && selectedRecord.status === 'draft' && 'cursor-pointer hover:bg-lime-100',
+                                      item && selectedRecord.status === 'draft' && !isRemoved && 'cursor-pointer hover:bg-lime-100',
                                       item?.assessmentId && 'bg-indigo-50/40',
                                     )}
                                     onClick={() =>
-                                      item
+                                      item && !isRemoved
                                         ? handleCellClick(item.id, student.studentId, score ?? null, {
                                             maxScore: item.hps,
                                             assessmentId: item.assessmentId,
@@ -955,7 +979,7 @@ export function TeacherClassRecordWorkbook({
                     {spreadsheet.students.length === 0 ? (
                       <tr>
                         <td colSpan={36} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                          No enrolled students yet.
+                          No class record participants yet.
                         </td>
                       </tr>
                     ) : null}

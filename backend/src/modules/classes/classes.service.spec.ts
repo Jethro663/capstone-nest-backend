@@ -95,6 +95,12 @@ describe('ClassesService', () => {
   const mockDb: any = {
     query: {
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
+      classTemplates: { findFirst: jest.fn(), findMany: jest.fn() },
+      classTemplateAssessments: { findMany: jest.fn() },
+      classTemplateModules: { findMany: jest.fn() },
+      classTemplateAnnouncements: { findMany: jest.fn() },
+      classTemplateModuleSections: { findMany: jest.fn() },
+      classTemplateModuleItems: { findMany: jest.fn() },
       classVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
       studentClassPresentationPreferences: {
         findFirst: jest.fn(),
@@ -125,8 +131,18 @@ describe('ClassesService', () => {
   const mockAuditService = { log: jest.fn() };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<any>) => callback(mockDb),
+    );
     mockAuditService.log.mockResolvedValue(undefined);
+    mockDb.query.classTemplates.findFirst.mockResolvedValue(null);
+    mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateModules.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateAnnouncements.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateModuleSections.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateModuleItems.findMany.mockResolvedValue([]);
+    mockDb.query.classes.findMany.mockResolvedValue([]);
     mockDb.query.classVisibilityPreferences.findMany.mockResolvedValue([]);
     mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue(null);
     mockDb.query.studentClassPresentationPreferences.findMany.mockResolvedValue(
@@ -160,13 +176,47 @@ describe('ClassesService', () => {
 
   describe('findById', () => {
     it('returns the class when found', async () => {
-      const cls = makeClass();
+      const cls = makeClass({
+        enrollments: [
+          makeEnrollment({
+            student: {
+              id: STUDENT_ID,
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              email: 'student71@lms.local',
+              profile: {
+                gradeLevel: '7',
+                lrn: '123456789012',
+                profilePicture: null,
+              },
+            },
+          }),
+        ],
+      });
       mockDb.query.classes.findFirst.mockResolvedValue(cls);
 
       const result = await service.findById(CLASS_ID);
 
       expect(result).toEqual(cls);
       expect(mockDb.query.classes.findFirst).toHaveBeenCalledTimes(1);
+      expect(mockDb.query.classes.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          with: expect.objectContaining({
+            enrollments: expect.objectContaining({
+              with: expect.objectContaining({
+                student: expect.objectContaining({
+                  columns: expect.objectContaining({
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      );
     });
 
     it('throws NotFoundException when the class does not exist', async () => {
@@ -175,6 +225,15 @@ describe('ClassesService', () => {
       await expect(service.findById('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('throws ForbiddenException when a student requester is not enrolled in the class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findById(CLASS_ID, STUDENT_ID, ['student']),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -240,9 +299,8 @@ describe('ClassesService', () => {
     const setupHappyPath = () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
     };
 
@@ -255,6 +313,27 @@ describe('ClassesService', () => {
       expect(mockDb.insert).toHaveBeenCalledTimes(1);
     });
 
+    it('writes audit metadata when class is created by an admin actor', async () => {
+      setupHappyPath();
+
+      await service.create(dto as any, 'admin-actor-1', ['admin']);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.created',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          sectionId: SECTION_ID,
+          teacherId: TEACHER_ID,
+          schoolYear: SCHOOL_YEAR,
+          hasSchedules: false,
+          templateId: null,
+        },
+      });
+    });
+
     it('stores subjectCode in UPPERCASE regardless of input case', async () => {
       setupHappyPath();
 
@@ -263,6 +342,43 @@ describe('ClassesService', () => {
       const insertValues =
         mockDb.insert.mock.results[0].value.values.mock.calls[0][0];
       expect(insertValues.subjectCode).toBe('MATH-7');
+    });
+
+    it('creates template-based classes inside a transaction', async () => {
+      setupHappyPath();
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-1',
+        status: 'published',
+        subjectCode: 'MATH-7',
+        subjectGradeLevel: '7',
+      });
+
+      const result = await service.create(
+        { ...dto, templateId: 'template-uuid-1' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(result).toEqual(makeClass());
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('accepts template subject code variants that normalize to the same subject', async () => {
+      setupHappyPath();
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-2',
+        status: 'published',
+        subjectCode: 'MATH-07',
+        subjectGradeLevel: '7',
+      });
+
+      await expect(
+        service.create(
+          { ...dto, templateId: 'template-uuid-2' } as any,
+          'admin-actor-1',
+          ['admin'],
+        ),
+      ).resolves.toEqual(makeClass());
     });
 
     it('throws BadRequestException when the section does not exist', async () => {
@@ -298,9 +414,8 @@ describe('ClassesService', () => {
       mockDb.query.users.findFirst.mockResolvedValue(
         makeTeacher({ userRoles: [{ role: { name: 'admin' } }] }),
       );
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
 
       await expect(service.create(dto as any)).resolves.toBeDefined();
@@ -309,7 +424,9 @@ describe('ClassesService', () => {
     it('throws ConflictException when the same subject+section+year already exists', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([
+        { id: CLASS_ID, subjectCode: 'MATH-7' },
+      ]);
 
       await expect(service.create(dto as any)).rejects.toThrow(
         ConflictException,
@@ -337,9 +454,8 @@ describe('ClassesService', () => {
     it('inserts schedule slots into class_schedules when schedules are provided', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null) // duplicate check
-        .mockResolvedValueOnce(makeClass()); // findById after insert
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       // First insert: classes table; second: class_schedules
       mockDb.insert
         .mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]))
@@ -356,7 +472,7 @@ describe('ClassesService', () => {
     it('throws ConflictException when a slot collides with another class in the same section', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst.mockResolvedValueOnce(null); // no duplicate
+      mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
 
       // Collision check returns a conflicting slot
@@ -388,7 +504,7 @@ describe('ClassesService', () => {
     it('throws ConflictException when a slot collides on the same teacher across sections', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst.mockResolvedValueOnce(null);
+      mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
 
       mockDb.select.mockReturnValue({
@@ -424,9 +540,8 @@ describe('ClassesService', () => {
       };
       mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeClass());
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
 
       await service.create(dtoNoSlots as any);
@@ -470,6 +585,35 @@ describe('ClassesService', () => {
       await expect(
         service.update(CLASS_ID, { teacherId: 'nonexistent-teacher' } as any),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('writes audit metadata when class fields are updated by an admin actor', async () => {
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass())
+        .mockResolvedValueOnce(
+          makeClass({ subjectName: 'Updated Math', room: 'Lab 2' }),
+        );
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      await service.update(
+        CLASS_ID,
+        { subjectName: 'Updated Math', room: 'Lab 2' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.updated',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          changedFields: ['subjectName', 'room'],
+          sectionId: SECTION_ID,
+          teacherId: TEACHER_ID,
+        },
+      });
     });
   });
 
@@ -560,6 +704,63 @@ describe('ClassesService', () => {
   });
 
   // =========================================================================
+  // updatePresentation
+  // =========================================================================
+
+  describe('updatePresentation', () => {
+    it('writes audit metadata when class presentation is updated by an owner teacher', async () => {
+      const updatedClass = makeClass({
+        cardPreset: 'sunset',
+        cardBannerUrl: '/api/classes/banners/new-banner.png',
+      });
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass())
+        .mockResolvedValueOnce(updatedClass);
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      const result = await service.updatePresentation(
+        CLASS_ID,
+        {
+          cardPreset: 'sunset',
+          cardBannerUrl: '/api/classes/banners/new-banner.png',
+        },
+        TEACHER_ID,
+        ['teacher'],
+      );
+
+      expect(result).toEqual(updatedClass);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: TEACHER_ID,
+        action: 'class.presentation.updated',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'teacher',
+          changedFields: ['cardPreset', 'cardBannerUrl'],
+          cardPreset: 'sunset',
+          cardBannerUrl: '/api/classes/banners/new-banner.png',
+        },
+      });
+    });
+
+    it('does not write audit log when teacher is not owner and request is denied', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(
+        makeClass({ teacherId: 'teacher-other' }),
+      );
+
+      await expect(
+        service.updatePresentation(
+          CLASS_ID,
+          { cardPreset: 'sunset' },
+          TEACHER_ID,
+          ['teacher'],
+        ),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockAuditService.log).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
   // delete
   // =========================================================================
 
@@ -571,8 +772,21 @@ describe('ClassesService', () => {
       mockDb.query.assessments.findMany.mockResolvedValue([]);
       mockDb.delete.mockReturnValue(makeDeleteChain());
 
-      await expect(service.delete(CLASS_ID)).resolves.not.toThrow();
+      await expect(
+        service.delete(CLASS_ID, 'admin-actor-1', ['admin']),
+      ).resolves.not.toThrow();
       expect(mockDb.delete).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.deleted',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          softDelete: true,
+          previousIsActive: true,
+        },
+      });
     });
 
     it('throws ConflictException when there are active enrollments', async () => {
@@ -622,8 +836,20 @@ describe('ClassesService', () => {
       );
       mockDb.delete.mockReturnValue(makeDeleteChain());
 
-      await expect(service.purge(CLASS_ID)).resolves.not.toThrow();
+      await expect(
+        service.purge(CLASS_ID, 'admin-actor-1', ['admin']),
+      ).resolves.not.toThrow();
       expect(mockDb.delete).toHaveBeenCalledTimes(1);
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.purged',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: false,
+        },
+      });
     });
 
     it('throws ConflictException when class is still active', async () => {
@@ -645,6 +871,52 @@ describe('ClassesService', () => {
     });
   });
 
+  // =========================================================================
+  // setClassHiddenState
+  // =========================================================================
+
+  describe('setClassHiddenState', () => {
+    it('writes audit metadata when class visibility is changed by a teacher', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.classVisibilityPreferences.findFirst.mockResolvedValue({
+        id: 'pref-1',
+        classId: CLASS_ID,
+        userId: TEACHER_ID,
+        isHidden: false,
+      });
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      const result = await service.setClassHiddenState(
+        CLASS_ID,
+        TEACHER_ID,
+        ['teacher'],
+        true,
+      );
+
+      expect(result).toEqual({ classId: CLASS_ID, isHidden: true });
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: TEACHER_ID,
+        action: 'class.visibility.updated',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'teacher',
+          hidden: true,
+        },
+      });
+    });
+
+    it('does not write audit log when student is not enrolled and request is denied', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.setClassHiddenState(CLASS_ID, STUDENT_ID, ['student'], true),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockAuditService.log).not.toHaveBeenCalled();
+    });
+  });
+
   describe('bulkLifecycleAction', () => {
     it('aggregates archive successes and failures without aborting the batch', async () => {
       jest
@@ -653,7 +925,9 @@ describe('ClassesService', () => {
       const toggleSpy = jest
         .spyOn(service, 'toggleActive')
         .mockResolvedValueOnce(makeClass({ isActive: false }))
-        .mockRejectedValueOnce(new ConflictException('Class is already archived.'))
+        .mockRejectedValueOnce(
+          new ConflictException('Class is already archived.'),
+        )
         .mockResolvedValueOnce(makeClass({ isActive: false }));
 
       const result = await service.bulkLifecycleAction({
@@ -668,7 +942,9 @@ describe('ClassesService', () => {
           action: 'archive',
           requested: 3,
           succeeded: ['class-1', 'class-3'],
-          failed: [{ classId: 'class-2', reason: 'Class is already archived.' }],
+          failed: [
+            { classId: 'class-2', reason: 'Class is already archived.' },
+          ],
         },
       });
     });
@@ -697,7 +973,8 @@ describe('ClassesService', () => {
           failed: [
             {
               classId: 'class-2',
-              reason: 'Only archived classes can be permanently deleted. Archive the class first.',
+              reason:
+                'Only archived classes can be permanently deleted. Archive the class first.',
             },
           ],
         },
@@ -780,7 +1057,25 @@ describe('ClassesService', () => {
       mockDb.query.enrollments.findMany.mockResolvedValue([
         { classId: CLASS_ID },
       ]);
-      mockDb.query.classes.findMany.mockResolvedValue([makeClass()]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClass({
+          enrollments: [
+            makeEnrollment({
+              student: {
+                id: STUDENT_ID,
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+                profile: {
+                  gradeLevel: '7',
+                  lrn: '123456789012',
+                  profilePicture: null,
+                },
+              },
+            }),
+          ],
+        }),
+      ]);
 
       await expect(
         service.getClassesByStudent(STUDENT_ID, STUDENT_ID, ['student']),
@@ -807,6 +1102,64 @@ describe('ClassesService', () => {
 
       expect(result).toEqual([]);
       expect(mockDb.query.classes.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns enrolled class rows with student identity details for classmates rendering', async () => {
+      mockDb.query.enrollments.findMany.mockResolvedValue([
+        { classId: CLASS_ID },
+      ]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClass({
+          enrollments: [
+            makeEnrollment({
+              student: {
+                id: STUDENT_ID,
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+                profile: {
+                  gradeLevel: '7',
+                  lrn: '123456789012',
+                  profilePicture: null,
+                },
+              },
+            }),
+          ],
+        }),
+      ]);
+
+      const result = await service.getClassesByStudent(STUDENT_ID, STUDENT_ID, [
+        'student',
+      ]);
+
+      expect(result[0]?.enrollments?.[0]).toEqual(
+        expect.objectContaining({
+          student: expect.objectContaining({
+            id: STUDENT_ID,
+            firstName: 'Liam',
+            lastName: 'Navarro',
+            email: 'student71@lms.local',
+          }),
+        }),
+      );
+      expect(mockDb.query.classes.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          with: expect.objectContaining({
+            enrollments: expect.objectContaining({
+              with: expect.objectContaining({
+                student: expect.objectContaining({
+                  columns: expect.objectContaining({
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      );
     });
   });
 
@@ -1181,12 +1534,9 @@ describe('ClassesService', () => {
       mockDb.query.enrollments.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getStudentOverviewForClass(
-          CLASS_ID,
-          STUDENT_ID,
-          TEACHER_ID,
-          ['teacher'],
-        ),
+        service.getStudentOverviewForClass(CLASS_ID, STUDENT_ID, TEACHER_ID, [
+          'teacher',
+        ]),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -1240,9 +1590,7 @@ describe('ClassesService', () => {
         ]);
       mockDb.query.classRecordScores.findMany
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { classRecordItemId: 'item-ww', score: '92' },
-        ]);
+        .mockResolvedValueOnce([{ classRecordItemId: 'item-ww', score: '92' }]);
       mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
       mockDb.query.assessments.findMany.mockResolvedValue([]);
 
@@ -1329,7 +1677,9 @@ describe('ClassesService', () => {
 
   describe('student course view preference', () => {
     it('returns card as the default view mode when no row exists', async () => {
-      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
+      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(
+        null,
+      );
 
       const result = await service.getStudentCourseViewPreference(
         STUDENT_ID,
@@ -1341,7 +1691,9 @@ describe('ClassesService', () => {
     });
 
     it('stores student course view preference with upsert semantics', async () => {
-      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
+      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(
+        null,
+      );
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: 'view-pref-1' }]));
 
       const result = await service.setStudentCourseViewPreference(
@@ -1383,6 +1735,27 @@ describe('ClassesService', () => {
       const result = await service.toggleActive(CLASS_ID);
 
       expect(result.isActive).toBe(true);
+    });
+
+    it('writes an audit log with actor context when status is toggled', async () => {
+      mockDb.query.classes.findFirst
+        .mockResolvedValueOnce(makeClass({ isActive: true }))
+        .mockResolvedValueOnce(makeClass({ isActive: false }));
+      mockDb.update.mockReturnValue(makeUpdateChain());
+
+      await service.toggleActive(CLASS_ID, 'admin-actor-1', ['admin']);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-actor-1',
+        action: 'class.status.toggled',
+        targetType: 'class',
+        targetId: CLASS_ID,
+        metadata: {
+          actorRole: 'admin',
+          previousIsActive: true,
+          isActive: false,
+        },
+      });
     });
   });
 });

@@ -8,9 +8,11 @@ import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
 
+let currentView = 'modules';
+
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'class-1' }),
-  useSearchParams: () => ({ get: (key: string) => (key === 'view' ? 'modules' : null) }),
+  useSearchParams: () => ({ get: (key: string) => (key === 'view' ? currentView : null) }),
 }));
 
 jest.mock('framer-motion', () => ({
@@ -67,6 +69,7 @@ const mockedSchoolEventService = schoolEventService as jest.Mocked<typeof school
 describe('StudentClassDetailPage module links', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    currentView = 'modules';
     mockedUseAuth.mockReturnValue({
       user: { id: 'student-1', firstName: 'Jamie', lastName: 'Cruz' },
     } as ReturnType<typeof useAuth>);
@@ -84,12 +87,12 @@ describe('StudentClassDetailPage module links', () => {
         enrollments: [],
         schedules: [],
       },
-    } as any);
+    } as Awaited<ReturnType<typeof classService.getById>>);
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
-    } as any);
+    } as Awaited<ReturnType<typeof classService.getByStudent>>);
 
     mockedModuleService.getByClass.mockResolvedValue({
       success: true,
@@ -108,7 +111,7 @@ describe('StudentClassDetailPage module links', () => {
           gradingScaleEntries: [],
         },
       ],
-    } as any);
+    } as Awaited<ReturnType<typeof moduleService.getByClass>>);
 
     mockedAssessmentService.getByClass.mockResolvedValue({
       success: true,
@@ -119,18 +122,18 @@ describe('StudentClassDetailPage module links', () => {
       page: 1,
       limit: 20,
       totalPages: 1,
-    } as any);
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
     mockedAnnouncementService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
       count: 0,
-    } as any);
+    } as Awaited<ReturnType<typeof announcementService.getByClass>>);
     mockedSchoolEventService.getAll.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
-    } as any);
+    } as Awaited<ReturnType<typeof schoolEventService.getAll>>);
   });
 
   it('routes module card open link to student module detail page', async () => {
@@ -162,5 +165,55 @@ describe('StudentClassDetailPage module links', () => {
     expect(window.localStorage.getItem('nexora.student.class.modules.view.class-1')).toBe(
       'card',
     );
+  });
+
+  it('renders classmate names and emails from enriched enrollments', async () => {
+    currentView = 'classmates';
+    mockedClassService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'class-1',
+        subjectName: 'Mathematics',
+        subjectCode: 'MATH',
+        schoolYear: '2025-2026',
+        subjectGradeLevel: '10',
+        section: { id: 'section-1', name: 'Rizal', gradeLevel: '10' },
+        teacher: { id: 'teacher-1', firstName: 'Jamie', lastName: 'Cruz' },
+        enrollments: [
+          {
+            id: 'enrollment-1',
+            studentId: 'student-1',
+            classId: 'class-1',
+            student: {
+              id: 'student-1',
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              email: 'student71@lms.local',
+            },
+          },
+          {
+            id: 'enrollment-2',
+            studentId: 'student-2',
+            classId: 'class-1',
+            student: {
+              id: 'student-2',
+              firstName: 'Mia',
+              lastName: 'Villanueva',
+              email: 'student72@lms.local',
+            },
+          },
+        ],
+        schedules: [],
+      },
+    } as Awaited<ReturnType<typeof classService.getById>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('Liam Navarro')).toBeInTheDocument();
+    expect(screen.getByText('student71@lms.local')).toBeInTheDocument();
+    expect(screen.getByText('Mia Villanueva')).toBeInTheDocument();
+    expect(screen.getByText('student72@lms.local')).toBeInTheDocument();
+    expect(screen.queryByText('Unnamed student')).not.toBeInTheDocument();
   });
 });

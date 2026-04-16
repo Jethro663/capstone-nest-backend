@@ -36,6 +36,8 @@ import {
   ReorderModuleItemsDto,
   ReorderModulesDto,
   ReorderModuleSectionsDto,
+  ReleaseCoreModuleDto,
+  ReleaseCoreModuleItemDto,
   UpdateModuleDto,
   UpdateModuleItemDto,
   UpdateModuleSectionDto,
@@ -76,7 +78,10 @@ export class ContentModulesController {
 
   @Get('class/:classId')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getByClass(@Param('classId') classId: string, @CurrentUser() user: any) {
+  async getByClass(
+    @Param('classId') classId: string,
+    @CurrentUser() user: any,
+  ) {
     const data = await this.contentModulesService.getModulesByClass(
       classId,
       user?.userId,
@@ -145,6 +150,27 @@ export class ContentModulesController {
     return {
       success: true,
       message: 'Module updated successfully',
+      data,
+    };
+  }
+
+  @Patch(':moduleId/core-release')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async releaseCoreModule(
+    @Param('moduleId') moduleId: string,
+    @Body() dto: ReleaseCoreModuleDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.contentModulesService.releaseCoreModule(
+      moduleId,
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Core module release updated successfully',
       data,
     };
   }
@@ -231,7 +257,10 @@ export class ContentModulesController {
 
   @Delete('sections/:sectionId')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async deleteSection(@Param('sectionId') sectionId: string, @CurrentUser() user: any) {
+  async deleteSection(
+    @Param('sectionId') sectionId: string,
+    @CurrentUser() user: any,
+  ) {
     const data = await this.contentModulesService.deleteSection(
       sectionId,
       user?.userId,
@@ -305,6 +334,27 @@ export class ContentModulesController {
     return {
       success: true,
       message: 'Module item updated successfully',
+      data,
+    };
+  }
+
+  @Patch('items/:itemId/core-release')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async releaseCoreModuleItem(
+    @Param('itemId') itemId: string,
+    @Body() dto: ReleaseCoreModuleItemDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.contentModulesService.releaseCoreModuleItem(
+      itemId,
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: 'Core module item release updated successfully',
       data,
     };
   }

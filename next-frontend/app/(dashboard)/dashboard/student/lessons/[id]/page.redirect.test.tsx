@@ -48,8 +48,8 @@ describe('StudentLessonViewPage module-route redirect', () => {
         order: 1,
         isDraft: false,
         contentBlocks: [],
-      } as any,
-    });
+      },
+    } as Awaited<ReturnType<typeof lessonService.getById>>);
     mockedLessonService.getCompletionStatus.mockResolvedValue({
       success: true,
       data: { completed: false },

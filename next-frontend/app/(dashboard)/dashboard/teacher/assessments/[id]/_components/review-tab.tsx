@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import Image from 'next/image';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -553,10 +554,13 @@ function AttemptDetailPanel({
             {canPreviewFile && previewUrl && (
               <div className="overflow-hidden rounded-lg border bg-muted/20">
                 {submittedFile.mimeType.startsWith('image/') ? (
-                  <img
+                  <Image
                     src={previewUrl}
                     alt={submittedFile.originalName}
-                    className="max-h-[32rem] w-full object-contain bg-background"
+                    width={1400}
+                    height={1000}
+                    unoptimized
+                    className="max-h-[32rem] h-auto w-full object-contain bg-background"
                   />
                 ) : (
                   <iframe
@@ -731,7 +735,14 @@ function ResponseCard({ response: r, index }: { response: AttemptResponse; index
 
         {question.imageUrl && (
           <div className="overflow-hidden rounded-xl border">
-            <img src={question.imageUrl} alt="Question" className="max-h-56 w-full object-contain" />
+            <Image
+              src={question.imageUrl}
+              alt="Question"
+              width={1024}
+              height={576}
+              unoptimized
+              className="max-h-56 h-auto w-full object-contain"
+            />
           </div>
         )}
 

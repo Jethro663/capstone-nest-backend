@@ -108,7 +108,7 @@ export function ProgressScreen(_: Props) {
         />
       }
     >
-      <GradientHeader colors={gradients.progress} eyebrow="Keep it up! ðŸ“ˆ" title="My Progress">
+      <GradientHeader colors={gradients.progress} eyebrow="Keep it up! 📈" title="My Progress">
         <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
           <StatCard icon="book-open-page-variant" iconColor="#A5D6A7" value={profileSummary.totalLessonsCompleted} label="Lessons" translucent />
           <StatCard icon="star" iconColor="#FFF176" value={`${profileSummary.averageScore}%`} label="Avg Score" translucent />
@@ -128,7 +128,7 @@ export function ProgressScreen(_: Props) {
         <Card>
           <SectionTitle title="Subject Progress" />
           {chartData.length === 0 ? (
-            <EmptyState emoji="ðŸ“Š" title="No progress yet" subtitle="Start lessons or assessments to populate this chart." />
+            <EmptyState emoji="📊" title="No progress yet" subtitle="Start lessons or assessments to populate this chart." />
           ) : (
             <>
               <SimpleBarChart data={chartData} />
@@ -165,7 +165,7 @@ export function ProgressScreen(_: Props) {
 
         <View style={{ marginBottom: 8 }}>
           <SectionTitle
-            title="Achievements ðŸ†"
+            title="Achievements 🏆"
             right={<Pill label={`${achievements.filter((entry) => entry.earned).length}/${achievements.length}`} backgroundColor={colors.paleAmber} color={colors.amber} />}
           />
           <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>

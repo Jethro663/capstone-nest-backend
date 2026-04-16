@@ -1,17 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { sql } from 'drizzle-orm';
 import { PerformanceService } from './performance.service';
 import { DatabaseService } from '../../database/database.service';
 import { PerformanceStatusChangedEvent } from '../../common/events';
+import { AuditService } from '../audit/audit.service';
 
 function buildMockDb() {
+  const subqueryWhere = jest.fn((condition: any) => {
+    const query = sql`select 1`;
+    (query as any).__condition = condition;
+    return query;
+  });
+  const innerJoin = jest.fn().mockReturnValue({ where: subqueryWhere });
+  const from = jest.fn().mockReturnValue({ innerJoin });
+  const select = jest.fn().mockReturnValue({ from });
+
   return {
     query: {
       classes: { findFirst: jest.fn() },
       assessments: { findFirst: jest.fn() },
+      assessmentResponses: { findMany: jest.fn() },
       assessmentAttempts: { findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
+      studentConceptMastery: { findMany: jest.fn() },
+      aiGenerationOutputs: { findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       enrollments: { findMany: jest.fn() },
@@ -19,7 +33,36 @@ function buildMockDb() {
     },
     insert: jest.fn(),
     update: jest.fn(),
+    execute: jest.fn(),
+    select,
+    __subqueryWhere: subqueryWhere,
   };
+}
+
+function collectSqlParams(node: any): any[] {
+  const params: any[] = [];
+  const stack = [node];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== 'object') continue;
+
+    if (Array.isArray(current)) {
+      stack.push(...current);
+      continue;
+    }
+
+    if ('queryChunks' in current && Array.isArray(current.queryChunks)) {
+      stack.push(...current.queryChunks);
+      continue;
+    }
+
+    if ('value' in current && !Array.isArray(current.value)) {
+      params.push(current.value);
+    }
+  }
+
+  return params;
 }
 
 function mockInsertReturning(db: any, rows: any[]) {
@@ -44,16 +87,19 @@ describe('PerformanceService', () => {
   let service: PerformanceService;
   let db: any;
   let eventEmitter: EventEmitter2;
+  let auditService: { log: jest.Mock };
 
   beforeEach(async () => {
     db = buildMockDb();
     eventEmitter = { emit: jest.fn() } as any;
+    auditService = { log: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PerformanceService,
         { provide: DatabaseService, useValue: { db } },
         { provide: EventEmitter2, useValue: eventEmitter },
+        { provide: AuditService, useValue: auditService },
       ],
     }).compile();
 
@@ -233,6 +279,97 @@ describe('PerformanceService', () => {
     expect(summary.students[0].studentId).toBe('student-2');
   });
 
+  it('getClassSummary should bulk recompute missing snapshots before building rows', async () => {
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    db.query.enrollments.findMany.mockResolvedValue([
+      {
+        studentId: 'student-1',
+        student: {
+          firstName: 'Alice',
+          lastName: 'Lee',
+          email: 'alice@test.com',
+        },
+      },
+      {
+        studentId: 'student-2',
+        student: { firstName: 'Bob', lastName: 'Tan', email: 'bob@test.com' },
+      },
+    ]);
+    db.query.performanceSnapshots.findMany
+      .mockResolvedValueOnce([
+        {
+          studentId: 'student-1',
+          assessmentAverage: '80',
+          classRecordAverage: '78',
+          blendedScore: '79',
+          assessmentSampleSize: 3,
+          classRecordSampleSize: 5,
+          hasData: true,
+          isAtRisk: false,
+          thresholdApplied: '74',
+          lastComputedAt: new Date(),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          studentId: 'student-1',
+          assessmentAverage: '80',
+          classRecordAverage: '78',
+          blendedScore: '79',
+          assessmentSampleSize: 3,
+          classRecordSampleSize: 5,
+          hasData: true,
+          isAtRisk: false,
+          thresholdApplied: '74',
+          lastComputedAt: new Date(),
+        },
+        {
+          studentId: 'student-2',
+          assessmentAverage: '60',
+          classRecordAverage: '64',
+          blendedScore: '62',
+          assessmentSampleSize: 3,
+          classRecordSampleSize: 5,
+          hasData: true,
+          isAtRisk: true,
+          thresholdApplied: '74',
+          lastComputedAt: new Date(),
+        },
+      ]);
+
+    const bulkSpy = jest
+      .spyOn(service as any, 'recomputeStudentsForClass')
+      .mockResolvedValue({ recomputed: 1 });
+    const singleSpy = jest
+      .spyOn(service, 'recomputeStudent')
+      .mockResolvedValue({
+        id: 'snap-2',
+        studentId: 'student-2',
+        classId: 'class-1',
+        assessmentAverage: 60,
+        classRecordAverage: 64,
+        blendedScore: 62,
+        assessmentSampleSize: 3,
+        classRecordSampleSize: 5,
+        hasData: true,
+        isAtRisk: true,
+        thresholdApplied: 74,
+        lastComputedAt: new Date(),
+      } as any);
+
+    const summary = await service.getClassSummary('class-1', 'teacher-1', [
+      'teacher',
+    ]);
+
+    expect(bulkSpy).toHaveBeenCalledWith('class-1', ['student-2'], 'view_refresh');
+    expect(singleSpy).not.toHaveBeenCalled();
+    expect(summary.totalStudents).toBe(2);
+    expect(summary.atRiskCount).toBe(1);
+  });
+
   it('getClassSummary should enforce teacher ownership', async () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
@@ -242,6 +379,58 @@ describe('PerformanceService', () => {
     await expect(
       service.getClassSummary('class-1', 'teacher-1', ['teacher']),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('recomputeClass should write manual recompute audit metadata', async () => {
+    jest
+      .spyOn(service as any, 'assertClassAccess')
+      .mockResolvedValue(undefined);
+    jest
+      .spyOn(service as any, 'loadEnrolledStudents')
+      .mockResolvedValue([
+        { studentId: 'student-1' },
+        { studentId: 'student-2' },
+      ]);
+    jest
+      .spyOn(service as any, 'recomputeStudentsForClass')
+      .mockResolvedValue(undefined);
+    jest.spyOn(service, 'getClassSummary').mockResolvedValue({
+      classId: 'class-1',
+      threshold: 74,
+      totalStudents: 2,
+      studentsWithData: 2,
+      atRiskCount: 1,
+      atRiskRate: 50,
+      averages: {
+        blended: 70,
+        assessment: 72,
+        classRecord: 68,
+      },
+      students: [],
+    });
+
+    const result = await service.recomputeClass('class-1', 'teacher-1', [
+      'teacher',
+    ]);
+
+    expect(result).toEqual({
+      classId: 'class-1',
+      recomputed: 2,
+      atRiskCount: 1,
+      totalStudents: 2,
+    });
+    expect(auditService.log).toHaveBeenCalledWith({
+      actorId: 'teacher-1',
+      action: 'performance.class.recomputed',
+      targetType: 'class',
+      targetId: 'class-1',
+      metadata: {
+        actorRole: 'teacher',
+        recomputedStudentCount: 2,
+        atRiskCount: 1,
+        totalStudents: 2,
+      },
+    });
   });
 
   it('getClassLogs should return parsed logs with student metadata', async () => {
@@ -346,5 +535,83 @@ describe('PerformanceService', () => {
     expect(result.classes).toHaveLength(2);
     expect(result.overall.atRiskClasses).toBe(1);
     expect(result.overall.averageBlendedScore).toBe(71.5);
+  });
+
+  it('getAdminAnalytics should return analytics datasets and log audit with uuid target', async () => {
+    db.query.studentConceptMastery.findMany.mockResolvedValue([
+      {
+        id: 'mastery-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        conceptKey: 'linear-equation',
+        errorCount: 3,
+        masteryScore: 64,
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    db.query.aiGenerationOutputs.findMany.mockResolvedValue([
+      {
+        id: 'output-1',
+        outputType: 'performance_diagnostic',
+        targetClassId: 'class-1',
+        targetTeacherId: 'teacher-1',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    db.query.performanceLogs.findMany.mockResolvedValue([
+      {
+        id: 'log-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        previousIsAtRisk: false,
+        currentIsAtRisk: true,
+        triggerSource: 'manual_recompute',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+
+    const result = await service.getAdminAnalytics('admin-1', ['admin']);
+
+    expect(result.conceptMasterySnapshots).toHaveLength(1);
+    expect(result.recommendationHistory).toHaveLength(1);
+    expect(result.performanceLogTransitions.total).toBe(1);
+    expect(result.performanceLogTransitions.summary.riskIncrements).toBe(1);
+    expect(auditService.log).toHaveBeenCalledWith({
+      actorId: 'admin-1',
+      action: 'performance.admin.analytics_viewed',
+      targetType: 'system',
+      targetId: 'admin-1',
+      metadata: {
+        conceptRows: 1,
+        recommendationRows: 1,
+        performanceLogRows: 1,
+      },
+    });
+  });
+
+  it('getAdminAnalytics should reject non-admin roles', async () => {
+    await expect(
+      service.getAdminAnalytics('teacher-1', ['teacher']),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('buildPerformanceDiagnostics should scope the initial query to class and student filters', async () => {
+    db.query.assessmentResponses.findMany.mockResolvedValue([]);
+
+    await (service as any).buildPerformanceDiagnostics(
+      'class-1',
+      'student-1',
+      'Focus on algebra mistakes',
+    );
+
+    const queryArg = db.query.assessmentResponses.findMany.mock.calls[0][0];
+    const collectedParams = [
+      ...collectSqlParams(queryArg.where),
+      ...collectSqlParams(db.__subqueryWhere.mock.calls[0][0]),
+    ];
+
+    expect(collectedParams).toEqual(
+      expect.arrayContaining([false, true, 'class-1', 'student-1']),
+    );
   });
 });

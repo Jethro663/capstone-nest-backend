@@ -6,9 +6,15 @@ import { AssessmentsService } from './assessments.service';
 import { FeedbackService } from './feedback.service';
 import { DatabaseModule } from '../../database/database.module';
 import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [DatabaseModule, EventEmitterModule, AuditModule],
+  imports: [
+    DatabaseModule,
+    EventEmitterModule,
+    AuditModule,
+    NotificationsModule,
+  ],
   controllers: [AssessmentsController, AssessmentsPublicController],
   providers: [AssessmentsService, FeedbackService],
   exports: [AssessmentsService],

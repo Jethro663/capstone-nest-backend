@@ -4,6 +4,14 @@ export interface UploadedFile {
   teacherId: string;
   classId?: string | null;
   scope: 'private' | 'general';
+  subjectKey?: LibrarySubjectKey | null;
+  gradeLevel?: LibraryGradeLevel | null;
+  teacherVisible?: boolean;
+  indexStatus?: LibraryIndexStatus;
+  indexError?: string | null;
+  indexedAt?: string | null;
+  contentHash?: string | null;
+  fileKind?: LibraryFileKind;
   originalName: string;
   storedName: string;
   mimeType: string;
@@ -24,6 +32,38 @@ export interface UploadedFile {
   };
   folder?: LibraryFolder | null;
 }
+
+export type LibrarySubjectKey =
+  | 'math'
+  | 'science'
+  | 'english'
+  | 'filipino'
+  | 'ap'
+  | 'tle'
+  | 'mapeh'
+  | 'esp';
+
+export type LibraryGradeLevel = '7' | '8' | '9' | '10';
+export type LibraryIndexStatus =
+  | 'not_indexed'
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+export type LibraryFileKind = 'pdf' | 'txt' | 'pptx';
+
+export const LIBRARY_SUBJECTS: Array<{ key: LibrarySubjectKey; label: string }> = [
+  { key: 'math', label: 'Math' },
+  { key: 'science', label: 'Science' },
+  { key: 'english', label: 'English' },
+  { key: 'filipino', label: 'Filipino' },
+  { key: 'ap', label: 'Araling Panlipunan' },
+  { key: 'tle', label: 'TLE' },
+  { key: 'mapeh', label: 'MAPEH' },
+  { key: 'esp', label: 'ESP' },
+];
+
+export const LIBRARY_GRADES: LibraryGradeLevel[] = ['7', '8', '9', '10'];
 
 export interface LibraryFolder {
   id: string;
@@ -54,6 +94,10 @@ export interface FileLibraryQuery {
   folderId?: string;
   ownerId?: string;
   classId?: string;
+  subjectKey?: LibrarySubjectKey;
+  gradeLevel?: LibraryGradeLevel;
+  teacherVisible?: boolean;
+  indexStatus?: LibraryIndexStatus;
   search?: string;
   page?: number;
   limit?: number;

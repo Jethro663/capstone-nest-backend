@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
-import { notificationService } from '@/services/notification-service';
+import { getFrontendApiOrigin } from '@/lib/api-origin';
+import { normalizeNotification, notificationService } from '@/services/notification-service';
 import type { Notification } from '@/types/notification';
 
 interface NotificationContextType {
@@ -31,6 +33,7 @@ export function useNotifications() {
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuth();
+  const sessionUserId = isAuthenticated ? user?.id ?? null : null;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -78,25 +81,26 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Fetch notifications when user is authenticated
   useEffect(() => {
-    if (isAuthenticated && user) {
-      fetchNotifications();
+    if (sessionUserId) {
+      void fetchNotifications();
     } else {
       setNotifications([]);
       setUnreadCount(0);
     }
-  }, [isAuthenticated, user, fetchNotifications]);
+  }, [fetchNotifications, sessionUserId]);
 
   // WebSocket connection
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
+    if (!sessionUserId) return;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3000';
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || getFrontendApiOrigin();
     const token = getAccessToken();
     if (!token) return;
+    const activeUserId = sessionUserId;
 
     const socket = io(`${wsUrl}/notifications`, {
       auth: { token: `Bearer ${token}` },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionDelay: 3000,
       reconnectionAttempts: 10,
@@ -114,18 +118,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       referenceId?: string;
       createdAt: string;
     }) => {
-      const newNotification: Notification = {
+      const newNotification = normalizeNotification({
         id: payload.id,
-        userId: user.id,
+        userId: activeUserId,
         type: payload.type,
         title: payload.title,
-        message: payload.body,
+        body: payload.body,
         isRead: false,
-        metadata: payload.referenceId ? { referenceId: payload.referenceId } : undefined,
+        referenceId: payload.referenceId,
         createdAt: payload.createdAt,
-      };
+      });
       setNotifications((prev) => [newNotification, ...prev]);
       setUnreadCount((prev) => prev + 1);
+      toast(payload.title, {
+        description: payload.body,
+        action: {
+          label: 'View',
+          onClick: () => {
+            window.location.assign('/dashboard/notifications');
+          },
+        },
+      });
     });
 
     socket.on('error', (err: { message: string }) => {
@@ -142,7 +155,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [isAuthenticated, user]);
+  }, [sessionUserId]);
 
   return (
     <NotificationContext.Provider

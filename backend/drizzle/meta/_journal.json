@@ -141,6 +141,13 @@
       "when": 1772302706827,
       "tag": "0019_add_ai_mentor_module",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1776000000000,
+      "tag": "0020_admin_analytics_chat",
+      "breakpoints": true
     }
   ]
 }

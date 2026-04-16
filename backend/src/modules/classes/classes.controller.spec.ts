@@ -4,13 +4,20 @@ import { ClassesController } from './classes.controller';
 import { ClassesService } from './classes.service';
 
 const mockClassesService = {
+  create: jest.fn(),
+  update: jest.fn(),
+  purge: jest.fn(),
+  delete: jest.fn(),
   findAll: jest.fn(),
+  findById: jest.fn(),
+  getClassesByStudent: jest.fn(),
   getStudentClassPresentationPreferences: jest.fn(),
   updateStudentClassPresentationPreference: jest.fn(),
   getStudentCourseViewPreference: jest.fn(),
   setStudentCourseViewPreference: jest.fn(),
   getStudentsMasterlistForClass: jest.fn(),
   bulkLifecycleAction: jest.fn(),
+  toggleActive: jest.fn(),
   getStudentOverviewForClass: jest.fn(),
 };
 
@@ -92,8 +99,11 @@ describe('ClassesController', () => {
           undefined,
           undefined,
           undefined,
-          '-1',
           undefined,
+          undefined,
+          undefined,
+          undefined,
+          '-1',
         ),
       ).rejects.toThrow(BadRequestException);
 
@@ -101,6 +111,9 @@ describe('ClassesController', () => {
         controller.getStudentsMasterlistForClass(
           'class-1',
           { userId: 'teacher-1', roles: ['teacher'] },
+          undefined,
+          undefined,
+          undefined,
           undefined,
           undefined,
           undefined,
@@ -133,7 +146,8 @@ describe('ClassesController', () => {
       ).toHaveBeenCalledWith('student-1', 'student-1', ['student']);
       expect(result).toEqual({
         success: true,
-        message: 'Student class presentation preferences retrieved successfully',
+        message:
+          'Student class presentation preferences retrieved successfully',
         data: [
           {
             classId: 'class-1',
@@ -155,16 +169,116 @@ describe('ClassesController', () => {
         { userId: 'student-1', roles: ['student'] },
       );
 
-      expect(mockClassesService.setStudentCourseViewPreference).toHaveBeenCalledWith(
-        'student-1',
-        'student-1',
-        ['student'],
-        'wide',
-      );
+      expect(
+        mockClassesService.setStudentCourseViewPreference,
+      ).toHaveBeenCalledWith('student-1', 'student-1', ['student'], 'wide');
       expect(result).toEqual({
         success: true,
         message: 'Student course view preference updated successfully',
         data: { viewMode: 'wide' },
+      });
+    });
+  });
+
+  describe('student class retrieval endpoints', () => {
+    it('returns getClassById in the standard success envelope', async () => {
+      mockClassesService.findById.mockResolvedValue({
+        id: 'class-1',
+        subjectName: 'Mathematics',
+        enrollments: [
+          {
+            id: 'enrollment-1',
+            student: {
+              id: 'student-1',
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              email: 'student71@lms.local',
+            },
+          },
+        ],
+      });
+
+      const result = await controller.getClassById('class-1', {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
+
+      expect(mockClassesService.findById).toHaveBeenCalledWith(
+        'class-1',
+        'teacher-1',
+        ['teacher'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Class retrieved successfully',
+        data: {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          enrollments: [
+            {
+              id: 'enrollment-1',
+              student: {
+                id: 'student-1',
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    it('returns getClassesByStudent in the standard success envelope', async () => {
+      mockClassesService.getClassesByStudent.mockResolvedValue([
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          enrollments: [
+            {
+              id: 'enrollment-1',
+              student: {
+                id: 'student-1',
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+              },
+            },
+          ],
+        },
+      ]);
+
+      const result = await controller.getClassesByStudent('student-1', 'all', {
+        userId: 'student-1',
+        roles: ['student'],
+      });
+
+      expect(mockClassesService.getClassesByStudent).toHaveBeenCalledWith(
+        'student-1',
+        'student-1',
+        ['student'],
+        'all',
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Classes retrieved successfully',
+        data: [
+          {
+            id: 'class-1',
+            subjectName: 'Mathematics',
+            enrollments: [
+              {
+                id: 'enrollment-1',
+                student: {
+                  id: 'student-1',
+                  firstName: 'Liam',
+                  lastName: 'Navarro',
+                  email: 'student71@lms.local',
+                },
+              },
+            ],
+          },
+        ],
       });
     });
   });
@@ -181,15 +295,22 @@ describe('ClassesController', () => {
         },
       });
 
-      const result = await controller.bulkLifecycle({
-        action: 'restore',
-        classIds: ['class-1', 'class-2'],
-      });
+      const result = await controller.bulkLifecycle(
+        {
+          action: 'restore',
+          classIds: ['class-1', 'class-2'],
+        },
+        { userId: 'admin-1', roles: ['admin'] },
+      );
 
-      expect(mockClassesService.bulkLifecycleAction).toHaveBeenCalledWith({
-        action: 'restore',
-        classIds: ['class-1', 'class-2'],
-      });
+      expect(mockClassesService.bulkLifecycleAction).toHaveBeenCalledWith(
+        {
+          action: 'restore',
+          classIds: ['class-1', 'class-2'],
+        },
+        'admin-1',
+        ['admin'],
+      );
       expect(result).toEqual({
         success: true,
         message: '1 class restored; 1 failed.',
@@ -200,6 +321,111 @@ describe('ClassesController', () => {
           failed: [{ classId: 'class-2', reason: 'Class is already active.' }],
         },
       });
+    });
+  });
+
+  describe('createClass', () => {
+    it('forwards actor context and returns success envelope', async () => {
+      const payload = {
+        subjectName: 'Math',
+        subjectCode: 'MATH-7',
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+      };
+      mockClassesService.create.mockResolvedValue({
+        id: 'class-1',
+        ...payload,
+      });
+
+      const result = await controller.createClass(payload as any, {
+        userId: 'admin-1',
+        roles: ['admin'],
+      });
+
+      expect(mockClassesService.create).toHaveBeenCalledWith(
+        payload,
+        'admin-1',
+        ['admin'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Class created successfully',
+        data: {
+          id: 'class-1',
+          ...payload,
+        },
+      });
+    });
+  });
+
+  describe('updateClass', () => {
+    it('forwards actor context and returns success envelope', async () => {
+      const payload = {
+        room: 'Lab 2',
+      };
+      mockClassesService.update.mockResolvedValue({
+        id: 'class-1',
+        room: 'Lab 2',
+      });
+
+      const result = await controller.updateClass('class-1', payload as any, {
+        userId: 'admin-1',
+        roles: ['admin'],
+      });
+
+      expect(mockClassesService.update).toHaveBeenCalledWith(
+        'class-1',
+        payload,
+        'admin-1',
+        ['admin'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Class updated successfully',
+        data: {
+          id: 'class-1',
+          room: 'Lab 2',
+        },
+      });
+    });
+  });
+
+  describe('purgeClass', () => {
+    it('forwards actor context and returns success envelope', async () => {
+      mockClassesService.purge.mockResolvedValue(undefined);
+
+      const result = await controller.purgeClass('class-1', {
+        userId: 'admin-1',
+        roles: ['admin'],
+      });
+
+      expect(mockClassesService.purge).toHaveBeenCalledWith(
+        'class-1',
+        'admin-1',
+        ['admin'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Class permanently deleted',
+      });
+    });
+  });
+
+  describe('deleteClass', () => {
+    it('forwards actor context for hard delete operation', async () => {
+      mockClassesService.delete.mockResolvedValue(undefined);
+
+      await controller.deleteClass('class-1', {
+        userId: 'admin-1',
+        roles: ['admin'],
+      });
+
+      expect(mockClassesService.delete).toHaveBeenCalledWith(
+        'class-1',
+        'admin-1',
+        ['admin'],
+      );
     });
   });
 
@@ -243,12 +469,9 @@ describe('ClassesController', () => {
         { userId: 'teacher-1', roles: ['teacher'] },
       );
 
-      expect(mockClassesService.getStudentOverviewForClass).toHaveBeenCalledWith(
-        'class-1',
-        'student-1',
-        'teacher-1',
-        ['teacher'],
-      );
+      expect(
+        mockClassesService.getStudentOverviewForClass,
+      ).toHaveBeenCalledWith('class-1', 'student-1', 'teacher-1', ['teacher']);
       expect(result).toEqual({
         success: true,
         message: 'Student overview retrieved successfully',
@@ -258,6 +481,34 @@ describe('ClassesController', () => {
           standing: expect.any(Object),
           history: expect.any(Object),
         }),
+      });
+    });
+  });
+
+  describe('toggleClassStatus', () => {
+    it('forwards actor context and returns success envelope', async () => {
+      mockClassesService.toggleActive.mockResolvedValue({
+        id: 'class-1',
+        isActive: false,
+      });
+
+      const result = await controller.toggleClassStatus('class-1', {
+        userId: 'admin-1',
+        roles: ['admin'],
+      });
+
+      expect(mockClassesService.toggleActive).toHaveBeenCalledWith(
+        'class-1',
+        'admin-1',
+        ['admin'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Class status toggled successfully',
+        data: {
+          id: 'class-1',
+          isActive: false,
+        },
       });
     });
   });

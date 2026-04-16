@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   classRecords,
@@ -43,7 +43,9 @@ const CATEGORY_NAME_TO_KEY = {
 } as const;
 
 function getDefaultItemTitle(categoryName: string, itemOrder: number) {
-  const category = DEPED_CATEGORIES.find((entry) => entry.name === categoryName);
+  const category = DEPED_CATEGORIES.find(
+    (entry) => entry.name === categoryName,
+  );
   return `${category?.prefix ?? 'ITEM'}${itemOrder}`;
 }
 
@@ -186,6 +188,18 @@ export class ClassRecordService {
     this.logger.log(
       `Generated class record for class "${dto.classId}", period ${dto.gradingPeriod}`,
     );
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.generated',
+      targetType: 'class_record',
+      targetId: record.id,
+      metadata: {
+        classId: dto.classId,
+        gradingPeriod: dto.gradingPeriod,
+        categoryCount: DEPED_CATEGORIES.length,
+      },
+    });
 
     return this.getClassRecord(record.id, userId, roles);
   }
@@ -354,13 +368,14 @@ export class ClassRecordService {
       },
     });
 
-    // Load enrolled students (alphabetical by lastName, firstName)
-    const enrolledStudents = await this.db
+    // Load active class participants (alphabetical by lastName, firstName)
+    const activeStudents = await this.db
       .select({
         studentId: enrollments.studentId,
         firstName: users.firstName,
         lastName: users.lastName,
         middleName: users.middleName,
+        email: users.email,
       })
       .from(enrollments)
       .innerJoin(users, eq(users.id, enrollments.studentId))
@@ -371,6 +386,72 @@ export class ClassRecordService {
         ),
       )
       .orderBy(users.lastName, users.firstName);
+
+    const historicalScoreRows = await this.db
+      .select({ studentId: classRecordScores.studentId })
+      .from(classRecordScores)
+      .innerJoin(
+        classRecordItems,
+        eq(classRecordItems.id, classRecordScores.classRecordItemId),
+      )
+      .where(eq(classRecordItems.classRecordId, classRecordId));
+
+    const historicalFinalRows = await this.db
+      .select({
+        studentId: classRecordFinalGrades.studentId,
+        finalPercentage: classRecordFinalGrades.finalPercentage,
+        remarks: classRecordFinalGrades.remarks,
+      })
+      .from(classRecordFinalGrades)
+      .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
+
+    const activeStudentIdSet = new Set(
+      activeStudents.map((student) => student.studentId),
+    );
+    const removedStudentIds = [
+      ...new Set(
+        [
+          ...historicalScoreRows.map((entry) => entry.studentId),
+          ...historicalFinalRows.map((entry) => entry.studentId),
+        ].filter((studentId) => !activeStudentIdSet.has(studentId)),
+      ),
+    ];
+
+    const removedStudents =
+      removedStudentIds.length > 0
+        ? await this.db
+            .select({
+              studentId: users.id,
+              firstName: users.firstName,
+              lastName: users.lastName,
+              middleName: users.middleName,
+              email: users.email,
+            })
+            .from(users)
+            .where(inArray(users.id, removedStudentIds))
+            .orderBy(users.lastName, users.firstName)
+        : [];
+
+    const finalGradeByStudentId = new Map(
+      historicalFinalRows.map((entry) => [
+        entry.studentId,
+        {
+          finalPercentage: parseFloat(entry.finalPercentage),
+          remarks: entry.remarks,
+        },
+      ]),
+    );
+
+    const participants = [
+      ...activeStudents.map((student) => ({
+        ...student,
+        enrollmentState: 'active' as const,
+      })),
+      ...removedStudents.map((student) => ({
+        ...student,
+        enrollmentState: 'removed' as const,
+      })),
+    ];
 
     // Load categories + items + scores
     const categories = await this.db.query.classRecordCategories.findMany({
@@ -384,7 +465,7 @@ export class ClassRecordService {
     });
 
     // Build spreadsheet data per student
-    const studentRows = enrolledStudents.map((student) => {
+    const studentRows = participants.map((student) => {
       const categoryData = categories.map((category) => {
         const weight = parseFloat(category.weightPercentage);
         const items = category.items;
@@ -423,20 +504,34 @@ export class ClassRecordService {
       });
 
       const initialGrade = categoryData.reduce((sum, c) => sum + c.ws, 0);
-      const quarterlyGrade = this.computationService.transmute(initialGrade);
+      const computedQuarterlyGrade =
+        this.computationService.transmute(initialGrade);
+      const historicalFinal = finalGradeByStudentId.get(student.studentId);
+      const hasHistoricalQuarterly =
+        historicalFinal && Number.isFinite(historicalFinal.finalPercentage);
+      const quarterlyGrade =
+        student.enrollmentState === 'removed' && hasHistoricalQuarterly
+          ? historicalFinal.finalPercentage
+          : computedQuarterlyGrade;
+      const remarks =
+        student.enrollmentState === 'removed' && hasHistoricalQuarterly
+          ? historicalFinal.remarks
+          : quarterlyGrade < 75
+            ? ('For Intervention' as const)
+            : ('Passed' as const);
 
       return {
         studentId: student.studentId,
         firstName: student.firstName,
         lastName: student.lastName,
         middleName: student.middleName,
+        email: student.email ?? undefined,
+        isRemoved: student.enrollmentState === 'removed',
+        enrollmentState: student.enrollmentState,
         categories: categoryData,
         initialGrade: Math.round(initialGrade * 1000) / 1000,
         quarterlyGrade,
-        remarks:
-          quarterlyGrade < 75
-            ? ('For Intervention' as const)
-            : ('Passed' as const),
+        remarks,
       };
     });
 
@@ -712,7 +807,22 @@ export class ClassRecordService {
       throw new ForbiddenException('Access denied');
     }
 
-    return this.syncService.syncFromAssessment(itemId, userId);
+    const result = await this.syncService.syncFromAssessment(itemId, userId);
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.scores.synced_assessment',
+      targetType: 'class_record_item',
+      targetId: itemId,
+      metadata: {
+        classRecordId: item.classRecord.id,
+        classId: item.classRecord.classId,
+        assessmentId: item.assessmentId,
+        synced: result.synced,
+      },
+    });
+
+    return result;
   }
 
   // ── Grade Preview & Finalization ──────────────────────────────────────────
@@ -787,6 +897,7 @@ export class ClassRecordService {
       targetType: 'class_record',
       targetId: classRecordId,
       metadata: {
+        classId: record.classId,
         gradeCount: result.gradeCount,
       },
     });
@@ -806,7 +917,9 @@ export class ClassRecordService {
     }
 
     if (record.status !== 'finalized') {
-      throw new ConflictException('Only finalized class records can be reopened');
+      throw new ConflictException(
+        'Only finalized class records can be reopened',
+      );
     }
 
     const result = await this.db.transaction(async (tx) => {
@@ -829,6 +942,7 @@ export class ClassRecordService {
       targetType: 'class_record',
       targetId: classRecordId,
       metadata: {
+        classId: record.classId,
         previousStatus: 'finalized',
         nextStatus: 'draft',
       },
@@ -865,12 +979,17 @@ export class ClassRecordService {
     userId: string,
     roles: string[],
   ) {
-    if (
-      !this.isAdmin(roles) &&
-      !roles.includes('teacher') &&
-      userId !== studentId
-    ) {
+    const isAdmin = this.isAdmin(roles);
+    const isTeacher = roles.includes('teacher');
+    const isStudentSelf = userId === studentId;
+
+    if (!isAdmin && !isTeacher && !isStudentSelf) {
       throw new ForbiddenException('Students may only view their own grade');
+    }
+
+    // Teachers can only view grades for class records they own.
+    if (isAdmin || isTeacher) {
+      await this.assertClassRecord(classRecordId, userId, roles);
     }
 
     const grade = await this.db.query.classRecordFinalGrades.findFirst({

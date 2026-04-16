@@ -1,0 +1,4 @@
+interface:
+  display_name: "Backend AI Performance Remediator"
+  short_description: "Repo-specific backend/AI audit skill"
+  default_prompt: "Use $backend-ai-performance-remediator to audit backend and ai-service performance and architecture safety in this repo."

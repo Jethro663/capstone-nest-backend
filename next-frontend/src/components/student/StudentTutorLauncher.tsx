@@ -70,7 +70,7 @@ export function StudentTutorLauncher() {
             onClick={() => router.push("/dashboard/student/ja")}
           >
             <MessageCircle className="h-4 w-4" />
-            Open JA
+            Open JA Hub
           </button>
         </div>
       ) : null}

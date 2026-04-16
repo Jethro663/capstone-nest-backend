@@ -76,6 +76,12 @@ export const lessonContentTypeEnum = pgEnum('lesson_content_type', [
   'divider',
 ]);
 
+export const lessonVersionTypeEnum = pgEnum('lesson_version_type', [
+  'auto',
+  'manual',
+  'restore',
+]);
+
 export const questionTypeEnum = pgEnum('question_type', [
   'multiple_choice',
   'multiple_select',
@@ -92,19 +98,42 @@ export const feedbackLevelEnum = pgEnum('feedback_level', [
 ]);
 
 export const fileScopeEnum = pgEnum('file_scope', ['private', 'general']);
+export const librarySubjectKeyEnum = pgEnum('library_subject_key', [
+  'math',
+  'science',
+  'english',
+  'filipino',
+  'ap',
+  'tle',
+  'mapeh',
+  'esp',
+]);
+export const libraryIndexStatusEnum = pgEnum('library_index_status', [
+  'not_indexed',
+  'pending',
+  'processing',
+  'completed',
+  'failed',
+]);
+export const libraryFileKindEnum = pgEnum('library_file_kind', [
+  'pdf',
+  'txt',
+  'pptx',
+]);
 export const moduleItemTypeEnum = pgEnum('module_item_type', [
   'lesson',
   'assessment',
   'file',
 ]);
-export const studentPresentationModeEnum = pgEnum(
-  'student_presentation_mode',
-  ['solid', 'gradient', 'preset'],
-);
-export const studentCourseViewModeEnum = pgEnum(
-  'student_course_view_mode',
-  ['card', 'wide'],
-);
+export const studentPresentationModeEnum = pgEnum('student_presentation_mode', [
+  'solid',
+  'gradient',
+  'preset',
+]);
+export const studentCourseViewModeEnum = pgEnum('student_course_view_mode', [
+  'card',
+  'wide',
+]);
 
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
@@ -449,6 +478,31 @@ export const lessonCompletions = pgTable(
   }),
 );
 
+export const lessonVersions = pgTable(
+  'lesson_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    lessonId: uuid('lesson_id')
+      .notNull()
+      .references(() => lessons.id, { onDelete: 'cascade' }),
+    versionNumber: integer('version_number').notNull(),
+    type: lessonVersionTypeEnum('type').notNull().default('auto'),
+    label: text('label'),
+    snapshot: json('snapshot').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    lessonIdIdx: index('lesson_versions_lesson_id_idx').on(table.lessonId),
+    lessonVersionUnique: unique('lesson_versions_lesson_version_unique').on(
+      table.lessonId,
+      table.versionNumber,
+    ),
+  }),
+);
+
 export const assessments = pgTable('assessments', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
@@ -485,6 +539,11 @@ export const assessments = pgTable('assessments', {
   isPublished: boolean('is_published').default(false),
   feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
   feedbackDelayHours: integer('feedback_delay_hours').default(24),
+  isCoreTemplateAsset: boolean('is_core_template_asset')
+    .notNull()
+    .default(false),
+  templateId: uuid('template_id'),
+  templateSourceId: uuid('template_source_id'),
   classRecordCategory: classRecordCategoryEnum('class_record_category'),
   quarter: gradingPeriodEnum('quarter'),
   aiOrigin: text('ai_origin'),
@@ -672,6 +731,11 @@ export const classModules = pgTable(
     imagePositionX: integer('image_position_x').notNull().default(50),
     imagePositionY: integer('image_position_y').notNull().default(50),
     imageScale: integer('image_scale').notNull().default(120),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -729,12 +793,19 @@ export const moduleItems = pgTable(
     isVisible: boolean('is_visible').notNull().default(true),
     isRequired: boolean('is_required').notNull().default(false),
     isGiven: boolean('is_given').notNull().default(true),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
     metadata: json('metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    sectionIdIdx: index('module_items_section_id_idx').on(table.moduleSectionId),
+    sectionIdIdx: index('module_items_section_id_idx').on(
+      table.moduleSectionId,
+    ),
     sectionOrderIdx: index('module_items_section_order_idx').on(
       table.moduleSectionId,
       table.order,
@@ -744,7 +815,9 @@ export const moduleItems = pgTable(
       table.assessmentId,
     ),
     fileIdIdx: index('module_items_file_id_idx').on(table.fileId),
-    uniqueLessonItem: unique('module_items_lesson_id_unique').on(table.lessonId),
+    uniqueLessonItem: unique('module_items_lesson_id_unique').on(
+      table.lessonId,
+    ),
     uniqueAssessmentItem: unique('module_items_assessment_id_unique').on(
       table.assessmentId,
     ),
@@ -792,7 +865,9 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   lessonCompletions: many(lessonCompletions),
   assessmentAttempts: many(assessmentAttempts),
   classVisibilityPreferences: many(classVisibilityPreferences),
-  studentClassPresentationPreferences: many(studentClassPresentationPreferences),
+  studentClassPresentationPreferences: many(
+    studentClassPresentationPreferences,
+  ),
   studentCourseViewPreference: one(studentCourseViewPreferences, {
     fields: [users.id],
     references: [studentCourseViewPreferences.userId],
@@ -907,6 +982,7 @@ export const lessonsRelations = relations(lessons, ({ one, many }) => ({
   }),
   contentBlocks: many(lessonContentBlocks),
   completions: many(lessonCompletions),
+  versions: many(lessonVersions),
   moduleItems: many(moduleItems),
 }));
 
@@ -933,6 +1009,17 @@ export const lessonCompletionsRelations = relations(
     }),
   }),
 );
+
+export const lessonVersionsRelations = relations(lessonVersions, ({ one }) => ({
+  lesson: one(lessons, {
+    fields: [lessonVersions.lessonId],
+    references: [lessons.id],
+  }),
+  creator: one(users, {
+    fields: [lessonVersions.createdBy],
+    references: [users.id],
+  }),
+}));
 
 export const assessmentsRelations = relations(assessments, ({ one, many }) => ({
   class: one(classes, {
@@ -1063,6 +1150,16 @@ export const uploadedFiles = pgTable(
       onDelete: 'cascade',
     }),
     scope: fileScopeEnum('scope').notNull().default('private'),
+    subjectKey: librarySubjectKeyEnum('subject_key'),
+    gradeLevel: gradeLevelEnum('grade_level'),
+    teacherVisible: boolean('teacher_visible').notNull().default(true),
+    indexStatus: libraryIndexStatusEnum('index_status')
+      .notNull()
+      .default('not_indexed'),
+    indexError: text('index_error'),
+    indexedAt: timestamp('indexed_at'),
+    contentHash: text('content_hash'),
+    fileKind: libraryFileKindEnum('file_kind').notNull().default('pdf'),
     originalName: varchar('original_name', { length: 255 }).notNull(),
     storedName: varchar('stored_name', { length: 255 }).notNull(),
     mimeType: varchar('mime_type', { length: 100 }).notNull(),
@@ -1076,6 +1173,16 @@ export const uploadedFiles = pgTable(
     teacherIdx: index('uploaded_files_teacher_idx').on(table.teacherId),
     classIdx: index('uploaded_files_class_idx').on(table.classId),
     scopeIdx: index('uploaded_files_scope_idx').on(table.scope),
+    generalPartitionIdx: index('uploaded_files_general_partition_idx').on(
+      table.scope,
+      table.subjectKey,
+      table.gradeLevel,
+      table.teacherVisible,
+      table.deletedAt,
+    ),
+    indexStatusIdx: index('uploaded_files_index_status_idx').on(
+      table.indexStatus,
+    ),
     uploadedAtIdx: index('uploaded_files_uploaded_at_idx').on(table.uploadedAt),
   }),
 );

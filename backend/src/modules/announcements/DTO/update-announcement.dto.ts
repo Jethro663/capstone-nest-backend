@@ -40,3 +40,15 @@ export class UpdateAnnouncementDto {
   @IsUUID('4', { each: true })
   fileIds?: string[];
 }
+
+export class ReleaseCoreAnnouncementDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  isPublished?: boolean;
+}

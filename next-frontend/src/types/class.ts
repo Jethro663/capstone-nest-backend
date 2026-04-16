@@ -41,6 +41,7 @@ export interface CreateClassDto {
   room?: string;
   cardPreset?: string;
   cardBannerUrl?: string | null;
+  templateId?: string;
   schedules?: { days: ScheduleDay[]; startTime: string; endTime: string }[];
 }
 
@@ -108,6 +109,10 @@ export interface StudentMasterlistQuery {
   gradeLevel?: string;
   sectionId?: string;
   search?: string;
+  eligibility?: 'all' | 'eligible' | 'mismatch';
+  sortBy?: 'lastName' | 'firstName' | 'email' | 'gradeLevel' | 'lrn' | 'eligibility';
+  sortDirection?: 'asc' | 'desc';
+  prioritizeEligible?: boolean;
   page?: number;
   limit?: number;
 }

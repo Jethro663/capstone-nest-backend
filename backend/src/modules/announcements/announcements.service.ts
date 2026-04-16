@@ -14,7 +14,7 @@ const sanitizeHtml = require('sanitize-html') as (
   options?: SanitizeOptions,
 ) => string;
 import { DatabaseService } from '../../database/database.service';
-import { announcements, classes } from '../../drizzle/schema';
+import { announcements, classes, enrollments } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
 import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
@@ -61,8 +61,68 @@ export class AnnouncementsService {
     }
   }
 
+  private async verifyClassReadAccess(
+    classId: string,
+    viewerId: string,
+    viewerRoles: string[],
+  ): Promise<{ isTeacherView: boolean }> {
+    const isAdmin = viewerRoles.includes('admin');
+    const isTeacher = viewerRoles.includes('teacher');
+    const isStudent = viewerRoles.includes('student');
+
+    if (!isAdmin && !isTeacher && !isStudent) {
+      throw new ForbiddenException('You do not have access to this class.');
+    }
+
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { id: true, teacherId: true },
+    });
+
+    if (!cls) {
+      throw new NotFoundException('Class not found.');
+    }
+
+    if (isAdmin) {
+      return { isTeacherView: true };
+    }
+
+    if (isTeacher) {
+      if (cls.teacherId !== viewerId) {
+        throw new ForbiddenException('You can only access your own classes.');
+      }
+      return { isTeacherView: true };
+    }
+
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.studentId, viewerId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException('You are not enrolled in this class.');
+    }
+
+    return { isTeacherView: false };
+  }
+
   private sanitize(html: string): string {
     return sanitizeHtml(html, ALLOWED_TAGS);
+  }
+
+  private ensureMutableAnnouncement(
+    announcement: { isCoreTemplateAsset?: boolean | null },
+    action: string,
+  ) {
+    if (announcement.isCoreTemplateAsset) {
+      throw new ForbiddenException(
+        `Core template announcements are immutable; use release control to ${action}`,
+      );
+    }
   }
 
   // ─── CRUD ───────────────────────────────────────────────────────────────────
@@ -132,9 +192,15 @@ export class AnnouncementsService {
   async findAllByClass(
     classId: string,
     viewerId: string,
-    viewerIsTeacher: boolean,
+    viewerRoles: string[],
     query: QueryAnnouncementsDto,
   ) {
+    const { isTeacherView } = await this.verifyClassReadAccess(
+      classId,
+      viewerId,
+      viewerRoles,
+    );
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
@@ -144,9 +210,12 @@ export class AnnouncementsService {
         eq(announcements.classId, classId),
         isNull(announcements.archivedAt),
         // Students only see published; teacher sees all (including pending)
-        viewerIsTeacher
+        isTeacherView
           ? undefined
-          : sql`${announcements.publishedAt} IS NOT NULL`,
+          : and(
+              sql`${announcements.publishedAt} IS NOT NULL`,
+              eq(announcements.isVisible, true),
+            ),
       ),
       orderBy: [desc(announcements.isPinned), desc(announcements.createdAt)],
       limit,
@@ -164,16 +233,26 @@ export class AnnouncementsService {
   async findOne(
     classId: string,
     announcementId: string,
-    viewerIsTeacher: boolean,
+    viewerId: string,
+    viewerRoles: string[],
   ) {
+    const { isTeacherView } = await this.verifyClassReadAccess(
+      classId,
+      viewerId,
+      viewerRoles,
+    );
+
     const row = await this.db.query.announcements.findFirst({
       where: and(
         eq(announcements.id, announcementId),
         eq(announcements.classId, classId),
         isNull(announcements.archivedAt),
-        viewerIsTeacher
+        isTeacherView
           ? undefined
-          : sql`${announcements.publishedAt} IS NOT NULL`,
+          : and(
+              sql`${announcements.publishedAt} IS NOT NULL`,
+              eq(announcements.isVisible, true),
+            ),
       ),
       with: {
         author: {
@@ -213,16 +292,28 @@ export class AnnouncementsService {
     if (!isAdmin && existing.authorId !== actorId) {
       throw new ForbiddenException('You can only edit your own announcements.');
     }
+    this.ensureMutableAnnouncement(existing, 'update');
 
     const updates: Partial<typeof announcements.$inferInsert> = {
       updatedAt: new Date(),
     };
+    const changedFields: string[] = [];
 
-    if (dto.title !== undefined) updates.title = dto.title.trim();
-    if (dto.content !== undefined) updates.content = this.sanitize(dto.content);
-    if (dto.isPinned !== undefined) updates.isPinned = dto.isPinned;
+    if (dto.title !== undefined) {
+      updates.title = dto.title.trim();
+      changedFields.push('title');
+    }
+    if (dto.content !== undefined) {
+      updates.content = this.sanitize(dto.content);
+      changedFields.push('content');
+    }
+    if (dto.isPinned !== undefined) {
+      updates.isPinned = dto.isPinned;
+      changedFields.push('isPinned');
+    }
     if (dto.scheduledAt !== undefined) {
       updates.scheduledAt = new Date(dto.scheduledAt);
+      changedFields.push('scheduledAt');
     }
 
     const [updated] = await this.db
@@ -230,6 +321,19 @@ export class AnnouncementsService {
       .set(updates)
       .where(eq(announcements.id, announcementId))
       .returning();
+
+    await this.auditService.log({
+      actorId,
+      action: 'announcement.updated',
+      targetType: 'announcement',
+      targetId: announcementId,
+      metadata: {
+        classId,
+        changedFields,
+        isPinned: updated.isPinned,
+        scheduledAt: updated.scheduledAt,
+      },
+    });
 
     return updated;
   }
@@ -259,6 +363,7 @@ export class AnnouncementsService {
         'You can only delete your own announcements.',
       );
     }
+    this.ensureMutableAnnouncement(existing, 'delete');
 
     await this.db
       .update(announcements)
@@ -318,6 +423,71 @@ export class AnnouncementsService {
           removeOnFail: false,
         },
       );
+
+      await this.auditService.log({
+        actorId: ann.authorId,
+        action: 'announcement.published_scheduled',
+        targetType: 'announcement',
+        targetId: ann.id,
+        metadata: {
+          classId: ann.classId,
+          trigger: 'scheduler',
+          publishedAt: now,
+        },
+      });
     }
+  }
+
+  async releaseCoreAnnouncement(
+    classId: string,
+    announcementId: string,
+    actorId: string,
+    isAdmin: boolean,
+    dto: { isVisible?: boolean; isPublished?: boolean },
+  ) {
+    await this.verifyClassAnnouncementAccess(classId, actorId, isAdmin);
+
+    const existing = await this.db.query.announcements.findFirst({
+      where: and(
+        eq(announcements.id, announcementId),
+        eq(announcements.classId, classId),
+        isNull(announcements.archivedAt),
+      ),
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Announcement not found.');
+    }
+    if (!existing.isCoreTemplateAsset) {
+      throw new BadRequestException(
+        'Only core template announcements can be released here',
+      );
+    }
+
+    const [updated] = await this.db
+      .update(announcements)
+      .set({
+        ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
+        ...(dto.isPublished !== undefined
+          ? { publishedAt: dto.isPublished ? new Date() : null }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(announcements.id, announcementId))
+      .returning();
+
+    await this.auditService.log({
+      actorId,
+      action: 'announcement.core_release_updated',
+      targetType: 'announcement',
+      targetId: announcementId,
+      metadata: {
+        classId,
+        isVisible: updated.isVisible,
+        isPublished: Boolean(updated.publishedAt),
+      },
+    });
+
+    return updated;
   }
 }

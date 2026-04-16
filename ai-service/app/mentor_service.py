@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import ollama_client
 from .config import settings
 from .media_utils import normalize_attachment_images, resolve_backend_upload_path
-from .retrieval_service import similarity_search
+from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser
 
 MENTOR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R ("Ja"), Nexora's grounded AI mentor.
@@ -190,6 +190,11 @@ async def explain_mistake(
         db,
         query_text=retrieval_query,
         class_id=str(row["class_id"]),
+        subject_key=normalize_library_subject_key(
+            row["subject_code"],
+            row["subject_name"],
+        ),
+        grade_level=str(row["grade_level"]) if row["grade_level"] else None,
         top_k=6,
         only_published=True,
         policy_name="mentor_explain",

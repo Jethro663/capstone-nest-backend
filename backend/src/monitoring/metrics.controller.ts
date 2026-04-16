@@ -1,7 +1,7 @@
 import { Controller, Get, Res, Inject } from '@nestjs/common';
 import type { Response } from 'express';
 import type { Registry } from 'prom-client';
-import { Public } from 'src/modules/auth/decorators/public.decorator';
+import { Public } from '../modules/auth/decorators/public.decorator';
 
 const PROM_CLIENT_REGISTRY = 'PROM_CLIENT_REGISTRY';
 

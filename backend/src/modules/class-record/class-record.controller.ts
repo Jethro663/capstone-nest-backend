@@ -199,7 +199,8 @@ export class ClassRecordController {
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getSlotOverview(
     @Param('classId', ParseUUIDPipe) classId: string,
-    @Query('gradingPeriod') gradingPeriod: CreateClassRecordDto['gradingPeriod'],
+    @Query('gradingPeriod')
+    gradingPeriod: CreateClassRecordDto['gradingPeriod'],
     @Query('assessmentId') assessmentId: string | undefined,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {

@@ -1,15 +1,7 @@
-/**
- * Login Form — react‑hook‑form + zod + shadcn/ui
- *
- * No signup link — accounts are created by admin.
- * On success stores access token in memory, then routes to /dashboard.
- */
-
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
@@ -17,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { loginSchema, type LoginFormValues } from '@/schemas/auth';
 import { loginAction, validateCredentialsAction } from '@/lib/auth-actions';
 import { useAuth } from '@/providers/AuthProvider';
+import { resolvePostLoginDestination } from '@/lib/dashboard-route-access';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,17 +18,18 @@ import { Label } from '@/components/ui/label';
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, role } = useAuth();
   const [serverError, setServerError] = useState('');
+  const requestedPath = searchParams.get('from');
 
-  // If already authenticated (e.g. page reload with valid cookie), skip login
+  // If already authenticated (e.g. page reload with valid cookie), skip login.
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.replace(searchParams.get('from') || '/dashboard');
+      router.replace(resolvePostLoginDestination(role, requestedPath));
     }
-  }, [authLoading, isAuthenticated, router, searchParams]);
+  }, [authLoading, isAuthenticated, requestedPath, role, router]);
 
-  // Show success toast when redirected here after account activation
+  // Show success toast when redirected here after account activation.
   useEffect(() => {
     if (searchParams.get('activated') === 'true') {
       toast.success('Account activated! Log in with your temporary password.');
@@ -56,8 +50,11 @@ export function LoginForm() {
     if (!result.success) {
       const msg = result.message ?? '';
       if (msg.toLowerCase().includes('not verified')) {
-        const validation = await validateCredentialsAction({ email: data.email, password: data.password });
-        
+        const validation = await validateCredentialsAction({
+          email: data.email,
+          password: data.password,
+        });
+
         if (validation.success) {
           router.push(`/verify-email?flow=activation&email=${encodeURIComponent(data.email)}`);
         } else {
@@ -69,68 +66,57 @@ export function LoginForm() {
       return;
     }
 
-    // Update auth context immediately
-    if (result.user) setUser(result.user);
-
-    // Redirect to the page they were trying to access, or dashboard
-    const from = searchParams.get('from') || '/dashboard';
-    router.push(from);
+    router.push(
+      resolvePostLoginDestination(result.user?.roles?.[0] ?? null, requestedPath),
+    );
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="auth-form space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-slate-900">Welcome back</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Sign in to your Nexora account
-        </p>
+        <h2 className="auth-title">Welcome back</h2>
+        <p className="auth-subtitle">Sign in to your Nexora account</p>
       </div>
 
-      {serverError && (
-        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {serverError}
-        </div>
-      )}
+      {serverError && <div className="auth-alert auth-alert-error">{serverError}</div>}
 
-      {/* Email */}
       <div className="space-y-2">
-        <Label htmlFor="email">Email address</Label>
+        <Label htmlFor="email" className="auth-label">
+          Email address
+        </Label>
         <Input
           id="email"
           type="email"
           placeholder="you@example.com"
+          autoComplete="username"
           disabled={isSubmitting}
+          className="auth-input"
           {...register('email')}
         />
-        {errors.email && (
-          <p className="text-xs text-destructive">{errors.email.message}</p>
-        )}
+        {errors.email && <p className="auth-error-text">{errors.email.message}</p>}
       </div>
 
-      {/* Password */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="password">Password</Label>
-          
-        </div>
+        <Label htmlFor="password" className="auth-label">
+          Password
+        </Label>
         <Input
           id="password"
           type="password"
-          placeholder="••••••••"
+          placeholder="********"
+          autoComplete="current-password"
           disabled={isSubmitting}
+          className="auth-input"
           {...register('password')}
         />
-        {errors.password && (
-          <p className="text-xs text-destructive">{errors.password.message}</p>
-        )}
+        {errors.password && <p className="auth-error-text">{errors.password.message}</p>}
       </div>
 
-      {/* Submit */}
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
+      <Button type="submit" className="auth-primary-button w-full" disabled={isSubmitting}>
         {isSubmitting ? (
           <span className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Signing in…
+            Signing in...
           </span>
         ) : (
           'Sign in'

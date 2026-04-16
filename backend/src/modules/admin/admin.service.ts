@@ -30,7 +30,10 @@ export class AdminService {
       totalSectionsResult,
       totalEnrollmentsResult,
     ] = await Promise.all([
-      this.db.select({ count: count() }).from(users).where(eq(users.status, 'ACTIVE')),
+      this.db
+        .select({ count: count() })
+        .from(users)
+        .where(eq(users.status, 'ACTIVE')),
       this.db
         .select({
           roleName: roles.name,
@@ -41,7 +44,10 @@ export class AdminService {
         .innerJoin(roles, eq(userRoles.roleId, roles.id))
         .where(eq(users.status, 'ACTIVE'))
         .groupBy(roles.name),
-      this.db.select({ count: count() }).from(classes).where(eq(classes.isActive, true)),
+      this.db
+        .select({ count: count() })
+        .from(classes)
+        .where(eq(classes.isActive, true)),
       this.db.select({ count: count() }).from(classes),
       this.db.select({ count: count() }).from(sql`sections`),
       this.db.select({ count: count() }).from(sql`enrollments`),
@@ -101,25 +107,24 @@ export class AdminService {
     return this.auditService.list(filters);
   }
 
-  async getUsageSummary(filters: {
-    dateFrom?: Date;
-    dateTo?: Date;
-  }) {
-    const [[activeTeachers], [activeStudents], systemUsage] = await Promise.all([
-      this.db
-        .select({ total: count(users.id) })
-        .from(users)
-        .innerJoin(userRoles, eq(userRoles.userId, users.id))
-        .innerJoin(roles, eq(roles.id, userRoles.roleId))
-        .where(and(eq(roles.name, 'teacher'), eq(users.status, 'ACTIVE'))),
-      this.db
-        .select({ total: count(users.id) })
-        .from(users)
-        .innerJoin(userRoles, eq(userRoles.userId, users.id))
-        .innerJoin(roles, eq(roles.id, userRoles.roleId))
-        .where(and(eq(roles.name, 'student'), eq(users.status, 'ACTIVE'))),
-      this.reportsService.getSystemUsage(filters),
-    ]);
+  async getUsageSummary(filters: { dateFrom?: Date; dateTo?: Date }) {
+    const [[activeTeachers], [activeStudents], systemUsage] = await Promise.all(
+      [
+        this.db
+          .select({ total: count(users.id) })
+          .from(users)
+          .innerJoin(userRoles, eq(userRoles.userId, users.id))
+          .innerJoin(roles, eq(roles.id, userRoles.roleId))
+          .where(and(eq(roles.name, 'teacher'), eq(users.status, 'ACTIVE'))),
+        this.db
+          .select({ total: count(users.id) })
+          .from(users)
+          .innerJoin(userRoles, eq(userRoles.userId, users.id))
+          .innerJoin(roles, eq(roles.id, userRoles.roleId))
+          .where(and(eq(roles.name, 'student'), eq(users.status, 'ACTIVE'))),
+        this.reportsService.getSystemUsage(filters),
+      ],
+    );
 
     return {
       activeTeachers: Number(activeTeachers?.total ?? 0),

@@ -81,7 +81,9 @@ export class AnalyticsService {
       const current = snapshotMap.get(entry.studentId);
       const before = entry.triggerScore ? Number(entry.triggerScore) : null;
       const after = current?.blendedScore ? Number(current.blendedScore) : null;
-      const completedAssignments = entry.assignments.filter((item) => item.isCompleted).length;
+      const completedAssignments = entry.assignments.filter(
+        (item) => item.isCompleted,
+      ).length;
       const improved =
         before !== null && after !== null ? after > before : null;
 
@@ -99,7 +101,9 @@ export class AnalyticsService {
         assignmentsCompleted: completedAssignments,
         completionRate:
           entry.assignments.length > 0
-            ? Math.round((completedAssignments / entry.assignments.length) * 100)
+            ? Math.round(
+                (completedAssignments / entry.assignments.length) * 100,
+              )
             : 0,
         currentIsAtRisk: current?.isAtRisk ?? null,
         lastComputedAt: current?.lastComputedAt ?? null,
@@ -140,7 +144,9 @@ export class AnalyticsService {
     });
 
     const trends = records.map((record) => {
-      const grades = record.finalGrades.map((item) => Number(item.finalPercentage));
+      const grades = record.finalGrades.map((item) =>
+        Number(item.finalPercentage),
+      );
       const average =
         grades.length > 0
           ? Math.round(

@@ -1,4 +1,10 @@
-import { ArrayMinSize, ArrayUnique, IsArray, IsIn, IsString } from 'class-validator';
+import {
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
+  IsIn,
+  IsString,
+} from 'class-validator';
 
 export const BULK_USER_LIFECYCLE_ACTIONS = [
   'suspend',
@@ -7,7 +13,8 @@ export const BULK_USER_LIFECYCLE_ACTIONS = [
   'purge',
 ] as const;
 
-export type BulkUserLifecycleAction = (typeof BULK_USER_LIFECYCLE_ACTIONS)[number];
+export type BulkUserLifecycleAction =
+  (typeof BULK_USER_LIFECYCLE_ACTIONS)[number];
 
 export interface BulkLifecycleFailure {
   userId: string;

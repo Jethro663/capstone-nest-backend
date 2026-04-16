@@ -40,6 +40,9 @@ export interface ModuleItem {
   isVisible: boolean;
   isRequired: boolean;
   isGiven: boolean;
+  isCoreTemplateAsset?: boolean;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   metadata?: Record<string, unknown> | null;
   accessible?: boolean;
   completed?: boolean;
@@ -83,6 +86,9 @@ export interface ClassModule {
   order: number;
   isVisible: boolean;
   isLocked: boolean;
+  isCoreTemplateAsset?: boolean;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   teacherNotes?: string;
   themeKind?: 'gradient' | 'image';
   gradientId?: string;

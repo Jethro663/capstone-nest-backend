@@ -57,8 +57,7 @@ export function AppOrbitLoader({
         ) : (
           <motion.div
             className="orbit-loader__system"
-            initial={false}
-            animate={{ rotate: 360 }}
+            animate={{ rotate: [0, 360] }}
             transition={{ duration: 3.4, repeat: Infinity, ease: 'linear' }}
             aria-hidden="true"
           >
@@ -66,8 +65,7 @@ export function AppOrbitLoader({
 
             <motion.div
               className="orbit-loader__ring orbit-loader__ring--outer"
-              initial={false}
-              animate={{ rotate: 360 }}
+              animate={{ rotate: [0, 360] }}
               transition={{ duration: 2.1, repeat: Infinity, ease: 'linear' }}
             >
               <div className="orbit-loader__orb orbit-loader__orb--outer" data-testid="orbit-ring-a">
@@ -79,8 +77,7 @@ export function AppOrbitLoader({
 
             <motion.div
               className="orbit-loader__ring orbit-loader__ring--inner"
-              initial={false}
-              animate={{ rotate: -360 }}
+              animate={{ rotate: [0, -360] }}
               transition={{ duration: 1.65, repeat: Infinity, ease: 'linear' }}
             >
               <div className="orbit-loader__orb orbit-loader__orb--inner" data-testid="orbit-ring-b" />

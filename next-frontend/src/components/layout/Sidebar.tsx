@@ -2,9 +2,10 @@
  * Sidebar - role-aware navigation
  */
 
-"use client";
+'use client';
 
-import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
   LayoutDashboard,
@@ -27,12 +28,13 @@ import {
   Library,
   Upload,
   CalendarDays,
-} from "lucide-react";
-import { cn } from "@/utils/cn";
-import { useAuth } from "@/providers/AuthProvider";
-import { logoutAction } from "@/lib/auth-actions";
-import { Button } from "@/components/ui/button";
-import { getProfileRoute } from "@/utils/profile";
+} from 'lucide-react';
+import { cn } from '@/utils/cn';
+import { useAuth } from '@/providers/AuthProvider';
+import { logoutAction } from '@/lib/auth-actions';
+import { Button } from '@/components/ui/button';
+import { getProfileRoute } from '@/utils/profile';
+import { lxpService } from '@/services/lxp-service';
 import {
   normalizeDashboardRole,
   type DashboardRole,
@@ -47,6 +49,7 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
   { label: "My Courses", href: "/dashboard/student/courses", icon: BookOpen },
+  { label: "LXP", href: "/dashboard/student/lxp", icon: ClipboardList },
   { label: "JA", href: "/dashboard/student/ja", icon: Bot },
   {
     label: "Performance",
@@ -134,9 +137,9 @@ const adminNav: NavItem[] = [
 
 function getNavItems(role: string | null): NavItem[] {
   switch (role) {
-    case "teacher":
+    case 'teacher':
       return teacherNav;
-    case "admin":
+    case 'admin':
       return adminNav;
     default:
       return studentNav;
@@ -146,11 +149,11 @@ function getNavItems(role: string | null): NavItem[] {
 function getRoleLabel(role: string | null): string {
   switch (role) {
     case "teacher":
-      return "Teacher Portal";
-    case "admin":
-      return "Admin Portal";
+      return 'Teacher Portal';
+    case 'admin':
+      return 'Admin Portal';
     default:
-      return "Student Portal";
+      return 'Student Portal';
   }
 }
 
@@ -194,10 +197,14 @@ export function Sidebar({
   const router = useRouter();
   const { role, user } = useAuth();
   const effectiveRole = shellRole ?? normalizeDashboardRole(role);
-  const items = getNavItems(effectiveRole).map((item) =>
-    item.label === "Profile"
+  const items = useMemo(
+    () =>
+      getNavItems(effectiveRole).map((item) =>
+        item.label === 'Profile'
       ? { ...item, href: getProfileRoute(effectiveRole) }
       : item,
+      ),
+    [effectiveRole],
   );
   const isStudentShell = effectiveRole === "student";
   const isTeacherShell = effectiveRole === "teacher";
@@ -208,6 +215,56 @@ export function Sidebar({
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ""}`.toUpperCase()
     : "U";
+  const [teacherPendingInterventionCount, setTeacherPendingInterventionCount] =
+    useState(0);
+  const teacherPendingCountCacheKey = user?.id
+    ? `nexora.teacherPendingInterventionCount:${user.id}`
+    : null;
+
+  useEffect(() => {
+    let mounted = true;
+    if (!isTeacherShell || !teacherPendingCountCacheKey) return;
+
+    if (typeof window !== 'undefined') {
+      const cachedValue = window.sessionStorage.getItem(
+        teacherPendingCountCacheKey,
+      );
+      if (cachedValue !== null) {
+        const parsedValue = Number(cachedValue);
+        if (Number.isFinite(parsedValue)) {
+          const frame = window.requestAnimationFrame(() => {
+            setTeacherPendingInterventionCount(Math.max(0, parsedValue));
+          });
+          return () => {
+            mounted = false;
+            window.cancelAnimationFrame(frame);
+          };
+        }
+      }
+    }
+
+    void lxpService
+      .getTeacherPendingInterventionCount()
+      .then((response) => {
+        if (!mounted) return;
+        const pendingCount = Math.max(0, response.data.pendingCount ?? 0);
+        setTeacherPendingInterventionCount(pendingCount);
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem(
+            teacherPendingCountCacheKey,
+            String(pendingCount),
+          );
+        }
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setTeacherPendingInterventionCount(0);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isTeacherShell, teacherPendingCountCacheKey]);
 
   const handleLogout = async () => {
     await logoutAction();
@@ -367,6 +424,7 @@ export function Sidebar({
           return (
             <button
               key={item.href}
+              type="button"
               onClick={() => {
                 router.push(item.href);
                 onClose?.();
@@ -398,7 +456,18 @@ export function Sidebar({
                   isStudentShell && "student-sidebar__item-icon",
                 )}
               />
-              {item.label}
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{item.label}</span>
+                {isTeacherShell &&
+                item.href === "/dashboard/teacher/interventions" &&
+                teacherPendingInterventionCount > 0 ? (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                    {teacherPendingInterventionCount > 99
+                      ? "99+"
+                      : teacherPendingInterventionCount}
+                  </span>
+                ) : null}
+              </span>
             </button>
           );
         })}

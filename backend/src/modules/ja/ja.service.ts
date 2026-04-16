@@ -8,6 +8,7 @@ import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { AiProxyService } from '../ai-mentor/ai-proxy.service';
+import { LxpService } from '../lxp/lxp.service';
 import {
   assessmentAttempts,
   assessments,
@@ -71,6 +72,7 @@ export class JaService {
     private readonly databaseService: DatabaseService,
     private readonly aiProxyService: AiProxyService,
     private readonly auditService: AuditService,
+    private readonly lxpService: LxpService,
   ) {}
 
   private get db() {
@@ -135,7 +137,9 @@ export class JaService {
       throw new BadRequestException('AI packet contains an invalid item.');
     }
     if (!item.prompt || !String(item.prompt).trim()) {
-      throw new BadRequestException('AI packet contains an item without prompt.');
+      throw new BadRequestException(
+        'AI packet contains an item without prompt.',
+      );
     }
     if (!item.itemType || !String(item.itemType).trim()) {
       throw new BadRequestException('AI packet contains an item without type.');
@@ -209,13 +213,17 @@ export class JaService {
   ) {
     if (itemType === 'multiple_choice' || itemType === 'dropdown') {
       const selectedOptionId =
-        typeof answer.selectedOptionId === 'string' ? answer.selectedOptionId : '';
+        typeof answer.selectedOptionId === 'string'
+          ? answer.selectedOptionId
+          : '';
       const expectedOptionId =
-        typeof answerKey.correctOptionId === 'string' ? answerKey.correctOptionId : '';
+        typeof answerKey.correctOptionId === 'string'
+          ? answerKey.correctOptionId
+          : '';
       const isCorrect = Boolean(
         selectedOptionId &&
-          expectedOptionId &&
-          selectedOptionId === expectedOptionId,
+        expectedOptionId &&
+        selectedOptionId === expectedOptionId,
       );
       return { isCorrect, scoreDelta: isCorrect ? 1 : 0 };
     }
@@ -240,7 +248,9 @@ export class JaService {
 
     if (itemType === 'true_false') {
       const expectedBoolean =
-        typeof answerKey.correctValue === 'boolean' ? answerKey.correctValue : null;
+        typeof answerKey.correctValue === 'boolean'
+          ? answerKey.correctValue
+          : null;
       const selectedBoolean =
         typeof answer.value === 'boolean'
           ? answer.value
@@ -253,13 +263,17 @@ export class JaService {
       }
 
       const selectedOptionId =
-        typeof answer.selectedOptionId === 'string' ? answer.selectedOptionId : '';
+        typeof answer.selectedOptionId === 'string'
+          ? answer.selectedOptionId
+          : '';
       const expectedOptionId =
-        typeof answerKey.correctOptionId === 'string' ? answerKey.correctOptionId : '';
+        typeof answerKey.correctOptionId === 'string'
+          ? answerKey.correctOptionId
+          : '';
       const isCorrect = Boolean(
         selectedOptionId &&
-          expectedOptionId &&
-          selectedOptionId === expectedOptionId,
+        expectedOptionId &&
+        selectedOptionId === expectedOptionId,
       );
       return { isCorrect, scoreDelta: isCorrect ? 1 : 0 };
     }
@@ -423,7 +437,9 @@ export class JaService {
             const lessonId =
               typeof entry.lessonId === 'string' ? entry.lessonId : null;
             const assessmentId =
-              typeof entry.assessmentId === 'string' ? entry.assessmentId : null;
+              typeof entry.assessmentId === 'string'
+                ? entry.assessmentId
+                : null;
             if (lessonId && !allowedLessonIds.has(lessonId)) return false;
             if (assessmentId && !allowedAssessmentIds.has(assessmentId))
               return false;
@@ -470,7 +486,9 @@ export class JaService {
       classes: data.classes ?? [],
       selectedClassId,
       recommendations: sanitizedRecommendations,
-      recentLessons: Array.isArray(data.recentLessons) ? data.recentLessons : [],
+      recentLessons: Array.isArray(data.recentLessons)
+        ? data.recentLessons
+        : [],
       recentAttempts: Array.isArray(data.recentAttempts)
         ? data.recentAttempts
         : [],
@@ -543,79 +561,85 @@ export class JaService {
 
     const [threads, eligibleAttempts, reviewSessions, masteryRows] =
       await Promise.all([
-      this.db.query.jaThreads.findMany({
-        where: and(
-          eq(jaThreads.studentId, studentId),
-          eq(jaThreads.classId, selectedClassId),
-          eq(jaThreads.status, 'active'),
-        ),
-        columns: {
-          id: true,
-          title: true,
-          status: true,
-          lastMessageAt: true,
-          updatedAt: true,
-        },
-        orderBy: [desc(jaThreads.updatedAt)],
-        limit: 12,
-      }),
-      this.db
-        .select({
-          attemptId: assessmentAttempts.id,
-          assessmentId: assessments.id,
-          assessmentTitle: assessments.title,
-          submittedAt: assessmentAttempts.submittedAt,
-          score: assessmentAttempts.score,
-          passed: assessmentAttempts.passed,
-        })
-        .from(assessmentAttempts)
-        .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
-        .where(
-          and(
-            eq(assessmentAttempts.studentId, studentId),
-            eq(assessmentAttempts.isSubmitted, true),
-            eq(assessments.classId, selectedClassId),
-            eq(assessments.isPublished, true),
+        this.db.query.jaThreads.findMany({
+          where: and(
+            eq(jaThreads.studentId, studentId),
+            eq(jaThreads.classId, selectedClassId),
+            eq(jaThreads.status, 'active'),
           ),
-        )
-        .orderBy(desc(assessmentAttempts.submittedAt))
-        .limit(15),
-      this.db.query.jaSessions.findMany({
-        where: and(
-          eq(jaSessions.studentId, studentId),
-          eq(jaSessions.classId, selectedClassId),
-          eq(jaSessions.mode, 'review'),
-          inArray(jaSessions.status, ['active', 'completed']),
-        ),
-        columns: {
-          id: true,
-          status: true,
-          currentIndex: true,
-          questionCount: true,
-          strikeCount: true,
-          rewardState: true,
-          groundingStatus: true,
-          startedAt: true,
-          completedAt: true,
-        },
-        orderBy: [desc(jaSessions.updatedAt)],
-        limit: 12,
-      }),
-      this.db
-        .select({
-          avgScore: sql<number>`coalesce(avg(${assessmentAttempts.score}), 0)`,
-        })
-        .from(assessmentAttempts)
-        .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
-        .where(
-          and(
-            eq(assessmentAttempts.studentId, studentId),
-            eq(assessmentAttempts.isSubmitted, true),
-            eq(assessments.classId, selectedClassId),
-            eq(assessments.isPublished, true),
+          columns: {
+            id: true,
+            title: true,
+            status: true,
+            lastMessageAt: true,
+            updatedAt: true,
+          },
+          orderBy: [desc(jaThreads.updatedAt)],
+          limit: 12,
+        }),
+        this.db
+          .select({
+            attemptId: assessmentAttempts.id,
+            assessmentId: assessments.id,
+            assessmentTitle: assessments.title,
+            submittedAt: assessmentAttempts.submittedAt,
+            score: assessmentAttempts.score,
+            passed: assessmentAttempts.passed,
+          })
+          .from(assessmentAttempts)
+          .innerJoin(
+            assessments,
+            eq(assessments.id, assessmentAttempts.assessmentId),
+          )
+          .where(
+            and(
+              eq(assessmentAttempts.studentId, studentId),
+              eq(assessmentAttempts.isSubmitted, true),
+              eq(assessments.classId, selectedClassId),
+              eq(assessments.isPublished, true),
+            ),
+          )
+          .orderBy(desc(assessmentAttempts.submittedAt))
+          .limit(15),
+        this.db.query.jaSessions.findMany({
+          where: and(
+            eq(jaSessions.studentId, studentId),
+            eq(jaSessions.classId, selectedClassId),
+            eq(jaSessions.mode, 'review'),
+            inArray(jaSessions.status, ['active', 'completed']),
           ),
-        ),
-    ]);
+          columns: {
+            id: true,
+            status: true,
+            currentIndex: true,
+            questionCount: true,
+            strikeCount: true,
+            rewardState: true,
+            groundingStatus: true,
+            startedAt: true,
+            completedAt: true,
+          },
+          orderBy: [desc(jaSessions.updatedAt)],
+          limit: 12,
+        }),
+        this.db
+          .select({
+            avgScore: sql<number>`coalesce(avg(${assessmentAttempts.score}), 0)`,
+          })
+          .from(assessmentAttempts)
+          .innerJoin(
+            assessments,
+            eq(assessments.id, assessmentAttempts.assessmentId),
+          )
+          .where(
+            and(
+              eq(assessmentAttempts.studentId, studentId),
+              eq(assessmentAttempts.isSubmitted, true),
+              eq(assessments.classId, selectedClassId),
+              eq(assessments.isPublished, true),
+            ),
+          ),
+      ]);
 
     const avgScore = Number(masteryRows[0]?.avgScore ?? 0);
     const masteryPercent = Math.max(0, Math.min(100, Math.round(avgScore)));
@@ -731,7 +755,10 @@ export class JaService {
   async getAskThread(user: UserContext, threadId: string) {
     const studentId = this.resolveUserId(user);
     const thread = await this.db.query.jaThreads.findFirst({
-      where: and(eq(jaThreads.id, threadId), eq(jaThreads.studentId, studentId)),
+      where: and(
+        eq(jaThreads.id, threadId),
+        eq(jaThreads.studentId, studentId),
+      ),
       columns: {
         id: true,
         classId: true,
@@ -772,7 +799,10 @@ export class JaService {
   ) {
     const studentId = this.resolveUserId(user);
     const thread = await this.db.query.jaThreads.findFirst({
-      where: and(eq(jaThreads.id, threadId), eq(jaThreads.studentId, studentId)),
+      where: and(
+        eq(jaThreads.id, threadId),
+        eq(jaThreads.studentId, studentId),
+      ),
       columns: {
         id: true,
         classId: true,
@@ -942,7 +972,10 @@ export class JaService {
         passed: assessmentAttempts.passed,
       })
       .from(assessmentAttempts)
-      .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+      .innerJoin(
+        assessments,
+        eq(assessments.id, assessmentAttempts.assessmentId),
+      )
       .where(
         and(
           eq(assessmentAttempts.studentId, studentId),
@@ -1082,9 +1115,13 @@ export class JaService {
     const attempt = await this.db
       .select({
         attemptId: assessmentAttempts.id,
+        assessmentId: assessments.id,
       })
       .from(assessmentAttempts)
-      .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+      .innerJoin(
+        assessments,
+        eq(assessments.id, assessmentAttempts.assessmentId),
+      )
       .where(
         and(
           eq(assessmentAttempts.id, dto.attemptId),
@@ -1153,6 +1190,7 @@ export class JaService {
         sourceSnapshotJson: {
           ...(data.sourceSnapshot ?? {}),
           attemptId: dto.attemptId,
+          assessmentId: attempt[0].assessmentId,
         },
         groundingStatus: data.groundingStatus ?? 'grounded',
       })
@@ -1187,7 +1225,11 @@ export class JaService {
 
     return this.getSession(user, createdSession.id, 'review');
   }
-  async getSession(user: UserContext, sessionId: string, expectedMode?: JaMode) {
+  async getSession(
+    user: UserContext,
+    sessionId: string,
+    expectedMode?: JaMode,
+  ) {
     const studentId = this.resolveUserId(user);
     const session = await this.getSessionForStudent(
       studentId,
@@ -1248,7 +1290,9 @@ export class JaService {
     );
 
     if (session.status !== 'active') {
-      throw new BadRequestException('Session is no longer accepting responses.');
+      throw new BadRequestException(
+        'Session is no longer accepting responses.',
+      );
     }
 
     const item = await this.db.query.jaSessionItems.findFirst({
@@ -1460,7 +1504,8 @@ export class JaService {
         } else {
           const dayDiff = progressRow.lastActivityAt
             ? Math.floor(
-                (now.getTime() - new Date(progressRow.lastActivityAt).getTime()) /
+                (now.getTime() -
+                  new Date(progressRow.lastActivityAt).getTime()) /
                   86_400_000,
               )
             : null;
@@ -1512,6 +1557,33 @@ export class JaService {
       },
     });
 
+    let lxpCheckpointCompletion: {
+      completed: boolean;
+      reason?: string;
+      assignmentId?: string;
+      caseId?: string;
+      interventionCompletedByStudent?: boolean;
+    } | null = null;
+    if (session.mode === 'review') {
+      const sourceSnapshot = (session.sourceSnapshotJson ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const linkedAssessmentId =
+        typeof sourceSnapshot.assessmentId === 'string'
+          ? sourceSnapshot.assessmentId
+          : null;
+      if (linkedAssessmentId) {
+        lxpCheckpointCompletion =
+          await this.lxpService.completeAssessmentRetryFromJaReview(
+            studentId,
+            session.classId,
+            linkedAssessmentId,
+            sessionId,
+          );
+      }
+    }
+
     await this.auditService.log({
       actorId: studentId,
       action: 'ja.session.completed',
@@ -1524,6 +1596,7 @@ export class JaService {
         questionCount: session.questionCount,
         awardedNow,
         xpAwarded,
+        lxpCheckpointCompletion,
       },
     });
 
@@ -1533,6 +1606,7 @@ export class JaService {
       questionCount: session.questionCount,
       awardedNow,
       xpAwarded,
+      lxpCheckpointCompletion,
     };
   }
 

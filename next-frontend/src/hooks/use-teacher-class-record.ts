@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { classRecordService } from '@/services/class-record-service';
+import { exportClassRecordTemplateWorkbook } from '@/lib/class-record-template-export';
 import type {
   ClassRecord,
   SpreadsheetData,
@@ -539,7 +540,7 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     } catch (error) {
       toast.error(getErrorMessage(error, 'Failed to save score'));
     }
-  }, [editValue, editingCell, reloadSelectedSpreadsheet]);
+  }, [editValue, editingCell, reloadSelectedSpreadsheet, selectedRecordId]);
 
   const handleCellKeyDown = useCallback(
     (e: ReactKeyboardEvent) => {
@@ -626,10 +627,15 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     if (!selectedRecord || !spreadsheet) return;
 
     try {
-      exportWorkbook(spreadsheet, selectedRecord);
+      await exportClassRecordTemplateWorkbook(spreadsheet, selectedRecord);
       toast.success('Workbook export downloaded');
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to export workbook'));
+    } catch {
+      try {
+        exportWorkbook(spreadsheet, selectedRecord);
+        toast.success('Workbook export downloaded');
+      } catch (fallbackError) {
+        toast.error(getErrorMessage(fallbackError, 'Failed to export workbook'));
+      }
     }
   }, [selectedRecord, spreadsheet]);
 

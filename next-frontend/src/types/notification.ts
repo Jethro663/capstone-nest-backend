@@ -3,8 +3,10 @@ export interface Notification {
   userId: string;
   type: string;
   title: string;
+  body?: string;
   message: string;
   isRead: boolean;
+  referenceId?: string | null;
   metadata?: Record<string, unknown>;
   createdAt: string;
   readAt?: string | null;

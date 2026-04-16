@@ -17,6 +17,7 @@ import { toAppError } from "../api/http";
 import { API_BASE_URL } from "../api/config";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
+import { buildProfileFullName, computeProfileReadiness } from "./screen-flow";
 import { colors, gradients } from "../theme/tokens";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
@@ -36,7 +37,12 @@ export function ProfileScreen(_: Props) {
   const [error, setError] = useState("");
 
   const fullName = useMemo(
-    () => [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || "Student",
+    () =>
+      buildProfileFullName({
+        firstName: user?.firstName,
+        lastName: user?.lastName,
+        email: user?.email,
+      }),
     [user?.email, user?.firstName, user?.lastName],
   );
 
@@ -47,7 +53,24 @@ export function ProfileScreen(_: Props) {
     setFamilyContact(profile?.familyContact || "");
   }, [profile?.address, profile?.familyContact, profile?.familyName, profile?.phone]);
 
-  const overallProgress = 65;
+  const overallProgress = useMemo(
+    () =>
+      computeProfileReadiness({
+        phone: profile?.phone,
+        address: profile?.address,
+        familyName: profile?.familyName,
+        familyContact: profile?.familyContact,
+        profilePicture: profile?.profilePicture || user?.profilePicture || null,
+      }),
+    [
+      profile?.address,
+      profile?.familyContact,
+      profile?.familyName,
+      profile?.phone,
+      profile?.profilePicture,
+      user?.profilePicture,
+    ],
+  );
 
   const handleSave = async () => {
     try {
@@ -141,7 +164,7 @@ export function ProfileScreen(_: Props) {
                   style={{ width: "100%", height: "100%" }}
                 />
               ) : (
-                <Text style={{ fontSize: 52 }}>ðŸŽ“</Text>
+                <Text style={{ fontSize: 52 }}>🎓</Text>
               )}
             </Pressable>
             <Pressable
@@ -164,7 +187,7 @@ export function ProfileScreen(_: Props) {
 
           <Text style={{ marginTop: 14, fontSize: 24, fontWeight: "900", color: colors.white }}>{fullName}</Text>
           <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.82)" }}>
-            {profile?.gradeLevel || user?.gradeLevel || "Assigned grade"} â€¢ {user?.email}
+            {profile?.gradeLevel || user?.gradeLevel || "Assigned grade"} • {user?.email}
           </Text>
           <View
             style={{
@@ -180,7 +203,7 @@ export function ProfileScreen(_: Props) {
           >
             <MaterialCommunityIcons name="account-check-outline" size={14} color="#FFD700" />
             <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>
-              {user?.status || "ACTIVE"} â€¢ Student
+              {user?.status || "ACTIVE"} • Student
             </Text>
           </View>
         </View>

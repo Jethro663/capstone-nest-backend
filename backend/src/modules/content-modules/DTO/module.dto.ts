@@ -231,6 +231,22 @@ export class ReorderModuleItemsDto {
   items: ReorderEntryDto[];
 }
 
+export class ReleaseCoreModuleDto {
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
+}
+
+export class ReleaseCoreModuleItemDto {
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isGiven?: boolean;
+}
+
 export class ModuleGradingScaleEntryDto {
   @IsString()
   @IsNotEmpty()

@@ -1,93 +1,145 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  StudentMasterlistTable,
+  type MasterlistEligibilityFilter,
+  type MasterlistSortDirection,
+  type MasterlistSortField,
+} from '@/components/shared/StudentMasterlistTable';
 import type { ClassItem, StudentMasterlistItem } from '@/types/class';
 import type { Section } from '@/types/section';
 import { GRADE_LEVELS } from '@/utils/constants';
 
 const PAGE_SIZE = 20;
 
+function toSortField(value: string | null): MasterlistSortField {
+  if (
+    value === 'firstName' ||
+    value === 'email' ||
+    value === 'gradeLevel' ||
+    value === 'lrn' ||
+    value === 'eligibility'
+  ) {
+    return value;
+  }
+  return 'lastName';
+}
+
+function toSortDirection(value: string | null): MasterlistSortDirection {
+  return value === 'desc' ? 'desc' : 'asc';
+}
+
+function toEligibility(value: string | null): MasterlistEligibilityFilter {
+  if (value === 'eligible' || value === 'mismatch') return value;
+  return 'all';
+}
+
 export default function TeacherAddStudentsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const classId = params.id as string;
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
-  const [gradeLevel, setGradeLevel] = useState('');
-  const [sectionId, setSectionId] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [sections, setSections] = useState<Section[]>([]);
   const [students, setStudents] = useState<StudentMasterlistItem[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const gradeLevel = searchParams.get('gradeLevel') || '';
+  const sectionId = searchParams.get('sectionId') || '';
+  const search = searchParams.get('search') || '';
+  const page = Math.max(1, Number(searchParams.get('page') || '1'));
+  const eligibility = toEligibility(searchParams.get('eligibility'));
+  const sortBy = toSortField(searchParams.get('sortBy'));
+  const sortDirection = toSortDirection(searchParams.get('sortDirection'));
 
   const selectedEligibleCount = useMemo(
     () => students.filter((student) => selectedIds.includes(student.id) && student.isEligible).length,
     [selectedIds, students],
   );
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput.trim());
-      setPage(1);
-      setSelectedIds([]);
-    }, 300);
+  const updateQuery = useCallback(
+    (updates: Record<string, string | number | null>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(updates)) {
+        if (value === null || value === '' || Number.isNaN(value)) {
+          next.delete(key);
+        } else {
+          next.set(key, String(value));
+        }
+      }
 
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+      const query = next.toString();
+      router.replace(
+        query
+          ? `/dashboard/teacher/classes/${classId}/students/add?${query}`
+          : `/dashboard/teacher/classes/${classId}/students/add`,
+        { scroll: false },
+      );
+    },
+    [classId, router, searchParams],
+  );
 
   const fetchClass = useCallback(async () => {
     const classRes = await classService.getById(classId);
-    setClassItem(classRes.data);
-    const defaultGrade = classRes.data.section?.gradeLevel || classRes.data.subjectGradeLevel || '';
-    setGradeLevel(defaultGrade);
-  }, [classId]);
+    const resolvedClass = classRes.data;
+    setClassItem(resolvedClass);
 
-  const fetchSections = useCallback(async (targetGradeLevel: string) => {
-    if (!targetGradeLevel) {
+    const defaultGrade = resolvedClass.section?.gradeLevel || resolvedClass.subjectGradeLevel || '';
+    if (!gradeLevel && defaultGrade) {
+      updateQuery({ gradeLevel: defaultGrade, page: 1 });
+    }
+  }, [classId, gradeLevel, updateQuery]);
+
+  const fetchSections = useCallback(async () => {
+    if (!gradeLevel) {
       setSections([]);
       return;
     }
-    const res = await sectionService.getAll({ gradeLevel: targetGradeLevel, page: 1, limit: 100 });
+    const res = await sectionService.getAll({ gradeLevel, page: 1, limit: 100 });
     setSections(res.data || []);
-  }, []);
+  }, [gradeLevel]);
 
   const fetchStudents = useCallback(async () => {
     if (!gradeLevel) return;
+
     try {
       setLoading(true);
       const res = await classService.getStudentsMasterlist(classId, {
         gradeLevel,
         sectionId: sectionId || undefined,
         search: search || undefined,
+        eligibility,
+        sortBy,
+        sortDirection,
+        prioritizeEligible: true,
         page,
         limit: PAGE_SIZE,
       });
+
       setStudents(res.data || []);
       setTotalPages(res.totalPages || 1);
       setTotal(res.total || 0);
+      setSelectedIds([]);
     } catch {
       toast.error('Failed to load students');
     } finally {
       setLoading(false);
     }
-  }, [classId, gradeLevel, page, search, sectionId]);
+  }, [classId, eligibility, gradeLevel, page, search, sectionId, sortBy, sortDirection]);
 
   useEffect(() => {
     (async () => {
@@ -103,23 +155,22 @@ export default function TeacherAddStudentsPage() {
   }, [fetchClass]);
 
   useEffect(() => {
-    if (!gradeLevel) return;
-    fetchSections(gradeLevel);
-    setSectionId('');
-    setPage(1);
-    setSelectedIds([]);
-  }, [gradeLevel, fetchSections]);
+    void fetchSections();
+  }, [fetchSections]);
 
   useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
+    if (!gradeLevel) return;
+    void fetchStudents();
+  }, [fetchStudents, gradeLevel]);
 
-  const handleToggleStudent = (student: StudentMasterlistItem) => {
-    if (!student.isEligible) return;
+  const handleToggleStudent = (studentId: string) => {
+    const student = students.find((row) => row.id === studentId);
+    if (!student?.isEligible) return;
+
     setSelectedIds((prev) =>
-      prev.includes(student.id)
-        ? prev.filter((id) => id !== student.id)
-        : [...prev, student.id],
+      prev.includes(studentId)
+        ? prev.filter((id) => id !== studentId)
+        : [...prev, studentId],
     );
   };
 
@@ -146,176 +197,101 @@ export default function TeacherAddStudentsPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      <div>
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)} className="mb-2">
-          ← Back to Class
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)} className="mb-2">
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Back to Class
+          </Button>
+          <h1 className="text-2xl font-bold">Add Students</h1>
+          <p className="text-muted-foreground">
+            {classItem?.subjectName} ({classItem?.subjectCode}) • {classItem?.section?.name}
+          </p>
+        </div>
+        <Button onClick={handleAddSelected} disabled={submitting || selectedEligibleCount === 0}>
+          <UserPlus className="mr-1 h-4 w-4" />
+          {submitting ? 'Adding...' : `Add ${selectedEligibleCount} Student(s)`}
         </Button>
-        <h1 className="text-2xl font-bold">Add Students</h1>
-        <p className="text-muted-foreground">
-          {classItem?.subjectName} ({classItem?.subjectCode}) • {classItem?.section?.name}
-        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Filter Students</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-4">
-          <div className="space-y-1.5">
-            <Label>Grade Level</Label>
-            <select
-              value={gradeLevel}
-              onChange={(event) => setGradeLevel(event.target.value)}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="">Select grade level</option>
-              {GRADE_LEVELS.map((grade) => (
-                <option key={grade} value={grade}>
-                  Grade {grade}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Section</Label>
-            <select
-              value={sectionId}
-              onChange={(event) => {
-                setSectionId(event.target.value);
-                setPage(1);
-                setSelectedIds([]);
-              }}
-              disabled={!gradeLevel}
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm disabled:opacity-50"
-            >
-              <option value="">All sections in selected grade</option>
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5 md:col-span-2">
-            <Label>Search (Name or LRN)</Label>
-            <Input
-              placeholder="Search by student name or LRN"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Masterlist</CardTitle>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">{total} total</Badge>
-            <Badge>{selectedEligibleCount} selected</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Students outside this class section or grade stay visible but are disabled for validation.
-          </p>
-
-          {loading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          ) : students.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No students found for current filters.</p>
-          ) : (
-            students.map((student) => {
-              const isSelected = selectedIds.includes(student.id);
-              const initials = `${student.firstName?.[0] || ''}${student.lastName?.[0] || ''}`.toUpperCase() || 'S';
-
-              return (
-                <label
-                  key={student.id}
-                  className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-                    student.isEligible ? 'cursor-pointer hover:bg-muted/30' : 'opacity-60 bg-muted/20'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    disabled={!student.isEligible}
-                    onChange={() => handleToggleStudent(student)}
-                    className="mt-3"
-                  />
-
-                  <Avatar className="h-10 w-10 border">
-                    {student.profilePicture ? <AvatarImage src={student.profilePicture} alt={`${student.firstName || ''} ${student.lastName || ''}`} /> : null}
-                    <AvatarFallback>{initials}</AvatarFallback>
-                  </Avatar>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">
-                        {student.firstName} {student.lastName}
-                      </p>
-                      <Badge variant="outline">Grade {student.gradeLevel || '—'}</Badge>
-                      <Badge variant="outline">{student.section?.name || 'No section'}</Badge>
-                      {!student.isEligible && student.disabledReason && (
-                        <Badge variant="secondary">{student.disabledReason}</Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{student.email}</p>
-                    <p className="text-xs text-muted-foreground">LRN: {student.lrn || '—'}</p>
-                  </div>
-                </label>
-              );
-            })
-          )}
-
-          <div className="flex items-center justify-between border-t pt-3">
-            <p className="text-xs text-muted-foreground">
-              Page {page} of {totalPages}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => {
-                  setPage((current) => Math.max(1, current - 1));
-                  setSelectedIds([]);
-                }}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => {
-                  setPage((current) => current + 1);
-                  setSelectedIds([]);
-                }}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {!gradeLevel ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Loading class grade context</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-12 w-full" />
+          </CardContent>
+        </Card>
+      ) : (
+        <StudentMasterlistTable
+          title="Modern Masterlist"
+          description="Multi-filter student discovery with eligibility-first ordering, quick select, and paginated matching."
+          rows={students.map((student) => ({
+            id: student.id,
+            firstName: student.firstName,
+            lastName: student.lastName,
+            email: student.email,
+            lrn: student.lrn,
+            gradeLevel: student.gradeLevel,
+            sectionName: student.section?.name,
+            profilePicture: student.profilePicture,
+            isEligible: student.isEligible,
+            disabledReason: student.disabledReason,
+          }))}
+          loading={loading}
+          total={total}
+          page={page}
+          totalPages={totalPages}
+          selectedIds={selectedIds}
+          searchValue={search}
+          onSearchChange={(value) => updateQuery({ search: value || null, page: 1 })}
+          eligibility={eligibility}
+          onEligibilityChange={(value) => updateQuery({ eligibility: value, page: 1 })}
+          gradeFilter={gradeLevel}
+          onGradeFilterChange={(value) => {
+            updateQuery({
+              gradeLevel: value || null,
+              sectionId: null,
+              page: 1,
+            });
+          }}
+          gradeOptions={GRADE_LEVELS.map((grade) => ({ value: grade, label: `Grade ${grade}` }))}
+          sectionFilter={sectionId}
+          onSectionFilterChange={(value) => updateQuery({ sectionId: value || null, page: 1 })}
+          sectionOptions={sections.map((section) => ({ value: section.id, label: section.name }))}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
+          onSortByChange={(field) => updateQuery({ sortBy: field, page: 1 })}
+          onSortDirectionChange={(direction) => updateQuery({ sortDirection: direction, page: 1 })}
+          onToggleRow={handleToggleStudent}
+          onSelectAllEligible={() => {
+            const eligibleIds = students.filter((student) => student.isEligible).map((student) => student.id);
+            setSelectedIds(Array.from(new Set([...selectedIds, ...eligibleIds])));
+          }}
+          onClearSelection={() => setSelectedIds([])}
+          onPageChange={(nextPage) => updateQuery({ page: nextPage })}
+          onOpenProfile={(studentId) => router.push(`/dashboard/teacher/classes/${classId}/students/${studentId}`)}
+        />
+      )}
 
       <div className="fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-end gap-2 px-4 py-3">
-          <Button variant="outline" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)}>
-            Cancel
-          </Button>
-          <Button onClick={handleAddSelected} disabled={submitting || selectedEligibleCount === 0}>
-            {submitting ? 'Adding...' : `Add ${selectedEligibleCount} Student(s)`}
-          </Button>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            <Users className="mr-1 inline h-3 w-3" />
+            Selected eligible: {selectedEligibleCount}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddSelected} disabled={submitting || selectedEligibleCount === 0}>
+              {submitting ? 'Adding...' : `Add ${selectedEligibleCount} Student(s)`}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

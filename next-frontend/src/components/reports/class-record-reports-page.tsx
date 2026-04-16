@@ -448,6 +448,9 @@ export function ClassRecordReportsPage({
       </TabsContent>
 
       <TabsContent value="interventionParticipation">
+        <p className={cn('mb-3 text-xs', isAdmin ? 'text-[var(--admin-text-muted)]' : 'text-[var(--teacher-text-muted)]')}>
+          Advisory only: intervention outcomes are non-graded metadata and never mutate official class records.
+        </p>
         <SimpleTableCard adminMode={isAdmin} title="Intervention Participation" description="Track case status, completion rates, and earned XP for assigned learners." empty="No intervention cases matched the selected filters." headers={['Student', 'Class', 'Status', 'Completion', 'XP']} rows={interventionParticipation.map((row) => [row.studentName || row.email || row.studentId, row.subjectCode ?? '--', row.status, `${row.completionRate}%`, row.xpTotal])} />
       </TabsContent>
 

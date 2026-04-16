@@ -20,6 +20,36 @@ type ReadFilter = 'all' | 'unread' | 'read';
 
 const PAGE_SIZE = 12;
 
+function formatNotificationTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatNotificationRelativeTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function NotificationsPage() {
   const { user, role } = useAuth();
   const { unreadCount, markAsRead, markAllAsRead, fetchNotifications } = useNotifications();
@@ -51,6 +81,11 @@ export default function NotificationsPage() {
       setLoading(false);
     }
   }, [backendFilter, page]);
+
+  const unreadItemsOnPage = useMemo(
+    () => items.filter((notification) => !notification.isRead).length,
+    [items],
+  );
 
   useEffect(() => {
     void loadPage();
@@ -90,11 +125,11 @@ export default function NotificationsPage() {
 
   if (isStudent) {
     return (
-      <div className="student-page space-y-6 rounded-3xl p-1">
-        <StudentActionCard className="border-0 bg-[var(--student-accent)] text-[var(--student-accent-contrast)]">
+      <div className="student-page space-y-5 rounded-3xl p-1">
+        <StudentActionCard className="border-0 bg-[var(--student-accent)] text-[var(--student-accent-contrast)] shadow-sm">
           <StudentSectionHeader
             title="Notifications"
-            subtitle={`${unreadCount} unread update${unreadCount === 1 ? '' : 's'} waiting for you.`}
+            subtitle={`${unreadCount} unread update${unreadCount === 1 ? '' : 's'} waiting in your student inbox.`}
             className="[&_h2]:text-[var(--student-accent-contrast)] [&_p]:text-[var(--student-accent-contrast)]/75"
             action={(
               <div className="flex flex-wrap items-center gap-2">
@@ -109,62 +144,105 @@ export default function NotificationsPage() {
           />
         </StudentActionCard>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {(['all', 'unread', 'read'] as const).map((value) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant={filter === value ? 'default' : 'outline'}
-              className={filter === value ? 'student-button-solid' : 'student-button-outline'}
-              onClick={() => setFilter(value)}
-            >
-              <Filter className="mr-2 h-4 w-4" />
-              {value === 'all' ? 'All' : value === 'unread' ? 'Unread' : 'Read'}
-            </Button>
-          ))}
-        </div>
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">Unread</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--student-text-strong)]">{unreadCount}</p>
+            </div>
+            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">On this page</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--student-text-strong)]">{items.length}</p>
+            </div>
+            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">Need review</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--student-text-strong)]">{unreadItemsOnPage}</p>
+            </div>
+          </div>
 
-        {items.length === 0 ? (
-          <StudentEmptyState
-            title="No notifications"
-            description="Class updates, returned grades, and announcements will appear here."
-            icon={<Bell className="h-5 w-5" />}
-          />
-        ) : (
-          <div className="space-y-3">
-            {items.map((notification) => (
-              <StudentActionCard key={notification.id}>
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-[var(--student-text-strong)]">{notification.title}</p>
-                      <StudentStatusChip tone={notification.isRead ? 'info' : 'warning'}>
-                        {notification.isRead ? 'Read' : 'New'}
-                      </StudentStatusChip>
-                    </div>
-                    <p className="text-sm student-muted-text">{notification.message}</p>
-                    <p className="text-xs student-muted-text">
-                      {new Date(notification.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  {!notification.isRead && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="student-button-outline"
-                      onClick={() => void handleMarkRead(notification.id)}
-                    >
-                      Mark Read
-                    </Button>
-                  )}
-                </div>
-              </StudentActionCard>
+          <div className="flex flex-wrap items-center gap-2">
+            {(['all', 'unread', 'read'] as const).map((value) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={filter === value ? 'default' : 'outline'}
+                className={filter === value ? 'student-button-solid' : 'student-button-outline'}
+                onClick={() => setFilter(value)}
+              >
+                <Filter className="mr-2 h-4 w-4" />
+                {value === 'all' ? 'All' : value === 'unread' ? 'Unread' : 'Read'}
+              </Button>
             ))}
           </div>
-        )}
+        </div>
 
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        <div className="rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-surface)] p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--student-outline)] px-1 pb-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--student-text-strong)]">Inbox</p>
+              <p className="text-sm student-muted-text">
+                Review class alerts, announcement updates, and intervention prompts in one place.
+              </p>
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">
+              {filter === 'all' ? 'Showing all updates' : filter === 'unread' ? 'Showing unread only' : 'Showing read only'}
+            </p>
+          </div>
+
+          {items.length === 0 ? (
+            <div className="pt-3">
+              <StudentEmptyState
+                title="No notifications"
+                description="Class updates, returned grades, and announcements will appear here."
+                icon={<Bell className="h-5 w-5" />}
+              />
+            </div>
+          ) : (
+            <div className="space-y-3 pt-3">
+              {items.map((notification) => (
+                <StudentActionCard
+                  key={notification.id}
+                  className={`border ${notification.isRead ? 'border-[var(--student-outline)] bg-[var(--student-surface-soft)]/70' : 'border-[var(--student-accent-soft-strong)] bg-[var(--student-surface)]'}`}
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-[var(--student-text-strong)]">{notification.title}</p>
+                        <StudentStatusChip tone={notification.isRead ? 'info' : 'warning'}>
+                          {notification.isRead ? 'Read' : 'New'}
+                        </StudentStatusChip>
+                        <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] student-muted-text">
+                          {notification.type.replaceAll('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-sm leading-6 text-[var(--student-text)]">{notification.message}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs student-muted-text">
+                        <span>{formatNotificationRelativeTime(notification.createdAt)}</span>
+                        <span>{formatNotificationTimestamp(notification.createdAt)}</span>
+                        {notification.readAt ? <span>Read {formatNotificationTimestamp(notification.readAt)}</span> : null}
+                      </div>
+                    </div>
+                    {!notification.isRead && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="student-button-outline shrink-0"
+                        onClick={() => void handleMarkRead(notification.id)}
+                      >
+                        Mark Read
+                      </Button>
+                    )}
+                  </div>
+                </StudentActionCard>
+              ))}
+            </div>
+          )}
+
+          <div className="pt-4">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -418,16 +496,18 @@ function Pagination({
   if (totalPages <= 1) return null;
 
   return (
-    <div className="flex items-center justify-end gap-2">
-      <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
-        Previous
-      </Button>
-      <span className="text-sm text-muted-foreground">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm student-muted-text">
         Page {page} of {totalPages}
-      </span>
-      <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
-        Next
-      </Button>
+      </p>
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          Previous
+        </Button>
+        <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          Next
+        </Button>
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   Body,
   UseGuards,
   Put,
+  Query,
   ForbiddenException,
   Res,
   UploadedFile,
@@ -64,6 +65,48 @@ export class ProfilesController {
     };
   }
 
+  @Get('me/transcript')
+  @Roles(RoleName.Student)
+  async getMyTranscript(
+    @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: 'all' | 'enrolled' | 'dropped' | 'completed',
+    @Query('search') search?: string,
+  ) {
+    const data = await this.profilesService.getTranscript(user.userId, {
+      page: page ? Number.parseInt(page, 10) : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      status,
+      search,
+    });
+    return {
+      success: true,
+      ...data,
+    };
+  }
+
+  @Get('me/assessment-history')
+  @Roles(RoleName.Student)
+  async getMyAssessmentHistory(
+    @CurrentUser() user: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('submission') submission?: 'all' | 'submitted' | 'in_progress',
+    @Query('search') search?: string,
+  ) {
+    const data = await this.profilesService.getAssessmentHistory(user.userId, {
+      page: page ? Number.parseInt(page, 10) : undefined,
+      limit: limit ? Number.parseInt(limit, 10) : undefined,
+      submission,
+      search,
+    });
+    return {
+      success: true,
+      ...data,
+    };
+  }
+
   @Public()
   @Get('images/:filename')
   async serveProfileImage(
@@ -103,9 +146,17 @@ export class ProfilesController {
   // Admin: create profile for a user
   @Post('create')
   @Roles(RoleName.Admin)
-  async createProfile(@Body() dto: UpdateProfileDto & { userId: string }) {
+  async createProfile(
+    @Body() dto: UpdateProfileDto & { userId: string },
+    @CurrentUser() user: any,
+  ) {
     const { userId, ...data } = dto as any;
-    const profile = await this.profilesService.createProfile(userId, data);
+    const profile = await this.profilesService.createProfile(
+      userId,
+      data,
+      user?.userId,
+      user?.roles ?? [],
+    );
     return {
       success: true,
       message: 'Profile created successfully',
@@ -127,7 +178,12 @@ export class ProfilesController {
       throw new ForbiddenException('Not authorized to update this profile');
     }
 
-    const updated = await this.profilesService.updateProfile(userId, dto);
+    const updated = await this.profilesService.updateProfile(
+      userId,
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -175,9 +231,12 @@ export class ProfilesController {
     }
 
     const profilePicture = `/api/profiles/images/${file.filename}`;
-    const updated = await this.profilesService.updateProfile(user.userId, {
-      profilePicture,
-    });
+    const updated = await this.profilesService.updateProfile(
+      user.userId,
+      { profilePicture },
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,

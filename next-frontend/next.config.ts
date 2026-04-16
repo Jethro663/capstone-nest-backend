@@ -1,12 +1,19 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
+import { getFrontendApiOrigin } from './src/lib/api-origin';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  allowedDevOrigins: [
+    '127.0.0.1',
+    'localhost',
+  ],
   async rewrites() {
+    const apiOrigin = getFrontendApiOrigin();
+
     return [
       {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/:path*`,
+        destination: `${apiOrigin}/api/:path*`,
       },
     ];
   },

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { and, eq, count, desc, SQL } from 'drizzle-orm';
+import { and, eq, count, desc, SQL, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { notifications } from '../../drizzle/schema';
 import { QueryNotificationsDto } from './DTO/query-notifications.dto';
@@ -12,6 +12,9 @@ export interface CreateNotificationInput {
   userId: string;
   type:
     | 'announcement_posted'
+    | 'discussion_thread_posted'
+    | 'discussion_comment_posted'
+    | 'assessment_assigned'
     | 'grade_updated'
     | 'assessment_due'
     | 'assessment_graded';
@@ -48,6 +51,56 @@ export class NotificationsService {
 
   // ─── REST: paginated inbox ────────────────────────────────────────────────
 
+  async createBulkDeduped(
+    inputs: CreateNotificationInput[],
+  ): Promise<CreateNotificationInput[]> {
+    if (inputs.length === 0) return [];
+
+    const referenceInputs = inputs.filter((input) => input.referenceId);
+    if (referenceInputs.length === 0) {
+      await this.createBulk(inputs);
+      return inputs;
+    }
+
+    const userIds = Array.from(
+      new Set(referenceInputs.map((input) => input.userId)),
+    );
+    const types = Array.from(
+      new Set(referenceInputs.map((input) => input.type)),
+    );
+    const referenceIds = Array.from(
+      new Set(referenceInputs.map((input) => input.referenceId as string)),
+    );
+
+    const existingRows = await this.db.query.notifications.findMany({
+      where: and(
+        inArray(notifications.userId, userIds),
+        inArray(notifications.type, types),
+        inArray(notifications.referenceId, referenceIds),
+      ),
+      columns: {
+        userId: true,
+        type: true,
+        referenceId: true,
+      },
+    });
+
+    const existingKeys = new Set(
+      existingRows.map(
+        (row) => `${row.userId}:${row.type}:${row.referenceId ?? ''}`,
+      ),
+    );
+    const nextInputs = inputs.filter((input) => {
+      if (!input.referenceId) return true;
+      return !existingKeys.has(
+        `${input.userId}:${input.type}:${input.referenceId}`,
+      );
+    });
+
+    await this.createBulk(nextInputs);
+    return nextInputs;
+  }
+
   async findByUser(userId: string, query: QueryNotificationsDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -67,10 +120,7 @@ export class NotificationsService {
         limit,
         offset,
       }),
-      this.db
-        .select({ total: count() })
-        .from(notifications)
-        .where(whereClause),
+      this.db.select({ total: count() }).from(notifications).where(whereClause),
     ]);
 
     const total = Number(totalResult[0]?.total ?? 0);

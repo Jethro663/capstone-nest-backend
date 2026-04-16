@@ -28,7 +28,8 @@ export class MentorExplainDto {
 
   @ApiPropertyOptional({
     description: 'Optional follow-up prompt from the student',
-    example: 'Can you explain why my answer is wrong without giving me the answer directly?',
+    example:
+      'Can you explain why my answer is wrong without giving me the answer directly?',
   })
   @IsOptional()
   @IsString()

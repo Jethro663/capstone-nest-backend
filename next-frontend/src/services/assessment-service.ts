@@ -90,6 +90,14 @@ export const assessmentService = {
     return data;
   },
 
+  async releaseCore(
+    id: string,
+    dto: { isPublished: boolean },
+  ): Promise<{ success: boolean; message: string; data: Assessment }> {
+    const { data } = await api.patch(`/assessments/${id}/core-release`, dto);
+    return data;
+  },
+
   /** DELETE /assessments/:id — Admin, Teacher */
   async delete(id: string): Promise<{ success: boolean; message: string }> {
     const { data } = await api.delete(`/assessments/${id}`);

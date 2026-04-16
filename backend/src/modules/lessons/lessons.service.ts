@@ -4,10 +4,21 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { eq, and, inArray, count, desc, isNotNull, or } from 'drizzle-orm';
+import {
+  eq,
+  and,
+  inArray,
+  count,
+  desc,
+  isNotNull,
+  or,
+  asc,
+  sql,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   lessons,
+  lessonVersions,
   lessonContentBlocks,
   classes,
   lessonCompletions,
@@ -103,6 +114,82 @@ export class LessonsService {
     }
 
     return and(...conditions);
+  }
+
+  private async createLessonVersionSnapshot(
+    lessonId: string,
+    userId: string,
+    type: 'auto' | 'manual' | 'restore',
+    label?: string,
+  ) {
+    const lesson = await this.db.query.lessons.findFirst({
+      where: eq(lessons.id, lessonId),
+      with: {
+        contentBlocks: {
+          orderBy: (blocks, { asc: byAsc }) => [byAsc(blocks.order)],
+        },
+      },
+    });
+
+    if (!lesson) {
+      throw new NotFoundException(`Lesson with ID "${lessonId}" not found`);
+    }
+
+    const latestVersion = await this.db.query.lessonVersions?.findFirst?.({
+      where: eq(lessonVersions.lessonId, lessonId),
+      columns: { versionNumber: true },
+      orderBy: (versions, { desc: byDesc }) => [byDesc(versions.versionNumber)],
+    });
+    const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
+
+    const insertBuilder = this.db.insert?.(lessonVersions);
+    if (!insertBuilder?.values) {
+      return;
+    }
+
+    await insertBuilder.values({
+      lessonId,
+      versionNumber,
+      type,
+      label: label ?? null,
+      createdBy: userId,
+      snapshot: {
+        title: lesson.title,
+        description: lesson.description,
+        order: lesson.order,
+        isDraft: lesson.isDraft,
+        classId: lesson.classId,
+        contentBlocks: (lesson.contentBlocks ?? []).map((block) => ({
+          type: block.type,
+          order: block.order,
+          content: block.content,
+          metadata: block.metadata ?? {},
+        })),
+      },
+    });
+
+    if (type === 'auto') {
+      const autoVersions = await this.db.query.lessonVersions?.findMany?.({
+        where: and(
+          eq(lessonVersions.lessonId, lessonId),
+          eq(lessonVersions.type, 'auto'),
+        ),
+        columns: { id: true },
+        orderBy: (versions, { desc: byDesc }) => [
+          byDesc(versions.versionNumber),
+        ],
+      });
+      const autoVersionRetention = 25;
+      if ((autoVersions?.length ?? 0) > autoVersionRetention) {
+        const idsToDelete = autoVersions
+          .slice(autoVersionRetention)
+          .map((entry) => entry.id);
+        const deleteBuilder = this.db.delete?.(lessonVersions);
+        if (deleteBuilder?.where) {
+          await deleteBuilder.where(inArray(lessonVersions.id, idsToDelete));
+        }
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -253,6 +340,12 @@ export class LessonsService {
     });
 
     const lesson = await this.getLessonById(newLessonId);
+    await this.createLessonVersionSnapshot(
+      lesson.id,
+      userId,
+      'auto',
+      'Initial lesson snapshot',
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -274,6 +367,154 @@ export class LessonsService {
     return lesson;
   }
 
+  async getLessonVersions(
+    lessonId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+
+    const versions = await this.db
+      .select({
+        id: lessonVersions.id,
+        lessonId: lessonVersions.lessonId,
+        versionNumber: lessonVersions.versionNumber,
+        type: lessonVersions.type,
+        label: lessonVersions.label,
+        createdBy: lessonVersions.createdBy,
+        createdAt: lessonVersions.createdAt,
+        createdByFirstName: users.firstName,
+        createdByLastName: users.lastName,
+      })
+      .from(lessonVersions)
+      .leftJoin(users, eq(users.id, lessonVersions.createdBy))
+      .where(eq(lessonVersions.lessonId, lessonId))
+      .orderBy(desc(lessonVersions.versionNumber));
+
+    return versions.map((version) => ({
+      id: version.id,
+      lessonId: version.lessonId,
+      versionNumber: version.versionNumber,
+      type: version.type,
+      label: version.label,
+      createdBy: version.createdBy,
+      createdByName:
+        version.createdByFirstName || version.createdByLastName
+          ? `${version.createdByFirstName ?? ''} ${version.createdByLastName ?? ''}`.trim()
+          : null,
+      createdAt: version.createdAt,
+    }));
+  }
+
+  async createManualVersion(
+    lessonId: string,
+    userId: string,
+    userRoles: string[],
+    label?: string,
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(lessonId, userId, 'manual', label);
+    return this.getLessonVersions(lessonId, userId, userRoles);
+  }
+
+  async restoreLessonVersion(
+    lessonId: string,
+    versionId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const lesson = await this.getLessonById(lessonId);
+    await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+
+    const version = await this.db.query.lessonVersions.findFirst({
+      where: and(
+        eq(lessonVersions.id, versionId),
+        eq(lessonVersions.lessonId, lessonId),
+      ),
+    });
+
+    if (!version) {
+      throw new NotFoundException(
+        `Lesson version "${versionId}" not found for lesson "${lessonId}"`,
+      );
+    }
+
+    const snapshot = version.snapshot as {
+      title?: string;
+      description?: string | null;
+      order?: number;
+      isDraft?: boolean;
+      contentBlocks?: Array<{
+        type: 'text' | 'image' | 'video' | 'question' | 'file' | 'divider';
+        order?: number;
+        content: unknown;
+        metadata?: Record<string, unknown>;
+      }>;
+    };
+
+    await this.createLessonVersionSnapshot(
+      lessonId,
+      userId,
+      'restore',
+      `Before restore to v${version.versionNumber}`,
+    );
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(lessons)
+        .set({
+          title: snapshot.title ?? lesson.title,
+          description:
+            snapshot.description === undefined
+              ? lesson.description
+              : snapshot.description,
+          order: snapshot.order ?? lesson.order,
+          isDraft:
+            snapshot.isDraft === undefined ? lesson.isDraft : snapshot.isDraft,
+          updatedAt: new Date(),
+        })
+        .where(eq(lessons.id, lessonId));
+
+      await tx
+        .delete(lessonContentBlocks)
+        .where(eq(lessonContentBlocks.lessonId, lessonId));
+
+      const blocks = snapshot.contentBlocks ?? [];
+      if (blocks.length > 0) {
+        await tx.insert(lessonContentBlocks).values(
+          blocks.map((block, index) => ({
+            lessonId,
+            type: block.type,
+            order: block.order ?? index + 1,
+            content: block.content,
+            metadata: block.metadata ?? {},
+          })),
+        );
+      }
+    });
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'lesson.version.restored',
+      targetType: 'lesson',
+      targetId: lessonId,
+      metadata: {
+        versionId,
+        versionNumber: version.versionNumber,
+      },
+    });
+
+    await this.ragIndexingService.queueClassReindex(lesson.classId, {
+      reason: 'lesson_restored',
+      actorId: userId,
+      source: 'lessons.restoreLessonVersion',
+    });
+
+    return this.getLessonById(lessonId);
+  }
+
   /**
    * Update a lesson's editable fields.
    */
@@ -285,6 +526,12 @@ export class LessonsService {
   ) {
     const lesson = await this.getLessonById(lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(
+      lessonId,
+      userId,
+      'auto',
+      'Auto snapshot before lesson update',
+    );
 
     await this.db
       .update(lessons)
@@ -348,6 +595,12 @@ export class LessonsService {
   async publishLesson(lessonId: string, userId: string, userRoles: string[]) {
     const lesson = await this.getLessonById(lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(
+      lessonId,
+      userId,
+      'auto',
+      'Auto snapshot before publish',
+    );
 
     await this.db
       .update(lessons)
@@ -393,10 +646,7 @@ export class LessonsService {
     await this.assertTeacherOwnership(classId, userId, userRoles);
 
     const existingLessons = await this.db.query.lessons.findMany({
-      where: and(
-        eq(lessons.classId, classId),
-        inArray(lessons.id, lessonIds),
-      ),
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
       columns: {
         id: true,
         title: true,
@@ -414,9 +664,7 @@ export class LessonsService {
     await this.db
       .update(lessons)
       .set({ isDraft, updatedAt: new Date() })
-      .where(
-        and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
-      );
+      .where(and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)));
 
     await this.auditService.log({
       actorId: userId,
@@ -459,10 +707,7 @@ export class LessonsService {
     await this.assertTeacherOwnership(classId, userId, userRoles);
 
     const existingLessons = await this.db.query.lessons.findMany({
-      where: and(
-        eq(lessons.classId, classId),
-        inArray(lessons.id, lessonIds),
-      ),
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
       columns: {
         id: true,
         title: true,
@@ -516,11 +761,16 @@ export class LessonsService {
 
     const requestedIds = reorderDto.lessons.map((lesson) => lesson.id);
     if (requestedIds.length === 0) {
-      throw new BadRequestException('At least one lesson reorder entry is required');
+      throw new BadRequestException(
+        'At least one lesson reorder entry is required',
+      );
     }
 
     const existingLessons = await this.db.query.lessons.findMany({
-      where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
+      where: and(
+        eq(lessons.classId, classId),
+        inArray(lessons.id, requestedIds),
+      ),
       columns: { id: true },
     });
 
@@ -559,7 +809,10 @@ export class LessonsService {
     });
 
     return this.db.query.lessons.findMany({
-      where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
+      where: and(
+        eq(lessons.classId, classId),
+        inArray(lessons.id, requestedIds),
+      ),
       orderBy: (l, { asc }) => [asc(l.order)],
     });
   }
@@ -582,6 +835,12 @@ export class LessonsService {
 
     const lesson = await this.getLessonById(createBlockDto.lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(
+      lesson.id,
+      userId,
+      'auto',
+      'Auto snapshot before block add',
+    );
 
     const [newBlock] = await this.db
       .insert(lessonContentBlocks)
@@ -632,6 +891,12 @@ export class LessonsService {
     const block = await this.getContentBlockById(blockId);
     const lesson = await this.getLessonById(block.lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(
+      lesson.id,
+      userId,
+      'auto',
+      'Auto snapshot before block update',
+    );
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -669,6 +934,12 @@ export class LessonsService {
     const block = await this.getContentBlockById(blockId);
     const lesson = await this.getLessonById(block.lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(
+      lesson.id,
+      userId,
+      'auto',
+      'Auto snapshot before block delete',
+    );
 
     await this.db
       .delete(lessonContentBlocks)
@@ -696,6 +967,12 @@ export class LessonsService {
   ) {
     const lesson = await this.getLessonById(lessonId);
     await this.assertTeacherOwnership(lesson.classId, userId, userRoles);
+    await this.createLessonVersionSnapshot(
+      lessonId,
+      userId,
+      'auto',
+      'Auto snapshot before block reorder',
+    );
 
     const requestedIds = reorderDto.blocks.map((b) => b.id);
 
@@ -752,7 +1029,9 @@ export class LessonsService {
       return Boolean(item.lesson && !item.lesson.isDraft);
     }
     if (item.itemType === 'assessment') {
-      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+      return Boolean(
+        item.assessment && item.assessment.isPublished && item.isGiven,
+      );
     }
     return Boolean(item.fileId);
   }
@@ -765,12 +1044,17 @@ export class LessonsService {
     return Math.trunc(rawPoints);
   }
 
-  private async buildModuleProgressForStudent(moduleId: string, studentId: string) {
+  private async buildModuleProgressForStudent(
+    moduleId: string,
+    studentId: string,
+  ) {
     const module = await this.db.query.classModules.findFirst({
       where: eq(classModules.id, moduleId),
       with: {
         sections: {
-          orderBy: (sectionTable, { asc: byAsc }) => [byAsc(sectionTable.order)],
+          orderBy: (sectionTable, { asc: byAsc }) => [
+            byAsc(sectionTable.order),
+          ],
           with: {
             items: {
               orderBy: (itemTable, { asc: byAsc }) => [byAsc(itemTable.order)],
@@ -816,7 +1100,9 @@ export class LessonsService {
       .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
       .map((item) => item.lessonId as string);
     const requiredAssessmentIds = visibleRequiredItems
-      .filter((item) => item.itemType === 'assessment' && Boolean(item.assessmentId))
+      .filter(
+        (item) => item.itemType === 'assessment' && Boolean(item.assessmentId),
+      )
       .map((item) => item.assessmentId as string);
 
     const completedLessonIds = new Set<string>();
@@ -849,7 +1135,9 @@ export class LessonsService {
           assessmentId: true,
         },
       });
-      attemptRows.forEach((entry) => completedAssessmentIds.add(entry.assessmentId));
+      attemptRows.forEach((entry) =>
+        completedAssessmentIds.add(entry.assessmentId),
+      );
     }
 
     let requiredCompletedCount = 0;
@@ -869,7 +1157,8 @@ export class LessonsService {
 
     const requiredVisibleCount = visibleRequiredItems.length;
     const completed =
-      requiredVisibleCount === 0 || requiredCompletedCount === requiredVisibleCount;
+      requiredVisibleCount === 0 ||
+      requiredCompletedCount === requiredVisibleCount;
     const progressPercent =
       requiredVisibleCount === 0
         ? 100
@@ -927,7 +1216,10 @@ export class LessonsService {
         .returning();
 
       const moduleProgress = moduleItem?.section?.module?.id
-        ? await this.buildModuleProgressForStudent(moduleItem.section.module.id, studentId)
+        ? await this.buildModuleProgressForStudent(
+            moduleItem.section.module.id,
+            studentId,
+          )
         : null;
 
       return {
@@ -951,7 +1243,10 @@ export class LessonsService {
           .returning();
 
         const moduleProgress = moduleItem?.section?.module?.id
-          ? await this.buildModuleProgressForStudent(moduleItem.section.module.id, studentId)
+          ? await this.buildModuleProgressForStudent(
+              moduleItem.section.module.id,
+              studentId,
+            )
           : null;
 
         return {

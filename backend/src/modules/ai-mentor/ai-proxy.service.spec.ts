@@ -29,15 +29,15 @@ describe('AiProxyService', () => {
   it('uses the chat timeout for mentor and tutor paths', () => {
     expect((service as any).resolveTimeoutMs('/chat')).toBe(70000);
     expect((service as any).resolveTimeoutMs('/mentor/explain')).toBe(70000);
-    expect((service as any).resolveTimeoutMs('/student/tutor/session/1/message')).toBe(
-      70000,
-    );
+    expect(
+      (service as any).resolveTimeoutMs('/student/tutor/session/1/message'),
+    ).toBe(70000);
   });
 
   it('uses the extraction timeout for non-chat paths', () => {
     expect((service as any).resolveTimeoutMs('/extract')).toBe(300000);
-    expect((service as any).resolveTimeoutMs('/teacher/quizzes/generate-draft')).toBe(
-      300000,
-    );
+    expect(
+      (service as any).resolveTimeoutMs('/teacher/quizzes/generate-draft'),
+    ).toBe(300000);
   });
 });

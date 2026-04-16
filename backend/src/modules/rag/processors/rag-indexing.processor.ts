@@ -22,7 +22,8 @@ export class RagIndexingProcessor extends WorkerHost {
 
   async process(job: Job<ReindexJobData>) {
     const aiServiceUrl =
-      this.configService.get<string>('AI_SERVICE_URL') ?? 'http://localhost:8000';
+      this.configService.get<string>('AI_SERVICE_URL') ??
+      'http://localhost:8000';
     const sharedSecret =
       this.configService.get<string>('AI_SERVICE_SHARED_SECRET') ?? '';
 
@@ -32,9 +33,7 @@ export class RagIndexingProcessor extends WorkerHost {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(sharedSecret
-            ? { 'X-Internal-Service-Token': sharedSecret }
-            : {}),
+          ...(sharedSecret ? { 'X-Internal-Service-Token': sharedSecret } : {}),
         },
         body: JSON.stringify({
           reason: job.data.reason,

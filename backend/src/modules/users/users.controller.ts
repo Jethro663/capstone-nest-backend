@@ -75,8 +75,14 @@ export class UsersController {
 
   @Post('create')
   @Roles(RoleName.Admin) // Only admins can create users
-  async createUser(@Body() createUserDto: CreateUserDto) {
-    const user = await this.usersService.createUser(createUserDto);
+  async createUser(
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUser() admin: any,
+  ) {
+    const user = await this.usersService.createUser(
+      createUserDto,
+      admin.sub || admin.id,
+    );
 
     return {
       success: true,
@@ -90,8 +96,13 @@ export class UsersController {
   async updateUser(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() admin: any,
   ) {
-    const updatedUser = await this.usersService.updateUser(id, updateUserDto);
+    const updatedUser = await this.usersService.updateUser(
+      id,
+      updateUserDto,
+      admin.sub || admin.id,
+    );
 
     return {
       success: true,
@@ -117,8 +128,8 @@ export class UsersController {
   // Legacy soft-delete endpoint (kept for backward compatibility)
   @Delete('delete/:id')
   @Roles(RoleName.Admin)
-  async deleteUser(@Param('id') id: string) {
-    await this.usersService.deleteUser(id);
+  async deleteUser(@Param('id') id: string, @CurrentUser() admin: any) {
+    await this.usersService.deleteUser(id, admin.sub || admin.id);
     return {
       success: true,
       message: 'User set to DELETED',
@@ -175,8 +186,15 @@ export class UsersController {
    */
   @Get(':id/export')
   @Roles(RoleName.Admin)
-  async exportUserData(@Param('id') id: string, @Res() res: Response) {
-    const data = await this.usersService.exportUserData(id);
+  async exportUserData(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @CurrentUser() admin: any,
+  ) {
+    const data = await this.usersService.exportUserData(
+      id,
+      admin.sub || admin.id,
+    );
     const filename = `user-export-${id}-${Date.now()}.json`;
 
     res.setHeader('Content-Type', 'application/json');

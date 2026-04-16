@@ -28,11 +28,15 @@ export const colors = {
 };
 
 export const gradients = {
-  lessons: [colors.amber, colors.orange],
+  classes: [colors.amber, colors.orange],
   assessments: [colors.blue, colors.blueDeep],
+  ja: [colors.indigo, colors.violet],
+  announcements: [colors.green, colors.greenDeep],
+  profile: [colors.purple, colors.purpleDeep],
+  // Compatibility aliases while migrating older screens.
+  lessons: [colors.amber, colors.orange],
   lxp: [colors.indigo, colors.violet],
   progress: [colors.green, colors.greenDeep],
-  profile: [colors.purple, colors.purpleDeep],
 } as const;
 
 export const shadow = {

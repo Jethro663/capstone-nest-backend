@@ -7,6 +7,12 @@ import { useTutorBootstrap, useTutorSession } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { Card, GradientHeader, Pill, ScreenScroll, SectionTitle } from "../components/ui/primitives";
 import type { RootStackParamList } from "../navigation/types";
+import {
+  buildTutorAnswerPayload,
+  canSendTutorMessage,
+  canSubmitTutorAnswers,
+  resolveInitialTutorClassId,
+} from "./screen-flow";
 import { colors, gradients } from "../theme/tokens";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AiTutor">;
@@ -23,8 +29,21 @@ export function AiTutorScreen({ route, navigation }: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    setActiveSessionId(undefined);
+    setMessage("");
+    setAnswers({});
+    setError("");
+  }, [selectedClassId]);
+
+  useEffect(() => {
     if (!selectedClassId) {
-      setSelectedClassId(bootstrapQuery.data?.selectedClassId || bootstrapQuery.data?.classes[0]?.id);
+      setSelectedClassId(
+        resolveInitialTutorClassId({
+          selectedClassId,
+          bootstrapSelectedClassId: bootstrapQuery.data?.selectedClassId,
+          bootstrapFirstClassId: bootstrapQuery.data?.classes[0]?.id,
+        }),
+      );
     }
   }, [bootstrapQuery.data?.classes, bootstrapQuery.data?.selectedClassId, selectedClassId]);
 
@@ -33,7 +52,10 @@ export function AiTutorScreen({ route, navigation }: Props) {
   const questionList = sessionState?.questions ?? [];
 
   const handleStartSession = async (recommendation: (typeof recommendations)[number]) => {
-    if (!selectedClassId) return;
+    if (!selectedClassId) {
+      setError("Select a class before starting a tutor session.");
+      return;
+    }
 
     try {
       setWorking(true);
@@ -51,7 +73,7 @@ export function AiTutorScreen({ route, navigation }: Props) {
   };
 
   const handleSendMessage = async () => {
-    if (!activeSessionId || !message.trim()) return;
+    if (!activeSessionId || !canSendTutorMessage(activeSessionId, message)) return;
 
     try {
       setWorking(true);
@@ -68,13 +90,18 @@ export function AiTutorScreen({ route, navigation }: Props) {
 
   const handleSubmitAnswers = async () => {
     if (!activeSessionId || questionList.length === 0) return;
+    const questionIds = questionList.map((question) => question.id);
+    if (!canSubmitTutorAnswers(questionIds, answers)) {
+      setError("Provide at least one answer before checking.");
+      return;
+    }
 
     try {
       setWorking(true);
       setError("");
       await aiApi.submitTutorAnswers(
         activeSessionId,
-        questionList.map((question) => answers[question.id] || ""),
+        buildTutorAnswerPayload(questionIds, answers),
       );
       await sessionQuery.refetch();
     } catch (rawError) {

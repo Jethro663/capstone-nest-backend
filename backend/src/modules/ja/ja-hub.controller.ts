@@ -163,7 +163,12 @@ export class JaHubController {
     @CurrentUser()
     user: { id: string; userId?: string; email: string; roles: string[] },
   ) {
-    const data = await this.jaService.submitResponse(user, sessionId, dto, 'review');
+    const data = await this.jaService.submitResponse(
+      user,
+      sessionId,
+      dto,
+      'review',
+    );
     return {
       success: true,
       message: 'JA Review response saved',
@@ -195,7 +200,11 @@ export class JaHubController {
     @CurrentUser()
     user: { id: string; userId?: string; email: string; roles: string[] },
   ) {
-    const data = await this.jaService.completeSession(sessionId, user, 'review');
+    const data = await this.jaService.completeSession(
+      sessionId,
+      user,
+      'review',
+    );
     return {
       success: true,
       message: 'JA Review session completed',
