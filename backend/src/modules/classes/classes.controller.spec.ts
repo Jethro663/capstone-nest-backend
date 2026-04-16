@@ -9,6 +9,8 @@ const mockClassesService = {
   purge: jest.fn(),
   delete: jest.fn(),
   findAll: jest.fn(),
+  findById: jest.fn(),
+  getClassesByStudent: jest.fn(),
   getStudentClassPresentationPreferences: jest.fn(),
   updateStudentClassPresentationPreference: jest.fn(),
   getStudentCourseViewPreference: jest.fn(),
@@ -97,8 +99,11 @@ describe('ClassesController', () => {
           undefined,
           undefined,
           undefined,
-          '-1',
           undefined,
+          undefined,
+          undefined,
+          undefined,
+          '-1',
         ),
       ).rejects.toThrow(BadRequestException);
 
@@ -106,6 +111,9 @@ describe('ClassesController', () => {
         controller.getStudentsMasterlistForClass(
           'class-1',
           { userId: 'teacher-1', roles: ['teacher'] },
+          undefined,
+          undefined,
+          undefined,
           undefined,
           undefined,
           undefined,
@@ -138,7 +146,8 @@ describe('ClassesController', () => {
       ).toHaveBeenCalledWith('student-1', 'student-1', ['student']);
       expect(result).toEqual({
         success: true,
-        message: 'Student class presentation preferences retrieved successfully',
+        message:
+          'Student class presentation preferences retrieved successfully',
         data: [
           {
             classId: 'class-1',
@@ -160,16 +169,116 @@ describe('ClassesController', () => {
         { userId: 'student-1', roles: ['student'] },
       );
 
-      expect(mockClassesService.setStudentCourseViewPreference).toHaveBeenCalledWith(
-        'student-1',
-        'student-1',
-        ['student'],
-        'wide',
-      );
+      expect(
+        mockClassesService.setStudentCourseViewPreference,
+      ).toHaveBeenCalledWith('student-1', 'student-1', ['student'], 'wide');
       expect(result).toEqual({
         success: true,
         message: 'Student course view preference updated successfully',
         data: { viewMode: 'wide' },
+      });
+    });
+  });
+
+  describe('student class retrieval endpoints', () => {
+    it('returns getClassById in the standard success envelope', async () => {
+      mockClassesService.findById.mockResolvedValue({
+        id: 'class-1',
+        subjectName: 'Mathematics',
+        enrollments: [
+          {
+            id: 'enrollment-1',
+            student: {
+              id: 'student-1',
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              email: 'student71@lms.local',
+            },
+          },
+        ],
+      });
+
+      const result = await controller.getClassById('class-1', {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      });
+
+      expect(mockClassesService.findById).toHaveBeenCalledWith(
+        'class-1',
+        'teacher-1',
+        ['teacher'],
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Class retrieved successfully',
+        data: {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          enrollments: [
+            {
+              id: 'enrollment-1',
+              student: {
+                id: 'student-1',
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    it('returns getClassesByStudent in the standard success envelope', async () => {
+      mockClassesService.getClassesByStudent.mockResolvedValue([
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          enrollments: [
+            {
+              id: 'enrollment-1',
+              student: {
+                id: 'student-1',
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+              },
+            },
+          ],
+        },
+      ]);
+
+      const result = await controller.getClassesByStudent('student-1', 'all', {
+        userId: 'student-1',
+        roles: ['student'],
+      });
+
+      expect(mockClassesService.getClassesByStudent).toHaveBeenCalledWith(
+        'student-1',
+        'student-1',
+        ['student'],
+        'all',
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Classes retrieved successfully',
+        data: [
+          {
+            id: 'class-1',
+            subjectName: 'Mathematics',
+            enrollments: [
+              {
+                id: 'enrollment-1',
+                student: {
+                  id: 'student-1',
+                  firstName: 'Liam',
+                  lastName: 'Navarro',
+                  email: 'student71@lms.local',
+                },
+              },
+            ],
+          },
+        ],
       });
     });
   });
@@ -194,12 +303,14 @@ describe('ClassesController', () => {
         { userId: 'admin-1', roles: ['admin'] },
       );
 
-      expect(mockClassesService.bulkLifecycleAction).toHaveBeenCalledWith({
-        action: 'restore',
-        classIds: ['class-1', 'class-2'],
-      },
-      'admin-1',
-      ['admin']);
+      expect(mockClassesService.bulkLifecycleAction).toHaveBeenCalledWith(
+        {
+          action: 'restore',
+          classIds: ['class-1', 'class-2'],
+        },
+        'admin-1',
+        ['admin'],
+      );
       expect(result).toEqual({
         success: true,
         message: '1 class restored; 1 failed.',
@@ -258,11 +369,10 @@ describe('ClassesController', () => {
         room: 'Lab 2',
       });
 
-      const result = await controller.updateClass(
-        'class-1',
-        payload as any,
-        { userId: 'admin-1', roles: ['admin'] },
-      );
+      const result = await controller.updateClass('class-1', payload as any, {
+        userId: 'admin-1',
+        roles: ['admin'],
+      });
 
       expect(mockClassesService.update).toHaveBeenCalledWith(
         'class-1',
@@ -359,12 +469,9 @@ describe('ClassesController', () => {
         { userId: 'teacher-1', roles: ['teacher'] },
       );
 
-      expect(mockClassesService.getStudentOverviewForClass).toHaveBeenCalledWith(
-        'class-1',
-        'student-1',
-        'teacher-1',
-        ['teacher'],
-      );
+      expect(
+        mockClassesService.getStudentOverviewForClass,
+      ).toHaveBeenCalledWith('class-1', 'student-1', 'teacher-1', ['teacher']);
       expect(result).toEqual({
         success: true,
         message: 'Student overview retrieved successfully',

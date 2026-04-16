@@ -140,7 +140,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
-    summary: 'Authenticate a mobile client and return access and refresh tokens',
+    summary:
+      'Authenticate a mobile client and return access and refresh tokens',
   })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'Mobile login successful' })

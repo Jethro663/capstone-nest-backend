@@ -102,7 +102,8 @@ export class AssessmentNotificationProcessor extends WorkerHost {
 
     for (const input of inserted) {
       this.notificationsGateway.emitToUser(input.userId, {
-        id: input.referenceId ?? `${input.type}:${input.userId}:${now.getTime()}`,
+        id:
+          input.referenceId ?? `${input.type}:${input.userId}:${now.getTime()}`,
         type: input.type,
         title: input.title,
         body: input.body,

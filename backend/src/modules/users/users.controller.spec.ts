@@ -220,7 +220,9 @@ describe('UsersController', () => {
         action: 'suspend',
         requested: 3,
         succeeded: ['u1', 'u2'],
-        failed: [{ userId: 'u3', reason: 'You cannot suspend your own account' }],
+        failed: [
+          { userId: 'u3', reason: 'You cannot suspend your own account' },
+        ],
       },
     });
 
@@ -240,7 +242,9 @@ describe('UsersController', () => {
         action: 'suspend',
         requested: 3,
         succeeded: ['u1', 'u2'],
-        failed: [{ userId: 'u3', reason: 'You cannot suspend your own account' }],
+        failed: [
+          { userId: 'u3', reason: 'You cannot suspend your own account' },
+        ],
       },
     });
   });

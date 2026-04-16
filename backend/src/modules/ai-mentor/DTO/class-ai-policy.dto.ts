@@ -7,7 +7,8 @@ export type AiPolicySourceScope =
 
 export class UpdateClassAiPolicyDto {
   @ApiPropertyOptional({
-    description: 'Enable/disable AI mistake explanations and tutor interactions for this class.',
+    description:
+      'Enable/disable AI mistake explanations and tutor interactions for this class.',
     example: true,
   })
   @IsOptional()
@@ -15,7 +16,8 @@ export class UpdateClassAiPolicyDto {
   mentorExplainEnabled?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Maximum allowed follow-up turns for AI assistance per context.',
+    description:
+      'Maximum allowed follow-up turns for AI assistance per context.',
     example: 3,
     minimum: 0,
     maximum: 10,
@@ -36,7 +38,8 @@ export class UpdateClassAiPolicyDto {
   sourceScope?: AiPolicySourceScope;
 
   @ApiPropertyOptional({
-    description: 'When true, AI should return guarded fallback if grounding is weak.',
+    description:
+      'When true, AI should return guarded fallback if grounding is weak.',
     example: false,
   })
   @IsOptional()

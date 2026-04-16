@@ -11,7 +11,9 @@ describe('TeacherProfilesController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    controller = new TeacherProfilesController(mockTeacherProfilesService as any);
+    controller = new TeacherProfilesController(
+      mockTeacherProfilesService as any,
+    );
   });
 
   it('passes actor context to updateByUserId', async () => {
@@ -36,11 +38,10 @@ describe('TeacherProfilesController', () => {
 
   it('rejects updateByUserId when non-admin updates another teacher profile', async () => {
     await expect(
-      controller.updateByUserId(
-        'teacher-2',
-        { department: 'Math' } as any,
-        { userId: 'teacher-1', roles: ['teacher'] },
-      ),
+      controller.updateByUserId('teacher-2', { department: 'Math' } as any, {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      }),
     ).rejects.toThrow(ForbiddenException);
   });
 

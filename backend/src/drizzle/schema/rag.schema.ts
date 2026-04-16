@@ -65,8 +65,9 @@ export const contentChunks = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     sourceType: contentSourceTypeEnum('source_type').notNull(),
     sourceId: uuid('source_id').notNull(),
-    classId: uuid('class_id')
-      .references(() => classes.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id').references(() => classes.id, {
+      onDelete: 'cascade',
+    }),
     libraryFileId: uuid('library_file_id').references(() => uploadedFiles.id, {
       onDelete: 'cascade',
     }),

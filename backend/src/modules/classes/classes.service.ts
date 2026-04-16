@@ -115,7 +115,9 @@ export class ClassesService {
     requesterRoles?: string[],
   ) {
     if (!requesterId || !requesterRoles || requesterRoles.length === 0) {
-      throw new ForbiddenException('Unable to verify student preference access');
+      throw new ForbiddenException(
+        'Unable to verify student preference access',
+      );
     }
 
     if (requesterRoles.includes('student') && requesterId !== studentId) {
@@ -316,7 +318,7 @@ export class ClassesService {
   /**
    * Find a class by ID
    */
-  async findById(id: string) {
+  async findById(id: string, requesterId?: string, requesterRoles?: string[]) {
     const classRecord = await this.db.query.classes.findFirst({
       where: eq(classes.id, id),
       with: {
@@ -330,11 +332,72 @@ export class ClassesService {
             email: true,
           },
         },
+        enrollments: {
+          where: eq(enrollments.status, 'enrolled'),
+          columns: {
+            id: true,
+            studentId: true,
+            classId: true,
+            sectionId: true,
+          },
+          with: {
+            student: {
+              columns: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+              with: {
+                profile: {
+                  columns: {
+                    gradeLevel: true,
+                    lrn: true,
+                    profilePicture: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
     if (!classRecord) {
       throw new NotFoundException(`Class with ID "${id}" not found`);
+    }
+
+    if (
+      requesterId &&
+      Array.isArray(requesterRoles) &&
+      requesterRoles.length > 0
+    ) {
+      const isAdmin = requesterRoles.includes('admin');
+      const isTeacher = requesterRoles.includes('teacher');
+      const isStudent = requesterRoles.includes('student');
+
+      if (!isAdmin && !isTeacher && !isStudent) {
+        throw new ForbiddenException('You do not have access to this class');
+      }
+
+      if (isTeacher && !isAdmin && classRecord.teacherId !== requesterId) {
+        throw new ForbiddenException('You can only access your own classes');
+      }
+
+      if (isStudent && !isAdmin) {
+        const enrollment = await this.db.query.enrollments.findFirst({
+          where: and(
+            eq(enrollments.classId, id),
+            eq(enrollments.studentId, requesterId),
+            eq(enrollments.status, 'enrolled'),
+          ),
+          columns: { id: true },
+        });
+
+        if (!enrollment) {
+          throw new ForbiddenException('You are not enrolled in this class');
+        }
+      }
     }
 
     return {
@@ -351,7 +414,9 @@ export class ClassesService {
     actorId?: string,
     actorRoles: string[] = [],
   ) {
-    const normalizedSubjectCode = normalizeSubjectCode(createClassDto.subjectCode);
+    const normalizedSubjectCode = normalizeSubjectCode(
+      createClassDto.subjectCode,
+    );
     const normalizedSubjectGradeLevel = normalizeGradeLevel(
       createClassDto.subjectGradeLevel,
     );
@@ -429,7 +494,10 @@ export class ClassesService {
         cardBannerUrl: createClassDto.cardBannerUrl ?? null,
       };
 
-      const [newClass] = await tx.insert(classes).values(insertPayload).returning();
+      const [newClass] = await tx
+        .insert(classes)
+        .values(insertPayload)
+        .returning();
 
       if (createClassDto.schedules?.length) {
         await this.checkCollisions(
@@ -506,7 +574,9 @@ export class ClassesService {
     });
 
     if (!template) {
-      throw new BadRequestException(`Template with ID "${templateId}" not found`);
+      throw new BadRequestException(
+        `Template with ID "${templateId}" not found`,
+      );
     }
 
     if (template.status !== 'published') {
@@ -514,7 +584,10 @@ export class ClassesService {
     }
 
     if (
-      !areSubjectCodesEquivalent(template.subjectCode, createClassDto.subjectCode) ||
+      !areSubjectCodesEquivalent(
+        template.subjectCode,
+        createClassDto.subjectCode,
+      ) ||
       normalizeGradeLevel(template.subjectGradeLevel) !==
         normalizeGradeLevel(createClassDto.subjectGradeLevel)
     ) {
@@ -541,7 +614,10 @@ export class ClassesService {
 
     const assessmentIdMap = new Map<string, string>();
     for (const templateAssessment of templateAssessments) {
-      const settings = (templateAssessment.settings ?? {}) as Record<string, unknown>;
+      const settings = (templateAssessment.settings ?? {}) as Record<
+        string,
+        unknown
+      >;
       const dueOffset =
         typeof settings.dueDateOffsetDays === 'number'
           ? settings.dueDateOffsetDays
@@ -557,20 +633,21 @@ export class ClassesService {
           classId,
           title: templateAssessment.title,
           description: templateAssessment.description,
-          type: templateAssessment.type as any,
+          type: templateAssessment.type,
           dueDate,
           totalPoints: templateAssessment.totalPoints ?? 0,
           isPublished: false,
           randomizeQuestions: Boolean(settings.randomizeQuestions ?? false),
-          closeWhenDue: settings.closeWhenDue === undefined ? true : Boolean(settings.closeWhenDue),
+          closeWhenDue:
+            settings.closeWhenDue === undefined
+              ? true
+              : Boolean(settings.closeWhenDue),
           passingScore:
             typeof settings.passingScore === 'number'
               ? settings.passingScore
               : undefined,
           maxAttempts:
-            typeof settings.maxAttempts === 'number'
-              ? settings.maxAttempts
-              : 1,
+            typeof settings.maxAttempts === 'number' ? settings.maxAttempts : 1,
           isCoreTemplateAsset: true,
           templateId,
           templateSourceId: templateAssessment.id,
@@ -581,7 +658,11 @@ export class ClassesService {
         ? (templateAssessment.questions as any[])
         : [];
 
-      for (let questionIndex = 0; questionIndex < questionRows.length; questionIndex += 1) {
+      for (
+        let questionIndex = 0;
+        questionIndex < questionRows.length;
+        questionIndex += 1
+      ) {
         const templateQuestion = questionRows[questionIndex];
         const [question] = await database
           .insert(assessmentQuestions)
@@ -682,12 +763,12 @@ export class ClassesService {
       const sectionId = sectionIdMap.get(templateItem.templateSectionId);
       if (!sectionId) continue;
       const mappedAssessmentId = templateItem.templateAssessmentId
-        ? assessmentIdMap.get(templateItem.templateAssessmentId) ?? null
+        ? (assessmentIdMap.get(templateItem.templateAssessmentId) ?? null)
         : null;
 
       await database.insert(moduleItems).values({
         moduleSectionId: sectionId,
-        itemType: templateItem.itemType as any,
+        itemType: templateItem.itemType,
         assessmentId: mappedAssessmentId,
         order: templateItem.order,
         isVisible: false,
@@ -1280,9 +1361,31 @@ export class ClassesService {
           },
         },
         enrollments: {
+          where: eq(enrollments.status, 'enrolled'),
           columns: {
             id: true,
             studentId: true,
+            classId: true,
+            sectionId: true,
+          },
+          with: {
+            student: {
+              columns: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+              with: {
+                profile: {
+                  columns: {
+                    gradeLevel: true,
+                    lrn: true,
+                    profilePicture: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -1311,7 +1414,11 @@ export class ClassesService {
     requesterId?: string,
     requesterRoles?: string[],
   ) {
-    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+    this.assertStudentPreferenceReadAccess(
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
     const classIds = await this.getEnrolledClassIds(studentId);
     if (classIds.length === 0) return [];
 
@@ -1358,7 +1465,9 @@ export class ClassesService {
           styleToken: presentation.styleToken,
           updatedAt: new Date(),
         })
-        .where(eq(studentClassPresentationPreferences.id, existingPreference.id));
+        .where(
+          eq(studentClassPresentationPreferences.id, existingPreference.id),
+        );
     } else {
       await this.db.insert(studentClassPresentationPreferences).values({
         classId,
@@ -1380,13 +1489,18 @@ export class ClassesService {
     requesterId?: string,
     requesterRoles?: string[],
   ) {
-    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
-    const preference = await this.db.query.studentCourseViewPreferences.findFirst({
-      where: eq(studentCourseViewPreferences.userId, studentId),
-      columns: {
-        viewMode: true,
-      },
-    });
+    this.assertStudentPreferenceReadAccess(
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
+    const preference =
+      await this.db.query.studentCourseViewPreferences.findFirst({
+        where: eq(studentCourseViewPreferences.userId, studentId),
+        columns: {
+          viewMode: true,
+        },
+      });
 
     return {
       viewMode: preference?.viewMode ?? ('card' as StudentCourseViewMode),
@@ -1399,16 +1513,21 @@ export class ClassesService {
     requesterRoles: string[],
     viewMode: StudentCourseViewMode,
   ) {
-    this.assertStudentPreferenceReadAccess(studentId, requesterId, requesterRoles);
+    this.assertStudentPreferenceReadAccess(
+      studentId,
+      requesterId,
+      requesterRoles,
+    );
 
     if (!STUDENT_COURSE_VIEW_MODES.includes(viewMode)) {
       throw new BadRequestException('Unsupported student course view mode');
     }
 
-    const existing =
-      await this.db.query.studentCourseViewPreferences.findFirst({
+    const existing = await this.db.query.studentCourseViewPreferences.findFirst(
+      {
         where: eq(studentCourseViewPreferences.userId, studentId),
-      });
+      },
+    );
 
     if (existing) {
       await this.db
@@ -1743,7 +1862,10 @@ export class ClassesService {
     return null;
   }
 
-  private async getAssessmentHistoryByStatus(classId: string, studentId: string) {
+  private async getAssessmentHistoryByStatus(
+    classId: string,
+    studentId: string,
+  ) {
     const classAssessments = await this.db.query.assessments.findMany({
       where: eq(assessments.classId, classId),
       columns: {
@@ -1781,7 +1903,10 @@ export class ClassesService {
         directScore: true,
         passed: true,
       },
-      orderBy: [desc(assessmentAttempts.submittedAt), desc(assessmentAttempts.createdAt)],
+      orderBy: [
+        desc(assessmentAttempts.submittedAt),
+        desc(assessmentAttempts.createdAt),
+      ],
     });
 
     const attemptsByAssessment = new Map<string, typeof attempts>();
@@ -1842,9 +1967,7 @@ export class ClassesService {
         ? new Date(latestSubmitted.submittedAt)
         : null;
       const isLate = Boolean(
-        dueDate &&
-          submittedAt &&
-          submittedAt.getTime() > dueDate.getTime(),
+        dueDate && submittedAt && submittedAt.getTime() > dueDate.getTime(),
       );
       const lateByMinutes =
         isLate && dueDate && submittedAt
@@ -2484,14 +2607,17 @@ export class ClassesService {
    *  - A teacher cannot be in two places at the same time
    *  - A room cannot host two classes at the same time
    */
-  private async checkCollisions(params: {
-    classId: string;
-    sectionId: string;
-    teacherId?: string | null;
-    room?: string | null;
-    slots: ScheduleSlotDto[];
-    excludeClassId?: string;
-  }, database: any = this.db): Promise<void> {
+  private async checkCollisions(
+    params: {
+      classId: string;
+      sectionId: string;
+      teacherId?: string | null;
+      room?: string | null;
+      slots: ScheduleSlotDto[];
+      excludeClassId?: string;
+    },
+    database: any = this.db,
+  ): Promise<void> {
     const { sectionId, teacherId, room, slots, excludeClassId } = params;
     const conflicts: any[] = [];
 

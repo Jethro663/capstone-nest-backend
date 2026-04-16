@@ -107,7 +107,12 @@ export class JaController {
     @CurrentUser()
     user: { id: string; userId?: string; email: string; roles: string[] },
   ) {
-    const data = await this.jaService.addEvent(user, sessionId, dto, 'practice');
+    const data = await this.jaService.addEvent(
+      user,
+      sessionId,
+      dto,
+      'practice',
+    );
     return {
       success: true,
       message: 'JA practice event recorded',

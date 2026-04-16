@@ -9,6 +9,7 @@
     "dev:turbo": "next dev -p 3001",
     "perf:auth-smoke": "node scripts/auth-perf-smoke.js",
     "perf:nav-smoke": "node scripts/nav-perf-smoke.js",
+    "perf:discussion-smoke": "node scripts/discussion-perf-smoke.js",
     "build": "next build",
     "start": "node scripts/start-standalone.js",
     "lint": "eslint",

@@ -125,14 +125,15 @@ export const moduleItemTypeEnum = pgEnum('module_item_type', [
   'assessment',
   'file',
 ]);
-export const studentPresentationModeEnum = pgEnum(
-  'student_presentation_mode',
-  ['solid', 'gradient', 'preset'],
-);
-export const studentCourseViewModeEnum = pgEnum(
-  'student_course_view_mode',
-  ['card', 'wide'],
-);
+export const studentPresentationModeEnum = pgEnum('student_presentation_mode', [
+  'solid',
+  'gradient',
+  'preset',
+]);
+export const studentCourseViewModeEnum = pgEnum('student_course_view_mode', [
+  'card',
+  'wide',
+]);
 
 // ==========================================
 // 1. IDENTITY & ACCESS (Roles & Users)
@@ -802,7 +803,9 @@ export const moduleItems = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    sectionIdIdx: index('module_items_section_id_idx').on(table.moduleSectionId),
+    sectionIdIdx: index('module_items_section_id_idx').on(
+      table.moduleSectionId,
+    ),
     sectionOrderIdx: index('module_items_section_order_idx').on(
       table.moduleSectionId,
       table.order,
@@ -812,7 +815,9 @@ export const moduleItems = pgTable(
       table.assessmentId,
     ),
     fileIdIdx: index('module_items_file_id_idx').on(table.fileId),
-    uniqueLessonItem: unique('module_items_lesson_id_unique').on(table.lessonId),
+    uniqueLessonItem: unique('module_items_lesson_id_unique').on(
+      table.lessonId,
+    ),
     uniqueAssessmentItem: unique('module_items_assessment_id_unique').on(
       table.assessmentId,
     ),
@@ -860,7 +865,9 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   lessonCompletions: many(lessonCompletions),
   assessmentAttempts: many(assessmentAttempts),
   classVisibilityPreferences: many(classVisibilityPreferences),
-  studentClassPresentationPreferences: many(studentClassPresentationPreferences),
+  studentClassPresentationPreferences: many(
+    studentClassPresentationPreferences,
+  ),
   studentCourseViewPreference: one(studentCourseViewPreferences, {
     fields: [users.id],
     references: [studentCourseViewPreferences.userId],

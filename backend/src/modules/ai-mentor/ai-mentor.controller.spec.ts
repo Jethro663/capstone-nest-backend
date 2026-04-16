@@ -327,7 +327,10 @@ describe('AiMentorController', () => {
       });
 
       await expect(
-        controller.extractModule({ fileId: 'file-uuid-1' } as any, TEACHER_USER),
+        controller.extractModule(
+          { fileId: 'file-uuid-1' } as any,
+          TEACHER_USER,
+        ),
       ).rejects.toThrow('You do not have access to this class.');
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });
@@ -336,7 +339,10 @@ describe('AiMentorController', () => {
       mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
 
       await expect(
-        controller.extractModule({ fileId: 'file-uuid-1' } as any, TEACHER_USER),
+        controller.extractModule(
+          { fileId: 'file-uuid-1' } as any,
+          TEACHER_USER,
+        ),
       ).rejects.toThrow(
         'AI extraction queue is temporarily unavailable. Please retry shortly.',
       );
@@ -541,7 +547,10 @@ describe('AiMentorController', () => {
           file: { originalName: 'module.pdf' },
         });
 
-      const result = await controller.getExtraction(EXTRACTION_ID, TEACHER_USER);
+      const result = await controller.getExtraction(
+        EXTRACTION_ID,
+        TEACHER_USER,
+      );
 
       expect(result).toEqual({
         success: true,
@@ -621,7 +630,11 @@ describe('AiMentorController', () => {
       mockProxy.forward.mockRejectedValue(new Error('connect ECONNREFUSED'));
 
       await expect(
-        controller.updateExtraction(EXTRACTION_ID, { lessons: [] } as any, TEACHER_USER),
+        controller.updateExtraction(
+          EXTRACTION_ID,
+          { lessons: [] } as any,
+          TEACHER_USER,
+        ),
       ).rejects.toThrow(
         'AI extraction update is temporarily unavailable. Please retry shortly.',
       );
@@ -790,7 +803,10 @@ describe('AiMentorController', () => {
 
     it('should propagate proxy HttpException for queue authorization failures', async () => {
       const dto = { note: 'Focus on fractions' };
-      const queueError = new HttpException({ message: 'You do not have access to this intervention case' }, 403);
+      const queueError = new HttpException(
+        { message: 'You do not have access to this intervention case' },
+        403,
+      );
       mockProxy.forward.mockRejectedValue(queueError);
 
       await expect(
@@ -927,7 +943,9 @@ describe('AiMentorController', () => {
 
   describe('student tutor visibility filtering', () => {
     it('filters hidden recommendations from bootstrap payload', async () => {
-      mockDb.query.enrollments.findMany.mockResolvedValue([{ classId: CLASS_ID }]);
+      mockDb.query.enrollments.findMany.mockResolvedValue([
+        { classId: CLASS_ID },
+      ]);
       mockDb.query.classModules.findMany.mockResolvedValue([
         {
           id: 'module-1',
@@ -944,7 +962,10 @@ describe('AiMentorController', () => {
                   lessonId: '11111111-1111-1111-1111-111111111112',
                   assessmentId: null,
                   fileId: null,
-                  lesson: { id: '11111111-1111-1111-1111-111111111112', isDraft: false },
+                  lesson: {
+                    id: '11111111-1111-1111-1111-111111111112',
+                    isDraft: false,
+                  },
                   assessment: null,
                 },
               ],
@@ -1000,7 +1021,10 @@ describe('AiMentorController', () => {
       };
       mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
 
-      const result = await controller.queueQuizDraftJob(dto as any, TEACHER_USER);
+      const result = await controller.queueQuizDraftJob(
+        dto as any,
+        TEACHER_USER,
+      );
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
         'POST',
@@ -1059,7 +1083,10 @@ describe('AiMentorController', () => {
         data: { draftId: 'draft-1' },
       });
 
-      const result = await controller.generateQuizDraft(dto as any, TEACHER_USER);
+      const result = await controller.generateQuizDraft(
+        dto as any,
+        TEACHER_USER,
+      );
 
       expect(mockProxy.forward).toHaveBeenCalledWith(
         'POST',
@@ -1109,7 +1136,10 @@ describe('AiMentorController', () => {
 
   describe('getTeacherJobStatus()', () => {
     it('should forward GET /teacher/jobs/:jobId', async () => {
-      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'processing' });
+      mockProxy.forward.mockResolvedValue({
+        jobId: JOB_ID,
+        status: 'processing',
+      });
 
       const result = await controller.getTeacherJobStatus(JOB_ID, TEACHER_USER);
 
@@ -1225,10 +1255,7 @@ describe('AiMentorController', () => {
         structuredOutput: { caseId: 'case-1', weakConcepts: ['Fractions'] },
       });
 
-      const result = await controller.getTeacherJobResult(
-        JOB_ID,
-        TEACHER_USER,
-      );
+      const result = await controller.getTeacherJobResult(JOB_ID, TEACHER_USER);
 
       expect(result).toMatchObject({
         success: true,
@@ -1273,10 +1300,7 @@ describe('AiMentorController', () => {
       });
       mockDb.query.aiGenerationOutputs.findFirst.mockResolvedValue(null);
 
-      const result = await controller.getTeacherJobResult(
-        JOB_ID,
-        TEACHER_USER,
-      );
+      const result = await controller.getTeacherJobResult(JOB_ID, TEACHER_USER);
 
       expect(result).toMatchObject({
         success: true,
@@ -1368,8 +1392,13 @@ describe('AiMentorController', () => {
 
     it('should audit and reject non-admin admin chat attempts', async () => {
       await expect(
-        controller.adminChat({ message: 'Show me audit anomalies.' }, STUDENT_USER),
-      ).rejects.toThrow('Admin analytics chat is restricted to admin accounts.');
+        controller.adminChat(
+          { message: 'Show me audit anomalies.' },
+          STUDENT_USER,
+        ),
+      ).rejects.toThrow(
+        'Admin analytics chat is restricted to admin accounts.',
+      );
 
       expect(mockAdminAnalyticsChat.logDeniedAttempt).toHaveBeenCalledWith(
         STUDENT_USER,

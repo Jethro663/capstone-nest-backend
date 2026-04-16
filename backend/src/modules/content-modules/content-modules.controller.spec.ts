@@ -32,7 +32,10 @@ describe('ContentModulesController', () => {
   });
 
   it('returns class module list envelope with count', async () => {
-    mockService.getModulesByClass.mockResolvedValue([{ id: MODULE_ID }, { id: 'module-2' }]);
+    mockService.getModulesByClass.mockResolvedValue([
+      { id: MODULE_ID },
+      { id: 'module-2' },
+    ]);
 
     const result = await controller.getByClass(CLASS_ID, USER);
 
@@ -52,7 +55,11 @@ describe('ContentModulesController', () => {
   it('returns module detail envelope for class + module id', async () => {
     mockService.getModuleByClass.mockResolvedValue({ id: MODULE_ID });
 
-    const result = await controller.getByClassAndModule(CLASS_ID, MODULE_ID, USER);
+    const result = await controller.getByClassAndModule(
+      CLASS_ID,
+      MODULE_ID,
+      USER,
+    );
 
     expect(mockService.getModuleByClass).toHaveBeenCalledWith(
       CLASS_ID,

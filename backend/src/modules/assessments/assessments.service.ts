@@ -159,7 +159,9 @@ export class AssessmentsService {
       .filter((criterion) => criterion.title.length > 0);
 
     if (normalized.some((criterion) => criterion.points < 0)) {
-      throw new BadRequestException('Rubric criterion points cannot be negative');
+      throw new BadRequestException(
+        'Rubric criterion points cannot be negative',
+      );
     }
 
     const seenIds = new Set<string>();
@@ -203,7 +205,10 @@ export class AssessmentsService {
     }
   }
 
-  private getDefaultClassRecordItemTitle(categoryName: string, itemOrder: number) {
+  private getDefaultClassRecordItemTitle(
+    categoryName: string,
+    itemOrder: number,
+  ) {
     const prefix =
       categoryName === 'Written Works'
         ? 'WW'
@@ -456,17 +461,17 @@ export class AssessmentsService {
         item.classRecord.id === record.id && item.category.id === category.id,
     );
 
-    let targetItem =
+    const targetItem =
       params.classRecordItemId != null
         ? categoryItems.find((item) => item.id === params.classRecordItemId)
         : currentLinkedItem
-            ? categoryItems.find((item) => item.id === currentLinkedItem.id)
-            : categoryItems.find(
-                (item) =>
-                  !item.assessmentId &&
-                  item.scores.length === 0 &&
-                  Number(item.maxScore) <= 0,
-              );
+          ? categoryItems.find((item) => item.id === currentLinkedItem.id)
+          : categoryItems.find(
+              (item) =>
+                !item.assessmentId &&
+                item.scores.length === 0 &&
+                Number(item.maxScore) <= 0,
+            );
 
     if (params.classRecordItemId && !targetItem) {
       throw new BadRequestException(
@@ -585,7 +590,9 @@ export class AssessmentsService {
       return this.stripXmlTags(documentXml);
     }
 
-    throw new BadRequestException('Only PDF, DOCX, and TXT rubrics are supported');
+    throw new BadRequestException(
+      'Only PDF, DOCX, and TXT rubrics are supported',
+    );
   }
 
   private draftRubricCriteriaFromText(text: string): RubricCriterion[] {
@@ -624,7 +631,9 @@ export class AssessmentsService {
 
     return paragraphChunks.map((chunk, index) => ({
       id: `criterion-${index + 1}`,
-      title: chunk.split(/[.!?]/)[0]?.trim().slice(0, 120) || `Criterion ${index + 1}`,
+      title:
+        chunk.split(/[.!?]/)[0]?.trim().slice(0, 120) ||
+        `Criterion ${index + 1}`,
       description: chunk.slice(0, 500),
       points: 20,
     }));
@@ -801,14 +810,17 @@ export class AssessmentsService {
   }) {
     return Boolean(
       assessment.timedQuestionsEnabled &&
-        assessment.type !== AssessmentType.FILE_UPLOAD &&
-        (assessment.questionTimeLimitSeconds ?? 0) > 0 &&
-        Array.isArray(assessment.questions) &&
-        assessment.questions.length > 0,
+      assessment.type !== AssessmentType.FILE_UPLOAD &&
+      (assessment.questionTimeLimitSeconds ?? 0) > 0 &&
+      Array.isArray(assessment.questions) &&
+      assessment.questions.length > 0,
     );
   }
 
-  private clampQuestionIndex(questionCount: number, questionIndex?: number | null) {
+  private clampQuestionIndex(
+    questionCount: number,
+    questionIndex?: number | null,
+  ) {
     if (questionCount <= 0) return 0;
     const safeQuestionIndex = questionIndex ?? 0;
     return Math.min(Math.max(safeQuestionIndex, 0), questionCount - 1);
@@ -818,7 +830,11 @@ export class AssessmentsService {
     startedAt: Date | string | null,
     questionTimeLimitSeconds?: number | null,
   ) {
-    if (!startedAt || !questionTimeLimitSeconds || questionTimeLimitSeconds < 1) {
+    if (
+      !startedAt ||
+      !questionTimeLimitSeconds ||
+      questionTimeLimitSeconds < 1
+    ) {
       return null;
     }
 
@@ -861,7 +877,8 @@ export class AssessmentsService {
       return attempt;
     }
 
-    const questionTimeLimitSeconds = assessment.questionTimeLimitSeconds ?? null;
+    const questionTimeLimitSeconds =
+      assessment.questionTimeLimitSeconds ?? null;
     const questionDurationMs = (questionTimeLimitSeconds ?? 0) * 1000;
     const normalizedQuestionIndex = this.clampQuestionIndex(
       questionCount,
@@ -912,7 +929,9 @@ export class AssessmentsService {
     }
 
     const elapsedQuestionCount =
-      Math.floor((now - currentQuestionDeadlineAt.getTime()) / questionDurationMs) + 1;
+      Math.floor(
+        (now - currentQuestionDeadlineAt.getTime()) / questionDurationMs,
+      ) + 1;
     const nextQuestionIndex = normalizedQuestionIndex + elapsedQuestionCount;
 
     if (nextQuestionIndex >= questionCount) {
@@ -925,7 +944,8 @@ export class AssessmentsService {
         Math.max(0, elapsedQuestionCount - 1) * questionDurationMs,
     );
     const nextQuestionDeadlineAt = new Date(
-      currentQuestionDeadlineAt.getTime() + elapsedQuestionCount * questionDurationMs,
+      currentQuestionDeadlineAt.getTime() +
+        elapsedQuestionCount * questionDurationMs,
     );
 
     const [updatedAttempt] = await this.db
@@ -997,7 +1017,9 @@ export class AssessmentsService {
     });
 
     if (currentUser && this.getUserRole(currentUser) === 'student') {
-      assessmentList = assessmentList.filter((assessment) => assessment.isPublished);
+      assessmentList = assessmentList.filter(
+        (assessment) => assessment.isPublished,
+      );
     }
 
     if (options?.studentId) {
@@ -1039,7 +1061,9 @@ export class AssessmentsService {
             );
           }
           if (status === 'upcoming') {
-            return !assessment.dueDate || new Date(assessment.dueDate) >= new Date();
+            return (
+              !assessment.dueDate || new Date(assessment.dueDate) >= new Date()
+            );
           }
           return true;
         });
@@ -1142,7 +1166,8 @@ export class AssessmentsService {
       });
     }
 
-    const rubricSourceFile = await this.getAssessmentRubricSourceFile(assessment);
+    const rubricSourceFile =
+      await this.getAssessmentRubricSourceFile(assessment);
     const rubricCriteria = this.sanitizeRubricForViewer(
       assessment.rubricCriteria,
       viewerRole,
@@ -1241,7 +1266,8 @@ export class AssessmentsService {
           : undefined,
         closeWhenDue: createAssessmentDto.closeWhenDue ?? true,
         randomizeQuestions: createAssessmentDto.randomizeQuestions ?? false,
-        timedQuestionsEnabled: createAssessmentDto.timedQuestionsEnabled ?? false,
+        timedQuestionsEnabled:
+          createAssessmentDto.timedQuestionsEnabled ?? false,
         questionTimeLimitSeconds:
           createAssessmentDto.questionTimeLimitSeconds ?? null,
         strictMode: createAssessmentDto.strictMode ?? false,
@@ -1252,7 +1278,7 @@ export class AssessmentsService {
           ? createAssessmentDto.teacherAttachmentFileId
           : null,
         rubricSourceFileId: isFileUpload
-          ? createAssessmentDto.rubricSourceFileId ?? null
+          ? (createAssessmentDto.rubricSourceFileId ?? null)
           : null,
         rubricParseStatus: isFileUpload
           ? createAssessmentDto.rubricSourceFileId
@@ -1451,7 +1477,10 @@ export class AssessmentsService {
 
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(existingAssessment, 'update publish state');
+    this.ensureAssessmentNotCoreTemplateAsset(
+      existingAssessment,
+      'update publish state',
+    );
     this.assertTeacherClassOwnership(
       existingAssessment.class?.teacherId,
       currentUser,
@@ -1523,7 +1552,7 @@ export class AssessmentsService {
     if (updateAssessmentDto.rubricSourceFileId !== undefined) {
       updateData.rubricSourceFileId = updateAssessmentDto.rubricSourceFileId;
       updateData.rubricParseStatus = updateAssessmentDto.rubricSourceFileId
-        ? existingAssessment.rubricParseStatus ?? 'pending'
+        ? (existingAssessment.rubricParseStatus ?? 'pending')
         : 'pending';
     }
     if (updateAssessmentDto.allowedUploadMimeTypes !== undefined)
@@ -1558,11 +1587,11 @@ export class AssessmentsService {
         updateAssessmentDto.rubricCriteria,
       );
       updateData.rubricCriteria = rubricCriteria;
-      updateData.rubricParseStatus = rubricCriteria.length > 0 ? 'reviewed' : 'pending';
+      updateData.rubricParseStatus =
+        rubricCriteria.length > 0 ? 'reviewed' : 'pending';
       updateData.rubricParsedAt = rubricCriteria.length > 0 ? new Date() : null;
-      updateData.totalPoints = rubricCriteria.length > 0
-        ? this.sumRubricPoints(rubricCriteria)
-        : 100;
+      updateData.totalPoints =
+        rubricCriteria.length > 0 ? this.sumRubricPoints(rubricCriteria) : 100;
     }
 
     if (!nextIsFileUpload) {
@@ -1648,7 +1677,10 @@ export class AssessmentsService {
       );
     }
 
-    if (assessment.isPublished && (!wasPublished || shouldRescheduleDueReminder)) {
+    if (
+      assessment.isPublished &&
+      (!wasPublished || shouldRescheduleDueReminder)
+    ) {
       await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
         assessment,
       );
@@ -1778,7 +1810,9 @@ export class AssessmentsService {
     }
 
     // Verify assessment exists
-    const assessment = await this.getAssessmentById(createQuestionDto.assessmentId);
+    const assessment = await this.getAssessmentById(
+      createQuestionDto.assessmentId,
+    );
     this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
@@ -2071,15 +2105,15 @@ export class AssessmentsService {
           if (!syncedAttempt) {
             // Timed question state exhausted the attempt and auto-submitted it.
           } else {
-          return {
-            attempt: syncedAttempt,
-            timeLimitMinutes: assessment.timeLimitMinutes,
-            expiresAt: syncedAttempt.expiresAt,
-            strictMode: assessment.strictMode ?? false,
-            timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
-            questionTimeLimitSeconds:
-              assessment.questionTimeLimitSeconds ?? null,
-          };
+            return {
+              attempt: syncedAttempt,
+              timeLimitMinutes: assessment.timeLimitMinutes,
+              expiresAt: syncedAttempt.expiresAt,
+              strictMode: assessment.strictMode ?? false,
+              timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
+              questionTimeLimitSeconds:
+                assessment.questionTimeLimitSeconds ?? null,
+            };
           }
         }
       } else {
@@ -2089,14 +2123,15 @@ export class AssessmentsService {
         );
 
         if (syncedAttempt) {
-        return {
-          attempt: syncedAttempt,
-          timeLimitMinutes: null,
-          expiresAt: syncedAttempt.expiresAt,
-          strictMode: assessment.strictMode ?? false,
-          timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
-          questionTimeLimitSeconds: assessment.questionTimeLimitSeconds ?? null,
-        };
+          return {
+            attempt: syncedAttempt,
+            timeLimitMinutes: null,
+            expiresAt: syncedAttempt.expiresAt,
+            strictMode: assessment.strictMode ?? false,
+            timedQuestionsEnabled: assessment.timedQuestionsEnabled ?? false,
+            questionTimeLimitSeconds:
+              assessment.questionTimeLimitSeconds ?? null,
+          };
         }
       }
     }
@@ -2158,7 +2193,8 @@ export class AssessmentsService {
         expiresAt,
         lastQuestionIndex: 0,
         currentQuestionStartedAt: freshQuestionTiming.currentQuestionStartedAt,
-        currentQuestionDeadlineAt: freshQuestionTiming.currentQuestionDeadlineAt,
+        currentQuestionDeadlineAt:
+          freshQuestionTiming.currentQuestionDeadlineAt,
         violationCount: 0,
         questionOrder,
         draftResponses: [],
@@ -2191,7 +2227,10 @@ export class AssessmentsService {
       return null;
     }
 
-    if (attempt.expiresAt && new Date(attempt.expiresAt).getTime() <= Date.now()) {
+    if (
+      attempt.expiresAt &&
+      new Date(attempt.expiresAt).getTime() <= Date.now()
+    ) {
       await this.autoSubmitExpiredAttempt(assessment, attempt);
       return null;
     }
@@ -2233,7 +2272,8 @@ export class AssessmentsService {
 
     const now = Date.now();
     const active = ongoing.filter(
-      (attempt) => !attempt.expiresAt || new Date(attempt.expiresAt).getTime() > now,
+      (attempt) =>
+        !attempt.expiresAt || new Date(attempt.expiresAt).getTime() > now,
     );
 
     return active.map((attempt) => ({
@@ -2269,9 +2309,14 @@ export class AssessmentsService {
 
     const assessment = await this.getAssessmentById(attempt.assessmentId);
 
-    if (attempt.expiresAt && new Date(attempt.expiresAt).getTime() <= Date.now()) {
+    if (
+      attempt.expiresAt &&
+      new Date(attempt.expiresAt).getTime() <= Date.now()
+    ) {
       await this.autoSubmitExpiredAttempt(assessment, attempt);
-      throw new BadRequestException('Attempt already expired and was auto-submitted');
+      throw new BadRequestException(
+        'Attempt already expired and was auto-submitted',
+      );
     }
 
     const syncedAttempt = await this.syncTimedAttemptState(assessment, attempt);
@@ -2307,7 +2352,8 @@ export class AssessmentsService {
     const questionCount = assessment.questions?.length ?? 0;
 
     if (
-      ((assessment.strictMode ?? false) || this.isTimedQuestionMode(assessment)) &&
+      ((assessment.strictMode ?? false) ||
+        this.isTimedQuestionMode(assessment)) &&
       typeof updateAttemptProgressDto.currentQuestionIndex === 'number' &&
       updateAttemptProgressDto.currentQuestionIndex < attempt.lastQuestionIndex
     ) {
@@ -2629,7 +2675,9 @@ export class AssessmentsService {
         rubricParseError,
         rubricCriteria: rubricCriteria,
         totalPoints:
-          rubricCriteria.length > 0 ? this.sumRubricPoints(rubricCriteria) : 100,
+          rubricCriteria.length > 0
+            ? this.sumRubricPoints(rubricCriteria)
+            : 100,
         updatedAt: new Date(),
       })
       .where(eq(assessments.id, assessmentId));
@@ -2684,7 +2732,8 @@ export class AssessmentsService {
       .update(assessments)
       .set({
         rubricCriteria: normalizedCriteria,
-        rubricParseStatus: normalizedCriteria.length > 0 ? 'reviewed' : 'parsed',
+        rubricParseStatus:
+          normalizedCriteria.length > 0 ? 'reviewed' : 'parsed',
         rubricParsedAt: new Date(),
         totalPoints:
           normalizedCriteria.length > 0
@@ -3148,7 +3197,9 @@ export class AssessmentsService {
       .set({
         isSubmitted: true,
         submittedAt: new Date(),
-        timeSpentSeconds: this.calculateAttemptTimeSpentSeconds(attempt.startedAt),
+        timeSpentSeconds: this.calculateAttemptTimeSpentSeconds(
+          attempt.startedAt,
+        ),
         draftResponses: submissionResponses,
       })
       .where(eq(assessmentAttempts.id, attempt.id))
@@ -3426,7 +3477,10 @@ export class AssessmentsService {
       currentUser,
       'You can only view statistics for your own class assessments',
     );
-    const attempts = await this.getAssessmentAttempts(assessmentId, currentUser);
+    const attempts = await this.getAssessmentAttempts(
+      assessmentId,
+      currentUser,
+    );
     const submittedAttempts = attempts.filter((a) => a.isSubmitted);
 
     // Count enrolled students for completion rate
@@ -3620,14 +3674,14 @@ export class AssessmentsService {
           ? {
               ...mapAttemptSummary(latestAttempt),
               submittedFile: latestAttempt.submittedFileId
-                ? submittedFileMap.get(latestAttempt.submittedFileId) ?? null
+                ? (submittedFileMap.get(latestAttempt.submittedFileId) ?? null)
                 : null,
             }
           : null,
         attempts: studentAttempts.map((attempt) => ({
           ...mapAttemptSummary(attempt),
           submittedFile: attempt.submittedFileId
-            ? submittedFileMap.get(attempt.submittedFileId) ?? null
+            ? (submittedFileMap.get(attempt.submittedFileId) ?? null)
             : null,
         })),
         totalAttempts: studentAttempts.length,
@@ -3738,7 +3792,10 @@ export class AssessmentsService {
             );
           }
 
-          if (rubricScore.pointsEarned < 0 || rubricScore.pointsEarned > criterion.points) {
+          if (
+            rubricScore.pointsEarned < 0 ||
+            rubricScore.pointsEarned > criterion.points
+          ) {
             throw new BadRequestException(
               `Rubric score for "${criterion.title}" must be between 0 and ${criterion.points}`,
             );
@@ -3778,7 +3835,9 @@ export class AssessmentsService {
         }
 
         if (dto.directScore < 0 || dto.directScore > 100) {
-          throw new BadRequestException('Direct score must be between 0 and 100');
+          throw new BadRequestException(
+            'Direct score must be between 0 and 100',
+          );
         }
 
         score = Math.round(dto.directScore);

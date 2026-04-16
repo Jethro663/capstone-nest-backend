@@ -137,13 +137,12 @@ describe('LxpController', () => {
     };
     mockLxpService.getTeacherPendingInterventionCount.mockResolvedValue(data);
 
-    const res = await controller.getTeacherPendingInterventionCount(
-      TEACHER_USER,
-    );
+    const res =
+      await controller.getTeacherPendingInterventionCount(TEACHER_USER);
 
-    expect(mockLxpService.getTeacherPendingInterventionCount).toHaveBeenCalledWith(
-      TEACHER_USER,
-    );
+    expect(
+      mockLxpService.getTeacherPendingInterventionCount,
+    ).toHaveBeenCalledWith(TEACHER_USER);
     expect(res).toEqual({ success: true, data });
   });
 
@@ -163,7 +162,9 @@ describe('LxpController', () => {
       TEACHER_USER,
     );
 
-    expect(mockLxpService.getTeacherInterventionCaseDetail).toHaveBeenCalledWith(
+    expect(
+      mockLxpService.getTeacherInterventionCaseDetail,
+    ).toHaveBeenCalledWith(
       '00000000-0000-0000-0000-000000000501',
       TEACHER_USER,
     );

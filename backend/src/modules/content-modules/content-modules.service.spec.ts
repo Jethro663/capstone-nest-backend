@@ -71,7 +71,10 @@ describe('ContentModulesService', () => {
   afterEach(() => jest.clearAllMocks());
 
   it('filters hidden modules, omits locked content, and computes student required progress from visible required items only', async () => {
-    db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID, teacherId: TEACHER_ID });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
     db.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
     db.query.classModules.findMany.mockResolvedValue([
       {
@@ -197,10 +200,16 @@ describe('ContentModulesService', () => {
       },
     ]);
 
-    db.query.lessonCompletions.findMany.mockResolvedValue([{ lessonId: LESSON_ID }]);
-    db.query.assessmentAttempts.findMany.mockResolvedValue([{ assessmentId: ASSESSMENT_ID }]);
+    db.query.lessonCompletions.findMany.mockResolvedValue([
+      { lessonId: LESSON_ID },
+    ]);
+    db.query.assessmentAttempts.findMany.mockResolvedValue([
+      { assessmentId: ASSESSMENT_ID },
+    ]);
 
-    const data = await service.getModulesByClass(CLASS_ID, STUDENT_ID, [RoleName.Student]);
+    const data = await service.getModulesByClass(CLASS_ID, STUDENT_ID, [
+      RoleName.Student,
+    ]);
 
     expect(data).toHaveLength(2);
     const visibleModule = data.find((entry) => entry.id === MODULE_ID);
@@ -212,7 +221,9 @@ describe('ContentModulesService', () => {
     expect(visibleModule?.sections[0]?.items).toHaveLength(2);
     expect(visibleModule?.sections[0]?.items[0]?.lessonPoints).toBe(15);
     expect(
-      visibleModule?.sections[0]?.items.every((item) => item.accessible === true),
+      visibleModule?.sections[0]?.items.every(
+        (item) => item.accessible === true,
+      ),
     ).toBe(true);
 
     const lockedModule = data.find((entry) => entry.id === 'module-locked');
@@ -227,11 +238,19 @@ describe('ContentModulesService', () => {
       id: SECTION_ID,
       module: { id: MODULE_ID, classId: CLASS_ID },
     });
-    db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID, teacherId: TEACHER_ID });
-    db.query.lessons.findFirst.mockResolvedValue({ id: LESSON_ID, classId: CLASS_ID });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.lessons.findFirst.mockResolvedValue({
+      id: LESSON_ID,
+      classId: CLASS_ID,
+    });
     mockSelectWhere(db, [{ maxOrder: 0 }]);
 
-    const returning = jest.fn().mockResolvedValue([{ id: ITEM_ID, metadata: { points: 20 } }]);
+    const returning = jest
+      .fn()
+      .mockResolvedValue([{ id: ITEM_ID, metadata: { points: 20 } }]);
     const values = jest.fn().mockReturnValue({ returning });
     db.insert.mockReturnValueOnce({ values });
 
@@ -266,18 +285,18 @@ describe('ContentModulesService', () => {
         itemType: ModuleItemType.Lesson,
         metadata: { points: 25, note: 'existing' },
       });
-    db.query.classes.findFirst.mockResolvedValue({ id: CLASS_ID, teacherId: TEACHER_ID });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
 
     const where = jest.fn().mockResolvedValue(undefined);
     const set = jest.fn().mockReturnValue({ where });
     db.update.mockReturnValueOnce({ set });
 
-    await service.updateItem(
-      ITEM_ID,
-      { points: 25 },
-      TEACHER_ID,
-      [RoleName.Teacher],
-    );
+    await service.updateItem(ITEM_ID, { points: 25 }, TEACHER_ID, [
+      RoleName.Teacher,
+    ]);
 
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({

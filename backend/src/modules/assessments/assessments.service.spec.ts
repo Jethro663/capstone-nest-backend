@@ -452,11 +452,10 @@ describe('AssessmentsService', () => {
       db.query.assessments.findFirst.mockResolvedValue(noQuestionsAssessment);
 
       await expect(
-        service.updateAssessment(
-          ASSESSMENT_ID,
-          { isPublished: true } as any,
-          { userId: 'teacher-1', roles: ['teacher'] },
-        ),
+        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -469,11 +468,10 @@ describe('AssessmentsService', () => {
       db.query.assessments.findFirst.mockResolvedValue(noPassing);
 
       await expect(
-        service.updateAssessment(
-          ASSESSMENT_ID,
-          { isPublished: true } as any,
-          { userId: 'teacher-1', roles: ['teacher'] },
-        ),
+        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -497,14 +495,18 @@ describe('AssessmentsService', () => {
       );
 
       expect(result.isPublished).toBe(true);
-      expect(assessmentNotificationDispatch.enqueueAssessmentAssigned).toHaveBeenCalledWith(
+      expect(
+        assessmentNotificationDispatch.enqueueAssessmentAssigned,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           id: ASSESSMENT_ID,
           classId: CLASS_ID,
           title: 'Test Quiz',
         }),
       );
-      expect(assessmentNotificationDispatch.rescheduleAssessmentDueReminder).toHaveBeenCalledWith(
+      expect(
+        assessmentNotificationDispatch.rescheduleAssessmentDueReminder,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
           id: ASSESSMENT_ID,
           classId: CLASS_ID,
@@ -530,8 +532,12 @@ describe('AssessmentsService', () => {
         { userId: 'teacher-1', roles: ['teacher'] },
       );
 
-      expect(assessmentNotificationDispatch.enqueueAssessmentAssigned).not.toHaveBeenCalled();
-      expect(assessmentNotificationDispatch.rescheduleAssessmentDueReminder).toHaveBeenCalledWith(
+      expect(
+        assessmentNotificationDispatch.enqueueAssessmentAssigned,
+      ).not.toHaveBeenCalled();
+      expect(
+        assessmentNotificationDispatch.rescheduleAssessmentDueReminder,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({ id: ASSESSMENT_ID, isPublished: true }),
       );
     });
@@ -544,11 +550,10 @@ describe('AssessmentsService', () => {
       db.query.assessments.findFirst.mockResolvedValue(invalidFileUpload);
 
       await expect(
-        service.updateAssessment(
-          ASSESSMENT_ID,
-          { isPublished: true } as any,
-          { userId: 'teacher-1', roles: ['teacher'] },
-        ),
+        service.updateAssessment(ASSESSMENT_ID, { isPublished: true } as any, {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -793,7 +798,8 @@ describe('AssessmentsService', () => {
       ]);
 
       const result = await service.startAttempt(STUDENT_ID, ASSESSMENT_ID);
-      const insertedValues = db.insert.mock.results[0].value.values.mock.calls[0][0];
+      const insertedValues =
+        db.insert.mock.results[0].value.values.mock.calls[0][0];
 
       expect(insertedValues.currentQuestionStartedAt).toBeInstanceOf(Date);
       expect(insertedValues.currentQuestionDeadlineAt).toBeInstanceOf(Date);
@@ -814,7 +820,11 @@ describe('AssessmentsService', () => {
         questionTimeLimitSeconds: 30,
         questions: [
           MOCK_QUESTION,
-          { ...MOCK_QUESTION, id: '00000000-0000-0000-0000-000000000021', order: 2 },
+          {
+            ...MOCK_QUESTION,
+            id: '00000000-0000-0000-0000-000000000021',
+            order: 2,
+          },
         ],
       };
       const expiredAttempt = {
@@ -856,7 +866,9 @@ describe('AssessmentsService', () => {
         passed: false,
       };
 
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_PUBLISHED_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_PUBLISHED_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(expiredAttempt);
       mockUpdateReturning(db, [submittedAttempt]);
       mockUpdateReturning(db, [finalAttempt]);
@@ -891,7 +903,11 @@ describe('AssessmentsService', () => {
         questionTimeLimitSeconds: 30,
         questions: [
           MOCK_QUESTION,
-          { ...MOCK_QUESTION, id: '00000000-0000-0000-0000-000000000021', order: 2 },
+          {
+            ...MOCK_QUESTION,
+            id: '00000000-0000-0000-0000-000000000021',
+            order: 2,
+          },
         ],
       };
       const activeAttempt = {
@@ -911,9 +927,13 @@ describe('AssessmentsService', () => {
       db.query.assessmentAttempts.findFirst.mockResolvedValue(activeAttempt);
       mockUpdateReturning(db, [updatedAttempt]);
 
-      const result = await service.updateAttemptProgress(STUDENT_ID, ATTEMPT_ID, {
-        currentQuestionIndex: 1,
-      });
+      const result = await service.updateAttemptProgress(
+        STUDENT_ID,
+        ATTEMPT_ID,
+        {
+          currentQuestionIndex: 1,
+        },
+      );
 
       const setArgs = db.update.mock.results[0].value.set.mock.calls[0][0];
       expect(setArgs.currentQuestionStartedAt).toBeInstanceOf(Date);
@@ -1190,7 +1210,9 @@ describe('AssessmentsService', () => {
         isReturned: false,
       };
 
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_FILE_UPLOAD_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_FILE_UPLOAD_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue(submittedAttempt);
       mockUpdateReturning(db, [restoredAttempt]);
 
@@ -1218,7 +1240,9 @@ describe('AssessmentsService', () => {
     });
 
     it('should reject unsubmit for returned file upload attempts', async () => {
-      db.query.assessments.findFirst.mockResolvedValue(MOCK_FILE_UPLOAD_ASSESSMENT);
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_FILE_UPLOAD_ASSESSMENT,
+      );
       db.query.assessmentAttempts.findFirst.mockResolvedValue({
         ...MOCK_ATTEMPT,
         isSubmitted: true,
@@ -1944,20 +1968,23 @@ describe('AssessmentsService', () => {
       // getQuestionById at the end
       db.query.assessmentQuestions.findFirst.mockResolvedValue(MOCK_QUESTION);
 
-      const result = await service.createQuestion({
-        assessmentId: ASSESSMENT_ID,
-        type: 'multiple_choice',
-        content: 'What is 1+1?',
-        points: 5,
-        order: 1,
-        options: [
-          { text: '2', isCorrect: true, order: 1 },
-          { text: '3', isCorrect: false, order: 2 },
-        ],
-      } as any, {
-        userId: 'teacher-1',
-        roles: ['teacher'],
-      });
+      const result = await service.createQuestion(
+        {
+          assessmentId: ASSESSMENT_ID,
+          type: 'multiple_choice',
+          content: 'What is 1+1?',
+          points: 5,
+          order: 1,
+          options: [
+            { text: '2', isCorrect: true, order: 1 },
+            { text: '3', isCorrect: false, order: 2 },
+          ],
+        } as any,
+        {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        },
+      );
 
       expect(result.id).toBe(QUESTION_ID);
       expect(mockAuditService.log).toHaveBeenCalledWith(
@@ -2063,7 +2090,9 @@ describe('AssessmentsService', () => {
       });
       mockUpdate(db);
       mockSelect(db, [{ total: 6 }]);
-      mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 6 }]);
+      mockUpdateReturning(db, [
+        { ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 6 },
+      ]);
 
       const result = await service.updateQuestion(
         QUESTION_ID,
@@ -2103,7 +2132,9 @@ describe('AssessmentsService', () => {
       });
       mockDelete(db);
       mockSelect(db, [{ total: 0 }]);
-      mockUpdateReturning(db, [{ ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 0 }]);
+      mockUpdateReturning(db, [
+        { ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 0 },
+      ]);
 
       const result = await service.deleteQuestion(QUESTION_ID, {
         userId: 'teacher-1',

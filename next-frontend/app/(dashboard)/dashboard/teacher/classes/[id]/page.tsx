@@ -27,6 +27,7 @@ import {
   GripVertical,
   LayoutPanelTop,
   Megaphone,
+  MessageSquare,
   Palette,
   Plus,
   Radar,
@@ -38,6 +39,7 @@ import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { announcementService } from '@/services/announcement-service';
+import { discussionBoardService } from '@/services/discussion-board-service';
 import { assessmentService } from '@/services/assessment-service';
 import { extractionService } from '@/services/extraction-service';
 import { aiService } from '@/services/ai-service';
@@ -56,6 +58,7 @@ import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 import type { ClassRecord } from '@/types/class-record';
+import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
 import type { Extraction } from '@/types/extraction';
 import type { ClassModule } from '@/types/module';
 import './workspace.css';
@@ -90,7 +93,7 @@ const TeacherClassRecordWorkbook = dynamic(
   },
 );
 
-type WorkspaceTab = 'modules' | 'assignments' | 'extraction' | 'announcements' | 'class-record' | 'students' | 'calendar';
+type WorkspaceTab = 'modules' | 'assignments' | 'extraction' | 'announcements' | 'discussion' | 'class-record' | 'students' | 'calendar';
 type AssignmentFilter = 'all' | 'written' | 'performance' | 'quarterly' | 'discussion' | 'drafts';
 type CalendarKind = 'assessment' | 'event' | 'holiday';
 type CalendarViewMode = 'calendar' | 'upcoming';
@@ -129,6 +132,7 @@ const CLASS_TABS: Array<{ key: WorkspaceTab; label: string; icon: typeof BookOpe
   { key: 'assignments', label: 'Assignments', icon: ClipboardList },
   { key: 'extraction', label: 'Extraction', icon: Radar },
   { key: 'announcements', label: 'Announcements', icon: Megaphone },
+  { key: 'discussion', label: 'Discussion Board', icon: MessageSquare },
   { key: 'class-record', label: 'Class Record', icon: FileSpreadsheet },
   { key: 'students', label: 'Students', icon: Users },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -177,6 +181,7 @@ function isWorkspaceTab(value: string | null): value is WorkspaceTab {
     value === 'assignments' ||
     value === 'extraction' ||
     value === 'announcements' ||
+    value === 'discussion' ||
     value === 'class-record' ||
     value === 'students' ||
     value === 'calendar'
@@ -279,6 +284,15 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   );
 }
 
+function sortDiscussionThreads(threads: DiscussionThreadSummary[]) {
+  return [...threads].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+    const aTs = new Date(a.publishedAt || a.createdAt || 0).getTime();
+    const bTs = new Date(b.publishedAt || b.createdAt || 0).getTime();
+    return bTs - aTs;
+  });
+}
+
 function normalizeModulePresentation(module: ClassModule): ModulePresentationDraft {
   const gradientId =
     MODULE_GRADIENT_OPTIONS.find((option) => option.id === module.gradientId)?.id ||
@@ -325,6 +339,9 @@ export default function TeacherClassDetailPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [discussionThreads, setDiscussionThreads] = useState<DiscussionThreadSummary[]>([]);
+  const [selectedDiscussionThreadId, setSelectedDiscussionThreadId] = useState<string | null>(null);
+  const [selectedDiscussionThread, setSelectedDiscussionThread] = useState<DiscussionThreadDetail | null>(null);
   const [finalGradeByStudentId, setFinalGradeByStudentId] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -371,6 +388,16 @@ export default function TeacherClassDetailPage() {
   const [announcementPinned, setAnnouncementPinned] = useState(false);
   const [creatingAnnouncement, setCreatingAnnouncement] = useState(false);
   const [busyAnnouncementId, setBusyAnnouncementId] = useState<string | null>(null);
+  const [showDiscussionForm, setShowDiscussionForm] = useState(false);
+  const [discussionTitle, setDiscussionTitle] = useState('');
+  const [discussionBody, setDiscussionBody] = useState<string>('');
+  const [discussionCommentLimit, setDiscussionCommentLimit] = useState('1');
+  const [discussionAllowComments, setDiscussionAllowComments] = useState(true);
+  const [discussionPinned, setDiscussionPinned] = useState(false);
+  const [discussionLinksText, setDiscussionLinksText] = useState('');
+  const [discussionAttachmentFiles, setDiscussionAttachmentFiles] = useState<File[]>([]);
+  const [creatingDiscussion, setCreatingDiscussion] = useState(false);
+  const [busyDiscussionThreadId, setBusyDiscussionThreadId] = useState<string | null>(null);
 
   const [busyEnrollmentId, setBusyEnrollmentId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
@@ -383,6 +410,9 @@ export default function TeacherClassDetailPage() {
       setAssessments([]);
       setExtractions([]);
       setAnnouncements([]);
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
       setFinalGradeByStudentId({});
       setLoading(false);
       return;
@@ -390,6 +420,7 @@ export default function TeacherClassDetailPage() {
 
     try {
       setLoading(true);
+      const shouldLoadFullWorkspaceData = activeTab !== 'discussion';
       const [
         classRes,
         modulesRes,
@@ -400,11 +431,31 @@ export default function TeacherClassDetailPage() {
         enrollmentsRes,
       ] = await Promise.all([
         classService.getById(classId),
-        moduleService.getByClass(classId).catch(() => ({ data: [] as ClassModule[] })),
-        assessmentService.getByClass(classId, { page: 1, limit: 100, status: 'all' }).catch(() => ({ data: [] as Assessment[] })),
-        extractionService.listByClass(classId).catch(() => ({ data: [] as Extraction[] })),
-        announcementService.getByClass(classId, { limit: 50 }).catch(() => ({ data: [] as Announcement[] })),
-        classRecordService.getByClass(classId).catch(() => ({ data: [] as ClassRecord[] })),
+        shouldLoadFullWorkspaceData
+          ? moduleService
+              .getByClass(classId)
+              .catch(() => ({ data: [] as ClassModule[] }))
+          : Promise.resolve({ data: [] as ClassModule[] }),
+        shouldLoadFullWorkspaceData
+          ? assessmentService
+              .getByClass(classId, { page: 1, limit: 100, status: 'all' })
+              .catch(() => ({ data: [] as Assessment[] }))
+          : Promise.resolve({ data: [] as Assessment[] }),
+        shouldLoadFullWorkspaceData
+          ? extractionService
+              .listByClass(classId)
+              .catch(() => ({ data: [] as Extraction[] }))
+          : Promise.resolve({ data: [] as Extraction[] }),
+        shouldLoadFullWorkspaceData
+          ? announcementService
+              .getByClass(classId, { limit: 50 })
+              .catch(() => ({ data: [] as Announcement[] }))
+          : Promise.resolve({ data: [] as Announcement[] }),
+        shouldLoadFullWorkspaceData
+          ? classRecordService
+              .getByClass(classId)
+              .catch(() => ({ data: [] as ClassRecord[] }))
+          : Promise.resolve({ data: [] as ClassRecord[] }),
         classService.getEnrollments(classId).catch(() => ({ data: [] as ClassItem['enrollments'] })),
       ]);
 
@@ -427,26 +478,30 @@ export default function TeacherClassDetailPage() {
         return bTs - aTs;
       }));
 
-      const records = (classRecordsRes.data || []).slice().sort((left, right) => {
-        const leftTs = Math.max(toTimestamp(left.updatedAt), toTimestamp(left.createdAt));
-        const rightTs = Math.max(toTimestamp(right.updatedAt), toTimestamp(right.createdAt));
-        return rightTs - leftTs;
-      });
-      const prioritizedRecord =
-        records.find((record) => record.status === 'finalized') ??
-        records.find((record) => record.status === 'draft') ??
-        null;
-
-      if (!prioritizedRecord?.id) {
+      if (!shouldLoadFullWorkspaceData) {
         setFinalGradeByStudentId({});
       } else {
-        const finalGradesRes = await classRecordService
-          .getFinalGrades(prioritizedRecord.id)
-          .catch(() => ({ data: [] as { studentId: string; finalPercentage: number }[] }));
-        const gradeMap = Object.fromEntries(
-          (finalGradesRes.data || []).map((grade) => [grade.studentId, grade.finalPercentage]),
-        );
-        setFinalGradeByStudentId(gradeMap);
+        const records = (classRecordsRes.data || []).slice().sort((left, right) => {
+          const leftTs = Math.max(toTimestamp(left.updatedAt), toTimestamp(left.createdAt));
+          const rightTs = Math.max(toTimestamp(right.updatedAt), toTimestamp(right.createdAt));
+          return rightTs - leftTs;
+        });
+        const prioritizedRecord =
+          records.find((record) => record.status === 'finalized') ??
+          records.find((record) => record.status === 'draft') ??
+          null;
+
+        if (!prioritizedRecord?.id) {
+          setFinalGradeByStudentId({});
+        } else {
+          const finalGradesRes = await classRecordService
+            .getFinalGrades(prioritizedRecord.id)
+            .catch(() => ({ data: [] as { studentId: string; finalPercentage: number }[] }));
+          const gradeMap = Object.fromEntries(
+            (finalGradesRes.data || []).map((grade) => [grade.studentId, grade.finalPercentage]),
+          );
+          setFinalGradeByStudentId(gradeMap);
+        }
       }
     } catch {
       setClassItem(null);
@@ -454,6 +509,9 @@ export default function TeacherClassDetailPage() {
       setAssessments([]);
       setExtractions([]);
       setAnnouncements([]);
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
       setFinalGradeByStudentId({});
     } finally {
       setLoading(false);
@@ -463,6 +521,51 @@ export default function TeacherClassDetailPage() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  const loadDiscussionThreads = useCallback(async () => {
+    if (!isClassIdValid) {
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
+      return;
+    }
+
+    try {
+      const response = await discussionBoardService.listThreads(classId, { limit: 50 });
+      setDiscussionThreads(sortDiscussionThreads(response.data.items || []));
+    } catch (error) {
+      setDiscussionThreads([]);
+      setSelectedDiscussionThreadId(null);
+      setSelectedDiscussionThread(null);
+      toast.error(getApiErrorMessage(error, 'Failed to load discussion threads'));
+    }
+  }, [activeTab, classId, isClassIdValid]);
+
+  useEffect(() => {
+    if (activeTab !== 'discussion') return;
+    void loadDiscussionThreads();
+  }, [activeTab, loadDiscussionThreads]);
+
+  const loadDiscussionThreadDetail = useCallback(
+    async (threadId: string) => {
+      try {
+        const response = await discussionBoardService.getThread(classId, threadId);
+        setSelectedDiscussionThread(response.data);
+      } catch (error) {
+        setSelectedDiscussionThread(null);
+        toast.error(getApiErrorMessage(error, 'Failed to load discussion thread'));
+      }
+    },
+    [classId],
+  );
+
+  useEffect(() => {
+    if (!selectedDiscussionThreadId) {
+      setSelectedDiscussionThread(null);
+      return;
+    }
+    void loadDiscussionThreadDetail(selectedDiscussionThreadId);
+  }, [loadDiscussionThreadDetail, selectedDiscussionThreadId]);
 
   const refreshAiDraftJobs = useCallback(async () => {
     if (!isClassIdValid) {
@@ -1163,6 +1266,127 @@ export default function TeacherClassDetailPage() {
     });
   };
 
+  const resetDiscussionComposer = () => {
+    setDiscussionTitle('');
+    setDiscussionBody('');
+    setDiscussionCommentLimit('1');
+    setDiscussionAllowComments(true);
+    setDiscussionPinned(false);
+    setDiscussionLinksText('');
+    setDiscussionAttachmentFiles([]);
+    setShowDiscussionForm(false);
+  };
+
+  const handleCreateDiscussionThread = async (publishImmediately: boolean) => {
+    const safeBody = sanitizeRichTextHtml(discussionBody).trim();
+    if (!discussionTitle.trim() || !safeBody || creatingDiscussion) return;
+
+    const commentLimit = Number.parseInt(discussionCommentLimit, 10);
+    const parsedLinks = discussionLinksText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((url) => ({ url }));
+
+    try {
+      setCreatingDiscussion(true);
+      const uploadedFiles = await Promise.all(
+        discussionAttachmentFiles.map((file) =>
+          discussionBoardService.uploadThreadAttachment(classId, file),
+        ),
+      );
+      const fileAttachmentIds = uploadedFiles.map((entry) => entry.data.id);
+
+      const created = await discussionBoardService.createThread(classId, {
+        title: discussionTitle.trim(),
+        bodyHtml: safeBody,
+        themeId: 'classic',
+        commentLimitPerStudent:
+          Number.isFinite(commentLimit) && commentLimit > 0 ? commentLimit : 1,
+        allowComments: discussionAllowComments,
+        isPinned: discussionPinned,
+        fileAttachmentIds,
+        linkAttachments: parsedLinks,
+      });
+
+      let nextThread = created.data;
+      if (publishImmediately) {
+        const published = await discussionBoardService.publishThread(
+          classId,
+          created.data.id,
+        );
+        nextThread = published.data;
+      }
+
+      setDiscussionThreads((current) => {
+        const withoutExisting = current.filter((entry) => entry.id !== nextThread.id);
+        return sortDiscussionThreads([nextThread, ...withoutExisting]);
+      });
+      setSelectedDiscussionThreadId(nextThread.id);
+      setSelectedDiscussionThread(nextThread);
+      resetDiscussionComposer();
+      toast.success(
+        publishImmediately
+          ? 'Discussion thread published'
+          : 'Discussion thread saved as draft',
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to save discussion thread'));
+    } finally {
+      setCreatingDiscussion(false);
+    }
+  };
+
+  const handleDiscussionThreadAction = async (
+    threadId: string,
+    action: 'publish' | 'close' | 'reopen' | 'archive',
+  ) => {
+    if (busyDiscussionThreadId) return;
+    try {
+      setBusyDiscussionThreadId(threadId);
+      if (action === 'archive') {
+        await discussionBoardService.archiveThread(classId, threadId);
+        setDiscussionThreads((current) =>
+          current.filter((entry) => entry.id !== threadId),
+        );
+        if (selectedDiscussionThreadId === threadId) {
+          setSelectedDiscussionThreadId(null);
+          setSelectedDiscussionThread(null);
+        }
+        toast.success('Discussion thread archived');
+        return;
+      }
+
+      const response =
+        action === 'publish'
+          ? await discussionBoardService.publishThread(classId, threadId)
+          : action === 'close'
+            ? await discussionBoardService.closeThread(classId, threadId)
+            : await discussionBoardService.reopenThread(classId, threadId);
+
+      const updated = response.data;
+      setDiscussionThreads((current) =>
+        sortDiscussionThreads(
+          current.map((entry) => (entry.id === updated.id ? updated : entry)),
+        ),
+      );
+      if (selectedDiscussionThreadId === updated.id) {
+        setSelectedDiscussionThread(updated);
+      }
+      toast.success(
+        action === 'publish'
+          ? 'Thread published'
+          : action === 'close'
+            ? 'Thread closed'
+            : 'Thread reopened',
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to update discussion thread'));
+    } finally {
+      setBusyDiscussionThreadId(null);
+    }
+  };
+
   const performRemoveStudent = async (enrollmentId: string, studentId: string) => {
     if (busyEnrollmentId) return;
     try {
@@ -1760,6 +1984,264 @@ export default function TeacherClassDetailPage() {
                 <div className="teacher-class-workspace__empty">No announcements yet.</div>
               ) : null}
             </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'discussion' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="teacher-class-workspace__panel-head">
+              <div>
+                <h2>Discussion Board</h2>
+                <p>{discussionThreads.length} thread{discussionThreads.length === 1 ? '' : 's'}</p>
+              </div>
+              <Button
+                type="button"
+                className="teacher-class-workspace__solid"
+                onClick={() => setShowDiscussionForm((current) => !current)}
+              >
+                <Plus className="h-4 w-4" />
+                New Thread
+              </Button>
+            </div>
+
+            {showDiscussionForm ? (
+              <div className="teacher-class-workspace__announcement-form">
+                <Input
+                  value={discussionTitle}
+                  onChange={(event) => setDiscussionTitle(event.target.value)}
+                  placeholder="Thread title"
+                />
+                <RichTextEditor
+                  value={discussionBody}
+                  onChange={setDiscussionBody}
+                  placeholder="Write discussion prompt and details..."
+                  minHeight={180}
+                />
+                <div className="teacher-class-workspace__head-actions">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={discussionCommentLimit}
+                    onChange={(event) => setDiscussionCommentLimit(event.target.value)}
+                    placeholder="Comment limit per student"
+                  />
+                  <Input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    onChange={(event) =>
+                      setDiscussionAttachmentFiles(
+                        Array.from(event.target.files || []),
+                      )
+                    }
+                  />
+                </div>
+                <textarea
+                  className="teacher-module-modal__textarea"
+                  value={discussionLinksText}
+                  onChange={(event) => setDiscussionLinksText(event.target.value)}
+                  placeholder="Optional links (one URL per line)"
+                  rows={3}
+                />
+                <div className="teacher-class-workspace__head-actions">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={discussionAllowComments}
+                      onChange={(event) =>
+                        setDiscussionAllowComments(event.target.checked)
+                      }
+                    />
+                    Allow comments
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={discussionPinned}
+                      onChange={(event) => setDiscussionPinned(event.target.checked)}
+                    />
+                    Pin thread
+                  </label>
+                </div>
+                <div className="teacher-class-workspace__head-actions">
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__outline"
+                    onClick={() => void handleCreateDiscussionThread(false)}
+                    disabled={creatingDiscussion}
+                  >
+                    Save Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__solid"
+                    onClick={() => void handleCreateDiscussionThread(true)}
+                    disabled={creatingDiscussion}
+                  >
+                    Publish Thread
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetDiscussionComposer}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="teacher-class-workspace__stack">
+              {discussionThreads.map((thread) => (
+                <article
+                  key={thread.id}
+                  className="teacher-class-workspace__announcement-card"
+                  data-pinned={thread.isPinned}
+                >
+                  <div>
+                    {thread.isPinned ? <span className="teacher-class-workspace__pin">Pinned</span> : null}
+                    <div className="teacher-class-workspace__assignment-tags">
+                      <span>{thread.status.toUpperCase()}</span>
+                      <span data-status={thread.allowComments ? 'published' : 'draft'}>
+                        {thread.commentCount} comments
+                      </span>
+                    </div>
+                    <h3>{thread.title}</h3>
+                    <RichTextRenderer
+                      html={thread.bodyHtml}
+                      className="teacher-class-workspace__announcement-rich"
+                    />
+                    <small>
+                      {formatDateYmd(thread.publishedAt || thread.createdAt)} • Theme {thread.themeId}
+                    </small>
+                    {thread.attachments.length > 0 ? (
+                      <div className="teacher-class-workspace__assignment-actions">
+                        {thread.attachments.map((attachment) => (
+                          <a
+                            key={attachment.id}
+                            href={attachment.inlineUrl || attachment.linkUrl || '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="teacher-class-workspace__outline"
+                          >
+                            {attachment.type === 'link'
+                              ? attachment.linkLabel || 'Link'
+                              : attachment.originalName || 'Attachment'}
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="teacher-class-workspace__assignment-actions">
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__outline"
+                      onClick={() => setSelectedDiscussionThreadId(thread.id)}
+                    >
+                      Open
+                    </button>
+                    {thread.status === 'draft' ? (
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__outline"
+                        disabled={busyDiscussionThreadId === thread.id}
+                        onClick={() =>
+                          void handleDiscussionThreadAction(thread.id, 'publish')
+                        }
+                      >
+                        Publish
+                      </button>
+                    ) : null}
+                    {thread.status === 'published' ? (
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__outline"
+                        disabled={busyDiscussionThreadId === thread.id}
+                        onClick={() =>
+                          void handleDiscussionThreadAction(thread.id, 'close')
+                        }
+                      >
+                        Close
+                      </button>
+                    ) : null}
+                    {thread.status === 'closed' ? (
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__outline"
+                        disabled={busyDiscussionThreadId === thread.id}
+                        onClick={() =>
+                          void handleDiscussionThreadAction(thread.id, 'reopen')
+                        }
+                      >
+                        Reopen
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__ghost-icon"
+                      onClick={() =>
+                        void handleDiscussionThreadAction(thread.id, 'archive')
+                      }
+                      disabled={busyDiscussionThreadId === thread.id}
+                      aria-label="Archive discussion thread"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {discussionThreads.length === 0 ? (
+                <div className="teacher-class-workspace__empty">No discussion threads yet.</div>
+              ) : null}
+            </div>
+
+            {selectedDiscussionThread ? (
+              <div className="teacher-class-workspace__panel teacher-class-workspace__panel--record">
+                <div className="teacher-class-workspace__panel-head">
+                  <div>
+                    <h2>{selectedDiscussionThread.title}</h2>
+                    <p>{selectedDiscussionThread.comments.length} comment{selectedDiscussionThread.comments.length === 1 ? '' : 's'}</p>
+                  </div>
+                </div>
+                <div className="teacher-class-workspace__stack">
+                  {selectedDiscussionThread.comments.map((comment) => (
+                    <article key={comment.id} className="teacher-class-workspace__announcement-card">
+                      <div>
+                        <h3>
+                          {comment.author?.firstName} {comment.author?.lastName}
+                        </h3>
+                        <RichTextRenderer
+                          html={comment.bodyHtml || '<p>(Image-only comment)</p>'}
+                          className="teacher-class-workspace__announcement-rich"
+                        />
+                        {comment.attachments.length > 0 ? (
+                          <div className="teacher-class-workspace__assignment-actions">
+                            {comment.attachments.map((attachment) => (
+                              <a
+                                key={attachment.id}
+                                href={attachment.inlineUrl || '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="teacher-class-workspace__outline"
+                              >
+                                {attachment.originalName || 'Image attachment'}
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                        <small>
+                          {comment.reactions.like} like • {comment.reactions.heart} heart • {comment.reactions.wow} wow
+                        </small>
+                      </div>
+                    </article>
+                  ))}
+                  {selectedDiscussionThread.comments.length === 0 ? (
+                    <div className="teacher-class-workspace__empty">No comments yet.</div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

@@ -225,10 +225,7 @@ export class AssessmentsController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   @HttpCode(HttpStatus.OK)
   async deleteAssessment(@Param('id') id: string, @CurrentUser() user: any) {
-    const result = await this.assessmentsService.deleteAssessment(
-      id,
-      user,
-    );
+    const result = await this.assessmentsService.deleteAssessment(id, user);
 
     return {
       success: result.success,
@@ -247,8 +244,10 @@ export class AssessmentsController {
     @Body() createQuestionDto: CreateQuestionDto,
     @CurrentUser() user: any,
   ) {
-    const question =
-      await this.assessmentsService.createQuestion(createQuestionDto, user);
+    const question = await this.assessmentsService.createQuestion(
+      createQuestionDto,
+      user,
+    );
 
     return {
       success: true,
@@ -780,8 +779,10 @@ export class AssessmentsController {
     @Param('assessmentId') assessmentId: string,
     @CurrentUser() user: any,
   ) {
-    const attempts =
-      await this.assessmentsService.getAssessmentAttempts(assessmentId, user);
+    const attempts = await this.assessmentsService.getAssessmentAttempts(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -801,8 +802,10 @@ export class AssessmentsController {
     @Param('assessmentId') assessmentId: string,
     @CurrentUser() user: any,
   ) {
-    const stats =
-      await this.assessmentsService.getAssessmentStats(assessmentId, user);
+    const stats = await this.assessmentsService.getAssessmentStats(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -821,8 +824,10 @@ export class AssessmentsController {
     @Param('assessmentId') assessmentId: string,
     @CurrentUser() user: any,
   ) {
-    const analytics =
-      await this.assessmentsService.getQuestionAnalytics(assessmentId, user);
+    const analytics = await this.assessmentsService.getQuestionAnalytics(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,
@@ -845,8 +850,10 @@ export class AssessmentsController {
     @Param('assessmentId') assessmentId: string,
     @CurrentUser() user: any,
   ) {
-    const submissions =
-      await this.assessmentsService.getAssessmentSubmissions(assessmentId, user);
+    const submissions = await this.assessmentsService.getAssessmentSubmissions(
+      assessmentId,
+      user,
+    );
 
     return {
       success: true,

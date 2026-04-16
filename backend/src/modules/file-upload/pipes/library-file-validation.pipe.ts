@@ -62,16 +62,26 @@ export class LibraryFileValidationPipe implements PipeTransform {
       file.originalname.includes('/') ||
       file.originalname.includes('\\')
     ) {
-      throw new BadRequestException('File name contains an unsafe path segment.');
+      throw new BadRequestException(
+        'File name contains an unsafe path segment.',
+      );
     }
 
-    if (!LIBRARY_FILE_EXTENSIONS.includes(ext as (typeof LIBRARY_FILE_EXTENSIONS)[number])) {
+    if (
+      !LIBRARY_FILE_EXTENSIONS.includes(
+        ext as (typeof LIBRARY_FILE_EXTENSIONS)[number],
+      )
+    ) {
       throw new UnsupportedMediaTypeException(
         'Only .pdf, .txt, and .pptx files are supported.',
       );
     }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype as (typeof ALLOWED_MIME_TYPES)[number])) {
+    if (
+      !ALLOWED_MIME_TYPES.includes(
+        file.mimetype as (typeof ALLOWED_MIME_TYPES)[number],
+      )
+    ) {
       throw new UnsupportedMediaTypeException(
         'Unsupported file type. Upload PDF, TXT, or PPTX files only.',
       );
@@ -98,7 +108,11 @@ export class LibraryFileValidationPipe implements PipeTransform {
       );
     }
 
-    const isPdf = header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46;
+    const isPdf =
+      header[0] === 0x25 &&
+      header[1] === 0x50 &&
+      header[2] === 0x44 &&
+      header[3] === 0x46;
     const isZip = header[0] === 0x50 && header[1] === 0x4b;
     const looksBinary = header.includes(0x00);
 

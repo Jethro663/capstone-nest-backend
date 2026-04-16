@@ -15,7 +15,11 @@ import { systemEvaluationTargetEnum } from '../../../drizzle/schema';
 
 const systemTargets = systemEvaluationTargetEnum.enumValues;
 export type SystemEvaluationTarget = (typeof systemTargets)[number];
-const aiSessionTypes = ['mentor_chat', 'mistake_explanation', 'student_tutor'] as const;
+const aiSessionTypes = [
+  'mentor_chat',
+  'mistake_explanation',
+  'student_tutor',
+] as const;
 export type AiSessionType = (typeof aiSessionTypes)[number];
 
 export class LessonAssignmentDto {

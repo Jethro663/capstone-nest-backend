@@ -1044,7 +1044,11 @@ export class UsersService {
     }
 
     return {
-      message: this.buildBulkLifecycleMessage(dto.action, succeeded.length, failed.length),
+      message: this.buildBulkLifecycleMessage(
+        dto.action,
+        succeeded.length,
+        failed.length,
+      ),
       data: {
         action: dto.action,
         requested: userIds.length,

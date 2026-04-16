@@ -12,9 +12,7 @@ interface QueueReindexOptions {
 export class RagIndexingService {
   private readonly logger = new Logger(RagIndexingService.name);
 
-  constructor(
-    @InjectQueue('rag-indexing') private readonly queue: Queue,
-  ) {}
+  constructor(@InjectQueue('rag-indexing') private readonly queue: Queue) {}
 
   async queueClassReindex(classId: string, options: QueueReindexOptions) {
     const jobId = `reindex:${classId}`;
@@ -41,8 +39,13 @@ export class RagIndexingService {
         },
       );
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Job is already waiting')) {
-        this.logger.debug(`RAG reindex job already queued for class ${classId}`);
+      if (
+        error instanceof Error &&
+        error.message.includes('Job is already waiting')
+      ) {
+        this.logger.debug(
+          `RAG reindex job already queued for class ${classId}`,
+        );
         return;
       }
 

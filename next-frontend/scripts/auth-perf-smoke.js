@@ -2,6 +2,11 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://127.0.0.1:3001';
 const USER_EMAIL = process.env.USER_EMAIL || 'admin@lms.local';
 const USER_PASSWORD = process.env.USER_PASSWORD || 'Test@123';
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 10000);
+const MAX_LOGIN_RETRIES = Number(process.env.MAX_LOGIN_RETRIES || 3);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function nowMs() {
   return Number(process.hrtime.bigint() / BigInt(1_000_000));
@@ -62,16 +67,35 @@ function extractCookies(response) {
 
 async function main() {
   const loginPage = await timedFetch(`${FRONTEND_ORIGIN}/login`);
-  const loginResponse = await timedFetch(`${FRONTEND_ORIGIN}/api/auth/login`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      email: USER_EMAIL,
-      password: USER_PASSWORD,
-    }),
-  });
+  let loginResponse = null;
+
+  for (let attempt = 1; attempt <= MAX_LOGIN_RETRIES; attempt += 1) {
+    const nextResponse = await timedFetch(`${FRONTEND_ORIGIN}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: USER_EMAIL,
+        password: USER_PASSWORD,
+      }),
+    });
+
+    loginResponse = nextResponse;
+    if (nextResponse.response.ok) {
+      break;
+    }
+
+    if (nextResponse.response.status !== 429 || attempt === MAX_LOGIN_RETRIES) {
+      break;
+    }
+
+    await sleep(750 * attempt);
+  }
+
+  if (!loginResponse) {
+    throw new Error('Login request did not execute.');
+  }
 
   if (!loginResponse.response.ok) {
     throw new Error(`Login failed with status ${loginResponse.response.status}`);

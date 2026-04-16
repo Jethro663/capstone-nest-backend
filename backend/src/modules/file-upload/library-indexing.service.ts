@@ -11,9 +11,7 @@ interface QueueFileIndexOptions {
 export class LibraryIndexingService {
   private readonly logger = new Logger(LibraryIndexingService.name);
 
-  constructor(
-    @InjectQueue('library-indexing') private readonly queue: Queue,
-  ) {}
+  constructor(@InjectQueue('library-indexing') private readonly queue: Queue) {}
 
   async queueFileIndex(fileId: string, options: QueueFileIndexOptions) {
     try {

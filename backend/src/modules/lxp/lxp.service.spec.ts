@@ -286,7 +286,9 @@ describe('LxpService', () => {
   });
 
   it('builds the student overview with lesson-first recommendation and evidence-backed weak focus entries', async () => {
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst.mockResolvedValue({
       id: 'case-1',
       classId: 'class-1',
@@ -434,7 +436,9 @@ describe('LxpService', () => {
   });
 
   it('falls back to assessment retry when no incomplete lesson remains', async () => {
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst.mockResolvedValue({
       id: 'case-1',
       classId: 'class-1',
@@ -510,7 +514,9 @@ describe('LxpService', () => {
   });
 
   it('rejects overview access when the student is not intervention-eligible', async () => {
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst.mockResolvedValue(null);
     mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
       isAtRisk: false,
@@ -525,7 +531,9 @@ describe('LxpService', () => {
   });
 
   it('blocks overview access when intervention is pending approval', async () => {
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'pending-case-1' });
@@ -536,7 +544,9 @@ describe('LxpService', () => {
   });
 
   it('blocks playlist access when intervention is pending approval', async () => {
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 'pending-case-1' });
@@ -1038,8 +1048,7 @@ describe('LxpService', () => {
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'completed',
-        note:
-          'Student has late work backlog\nAuto-resolved because student is no longer at-risk.',
+        note: 'Student has late work backlog\nAuto-resolved because student is no longer at-risk.',
       }),
     );
     expect(mockAuditService.log).toHaveBeenCalledWith(
@@ -1125,8 +1134,7 @@ describe('LxpService', () => {
     expect(txUpdateSet).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'completed',
-        note:
-          'Teacher assigned checkpoint sequence\nAuto-completed after finishing all LXP checkpoints.',
+        note: 'Teacher assigned checkpoint sequence\nAuto-completed after finishing all LXP checkpoints.',
       }),
     );
     expect(mockAuditService.log).toHaveBeenCalledWith(
@@ -1226,9 +1234,9 @@ describe('LxpService', () => {
       }),
       query: {
         interventionAssignments: {
-          findMany: jest.fn().mockResolvedValue([
-            { id: 'assignment-retry', isCompleted: true },
-          ]),
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ id: 'assignment-retry', isCompleted: true }]),
         },
       },
     };

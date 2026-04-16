@@ -170,11 +170,17 @@ export const classAiPolicies = pgTable(
     classId: uuid('class_id')
       .notNull()
       .references(() => classes.id, { onDelete: 'cascade' }),
-    mentorExplainEnabled: boolean('mentor_explain_enabled').notNull().default(true),
+    mentorExplainEnabled: boolean('mentor_explain_enabled')
+      .notNull()
+      .default(true),
     maxFollowUpTurns: integer('max_follow_up_turns').notNull().default(3),
-    sourceScope: aiPolicySourceScopeEnum('source_scope').notNull().default('class_materials'),
+    sourceScope: aiPolicySourceScopeEnum('source_scope')
+      .notNull()
+      .default('class_materials'),
     strictGrounding: boolean('strict_grounding').notNull().default(false),
-    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    updatedBy: uuid('updated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

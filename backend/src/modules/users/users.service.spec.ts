@@ -777,7 +777,9 @@ describe('UsersService', () => {
           message: 'User suspended successfully',
           userId: 'user-1',
         })
-        .mockRejectedValueOnce(new BadRequestException('Cannot suspend a deleted user'))
+        .mockRejectedValueOnce(
+          new BadRequestException('Cannot suspend a deleted user'),
+        )
         .mockResolvedValueOnce({
           message: 'User suspended successfully',
           userId: 'user-3',
@@ -798,7 +800,9 @@ describe('UsersService', () => {
           action: 'suspend',
           requested: 3,
           succeeded: ['user-1', 'user-3'],
-          failed: [{ userId: 'user-2', reason: 'Cannot suspend a deleted user' }],
+          failed: [
+            { userId: 'user-2', reason: 'Cannot suspend a deleted user' },
+          ],
         },
       });
     });

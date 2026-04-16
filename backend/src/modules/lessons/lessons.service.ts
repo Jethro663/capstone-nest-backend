@@ -170,9 +170,14 @@ export class LessonsService {
 
     if (type === 'auto') {
       const autoVersions = await this.db.query.lessonVersions?.findMany?.({
-        where: and(eq(lessonVersions.lessonId, lessonId), eq(lessonVersions.type, 'auto')),
+        where: and(
+          eq(lessonVersions.lessonId, lessonId),
+          eq(lessonVersions.type, 'auto'),
+        ),
         columns: { id: true },
-        orderBy: (versions, { desc: byDesc }) => [byDesc(versions.versionNumber)],
+        orderBy: (versions, { desc: byDesc }) => [
+          byDesc(versions.versionNumber),
+        ],
       });
       const autoVersionRetention = 25;
       if ((autoVersions?.length ?? 0) > autoVersionRetention) {
@@ -335,7 +340,12 @@ export class LessonsService {
     });
 
     const lesson = await this.getLessonById(newLessonId);
-    await this.createLessonVersionSnapshot(lesson.id, userId, 'auto', 'Initial lesson snapshot');
+    await this.createLessonVersionSnapshot(
+      lesson.id,
+      userId,
+      'auto',
+      'Initial lesson snapshot',
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -636,10 +646,7 @@ export class LessonsService {
     await this.assertTeacherOwnership(classId, userId, userRoles);
 
     const existingLessons = await this.db.query.lessons.findMany({
-      where: and(
-        eq(lessons.classId, classId),
-        inArray(lessons.id, lessonIds),
-      ),
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
       columns: {
         id: true,
         title: true,
@@ -657,9 +664,7 @@ export class LessonsService {
     await this.db
       .update(lessons)
       .set({ isDraft, updatedAt: new Date() })
-      .where(
-        and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
-      );
+      .where(and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)));
 
     await this.auditService.log({
       actorId: userId,
@@ -702,10 +707,7 @@ export class LessonsService {
     await this.assertTeacherOwnership(classId, userId, userRoles);
 
     const existingLessons = await this.db.query.lessons.findMany({
-      where: and(
-        eq(lessons.classId, classId),
-        inArray(lessons.id, lessonIds),
-      ),
+      where: and(eq(lessons.classId, classId), inArray(lessons.id, lessonIds)),
       columns: {
         id: true,
         title: true,
@@ -759,11 +761,16 @@ export class LessonsService {
 
     const requestedIds = reorderDto.lessons.map((lesson) => lesson.id);
     if (requestedIds.length === 0) {
-      throw new BadRequestException('At least one lesson reorder entry is required');
+      throw new BadRequestException(
+        'At least one lesson reorder entry is required',
+      );
     }
 
     const existingLessons = await this.db.query.lessons.findMany({
-      where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
+      where: and(
+        eq(lessons.classId, classId),
+        inArray(lessons.id, requestedIds),
+      ),
       columns: { id: true },
     });
 
@@ -802,7 +809,10 @@ export class LessonsService {
     });
 
     return this.db.query.lessons.findMany({
-      where: and(eq(lessons.classId, classId), inArray(lessons.id, requestedIds)),
+      where: and(
+        eq(lessons.classId, classId),
+        inArray(lessons.id, requestedIds),
+      ),
       orderBy: (l, { asc }) => [asc(l.order)],
     });
   }
@@ -1019,7 +1029,9 @@ export class LessonsService {
       return Boolean(item.lesson && !item.lesson.isDraft);
     }
     if (item.itemType === 'assessment') {
-      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+      return Boolean(
+        item.assessment && item.assessment.isPublished && item.isGiven,
+      );
     }
     return Boolean(item.fileId);
   }
@@ -1032,12 +1044,17 @@ export class LessonsService {
     return Math.trunc(rawPoints);
   }
 
-  private async buildModuleProgressForStudent(moduleId: string, studentId: string) {
+  private async buildModuleProgressForStudent(
+    moduleId: string,
+    studentId: string,
+  ) {
     const module = await this.db.query.classModules.findFirst({
       where: eq(classModules.id, moduleId),
       with: {
         sections: {
-          orderBy: (sectionTable, { asc: byAsc }) => [byAsc(sectionTable.order)],
+          orderBy: (sectionTable, { asc: byAsc }) => [
+            byAsc(sectionTable.order),
+          ],
           with: {
             items: {
               orderBy: (itemTable, { asc: byAsc }) => [byAsc(itemTable.order)],
@@ -1083,7 +1100,9 @@ export class LessonsService {
       .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
       .map((item) => item.lessonId as string);
     const requiredAssessmentIds = visibleRequiredItems
-      .filter((item) => item.itemType === 'assessment' && Boolean(item.assessmentId))
+      .filter(
+        (item) => item.itemType === 'assessment' && Boolean(item.assessmentId),
+      )
       .map((item) => item.assessmentId as string);
 
     const completedLessonIds = new Set<string>();
@@ -1116,7 +1135,9 @@ export class LessonsService {
           assessmentId: true,
         },
       });
-      attemptRows.forEach((entry) => completedAssessmentIds.add(entry.assessmentId));
+      attemptRows.forEach((entry) =>
+        completedAssessmentIds.add(entry.assessmentId),
+      );
     }
 
     let requiredCompletedCount = 0;
@@ -1136,7 +1157,8 @@ export class LessonsService {
 
     const requiredVisibleCount = visibleRequiredItems.length;
     const completed =
-      requiredVisibleCount === 0 || requiredCompletedCount === requiredVisibleCount;
+      requiredVisibleCount === 0 ||
+      requiredCompletedCount === requiredVisibleCount;
     const progressPercent =
       requiredVisibleCount === 0
         ? 100
@@ -1194,7 +1216,10 @@ export class LessonsService {
         .returning();
 
       const moduleProgress = moduleItem?.section?.module?.id
-        ? await this.buildModuleProgressForStudent(moduleItem.section.module.id, studentId)
+        ? await this.buildModuleProgressForStudent(
+            moduleItem.section.module.id,
+            studentId,
+          )
         : null;
 
       return {
@@ -1218,7 +1243,10 @@ export class LessonsService {
           .returning();
 
         const moduleProgress = moduleItem?.section?.module?.id
-          ? await this.buildModuleProgressForStudent(moduleItem.section.module.id, studentId)
+          ? await this.buildModuleProgressForStudent(
+              moduleItem.section.module.id,
+              studentId,
+            )
           : null;
 
         return {

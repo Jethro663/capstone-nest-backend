@@ -27,7 +27,9 @@ export class ProfilesService {
     return this.databaseService.db;
   }
 
-  private resolveActorRole(actorRoles: string[] = []): 'admin' | 'teacher' | 'student' | 'system' {
+  private resolveActorRole(
+    actorRoles: string[] = [],
+  ): 'admin' | 'teacher' | 'student' | 'system' {
     if (actorRoles.includes('admin')) return 'admin';
     if (actorRoles.includes('teacher')) return 'teacher';
     if (actorRoles.includes('student')) return 'student';
@@ -293,8 +295,9 @@ export class ProfilesService {
         closedAt: entry.closedAt,
         note: entry.note,
         assignmentCount: entry.assignments.length,
-        completedAssignments: entry.assignments.filter((item) => item.isCompleted)
-          .length,
+        completedAssignments: entry.assignments.filter(
+          (item) => item.isCompleted,
+        ).length,
       })),
       lxpProgress: lxpProgressRows,
       classRecordHistory: classRecordHistory.map((row) => ({
@@ -450,7 +453,10 @@ export class ProfilesService {
           },
         })
         .from(assessmentAttempts)
-        .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+        .innerJoin(
+          assessments,
+          eq(assessments.id, assessmentAttempts.assessmentId),
+        )
         .leftJoin(classes, eq(classes.id, assessments.classId))
         .where(
           and(
@@ -464,7 +470,10 @@ export class ProfilesService {
       this.db
         .select({ total: sql<number>`count(*)`.mapWith(Number) })
         .from(assessmentAttempts)
-        .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+        .innerJoin(
+          assessments,
+          eq(assessments.id, assessmentAttempts.assessmentId),
+        )
         .leftJoin(classes, eq(classes.id, assessments.classId))
         .where(
           and(
@@ -475,7 +484,8 @@ export class ProfilesService {
     ]);
 
     const mappedRows = rows.map((row) => {
-      const { classRefId, classSubjectName, classSubjectCode, ...assessment } = row.assessment;
+      const { classRefId, classSubjectName, classSubjectCode, ...assessment } =
+        row.assessment;
       return {
         ...row,
         assessment: {

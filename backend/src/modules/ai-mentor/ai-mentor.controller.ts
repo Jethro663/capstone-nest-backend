@@ -100,25 +100,23 @@ export class AiMentorController {
     return new Date().toISOString();
   }
 
-  private toExtractionFallbackPayload(
-    extraction: {
-      id: string;
-      fileId: string;
-      classId: string;
-      teacherId: string;
-      extractionStatus: string;
-      modelUsed: string | null;
-      errorMessage: string | null;
-      structuredContent: unknown;
-      isApplied: boolean;
-      progressPercent: number;
-      totalChunks: number | null;
-      processedChunks: number;
-      createdAt: Date | string;
-      updatedAt: Date | string;
-      file?: { originalName: string } | null;
-    },
-  ) {
+  private toExtractionFallbackPayload(extraction: {
+    id: string;
+    fileId: string;
+    classId: string;
+    teacherId: string;
+    extractionStatus: string;
+    modelUsed: string | null;
+    errorMessage: string | null;
+    structuredContent: unknown;
+    isApplied: boolean;
+    progressPercent: number;
+    totalChunks: number | null;
+    processedChunks: number;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    file?: { originalName: string } | null;
+  }) {
     return {
       id: extraction.id,
       fileId: extraction.fileId,
@@ -142,11 +140,14 @@ export class AiMentorController {
     return Array.isArray(userRoles) && userRoles.includes(role);
   }
 
-  private async assertAdminAnalyticsAccess(user: {
-    id: string;
-    email: string;
-    roles: string[];
-  }, route: string) {
+  private async assertAdminAnalyticsAccess(
+    user: {
+      id: string;
+      email: string;
+      roles: string[];
+    },
+    route: string,
+  ) {
     if (this.hasRole(user.roles, RoleName.Admin)) {
       return;
     }
@@ -165,7 +166,9 @@ export class AiMentorController {
       return;
     }
     if (!this.hasRole(user.roles, RoleName.Teacher)) {
-      throw new ForbiddenException('Only teachers and admins can access this class.');
+      throw new ForbiddenException(
+        'Only teachers and admins can access this class.',
+      );
     }
 
     const classRecord = await this.db.query.classes.findFirst({
@@ -193,7 +196,9 @@ export class AiMentorController {
       return;
     }
     if (!this.hasRole(user.roles, RoleName.Teacher)) {
-      throw new ForbiddenException('Only teachers and admins can access this extraction.');
+      throw new ForbiddenException(
+        'Only teachers and admins can access this extraction.',
+      );
     }
 
     const extraction = await this.db.query.extractedModules.findFirst({
@@ -205,7 +210,9 @@ export class AiMentorController {
     });
 
     if (!extraction) {
-      throw new NotFoundException(`Extraction with ID "${extractionId}" not found`);
+      throw new NotFoundException(
+        `Extraction with ID "${extractionId}" not found`,
+      );
     }
 
     await this.assertTeacherClassAccess(extraction.classId, user);
@@ -219,7 +226,9 @@ export class AiMentorController {
       return;
     }
     if (!this.hasRole(user.roles, RoleName.Teacher)) {
-      throw new ForbiddenException('Only teachers and admins can start module extraction.');
+      throw new ForbiddenException(
+        'Only teachers and admins can start module extraction.',
+      );
     }
 
     const file = await this.db.query.uploadedFiles.findFirst({
@@ -257,7 +266,9 @@ export class AiMentorController {
     });
 
     if (!interventionCase) {
-      throw new NotFoundException(`Intervention case with ID "${caseId}" not found`);
+      throw new NotFoundException(
+        `Intervention case with ID "${caseId}" not found`,
+      );
     }
 
     await this.assertTeacherClassAccess(interventionCase.classId, user);
@@ -300,7 +311,8 @@ export class AiMentorController {
     return {
       classId,
       mentorExplainEnabled:
-        policy?.mentorExplainEnabled ?? this.defaultClassAiPolicy.mentorExplainEnabled,
+        policy?.mentorExplainEnabled ??
+        this.defaultClassAiPolicy.mentorExplainEnabled,
       maxFollowUpTurns:
         policy?.maxFollowUpTurns ?? this.defaultClassAiPolicy.maxFollowUpTurns,
       sourceScope: policy?.sourceScope ?? this.defaultClassAiPolicy.sourceScope,
@@ -347,7 +359,10 @@ export class AiMentorController {
       );
     }
 
-    if (!this.hasRole(user.roles, RoleName.Admin) && attempt.studentId !== user.id) {
+    if (
+      !this.hasRole(user.roles, RoleName.Admin) &&
+      attempt.studentId !== user.id
+    ) {
       throw new ForbiddenException(
         'You can only request mentoring help for your own assessment attempts.',
       );
@@ -451,7 +466,9 @@ export class AiMentorController {
     });
 
     if (!job) {
-      throw new NotFoundException(`AI generation job with ID "${jobId}" not found`);
+      throw new NotFoundException(
+        `AI generation job with ID "${jobId}" not found`,
+      );
     }
 
     if (this.hasRole(user.roles, RoleName.Admin)) {
@@ -496,14 +513,16 @@ export class AiMentorController {
         return Math.max(0, Math.min(100, Math.round(parsed)));
       }
     }
-    return {
-      pending: 5,
-      processing: 60,
-      completed: 100,
-      approved: 100,
-      rejected: 100,
-      failed: 100,
-    }[status] ?? 0;
+    return (
+      {
+        pending: 5,
+        processing: 60,
+        completed: 100,
+        approved: 100,
+        rejected: 100,
+        failed: 100,
+      }[status] ?? 0
+    );
   }
 
   private async resolveAssessmentIdForOutput(outputId: string | null) {
@@ -528,12 +547,14 @@ export class AiMentorController {
         : {};
 
     const lessonIds = Array.isArray(rawSuggestedPayload.lessonIds)
-      ? rawSuggestedPayload.lessonIds
-          .filter((value): value is string => typeof value === 'string')
+      ? rawSuggestedPayload.lessonIds.filter(
+          (value): value is string => typeof value === 'string',
+        )
       : [];
     const assessmentIds = Array.isArray(rawSuggestedPayload.assessmentIds)
-      ? rawSuggestedPayload.assessmentIds
-          .filter((value): value is string => typeof value === 'string')
+      ? rawSuggestedPayload.assessmentIds.filter(
+          (value): value is string => typeof value === 'string',
+        )
       : [];
 
     normalized.suggestedAssignmentPayload = {
@@ -558,7 +579,9 @@ export class AiMentorController {
       return Boolean(item.lesson && !item.lesson.isDraft);
     }
     if (item.itemType === 'assessment') {
-      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+      return Boolean(
+        item.assessment && item.assessment.isPublished && item.isGiven,
+      );
     }
     return Boolean(item.fileId);
   }
@@ -601,14 +624,16 @@ export class AiMentorController {
   private extractStringField(payload: unknown, key: string): string | null {
     const unwrapped = this.unwrapEnvelope(payload);
     return (
-      this.readStringField(unwrapped.data, key) ?? this.readStringField(payload, key)
+      this.readStringField(unwrapped.data, key) ??
+      this.readStringField(payload, key)
     );
   }
 
   private extractNumberField(payload: unknown, key: string): number | null {
     const unwrapped = this.unwrapEnvelope(payload);
     return (
-      this.readNumberField(unwrapped.data, key) ?? this.readNumberField(payload, key)
+      this.readNumberField(unwrapped.data, key) ??
+      this.readNumberField(payload, key)
     );
   }
 
@@ -631,7 +656,10 @@ export class AiMentorController {
   }
 
   private isAllowedRecommendation(
-    recommendation: { lessonId?: string | null; assessmentId?: string | null } | null | undefined,
+    recommendation:
+      | { lessonId?: string | null; assessmentId?: string | null }
+      | null
+      | undefined,
     allowedLessonIds: Set<string>,
     allowedAssessmentIds: Set<string>,
   ) {
@@ -732,7 +760,10 @@ export class AiMentorController {
       ),
     );
     if (classIds.length === 0) {
-      return { allowedLessonIds: new Set<string>(), allowedAssessmentIds: new Set<string>() };
+      return {
+        allowedLessonIds: new Set<string>(),
+        allowedAssessmentIds: new Set<string>(),
+      };
     }
 
     const modules = await this.db.query.classModules.findMany({
@@ -779,7 +810,11 @@ export class AiMentorController {
       if (module.isLocked) return;
       module.sections.forEach((section) => {
         section.items.forEach((item) => {
-          if (!this.isTutorItemVisible(item as typeof item & { fileId?: string | null })) {
+          if (
+            !this.isTutorItemVisible(
+              item as typeof item & { fileId?: string | null },
+            )
+          ) {
             return;
           }
           if (item.itemType === 'lesson' && item.lessonId) {
@@ -837,7 +872,9 @@ export class AiMentorController {
   @Post('mentor/explain')
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get grounded mentoring help for a returned assessment question' })
+  @ApiOperation({
+    summary: 'Get grounded mentoring help for a returned assessment question',
+  })
   async explainMistake(
     @Body() dto: MentorExplainDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -882,7 +919,9 @@ export class AiMentorController {
       dto.sourceScope === undefined &&
       dto.strictGrounding === undefined
     ) {
-      throw new BadRequestException('Provide at least one policy field to update.');
+      throw new BadRequestException(
+        'Provide at least one policy field to update.',
+      );
     }
 
     const [updated] = await this.db
@@ -890,7 +929,8 @@ export class AiMentorController {
       .values({
         classId,
         mentorExplainEnabled:
-          dto.mentorExplainEnabled ?? this.defaultClassAiPolicy.mentorExplainEnabled,
+          dto.mentorExplainEnabled ??
+          this.defaultClassAiPolicy.mentorExplainEnabled,
         maxFollowUpTurns:
           dto.maxFollowUpTurns ?? this.defaultClassAiPolicy.maxFollowUpTurns,
         sourceScope: dto.sourceScope ?? this.defaultClassAiPolicy.sourceScope,
@@ -945,7 +985,9 @@ export class AiMentorController {
 
   @Get('student/tutor/bootstrap')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Get student tutor classes, recommendations, and saved sessions' })
+  @ApiOperation({
+    summary: 'Get student tutor classes, recommendations, and saved sessions',
+  })
   async studentTutorBootstrap(
     @Query() query: StudentTutorBootstrapQueryDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -969,7 +1011,10 @@ export class AiMentorController {
       recentLessons: Array.isArray(rawData.recentLessons)
         ? rawData.recentLessons.filter((entry) =>
             this.isAllowedRecommendation(
-              entry as { lessonId?: string | null; assessmentId?: string | null },
+              entry as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
               allowedLessonIds,
               allowedAssessmentIds,
             ),
@@ -978,7 +1023,10 @@ export class AiMentorController {
       recentAttempts: Array.isArray(rawData.recentAttempts)
         ? rawData.recentAttempts.filter((entry) =>
             this.isAllowedRecommendation(
-              entry as { lessonId?: string | null; assessmentId?: string | null },
+              entry as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
               allowedLessonIds,
               allowedAssessmentIds,
             ),
@@ -987,7 +1035,10 @@ export class AiMentorController {
       recommendations: Array.isArray(rawData.recommendations)
         ? rawData.recommendations.filter((entry) =>
             this.isAllowedRecommendation(
-              entry as { lessonId?: string | null; assessmentId?: string | null },
+              entry as {
+                lessonId?: string | null;
+                assessmentId?: string | null;
+              },
               allowedLessonIds,
               allowedAssessmentIds,
             ),
@@ -1006,7 +1057,9 @@ export class AiMentorController {
 
   @Post('student/tutor/session')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Start a student tutor session from a recommended topic' })
+  @ApiOperation({
+    summary: 'Start a student tutor session from a recommended topic',
+  })
   async startStudentTutorSession(
     @Body() dto: StudentTutorStartDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -1092,7 +1145,9 @@ export class AiMentorController {
         ? (rawData.state as Record<string, unknown>)
         : null;
     const classId =
-      typeof sessionState?.classId === 'string' ? sessionState.classId : undefined;
+      typeof sessionState?.classId === 'string'
+        ? sessionState.classId
+        : undefined;
     if (!classId) return payload;
 
     const { allowedLessonIds, allowedAssessmentIds } =
@@ -1136,7 +1191,9 @@ export class AiMentorController {
 
   @Post('student/tutor/session/:sessionId/message')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Send a follow-up message to a student tutor session' })
+  @ApiOperation({
+    summary: 'Send a follow-up message to a student tutor session',
+  })
   async messageStudentTutorSession(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() dto: StudentTutorMessageDto,
@@ -1187,7 +1244,9 @@ export class AiMentorController {
 
   @Post('student/tutor/session/:sessionId/answers')
   @Roles(RoleName.Student)
-  @ApiOperation({ summary: 'Evaluate the current practice round for a student tutor session' })
+  @ApiOperation({
+    summary: 'Evaluate the current practice round for a student tutor session',
+  })
   async answerStudentTutorSession(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() dto: StudentTutorAnswersDto,
@@ -1314,7 +1373,10 @@ export class AiMentorController {
       weakConceptsInput.length > 0
         ? weakConceptsInput
         : dto.subjectId === 'science'
-          ? ['Scientific reasoning fundamentals', 'Cell and ecosystem concept transfer']
+          ? [
+              'Scientific reasoning fundamentals',
+              'Cell and ecosystem concept transfer',
+            ]
           : ['Main idea extraction', 'Coherent paragraph development'];
 
     const fallbackPayload = {
@@ -1325,7 +1387,10 @@ export class AiMentorController {
         dto.quarterExamScore <= 74
           ? 'Student is currently below target threshold. Prioritize foundational remediation and short feedback loops.'
           : 'Student is improving. Use focused reinforcement before the next full assessment.',
-      lxpQuestions: this.buildDemoPlanQuestions(fallbackWeakConcepts, dto.subjectId),
+      lxpQuestions: this.buildDemoPlanQuestions(
+        fallbackWeakConcepts,
+        dto.subjectId,
+      ),
     };
 
     const userContext = { id: '', email: '', roles: [] as string[] };
@@ -1388,8 +1453,7 @@ export class AiMentorController {
         liveError = error;
         const status =
           error instanceof HttpException ? error.getStatus() : undefined;
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(
           `Demo AI live plan attempt ${attempt} failed${status ? ` (status ${status})` : ''}: ${message}`,
         );
@@ -1399,7 +1463,8 @@ export class AiMentorController {
     return {
       success: true,
       degraded: true,
-      message: 'Live AI unavailable. Returning demo fallback intervention plan.',
+      message:
+        'Live AI unavailable. Returning demo fallback intervention plan.',
       data: fallbackPayload,
       error: liveError instanceof Error ? liveError.message : undefined,
     };
@@ -1444,7 +1509,9 @@ export class AiMentorController {
         throw error;
       }
       const message =
-        error instanceof Error ? error.message : 'Unknown extraction queue error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction queue error';
       this.logger.warn(
         `AI extraction queue unavailable for file ${dto.fileId}: ${message}`,
       );
@@ -1475,7 +1542,9 @@ export class AiMentorController {
         throw error;
       }
       const message =
-        error instanceof Error ? error.message : 'Unknown extraction status error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction status error';
       this.logger.warn(
         `AI extraction status degraded fallback for ${id}: ${message}`,
       );
@@ -1605,7 +1674,9 @@ export class AiMentorController {
       }
 
       const message =
-        error instanceof Error ? error.message : 'Unknown extraction detail error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction detail error';
       this.logger.warn(
         `AI extraction detail degraded fallback for ${id}: ${message}`,
       );
@@ -1696,7 +1767,9 @@ export class AiMentorController {
         throw error;
       }
       const message =
-        error instanceof Error ? error.message : 'Unknown extraction update error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction update error';
       this.logger.warn(
         `AI extraction update unavailable for ${id}: ${message}`,
       );
@@ -1721,7 +1794,8 @@ export class AiMentorController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Module sections with draft lessons/assessments created from extraction',
+    description:
+      'Module sections with draft lessons/assessments created from extraction',
   })
   async applyExtraction(
     @Param('id', ParseUUIDPipe) id: string,
@@ -1763,10 +1837,10 @@ export class AiMentorController {
         throw error;
       }
       const message =
-        error instanceof Error ? error.message : 'Unknown extraction apply error';
-      this.logger.warn(
-        `AI extraction apply unavailable for ${id}: ${message}`,
-      );
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction apply error';
+      this.logger.warn(`AI extraction apply unavailable for ${id}: ${message}`);
 
       const cachedExtraction = await this.db.query.extractedModules.findFirst({
         where: eq(extractedModules.id, id),
@@ -1818,7 +1892,11 @@ export class AiMentorController {
   ) {
     await this.assertTeacherExtractionAccess(id, user);
     try {
-      const result = await this.proxy.forward('DELETE', `/extractions/${id}`, user);
+      const result = await this.proxy.forward(
+        'DELETE',
+        `/extractions/${id}`,
+        user,
+      );
       await this.logAuditSafe({
         actorId: user.id,
         action: 'ai.extraction.deleted',
@@ -1831,7 +1909,9 @@ export class AiMentorController {
         throw error;
       }
       const message =
-        error instanceof Error ? error.message : 'Unknown extraction delete error';
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction delete error';
       this.logger.warn(
         `AI extraction delete unavailable for ${id}: ${message}`,
       );
@@ -1906,7 +1986,9 @@ export class AiMentorController {
 
   @Post('teacher/interventions/:caseId/recommend')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Generate AI intervention recommendations for an active LXP case' })
+  @ApiOperation({
+    summary: 'Generate AI intervention recommendations for an active LXP case',
+  })
   async recommendIntervention(
     @Param('caseId', ParseUUIDPipe) caseId: string,
     @Body() dto: InterventionRecommendationDto,
@@ -1934,7 +2016,10 @@ export class AiMentorController {
   @Post('teacher/interventions/:caseId/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Queue AI intervention recommendation generation for an active LXP case' })
+  @ApiOperation({
+    summary:
+      'Queue AI intervention recommendation generation for an active LXP case',
+  })
   async queueInterventionRecommendation(
     @Param('caseId', ParseUUIDPipe) caseId: string,
     @Body() dto: InterventionRecommendationDto,
@@ -1963,7 +2048,9 @@ export class AiMentorController {
   @Post('teacher/quizzes/generate-draft')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Generate a grounded draft assessment from lesson/module sources' })
+  @ApiOperation({
+    summary: 'Generate a grounded draft assessment from lesson/module sources',
+  })
   async generateQuizDraft(
     @Body() dto: GenerateQuizDraftDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -1992,13 +2079,21 @@ export class AiMentorController {
   @Post('teacher/quizzes/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Queue grounded AI draft assessment generation from lesson/module sources' })
+  @ApiOperation({
+    summary:
+      'Queue grounded AI draft assessment generation from lesson/module sources',
+  })
   async queueQuizDraftJob(
     @Body() dto: GenerateQuizDraftDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherClassAccess(dto.classId, user);
-    const result = await this.proxy.forward('POST', '/teacher/quizzes/jobs', user, dto);
+    const result = await this.proxy.forward(
+      'POST',
+      '/teacher/quizzes/jobs',
+      user,
+      dto,
+    );
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.quiz_draft.queued',
@@ -2096,7 +2191,9 @@ export class AiMentorController {
 
   @Get('teacher/jobs/:jobId/result')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Get the completed result of a teacher AI generation job' })
+  @ApiOperation({
+    summary: 'Get the completed result of a teacher AI generation job',
+  })
   async getTeacherJobResult(
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -2199,8 +2296,10 @@ export class AiMentorController {
             structuredOutput:
               cachedOutput.outputType === 'intervention_recommendation'
                 ? this.normalizeInterventionStructuredOutput({
-                    ...((cachedOutput.structuredOutput as Record<string, unknown>) ??
-                      {}),
+                    ...((cachedOutput.structuredOutput as Record<
+                      string,
+                      unknown
+                    >) ?? {}),
                     ...(assessmentId ? { assessmentId } : {}),
                     ...(runtime &&
                     runtime.resultSummary &&
@@ -2209,15 +2308,17 @@ export class AiMentorController {
                       : {}),
                   })
                 : {
-                    ...((cachedOutput.structuredOutput as Record<string, unknown>) ??
-                      {}),
-              ...(assessmentId ? { assessmentId } : {}),
-              ...(runtime &&
-              runtime.resultSummary &&
-              typeof runtime.resultSummary === 'object'
-                ? { runtime: runtime.resultSummary }
-                : {}),
-            },
+                    ...((cachedOutput.structuredOutput as Record<
+                      string,
+                      unknown
+                    >) ?? {}),
+                    ...(assessmentId ? { assessmentId } : {}),
+                    ...(runtime &&
+                    runtime.resultSummary &&
+                    typeof runtime.resultSummary === 'object'
+                      ? { runtime: runtime.resultSummary }
+                      : {}),
+                  },
           },
           errorMessage:
             cachedJob.errorMessage ??
@@ -2232,13 +2333,20 @@ export class AiMentorController {
 
   @Post('index/classes/:classId')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Reindex class lesson and assessment content for semantic retrieval' })
+  @ApiOperation({
+    summary:
+      'Reindex class lesson and assessment content for semantic retrieval',
+  })
   async reindexClass(
     @Param('classId', ParseUUIDPipe) classId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherClassAccess(classId, user);
-    const result = await this.proxy.forward('POST', `/index/classes/${classId}`, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/index/classes/${classId}`,
+      user,
+    );
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.class_content.reindex_queued',

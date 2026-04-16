@@ -86,21 +86,30 @@ export class AdminAnalyticsChatService {
   async buildScopedAnalyticsContext(user: AuthUser) {
     this.assertAdmin(user);
 
-    const [overview, auditLogs, studentPerformance, assessmentSummary, interventionParticipation, systemUsage, analyticsOverview, performanceAnalytics, evaluations] =
-      await Promise.all([
-        this.adminService.getDashboardOverview(),
-        this.adminService.getAuditLogs({ limit: 10, page: 1 }),
-        this.reportsService.getStudentPerformance({ limit: 12 }),
-        this.reportsService.getAssessmentSummary({ limit: 12 }),
-        this.reportsService.getInterventionParticipation({ limit: 12 }),
-        this.reportsService.getSystemUsage({}),
-        this.analyticsService.getAdminOverview(),
-        this.getPerformanceAnalytics(user),
-        this.lxpService.listSystemEvaluations(
-          { userId: user.id, roles: user.roles },
-          {},
-        ),
-      ]);
+    const [
+      overview,
+      auditLogs,
+      studentPerformance,
+      assessmentSummary,
+      interventionParticipation,
+      systemUsage,
+      analyticsOverview,
+      performanceAnalytics,
+      evaluations,
+    ] = await Promise.all([
+      this.adminService.getDashboardOverview(),
+      this.adminService.getAuditLogs({ limit: 10, page: 1 }),
+      this.reportsService.getStudentPerformance({ limit: 12 }),
+      this.reportsService.getAssessmentSummary({ limit: 12 }),
+      this.reportsService.getInterventionParticipation({ limit: 12 }),
+      this.reportsService.getSystemUsage({}),
+      this.analyticsService.getAdminOverview(),
+      this.getPerformanceAnalytics(user),
+      this.lxpService.listSystemEvaluations(
+        { userId: user.id, roles: user.roles },
+        {},
+      ),
+    ]);
 
     return {
       requestedBy: {

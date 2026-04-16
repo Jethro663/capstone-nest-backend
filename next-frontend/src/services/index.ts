@@ -6,6 +6,7 @@ export { lessonService } from './lesson-service';
 export { assessmentService } from './assessment-service';
 export { classRecordService } from './class-record-service';
 export { announcementService } from './announcement-service';
+export { discussionBoardService } from './discussion-board-service';
 export { notificationService } from './notification-service';
 export { fileService } from './file-service';
 export { dashboardService } from './dashboard-service';

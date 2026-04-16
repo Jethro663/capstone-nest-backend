@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class DemoInterventionPlanDto {
   @ApiProperty({
@@ -22,7 +32,10 @@ export class DemoInterventionPlanDto {
   @ApiPropertyOptional({
     description: 'Weak concepts detected during demo progression',
     type: [String],
-    example: ['Cell structures and functions', 'Scientific method and variable control'],
+    example: [
+      'Cell structures and functions',
+      'Scientific method and variable control',
+    ],
   })
   @IsOptional()
   @IsArray()
@@ -43,4 +56,3 @@ export class DemoInterventionPlanDto {
   @IsNumber({}, { each: true })
   moduleScores?: number[];
 }
-

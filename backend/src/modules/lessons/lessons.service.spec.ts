@@ -658,7 +658,9 @@ describe('LessonsService', () => {
           },
         ],
       });
-      db.query.lessonCompletions.findMany.mockResolvedValue([{ lessonId: LESSON_ID }]);
+      db.query.lessonCompletions.findMany.mockResolvedValue([
+        { lessonId: LESSON_ID },
+      ]);
       db.query.assessmentAttempts.findMany.mockResolvedValue([]);
 
       const now = new Date();

@@ -142,10 +142,7 @@ export class FileUploadController {
 
   @Get()
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async listFiles(
-    @CurrentUser() user: any,
-    @Query() query: FileQueryDto = {},
-  ) {
+  async listFiles(@CurrentUser() user: any, @Query() query: FileQueryDto = {}) {
     const files = await this.fileUploadService.findAll(
       this.normalizeUser(user),
       query,
@@ -165,10 +162,7 @@ export class FileUploadController {
 
   @Get('folders')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async listFolders(
-    @CurrentUser() user: any,
-    @Query() query: FileQueryDto,
-  ) {
+  async listFolders(@CurrentUser() user: any, @Query() query: FileQueryDto) {
     const folders = await this.fileUploadService.listFolders(
       this.normalizeUser(user),
       query,
@@ -253,7 +247,10 @@ export class FileUploadController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: any,
   ) {
-    const file = await this.fileUploadService.findOne(id, this.normalizeUser(user));
+    const file = await this.fileUploadService.findOne(
+      id,
+      this.normalizeUser(user),
+    );
 
     return {
       success: true,

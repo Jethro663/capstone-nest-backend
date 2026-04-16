@@ -9,7 +9,12 @@ import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [DatabaseModule, EventEmitterModule, AuditModule, NotificationsModule],
+  imports: [
+    DatabaseModule,
+    EventEmitterModule,
+    AuditModule,
+    NotificationsModule,
+  ],
   controllers: [AssessmentsController, AssessmentsPublicController],
   providers: [AssessmentsService, FeedbackService],
   exports: [AssessmentsService],

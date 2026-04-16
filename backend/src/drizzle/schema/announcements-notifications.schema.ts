@@ -19,6 +19,8 @@ import { classes } from './base.schema';
 
 export const notificationTypeEnum = pgEnum('notification_type', [
   'announcement_posted',
+  'discussion_thread_posted',
+  'discussion_comment_posted',
   'assessment_assigned',
   'grade_updated',
   'assessment_due',

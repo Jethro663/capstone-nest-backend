@@ -43,7 +43,9 @@ const CATEGORY_NAME_TO_KEY = {
 } as const;
 
 function getDefaultItemTitle(categoryName: string, itemOrder: number) {
-  const category = DEPED_CATEGORIES.find((entry) => entry.name === categoryName);
+  const category = DEPED_CATEGORIES.find(
+    (entry) => entry.name === categoryName,
+  );
   return `${category?.prefix ?? 'ITEM'}${itemOrder}`;
 }
 
@@ -502,7 +504,8 @@ export class ClassRecordService {
       });
 
       const initialGrade = categoryData.reduce((sum, c) => sum + c.ws, 0);
-      const computedQuarterlyGrade = this.computationService.transmute(initialGrade);
+      const computedQuarterlyGrade =
+        this.computationService.transmute(initialGrade);
       const historicalFinal = finalGradeByStudentId.get(student.studentId);
       const hasHistoricalQuarterly =
         historicalFinal && Number.isFinite(historicalFinal.finalPercentage);
@@ -914,7 +917,9 @@ export class ClassRecordService {
     }
 
     if (record.status !== 'finalized') {
-      throw new ConflictException('Only finalized class records can be reopened');
+      throw new ConflictException(
+        'Only finalized class records can be reopened',
+      );
     }
 
     const result = await this.db.transaction(async (tx) => {

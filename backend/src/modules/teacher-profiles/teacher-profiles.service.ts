@@ -16,7 +16,9 @@ export class TeacherProfilesService {
     return this.databaseService.db;
   }
 
-  private resolveActorRole(actorRoles: string[] = []): 'admin' | 'teacher' | 'system' {
+  private resolveActorRole(
+    actorRoles: string[] = [],
+  ): 'admin' | 'teacher' | 'system' {
     if (actorRoles.includes('admin')) return 'admin';
     if (actorRoles.includes('teacher')) return 'teacher';
     return 'system';

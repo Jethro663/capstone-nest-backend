@@ -16,7 +16,10 @@ import {
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
-import { areSubjectCodesEquivalent, normalizeSubjectCode } from '../../common/utils/subject-code.util';
+import {
+  areSubjectCodesEquivalent,
+  normalizeSubjectCode,
+} from '../../common/utils/subject-code.util';
 import {
   ClassTemplateStatus,
   CreateClassTemplateDto,
@@ -45,10 +48,14 @@ export class ClassTemplatesService {
   async findAll(query?: { subjectCode?: string; subjectGradeLevel?: string }) {
     const filters: SQL[] = [];
     if (query?.subjectCode) {
-      filters.push(eq(classTemplates.subjectCode, query.subjectCode.toUpperCase()));
+      filters.push(
+        eq(classTemplates.subjectCode, query.subjectCode.toUpperCase()),
+      );
     }
     if (query?.subjectGradeLevel) {
-      filters.push(eq(classTemplates.subjectGradeLevel, query.subjectGradeLevel));
+      filters.push(
+        eq(classTemplates.subjectGradeLevel, query.subjectGradeLevel),
+      );
     }
 
     const rows = await this.db.query.classTemplates.findMany({
@@ -59,7 +66,11 @@ export class ClassTemplatesService {
     return rows;
   }
 
-  async create(dto: CreateClassTemplateDto, actorId: string, actorRoles: string[]) {
+  async create(
+    dto: CreateClassTemplateDto,
+    actorId: string,
+    actorRoles: string[],
+  ) {
     this.assertAdmin(actorRoles);
     const payload = {
       name: dto.name.trim(),
@@ -68,7 +79,10 @@ export class ClassTemplatesService {
       createdBy: actorId,
     };
 
-    const [created] = await this.db.insert(classTemplates).values(payload).returning();
+    const [created] = await this.db
+      .insert(classTemplates)
+      .values(payload)
+      .returning();
 
     await this.auditService.log({
       actorId,
@@ -157,7 +171,8 @@ export class ClassTemplatesService {
       .update(classTemplates)
       .set({
         status,
-        publishedAt: status === ClassTemplateStatus.Published ? new Date() : null,
+        publishedAt:
+          status === ClassTemplateStatus.Published ? new Date() : null,
         updatedAt: new Date(),
       })
       .where(eq(classTemplates.id, id))
@@ -194,7 +209,10 @@ export class ClassTemplatesService {
     const moduleIds = modules.map((m) => m.id);
     const sections = moduleIds.length
       ? await this.db.query.classTemplateModuleSections.findMany({
-          where: inArray(classTemplateModuleSections.templateModuleId, moduleIds),
+          where: inArray(
+            classTemplateModuleSections.templateModuleId,
+            moduleIds,
+          ),
           orderBy: [asc(classTemplateModuleSections.order)],
         })
       : [];
@@ -205,11 +223,16 @@ export class ClassTemplatesService {
     const sectionIds = filteredSections.map((section) => section.id);
     const items = sectionIds.length
       ? await this.db.query.classTemplateModuleItems.findMany({
-          where: inArray(classTemplateModuleItems.templateSectionId, sectionIds),
+          where: inArray(
+            classTemplateModuleItems.templateSectionId,
+            sectionIds,
+          ),
           orderBy: [asc(classTemplateModuleItems.order)],
         })
       : [];
-    const filteredItems = items.filter((item) => sectionIds.includes(item.templateSectionId));
+    const filteredItems = items.filter((item) =>
+      sectionIds.includes(item.templateSectionId),
+    );
 
     const sectionByModule = new Map<string, any[]>();
     for (const section of filteredSections) {
@@ -218,7 +241,9 @@ export class ClassTemplatesService {
       }
       sectionByModule.get(section.templateModuleId)!.push({
         ...section,
-        items: filteredItems.filter((item) => item.templateSectionId === section.id),
+        items: filteredItems.filter(
+          (item) => item.templateSectionId === section.id,
+        ),
       });
     }
 
@@ -265,7 +290,9 @@ export class ClassTemplatesService {
       }
 
       if (dto.modules) {
-        await tx.delete(classTemplateModules).where(eq(classTemplateModules.templateId, id));
+        await tx
+          .delete(classTemplateModules)
+          .where(eq(classTemplateModules.templateId, id));
         if (dto.modules.length > 0) {
           const insertedModules = await tx
             .insert(classTemplateModules)
@@ -286,7 +313,11 @@ export class ClassTemplatesService {
             )
             .returning();
 
-          for (let moduleIndex = 0; moduleIndex < dto.modules.length; moduleIndex += 1) {
+          for (
+            let moduleIndex = 0;
+            moduleIndex < dto.modules.length;
+            moduleIndex += 1
+          ) {
             const moduleInput = dto.modules[moduleIndex];
             const moduleRow = insertedModules[moduleIndex];
             const sectionInputs = moduleInput.sections ?? [];
@@ -370,7 +401,10 @@ export class ClassTemplatesService {
     return this.getContent(id);
   }
 
-  async getPublishedByCompatibility(subjectCode: string, subjectGradeLevel: string) {
+  async getPublishedByCompatibility(
+    subjectCode: string,
+    subjectGradeLevel: string,
+  ) {
     if (!subjectCode || !subjectGradeLevel) {
       throw new BadRequestException(
         'subjectCode and subjectGradeLevel are required to filter templates',

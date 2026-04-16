@@ -303,7 +303,9 @@ describe('SectionsController', () => {
 
   describe('updateSectionPresentation', () => {
     it('returns success message and updated section payload', async () => {
-      const updated = makeSection({ cardBannerUrl: '/api/sections/banners/a.png' });
+      const updated = makeSection({
+        cardBannerUrl: '/api/sections/banners/a.png',
+      });
       mockSectionsService.updatePresentation.mockResolvedValue(updated);
 
       const result = await controller.updateSectionPresentation(
@@ -401,12 +403,14 @@ describe('SectionsController', () => {
         ADMIN_USER,
       );
 
-      expect(mockSectionsService.bulkLifecycleAction).toHaveBeenCalledWith({
-        action: 'archive',
-        sectionIds: ['s1', 's2', 's3'],
-      },
-      ADMIN_USER.userId,
-      ADMIN_USER.roles);
+      expect(mockSectionsService.bulkLifecycleAction).toHaveBeenCalledWith(
+        {
+          action: 'archive',
+          sectionIds: ['s1', 's2', 's3'],
+        },
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
       expect(result).toEqual({
         success: true,
         message: '2 sections archived; 1 failed.',

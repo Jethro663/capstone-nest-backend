@@ -60,7 +60,9 @@ export class SectionsService {
     return this.databaseService.db;
   }
 
-  private resolveActorRole(actorRoles: string[] = []): 'admin' | 'teacher' | 'system' {
+  private resolveActorRole(
+    actorRoles: string[] = [],
+  ): 'admin' | 'teacher' | 'system' {
     if (actorRoles.includes('admin')) return 'admin';
     if (actorRoles.includes('teacher')) return 'teacher';
     return 'system';
@@ -97,19 +99,23 @@ export class SectionsService {
     }
   }
 
-  private async getHiddenSectionIdsForUser(userId: string, sectionIds: string[]) {
+  private async getHiddenSectionIdsForUser(
+    userId: string,
+    sectionIds: string[],
+  ) {
     if (!userId || sectionIds.length === 0) return new Set<string>();
 
-    const preferences = await this.db.query.sectionVisibilityPreferences.findMany({
-      where: and(
-        eq(sectionVisibilityPreferences.userId, userId),
-        inArray(sectionVisibilityPreferences.sectionId, sectionIds),
-        eq(sectionVisibilityPreferences.isHidden, true),
-      ),
-      columns: {
-        sectionId: true,
-      },
-    });
+    const preferences =
+      await this.db.query.sectionVisibilityPreferences.findMany({
+        where: and(
+          eq(sectionVisibilityPreferences.userId, userId),
+          inArray(sectionVisibilityPreferences.sectionId, sectionIds),
+          eq(sectionVisibilityPreferences.isHidden, true),
+        ),
+        columns: {
+          sectionId: true,
+        },
+      });
 
     return new Set(preferences.map((preference) => preference.sectionId));
   }
@@ -245,7 +251,9 @@ export class SectionsService {
         limit,
         total: status === 'hidden' ? data.length : total,
         totalPages:
-          status === 'hidden' ? Math.ceil(data.length / limit) : Math.ceil(total / limit),
+          status === 'hidden'
+            ? Math.ceil(data.length / limit)
+            : Math.ceil(total / limit),
       },
     };
   }
@@ -476,10 +484,10 @@ export class SectionsService {
         eligibilityReason,
         hasActiveSectionEnrollment,
         enrolledSectionId: hasActiveSectionEnrollment
-          ? membership?.sectionId ?? null
+          ? (membership?.sectionId ?? null)
           : null,
         enrolledSectionName: hasActiveSectionEnrollment
-          ? membership?.sectionName ?? null
+          ? (membership?.sectionName ?? null)
           : null,
       };
     });
@@ -1096,11 +1104,7 @@ export class SectionsService {
     });
   }
 
-  async deleteSection(
-    id: string,
-    actorId?: string,
-    actorRoles: string[] = [],
-  ) {
+  async deleteSection(id: string, actorId?: string, actorRoles: string[] = []) {
     await this.archiveSection(id, actorId, actorRoles);
   }
 

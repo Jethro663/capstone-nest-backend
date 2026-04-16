@@ -107,13 +107,23 @@ describe('AdminAnalyticsChatService', () => {
       generatedAt: '2026-04-13T00:00:00.000Z',
     });
     mockAnalyticsService.getAdminOverview.mockResolvedValue({
-      totals: { teachers: 3, students: 8, classes: 5, activeInterventions: 1, atRiskStudents: 2 },
+      totals: {
+        teachers: 3,
+        students: 8,
+        classes: 5,
+        activeInterventions: 1,
+        atRiskStudents: 2,
+      },
       action: 'Monitor interventions',
     });
     mockPerformanceService.getAdminAnalytics.mockResolvedValue({
       conceptMasterySnapshots: [],
       recommendationHistory: [],
-      performanceLogTransitions: { total: 0, summary: { riskIncrements: 0, riskRecoveries: 0, otherTransitions: 0 }, rows: [] },
+      performanceLogTransitions: {
+        total: 0,
+        summary: { riskIncrements: 0, riskRecoveries: 0, otherTransitions: 0 },
+        rows: [],
+      },
     });
     mockLxpService.listSystemEvaluations.mockResolvedValue({
       count: 1,
@@ -162,10 +172,19 @@ describe('AdminAnalyticsChatService', () => {
     });
 
     expect(mockAdminService.getDashboardOverview).toHaveBeenCalled();
-    expect(mockAdminService.getAuditLogs).toHaveBeenCalledWith({ limit: 10, page: 1 });
-    expect(mockReportsService.getStudentPerformance).toHaveBeenCalledWith({ limit: 12 });
-    expect(mockReportsService.getAssessmentSummary).toHaveBeenCalledWith({ limit: 12 });
-    expect(mockReportsService.getInterventionParticipation).toHaveBeenCalledWith({ limit: 12 });
+    expect(mockAdminService.getAuditLogs).toHaveBeenCalledWith({
+      limit: 10,
+      page: 1,
+    });
+    expect(mockReportsService.getStudentPerformance).toHaveBeenCalledWith({
+      limit: 12,
+    });
+    expect(mockReportsService.getAssessmentSummary).toHaveBeenCalledWith({
+      limit: 12,
+    });
+    expect(
+      mockReportsService.getInterventionParticipation,
+    ).toHaveBeenCalledWith({ limit: 12 });
     expect(mockReportsService.getSystemUsage).toHaveBeenCalledWith({});
     expect(mockAnalyticsService.getAdminOverview).toHaveBeenCalled();
     expect(mockPerformanceService.getAdminAnalytics).toHaveBeenCalledWith(

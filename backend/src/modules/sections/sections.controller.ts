@@ -113,12 +113,7 @@ export class SectionsController {
   @Roles(RoleName.Admin, RoleName.Teacher)
   async getMySections(
     @Query('status')
-    statusQuery:
-      | 'active'
-      | 'archived'
-      | 'hidden'
-      | 'all'
-      | undefined,
+    statusQuery: 'active' | 'archived' | 'hidden' | 'all' | undefined,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const normalizedStatus = statusQuery ?? 'all';
@@ -259,7 +254,11 @@ export class SectionsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    await this.sectionsService.archiveSection(id, user?.userId, user?.roles ?? []);
+    await this.sectionsService.archiveSection(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -336,7 +335,11 @@ export class SectionsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    await this.sectionsService.restoreSection(id, user?.userId, user?.roles ?? []);
+    await this.sectionsService.restoreSection(
+      id,
+      user?.userId,
+      user?.roles ?? [],
+    );
 
     return {
       success: true,
@@ -414,17 +417,18 @@ export class SectionsController {
     filters.page = parsePositiveIntQuery(page, 'page');
     filters.limit = parsePositiveIntQuery(limit, 'limit');
 
-    const result = await this.sectionsService.getCandidates(
-      id,
-      filters,
-      user,
-    );
+    const result = await this.sectionsService.getCandidates(id, filters, user);
 
     if (Array.isArray(result)) {
       return { success: true, data: result, count: result.length };
     }
 
-    return { ...result, success: true, data: result.data, count: result.data.length };
+    return {
+      ...result,
+      success: true,
+      data: result.data,
+      count: result.data.length,
+    };
   }
 
   /**

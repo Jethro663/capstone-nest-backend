@@ -132,8 +132,8 @@ describe('ClassesService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    mockDb.transaction.mockImplementation(async (callback: (tx: any) => Promise<any>) =>
-      callback(mockDb),
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: any) => Promise<any>) => callback(mockDb),
     );
     mockAuditService.log.mockResolvedValue(undefined);
     mockDb.query.classTemplates.findFirst.mockResolvedValue(null);
@@ -176,13 +176,47 @@ describe('ClassesService', () => {
 
   describe('findById', () => {
     it('returns the class when found', async () => {
-      const cls = makeClass();
+      const cls = makeClass({
+        enrollments: [
+          makeEnrollment({
+            student: {
+              id: STUDENT_ID,
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              email: 'student71@lms.local',
+              profile: {
+                gradeLevel: '7',
+                lrn: '123456789012',
+                profilePicture: null,
+              },
+            },
+          }),
+        ],
+      });
       mockDb.query.classes.findFirst.mockResolvedValue(cls);
 
       const result = await service.findById(CLASS_ID);
 
       expect(result).toEqual(cls);
       expect(mockDb.query.classes.findFirst).toHaveBeenCalledTimes(1);
+      expect(mockDb.query.classes.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          with: expect.objectContaining({
+            enrollments: expect.objectContaining({
+              with: expect.objectContaining({
+                student: expect.objectContaining({
+                  columns: expect.objectContaining({
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      );
     });
 
     it('throws NotFoundException when the class does not exist', async () => {
@@ -191,6 +225,15 @@ describe('ClassesService', () => {
       await expect(service.findById('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('throws ForbiddenException when a student requester is not enrolled in the class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findById(CLASS_ID, STUDENT_ID, ['student']),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -882,7 +925,9 @@ describe('ClassesService', () => {
       const toggleSpy = jest
         .spyOn(service, 'toggleActive')
         .mockResolvedValueOnce(makeClass({ isActive: false }))
-        .mockRejectedValueOnce(new ConflictException('Class is already archived.'))
+        .mockRejectedValueOnce(
+          new ConflictException('Class is already archived.'),
+        )
         .mockResolvedValueOnce(makeClass({ isActive: false }));
 
       const result = await service.bulkLifecycleAction({
@@ -897,7 +942,9 @@ describe('ClassesService', () => {
           action: 'archive',
           requested: 3,
           succeeded: ['class-1', 'class-3'],
-          failed: [{ classId: 'class-2', reason: 'Class is already archived.' }],
+          failed: [
+            { classId: 'class-2', reason: 'Class is already archived.' },
+          ],
         },
       });
     });
@@ -926,7 +973,8 @@ describe('ClassesService', () => {
           failed: [
             {
               classId: 'class-2',
-              reason: 'Only archived classes can be permanently deleted. Archive the class first.',
+              reason:
+                'Only archived classes can be permanently deleted. Archive the class first.',
             },
           ],
         },
@@ -1009,7 +1057,25 @@ describe('ClassesService', () => {
       mockDb.query.enrollments.findMany.mockResolvedValue([
         { classId: CLASS_ID },
       ]);
-      mockDb.query.classes.findMany.mockResolvedValue([makeClass()]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClass({
+          enrollments: [
+            makeEnrollment({
+              student: {
+                id: STUDENT_ID,
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+                profile: {
+                  gradeLevel: '7',
+                  lrn: '123456789012',
+                  profilePicture: null,
+                },
+              },
+            }),
+          ],
+        }),
+      ]);
 
       await expect(
         service.getClassesByStudent(STUDENT_ID, STUDENT_ID, ['student']),
@@ -1036,6 +1102,64 @@ describe('ClassesService', () => {
 
       expect(result).toEqual([]);
       expect(mockDb.query.classes.findMany).not.toHaveBeenCalled();
+    });
+
+    it('returns enrolled class rows with student identity details for classmates rendering', async () => {
+      mockDb.query.enrollments.findMany.mockResolvedValue([
+        { classId: CLASS_ID },
+      ]);
+      mockDb.query.classes.findMany.mockResolvedValue([
+        makeClass({
+          enrollments: [
+            makeEnrollment({
+              student: {
+                id: STUDENT_ID,
+                firstName: 'Liam',
+                lastName: 'Navarro',
+                email: 'student71@lms.local',
+                profile: {
+                  gradeLevel: '7',
+                  lrn: '123456789012',
+                  profilePicture: null,
+                },
+              },
+            }),
+          ],
+        }),
+      ]);
+
+      const result = await service.getClassesByStudent(STUDENT_ID, STUDENT_ID, [
+        'student',
+      ]);
+
+      expect(result[0]?.enrollments?.[0]).toEqual(
+        expect.objectContaining({
+          student: expect.objectContaining({
+            id: STUDENT_ID,
+            firstName: 'Liam',
+            lastName: 'Navarro',
+            email: 'student71@lms.local',
+          }),
+        }),
+      );
+      expect(mockDb.query.classes.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          with: expect.objectContaining({
+            enrollments: expect.objectContaining({
+              with: expect.objectContaining({
+                student: expect.objectContaining({
+                  columns: expect.objectContaining({
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                  }),
+                }),
+              }),
+            }),
+          }),
+        }),
+      );
     });
   });
 
@@ -1410,12 +1534,9 @@ describe('ClassesService', () => {
       mockDb.query.enrollments.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getStudentOverviewForClass(
-          CLASS_ID,
-          STUDENT_ID,
-          TEACHER_ID,
-          ['teacher'],
-        ),
+        service.getStudentOverviewForClass(CLASS_ID, STUDENT_ID, TEACHER_ID, [
+          'teacher',
+        ]),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -1469,9 +1590,7 @@ describe('ClassesService', () => {
         ]);
       mockDb.query.classRecordScores.findMany
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          { classRecordItemId: 'item-ww', score: '92' },
-        ]);
+        .mockResolvedValueOnce([{ classRecordItemId: 'item-ww', score: '92' }]);
       mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
       mockDb.query.assessments.findMany.mockResolvedValue([]);
 
@@ -1558,7 +1677,9 @@ describe('ClassesService', () => {
 
   describe('student course view preference', () => {
     it('returns card as the default view mode when no row exists', async () => {
-      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
+      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(
+        null,
+      );
 
       const result = await service.getStudentCourseViewPreference(
         STUDENT_ID,
@@ -1570,7 +1691,9 @@ describe('ClassesService', () => {
     });
 
     it('stores student course view preference with upsert semantics', async () => {
-      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(null);
+      mockDb.query.studentCourseViewPreferences.findFirst.mockResolvedValue(
+        null,
+      );
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: 'view-pref-1' }]));
 
       const result = await service.setStudentCourseViewPreference(

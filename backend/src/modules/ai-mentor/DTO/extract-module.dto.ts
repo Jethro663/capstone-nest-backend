@@ -41,8 +41,7 @@ export class ApplyExtractionDto {
   sectionIndices?: number[];
 
   @ApiPropertyOptional({
-    description:
-      'Legacy alias of sectionIndices for backward compatibility.',
+    description: 'Legacy alias of sectionIndices for backward compatibility.',
     example: [0, 2, 3],
     type: [Number],
   })
@@ -140,7 +139,9 @@ export class ExtractionAssessmentQuestionDto {
   @IsString()
   explanation?: string;
 
-  @ApiPropertyOptional({ description: 'Optional image URL (supports data URL)' })
+  @ApiPropertyOptional({
+    description: 'Optional image URL (supports data URL)',
+  })
   @IsOptional()
   @IsString()
   imageUrl?: string;

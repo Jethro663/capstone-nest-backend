@@ -138,7 +138,9 @@ export class PerformanceController {
 
   @Get('admin/analytics')
   @Roles(RoleName.Admin)
-  async getAdminAnalytics(@CurrentUser() user: { userId: string; roles: string[] }) {
+  async getAdminAnalytics(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
     const data = await this.performanceService.getAdminAnalytics(
       user.userId,
       user.roles,

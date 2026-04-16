@@ -42,7 +42,8 @@ type UserContext = {
   roles: string[];
 };
 
-type SystemEvaluationTarget = (typeof systemEvaluationTargetEnum.enumValues)[number];
+type SystemEvaluationTarget =
+  (typeof systemEvaluationTargetEnum.enumValues)[number];
 
 @Injectable()
 export class LxpService {
@@ -268,7 +269,10 @@ export class LxpService {
           eq(assessments.isPublished, true),
         ),
       )
-      .orderBy(asc(assessmentAttempts.score), desc(assessmentAttempts.submittedAt))
+      .orderBy(
+        asc(assessmentAttempts.score),
+        desc(assessmentAttempts.submittedAt),
+      )
       .limit(3);
 
     const payload: (typeof interventionAssignments.$inferInsert)[] = [];
@@ -346,7 +350,10 @@ export class LxpService {
     }
   }
 
-  private async notifyInterventionActivated(studentId: string, classId: string) {
+  private async notifyInterventionActivated(
+    studentId: string,
+    classId: string,
+  ) {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
       columns: { teacherId: true, subjectName: true, subjectCode: true },
@@ -420,7 +427,8 @@ export class LxpService {
       return;
     }
 
-    const autoResolveNote = 'Auto-resolved because student is no longer at-risk.';
+    const autoResolveNote =
+      'Auto-resolved because student is no longer at-risk.';
 
     for (const openCase of openCases) {
       const resolvedNote = this.appendInterventionNote(
@@ -548,7 +556,7 @@ export class LxpService {
   async getStudentPlaylist(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 
-    let interventionCase = await this.db.query.interventionCases.findFirst({
+    const interventionCase = await this.db.query.interventionCases.findFirst({
       where: and(
         eq(interventionCases.studentId, studentId),
         eq(interventionCases.classId, classId),
@@ -574,7 +582,11 @@ export class LxpService {
       );
     }
 
-    await this.ensureDefaultAssignments(interventionCase.id, classId, studentId);
+    await this.ensureDefaultAssignments(
+      interventionCase.id,
+      classId,
+      studentId,
+    );
     const progress = await this.getOrCreateProgress(studentId, classId);
 
     const assignments = await this.db.query.interventionAssignments.findMany({
@@ -635,7 +647,7 @@ export class LxpService {
   async getStudentOverview(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 
-    let interventionCase = await this.db.query.interventionCases.findFirst({
+    const interventionCase = await this.db.query.interventionCases.findFirst({
       where: and(
         eq(interventionCases.studentId, studentId),
         eq(interventionCases.classId, classId),
@@ -676,7 +688,11 @@ export class LxpService {
       );
     }
 
-    await this.ensureDefaultAssignments(interventionCase.id, classId, studentId);
+    await this.ensureDefaultAssignments(
+      interventionCase.id,
+      classId,
+      studentId,
+    );
     const progress = await this.getOrCreateProgress(studentId, classId);
 
     const [studentEnrollments, assignments] = await Promise.all([
@@ -1181,8 +1197,7 @@ export class LxpService {
   ) {
     await this.assertStudentEnrollment(studentId, classId);
 
-    const candidates =
-      await this.db.query.interventionAssignments.findMany({
+    const candidates = await this.db.query.interventionAssignments.findMany({
       where: and(
         eq(interventionAssignments.assignmentType, 'assessment_retry'),
         eq(interventionAssignments.assessmentId, assessmentId),
@@ -1414,10 +1429,9 @@ export class LxpService {
     const progressByStudentId = new Map<string, (typeof progressRows)[number]>(
       progressRows.map((row) => [row.studentId, row] as const),
     );
-    const snapshotByStudentId = new Map<
-      string,
-      (typeof snapshotRows)[number]
-    >(snapshotRows.map((row) => [row.studentId, row] as const));
+    const snapshotByStudentId = new Map<string, (typeof snapshotRows)[number]>(
+      snapshotRows.map((row) => [row.studentId, row] as const),
+    );
 
     const queue = cases.map((row) => {
       const assignments = assignmentsByCaseId.get(row.id) ?? [];
@@ -1741,7 +1755,10 @@ export class LxpService {
 
     const countsByClassId = new Map<string, number>();
     for (const row of pendingRows) {
-      countsByClassId.set(row.classId, (countsByClassId.get(row.classId) ?? 0) + 1);
+      countsByClassId.set(
+        row.classId,
+        (countsByClassId.get(row.classId) ?? 0) + 1,
+      );
     }
 
     return {
@@ -1829,10 +1846,12 @@ export class LxpService {
       throw new NotFoundException('Intervention case not found');
     await this.assertTeacherClassAccess(interventionCase.classId, user);
 
-    const assignmentRows = await this.db.query.interventionAssignments.findMany({
-      where: eq(interventionAssignments.caseId, interventionCase.id),
-      columns: { id: true, caseId: true, isCompleted: true },
-    });
+    const assignmentRows = await this.db.query.interventionAssignments.findMany(
+      {
+        where: eq(interventionAssignments.caseId, interventionCase.id),
+        columns: { id: true, caseId: true, isCompleted: true },
+      },
+    );
     const progress = await this.db.query.lxpProgress.findFirst({
       where: and(
         eq(lxpProgress.classId, interventionCase.classId),
@@ -2052,7 +2071,8 @@ export class LxpService {
             classRecordAverage: this.toNumber(snapshot.classRecordAverage),
             blendedScore: this.toNumber(snapshot.blendedScore),
             thresholdApplied:
-              this.toNumber(snapshot.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+              this.toNumber(snapshot.thresholdApplied) ??
+              INTERVENTION_THRESHOLD,
             isAtRisk: snapshot.isAtRisk,
             lastComputedAt: snapshot.lastComputedAt,
           }
@@ -2149,7 +2169,9 @@ export class LxpService {
     const completed = withDelta.filter(
       (entry) => entry.status === 'completed',
     ).length;
-    const pending = withDelta.filter((entry) => entry.status === 'pending').length;
+    const pending = withDelta.filter(
+      (entry) => entry.status === 'pending',
+    ).length;
     const active = withDelta.filter(
       (entry) => entry.status === 'active',
     ).length;
@@ -2238,16 +2260,12 @@ export class LxpService {
     const targetModule = query.targetModule;
     let targetFilter: SystemEvaluationTarget | undefined;
     if (targetModule !== undefined) {
-      if (
-        !systemEvaluationTargetEnum.enumValues.includes(
-          targetModule as SystemEvaluationTarget,
-        )
-      ) {
+      if (!systemEvaluationTargetEnum.enumValues.includes(targetModule)) {
         throw new BadRequestException(
           `targetModule must be one of: ${systemEvaluationTargetEnum.enumValues.join(', ')}`,
         );
       }
-      targetFilter = targetModule as SystemEvaluationTarget;
+      targetFilter = targetModule;
     }
 
     const conditions: SQL[] = [];
@@ -2281,8 +2299,7 @@ export class LxpService {
       limit: 200,
     });
 
-    const roundToHundredths = (value: number) =>
-      Math.round(value * 100) / 100;
+    const roundToHundredths = (value: number) => Math.round(value * 100) / 100;
     const averageFrom = (total: number, count: number) =>
       count > 0 ? roundToHundredths(total / count) : 0;
 
@@ -2344,10 +2361,7 @@ export class LxpService {
             rows.length,
           ),
           performanceScore: averageFrom(totals.performanceScore, rows.length),
-          satisfactionScore: averageFrom(
-            totals.satisfactionScore,
-            rows.length,
-          ),
+          satisfactionScore: averageFrom(totals.satisfactionScore, rows.length),
         },
         feedbackCount: totals.feedbackCount,
         moduleBreakdown: Array.from(moduleBuckets.entries()).map(
@@ -2355,10 +2369,7 @@ export class LxpService {
             targetModule: moduleName,
             count: bucket.count,
             averages: {
-              usabilityScore: averageFrom(
-                bucket.usabilityScore,
-                bucket.count,
-              ),
+              usabilityScore: averageFrom(bucket.usabilityScore, bucket.count),
               functionalityScore: averageFrom(
                 bucket.functionalityScore,
                 bucket.count,

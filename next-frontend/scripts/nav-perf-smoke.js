@@ -14,27 +14,29 @@ const ROLE_PROFILES = [
     role: 'admin',
     email: process.env.ADMIN_EMAIL || 'admin@lms.local',
     password: process.env.ADMIN_PASSWORD || 'Test@123',
-    firstRoute: '/dashboard/admin',
+    firstRoutePrefix: '/dashboard/admin',
     routes: ['/dashboard/admin/users', '/dashboard/admin/diagnostics'],
   },
   {
     role: 'teacher',
     email: process.env.TEACHER_EMAIL || 'teacher1@lms.local',
     password: process.env.TEACHER_PASSWORD || 'Teacher123!',
-    firstRoute: '/dashboard/teacher',
+    firstRoutePrefix: '/dashboard/teacher',
     routes: ['/dashboard/teacher/classes'],
   },
   {
     role: 'student',
     email: process.env.STUDENT_EMAIL || 'student71@lms.local',
     password: process.env.STUDENT_PASSWORD || 'Student123!',
-    firstRoute: '/dashboard/student',
+    firstRoutePrefix: '/dashboard/student',
     routes: ['/dashboard/student/courses', '/dashboard/student/ja'],
   },
 ];
 
-async function waitForRoute(page, route) {
-  const routeRegex = new RegExp(`${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\?.*)?$`);
+async function waitForRoutePrefix(page, routePrefix) {
+  const routeRegex = new RegExp(
+    `${routePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:/.*)?(?:\\?.*)?$`,
+  );
   await page.waitForURL(routeRegex, { timeout: 120000 });
 }
 
@@ -63,7 +65,7 @@ async function runRoleProfile(browser, profile) {
 
   startedAt = Date.now();
   await Promise.all([
-    waitForRoute(page, profile.firstRoute),
+    waitForRoutePrefix(page, profile.firstRoutePrefix),
     page.getByRole('button', { name: /sign in/i }).click(),
   ]);
   await page.waitForLoadState('load');
@@ -89,7 +91,15 @@ async function main() {
       : ROLE_PROFILES;
 
     for (const profile of selectedProfiles) {
-      results.push(await runRoleProfile(browser, profile));
+      try {
+        results.push(await runRoleProfile(browser, profile));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results.push({
+          role: profile.role,
+          error: message,
+        });
+      }
     }
 
     console.log(

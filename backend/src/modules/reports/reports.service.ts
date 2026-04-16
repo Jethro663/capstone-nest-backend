@@ -1,14 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  and,
-  count,
-  desc,
-  eq,
-  gte,
-  inArray,
-  lte,
-  sql,
-} from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   assessmentAttempts,
@@ -39,7 +30,9 @@ export class ReportsService {
 
   private buildDateRange<TColumn>(column: TColumn, query: ReportQuery) {
     return and(
-      query.dateFrom ? gte(column as never, query.dateFrom as never) : undefined,
+      query.dateFrom
+        ? gte(column as never, query.dateFrom as never)
+        : undefined,
       query.dateTo ? lte(column as never, query.dateTo as never) : undefined,
     );
   }
@@ -73,7 +66,9 @@ export class ReportsService {
 
     return [
       headers.join(','),
-      ...rows.map((row) => headers.map((header) => escape(row[header])).join(',')),
+      ...rows.map((row) =>
+        headers.map((header) => escape(row[header])).join(','),
+      ),
     ].join('\n');
   }
 
@@ -91,7 +86,9 @@ export class ReportsService {
     };
   }
 
-  private async resolveClassScopeIds(query: ReportQuery): Promise<string[] | null> {
+  private async resolveClassScopeIds(
+    query: ReportQuery,
+  ): Promise<string[] | null> {
     if (!query.teacherId && !query.classId && !query.sectionId) {
       return null;
     }
@@ -310,8 +307,7 @@ export class ReportsService {
               },
             },
             orderBy: [desc(performanceSnapshots.lastComputedAt)],
-          },
-        );
+          });
 
     const data = rows.map((row) => ({
       classId: row.classId,
@@ -321,11 +317,17 @@ export class ReportsService {
       firstName: row.student?.firstName ?? '',
       lastName: row.student?.lastName ?? '',
       email: row.student?.email ?? '',
-      assessmentAverage: row.assessmentAverage ? Number(row.assessmentAverage) : null,
-      classRecordAverage: row.classRecordAverage ? Number(row.classRecordAverage) : null,
+      assessmentAverage: row.assessmentAverage
+        ? Number(row.assessmentAverage)
+        : null,
+      classRecordAverage: row.classRecordAverage
+        ? Number(row.classRecordAverage)
+        : null,
       blendedScore: row.blendedScore ? Number(row.blendedScore) : null,
       isAtRisk: row.isAtRisk,
-      thresholdApplied: row.thresholdApplied ? Number(row.thresholdApplied) : null,
+      thresholdApplied: row.thresholdApplied
+        ? Number(row.thresholdApplied)
+        : null,
       lastComputedAt: row.lastComputedAt?.toISOString?.() ?? null,
     }));
 
@@ -349,8 +351,12 @@ export class ReportsService {
     }
 
     const whereClause = and(
-      classScopeIds ? inArray(interventionCases.classId, classScopeIds) : undefined,
-      query.studentId ? eq(interventionCases.studentId, query.studentId) : undefined,
+      classScopeIds
+        ? inArray(interventionCases.classId, classScopeIds)
+        : undefined,
+      query.studentId
+        ? eq(interventionCases.studentId, query.studentId)
+        : undefined,
       this.buildDateRange(interventionCases.openedAt, query),
     );
 
@@ -382,7 +388,9 @@ export class ReportsService {
     const progressRows = cases.length
       ? await this.db.query.lxpProgress.findMany({
           where: and(
-            classScopeIds ? inArray(lxpProgress.classId, classScopeIds) : undefined,
+            classScopeIds
+              ? inArray(lxpProgress.classId, classScopeIds)
+              : undefined,
             inArray(
               lxpProgress.studentId,
               cases.map((entry) => entry.studentId),
@@ -408,7 +416,8 @@ export class ReportsService {
         subjectCode: entry.class?.subjectCode ?? null,
         sectionName: entry.class?.section?.name ?? null,
         studentId: entry.studentId,
-        studentName: `${entry.student?.lastName ?? ''}, ${entry.student?.firstName ?? ''}`.trim(),
+        studentName:
+          `${entry.student?.lastName ?? ''}, ${entry.student?.firstName ?? ''}`.trim(),
         email: entry.student?.email ?? null,
         status: entry.status,
         triggerScore: entry.triggerScore,
@@ -419,7 +428,9 @@ export class ReportsService {
         completedAssignments,
         completionRate:
           entry.assignments.length > 0
-            ? Math.round((completedAssignments / entry.assignments.length) * 100)
+            ? Math.round(
+                (completedAssignments / entry.assignments.length) * 100,
+              )
             : 0,
         xpTotal: progress?.xpTotal ?? 0,
         checkpointsCompleted: progress?.checkpointsCompleted ?? 0,
@@ -447,7 +458,9 @@ export class ReportsService {
 
     const whereClause = and(
       classScopeIds ? inArray(assessments.classId, classScopeIds) : undefined,
-      query.gradingPeriod ? eq(assessments.quarter, query.gradingPeriod) : undefined,
+      query.gradingPeriod
+        ? eq(assessments.quarter, query.gradingPeriod)
+        : undefined,
       this.buildDateRange(assessments.createdAt, query),
     );
 
@@ -513,7 +526,8 @@ export class ReportsService {
         totalPoints: row.totalPoints,
         maxAttempts: row.maxAttempts,
         submittedAttempts: submitted.length,
-        uniqueStudents: new Set(submitted.map((attempt) => attempt.studentId)).size,
+        uniqueStudents: new Set(submitted.map((attempt) => attempt.studentId))
+          .size,
         averageScore: average === null ? null : Math.round(average * 100) / 100,
       };
     });
@@ -567,13 +581,18 @@ export class ReportsService {
       .where(
         and(
           this.buildDateRange(lessonCompletions.completedAt, query),
-          hasClassScope ? inArray(lessons.classId, classScopeIds as string[]) : undefined,
+          hasClassScope
+            ? inArray(lessons.classId, classScopeIds as string[])
+            : undefined,
         ),
       );
     const [submittedAttemptCount] = await this.db
       .select({ total: count() })
       .from(assessmentAttempts)
-      .innerJoin(assessments, eq(assessments.id, assessmentAttempts.assessmentId))
+      .innerJoin(
+        assessments,
+        eq(assessments.id, assessmentAttempts.assessmentId),
+      )
       .where(
         and(
           eq(assessmentAttempts.isSubmitted, true),

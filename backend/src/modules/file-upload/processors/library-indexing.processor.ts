@@ -34,7 +34,8 @@ export class LibraryIndexingProcessor extends WorkerHost {
 
   async process(job: Job<LibraryIndexJobData>) {
     const aiServiceUrl =
-      this.configService.get<string>('AI_SERVICE_URL') ?? 'http://localhost:8000';
+      this.configService.get<string>('AI_SERVICE_URL') ??
+      'http://localhost:8000';
     const sharedSecret =
       this.configService.get<string>('AI_SERVICE_SHARED_SECRET') ?? '';
 

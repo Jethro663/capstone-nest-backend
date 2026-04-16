@@ -110,7 +110,10 @@ describe('SectionsService', () => {
   const mockDb: any = {
     query: {
       sections: { findFirst: jest.fn(), findMany: jest.fn() },
-      sectionVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
+      sectionVisibilityPreferences: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
       classes: { findMany: jest.fn() },
       users: { findFirst: jest.fn() },
       enrollments: { findFirst: jest.fn(), findMany: jest.fn() },
@@ -845,7 +848,9 @@ describe('SectionsService', () => {
       mockDb.query.sections.findFirst.mockResolvedValue(
         makeSection({ adviserId: ADVISER_ID }),
       );
-      mockDb.query.sectionVisibilityPreferences.findFirst.mockResolvedValue(null);
+      mockDb.query.sectionVisibilityPreferences.findFirst.mockResolvedValue(
+        null,
+      );
       mockDb.insert.mockReturnValue(makeInsertChain([]));
 
       const result = await service.setSectionHiddenState(
@@ -929,7 +934,11 @@ describe('SectionsService', () => {
       const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await service.deleteSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles);
+      await service.deleteSection(
+        SECTION_ID,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
 
       // archiveSection calls tx.update twice: enrollments drop + section archive
       expect(tx.update).toHaveBeenCalledTimes(2);
@@ -978,7 +987,11 @@ describe('SectionsService', () => {
       );
       mockDb.update.mockReturnValue(makeUpdateChain());
 
-      await service.restoreSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles);
+      await service.restoreSection(
+        SECTION_ID,
+        ADMIN_USER.userId,
+        ADMIN_USER.roles,
+      );
 
       expect(mockDb.update).toHaveBeenCalledTimes(1);
       expect(mockAuditService.log).toHaveBeenCalledWith({
@@ -1074,13 +1087,13 @@ describe('SectionsService', () => {
       const archiveSpy = jest
         .spyOn(service, 'archiveSection')
         .mockResolvedValueOnce(undefined)
-        .mockRejectedValueOnce(new ConflictException('Section is already archived.'))
+        .mockRejectedValueOnce(
+          new ConflictException('Section is already archived.'),
+        )
         .mockResolvedValueOnce(undefined);
       jest
         .spyOn(service, 'findById')
-        .mockResolvedValue(
-          makeSection({ isActive: true }),
-        );
+        .mockResolvedValue(makeSection({ isActive: true }));
 
       const result = await service.bulkLifecycleAction({
         action: 'archive',

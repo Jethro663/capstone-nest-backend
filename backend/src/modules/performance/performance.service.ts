@@ -802,40 +802,42 @@ export class PerformanceService {
     studentId?: string,
     teacherNote?: string,
   ) {
-    const incorrectResponses = await this.db.query.assessmentResponses.findMany({
-      where: eq(assessmentResponses.isCorrect, false),
-      with: {
-        attempt: {
-          columns: {
-            id: true,
-            studentId: true,
-            assessmentId: true,
-            submittedAt: true,
-            isSubmitted: true,
-            score: true,
-          },
-          with: {
-            assessment: {
-              columns: {
-                id: true,
-                classId: true,
-                title: true,
-                type: true,
+    const incorrectResponses = await this.db.query.assessmentResponses.findMany(
+      {
+        where: eq(assessmentResponses.isCorrect, false),
+        with: {
+          attempt: {
+            columns: {
+              id: true,
+              studentId: true,
+              assessmentId: true,
+              submittedAt: true,
+              isSubmitted: true,
+              score: true,
+            },
+            with: {
+              assessment: {
+                columns: {
+                  id: true,
+                  classId: true,
+                  title: true,
+                  type: true,
+                },
               },
             },
           },
-        },
-        question: {
-          columns: {
-            id: true,
-            content: true,
-            conceptTags: true,
+          question: {
+            columns: {
+              id: true,
+              content: true,
+              conceptTags: true,
+            },
           },
         },
+        orderBy: [desc(assessmentResponses.createdAt)],
+        limit: 500,
       },
-      orderBy: [desc(assessmentResponses.createdAt)],
-      limit: 500,
-    });
+    );
 
     const filteredMistakes = incorrectResponses.filter((response) => {
       const attempt = response.attempt;
@@ -845,14 +847,22 @@ export class PerformanceService {
       return true;
     });
 
-    const conceptMap = new Map<string, { wrongCount: number; evidenceCount: number }>();
+    const conceptMap = new Map<
+      string,
+      { wrongCount: number; evidenceCount: number }
+    >();
     const perStudentConcept = new Map<
       string,
       Map<string, { wrongCount: number; evidenceCount: number }>
     >();
     const scoreBreakdownMap = new Map<
       string,
-      { assessmentId: string; title: string; scores: number[]; type: string | null }
+      {
+        assessmentId: string;
+        title: string;
+        scores: number[];
+        type: string | null;
+      }
     >();
 
     for (const response of filteredMistakes) {
@@ -877,15 +887,21 @@ export class PerformanceService {
         question.content,
       );
       for (const concept of concepts) {
-        const existing = conceptMap.get(concept) ?? { wrongCount: 0, evidenceCount: 0 };
+        const existing = conceptMap.get(concept) ?? {
+          wrongCount: 0,
+          evidenceCount: 0,
+        };
         existing.wrongCount += 1;
         existing.evidenceCount += 1;
         conceptMap.set(concept, existing);
 
         const studentKey = attempt.studentId;
-        const studentConceptMap = perStudentConcept.get(studentKey) ?? new Map();
-        const studentConcept =
-          studentConceptMap.get(concept) ?? { wrongCount: 0, evidenceCount: 0 };
+        const studentConceptMap =
+          perStudentConcept.get(studentKey) ?? new Map();
+        const studentConcept = studentConceptMap.get(concept) ?? {
+          wrongCount: 0,
+          evidenceCount: 0,
+        };
         studentConcept.wrongCount += 1;
         studentConcept.evidenceCount += 1;
         studentConceptMap.set(concept, studentConcept);
@@ -965,7 +981,10 @@ export class PerformanceService {
       .map((item) => {
         const average =
           item.scores.length > 0
-            ? this.round(item.scores.reduce((sum, score) => sum + score, 0) / item.scores.length)
+            ? this.round(
+                item.scores.reduce((sum, score) => sum + score, 0) /
+                  item.scores.length,
+              )
             : null;
         return {
           assessmentId: item.assessmentId,
@@ -975,7 +994,11 @@ export class PerformanceService {
           attemptCount: item.scores.length,
         };
       })
-      .sort((a, b) => (a.averageScore ?? Number.POSITIVE_INFINITY) - (b.averageScore ?? Number.POSITIVE_INFINITY))
+      .sort(
+        (a, b) =>
+          (a.averageScore ?? Number.POSITIVE_INFINITY) -
+          (b.averageScore ?? Number.POSITIVE_INFINITY),
+      )
       .slice(0, 10);
 
     const evidence = filteredMistakes.slice(0, 8).map((entry) => ({
@@ -988,7 +1011,8 @@ export class PerformanceService {
       submittedAt: entry.attempt?.submittedAt ?? null,
     }));
 
-    const insufficientEvidence = filteredMistakes.length < 2 || learningGaps.length === 0;
+    const insufficientEvidence =
+      filteredMistakes.length < 2 || learningGaps.length === 0;
     const teacherActions = insufficientEvidence
       ? [
           'Collect more submitted attempts before relying on AI learning-gap signals.',
@@ -1003,7 +1027,9 @@ export class PerformanceService {
       shouldOpenCase:
         !insufficientEvidence &&
         learningGaps.length > 0 &&
-        learningGaps.some((gap) => gap.masteryScore < PERFORMANCE_RISK_THRESHOLD),
+        learningGaps.some(
+          (gap) => gap.masteryScore < PERFORMANCE_RISK_THRESHOLD,
+        ),
       status: insufficientEvidence ? 'insufficient_evidence' : 'actionable',
       topConcepts: learningGaps.slice(0, 3).map((gap) => gap.concept),
     };
@@ -1070,7 +1096,9 @@ export class PerformanceService {
           status: 'failed',
           updatedAt: new Date(),
           errorMessage:
-            error instanceof Error ? error.message : 'Performance analysis failed',
+            error instanceof Error
+              ? error.message
+              : 'Performance analysis failed',
         })
         .where(eq(aiGenerationJobs.id, jobId));
     }
@@ -1094,7 +1122,9 @@ export class PerformanceService {
         columns: { studentId: true },
       });
       if (!enrollment) {
-        throw new BadRequestException('Selected student is not enrolled in this class.');
+        throw new BadRequestException(
+          'Selected student is not enrolled in this class.',
+        );
       }
     }
 
@@ -1258,21 +1288,23 @@ export class PerformanceService {
       limit: 120,
     });
 
-    const recommendationRows = await this.db.query.aiGenerationOutputs.findMany({
-      where: inArray(aiGenerationOutputs.outputType, [
-        'intervention_recommendation',
-        'performance_diagnostic',
-      ]),
-      columns: {
-        id: true,
-        outputType: true,
-        targetClassId: true,
-        targetTeacherId: true,
-        createdAt: true,
+    const recommendationRows = await this.db.query.aiGenerationOutputs.findMany(
+      {
+        where: inArray(aiGenerationOutputs.outputType, [
+          'intervention_recommendation',
+          'performance_diagnostic',
+        ]),
+        columns: {
+          id: true,
+          outputType: true,
+          targetClassId: true,
+          targetTeacherId: true,
+          createdAt: true,
+        },
+        orderBy: [desc(aiGenerationOutputs.createdAt)],
+        limit: 100,
       },
-      orderBy: [desc(aiGenerationOutputs.createdAt)],
-      limit: 100,
-    });
+    );
 
     const recentLogs = await this.db.query.performanceLogs.findMany({
       columns: {

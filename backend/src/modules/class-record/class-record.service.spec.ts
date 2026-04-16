@@ -65,7 +65,9 @@ describe('ClassRecordService', () => {
   const mockComputationService = {
     validateCategoryWeights: jest.fn(),
     computeGrades: jest.fn(),
-    transmute: jest.fn((value: number) => Math.max(60, Math.round(value * 0.4 + 60))),
+    transmute: jest.fn((value: number) =>
+      Math.max(60, Math.round(value * 0.4 + 60)),
+    ),
   };
   const mockSyncService = {
     syncFromAssessment: jest.fn(),
@@ -206,12 +208,9 @@ describe('ClassRecordService', () => {
     });
 
     await expect(
-      service.updateClassRecordItem(
-        'item-1',
-        { maxScore: 30 },
-        'teacher-1',
-        ['teacher'],
-      ),
+      service.updateClassRecordItem('item-1', { maxScore: 30 }, 'teacher-1', [
+        'teacher',
+      ]),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -370,9 +369,9 @@ describe('ClassRecordService', () => {
       update: jest.fn().mockReturnValue({
         set: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([
-              { id: 'record-1', status: 'finalized' },
-            ]),
+            returning: jest
+              .fn()
+              .mockResolvedValue([{ id: 'record-1', status: 'finalized' }]),
           }),
         }),
       }),
@@ -381,11 +380,9 @@ describe('ClassRecordService', () => {
       handler(tx),
     );
 
-    const result = await service.finalizeClassRecord(
-      'record-1',
-      'teacher-1',
-      ['teacher'],
-    );
+    const result = await service.finalizeClassRecord('record-1', 'teacher-1', [
+      'teacher',
+    ]);
 
     expect(result).toEqual({
       classRecord: { id: 'record-1', status: 'finalized' },
@@ -427,9 +424,9 @@ describe('ClassRecordService', () => {
       update: jest.fn().mockReturnValue({
         set: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([
-              { id: 'record-1', status: 'draft' },
-            ]),
+            returning: jest
+              .fn()
+              .mockResolvedValue([{ id: 'record-1', status: 'draft' }]),
           }),
         }),
       }),
@@ -438,11 +435,9 @@ describe('ClassRecordService', () => {
       handler(tx),
     );
 
-    const result = await service.reopenClassRecord(
-      'record-1',
-      'teacher-1',
-      ['teacher'],
-    );
+    const result = await service.reopenClassRecord('record-1', 'teacher-1', [
+      'teacher',
+    ]);
 
     expect(result).toEqual({ id: 'record-1', status: 'draft' });
     expect(mockAuditService.log).toHaveBeenCalledWith(
@@ -520,12 +515,9 @@ describe('ClassRecordService', () => {
     });
 
     await expect(
-      service.getStudentGrade(
-        'record-1',
-        'student-1',
-        'teacher-1',
-        ['teacher'],
-      ),
+      service.getStudentGrade('record-1', 'student-1', 'teacher-1', [
+        'teacher',
+      ]),
     ).rejects.toThrow(ForbiddenException);
   });
 

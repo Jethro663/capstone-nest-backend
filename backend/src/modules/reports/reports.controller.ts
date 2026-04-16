@@ -24,14 +24,14 @@ export class ReportsController {
 
   private buildQuery(
     query: {
-    classId?: string;
-    sectionId?: string;
-    gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
-    studentId?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    page?: string;
-    limit?: string;
+      classId?: string;
+      sectionId?: string;
+      gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+      studentId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      page?: string;
+      limit?: string;
       export?: 'csv';
     },
     user: AuthUser,
@@ -180,9 +180,8 @@ export class ReportsController {
     @Res() res: Response,
   ) {
     const reportQuery = this.buildQuery(query, user);
-    const result = await this.reportsService.getInterventionParticipation(
-      reportQuery,
-    );
+    const result =
+      await this.reportsService.getInterventionParticipation(reportQuery);
 
     if (
       await this.sendCsvIfRequested(

@@ -11,7 +11,12 @@ import {
   index,
   unique,
 } from 'drizzle-orm/pg-core';
-import { classModules, moduleSections, moduleItems, users } from './base.schema';
+import {
+  classModules,
+  moduleSections,
+  moduleItems,
+  users,
+} from './base.schema';
 
 export const classTemplateStatusEnum = pgEnum('class_template_status', [
   'draft',
@@ -133,8 +138,12 @@ export const classTemplateModuleItems = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     templateSectionId: uuid('template_section_id')
       .notNull()
-      .references(() => classTemplateModuleSections.id, { onDelete: 'cascade' }),
-    itemType: classTemplateItemTypeEnum('item_type').notNull().default('assessment'),
+      .references(() => classTemplateModuleSections.id, {
+        onDelete: 'cascade',
+      }),
+    itemType: classTemplateItemTypeEnum('item_type')
+      .notNull()
+      .default('assessment'),
     templateAssessmentId: uuid('template_assessment_id').references(
       () => classTemplateAssessments.id,
       { onDelete: 'set null' },
@@ -169,10 +178,9 @@ export const classTemplateAnnouncements = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    templateOrderIdx: index('class_template_announcements_template_order_idx').on(
-      table.templateId,
-      table.order,
-    ),
+    templateOrderIdx: index(
+      'class_template_announcements_template_order_idx',
+    ).on(table.templateId, table.order),
   }),
 );
 

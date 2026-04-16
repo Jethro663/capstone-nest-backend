@@ -55,7 +55,10 @@ export class HealthService {
     try {
       await client.connect();
       const reply = await client.ping();
-      return { ok: reply === 'PONG', message: reply !== 'PONG' ? reply : undefined };
+      return {
+        ok: reply === 'PONG',
+        message: reply !== 'PONG' ? reply : undefined,
+      };
     } catch (error) {
       return {
         ok: false,
@@ -66,9 +69,12 @@ export class HealthService {
     }
   }
 
-  private async checkAiService(): Promise<DependencyStatus & { degraded?: boolean }> {
+  private async checkAiService(): Promise<
+    DependencyStatus & { degraded?: boolean }
+  > {
     const aiServiceUrl =
-      this.configService.get<string>('AI_SERVICE_URL') ?? 'http://localhost:8000';
+      this.configService.get<string>('AI_SERVICE_URL') ??
+      'http://localhost:8000';
     const allowDegradedAi =
       (process.env.AI_DEGRADED_ALLOWED ?? 'false').toLowerCase() === 'true';
 
@@ -107,7 +113,9 @@ export class HealthService {
         ok: allowDegradedAi,
         degraded: allowDegradedAi,
         message:
-          error instanceof Error ? error.message : 'AI service health check failed',
+          error instanceof Error
+            ? error.message
+            : 'AI service health check failed',
       };
     }
   }

@@ -46,7 +46,10 @@ export class AnalyticsController {
     @Param('teacherId') teacherId: string,
     @CurrentUser() user: any,
   ) {
-    const data = await this.analyticsService.getTeacherWorkload(teacherId, user);
+    const data = await this.analyticsService.getTeacherWorkload(
+      teacherId,
+      user,
+    );
     return { success: true, data };
   }
 

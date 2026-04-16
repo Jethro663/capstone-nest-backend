@@ -88,6 +88,7 @@ describe('AnnouncementsService', () => {
     mockDb = {
       query: {
         classes: { findFirst: jest.fn() },
+        enrollments: { findFirst: jest.fn() },
         announcements: {
           findFirst: jest.fn(),
           findMany: jest.fn(),
@@ -107,6 +108,7 @@ describe('AnnouncementsService', () => {
     }).compile();
 
     service = module.get<AnnouncementsService>(AnnouncementsService);
+    mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -219,7 +221,7 @@ describe('AnnouncementsService', () => {
     it('calls findMany with correct pagination offset', async () => {
       mockDb.query.announcements.findMany.mockResolvedValue([]);
 
-      await service.findAllByClass(CLASS_ID, TEACHER_ID, true, {
+      await service.findAllByClass(CLASS_ID, TEACHER_ID, ['teacher'], {
         page: 3,
         limit: 10,
       });
@@ -236,11 +238,19 @@ describe('AnnouncementsService', () => {
       const result = await service.findAllByClass(
         CLASS_ID,
         TEACHER_ID,
-        true,
+        ['teacher'],
         {},
       );
 
       expect(result).toHaveLength(2);
+    });
+
+    it('throws ForbiddenException when student viewer is not enrolled', async () => {
+      mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.findAllByClass(CLASS_ID, 'student-uuid-99', ['student'], {}),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -253,16 +263,18 @@ describe('AnnouncementsService', () => {
       const ann = makeAnnouncement();
       mockDb.query.announcements.findFirst.mockResolvedValue(ann);
 
-      const result = await service.findOne(CLASS_ID, ANN_ID, false);
+      const result = await service.findOne(CLASS_ID, ANN_ID, TEACHER_ID, [
+        'teacher',
+      ]);
       expect(result).toEqual(ann);
     });
 
     it('throws NotFoundException when announcement does not exist', async () => {
       mockDb.query.announcements.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne(CLASS_ID, ANN_ID, false)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.findOne(CLASS_ID, ANN_ID, TEACHER_ID, ['teacher']),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

@@ -184,7 +184,9 @@ describe('FileUploadService', () => {
           }),
           ADMIN_USER,
         ),
-      ).rejects.toThrow('General module uploads must specify subjectKey and gradeLevel');
+      ).rejects.toThrow(
+        'General module uploads must specify subjectKey and gradeLevel',
+      );
     });
 
     it('queues indexing for admin general uploads with a partition', async () => {
@@ -225,7 +227,9 @@ describe('FileUploadService', () => {
     it('returns all non-deleted files for an admin', async () => {
       const records = [makeFileRecord(), makeFileRecord({ id: FILE_ID_2 })];
       mockDb.query.uploadedFiles.findMany.mockResolvedValue(records);
-      mockDb.select.mockReturnValue(makeSelectChain([{ total: records.length }]));
+      mockDb.select.mockReturnValue(
+        makeSelectChain([{ total: records.length }]),
+      );
 
       const result = await service.findAll(ADMIN_USER);
 
@@ -242,7 +246,9 @@ describe('FileUploadService', () => {
     it('filters by teacherId for a teacher', async () => {
       const records = [makeFileRecord()];
       mockDb.query.uploadedFiles.findMany.mockResolvedValue(records);
-      mockDb.select.mockReturnValue(makeSelectChain([{ total: records.length }]));
+      mockDb.select.mockReturnValue(
+        makeSelectChain([{ total: records.length }]),
+      );
 
       const result = await service.findAll(TEACHER_USER);
 

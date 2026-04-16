@@ -12,6 +12,8 @@ export interface CreateNotificationInput {
   userId: string;
   type:
     | 'announcement_posted'
+    | 'discussion_thread_posted'
+    | 'discussion_comment_posted'
     | 'assessment_assigned'
     | 'grade_updated'
     | 'assessment_due'
@@ -118,10 +120,7 @@ export class NotificationsService {
         limit,
         offset,
       }),
-      this.db
-        .select({ total: count() })
-        .from(notifications)
-        .where(whereClause),
+      this.db.select({ total: count() }).from(notifications).where(whereClause),
     ]);
 
     const total = Number(totalResult[0]?.total ?? 0);

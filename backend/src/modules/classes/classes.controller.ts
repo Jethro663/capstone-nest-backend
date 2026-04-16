@@ -257,12 +257,13 @@ export class ClassesController {
     @Body() dto: UpdateStudentClassPresentationDto,
     @CurrentUser() user: any,
   ) {
-    const data = await this.classesService.updateStudentClassPresentationPreference(
-      id,
-      user?.userId,
-      user?.roles ?? [],
-      dto,
-    );
+    const data =
+      await this.classesService.updateStudentClassPresentationPreference(
+        id,
+        user?.userId,
+        user?.roles ?? [],
+        dto,
+      );
 
     return {
       success: true,
@@ -316,8 +317,12 @@ export class ClassesController {
    */
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getClassById(@Param('id') id: string) {
-    const classRecord = await this.classesService.findById(id);
+  async getClassById(@Param('id') id: string, @CurrentUser() user: any) {
+    const classRecord = await this.classesService.findById(
+      id,
+      user?.userId,
+      user?.roles,
+    );
 
     return {
       success: true,
@@ -725,10 +730,7 @@ export class ClassesController {
 export class ClassesPublicController {
   @Public()
   @Get('banners/:filename')
-  async serveClassBanner(
-    @Param('filename') filename: string,
-    @Res() res: any,
-  ) {
+  async serveClassBanner(@Param('filename') filename: string, @Res() res: any) {
     const sanitized = path.basename(filename);
     const filePath = path.join(CLASS_BANNER_UPLOAD_DEST, sanitized);
 

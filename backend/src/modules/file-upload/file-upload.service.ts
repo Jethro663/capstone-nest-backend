@@ -5,7 +5,17 @@ import {
   BadRequestException,
   Optional,
 } from '@nestjs/common';
-import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   classes,
@@ -131,7 +141,10 @@ export class FileUploadService {
     return folder;
   }
 
-  private async ensureStudentCanAccessClass(classId: string, user: RequestUser) {
+  private async ensureStudentCanAccessClass(
+    classId: string,
+    user: RequestUser,
+  ) {
     if (!this.isStudent(user)) return;
 
     const enrollment = await this.db.query.enrollments.findFirst({
@@ -238,7 +251,9 @@ export class FileUploadService {
       record.scope === FileScopeDto.General &&
       record.teacherVisible === false
     ) {
-      throw new ForbiddenException('This general module is hidden from teachers and students');
+      throw new ForbiddenException(
+        'This general module is hidden from teachers and students',
+      );
     }
 
     if (
@@ -453,7 +468,9 @@ export class FileUploadService {
 
     if (typeof query.teacherVisible === 'boolean') {
       if (!isAdmin && query.teacherVisible === false) {
-        throw new ForbiddenException('Only admins can list hidden general modules');
+        throw new ForbiddenException(
+          'Only admins can list hidden general modules',
+        );
       }
       filters.push(eq(uploadedFiles.teacherVisible, query.teacherVisible));
     }
@@ -532,8 +549,7 @@ export class FileUploadService {
     const nextGradeLevel =
       dto.gradeLevel === undefined ? record.gradeLevel : dto.gradeLevel;
     const normalizedNextScope = nextScope as FileScopeDto;
-    const normalizedSubjectKey =
-      nextSubjectKey as LibrarySubjectKeyDto | null;
+    const normalizedSubjectKey = nextSubjectKey as LibrarySubjectKeyDto | null;
     const normalizedGradeLevel = nextGradeLevel as GradeLevelDto | null;
 
     this.ensureCanWriteScope(normalizedNextScope, user);
@@ -582,7 +598,8 @@ export class FileUploadService {
       .where(eq(uploadedFiles.id, id));
 
     const partitionChanged =
-      record.subjectKey !== nextSubjectKey || record.gradeLevel !== nextGradeLevel;
+      record.subjectKey !== nextSubjectKey ||
+      record.gradeLevel !== nextGradeLevel;
     if (normalizedNextScope === FileScopeDto.General && partitionChanged) {
       await this.db
         .update(contentChunks)
@@ -650,7 +667,9 @@ export class FileUploadService {
   async retryIndex(id: string, user: RequestUser) {
     const record = await this.ensureFileWritable(id, user);
     if (record.scope !== FileScopeDto.General) {
-      throw new BadRequestException('Only general module files can be indexed.');
+      throw new BadRequestException(
+        'Only general module files can be indexed.',
+      );
     }
     this.ensureGeneralPartition({
       scope: record.scope as FileScopeDto,

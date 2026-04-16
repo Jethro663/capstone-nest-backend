@@ -16,7 +16,11 @@ import { LibraryIndexingProcessor } from './processors/library-indexing.processo
     }),
   ],
   controllers: [FileUploadController],
-  providers: [FileUploadService, LibraryIndexingService, LibraryIndexingProcessor],
+  providers: [
+    FileUploadService,
+    LibraryIndexingService,
+    LibraryIndexingProcessor,
+  ],
   exports: [FileUploadService, LibraryIndexingService],
 })
 export class FileUploadModule {}

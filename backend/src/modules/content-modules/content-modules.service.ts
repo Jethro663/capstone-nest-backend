@@ -79,7 +79,9 @@ export class ContentModulesService {
     }
 
     if (!this.hasRole(userRoles, RoleName.Student)) {
-      throw new ForbiddenException('You are not allowed to access class modules');
+      throw new ForbiddenException(
+        'You are not allowed to access class modules',
+      );
     }
 
     const enrollment = await this.db.query.enrollments.findFirst({
@@ -104,7 +106,11 @@ export class ContentModulesService {
     userId: string,
     userRoles: string[],
   ) {
-    const classRecord = await this.assertClassReadAccess(classId, userId, userRoles);
+    const classRecord = await this.assertClassReadAccess(
+      classId,
+      userId,
+      userRoles,
+    );
 
     if (this.hasRole(userRoles, RoleName.Student)) {
       throw new ForbiddenException('Students cannot modify modules');
@@ -129,7 +135,9 @@ export class ContentModulesService {
       where: eq(classModules.id, moduleId),
       with: {
         sections: {
-          orderBy: (sectionTable, { asc: byAsc }) => [byAsc(sectionTable.order)],
+          orderBy: (sectionTable, { asc: byAsc }) => [
+            byAsc(sectionTable.order),
+          ],
           with: {
             items: {
               orderBy: (itemTable, { asc: byAsc }) => [byAsc(itemTable.order)],
@@ -153,13 +161,15 @@ export class ContentModulesService {
     return module;
   }
 
-  private async hydrateFileRefs<T extends { sections: Array<{ items: Array<{ fileId: string | null }> }> }>(
-    modulesList: T[],
-  ) {
+  private async hydrateFileRefs<
+    T extends { sections: Array<{ items: Array<{ fileId: string | null }> }> },
+  >(modulesList: T[]) {
     const fileIds = modulesList
       .flatMap((module) =>
         module.sections.flatMap((section) =>
-          section.items.map((item) => item.fileId).filter((id): id is string => Boolean(id)),
+          section.items
+            .map((item) => item.fileId)
+            .filter((id): id is string => Boolean(id)),
         ),
       )
       .filter((value, index, array) => array.indexOf(value) === index);
@@ -197,7 +207,7 @@ export class ContentModulesService {
         ...section,
         items: section.items.map((item) => ({
           ...item,
-          file: item.fileId ? fileMap.get(item.fileId) ?? null : null,
+          file: item.fileId ? (fileMap.get(item.fileId) ?? null) : null,
         })),
       })),
     }));
@@ -218,7 +228,9 @@ export class ContentModulesService {
     });
 
     if (!section) {
-      throw new NotFoundException(`Module section with ID "${sectionId}" not found`);
+      throw new NotFoundException(
+        `Module section with ID "${sectionId}" not found`,
+      );
     }
 
     return section;
@@ -250,7 +262,9 @@ export class ContentModulesService {
   }
 
   private ensureSingleTargetForType(dto: AttachModuleItemDto) {
-    const providedTargets = [dto.lessonId, dto.assessmentId, dto.fileId].filter(Boolean).length;
+    const providedTargets = [dto.lessonId, dto.assessmentId, dto.fileId].filter(
+      Boolean,
+    ).length;
     if (providedTargets !== 1) {
       throw new BadRequestException(
         'Exactly one of lessonId, assessmentId, or fileId must be provided',
@@ -258,29 +272,35 @@ export class ContentModulesService {
     }
 
     if (dto.itemType === ModuleItemType.Lesson && !dto.lessonId) {
-      throw new BadRequestException('lessonId is required when itemType is "lesson"');
+      throw new BadRequestException(
+        'lessonId is required when itemType is "lesson"',
+      );
     }
 
     if (dto.itemType === ModuleItemType.Assessment && !dto.assessmentId) {
-      throw new BadRequestException('assessmentId is required when itemType is "assessment"');
+      throw new BadRequestException(
+        'assessmentId is required when itemType is "assessment"',
+      );
     }
 
     if (dto.itemType === ModuleItemType.File && !dto.fileId) {
-      throw new BadRequestException('fileId is required when itemType is "file"');
+      throw new BadRequestException(
+        'fileId is required when itemType is "file"',
+      );
     }
   }
 
   private normalizeItemMetadataForAttach(dto: AttachModuleItemDto) {
     if (dto.points !== undefined && dto.itemType !== ModuleItemType.Lesson) {
-      throw new BadRequestException('points is only supported for lesson module items');
+      throw new BadRequestException(
+        'points is only supported for lesson module items',
+      );
     }
 
     if (dto.itemType === ModuleItemType.File) {
       return {
         ...(dto.metadata ?? {}),
-        fileSubtype:
-          (dto.metadata as Record<string, unknown> | undefined)?.fileSubtype ??
-          'pdf',
+        fileSubtype: dto.metadata?.fileSubtype ?? 'pdf',
       };
     }
 
@@ -296,11 +316,19 @@ export class ContentModulesService {
   }
 
   private normalizeItemMetadataForUpdate(
-    currentItem: { itemType: 'lesson' | 'assessment' | 'file'; metadata: unknown },
+    currentItem: {
+      itemType: 'lesson' | 'assessment' | 'file';
+      metadata: unknown;
+    },
     dto: UpdateModuleItemDto,
   ) {
-    if (dto.points !== undefined && currentItem.itemType !== ModuleItemType.Lesson) {
-      throw new BadRequestException('points is only supported for lesson module items');
+    if (
+      dto.points !== undefined &&
+      currentItem.itemType !== ModuleItemType.Lesson
+    ) {
+      throw new BadRequestException(
+        'points is only supported for lesson module items',
+      );
     }
 
     if (dto.metadata === undefined && dto.points === undefined) {
@@ -344,7 +372,9 @@ export class ContentModulesService {
       return Boolean(item.lesson && !item.lesson.isDraft);
     }
     if (item.itemType === ModuleItemType.Assessment) {
-      return Boolean(item.assessment && item.assessment.isPublished && item.isGiven);
+      return Boolean(
+        item.assessment && item.assessment.isPublished && item.isGiven,
+      );
     }
     return Boolean(item.fileId);
   }
@@ -384,7 +414,9 @@ export class ContentModulesService {
           assessmentId: true,
         },
       });
-      attempts.forEach((entry) => completedAssessmentIds.add(entry.assessmentId));
+      attempts.forEach((entry) =>
+        completedAssessmentIds.add(entry.assessmentId),
+      );
     }
 
     return { completedLessonIds, completedAssessmentIds };
@@ -440,7 +472,8 @@ export class ContentModulesService {
               item.itemType === ModuleItemType.Lesson &&
               item.metadata &&
               typeof item.metadata === 'object' &&
-              typeof (item.metadata as Record<string, unknown>).points === 'number'
+              typeof (item.metadata as Record<string, unknown>).points ===
+                'number'
                 ? Number((item.metadata as Record<string, unknown>).points)
                 : 0,
           };
@@ -453,7 +486,8 @@ export class ContentModulesService {
     });
 
     const completed =
-      requiredVisibleCount === 0 || requiredVisibleCount === requiredCompletedCount;
+      requiredVisibleCount === 0 ||
+      requiredVisibleCount === requiredCompletedCount;
     const progressPercent =
       requiredVisibleCount === 0
         ? 100
@@ -469,15 +503,25 @@ export class ContentModulesService {
     };
   }
 
-  async getModulesByClass(classId: string, userId: string, userRoles: string[]) {
-    const classRecord = await this.assertClassReadAccess(classId, userId, userRoles);
+  async getModulesByClass(
+    classId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const classRecord = await this.assertClassReadAccess(
+      classId,
+      userId,
+      userRoles,
+    );
     const studentMode = this.hasRole(userRoles, RoleName.Student);
 
     const modulesList = await this.db.query.classModules.findMany({
       where: eq(classModules.classId, classRecord.id),
       with: {
         sections: {
-          orderBy: (sectionTable, { asc: byAsc }) => [byAsc(sectionTable.order)],
+          orderBy: (sectionTable, { asc: byAsc }) => [
+            byAsc(sectionTable.order),
+          ],
           with: {
             items: {
               orderBy: (itemTable, { asc: byAsc }) => [byAsc(itemTable.order)],
@@ -507,7 +551,11 @@ export class ContentModulesService {
         : module.sections.flatMap((section) =>
             section.items
               .filter((item) => this.isItemVisibleToStudent(item))
-              .filter((item) => item.itemType === ModuleItemType.Lesson && Boolean(item.lessonId))
+              .filter(
+                (item) =>
+                  item.itemType === ModuleItemType.Lesson &&
+                  Boolean(item.lessonId),
+              )
               .map((item) => item.lessonId as string),
           ),
     );
@@ -534,7 +582,11 @@ export class ContentModulesService {
       );
 
     return visibleModules.map((module) =>
-      this.decorateStudentModule(module, completedLessonIds, completedAssessmentIds),
+      this.decorateStudentModule(
+        module,
+        completedLessonIds,
+        completedAssessmentIds,
+      ),
     );
   }
 
@@ -552,7 +604,11 @@ export class ContentModulesService {
     return module;
   }
 
-  async createModule(dto: CreateModuleDto, userId: string, userRoles: string[]) {
+  async createModule(
+    dto: CreateModuleDto,
+    userId: string,
+    userRoles: string[],
+  ) {
     await this.assertClassWriteAccess(dto.classId, userId, userRoles);
 
     const maxOrderResult = await this.db
@@ -591,7 +647,12 @@ export class ContentModulesService {
     return this.getModuleByIdOrThrow(created.id);
   }
 
-  async updateModule(moduleId: string, dto: UpdateModuleDto, userId: string, userRoles: string[]) {
+  async updateModule(
+    moduleId: string,
+    dto: UpdateModuleDto,
+    userId: string,
+    userRoles: string[],
+  ) {
     const module = await this.getModuleByIdOrThrow(moduleId);
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
     this.ensureNotCoreAsset(module.isCoreTemplateAsset, 'update visibility');
@@ -600,13 +661,19 @@ export class ContentModulesService {
       .update(classModules)
       .set({
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
         ...(dto.isLocked !== undefined ? { isLocked: dto.isLocked } : {}),
-        ...(dto.teacherNotes !== undefined ? { teacherNotes: dto.teacherNotes } : {}),
+        ...(dto.teacherNotes !== undefined
+          ? { teacherNotes: dto.teacherNotes }
+          : {}),
         ...(dto.themeKind !== undefined ? { themeKind: dto.themeKind } : {}),
         ...(dto.gradientId !== undefined ? { gradientId: dto.gradientId } : {}),
-        ...(dto.coverImageUrl !== undefined ? { coverImageUrl: dto.coverImageUrl } : {}),
+        ...(dto.coverImageUrl !== undefined
+          ? { coverImageUrl: dto.coverImageUrl }
+          : {}),
         ...(dto.imagePositionX !== undefined
           ? { imagePositionX: dto.imagePositionX }
           : {}),
@@ -651,21 +718,33 @@ export class ContentModulesService {
     return module;
   }
 
-  async reorderModules(classId: string, dto: ReorderModulesDto, userId: string, userRoles: string[]) {
+  async reorderModules(
+    classId: string,
+    dto: ReorderModulesDto,
+    userId: string,
+    userRoles: string[],
+  ) {
     await this.assertClassWriteAccess(classId, userId, userRoles);
 
     if (dto.modules.length === 0) {
-      throw new BadRequestException('At least one module reorder entry is required');
+      throw new BadRequestException(
+        'At least one module reorder entry is required',
+      );
     }
 
     const requestedIds = dto.modules.map((item) => item.id);
     const existing = await this.db.query.classModules.findMany({
-      where: and(eq(classModules.classId, classId), inArray(classModules.id, requestedIds)),
+      where: and(
+        eq(classModules.classId, classId),
+        inArray(classModules.id, requestedIds),
+      ),
       columns: { id: true },
     });
 
     if (existing.length !== requestedIds.length) {
-      throw new BadRequestException('One or more modules do not belong to the class');
+      throw new BadRequestException(
+        'One or more modules do not belong to the class',
+      );
     }
 
     await this.db.transaction(async (tx) => {
@@ -693,7 +772,12 @@ export class ContentModulesService {
     return this.getModulesByClass(classId, userId, userRoles);
   }
 
-  async createSection(moduleId: string, dto: CreateModuleSectionDto, userId: string, userRoles: string[]) {
+  async createSection(
+    moduleId: string,
+    dto: CreateModuleSectionDto,
+    userId: string,
+    userRoles: string[],
+  ) {
     const module = await this.getModuleByIdOrThrow(moduleId);
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
     this.ensureNotCoreAsset(module.isCoreTemplateAsset, 'add sections');
@@ -734,14 +818,23 @@ export class ContentModulesService {
     userRoles: string[],
   ) {
     const section = await this.getModuleContextFromSection(sectionId);
-    await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
-    this.ensureNotCoreAsset(section.module.isCoreTemplateAsset, 'update sections');
+    await this.assertClassWriteAccess(
+      section.module.classId,
+      userId,
+      userRoles,
+    );
+    this.ensureNotCoreAsset(
+      section.module.isCoreTemplateAsset,
+      'update sections',
+    );
 
     await this.db
       .update(moduleSections)
       .set({
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(moduleSections.id, sectionId));
@@ -763,10 +856,19 @@ export class ContentModulesService {
 
   async deleteSection(sectionId: string, userId: string, userRoles: string[]) {
     const section = await this.getModuleContextFromSection(sectionId);
-    await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
-    this.ensureNotCoreAsset(section.module.isCoreTemplateAsset, 'delete sections');
+    await this.assertClassWriteAccess(
+      section.module.classId,
+      userId,
+      userRoles,
+    );
+    this.ensureNotCoreAsset(
+      section.module.isCoreTemplateAsset,
+      'delete sections',
+    );
 
-    await this.db.delete(moduleSections).where(eq(moduleSections.id, sectionId));
+    await this.db
+      .delete(moduleSections)
+      .where(eq(moduleSections.id, sectionId));
 
     await this.auditService.log({
       actorId: userId,
@@ -791,7 +893,9 @@ export class ContentModulesService {
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
 
     if (dto.sections.length === 0) {
-      throw new BadRequestException('At least one section reorder entry is required');
+      throw new BadRequestException(
+        'At least one section reorder entry is required',
+      );
     }
 
     const requestedIds = dto.sections.map((item) => item.id);
@@ -804,7 +908,9 @@ export class ContentModulesService {
     });
 
     if (existing.length !== requestedIds.length) {
-      throw new BadRequestException('One or more sections do not belong to the module');
+      throw new BadRequestException(
+        'One or more sections do not belong to the module',
+      );
     }
 
     await this.db.transaction(async (tx) => {
@@ -844,7 +950,11 @@ export class ContentModulesService {
     this.ensureSingleTargetForType(dto);
 
     const section = await this.getModuleContextFromSection(sectionId);
-    await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
+    await this.assertClassWriteAccess(
+      section.module.classId,
+      userId,
+      userRoles,
+    );
     this.ensureNotCoreAsset(section.module.isCoreTemplateAsset, 'attach items');
 
     if (dto.lessonId) {
@@ -855,9 +965,14 @@ export class ContentModulesService {
           classId: true,
         },
       });
-      if (!lesson) throw new NotFoundException(`Lesson with ID "${dto.lessonId}" not found`);
+      if (!lesson)
+        throw new NotFoundException(
+          `Lesson with ID "${dto.lessonId}" not found`,
+        );
       if (lesson.classId !== section.module.classId) {
-        throw new BadRequestException('Lesson must belong to the same class as the module');
+        throw new BadRequestException(
+          'Lesson must belong to the same class as the module',
+        );
       }
     }
 
@@ -870,10 +985,14 @@ export class ContentModulesService {
         },
       });
       if (!assessment) {
-        throw new NotFoundException(`Assessment with ID "${dto.assessmentId}" not found`);
+        throw new NotFoundException(
+          `Assessment with ID "${dto.assessmentId}" not found`,
+        );
       }
       if (assessment.classId !== section.module.classId) {
-        throw new BadRequestException('Assessment must belong to the same class as the module');
+        throw new BadRequestException(
+          'Assessment must belong to the same class as the module',
+        );
       }
     }
 
@@ -885,7 +1004,8 @@ export class ContentModulesService {
           classId: true,
         },
       });
-      if (!file) throw new NotFoundException(`File with ID "${dto.fileId}" not found`);
+      if (!file)
+        throw new NotFoundException(`File with ID "${dto.fileId}" not found`);
       if (file.classId && file.classId !== section.module.classId) {
         throw new BadRequestException(
           'Class-scoped file must belong to the same class as the module',
@@ -932,9 +1052,18 @@ export class ContentModulesService {
     return item;
   }
 
-  async updateItem(itemId: string, dto: UpdateModuleItemDto, userId: string, userRoles: string[]) {
+  async updateItem(
+    itemId: string,
+    dto: UpdateModuleItemDto,
+    userId: string,
+    userRoles: string[],
+  ) {
     const item = await this.getModuleContextFromItem(itemId);
-    await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
+    await this.assertClassWriteAccess(
+      item.section.module.classId,
+      userId,
+      userRoles,
+    );
     this.ensureNotCoreAsset(item.isCoreTemplateAsset, 'update items');
 
     const normalizedMetadata = this.normalizeItemMetadataForUpdate(item, dto);
@@ -946,7 +1075,9 @@ export class ContentModulesService {
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
         ...(dto.isRequired !== undefined ? { isRequired: dto.isRequired } : {}),
         ...(dto.isGiven !== undefined ? { isGiven: dto.isGiven } : {}),
-        ...(normalizedMetadata !== undefined ? { metadata: normalizedMetadata } : {}),
+        ...(normalizedMetadata !== undefined
+          ? { metadata: normalizedMetadata }
+          : {}),
         updatedAt: new Date(),
       })
       .where(eq(moduleItems.id, itemId));
@@ -968,7 +1099,11 @@ export class ContentModulesService {
 
   async deleteItem(itemId: string, userId: string, userRoles: string[]) {
     const item = await this.getModuleContextFromItem(itemId);
-    await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
+    await this.assertClassWriteAccess(
+      item.section.module.classId,
+      userId,
+      userRoles,
+    );
     this.ensureNotCoreAsset(item.isCoreTemplateAsset, 'delete items');
 
     await this.db.delete(moduleItems).where(eq(moduleItems.id, itemId));
@@ -993,10 +1128,16 @@ export class ContentModulesService {
     userRoles: string[],
   ) {
     const section = await this.getModuleContextFromSection(sectionId);
-    await this.assertClassWriteAccess(section.module.classId, userId, userRoles);
+    await this.assertClassWriteAccess(
+      section.module.classId,
+      userId,
+      userRoles,
+    );
 
     if (dto.items.length === 0) {
-      throw new BadRequestException('At least one item reorder entry is required');
+      throw new BadRequestException(
+        'At least one item reorder entry is required',
+      );
     }
 
     const requestedIds = dto.items.map((item) => item.id);
@@ -1009,7 +1150,9 @@ export class ContentModulesService {
     });
 
     if (existing.length !== requestedIds.length) {
-      throw new BadRequestException('One or more items do not belong to the section');
+      throw new BadRequestException(
+        'One or more items do not belong to the section',
+      );
     }
 
     await this.db.transaction(async (tx) => {
@@ -1104,7 +1247,9 @@ export class ContentModulesService {
     const module = await this.getModuleByIdOrThrow(moduleId);
     await this.assertClassWriteAccess(module.classId, userId, userRoles);
     if (!module.isCoreTemplateAsset) {
-      throw new BadRequestException('Only core template modules can be released here');
+      throw new BadRequestException(
+        'Only core template modules can be released here',
+      );
     }
 
     const [updated] = await this.db
@@ -1137,9 +1282,15 @@ export class ContentModulesService {
     userRoles: string[],
   ) {
     const item = await this.getModuleContextFromItem(itemId);
-    await this.assertClassWriteAccess(item.section.module.classId, userId, userRoles);
+    await this.assertClassWriteAccess(
+      item.section.module.classId,
+      userId,
+      userRoles,
+    );
     if (!item.isCoreTemplateAsset) {
-      throw new BadRequestException('Only core template items can be released here');
+      throw new BadRequestException(
+        'Only core template items can be released here',
+      );
     }
 
     const [updated] = await this.db

@@ -14,7 +14,7 @@ const sanitizeHtml = require('sanitize-html') as (
   options?: SanitizeOptions,
 ) => string;
 import { DatabaseService } from '../../database/database.service';
-import { announcements, classes } from '../../drizzle/schema';
+import { announcements, classes, enrollments } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
 import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
@@ -59,6 +59,55 @@ export class AnnouncementsService {
           : 'You are not the teacher of this class or the class does not exist.',
       );
     }
+  }
+
+  private async verifyClassReadAccess(
+    classId: string,
+    viewerId: string,
+    viewerRoles: string[],
+  ): Promise<{ isTeacherView: boolean }> {
+    const isAdmin = viewerRoles.includes('admin');
+    const isTeacher = viewerRoles.includes('teacher');
+    const isStudent = viewerRoles.includes('student');
+
+    if (!isAdmin && !isTeacher && !isStudent) {
+      throw new ForbiddenException('You do not have access to this class.');
+    }
+
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { id: true, teacherId: true },
+    });
+
+    if (!cls) {
+      throw new NotFoundException('Class not found.');
+    }
+
+    if (isAdmin) {
+      return { isTeacherView: true };
+    }
+
+    if (isTeacher) {
+      if (cls.teacherId !== viewerId) {
+        throw new ForbiddenException('You can only access your own classes.');
+      }
+      return { isTeacherView: true };
+    }
+
+    const enrollment = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.studentId, viewerId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException('You are not enrolled in this class.');
+    }
+
+    return { isTeacherView: false };
   }
 
   private sanitize(html: string): string {
@@ -143,9 +192,15 @@ export class AnnouncementsService {
   async findAllByClass(
     classId: string,
     viewerId: string,
-    viewerIsTeacher: boolean,
+    viewerRoles: string[],
     query: QueryAnnouncementsDto,
   ) {
+    const { isTeacherView } = await this.verifyClassReadAccess(
+      classId,
+      viewerId,
+      viewerRoles,
+    );
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const offset = (page - 1) * limit;
@@ -155,7 +210,7 @@ export class AnnouncementsService {
         eq(announcements.classId, classId),
         isNull(announcements.archivedAt),
         // Students only see published; teacher sees all (including pending)
-        viewerIsTeacher
+        isTeacherView
           ? undefined
           : and(
               sql`${announcements.publishedAt} IS NOT NULL`,
@@ -178,14 +233,21 @@ export class AnnouncementsService {
   async findOne(
     classId: string,
     announcementId: string,
-    viewerIsTeacher: boolean,
+    viewerId: string,
+    viewerRoles: string[],
   ) {
+    const { isTeacherView } = await this.verifyClassReadAccess(
+      classId,
+      viewerId,
+      viewerRoles,
+    );
+
     const row = await this.db.query.announcements.findFirst({
       where: and(
         eq(announcements.id, announcementId),
         eq(announcements.classId, classId),
         isNull(announcements.archivedAt),
-        viewerIsTeacher
+        isTeacherView
           ? undefined
           : and(
               sql`${announcements.publishedAt} IS NOT NULL`,

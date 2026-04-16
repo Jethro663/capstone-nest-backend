@@ -254,10 +254,12 @@ describe('PerformanceService', () => {
     jest
       .spyOn(service as any, 'assertClassAccess')
       .mockResolvedValue(undefined);
-    jest.spyOn(service as any, 'loadEnrolledStudents').mockResolvedValue([
-      { studentId: 'student-1' },
-      { studentId: 'student-2' },
-    ]);
+    jest
+      .spyOn(service as any, 'loadEnrolledStudents')
+      .mockResolvedValue([
+        { studentId: 'student-1' },
+        { studentId: 'student-2' },
+      ]);
     jest
       .spyOn(service as any, 'recomputeStudentsForClass')
       .mockResolvedValue(undefined);

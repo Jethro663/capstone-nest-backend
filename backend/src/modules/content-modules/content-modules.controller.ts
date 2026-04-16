@@ -78,7 +78,10 @@ export class ContentModulesController {
 
   @Get('class/:classId')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getByClass(@Param('classId') classId: string, @CurrentUser() user: any) {
+  async getByClass(
+    @Param('classId') classId: string,
+    @CurrentUser() user: any,
+  ) {
     const data = await this.contentModulesService.getModulesByClass(
       classId,
       user?.userId,
@@ -254,7 +257,10 @@ export class ContentModulesController {
 
   @Delete('sections/:sectionId')
   @Roles(RoleName.Admin, RoleName.Teacher)
-  async deleteSection(@Param('sectionId') sectionId: string, @CurrentUser() user: any) {
+  async deleteSection(
+    @Param('sectionId') sectionId: string,
+    @CurrentUser() user: any,
+  ) {
     const data = await this.contentModulesService.deleteSection(
       sectionId,
       user?.userId,
