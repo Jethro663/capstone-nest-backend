@@ -1,9 +1,10 @@
 import {
   studentParityRouteNames,
+  studentRouteManifest,
   studentSupportRouteNames,
   type StudentParityRouteName,
   type StudentSupportRouteName,
-} from "../navigation/types";
+} from "../navigation/student-route-manifest";
 
 export type StudentParityRouteInventoryEntry = {
   name: StudentParityRouteName;
@@ -11,25 +12,8 @@ export type StudentParityRouteInventoryEntry = {
 };
 
 export const studentParityRouteInventory = [
-  { name: "Dashboard", kind: "tab" },
-  { name: "Classes", kind: "tab" },
-  { name: "ClassDetail", kind: "stack" },
-  { name: "ModuleDetail", kind: "stack" },
-  { name: "Courses", kind: "stack" },
-  { name: "Lessons", kind: "stack" },
-  { name: "LessonDetail", kind: "stack" },
-  { name: "Assessments", kind: "tab" },
-  { name: "AssessmentDetail", kind: "stack" },
-  { name: "AssessmentTake", kind: "stack" },
-  { name: "AssessmentResults", kind: "stack" },
-  { name: "AssessmentHistory", kind: "stack" },
-  { name: "Announcements", kind: "tab" },
-  { name: "JA", kind: "tab" },
-  { name: "LXP", kind: "stack" },
-  { name: "Chatbot", kind: "stack" },
-  { name: "Performance", kind: "stack" },
-  { name: "Profile", kind: "tab" },
-  { name: "Transcript", kind: "stack" },
+  ...studentRouteManifest.tabs.map((name) => ({ name, kind: "tab" as const })),
+  ...studentRouteManifest.stack.map((name) => ({ name, kind: "stack" as const })),
 ] as const satisfies ReadonlyArray<StudentParityRouteInventoryEntry>;
 
 export const studentParityRouteInventoryNames = studentParityRouteNames;
@@ -40,8 +24,7 @@ export type StudentSupportRouteInventoryEntry = {
 };
 
 export const studentSupportRouteInventory = [
-  { name: "ClassWorkspace", kind: "stack" },
-  { name: "AiTutor", kind: "stack" },
+  ...studentRouteManifest.support.map((name) => ({ name, kind: "stack" as const })),
 ] as const satisfies ReadonlyArray<StudentSupportRouteInventoryEntry>;
 
 export const studentSupportRouteInventoryNames = studentSupportRouteNames;

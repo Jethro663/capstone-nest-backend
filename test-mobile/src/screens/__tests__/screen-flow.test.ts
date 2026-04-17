@@ -9,6 +9,10 @@ import {
   resolveInitialLxpClassId,
   resolveInitialTutorClassId,
 } from '../screen-flow';
+import {
+  studentParityRouteNames,
+  studentSupportRouteNames,
+} from '../../navigation/student-route-manifest';
 
 describe('mobile screen flow helpers', () => {
   it('prefers existing LXP selected class before fallback sources', () => {
@@ -131,33 +135,10 @@ describe('mobile screen flow helpers', () => {
   });
 
   it('declares the required student parity route inventory in order', () => {
-    expect(studentParityRouteInventory.map((entry) => entry.name)).toEqual([
-      'Dashboard',
-      'Classes',
-      'ClassDetail',
-      'ModuleDetail',
-      'Courses',
-      'Lessons',
-      'LessonDetail',
-      'Assessments',
-      'AssessmentDetail',
-      'AssessmentTake',
-      'AssessmentResults',
-      'AssessmentHistory',
-      'Announcements',
-      'JA',
-      'LXP',
-      'Chatbot',
-      'Performance',
-      'Profile',
-      'Transcript',
-    ]);
+    expect(studentParityRouteInventory.map((entry) => entry.name)).toEqual(studentParityRouteNames);
   });
 
   it('declares the support route inventory separately from parity routes', () => {
-    expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual([
-      'ClassWorkspace',
-      'AiTutor',
-    ]);
+    expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual(studentSupportRouteNames);
   });
 });

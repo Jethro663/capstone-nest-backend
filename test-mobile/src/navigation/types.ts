@@ -1,30 +1,7 @@
-export const studentParityRouteNames = [
-  "Dashboard",
-  "Classes",
-  "ClassDetail",
-  "ModuleDetail",
-  "Courses",
-  "Lessons",
-  "LessonDetail",
-  "Assessments",
-  "AssessmentDetail",
-  "AssessmentTake",
-  "AssessmentResults",
-  "AssessmentHistory",
-  "Announcements",
-  "JA",
-  "LXP",
-  "Chatbot",
-  "Performance",
-  "Profile",
-  "Transcript",
-] as const;
-
-export type StudentParityRouteName = (typeof studentParityRouteNames)[number];
-
-export const studentSupportRouteNames = ["ClassWorkspace", "AiTutor"] as const;
-
-export type StudentSupportRouteName = (typeof studentSupportRouteNames)[number];
+export type {
+  StudentParityRouteName,
+  StudentSupportRouteName,
+} from "./student-route-manifest";
 
 export type RootStackParamList = {
   MainTabs: undefined;

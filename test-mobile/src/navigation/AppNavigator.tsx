@@ -1,8 +1,8 @@
-import { Component, type ReactNode, useMemo, useState } from "react";
+import { Component, type ComponentProps, type ComponentType, type ReactNode, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth } from "../providers/AuthProvider";
 import { BottomTabBar } from "../components/ui/BottomTabBar";
 import { LessonsScreen as ClassesScreen } from "../screens/LessonsScreen";
@@ -18,6 +18,14 @@ import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { colors } from "../theme/tokens";
+import {
+  studentStackRouteNames,
+  studentSupportRouteNames,
+  studentTabRouteNames,
+  type StudentStackRouteName,
+  type StudentSupportRouteName,
+  type StudentTabRouteName,
+} from "./student-route-manifest";
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
 import { resolveMobileRole } from "./role-resolver";
 
@@ -47,16 +55,156 @@ function StudentRoutePlaceholder({ title, subtitle }: { title: string; subtitle:
   );
 }
 
-function DashboardRouteScreen() {
-  return <StudentRoutePlaceholder title="Dashboard" subtitle="Student overview routes will land here." />;
+type TabScreenComponent<Name extends StudentTabRouteName> = ComponentType<
+  BottomTabScreenProps<MainTabParamList, Name>
+>;
+
+type StackScreenComponent<Name extends StudentStackRouteName | StudentSupportRouteName> = ComponentType<
+  NativeStackScreenProps<RootStackParamList, Name>
+>;
+
+function createTabPlaceholderScreen<Name extends StudentTabRouteName>(
+  title: string,
+  subtitle: string,
+): TabScreenComponent<Name> {
+  return function TabPlaceholderScreen(_props) {
+    return <StudentRoutePlaceholder title={title} subtitle={subtitle} />;
+  };
 }
 
-function LxpRouteScreen() {
-  return <StudentRoutePlaceholder title="LXP" subtitle="Parity route placeholder for learner experience overview." />;
+function createStackPlaceholderScreen<Name extends StudentStackRouteName | StudentSupportRouteName>(
+  title: string,
+  subtitle: string,
+): StackScreenComponent<Name> {
+  return function StackPlaceholderScreen(_props) {
+    return <StudentRoutePlaceholder title={title} subtitle={subtitle} />;
+  };
 }
 
-function PerformanceRouteScreen() {
-  return <StudentRoutePlaceholder title="Performance" subtitle="Parity route placeholder for performance analytics." />;
+function ClassesRouteScreen(props: BottomTabScreenProps<MainTabParamList, "Classes">) {
+  return <ClassesScreen {...(props as ComponentProps<typeof ClassesScreen>)} />;
+}
+
+const studentTabScreens = {
+  Dashboard: createTabPlaceholderScreen<"Dashboard">(
+    "Dashboard",
+    "Student overview routes will land here.",
+  ),
+  Classes: ClassesRouteScreen,
+  Assessments: AssessmentsScreen,
+  JA: JaScreen,
+  Announcements: AnnouncementsScreen,
+  Profile: ProfileScreen,
+} satisfies { [K in StudentTabRouteName]: TabScreenComponent<K> };
+
+const studentStackScreens = {
+  ClassDetail: createStackPlaceholderScreen<"ClassDetail">(
+    "Class Detail",
+    "Parity route placeholder for class details.",
+  ),
+  ModuleDetail: createStackPlaceholderScreen<"ModuleDetail">(
+    "Module Detail",
+    "Parity route placeholder for module details.",
+  ),
+  Courses: createStackPlaceholderScreen<"Courses">(
+    "Courses",
+    "Parity route placeholder for the student courses view.",
+  ),
+  Lessons: createStackPlaceholderScreen<"Lessons">(
+    "Lessons",
+    "Parity route placeholder for the student lessons view.",
+  ),
+  LessonDetail: createStackPlaceholderScreen<"LessonDetail">(
+    "Lesson Detail",
+    "Parity route placeholder for a single lesson.",
+  ),
+  AssessmentDetail: AssessmentDetailScreen,
+  AssessmentTake: AssessmentTakeScreen,
+  AssessmentResults: AssessmentResultsScreen,
+  AssessmentHistory: createStackPlaceholderScreen<"AssessmentHistory">(
+    "Assessment History",
+    "Parity route placeholder for assessment history.",
+  ),
+  Chatbot: createStackPlaceholderScreen<"Chatbot">(
+    "Chatbot",
+    "Parity route placeholder for the student chatbot route.",
+  ),
+  Performance: createStackPlaceholderScreen<"Performance">(
+    "Performance",
+    "Parity route placeholder for performance analytics.",
+  ),
+  Transcript: createStackPlaceholderScreen<"Transcript">(
+    "Transcript",
+    "Parity route placeholder for the student transcript.",
+  ),
+  LXP: createStackPlaceholderScreen<"LXP">(
+    "LXP",
+    "Parity route placeholder for learner experience overview.",
+  ),
+} satisfies { [K in StudentStackRouteName]: StackScreenComponent<K> };
+
+const studentSupportScreens = {
+  ClassWorkspace: ClassWorkspaceScreen,
+  AiTutor: AiTutorScreen,
+} satisfies { [K in StudentSupportRouteName]: StackScreenComponent<K> };
+
+const [classWorkspaceRouteName, aiTutorRouteName] = studentSupportRouteNames;
+
+function renderStudentTabScreen(name: StudentTabRouteName) {
+  switch (name) {
+    case "Dashboard":
+      return <Tab.Screen key={name} name={name} component={studentTabScreens.Dashboard} />;
+    case "Classes":
+      return <Tab.Screen key={name} name={name} component={studentTabScreens.Classes} />;
+    case "Assessments":
+      return <Tab.Screen key={name} name={name} component={studentTabScreens.Assessments} />;
+    case "JA":
+      return <Tab.Screen key={name} name={name} component={studentTabScreens.JA} />;
+    case "Announcements":
+      return <Tab.Screen key={name} name={name} component={studentTabScreens.Announcements} />;
+    case "Profile":
+      return <Tab.Screen key={name} name={name} component={studentTabScreens.Profile} />;
+  }
+}
+
+function renderStudentStackScreen(name: StudentStackRouteName) {
+  switch (name) {
+    case "ClassDetail":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.ClassDetail} />;
+    case "ModuleDetail":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.ModuleDetail} />;
+    case "Courses":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Courses} />;
+    case "Lessons":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Lessons} />;
+    case "LessonDetail":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.LessonDetail} />;
+    case "AssessmentDetail":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentDetail} />;
+    case "AssessmentTake":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentTake} />;
+    case "AssessmentResults":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentResults} />;
+    case "AssessmentHistory":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentHistory} />;
+    case "Chatbot":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Chatbot} />;
+    case "Performance":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Performance} />;
+    case "Transcript":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Transcript} />;
+    case "LXP":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.LXP} />;
+  }
+}
+
+function renderStudentSupportScreen(name: StudentSupportRouteName) {
+  switch (name) {
+    case "ClassWorkspace":
+      return <RootStack.Screen key={name} name={name} component={studentSupportScreens.ClassWorkspace} />;
+    case "AiTutor":
+      return <RootStack.Screen key={name} name={name} component={studentSupportScreens.AiTutor} />;
+  }
 }
 
 const navigationTheme = {
@@ -172,12 +320,7 @@ function AuthNavigator() {
 function StudentTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
-      <Tab.Screen name="Dashboard">{() => <DashboardRouteScreen />}</Tab.Screen>
-      <Tab.Screen name="Classes" component={ClassesScreen} />
-      <Tab.Screen name="Assessments" component={AssessmentsScreen} />
-      <Tab.Screen name="JA" component={JaScreen} />
-      <Tab.Screen name="Announcements" component={AnnouncementsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      {studentTabRouteNames.map(renderStudentTabScreen)}
     </Tab.Navigator>
   );
 }
@@ -186,41 +329,9 @@ function StudentNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={StudentTabs} />
-      <RootStack.Screen name="ClassWorkspace" component={ClassWorkspaceScreen} />
-      <RootStack.Screen name="ClassDetail">
-        {() => <StudentRoutePlaceholder title="Class Detail" subtitle="Parity route placeholder for class details." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="ModuleDetail">
-        {() => <StudentRoutePlaceholder title="Module Detail" subtitle="Parity route placeholder for module details." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Courses">
-        {() => <StudentRoutePlaceholder title="Courses" subtitle="Parity route placeholder for the student courses view." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Lessons">
-        {() => <StudentRoutePlaceholder title="Lessons" subtitle="Parity route placeholder for the student lessons view." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="LessonDetail">
-        {() => <StudentRoutePlaceholder title="Lesson Detail" subtitle="Parity route placeholder for a single lesson." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="AssessmentDetail" component={AssessmentDetailScreen} />
-      <RootStack.Screen name="AssessmentTake" component={AssessmentTakeScreen} />
-      <RootStack.Screen name="AssessmentResults" component={AssessmentResultsScreen} />
-      <RootStack.Screen name="AssessmentHistory">
-        {() => <StudentRoutePlaceholder title="Assessment History" subtitle="Parity route placeholder for assessment history." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Chatbot">
-        {() => <StudentRoutePlaceholder title="Chatbot" subtitle="Parity route placeholder for the student chatbot route." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Performance">
-        {() => <PerformanceRouteScreen />}
-      </RootStack.Screen>
-      <RootStack.Screen name="Transcript">
-        {() => <StudentRoutePlaceholder title="Transcript" subtitle="Parity route placeholder for the student transcript." />}
-      </RootStack.Screen>
-      <RootStack.Screen name="LXP">
-        {() => <LxpRouteScreen />}
-      </RootStack.Screen>
-      <RootStack.Screen name="AiTutor" component={AiTutorScreen} />
+      {renderStudentSupportScreen(classWorkspaceRouteName)}
+      {studentStackRouteNames.map(renderStudentStackScreen)}
+      {renderStudentSupportScreen(aiTutorRouteName)}
     </RootStack.Navigator>
   );
 }
@@ -237,7 +348,15 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
   );
 }
 
-function getActiveRouteName(state: any): string {
+type ActiveRouteState = {
+  index?: number;
+  routes?: Array<{
+    name?: string;
+    state?: ActiveRouteState;
+  }>;
+};
+
+function getActiveRouteName(state?: ActiveRouteState): string {
   const route = state?.routes?.[state?.index ?? 0];
   if (!route) {
     return "Dashboard";
@@ -254,25 +373,21 @@ export function AppNavigator() {
   const { isAuthenticated, loading, user } = useAuth();
   const [currentRouteName, setCurrentRouteName] = useState("Home");
   const mobileRole = resolveMobileRole(user?.roles);
-  const navigator = useMemo(
-    () => {
-      if (!isAuthenticated) return <AuthNavigator />;
-
-      if (mobileRole === "student") {
-        return (
-        <NavigationErrorBoundary currentRouteName={currentRouteName}>
-          <StudentNavigator />
-        </NavigationErrorBoundary>
-        );
-      }
-
-      return <RoleTabs role={mobileRole} />;
-    },
-    [currentRouteName, isAuthenticated, mobileRole],
-  );
 
   if (loading) {
     return <RootFallback />;
+  }
+
+  let navigator = <AuthNavigator />;
+  if (isAuthenticated) {
+    navigator =
+      mobileRole === "student" ? (
+        <NavigationErrorBoundary currentRouteName={currentRouteName}>
+          <StudentNavigator />
+        </NavigationErrorBoundary>
+      ) : (
+        <RoleTabs role={mobileRole} />
+      );
   }
 
   return (
