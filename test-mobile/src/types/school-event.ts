@@ -14,28 +14,6 @@ export interface SchoolEvent {
   updatedAt?: string;
 }
 
-export interface CreateSchoolEventDto {
-  eventType: SchoolEventType;
-  schoolYear: string;
-  title: string;
-  description?: string;
-  location?: string;
-  startsAt: string;
-  endsAt: string;
-  allDay?: boolean;
-}
-
-export interface UpdateSchoolEventDto {
-  eventType?: SchoolEventType;
-  schoolYear?: string;
-  title?: string;
-  description?: string;
-  location?: string;
-  startsAt?: string;
-  endsAt?: string;
-  allDay?: boolean;
-}
-
 export interface SchoolEventQuery {
   schoolYear?: string;
   from?: string;
