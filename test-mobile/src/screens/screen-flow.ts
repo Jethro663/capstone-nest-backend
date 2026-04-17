@@ -1,4 +1,9 @@
-import { studentParityRouteNames, type StudentParityRouteName } from "../navigation/types";
+import {
+  studentParityRouteNames,
+  studentSupportRouteNames,
+  type StudentParityRouteName,
+  type StudentSupportRouteName,
+} from "../navigation/types";
 
 export type StudentParityRouteInventoryEntry = {
   name: StudentParityRouteName;
@@ -28,6 +33,18 @@ export const studentParityRouteInventory = [
 ] as const satisfies ReadonlyArray<StudentParityRouteInventoryEntry>;
 
 export const studentParityRouteInventoryNames = studentParityRouteNames;
+
+export type StudentSupportRouteInventoryEntry = {
+  name: StudentSupportRouteName;
+  kind: "stack";
+};
+
+export const studentSupportRouteInventory = [
+  { name: "ClassWorkspace", kind: "stack" },
+  { name: "AiTutor", kind: "stack" },
+] as const satisfies ReadonlyArray<StudentSupportRouteInventoryEntry>;
+
+export const studentSupportRouteInventoryNames = studentSupportRouteNames;
 
 export function resolveInitialLxpClassId(params: {
   selectedClassId?: string | null;

@@ -5,6 +5,7 @@ import {
   canSubmitTutorAnswers,
   computeProfileReadiness,
   studentParityRouteInventory,
+  studentSupportRouteInventory,
   resolveInitialLxpClassId,
   resolveInitialTutorClassId,
 } from '../screen-flow';
@@ -150,6 +151,13 @@ describe('mobile screen flow helpers', () => {
       'Performance',
       'Profile',
       'Transcript',
+    ]);
+  });
+
+  it('declares the support route inventory separately from parity routes', () => {
+    expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual([
+      'ClassWorkspace',
+      'AiTutor',
     ]);
   });
 });

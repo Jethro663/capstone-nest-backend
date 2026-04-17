@@ -22,6 +22,10 @@ export const studentParityRouteNames = [
 
 export type StudentParityRouteName = (typeof studentParityRouteNames)[number];
 
+export const studentSupportRouteNames = ["ClassWorkspace", "AiTutor"] as const;
+
+export type StudentSupportRouteName = (typeof studentSupportRouteNames)[number];
+
 export type RootStackParamList = {
   MainTabs: undefined;
   ClassWorkspace: { classId: string };

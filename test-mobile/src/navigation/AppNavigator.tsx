@@ -16,8 +16,6 @@ import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
-import { LxpScreen } from "../screens/LxpScreen";
-import { ProgressScreen } from "../screens/ProgressScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { colors } from "../theme/tokens";
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
@@ -54,11 +52,11 @@ function DashboardRouteScreen() {
 }
 
 function LxpRouteScreen() {
-  return <LxpScreen {...({} as any)} />;
+  return <StudentRoutePlaceholder title="LXP" subtitle="Parity route placeholder for learner experience overview." />;
 }
 
 function PerformanceRouteScreen() {
-  return <ProgressScreen {...({} as any)} />;
+  return <StudentRoutePlaceholder title="Performance" subtitle="Parity route placeholder for performance analytics." />;
 }
 
 const navigationTheme = {

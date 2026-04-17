@@ -1,4 +1,7 @@
-import { studentParityRouteInventory } from "../../screens/screen-flow";
+import {
+  studentParityRouteInventory,
+  studentSupportRouteInventory,
+} from "../../screens/screen-flow";
 import type { MainTabParamList, RootStackParamList } from "../../navigation/types";
 
 const studentTabRoutes = [
@@ -11,7 +14,6 @@ const studentTabRoutes = [
 ] as const satisfies ReadonlyArray<keyof MainTabParamList>;
 
 const studentStackRoutes = [
-  "ClassWorkspace",
   "ClassDetail",
   "ModuleDetail",
   "Courses",
@@ -25,6 +27,10 @@ const studentStackRoutes = [
   "Performance",
   "Transcript",
   "LXP",
+] as const satisfies ReadonlyArray<keyof RootStackParamList>;
+
+const studentSupportRoutes = [
+  "ClassWorkspace",
   "AiTutor",
 ] as const satisfies ReadonlyArray<keyof RootStackParamList>;
 
@@ -40,7 +46,6 @@ describe("student parity navigation", () => {
     ]);
 
     expect(studentStackRoutes).toEqual([
-      "ClassWorkspace",
       "ClassDetail",
       "ModuleDetail",
       "Courses",
@@ -54,6 +59,10 @@ describe("student parity navigation", () => {
       "Performance",
       "Transcript",
       "LXP",
+    ]);
+
+    expect(studentSupportRoutes).toEqual([
+      "ClassWorkspace",
       "AiTutor",
     ]);
 
@@ -77,6 +86,11 @@ describe("student parity navigation", () => {
       "Performance",
       "Profile",
       "Transcript",
+    ]);
+
+    expect(studentSupportRouteInventory.map((route) => route.name)).toEqual([
+      "ClassWorkspace",
+      "AiTutor",
     ]);
   });
 });
