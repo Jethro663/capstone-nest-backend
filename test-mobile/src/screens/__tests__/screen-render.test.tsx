@@ -675,6 +675,49 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("No published assessments right now.");
   });
 
+  it("does not count assessments as pending when attempt loading fails", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    mockedUseAssessmentAttempts.mockImplementation(
+      ((assessmentId?: string) =>
+        createQueryState(
+          undefined,
+          assessmentId
+            ? {
+                error: {
+                  isAxiosError: true,
+                  response: {
+                    status: 503,
+                    data: {
+                      message: "Assessment attempts unavailable",
+                    },
+                  },
+                  message: "Request failed",
+                },
+              }
+            : undefined,
+        )) as ReturnType<typeof useAssessmentAttempts>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("0 tasks still need attention");
+    expect(renderedText).toContain("No published assessments right now.");
+    expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
+  });
+
   it("renders all-day school events without a midnight time label", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     mockedUseSchoolEvents.mockReturnValue(

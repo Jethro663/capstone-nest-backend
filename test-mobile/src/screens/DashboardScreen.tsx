@@ -60,11 +60,25 @@ type ClassDashboardSnapshot = {
   isRefetching: boolean;
 };
 
+function getErrorSignature(error: unknown) {
+  if (!error) return "";
+
+  if (error instanceof Error) {
+    return `${error.name}:${error.message}`;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 function areClassSnapshotsEqual(left: ClassDashboardSnapshot | undefined, right: ClassDashboardSnapshot) {
   if (!left) return false;
 
   return (
-    left.error === right.error &&
+    getErrorSignature(left.error) === getErrorSignature(right.error) &&
     left.isRefetching === right.isRefetching &&
     JSON.stringify(left.lessons) === JSON.stringify(right.lessons) &&
     JSON.stringify(left.completions) === JSON.stringify(right.completions) &&
@@ -192,7 +206,7 @@ function DashboardAssessmentAttemptBridge({
       attempts: attemptsQuery.data ?? [],
       error: attemptsQuery.error,
       isRefetching: attemptsQuery.isRefetching,
-      isResolved: attemptsQuery.data !== undefined || attemptsQuery.error != null,
+      isResolved: attemptsQuery.data !== undefined && attemptsQuery.error == null,
     }),
     [attemptsQuery.data, attemptsQuery.error, attemptsQuery.isRefetching],
   );
@@ -251,7 +265,7 @@ function DashboardClassDataBridge({
     setAssessmentAttemptMap((current) => {
       const previous = current[assessmentId];
       if (
-        previous?.error === snapshot.error &&
+        getErrorSignature(previous?.error) === getErrorSignature(snapshot.error) &&
         previous?.isRefetching === snapshot.isRefetching &&
         previous?.isResolved === snapshot.isResolved &&
         JSON.stringify(previous?.attempts ?? []) === JSON.stringify(snapshot.attempts)
