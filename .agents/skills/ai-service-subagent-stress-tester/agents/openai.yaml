@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Service Subagent Stress Tester"
+  short_description: "Repo-specific AI stress test skill"
+  default_prompt: "Use $ai-service-subagent-stress-tester to validate ai-service, LXP flows, and AI feature robustness in this repo."
