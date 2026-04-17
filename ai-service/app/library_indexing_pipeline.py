@@ -132,6 +132,10 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
               original_name,
               mime_type,
               size_bytes,
+              teacher_id,
+              class_id,
+              scope,
+              ai_enabled,
               subject_key,
               grade_level,
               teacher_visible,
@@ -140,16 +144,22 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
             FROM uploaded_files
             WHERE id = :fileId
               AND deleted_at IS NULL
-              AND scope = 'general'
+              AND (
+                scope = 'general'
+                OR (
+                  scope = 'private'
+                  AND ai_enabled = true
+                )
+              )
             """
         ),
         {"fileId": file_id},
     )
     file_row = row_result.mappings().first()
     if not file_row:
-        raise ValueError("General library file not found")
+        raise ValueError("Library file not found")
     if not file_row["subject_key"] or not file_row["grade_level"]:
-        raise ValueError("General library file is missing subject_key or grade_level")
+        raise ValueError("Library file is missing subject_key or grade_level")
 
     await db.execute(
         sa_text(
@@ -196,6 +206,10 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
                 "sourceReference": f"library:{file_id} | chunk:{chunk_order}",
                 "sourceType": "library_file",
                 "blockType": "library_file",
+                "teacherId": str(file_row["teacher_id"]) if file_row["teacher_id"] else None,
+                "classId": str(file_row["class_id"]) if file_row["class_id"] else None,
+                "scope": file_row["scope"],
+                "aiEnabled": bool(file_row["ai_enabled"]),
                 "subjectKey": file_row["subject_key"],
                 "gradeLevel": file_row["grade_level"],
                 "teacherVisible": bool(file_row["teacher_visible"]),
@@ -318,7 +332,13 @@ async def backfill_library_files(db: AsyncSession) -> dict[str, Any]:
             SELECT id
             FROM uploaded_files
             WHERE deleted_at IS NULL
-              AND scope = 'general'
+              AND (
+                scope = 'general'
+                OR (
+                  scope = 'private'
+                  AND ai_enabled = true
+                )
+              )
               AND subject_key IS NOT NULL
               AND grade_level IS NOT NULL
             ORDER BY uploaded_at ASC

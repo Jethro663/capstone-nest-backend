@@ -141,6 +141,7 @@ async def recommend_intervention_case(
         db,
         query_text=retrieval_query,
         class_id=str(intervention_case["class_id"]),
+        teacher_id=user.id,
         subject_key=normalize_library_subject_key(
             intervention_case["subject_code"],
             intervention_case["subject_name"],

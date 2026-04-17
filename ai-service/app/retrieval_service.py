@@ -187,6 +187,7 @@ async def _vector_search(
     *,
     query_text: str,
     class_id: str,
+    teacher_id: str | None = None,
     subject_key: str | None = None,
     grade_level: str | None = None,
     include_library: bool = True,
@@ -205,18 +206,34 @@ async def _vector_search(
     if include_library and subject_key and grade_level:
         params["subjectKey"] = subject_key
         params["gradeLevel"] = grade_level
-        filters = [
+        library_filters = [
             """
             (
-              c.class_id = :classId
-              OR (
-                c.source_type = 'library_file'
-                AND c.subject_key = :subjectKey
-                AND c.grade_level = :gradeLevel
+              c.source_type = 'library_file'
+              AND c.subject_key = :subjectKey
+              AND c.grade_level = :gradeLevel
+              AND (
+                c.metadata_json->>'scope' = 'general'
+                OR c.metadata_json->>'scope' IS NULL
               )
             )
             """
         ]
+        if teacher_id:
+            params["teacherId"] = teacher_id
+            library_filters.append(
+                """
+                (
+                  c.source_type = 'library_file'
+                  AND c.subject_key = :subjectKey
+                  AND c.grade_level = :gradeLevel
+                  AND c.metadata_json->>'teacherId' = :teacherId
+                  AND c.metadata_json->>'scope' = 'private'
+                  AND c.metadata_json->>'aiEnabled' = 'true'
+                )
+                """
+            )
+        filters = ["(c.class_id = :classId OR " + " OR ".join(library_filters) + ")"]
     else:
         filters = ["c.class_id = :classId"]
     query_text_template = """
@@ -469,6 +486,7 @@ async def similarity_search(
     *,
     query_text: str,
     class_id: str,
+    teacher_id: str | None = None,
     subject_key: str | None = None,
     grade_level: str | None = None,
     include_library: bool = True,
@@ -498,6 +516,7 @@ async def similarity_search(
             db,
             query_text=variant,
             class_id=class_id,
+            teacher_id=teacher_id,
             subject_key=subject_key,
             grade_level=grade_level,
             include_library=include_library,
@@ -535,6 +554,7 @@ async def preview_retrieval(
     *,
     query_text: str,
     class_id: str,
+    teacher_id: str | None = None,
     subject_key: str | None = None,
     grade_level: str | None = None,
     include_library: bool = True,
@@ -555,6 +575,7 @@ async def preview_retrieval(
         db,
         query_text=query_text,
         class_id=class_id,
+        teacher_id=teacher_id,
         subject_key=subject_key,
         grade_level=grade_level,
         include_library=include_library,
