@@ -1,8 +1,3 @@
-export type {
-  StudentParityRouteName,
-  StudentSupportRouteName,
-} from "./student-route-manifest";
-
 export type RootStackParamList = {
   MainTabs: undefined;
   ClassWorkspace: { classId: string };
@@ -15,10 +10,10 @@ export type RootStackParamList = {
   AssessmentTake: { assessmentId: string };
   AssessmentResults: { attemptId: string };
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
-  LXP: undefined;
   Chatbot: { classId?: string } | undefined;
   Performance: undefined;
   Transcript: undefined;
+  LXP: undefined;
   AiTutor: { classId?: string } | undefined;
 };
 
@@ -39,3 +34,40 @@ export type MainTabParamList = {
 export type AuthStackParamList = {
   Login: undefined;
 };
+
+export const studentTabRouteNames = [
+  "Dashboard",
+  "Classes",
+  "Assessments",
+  "JA",
+  "Announcements",
+  "Profile",
+] as const satisfies ReadonlyArray<keyof MainTabParamList>;
+
+export const studentParityStackRouteNames = [
+  "ClassDetail",
+  "ModuleDetail",
+  "Courses",
+  "Lessons",
+  "LessonDetail",
+  "AssessmentDetail",
+  "AssessmentTake",
+  "AssessmentResults",
+  "AssessmentHistory",
+  "Chatbot",
+  "Performance",
+  "Transcript",
+  "LXP",
+] as const satisfies ReadonlyArray<keyof RootStackParamList>;
+
+export const studentSupportStackRouteNames = ["ClassWorkspace", "AiTutor"] as const satisfies ReadonlyArray<
+  keyof RootStackParamList
+>;
+
+export const studentParityRouteNames = [
+  ...studentTabRouteNames,
+  ...studentParityStackRouteNames,
+] as const;
+
+export type StudentParityRouteName = (typeof studentParityRouteNames)[number];
+export type StudentSupportRouteName = (typeof studentSupportStackRouteNames)[number];
