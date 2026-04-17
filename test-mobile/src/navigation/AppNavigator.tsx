@@ -5,6 +5,7 @@ import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navi
 import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth } from "../providers/AuthProvider";
 import { BottomTabBar } from "../components/ui/BottomTabBar";
+import { DashboardScreen } from "../screens/DashboardScreen";
 import { LessonsScreen as ClassesScreen } from "../screens/LessonsScreen";
 import { AssessmentsScreen } from "../screens/AssessmentsScreen";
 import { JaScreen } from "../screens/JaScreen";
@@ -85,11 +86,12 @@ function ClassesRouteScreen(props: BottomTabScreenProps<MainTabParamList, "Class
   return <ClassesScreen {...(props as ComponentProps<typeof ClassesScreen>)} />;
 }
 
+function DashboardRouteScreen(props: BottomTabScreenProps<MainTabParamList, "Dashboard">) {
+  return <DashboardScreen {...(props as ComponentProps<typeof DashboardScreen>)} />;
+}
+
 const studentTabScreens = {
-  Dashboard: createTabPlaceholderScreen<"Dashboard">(
-    "Dashboard",
-    "Student overview routes will land here.",
-  ),
+  Dashboard: DashboardRouteScreen,
   Classes: ClassesRouteScreen,
   Assessments: AssessmentsScreen,
   JA: JaScreen,

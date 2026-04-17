@@ -5,6 +5,7 @@ import { useQueries } from "@tanstack/react-query";
 import { aiApi } from "../../api/services/ai";
 import { useAuth } from "../../providers/AuthProvider";
 import {
+  useSchoolEvents,
   useLxpCheckpointMutation,
   useLxpEligibility,
   useLxpPlaylist,
@@ -103,6 +104,7 @@ jest.mock("../../components/ui/primitives", () => {
         title ? ReactRuntime.createElement(Text, null, title) : null,
         children,
       ),
+    FloatingIconButton: component("FloatingIconButton"),
     Pill: ({ label }: { label: string }) =>
       ReactRuntime.createElement("Pill", null, ReactRuntime.createElement(Text, null, label)),
     ProgressBar: component("ProgressBar"),
@@ -168,9 +170,28 @@ jest.mock("../../api/hooks", () => ({
   useProfileUpdateMutation: jest.fn(),
   useProfileAvatarMutation: jest.fn(),
   usePerformanceSummary: jest.fn(),
+  useSchoolEvents: jest.fn(),
 }));
 
 jest.mock("../../data/mappers", () => ({
+  findContinueLearning: jest.fn(
+    (
+      subjects: Array<{ id: string; name: string }>,
+      lessonMap: Record<string, Array<{ id: string; title: string; description: string; duration: string }>>,
+    ) =>
+      subjects.flatMap((subject) =>
+        (lessonMap[subject.id] ?? []).slice(0, 1).map((lesson) => ({ lesson, subject })),
+      ),
+  ),
+  toLessonCards: jest.fn(() => [
+    {
+      id: "lesson-1",
+      title: "Lesson 1",
+      description: "Start with the newest lesson in class.",
+      duration: "15 min",
+      status: "ongoing",
+    },
+  ]),
   toTutorRecommendationCards: jest.fn(() => [
     {
       id: "checkpoint-1",
@@ -188,6 +209,12 @@ jest.mock("../../data/mappers", () => ({
     emoji: "📘",
     progress: 78,
     color: "#4f46e5",
+    bgColor: "#EEF2FF",
+    section: "Section A",
+    teacherName: "Teacher One",
+    subjectCode: "MATH-1",
+    totalLessons: 1,
+    completedLessons: 0,
   })),
   toAssessmentCard: jest.fn((assessment: { id: string }) => ({
     id: assessment.id,
@@ -279,6 +306,7 @@ const mockedUseProfile = useProfile as jest.MockedFunction<typeof useProfile>;
 const mockedUseProfileUpdateMutation = useProfileUpdateMutation as jest.MockedFunction<typeof useProfileUpdateMutation>;
 const mockedUseProfileAvatarMutation = useProfileAvatarMutation as jest.MockedFunction<typeof useProfileAvatarMutation>;
 const mockedUsePerformanceSummary = usePerformanceSummary as jest.MockedFunction<typeof usePerformanceSummary>;
+const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<typeof useSchoolEvents>;
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
 let checkpointMutateAsync: jest.Mock;
@@ -415,6 +443,20 @@ describe("mobile rendered screen flows", () => {
         classes: [{ classId: "class-1", blendedScore: 84 }],
       }) as ReturnType<typeof usePerformanceSummary>,
     );
+    mockedUseSchoolEvents.mockReturnValue(
+      createQueryState([
+        {
+          id: "event-1",
+          title: "Math remediation day",
+          startsAt: "2026-04-21T08:00:00.000Z",
+          endsAt: "2026-04-21T10:00:00.000Z",
+          location: "Room 201",
+          schoolYear: "2025-2026",
+          eventType: "school_event",
+          allDay: false,
+        },
+      ]) as ReturnType<typeof useSchoolEvents>,
+    );
 
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
@@ -463,6 +505,33 @@ describe("mobile rendered screen flows", () => {
     expect(renderedLxpText).not.toContain("âœ");
 
     expect(navigate).toHaveBeenCalledWith("AiTutor", { classId: "class-1" });
+  });
+
+  it("renders Dashboard screen shell with student home sections", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Student Home");
+    expect(renderedText).toContain("Continue Learning");
+    expect(renderedText).toContain("Today's Schedule");
+    expect(renderedText).toContain("Pending Assessments");
+    expect(renderedText).toContain("Recent Lessons");
+    expect(renderedText).toContain("School Events");
   });
 
   it("blocks tutor launch when no class is selected and shows guidance", () => {

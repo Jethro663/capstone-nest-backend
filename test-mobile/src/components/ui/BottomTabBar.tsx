@@ -19,9 +19,9 @@ const routeConfig: Record<
     inactiveIcon: "view-dashboard-outline",
   },
   Dashboard: {
-    label: "Dashboard",
-    activeIcon: "view-dashboard",
-    inactiveIcon: "view-dashboard-outline",
+    label: "Home",
+    activeIcon: "home-variant",
+    inactiveIcon: "home-variant-outline",
   },
   Classes: {
     label: "Classes",
