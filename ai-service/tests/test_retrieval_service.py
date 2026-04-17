@@ -118,7 +118,15 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "extraction_id": None,
             "chunk_text": "Teacher-only science notes.",
             "chunk_order": 0,
-            "metadata_json": {"documentId": "library:file-1:chunk:0", "isPublished": True},
+            "metadata_json": {
+                "documentId": "library:file-1:chunk:0",
+                "teacherId": "teacher-1",
+                "scope": "private",
+                "aiEnabled": True,
+                "subjectKey": "science",
+                "gradeLevel": "7",
+                "isPublished": True,
+            },
             "distance": 0.01,
         }
         general_row = {
@@ -135,7 +143,13 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "extraction_id": None,
             "chunk_text": "General science notes.",
             "chunk_order": 0,
-            "metadata_json": {"documentId": "library:file-2:chunk:0", "isPublished": True},
+            "metadata_json": {
+                "documentId": "library:file-2:chunk:0",
+                "scope": "general",
+                "subjectKey": "science",
+                "gradeLevel": "7",
+                "isPublished": True,
+            },
             "distance": 0.02,
         }
         other_teacher_row = {
@@ -152,7 +166,15 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "extraction_id": None,
             "chunk_text": "Another teacher's private notes.",
             "chunk_order": 0,
-            "metadata_json": {"documentId": "library:file-3:chunk:0", "isPublished": True},
+            "metadata_json": {
+                "documentId": "library:file-3:chunk:0",
+                "teacherId": "teacher-2",
+                "scope": "private",
+                "aiEnabled": True,
+                "subjectKey": "science",
+                "gradeLevel": "7",
+                "isPublished": True,
+            },
             "distance": 0.03,
         }
 
@@ -161,10 +183,11 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
             result.mappings.return_value = rows
             return result
 
-        async def execute_side_effect(_query, params=None):
-            if params and params.get("teacherId") == "teacher-1":
+        async def execute_side_effect(query, params=None):
+            sql = str(query)
+            if "c.metadata_json->>'teacherId' = :teacherId" in sql and "c.metadata_json->>'scope' = 'private'" in sql:
                 return build_result([teacher_owned_row, general_row])
-            return build_result([general_row])
+            return build_result([general_row, other_teacher_row])
 
         db = AsyncMock()
         db.execute = AsyncMock(side_effect=execute_side_effect)
@@ -189,22 +212,28 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("general-chunk-1", [item["id"] for item in results])
         self.assertNotIn("other-teacher-chunk-1", [item["id"] for item in results])
 
-    async def test_similarity_search_keeps_library_chunks_when_lesson_ids_are_supplied(self) -> None:
+    async def test_similarity_search_excludes_library_chunks_for_extraction_only_source_types(self) -> None:
         class_row = {
             "id": "class-chunk-1",
-            "source_type": "lesson_block",
-            "source_id": "lesson-1",
+            "source_type": "extracted_module",
+            "source_id": "extraction-1",
             "class_id": "class-1",
             "library_file_id": None,
-            "subject_key": None,
-            "grade_level": None,
-            "lesson_id": "lesson-1",
+            "subject_key": "science",
+            "grade_level": "7",
+            "lesson_id": None,
             "assessment_id": None,
             "question_id": None,
-            "extraction_id": None,
-            "chunk_text": "Class lesson content.",
+            "extraction_id": "extraction-1",
+            "chunk_text": "Class extraction content.",
             "chunk_order": 0,
-            "metadata_json": {"lessonTitle": "Lesson 1", "isPublished": True},
+            "metadata_json": {
+                "documentId": "extraction:extraction-1:section:0",
+                "teacherId": "teacher-1",
+                "subjectKey": "science",
+                "gradeLevel": "7",
+                "isPublished": True,
+            },
             "distance": 0.09,
         }
         teacher_row = {
@@ -244,7 +273,13 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "extraction_id": None,
             "chunk_text": "General science notes.",
             "chunk_order": 0,
-            "metadata_json": {"documentId": "library:file-2:chunk:0", "scope": "general", "isPublished": True},
+            "metadata_json": {
+                "documentId": "library:file-2:chunk:0",
+                "scope": "general",
+                "subjectKey": "science",
+                "gradeLevel": "7",
+                "isPublished": True,
+            },
             "distance": 0.02,
         }
 
@@ -255,9 +290,9 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
 
         async def execute_side_effect(query, params=None):
             sql = str(query)
-            if params and params.get("lessonIds") and ") AND c.lesson_id IN (" in sql:
-                return build_result([class_row])
-            return build_result([class_row, teacher_row, general_row])
+            if "c.source_type = 'library_file'" in sql:
+                return build_result([class_row, teacher_row, general_row])
+            return build_result([class_row])
 
         db = AsyncMock()
         db.execute = AsyncMock(side_effect=execute_side_effect)
@@ -274,15 +309,13 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 teacher_id="teacher-1",
                 subject_key="science",
                 grade_level="7",
-                lesson_ids=["lesson-1"],
+                source_types=["extracted_module"],
                 top_k=5,
                 policy_name="general",
             )
 
         returned_ids = [item["id"] for item in results]
-        self.assertIn("teacher-library-chunk", returned_ids)
-        self.assertIn("general-library-chunk", returned_ids)
-        self.assertIn("class-chunk-1", returned_ids)
+        self.assertEqual(returned_ids, ["class-chunk-1"])
 
 
 if __name__ == "__main__":

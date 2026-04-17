@@ -205,7 +205,10 @@ async def _vector_search(
     }
     class_filters = ["c.class_id = :classId"]
     library_filters: list[str] = []
-    if include_library and subject_key and grade_level:
+    library_allowed = include_library and subject_key and grade_level and (
+        not source_types or "library_file" in source_types
+    )
+    if library_allowed:
         params["subjectKey"] = subject_key
         params["gradeLevel"] = grade_level
         library_filters.append(
@@ -235,8 +238,6 @@ async def _vector_search(
                 )
                 """
             )
-    else:
-        library_filters = []
     query_text_template = """
         SELECT
           c.id,
