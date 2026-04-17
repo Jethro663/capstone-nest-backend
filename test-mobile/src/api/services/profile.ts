@@ -1,12 +1,6 @@
 import { apiClient } from "../client";
 import { normalizeObject, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type {
-  AssessmentHistoryQuery,
-  AssessmentHistoryResponse,
-  TranscriptQuery,
-  TranscriptResponse,
-} from "../../types/report";
 import type { StudentProfile, UpdateProfileDto } from "../../types/profile";
 
 const emptyProfile = (): StudentProfile => ({
@@ -19,21 +13,6 @@ export const profileApi = {
     const response = await apiClient.get<ApiEnvelope<StudentProfile | null>>("/profiles/me");
     const data = unwrapEnvelope(response.data);
     return data ? normalizeObject(data, emptyProfile()) : null;
-  },
-
-  async getTranscript(query?: TranscriptQuery) {
-    const response = await apiClient.get<TranscriptResponse>("/profiles/me/transcript", {
-      params: query,
-    });
-    return response.data;
-  },
-
-  async getAssessmentHistory(query?: AssessmentHistoryQuery) {
-    const response = await apiClient.get<AssessmentHistoryResponse>(
-      "/profiles/me/assessment-history",
-      { params: query },
-    );
-    return response.data;
   },
 
   async updateByUserId(userId: string, payload: UpdateProfileDto) {

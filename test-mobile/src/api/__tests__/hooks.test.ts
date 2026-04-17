@@ -16,6 +16,11 @@ jest.mock('../services/modules', () => ({ modulesApi: {} }));
 jest.mock('../services/performance', () => ({ performanceApi: {} }));
 jest.mock('../services/profile', () => ({
   profileApi: {
+    getMine: jest.fn(),
+  },
+}));
+jest.mock('../services/reports', () => ({
+  reportsApi: {
     getTranscript: jest.fn(),
     getAssessmentHistory: jest.fn(),
   },

@@ -9,6 +9,7 @@ import { lxpApi } from "./services/lxp";
 import { modulesApi } from "./services/modules";
 import { performanceApi } from "./services/performance";
 import { profileApi } from "./services/profile";
+import { reportsApi } from "./services/reports";
 import { schoolEventsApi } from "./services/school-events";
 import type { AssessmentHistoryQuery, TranscriptQuery } from "../types/report";
 import type { SchoolEventQuery } from "../types/school-event";
@@ -99,13 +100,13 @@ export const useSchoolEvents = (query?: SchoolEventQuery) =>
 export const useTranscript = (query?: TranscriptQuery) =>
   useQuery({
     queryKey: queryKeys.transcript(query),
-    queryFn: () => profileApi.getTranscript(query),
+    queryFn: () => reportsApi.getTranscript(query),
   });
 
 export const useAssessmentHistory = (query?: AssessmentHistoryQuery) =>
   useQuery({
     queryKey: queryKeys.assessmentHistory(query),
-    queryFn: () => profileApi.getAssessmentHistory(query),
+    queryFn: () => reportsApi.getAssessmentHistory(query),
   });
 
 export const useAssessments = (classId?: string) =>
