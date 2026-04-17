@@ -3,6 +3,8 @@ import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type { ClassModule } from "../../types/module";
 
+export type ModuleDetail = ClassModule;
+
 export const modulesApi = {
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<ClassModule[]>>(`/modules/class/${classId}`);

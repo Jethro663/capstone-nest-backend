@@ -8,6 +8,9 @@ import type {
   SubmitAssessmentDto,
 } from "../../types/assessment";
 
+export type AssessmentAttemptList = AssessmentAttempt[];
+export type AssessmentAttemptDetail = AttemptResult;
+
 export const assessmentsApi = {
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<Assessment[]>>(`/assessments/class/${classId}`);

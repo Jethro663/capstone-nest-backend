@@ -9,6 +9,9 @@ import { lxpApi } from "./services/lxp";
 import { modulesApi } from "./services/modules";
 import { performanceApi } from "./services/performance";
 import { profileApi } from "./services/profile";
+import { schoolEventsApi } from "./services/school-events";
+import type { AssessmentHistoryQuery, TranscriptQuery } from "../types/report";
+import type { SchoolEventQuery } from "../types/school-event";
 
 export const queryKeys = {
   classes: (studentId: string) => ["classes", studentId] as const,
@@ -16,11 +19,16 @@ export const queryKeys = {
   classModules: (classId: string) => ["class-modules", classId] as const,
   lessons: (classId: string) => ["lessons", classId] as const,
   lessonCompletions: (classId: string) => ["lesson-completions", classId] as const,
+  lessonDetail: (lessonId?: string) => ["lesson-detail", lessonId ?? "missing"] as const,
   assessments: (classId: string) => ["assessments", classId] as const,
   assessmentDetail: (assessmentId: string) => ["assessment-detail", assessmentId] as const,
   assessmentAttempts: (assessmentId: string) => ["assessment-attempts", assessmentId] as const,
   assessmentResult: (attemptId: string) => ["assessment-result", attemptId] as const,
+  assessmentHistory: (query?: AssessmentHistoryQuery) =>
+    ["assessment-history", query ?? "all"] as const,
   announcements: (classId: string) => ["announcements", classId] as const,
+  schoolEvents: (query?: SchoolEventQuery) => ["school-events", query ?? "all"] as const,
+  transcript: (query?: TranscriptQuery) => ["transcript", query ?? "all"] as const,
   performance: ["performance"] as const,
   lxpEligibility: ["lxp-eligibility"] as const,
   lxpPlaylist: (classId: string) => ["lxp-playlist", classId] as const,
@@ -29,6 +37,8 @@ export const queryKeys = {
   tutorSession: (sessionId?: string) => ["tutor-session", sessionId ?? "missing"] as const,
   jaHub: (classId?: string) => ["ja-hub", classId ?? "all"] as const,
   jaAskThread: (threadId?: string) => ["ja-ask-thread", threadId ?? "missing"] as const,
+  moduleDetail: (classId?: string, moduleId?: string) =>
+    ["module-detail", classId ?? "missing", moduleId ?? "missing"] as const,
 };
 
 export const useStudentClasses = (studentId?: string) =>
@@ -52,6 +62,13 @@ export const useLessons = (classId?: string) =>
     enabled: !!classId,
   });
 
+export const useLessonDetail = (lessonId?: string) =>
+  useQuery({
+    queryKey: queryKeys.lessonDetail(lessonId),
+    queryFn: () => lessonsApi.getById(lessonId!),
+    enabled: !!lessonId,
+  });
+
 export const useClassModules = (classId?: string) =>
   useQuery({
     queryKey: classId ? queryKeys.classModules(classId) : ["class-modules", "missing"],
@@ -59,11 +76,36 @@ export const useClassModules = (classId?: string) =>
     enabled: !!classId,
   });
 
+export const useModuleDetail = (classId?: string, moduleId?: string) =>
+  useQuery({
+    queryKey: queryKeys.moduleDetail(classId, moduleId),
+    queryFn: () => modulesApi.getByClassAndModule(classId!, moduleId!),
+    enabled: !!classId && !!moduleId,
+  });
+
 export const useLessonCompletions = (classId?: string) =>
   useQuery({
     queryKey: classId ? queryKeys.lessonCompletions(classId) : ["lesson-completions", "missing"],
     queryFn: () => lessonsApi.getCompletedByClass(classId!),
     enabled: !!classId,
+  });
+
+export const useSchoolEvents = (query?: SchoolEventQuery) =>
+  useQuery({
+    queryKey: queryKeys.schoolEvents(query),
+    queryFn: () => schoolEventsApi.getAll(query),
+  });
+
+export const useTranscript = (query?: TranscriptQuery) =>
+  useQuery({
+    queryKey: queryKeys.transcript(query),
+    queryFn: () => profileApi.getTranscript(query),
+  });
+
+export const useAssessmentHistory = (query?: AssessmentHistoryQuery) =>
+  useQuery({
+    queryKey: queryKeys.assessmentHistory(query),
+    queryFn: () => profileApi.getAssessmentHistory(query),
   });
 
 export const useAssessments = (classId?: string) =>

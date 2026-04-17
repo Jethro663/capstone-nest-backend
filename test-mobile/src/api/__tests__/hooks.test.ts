@@ -14,14 +14,30 @@ jest.mock('../services/lxp', () => ({ lxpApi: { completeCheckpoint: jest.fn() } 
 jest.mock('../services/ja', () => ({ jaApi: {} }));
 jest.mock('../services/modules', () => ({ modulesApi: {} }));
 jest.mock('../services/performance', () => ({ performanceApi: {} }));
-jest.mock('../services/profile', () => ({ profileApi: {} }));
+jest.mock('../services/profile', () => ({
+  profileApi: {
+    getTranscript: jest.fn(),
+    getAssessmentHistory: jest.fn(),
+  },
+}));
+jest.mock('../services/school-events', () => ({ schoolEventsApi: {} }));
 jest.mock('expo-constants', () => ({
   expoConfig: {
     hostUri: 'localhost:3000',
   },
 }));
 
-const { queryKeys, useLxpCheckpointMutation, useLxpPlaylist, useTutorSession } = require('../hooks');
+const {
+  queryKeys,
+  useAssessmentHistory,
+  useLessonDetail,
+  useLxpCheckpointMutation,
+  useLxpPlaylist,
+  useModuleDetail,
+  useSchoolEvents,
+  useTranscript,
+  useTutorSession,
+} = require('../hooks');
 
 describe('api hooks', () => {
   const mockedUseQuery = useQuery as jest.Mock;
@@ -55,6 +71,64 @@ describe('api hooks', () => {
       expect.objectContaining({
         queryKey: ['tutor-session', 'missing'],
         enabled: false,
+      }),
+    );
+  });
+
+  it('queries school events with the provided filters', () => {
+    const query = { schoolYear: '2025-2026' };
+
+    useSchoolEvents(query);
+
+    expect(mockedUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queryKeys.schoolEvents(query),
+      }),
+    );
+  });
+
+  it('queries transcript data with the provided filters', () => {
+    const query = { page: 2, limit: 10 };
+
+    useTranscript(query);
+
+    expect(mockedUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queryKeys.transcript(query),
+      }),
+    );
+  });
+
+  it('queries assessment history data with the provided filters', () => {
+    const query = { submission: 'submitted' as const };
+
+    useAssessmentHistory(query);
+
+    expect(mockedUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queryKeys.assessmentHistory(query),
+      }),
+    );
+  });
+
+  it('queries lesson detail by lesson id', () => {
+    useLessonDetail('lesson-1');
+
+    expect(mockedUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queryKeys.lessonDetail('lesson-1'),
+        enabled: true,
+      }),
+    );
+  });
+
+  it('queries module detail by class and module ids', () => {
+    useModuleDetail('class-1', 'module-1');
+
+    expect(mockedUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: queryKeys.moduleDetail('class-1', 'module-1'),
+        enabled: true,
       }),
     );
   });
