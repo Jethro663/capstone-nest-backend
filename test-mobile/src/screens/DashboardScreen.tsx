@@ -20,6 +20,7 @@ import {
 import { toAppError } from "../api/http";
 import {
   useAssessments,
+  useAssessmentAttempts,
   useLessonCompletions,
   useLessons,
   usePerformanceSummary,
@@ -27,12 +28,12 @@ import {
   useSchoolEvents,
   useStudentClasses,
 } from "../api/hooks";
-import { findContinueLearning, toLessonCards, toSubjectCard } from "../data/mappers";
+import { findContinueLearning, toAssessmentCard, toLessonCards, toSubjectCard } from "../data/mappers";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { computeProfileReadiness } from "./screen-flow";
 import { colors, gradients } from "../theme/tokens";
-import type { Assessment } from "../types/assessment";
+import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { Lesson, LessonCompletion } from "../types/lesson";
 
 type Props = CompositeScreenProps<
@@ -54,6 +55,7 @@ type ClassDashboardSnapshot = {
   lessons: Lesson[];
   completions: LessonCompletion[];
   assessments: Assessment[];
+  assessmentAttempts: Record<string, AssessmentAttempt[]>;
   error: unknown;
   isRefetching: boolean;
 };
@@ -66,7 +68,8 @@ function areClassSnapshotsEqual(left: ClassDashboardSnapshot | undefined, right:
     left.isRefetching === right.isRefetching &&
     JSON.stringify(left.lessons) === JSON.stringify(right.lessons) &&
     JSON.stringify(left.completions) === JSON.stringify(right.completions) &&
-    JSON.stringify(left.assessments) === JSON.stringify(right.assessments)
+    JSON.stringify(left.assessments) === JSON.stringify(right.assessments) &&
+    JSON.stringify(left.assessmentAttempts) === JSON.stringify(right.assessmentAttempts)
   );
 }
 
@@ -155,6 +158,54 @@ function buildTodaySchedule(classes: NonNullable<ReturnType<typeof useStudentCla
     .slice(0, 4);
 }
 
+type AssessmentAttemptSnapshot = {
+  attempts: AssessmentAttempt[];
+  error: unknown;
+  isRefetching: boolean;
+};
+
+function DashboardAssessmentAttemptBridge({
+  assessmentId,
+  onChange,
+  onRemove,
+  onRefreshReady,
+}: {
+  assessmentId: string;
+  onChange: (assessmentId: string, snapshot: AssessmentAttemptSnapshot) => void;
+  onRemove: (assessmentId: string) => void;
+  onRefreshReady: (assessmentId: string, refresh: () => Promise<unknown>) => void;
+}) {
+  const attemptsQuery = useAssessmentAttempts(assessmentId);
+
+  const refetchAttempts = useCallback(() => attemptsQuery.refetch(), [attemptsQuery]);
+
+  const snapshot = useMemo<AssessmentAttemptSnapshot>(
+    () => ({
+      attempts: attemptsQuery.data ?? [],
+      error: attemptsQuery.error,
+      isRefetching: attemptsQuery.isRefetching,
+    }),
+    [attemptsQuery.data, attemptsQuery.error, attemptsQuery.isRefetching],
+  );
+
+  useEffect(() => {
+    onRefreshReady(assessmentId, refetchAttempts);
+  }, [assessmentId, onRefreshReady, refetchAttempts]);
+
+  useEffect(() => {
+    onChange(assessmentId, snapshot);
+  }, [assessmentId, onChange, snapshot]);
+
+  useEffect(
+    () => () => {
+      onRemove(assessmentId);
+    },
+    [assessmentId, onRemove],
+  );
+
+  return null;
+}
+
 function DashboardClassDataBridge({
   classId,
   onChange,
@@ -169,22 +220,96 @@ function DashboardClassDataBridge({
   const lessonsQuery = useLessons(classId);
   const completionsQuery = useLessonCompletions(classId);
   const assessmentsQuery = useAssessments(classId);
+  const [assessmentAttemptMap, setAssessmentAttemptMap] = useState<Record<string, AssessmentAttemptSnapshot>>({});
+  const assessmentRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
+  const assessmentIds = useMemo(
+    () => (assessmentsQuery.data ?? []).map((assessment) => assessment.id),
+    [assessmentsQuery.data],
+  );
 
   const refetchAll = useCallback(
-    () => Promise.all([lessonsQuery.refetch(), completionsQuery.refetch(), assessmentsQuery.refetch()]),
+    () =>
+      Promise.all([
+        lessonsQuery.refetch(),
+        completionsQuery.refetch(),
+        assessmentsQuery.refetch(),
+        ...Object.values(assessmentRefreshersRef.current).map((refresh) => refresh()),
+      ]),
     [assessmentsQuery, completionsQuery, lessonsQuery],
   );
+
+  const handleAttemptChange = useCallback((assessmentId: string, snapshot: AssessmentAttemptSnapshot) => {
+    setAssessmentAttemptMap((current) => {
+      const previous = current[assessmentId];
+      if (
+        previous?.error === snapshot.error &&
+        previous?.isRefetching === snapshot.isRefetching &&
+        JSON.stringify(previous?.attempts ?? []) === JSON.stringify(snapshot.attempts)
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [assessmentId]: snapshot,
+      };
+    });
+  }, []);
+
+  const handleAttemptRemove = useCallback((assessmentId: string) => {
+    delete assessmentRefreshersRef.current[assessmentId];
+    setAssessmentAttemptMap((current) => {
+      if (!(assessmentId in current)) return current;
+      const next = { ...current };
+      delete next[assessmentId];
+      return next;
+    });
+  }, []);
+
+  const handleAttemptRefreshReady = useCallback((assessmentId: string, refresh: () => Promise<unknown>) => {
+    assessmentRefreshersRef.current[assessmentId] = refresh;
+  }, []);
+
+  useEffect(() => {
+    setAssessmentAttemptMap((current) => {
+      const activeIds = new Set(assessmentIds);
+      let changed = false;
+      const next: Record<string, AssessmentAttemptSnapshot> = {};
+
+      Object.entries(current).forEach(([assessmentId, snapshot]) => {
+        if (activeIds.has(assessmentId)) {
+          next[assessmentId] = snapshot;
+        } else {
+          delete assessmentRefreshersRef.current[assessmentId];
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [assessmentIds]);
 
   const snapshot = useMemo<ClassDashboardSnapshot>(
     () => ({
       lessons: lessonsQuery.data ?? [],
       completions: completionsQuery.data ?? [],
       assessments: assessmentsQuery.data ?? [],
-      error: lessonsQuery.error || completionsQuery.error || assessmentsQuery.error,
+      assessmentAttempts: Object.fromEntries(
+        Object.entries(assessmentAttemptMap).map(([assessmentId, attemptSnapshot]) => [assessmentId, attemptSnapshot.attempts]),
+      ),
+      error:
+        lessonsQuery.error ||
+        completionsQuery.error ||
+        assessmentsQuery.error ||
+        Object.values(assessmentAttemptMap).find((entry) => entry.error)?.error,
       isRefetching:
-        lessonsQuery.isRefetching || completionsQuery.isRefetching || assessmentsQuery.isRefetching,
+        lessonsQuery.isRefetching ||
+        completionsQuery.isRefetching ||
+        assessmentsQuery.isRefetching ||
+        Object.values(assessmentAttemptMap).some((entry) => entry.isRefetching),
     }),
     [
+      assessmentAttemptMap,
       assessmentsQuery.data,
       assessmentsQuery.error,
       assessmentsQuery.isRefetching,
@@ -212,7 +337,19 @@ function DashboardClassDataBridge({
     [classId, onRemove],
   );
 
-  return null;
+  return (
+    <>
+      {assessmentIds.map((assessmentId) => (
+        <DashboardAssessmentAttemptBridge
+          key={assessmentId}
+          assessmentId={assessmentId}
+          onChange={handleAttemptChange}
+          onRemove={handleAttemptRemove}
+          onRefreshReady={handleAttemptRefreshReady}
+        />
+      ))}
+    </>
+  );
 }
 
 export function DashboardScreen({ navigation }: Props) {
@@ -322,13 +459,32 @@ export function DashboardScreen({ navigation }: Props) {
     const subjectByClassId = new Map(subjects.map((subject) => [subject.id, subject]));
 
     return Object.values(classDataMap)
-      .flatMap((entry) => entry.assessments)
-      .filter((assessment) => assessment.isPublished)
-      .map((assessment) => ({
-        assessment,
-        subject: subjectByClassId.get(assessment.classId),
-        dueTime: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
-      }))
+      .flatMap((entry) =>
+        entry.assessments
+          .filter((assessment) => assessment.isPublished)
+          .map((assessment) => {
+            const subject = subjectByClassId.get(assessment.classId);
+            if (!subject) return null;
+
+            const card = toAssessmentCard(
+              assessment,
+              subject,
+              entry.assessmentAttempts[assessment.id] ?? [],
+            );
+
+            if (card.status === "completed") {
+              return null;
+            }
+
+            return {
+              assessment,
+              subject,
+              dueTime: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
+              status: card.status,
+            };
+          }),
+      )
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
       .sort((left, right) => left.dueTime - right.dueTime)
       .slice(0, 4);
   }, [classDataMap, subjects]);

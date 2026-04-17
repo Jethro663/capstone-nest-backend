@@ -9,6 +9,7 @@ import {
   useLessons,
   useLessonCompletions,
   useAssessments,
+  useAssessmentAttempts,
   useLxpCheckpointMutation,
   useLxpEligibility,
   useLxpPlaylist,
@@ -177,6 +178,7 @@ jest.mock("../../api/hooks", () => ({
   useLessons: jest.fn(),
   useLessonCompletions: jest.fn(),
   useAssessments: jest.fn(),
+  useAssessmentAttempts: jest.fn(),
 }));
 
 jest.mock("../../data/mappers", () => ({
@@ -316,6 +318,7 @@ const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<typeof useS
 const mockedUseLessons = useLessons as jest.MockedFunction<typeof useLessons>;
 const mockedUseLessonCompletions = useLessonCompletions as jest.MockedFunction<typeof useLessonCompletions>;
 const mockedUseAssessments = useAssessments as jest.MockedFunction<typeof useAssessments>;
+const mockedUseAssessmentAttempts = useAssessmentAttempts as jest.MockedFunction<typeof useAssessmentAttempts>;
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
 let checkpointMutateAsync: jest.Mock;
@@ -482,6 +485,10 @@ describe("mobile rendered screen flows", () => {
             : [],
         )) as ReturnType<typeof useAssessments>,
     );
+    mockedUseAssessmentAttempts.mockImplementation(
+      ((assessmentId?: string) =>
+        createQueryState(assessmentId ? [] : [])) as ReturnType<typeof useAssessmentAttempts>,
+    );
 
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
@@ -560,6 +567,66 @@ describe("mobile rendered screen flows", () => {
     expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
     expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
+  });
+
+  it("excludes submitted assessments from dashboard pending work", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    const toAssessmentCard = require("../../data/mappers").toAssessmentCard as jest.Mock;
+    toAssessmentCard.mockImplementation(
+      (
+        assessment: { id: string; classId?: string; title?: string },
+        subject: { id: string; name: string; emoji?: string },
+        attempts: Array<{ isSubmitted?: boolean }> = [],
+      ) => ({
+        id: assessment.id,
+        raw: assessment,
+        classId: assessment.classId || "class-1",
+        subjectId: subject.id,
+        title: assessment.title || `Assessment ${assessment.id}`,
+        subject: subject.name,
+        dueDate: "Tomorrow",
+        status: attempts.some((attempt) => attempt.isSubmitted) ? "completed" : "pending",
+        emoji: subject.emoji || "ðŸ“",
+        totalScore: 100,
+        attempts,
+      }),
+    );
+    mockedUseAssessmentAttempts.mockImplementation(
+      ((assessmentId?: string) =>
+        createQueryState(
+          assessmentId
+            ? [
+                {
+                  id: "attempt-1",
+                  assessmentId,
+                  studentId: "student-1",
+                  isSubmitted: true,
+                  submittedAt: "2026-04-18T09:30:00.000Z",
+                  score: 95,
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useAssessmentAttempts>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("0 tasks still need attention");
+    expect(renderedText).toContain("No published assessments right now.");
+    expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
   });
 
   it("blocks tutor launch when no class is selected and shows guidance", () => {
