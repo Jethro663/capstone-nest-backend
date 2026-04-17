@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
@@ -20,19 +19,21 @@ import {
 } from "../components/ui/primitives";
 import { toAppError } from "../api/http";
 import {
-  queryKeys,
+  useAssessments,
+  useLessonCompletions,
+  useLessons,
   usePerformanceSummary,
   useProfile,
   useSchoolEvents,
   useStudentClasses,
 } from "../api/hooks";
-import { assessmentsApi } from "../api/services/assessments";
-import { lessonsApi } from "../api/services/lessons";
 import { findContinueLearning, toLessonCards, toSubjectCard } from "../data/mappers";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { computeProfileReadiness } from "./screen-flow";
 import { colors, gradients } from "../theme/tokens";
+import type { Assessment } from "../types/assessment";
+import type { Lesson, LessonCompletion } from "../types/lesson";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Dashboard">,
@@ -48,6 +49,26 @@ type ScheduleEntry = {
   startTime: string;
   endTime: string;
 };
+
+type ClassDashboardSnapshot = {
+  lessons: Lesson[];
+  completions: LessonCompletion[];
+  assessments: Assessment[];
+  error: unknown;
+  isRefetching: boolean;
+};
+
+function areClassSnapshotsEqual(left: ClassDashboardSnapshot | undefined, right: ClassDashboardSnapshot) {
+  if (!left) return false;
+
+  return (
+    left.error === right.error &&
+    left.isRefetching === right.isRefetching &&
+    JSON.stringify(left.lessons) === JSON.stringify(right.lessons) &&
+    JSON.stringify(left.completions) === JSON.stringify(right.completions) &&
+    JSON.stringify(left.assessments) === JSON.stringify(right.assessments)
+  );
+}
 
 const DAY_TO_INDEX: Record<string, number> = {
   SU: 0,
@@ -134,11 +155,73 @@ function buildTodaySchedule(classes: NonNullable<ReturnType<typeof useStudentCla
     .slice(0, 4);
 }
 
+function DashboardClassDataBridge({
+  classId,
+  onChange,
+  onRemove,
+  onRefreshReady,
+}: {
+  classId: string;
+  onChange: (classId: string, snapshot: ClassDashboardSnapshot) => void;
+  onRemove: (classId: string) => void;
+  onRefreshReady: (classId: string, refresh: () => Promise<unknown>) => void;
+}) {
+  const lessonsQuery = useLessons(classId);
+  const completionsQuery = useLessonCompletions(classId);
+  const assessmentsQuery = useAssessments(classId);
+
+  const refetchAll = useCallback(
+    () => Promise.all([lessonsQuery.refetch(), completionsQuery.refetch(), assessmentsQuery.refetch()]),
+    [assessmentsQuery, completionsQuery, lessonsQuery],
+  );
+
+  const snapshot = useMemo<ClassDashboardSnapshot>(
+    () => ({
+      lessons: lessonsQuery.data ?? [],
+      completions: completionsQuery.data ?? [],
+      assessments: assessmentsQuery.data ?? [],
+      error: lessonsQuery.error || completionsQuery.error || assessmentsQuery.error,
+      isRefetching:
+        lessonsQuery.isRefetching || completionsQuery.isRefetching || assessmentsQuery.isRefetching,
+    }),
+    [
+      assessmentsQuery.data,
+      assessmentsQuery.error,
+      assessmentsQuery.isRefetching,
+      completionsQuery.data,
+      completionsQuery.error,
+      completionsQuery.isRefetching,
+      lessonsQuery.data,
+      lessonsQuery.error,
+      lessonsQuery.isRefetching,
+    ],
+  );
+
+  useEffect(() => {
+    onRefreshReady(classId, refetchAll);
+  }, [classId, onRefreshReady, refetchAll]);
+
+  useEffect(() => {
+    onChange(classId, snapshot);
+  }, [classId, onChange, snapshot]);
+
+  useEffect(
+    () => () => {
+      onRemove(classId);
+    },
+    [classId, onRemove],
+  );
+
+  return null;
+}
+
 export function DashboardScreen({ navigation }: Props) {
   const { user } = useAuth();
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const profileQuery = useProfile();
   const performanceQuery = usePerformanceSummary();
+  const [classDataMap, setClassDataMap] = useState<Record<string, ClassDashboardSnapshot>>({});
+  const classRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
 
   const schoolEventFilters = useMemo(() => {
     const schoolYear = classesQuery.data?.[0]?.schoolYear;
@@ -150,53 +233,78 @@ export function DashboardScreen({ navigation }: Props) {
     () => classesQuery.data?.map((classItem) => classItem.id) ?? [],
     [classesQuery.data],
   );
+  const handleClassDataChange = useCallback((classId: string, snapshot: ClassDashboardSnapshot) => {
+    setClassDataMap((current) => {
+      const previous = current[classId];
+      if (areClassSnapshotsEqual(previous, snapshot)) {
+        return current;
+      }
 
-  const lessonQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessons(classId),
-      queryFn: () => lessonsApi.getByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
+      return {
+        ...current,
+        [classId]: snapshot,
+      };
+    });
+  }, []);
 
-  const completionQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessonCompletions(classId),
-      queryFn: () => lessonsApi.getCompletedByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
+  const handleClassDataRemove = useCallback((classId: string) => {
+    delete classRefreshersRef.current[classId];
+    setClassDataMap((current) => {
+      if (!(classId in current)) return current;
+      const next = { ...current };
+      delete next[classId];
+      return next;
+    });
+  }, []);
 
-  const assessmentQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.assessments(classId),
-      queryFn: () => assessmentsApi.getByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
+  const handleClassRefreshReady = useCallback((classId: string, refresh: () => Promise<unknown>) => {
+    classRefreshersRef.current[classId] = refresh;
+  }, []);
+
+  useEffect(() => {
+    setClassDataMap((current) => {
+      const activeIds = new Set(classIds);
+      let changed = false;
+      const next: Record<string, ClassDashboardSnapshot> = {};
+
+      Object.entries(current).forEach(([classId, snapshot]) => {
+        if (activeIds.has(classId)) {
+          next[classId] = snapshot;
+        } else {
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [classIds]);
 
   const subjects = useMemo(
     () =>
-      (classesQuery.data ?? []).map((classItem, index) =>
+      (classesQuery.data ?? []).map((classItem) =>
         toSubjectCard(
           classItem,
-          lessonQueries[index]?.data ?? [],
-          completionQueries[index]?.data ?? [],
+          classDataMap[classItem.id]?.lessons ?? [],
+          classDataMap[classItem.id]?.completions ?? [],
           performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
         ),
       ),
-    [classesQuery.data, completionQueries, lessonQueries, performanceQuery.data?.classes],
+    [classDataMap, classesQuery.data, performanceQuery.data?.classes],
   );
 
   const lessonMap = useMemo(
     () =>
       Object.fromEntries(
-        subjects.map((subject, index) => [
+        subjects.map((subject) => [
           subject.id,
-          toLessonCards(lessonQueries[index]?.data ?? [], completionQueries[index]?.data ?? [], subject),
+          toLessonCards(
+            classDataMap[subject.id]?.lessons ?? [],
+            classDataMap[subject.id]?.completions ?? [],
+            subject,
+          ),
         ]),
       ),
-    [completionQueries, lessonQueries, subjects],
+    [classDataMap, subjects],
   );
 
   const continueLearning = useMemo(() => findContinueLearning(subjects, lessonMap), [lessonMap, subjects]);
@@ -213,8 +321,8 @@ export function DashboardScreen({ navigation }: Props) {
   const pendingAssessments = useMemo(() => {
     const subjectByClassId = new Map(subjects.map((subject) => [subject.id, subject]));
 
-    return assessmentQueries
-      .flatMap((query) => query.data ?? [])
+    return Object.values(classDataMap)
+      .flatMap((entry) => entry.assessments)
       .filter((assessment) => assessment.isPublished)
       .map((assessment) => ({
         assessment,
@@ -223,7 +331,7 @@ export function DashboardScreen({ navigation }: Props) {
       }))
       .sort((left, right) => left.dueTime - right.dueTime)
       .slice(0, 4);
-  }, [assessmentQueries, subjects]);
+  }, [classDataMap, subjects]);
 
   const todaySchedule = useMemo(
     () => buildTodaySchedule(classesQuery.data ?? []),
@@ -258,17 +366,13 @@ export function DashboardScreen({ navigation }: Props) {
     profileQuery.error ||
     performanceQuery.error ||
     schoolEventsQuery.error ||
-    lessonQueries.find((query) => query.error)?.error ||
-    completionQueries.find((query) => query.error)?.error ||
-    assessmentQueries.find((query) => query.error)?.error;
+    Object.values(classDataMap).find((entry) => entry.error)?.error;
   const refreshing =
     classesQuery.isRefetching ||
     profileQuery.isRefetching ||
     performanceQuery.isRefetching ||
     schoolEventsQuery.isRefetching ||
-    lessonQueries.some((query) => query.isRefetching) ||
-    completionQueries.some((query) => query.isRefetching) ||
-    assessmentQueries.some((query) => query.isRefetching);
+    Object.values(classDataMap).some((entry) => entry.isRefetching);
 
   const handleRefresh = () => {
     void Promise.all([
@@ -276,9 +380,7 @@ export function DashboardScreen({ navigation }: Props) {
       profileQuery.refetch(),
       performanceQuery.refetch(),
       schoolEventsQuery.refetch(),
-      ...lessonQueries.map((query) => query.refetch()),
-      ...completionQueries.map((query) => query.refetch()),
-      ...assessmentQueries.map((query) => query.refetch()),
+      ...Object.values(classRefreshersRef.current).map((refresh) => refresh()),
     ]);
   };
 
@@ -286,6 +388,15 @@ export function DashboardScreen({ navigation }: Props) {
 
   return (
     <ScreenScroll refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}>
+      {classIds.map((classId) => (
+        <DashboardClassDataBridge
+          key={classId}
+          classId={classId}
+          onChange={handleClassDataChange}
+          onRemove={handleClassDataRemove}
+          onRefreshReady={handleClassRefreshReady}
+        />
+      ))}
       <GradientHeader
         colors={gradients.assessments}
         eyebrow={`Ready for today, ${firstName}?`}

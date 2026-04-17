@@ -6,6 +6,9 @@ import { aiApi } from "../../api/services/ai";
 import { useAuth } from "../../providers/AuthProvider";
 import {
   useSchoolEvents,
+  useLessons,
+  useLessonCompletions,
+  useAssessments,
   useLxpCheckpointMutation,
   useLxpEligibility,
   useLxpPlaylist,
@@ -171,6 +174,9 @@ jest.mock("../../api/hooks", () => ({
   useProfileAvatarMutation: jest.fn(),
   usePerformanceSummary: jest.fn(),
   useSchoolEvents: jest.fn(),
+  useLessons: jest.fn(),
+  useLessonCompletions: jest.fn(),
+  useAssessments: jest.fn(),
 }));
 
 jest.mock("../../data/mappers", () => ({
@@ -307,6 +313,9 @@ const mockedUseProfileUpdateMutation = useProfileUpdateMutation as jest.MockedFu
 const mockedUseProfileAvatarMutation = useProfileAvatarMutation as jest.MockedFunction<typeof useProfileAvatarMutation>;
 const mockedUsePerformanceSummary = usePerformanceSummary as jest.MockedFunction<typeof usePerformanceSummary>;
 const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<typeof useSchoolEvents>;
+const mockedUseLessons = useLessons as jest.MockedFunction<typeof useLessons>;
+const mockedUseLessonCompletions = useLessonCompletions as jest.MockedFunction<typeof useLessonCompletions>;
+const mockedUseAssessments = useAssessments as jest.MockedFunction<typeof useAssessments>;
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
 let checkpointMutateAsync: jest.Mock;
@@ -457,6 +466,22 @@ describe("mobile rendered screen flows", () => {
         },
       ]) as ReturnType<typeof useSchoolEvents>,
     );
+    mockedUseLessons.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(classId ? [{ id: "lesson-1", classId, title: "Lesson 1", order: 1, isDraft: false }] : [])) as ReturnType<typeof useLessons>,
+    );
+    mockedUseLessonCompletions.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(classId ? [{ lessonId: "lesson-1", completed: false }] : [])) as ReturnType<typeof useLessonCompletions>,
+    );
+    mockedUseAssessments.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [{ id: "assessment-1", classId, title: "Assessment 1", type: "quiz", isPublished: true, dueDate: "2026-04-20T09:00:00.000Z" }]
+            : [],
+        )) as ReturnType<typeof useAssessments>,
+    );
 
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
@@ -532,6 +557,9 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Pending Assessments");
     expect(renderedText).toContain("Recent Lessons");
     expect(renderedText).toContain("School Events");
+    expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
+    expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
+    expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
   });
 
   it("blocks tutor launch when no class is selected and shows guidance", () => {
