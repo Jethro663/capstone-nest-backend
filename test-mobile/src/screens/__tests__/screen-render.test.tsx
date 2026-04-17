@@ -74,6 +74,19 @@ jest.mock("expo-constants", () => ({
   },
 }));
 
+jest.mock("expo-linear-gradient", () => {
+  const ReactRuntime = require("react") as typeof React;
+  return {
+    LinearGradient: (props: Record<string, unknown>) =>
+      ReactRuntime.createElement("LinearGradient", props, props.children),
+  };
+});
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  SafeAreaView: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
 jest.mock("../../components/ui/primitives", () => {
   const ReactRuntime = require("react") as typeof React;
   const component = (name: string) =>
@@ -627,6 +640,117 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("0 tasks still need attention");
     expect(renderedText).toContain("No published assessments right now.");
     expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
+  });
+
+  it("does not count assessments as pending until attempt data resolves", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    mockedUseAssessmentAttempts.mockImplementation(
+      ((assessmentId?: string) =>
+        createQueryState(
+          undefined,
+          assessmentId
+            ? {
+                isRefetching: true,
+              }
+            : undefined,
+        )) as ReturnType<typeof useAssessmentAttempts>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("0 tasks still need attention");
+    expect(renderedText).toContain("No published assessments right now.");
+  });
+
+  it("renders all-day school events without a midnight time label", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    mockedUseSchoolEvents.mockReturnValue(
+      createQueryState([
+        {
+          id: "event-2",
+          title: "Foundation Day",
+          startsAt: "2026-04-22T00:00:00.000Z",
+          endsAt: "2026-04-22T23:59:59.000Z",
+          location: "Main Campus",
+          schoolYear: "2025-2026",
+          eventType: "school_event",
+          allDay: true,
+        },
+      ]) as ReturnType<typeof useSchoolEvents>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Foundation Day");
+    expect(renderedText).toContain("Apr 22");
+    expect(renderedText).not.toContain("12:00 AM");
+  });
+
+  it("renders the student dashboard tab as Home and keeps Dashboard route navigation", () => {
+    const { BottomTabBar } = require("../../components/ui/BottomTabBar");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(BottomTabBar, {
+          state: {
+            index: 1,
+            routes: [
+              { key: "dashboard-key", name: "Dashboard" },
+              { key: "classes-key", name: "Classes" },
+            ],
+          },
+          descriptors: {
+            "dashboard-key": { options: {} },
+            "classes-key": { options: {} },
+          },
+          navigation: {
+            emit: jest.fn().mockReturnValue({ defaultPrevented: false }),
+            navigate,
+          },
+        }),
+      );
+    });
+
+    const homeTab = findPressableByText(testRenderer!.root, "Home");
+    act(() => {
+      homeTab.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Home");
+    expect(navigate).toHaveBeenCalledWith("Dashboard");
   });
 
   it("blocks tutor launch when no class is selected and shows guidance", () => {

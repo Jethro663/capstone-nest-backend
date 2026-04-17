@@ -55,7 +55,7 @@ type ClassDashboardSnapshot = {
   lessons: Lesson[];
   completions: LessonCompletion[];
   assessments: Assessment[];
-  assessmentAttempts: Record<string, AssessmentAttempt[]>;
+  assessmentAttempts: Record<string, AssessmentAttemptSnapshot>;
   error: unknown;
   isRefetching: boolean;
 };
@@ -103,11 +103,18 @@ function formatDueDate(value?: string | null) {
   }).format(date);
 }
 
-function formatEventDate(value?: string | null) {
+function formatEventDate(value?: string | null, allDay?: boolean) {
   if (!value) return "Date to be announced";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
+
+  if (allDay) {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  }
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -162,6 +169,7 @@ type AssessmentAttemptSnapshot = {
   attempts: AssessmentAttempt[];
   error: unknown;
   isRefetching: boolean;
+  isResolved: boolean;
 };
 
 function DashboardAssessmentAttemptBridge({
@@ -184,6 +192,7 @@ function DashboardAssessmentAttemptBridge({
       attempts: attemptsQuery.data ?? [],
       error: attemptsQuery.error,
       isRefetching: attemptsQuery.isRefetching,
+      isResolved: attemptsQuery.data !== undefined || attemptsQuery.error != null,
     }),
     [attemptsQuery.data, attemptsQuery.error, attemptsQuery.isRefetching],
   );
@@ -244,6 +253,7 @@ function DashboardClassDataBridge({
       if (
         previous?.error === snapshot.error &&
         previous?.isRefetching === snapshot.isRefetching &&
+        previous?.isResolved === snapshot.isResolved &&
         JSON.stringify(previous?.attempts ?? []) === JSON.stringify(snapshot.attempts)
       ) {
         return current;
@@ -294,9 +304,7 @@ function DashboardClassDataBridge({
       lessons: lessonsQuery.data ?? [],
       completions: completionsQuery.data ?? [],
       assessments: assessmentsQuery.data ?? [],
-      assessmentAttempts: Object.fromEntries(
-        Object.entries(assessmentAttemptMap).map(([assessmentId, attemptSnapshot]) => [assessmentId, attemptSnapshot.attempts]),
-      ),
+      assessmentAttempts: assessmentAttemptMap,
       error:
         lessonsQuery.error ||
         completionsQuery.error ||
@@ -465,11 +473,15 @@ export function DashboardScreen({ navigation }: Props) {
           .map((assessment) => {
             const subject = subjectByClassId.get(assessment.classId);
             if (!subject) return null;
+            const attemptSnapshot = entry.assessmentAttempts[assessment.id];
+            if (!attemptSnapshot?.isResolved) {
+              return null;
+            }
 
             const card = toAssessmentCard(
               assessment,
               subject,
-              entry.assessmentAttempts[assessment.id] ?? [],
+              attemptSnapshot.attempts,
             );
 
             if (card.status === "completed") {
@@ -920,7 +932,7 @@ export function DashboardScreen({ navigation }: Props) {
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{event.title}</Text>
                         <Text style={{ marginTop: 2, fontSize: 12, color: colors.textSecondary }}>
-                          {formatEventDate(event.startsAt)}
+                          {formatEventDate(event.startsAt, event.allDay)}
                         </Text>
                         <Text style={{ marginTop: 4, fontSize: 11, color: colors.muted }}>
                           {event.location || event.description || "School-wide notice"}
