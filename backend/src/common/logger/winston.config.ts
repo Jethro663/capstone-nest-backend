@@ -1,7 +1,7 @@
 import * as winston from 'winston';
 import LokiTransport from 'winston-loki';
 
-const isProd = process.env.NODE_ENV === 'production';
+const serviceName = process.env.OTEL_SERVICE_NAME || 'nexora-backend';
 
 const transports: winston.transport[] = [
   // Console transport — always enabled
@@ -10,10 +10,12 @@ const transports: winston.transport[] = [
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       winston.format.errors({ stack: true }),
       winston.format.colorize(),
-      winston.format.printf(({ timestamp, level, message, context, stack }) => {
+      winston.format.printf(
+        ({ timestamp, level, message, context, trace, stack }) => {
         const ctx = context ? `[${context}]` : '';
+        const traceText = trace ? `\n${trace}` : '';
         const err = stack ? `\n${stack}` : '';
-        return `${timestamp} ${level} ${ctx} ${message}${err}`;
+        return `${timestamp} ${level} ${ctx} ${message}${traceText}${err}`;
       }),
     ),
   }),
@@ -40,13 +42,14 @@ const transports: winston.transport[] = [
   }),
 ];
 
-// Add Loki transport in production
-if (isProd && process.env.LOKI_HOST) {
+// Add Loki transport whenever the host is configured.
+if (process.env.LOKI_HOST) {
   transports.push(
     new LokiTransport({
-      host: process.env.LOKI_HOST || 'http://localhost:3100',
+      host: process.env.LOKI_HOST,
       labels: {
-        app: 'nexora-lms-backend',
+        app: serviceName,
+        service_name: serviceName,
         environment: process.env.NODE_ENV || 'development',
       },
     }),
@@ -54,7 +57,9 @@ if (isProd && process.env.LOKI_HOST) {
 }
 
 export const winstonLogger = winston.createLogger({
-  level: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
+  level:
+    process.env.LOG_LEVEL ||
+    (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   transports,
   exitOnError: false,
 });
