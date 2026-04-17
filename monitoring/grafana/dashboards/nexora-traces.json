@@ -1,0 +1,39 @@
+{
+  "uid": "nexora-traces",
+  "title": "Nexora Traces",
+  "tags": ["nexora", "traces"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Backend Trace Search",
+      "options": {
+        "mode": "markdown",
+        "content": "Use the Tempo datasource to search traces for `service_name=nexora-backend`."
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Trace Volume",
+      "datasource": { "type": "tempo", "uid": "Tempo" },
+      "targets": [
+        {
+          "expr": "service.name=\"nexora-backend\"",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 }
+    }
+  ]
+}

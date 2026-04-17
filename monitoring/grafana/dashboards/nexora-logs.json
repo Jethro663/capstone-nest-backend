@@ -1,0 +1,29 @@
+{
+  "uid": "nexora-logs",
+  "title": "Nexora Logs",
+  "tags": ["nexora", "logs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "logs",
+      "title": "Docker Logs",
+      "datasource": { "type": "loki", "uid": "Loki" },
+      "targets": [
+        {
+          "expr": "{job=\"docker\"}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 }
+    }
+  ]
+}
