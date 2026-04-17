@@ -15,6 +15,11 @@ jest.mock('../services/ja', () => ({ jaApi: {} }));
 jest.mock('../services/modules', () => ({ modulesApi: {} }));
 jest.mock('../services/performance', () => ({ performanceApi: {} }));
 jest.mock('../services/profile', () => ({ profileApi: {} }));
+jest.mock('expo-constants', () => ({
+  expoConfig: {
+    hostUri: 'localhost:3000',
+  },
+}));
 
 const { queryKeys, useLxpCheckpointMutation, useLxpPlaylist, useTutorSession } = require('../hooks');
 
