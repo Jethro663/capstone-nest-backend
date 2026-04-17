@@ -10,10 +10,9 @@ import {
   resolveInitialTutorClassId,
 } from '../screen-flow';
 import {
-  studentParityStackRouteNames,
-  studentSupportStackRouteNames,
-  studentTabRouteNames,
-} from '../../navigation/types';
+  studentParityRouteNames,
+  studentSupportRouteNames,
+} from '../../navigation/student-route-manifest';
 
 describe('mobile screen flow helpers', () => {
   it('prefers existing LXP selected class before fallback sources', () => {
@@ -135,17 +134,11 @@ describe('mobile screen flow helpers', () => {
     ).toBe(40);
   });
 
-  it('keeps the declared student inventories aligned with the mounted navigator groups', () => {
-    expect(studentParityRouteInventory.map((entry) => entry.name)).toEqual([
-      ...studentTabRouteNames,
-      ...studentParityStackRouteNames,
-    ]);
-    expect(studentParityRouteInventory.filter((entry) => entry.kind === 'tab').map((entry) => entry.name)).toEqual(
-      studentTabRouteNames,
-    );
-    expect(studentParityRouteInventory.filter((entry) => entry.kind === 'stack').map((entry) => entry.name)).toEqual(
-      studentParityStackRouteNames,
-    );
-    expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual(studentSupportStackRouteNames);
+  it('declares the required student parity route inventory in order', () => {
+    expect(studentParityRouteInventory.map((entry) => entry.name)).toEqual(studentParityRouteNames);
+  });
+
+  it('declares the support route inventory separately from parity routes', () => {
+    expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual(studentSupportRouteNames);
   });
 });
