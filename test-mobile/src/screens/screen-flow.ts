@@ -1,3 +1,34 @@
+import { studentParityRouteNames, type StudentParityRouteName } from "../navigation/types";
+
+export type StudentParityRouteInventoryEntry = {
+  name: StudentParityRouteName;
+  kind: "tab" | "stack";
+};
+
+export const studentParityRouteInventory = [
+  { name: "Dashboard", kind: "tab" },
+  { name: "Classes", kind: "tab" },
+  { name: "ClassDetail", kind: "stack" },
+  { name: "ModuleDetail", kind: "stack" },
+  { name: "Courses", kind: "stack" },
+  { name: "Lessons", kind: "stack" },
+  { name: "LessonDetail", kind: "stack" },
+  { name: "Assessments", kind: "tab" },
+  { name: "AssessmentDetail", kind: "stack" },
+  { name: "AssessmentTake", kind: "stack" },
+  { name: "AssessmentResults", kind: "stack" },
+  { name: "AssessmentHistory", kind: "stack" },
+  { name: "Announcements", kind: "tab" },
+  { name: "JA", kind: "tab" },
+  { name: "LXP", kind: "stack" },
+  { name: "Chatbot", kind: "stack" },
+  { name: "Performance", kind: "stack" },
+  { name: "Profile", kind: "tab" },
+  { name: "Transcript", kind: "stack" },
+] as const satisfies ReadonlyArray<StudentParityRouteInventoryEntry>;
+
+export const studentParityRouteInventoryNames = studentParityRouteNames;
+
 export function resolveInitialLxpClassId(params: {
   selectedClassId?: string | null;
   eligibleClassId?: string | null;

@@ -18,6 +18,11 @@ const routeConfig: Record<
     activeIcon: "view-dashboard",
     inactiveIcon: "view-dashboard-outline",
   },
+  Dashboard: {
+    label: "Dashboard",
+    activeIcon: "view-dashboard",
+    inactiveIcon: "view-dashboard-outline",
+  },
   Classes: {
     label: "Classes",
     activeIcon: "book-open-variant",

@@ -4,6 +4,7 @@ import {
   canSendTutorMessage,
   canSubmitTutorAnswers,
   computeProfileReadiness,
+  studentParityRouteInventory,
   resolveInitialLxpClassId,
   resolveInitialTutorClassId,
 } from '../screen-flow';
@@ -126,5 +127,29 @@ describe('mobile screen flow helpers', () => {
         profilePicture: '/uploads/avatar.jpg',
       }),
     ).toBe(40);
+  });
+
+  it('declares the required student parity route inventory in order', () => {
+    expect(studentParityRouteInventory.map((entry) => entry.name)).toEqual([
+      'Dashboard',
+      'Classes',
+      'ClassDetail',
+      'ModuleDetail',
+      'Courses',
+      'Lessons',
+      'LessonDetail',
+      'Assessments',
+      'AssessmentDetail',
+      'AssessmentTake',
+      'AssessmentResults',
+      'AssessmentHistory',
+      'Announcements',
+      'JA',
+      'LXP',
+      'Chatbot',
+      'Performance',
+      'Profile',
+      'Transcript',
+    ]);
   });
 });

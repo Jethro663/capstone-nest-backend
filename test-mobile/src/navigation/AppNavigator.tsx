@@ -16,6 +16,8 @@ import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
+import { LxpScreen } from "../screens/LxpScreen";
+import { ProgressScreen } from "../screens/ProgressScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { colors } from "../theme/tokens";
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
@@ -24,6 +26,40 @@ import { resolveMobileRole } from "./role-resolver";
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
+
+function StudentRoutePlaceholder({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, paddingHorizontal: 24 }}>
+      <View
+        style={{
+          maxWidth: 360,
+          width: "100%",
+          borderRadius: 28,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.white,
+          padding: 24,
+        }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: "900", color: colors.indigo }}>Student parity route</Text>
+        <Text style={{ marginTop: 10, fontSize: 22, fontWeight: "900", color: colors.text }}>{title}</Text>
+        <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>{subtitle}</Text>
+      </View>
+    </View>
+  );
+}
+
+function DashboardRouteScreen() {
+  return <StudentRoutePlaceholder title="Dashboard" subtitle="Student overview routes will land here." />;
+}
+
+function LxpRouteScreen() {
+  return <LxpScreen {...({} as any)} />;
+}
+
+function PerformanceRouteScreen() {
+  return <ProgressScreen {...({} as any)} />;
+}
 
 const navigationTheme = {
   ...DefaultTheme,
@@ -138,6 +174,7 @@ function AuthNavigator() {
 function StudentTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+      <Tab.Screen name="Dashboard">{() => <DashboardRouteScreen />}</Tab.Screen>
       <Tab.Screen name="Classes" component={ClassesScreen} />
       <Tab.Screen name="Assessments" component={AssessmentsScreen} />
       <Tab.Screen name="JA" component={JaScreen} />
@@ -152,9 +189,39 @@ function StudentNavigator() {
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={StudentTabs} />
       <RootStack.Screen name="ClassWorkspace" component={ClassWorkspaceScreen} />
+      <RootStack.Screen name="ClassDetail">
+        {() => <StudentRoutePlaceholder title="Class Detail" subtitle="Parity route placeholder for class details." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="ModuleDetail">
+        {() => <StudentRoutePlaceholder title="Module Detail" subtitle="Parity route placeholder for module details." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="Courses">
+        {() => <StudentRoutePlaceholder title="Courses" subtitle="Parity route placeholder for the student courses view." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="Lessons">
+        {() => <StudentRoutePlaceholder title="Lessons" subtitle="Parity route placeholder for the student lessons view." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="LessonDetail">
+        {() => <StudentRoutePlaceholder title="Lesson Detail" subtitle="Parity route placeholder for a single lesson." />}
+      </RootStack.Screen>
       <RootStack.Screen name="AssessmentDetail" component={AssessmentDetailScreen} />
       <RootStack.Screen name="AssessmentTake" component={AssessmentTakeScreen} />
       <RootStack.Screen name="AssessmentResults" component={AssessmentResultsScreen} />
+      <RootStack.Screen name="AssessmentHistory">
+        {() => <StudentRoutePlaceholder title="Assessment History" subtitle="Parity route placeholder for assessment history." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="Chatbot">
+        {() => <StudentRoutePlaceholder title="Chatbot" subtitle="Parity route placeholder for the student chatbot route." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="Performance">
+        {() => <PerformanceRouteScreen />}
+      </RootStack.Screen>
+      <RootStack.Screen name="Transcript">
+        {() => <StudentRoutePlaceholder title="Transcript" subtitle="Parity route placeholder for the student transcript." />}
+      </RootStack.Screen>
+      <RootStack.Screen name="LXP">
+        {() => <LxpRouteScreen />}
+      </RootStack.Screen>
       <RootStack.Screen name="AiTutor" component={AiTutorScreen} />
     </RootStack.Navigator>
   );
@@ -175,14 +242,14 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
 function getActiveRouteName(state: any): string {
   const route = state?.routes?.[state?.index ?? 0];
   if (!route) {
-    return "Classes";
+    return "Dashboard";
   }
 
   if (route.state?.routes?.length) {
     return getActiveRouteName(route.state);
   }
 
-  return route.name || "Classes";
+  return route.name || "Dashboard";
 }
 
 export function AppNavigator() {
@@ -218,7 +285,7 @@ export function AppNavigator() {
           setCurrentRouteName("Login");
           return;
         }
-        setCurrentRouteName(mobileRole === "student" ? "Classes" : "Home");
+        setCurrentRouteName(mobileRole === "student" ? "Dashboard" : "Home");
       }}
       onStateChange={(state) => setCurrentRouteName(getActiveRouteName(state))}
     >
