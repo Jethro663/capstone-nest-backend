@@ -38,6 +38,9 @@ jest.mock("react-native", () => {
     TextInput: component("TextInput"),
     Image: component("Image"),
     RefreshControl: component("RefreshControl"),
+    Platform: {
+      OS: "ios",
+    },
     useWindowDimensions: () => ({ width: 390, height: 844 }),
     Animated: {
       Value: AnimatedValue,

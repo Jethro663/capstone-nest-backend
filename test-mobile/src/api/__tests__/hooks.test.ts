@@ -11,6 +11,8 @@ jest.mock('../services/assessments', () => ({ assessmentsApi: {} }));
 jest.mock('../services/classes', () => ({ classesApi: {} }));
 jest.mock('../services/lessons', () => ({ lessonsApi: {} }));
 jest.mock('../services/lxp', () => ({ lxpApi: { completeCheckpoint: jest.fn() } }));
+jest.mock('../services/ja', () => ({ jaApi: {} }));
+jest.mock('../services/modules', () => ({ modulesApi: {} }));
 jest.mock('../services/performance', () => ({ performanceApi: {} }));
 jest.mock('../services/profile', () => ({ profileApi: {} }));
 
