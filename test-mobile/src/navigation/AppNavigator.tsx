@@ -22,6 +22,8 @@ import { AssessmentHistoryScreen } from "../screens/AssessmentHistoryScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
+import { LxpScreen } from "../screens/LxpScreen";
+import { PerformanceScreen } from "../screens/PerformanceScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { colors } from "../theme/tokens";
 import {
@@ -95,11 +97,23 @@ function DashboardRouteScreen(props: BottomTabScreenProps<MainTabParamList, "Das
   return <DashboardScreen {...(props as ComponentProps<typeof DashboardScreen>)} />;
 }
 
+function JaRouteScreen(props: BottomTabScreenProps<MainTabParamList, "JA">) {
+  return <JaScreen {...(props as ComponentProps<typeof JaScreen>)} />;
+}
+
+function ChatbotRouteScreen(props: NativeStackScreenProps<RootStackParamList, "Chatbot">) {
+  return <JaScreen navigation={props.navigation as never} />;
+}
+
+function LxpRouteScreen(props: NativeStackScreenProps<RootStackParamList, "LXP">) {
+  return <LxpScreen navigation={props.navigation as never} route={props.route as never} />;
+}
+
 const studentTabScreens = {
   Dashboard: DashboardRouteScreen,
   Classes: ClassesRouteScreen,
   Assessments: AssessmentsScreen,
-  JA: JaScreen,
+  JA: JaRouteScreen,
   Announcements: AnnouncementsScreen,
   Profile: ProfileScreen,
 } satisfies { [K in StudentTabRouteName]: TabScreenComponent<K> };
@@ -117,22 +131,13 @@ const studentStackScreens = {
   AssessmentTake: AssessmentTakeScreen,
   AssessmentResults: AssessmentResultsScreen,
   AssessmentHistory: AssessmentHistoryScreen,
-  Chatbot: createStackPlaceholderScreen<"Chatbot">(
-    "Chatbot",
-    "Parity route placeholder for the student chatbot route.",
-  ),
-  Performance: createStackPlaceholderScreen<"Performance">(
-    "Performance",
-    "Parity route placeholder for performance analytics.",
-  ),
+  Chatbot: ChatbotRouteScreen,
+  Performance: PerformanceScreen,
   Transcript: createStackPlaceholderScreen<"Transcript">(
     "Transcript",
     "Parity route placeholder for the student transcript.",
   ),
-  LXP: createStackPlaceholderScreen<"LXP">(
-    "LXP",
-    "Parity route placeholder for learner experience overview.",
-  ),
+  LXP: LxpRouteScreen,
 } satisfies { [K in StudentStackRouteName]: StackScreenComponent<K> };
 
 const studentSupportScreens = {

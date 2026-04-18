@@ -1,43 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Pressable, Text, TextInput, View } from "react-native";
-import {
-  Card,
-  EmptyState,
-  GradientHeader,
-  Pill,
-  Refreshable,
-  ScreenScroll,
-  SectionTitle,
-} from "../components/ui/primitives";
 import { toAppError } from "../api/http";
-import { useJaHub, useLxpEligibility, useLxpPlaylist } from "../api/hooks";
+import { useJaHub } from "../api/hooks";
 import { jaApi } from "../api/services/ja";
+import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
 import { useAuth } from "../providers/AuthProvider";
-import type { MainTabParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
 
-type Props = BottomTabScreenProps<MainTabParamList, "JA">;
-type JaMiniTab = "chatbot" | "lxp";
+type Props = {
+  navigation: {
+    navigate: (routeName: never, params?: never) => void;
+  };
+};
+type JaMiniTab = "practice" | "ask" | "review";
 
-export function JaScreen(_: Props) {
+export function JaScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<JaMiniTab>("chatbot");
+  const [activeTab, setActiveTab] = useState<JaMiniTab>("ask");
   const [selectedClassId, setSelectedClassId] = useState<string | undefined>();
   const [threadId, setThreadId] = useState<string | undefined>();
   const [message, setMessage] = useState("");
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; role: "student" | "assistant"; content: string }>>([]);
-  const [showLxpLockedModal, setShowLxpLockedModal] = useState(false);
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
   const jaHubQuery = useJaHub(selectedClassId);
-  const eligibilityQuery = useLxpEligibility();
-  const playlistQuery = useLxpPlaylist(selectedClassId);
 
   useEffect(() => {
-    if (selectedClassId || !jaHubQuery.data?.classes.length) return;
+    if (selectedClassId || !jaHubQuery.data?.classes.length) {
+      return;
+    }
+
     setSelectedClassId(jaHubQuery.data.selectedClassId || jaHubQuery.data.classes[0].id);
   }, [jaHubQuery.data, selectedClassId]);
 
@@ -46,6 +40,7 @@ export function JaScreen(_: Props) {
       setChatMessages([]);
       return;
     }
+
     void (async () => {
       try {
         const thread = await jaApi.getAskThread(threadId);
@@ -56,35 +51,41 @@ export function JaScreen(_: Props) {
     })();
   }, [threadId]);
 
-  const eligibleClassIds = useMemo(
-    () => new Set((eligibilityQuery.data?.eligibleClasses ?? []).map((entry) => entry.classId)),
-    [eligibilityQuery.data?.eligibleClasses],
-  );
-  const lxpEnabled = Boolean(selectedClassId && eligibleClassIds.has(selectedClassId));
+  useEffect(() => {
+    setThreadId(jaHubQuery.data?.ask.threads[0]?.id);
+    setChatMessages([]);
+    setChatError(null);
+  }, [selectedClassId, jaHubQuery.data?.ask.threads]);
 
-  const openLxpTab = () => {
-    if (lxpEnabled) {
-      setActiveTab("lxp");
-      return;
-    }
-    setShowLxpLockedModal(true);
-  };
+  const practiceRecommendations = jaHubQuery.data?.practice.recommendations ?? [];
+  const practiceSessions = jaHubQuery.data?.practice.sessions ?? [];
+  const reviewSessions = jaHubQuery.data?.review.sessions ?? [];
+  const askThreads = jaHubQuery.data?.ask.threads ?? [];
+
+  const headlineRecommendation = useMemo(
+    () => practiceRecommendations[0],
+    [practiceRecommendations],
+  );
 
   const sendChatMessage = async () => {
     if (!selectedClassId || !message.trim()) return;
+
     try {
       setSending(true);
       setChatError(null);
+
       let resolvedThreadId = threadId;
       if (!resolvedThreadId) {
         const created = await jaApi.createAskThread({ classId: selectedClassId });
         resolvedThreadId = created.thread.id;
         setThreadId(resolvedThreadId);
       }
-      const sent = await jaApi.sendAskMessage(resolvedThreadId, message.trim());
+
+      const trimmedMessage = message.trim();
+      const sent = await jaApi.sendAskMessage(resolvedThreadId, trimmedMessage);
       setChatMessages((current) => [
         ...current,
-        { id: `local-${Date.now()}`, role: "student", content: message.trim() },
+        { id: `local-${Date.now()}`, role: "student", content: trimmedMessage },
         sent.message,
       ]);
       setMessage("");
@@ -95,57 +96,72 @@ export function JaScreen(_: Props) {
     }
   };
 
-  const refreshing = jaHubQuery.isRefetching || eligibilityQuery.isRefetching || playlistQuery.isRefetching;
+  const openTutor = () => {
+    navigation.navigate("AiTutor" as never, (selectedClassId ? { classId: selectedClassId } : undefined) as never);
+  };
+
+  const openAssessmentHistory = () => {
+    navigation.navigate(
+      "AssessmentHistory" as never,
+      (selectedClassId ? { classId: selectedClassId } : undefined) as never,
+    );
+  };
 
   return (
     <ScreenScroll
       refreshControl={
         <Refreshable
-          refreshing={refreshing}
+          refreshing={jaHubQuery.isRefetching}
           onRefresh={() => {
-            void Promise.all([jaHubQuery.refetch(), eligibilityQuery.refetch(), playlistQuery.refetch()]);
+            void jaHubQuery.refetch();
           }}
         />
       }
     >
-      <GradientHeader colors={gradients.ja} eyebrow={`Hi ${user?.firstName || "Student"} 👋`} title="JA">
+      <GradientHeader colors={gradients.ja} eyebrow={`Hi ${user?.firstName || "Student"} 👋`} title="JA Hub">
         <Text style={{ marginTop: 10, color: "rgba(255,255,255,0.84)", fontSize: 12 }}>
-          AI Chatbot and Learner Path now live in one mission control.
+          Practice, ask questions, and revisit weak areas with class-grounded AI support.
         </Text>
       </GradientHeader>
 
       <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
         <Card>
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <Pressable
-              onPress={() => setActiveTab("chatbot")}
-              style={{
-                flex: 1,
-                borderRadius: 999,
-                alignItems: "center",
-                paddingVertical: 10,
-                backgroundColor: activeTab === "chatbot" ? colors.indigo : colors.paleIndigo,
-              }}
-            >
-              <Text style={{ color: activeTab === "chatbot" ? colors.white : colors.indigo, fontSize: 12, fontWeight: "800" }}>
-                AI Chatbot
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={openLxpTab}
-              style={{
-                flex: 1,
-                borderRadius: 999,
-                alignItems: "center",
-                paddingVertical: 10,
-                backgroundColor: activeTab === "lxp" ? colors.amber : colors.paleAmber,
-                opacity: lxpEnabled || activeTab === "lxp" ? 1 : 0.82,
-              }}
-            >
-              <Text style={{ color: activeTab === "lxp" ? colors.white : colors.orange, fontSize: 12, fontWeight: "800" }}>
-                Learner Path (LXP)
-              </Text>
-            </Pressable>
+            {([
+              { key: "practice", label: "Practice", activeColor: colors.orange, idleColor: colors.paleAmber },
+              { key: "ask", label: "Ask", activeColor: colors.indigo, idleColor: colors.paleIndigo },
+              { key: "review", label: "Review", activeColor: colors.green, idleColor: colors.paleGreen },
+            ] as const).map((tab) => (
+              <Pressable
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                style={{
+                  flex: 1,
+                  borderRadius: 999,
+                  alignItems: "center",
+                  paddingVertical: 10,
+                  backgroundColor: activeTab === tab.key ? tab.activeColor : tab.idleColor,
+                }}
+              >
+                <Text
+                  style={{
+                    color: activeTab === tab.key ? colors.white : colors.text,
+                    fontSize: 12,
+                    fontWeight: "800",
+                  }}
+                >
+                  {tab.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Card>
+
+        <Card>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <Pill label={`${practiceRecommendations.length} recommendations`} backgroundColor={colors.paleAmber} color={colors.orange} />
+            <Pill label={`${askThreads.length} ask threads`} backgroundColor={colors.paleIndigo} color={colors.indigo} />
+            <Pill label={`${reviewSessions.length} review sessions`} backgroundColor={colors.paleGreen} color={colors.green} />
           </View>
         </Card>
 
@@ -174,10 +190,10 @@ export function JaScreen(_: Props) {
             </View>
           </Card>
         ) : (
-          <EmptyState emoji="🤖" title="Loading JA classes" subtitle="Fetching your class context..." />
+          <EmptyState emoji="🤖" title="Loading JA classes" subtitle="Fetching your class-grounded JA hub..." />
         )}
 
-        {activeTab === "chatbot" ? (
+        {activeTab === "practice" ? (
           <>
             <Card style={{ backgroundColor: "#FFF8E7" }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -191,30 +207,131 @@ export function JaScreen(_: Props) {
                     backgroundColor: "#FDE68A",
                   }}
                 >
-                  <MaterialCommunityIcons name="robot-happy" size={24} color={colors.orange} />
+                  <MaterialCommunityIcons name="sword-cross" size={24} color={colors.orange} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "900", color: "#92400E" }}>Class-safe AI chatbot</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "900", color: "#92400E" }}>Practice missions</Text>
                   <Text style={{ marginTop: 4, fontSize: 12, color: "#92400E" }}>
-                    Ask JA about lessons, weak topics, and review strategy based on your class context.
+                    {headlineRecommendation?.reason || "JA uses your class context to surface grounded practice priorities."}
                   </Text>
                 </View>
               </View>
-              {jaHubQuery.data?.practice.recommendations?.[0] ? (
-                <View style={{ marginTop: 10 }}>
-                  <Pill label="Suggested focus" backgroundColor={colors.paleAmber} color={colors.orange} />
-                  <Text style={{ marginTop: 8, fontSize: 12, color: colors.textSecondary }}>
-                    {jaHubQuery.data.practice.recommendations[0].reason}
+              <Pressable
+                onPress={openTutor}
+                style={{
+                  marginTop: 14,
+                  alignSelf: "flex-start",
+                  borderRadius: 999,
+                  backgroundColor: colors.orange,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <MaterialCommunityIcons name="rocket-launch" size={14} color={colors.white} />
+                <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Open tutor practice</Text>
+              </Pressable>
+            </Card>
+
+            {practiceRecommendations.length === 0 ? (
+              <EmptyState
+                emoji="🎯"
+                title="No practice recommendations yet"
+                subtitle="JA will show practice missions here once the backend has enough signal for your selected class."
+              />
+            ) : (
+              <View style={{ gap: 10 }}>
+                {practiceRecommendations.map((recommendation) => (
+                  <Card key={recommendation.id}>
+                    <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{recommendation.title}</Text>
+                    <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+                      {recommendation.reason}
+                    </Text>
+                    <Text style={{ marginTop: 6, fontSize: 11, fontWeight: "800", color: colors.orange }}>
+                      Focus: {recommendation.focusText}
+                    </Text>
+                  </Card>
+                ))}
+              </View>
+            )}
+
+            <Card>
+              <SectionTitle title="Session history" />
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                {practiceSessions.length
+                  ? `${practiceSessions.length} practice session${practiceSessions.length === 1 ? "" : "s"} recorded for this class.`
+                  : "No practice sessions have been recorded for this class yet."}
+              </Text>
+            </Card>
+          </>
+        ) : null}
+
+        {activeTab === "ask" ? (
+          <>
+            <Card style={{ backgroundColor: "#EEF2FF" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 999,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#C7D2FE",
+                  }}
+                >
+                  <MaterialCommunityIcons name="robot-happy" size={24} color={colors.indigo} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "900", color: colors.indigo }}>Ask Nexora</Text>
+                  <Text style={{ marginTop: 4, fontSize: 12, color: colors.indigo }}>
+                    Ask class-safe questions about lessons, weak topics, and study strategy for the selected class.
                   </Text>
                 </View>
-              ) : null}
+              </View>
             </Card>
+
+            {askThreads.length ? (
+              <Card>
+                <SectionTitle title="Recent threads" />
+                <View style={{ gap: 8 }}>
+                  {askThreads.map((thread) => (
+                    <Pressable
+                      key={thread.id}
+                      onPress={() => setThreadId(thread.id)}
+                      style={{
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: thread.id === threadId ? colors.indigo : colors.border,
+                        backgroundColor: thread.id === threadId ? colors.paleIndigo : colors.white,
+                        padding: 12,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>
+                        {thread.title || "Untitled ask thread"}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
+                        {new Date(thread.updatedAt).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </Card>
+            ) : null}
 
             <Card>
               <SectionTitle title="Chat" />
               {chatMessages.length === 0 ? (
                 <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                  No thread yet. Ask JA to explain a topic in simpler terms or to generate quick practice prompts.
+                  No thread yet. Ask a question about your lesson or the topic you want to review.
                 </Text>
               ) : (
                 <View style={{ gap: 8 }}>
@@ -242,7 +359,7 @@ export function JaScreen(_: Props) {
                 <TextInput
                   value={message}
                   onChangeText={setMessage}
-                  placeholder="Ask JA anything class-grounded..."
+                  placeholder="Ask a question about your lesson"
                   placeholderTextColor={colors.muted}
                   style={{
                     flex: 1,
@@ -275,91 +392,83 @@ export function JaScreen(_: Props) {
               {chatError ? <Text style={{ marginTop: 8, fontSize: 11, color: colors.red }}>{chatError}</Text> : null}
             </Card>
           </>
-        ) : (
-          <Card>
-            <SectionTitle title="Learner Path" />
-            {!lxpEnabled ? (
-              <EmptyState
-                emoji="🔒"
-                title="Not unlocked yet"
-                subtitle="Keep building momentum first. Learner Path opens once your class qualifies."
-              />
-            ) : (
-              <View style={{ gap: 10 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Checkpoint progress</Text>
-                  <Pill
-                    label={`${playlistQuery.data?.progress.completionPercent ?? 0}%`}
-                    backgroundColor={colors.paleIndigo}
-                    color={colors.indigo}
-                  />
+        ) : null}
+
+        {activeTab === "review" ? (
+          <>
+            <Card style={{ backgroundColor: "#ECFDF3" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View
+                  style={{
+                    width: 50,
+                    height: 50,
+                    borderRadius: 999,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#BBF7D0",
+                  }}
+                >
+                  <MaterialCommunityIcons name="history" size={24} color={colors.green} />
                 </View>
-                {(playlistQuery.data?.checkpoints ?? []).length === 0 ? (
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                    No checkpoints available for this class yet.
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "900", color: colors.green }}>Review weak areas</Text>
+                  <Text style={{ marginTop: 4, fontSize: 12, color: colors.green }}>
+                    Revisit past assessment attempts and recent JA review sessions for this class.
                   </Text>
-                ) : (
-                  playlistQuery.data?.checkpoints.map((checkpoint) => (
+                </View>
+              </View>
+              <Pressable
+                onPress={openAssessmentHistory}
+                style={{
+                  marginTop: 14,
+                  alignSelf: "flex-start",
+                  borderRadius: 999,
+                  backgroundColor: colors.green,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <MaterialCommunityIcons name="clipboard-search" size={14} color={colors.white} />
+                <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Open assessment history</Text>
+              </Pressable>
+            </Card>
+
+            <Card>
+              <SectionTitle title="Review session history" />
+              {reviewSessions.length === 0 ? (
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                  No JA review sessions have been recorded for this class yet.
+                </Text>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {reviewSessions.map((session, index) => (
                     <View
-                      key={checkpoint.id}
+                      key={`${session.id}-${index}`}
                       style={{
                         borderRadius: 14,
                         borderWidth: 1,
                         borderColor: colors.border,
                         padding: 12,
-                        backgroundColor: checkpoint.isCompleted ? colors.paleGreen : colors.white,
+                        backgroundColor: colors.white,
                       }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>
+                        Review session {index + 1}
+                      </Text>
                       <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-                        {checkpoint.isCompleted ? "Completed" : `+${checkpoint.xpAwarded} XP waiting`}
+                        Session ID: {session.id}
                       </Text>
                     </View>
-                  ))
-                )}
-              </View>
-            )}
-          </Card>
-        )}
+                  ))}
+                </View>
+              )}
+            </Card>
+          </>
+        ) : null}
       </View>
-
-      {showLxpLockedModal ? (
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            alignItems: "center",
-            justifyContent: "center",
-            paddingHorizontal: 24,
-            backgroundColor: "rgba(15, 23, 42, 0.35)",
-          }}
-        >
-          <View style={{ width: "100%", borderRadius: 20, backgroundColor: colors.white, padding: 20 }}>
-            <Text style={{ fontSize: 22 }}>🤖</Text>
-            <Text style={{ marginTop: 8, fontSize: 17, fontWeight: "900", color: colors.text }}>
-              Learner Path is still locked
-            </Text>
-            <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-              Not yet, champion. Keep learning and JA will unlock this mode when it matters most.
-            </Text>
-            <Pressable
-              onPress={() => setShowLxpLockedModal(false)}
-              style={{
-                marginTop: 14,
-                borderRadius: 14,
-                backgroundColor: colors.text,
-                alignItems: "center",
-                paddingVertical: 12,
-              }}
-            >
-              <Text style={{ color: colors.white, fontWeight: "800" }}>Got it</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
     </ScreenScroll>
   );
 }

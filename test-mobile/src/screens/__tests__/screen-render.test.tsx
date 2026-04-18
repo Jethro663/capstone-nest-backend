@@ -3236,6 +3236,28 @@ describe("mobile rendered screen flows", () => {
     ).toBeTruthy();
   });
 
+  it("renders the performance parity screen", () => {
+    const { PerformanceScreen } = require("../PerformanceScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(PerformanceScreen, {
+          navigation: {} as never,
+          route: { key: "Performance", name: "Performance" } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Performance overview"),
+      ),
+    ).toBeTruthy();
+  });
+
   it("renders Assessments screen and opens assessment details from a card", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
     const navigate = jest.fn();

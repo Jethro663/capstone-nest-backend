@@ -115,7 +115,7 @@ export function AiTutorScreen({ route, navigation }: Props) {
 
   return (
     <ScreenScroll>
-      <GradientHeader colors={gradients.lxp} eyebrow="Grounded AI Tutor" title="J.A.K.I.P.I.R.">
+      <GradientHeader colors={gradients.lxp} eyebrow="Grounded AI Tutor" title="Ask Nexora">
         <Pressable
           onPress={() => navigation.goBack()}
           style={{
