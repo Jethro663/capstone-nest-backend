@@ -20,6 +20,7 @@ import {
   useAssessments,
   useAssessmentAttempts,
   useAssessmentResult,
+  useAssessmentSubmitMutation,
   useLxpCheckpointMutation,
   useLxpEligibility,
   useLxpPlaylist,
@@ -175,6 +176,15 @@ jest.mock("../../api/services/ai", () => ({
 jest.mock("../../api/services/assessments", () => ({
   assessmentsApi: {
     getByClass: jest.fn().mockResolvedValue([]),
+    getOngoingAttempt: jest.fn().mockResolvedValue(null),
+    startAttempt: jest.fn().mockResolvedValue({
+      attempt: {
+        id: "attempt-ongoing",
+        assessmentId: "assessment-1",
+        startedAt: "2026-04-18T09:00:00.000Z",
+      },
+    }),
+    getStudentAttempts: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -231,6 +241,7 @@ jest.mock("../../api/hooks", () => ({
   useAssessments: jest.fn(),
   useAssessmentAttempts: jest.fn(),
   useAssessmentResult: jest.fn(),
+  useAssessmentSubmitMutation: jest.fn(),
 }));
 
 jest.mock("../../data/mappers", () => ({
@@ -390,9 +401,17 @@ const mockedUseAssessmentHistory = useAssessmentHistory as jest.MockedFunction<t
 const mockedUseAssessments = useAssessments as jest.MockedFunction<typeof useAssessments>;
 const mockedUseAssessmentAttempts = useAssessmentAttempts as jest.MockedFunction<typeof useAssessmentAttempts>;
 const mockedUseAssessmentResult = useAssessmentResult as jest.MockedFunction<typeof useAssessmentResult>;
+const mockedUseAssessmentSubmitMutation = useAssessmentSubmitMutation as jest.MockedFunction<
+  typeof useAssessmentSubmitMutation
+>;
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedUseQueryClient = useQueryClient as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
+const mockedAssessmentsApi = require("../../api/services/assessments").assessmentsApi as {
+  getOngoingAttempt: jest.Mock;
+  startAttempt: jest.Mock;
+  getStudentAttempts: jest.Mock;
+};
 let checkpointMutateAsync: jest.Mock;
 let lessonCompleteMutateAsync: jest.Mock;
 let profileUpdateMutateAsync: jest.Mock;
@@ -818,6 +837,11 @@ describe("mobile rendered screen flows", () => {
       ((assessmentId?: string) =>
         createQueryState(assessmentId ? [] : [])) as ReturnType<typeof useAssessmentAttempts>,
     );
+    mockedUseAssessmentSubmitMutation.mockReturnValue({
+      mutateAsync: jest.fn().mockResolvedValue(undefined),
+      isPending: false,
+      error: null,
+    } as ReturnType<typeof useAssessmentSubmitMutation>);
     mockedUseAssessmentResult.mockImplementation(
       ((attemptId?: string) =>
         createQueryState(
@@ -3351,6 +3375,30 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
+  it("uses an expanded first page for route-scoped assessment history", () => {
+    const { AssessmentHistoryScreen } = require("../AssessmentHistoryScreen");
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(AssessmentHistoryScreen, {
+          navigation: { navigate: jest.fn(), goBack: jest.fn() } as never,
+          route: {
+            key: "AssessmentHistory",
+            name: "AssessmentHistory",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
+    });
+
+    expect(mockedUseAssessmentHistory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        page: 1,
+        limit: 1000,
+      }),
+    );
+  });
+
   it("routes assessment results back to assessment detail without fabricating classId", () => {
     const { AssessmentResultsScreen } = require("../AssessmentResultsScreen");
     const navigate = jest.fn();
@@ -3400,6 +3448,47 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
       assessmentId: "assessment-1",
     });
+  });
+
+  it("blocks assessment take submission when attempt preparation fails", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+    mockedAssessmentsApi.getOngoingAttempt.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: {
+          message: "Attempt history unavailable",
+        },
+      },
+      message: "Attempt history unavailable",
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: { replace: jest.fn(), goBack: jest.fn() } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Unable to prepare this attempt");
+    expect(renderedText).toContain("Attempt history unavailable");
+    expect(() => findPressableByText(testRenderer!.root, "Submit Assessment")).toThrow();
   });
 
   it("surfaces assessments backend error state in rendered screen flow", () => {

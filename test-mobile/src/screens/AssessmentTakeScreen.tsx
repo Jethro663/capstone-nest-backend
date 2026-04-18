@@ -58,6 +58,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
   const [error, setError] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [attemptReady, setAttemptReady] = useState(false);
+  const [attemptPreparationFailed, setAttemptPreparationFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +66,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
     const prepareAttempt = async () => {
       try {
         setAttemptReady(false);
+        setAttemptPreparationFailed(false);
         setError("");
 
         const ongoingAttempt = await assessmentsApi.getOngoingAttempt(assessmentId);
@@ -84,16 +86,14 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
             (currentAttempt?.attempt as { draftResponses?: DraftResponse[] } | undefined)?.draftResponses,
           ),
         );
+        setAttemptReady(true);
       } catch (rawError) {
         if (!active) {
           return;
         }
 
+        setAttemptPreparationFailed(true);
         setError(toAppError(rawError).message);
-      } finally {
-        if (active) {
-          setAttemptReady(true);
-        }
       }
     };
 
@@ -198,7 +198,18 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
           </Card>
         ) : null}
 
-        {assessmentType !== "file_upload"
+        {attemptPreparationFailed ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+              Unable to prepare this attempt
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {error || "The assessment attempt could not be prepared right now."}
+            </Text>
+          </Card>
+        ) : null}
+
+        {assessmentType !== "file_upload" && attemptReady
           ? questions.map((question, index) => (
               <Card key={question.id}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
@@ -269,15 +280,20 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
             ))
           : null}
 
-        {!!error && (
+        {!!error && !attemptPreparationFailed && (
           <View style={{ borderRadius: 16, backgroundColor: colors.paleRed, padding: 12 }}>
             <Text style={{ color: colors.red, fontSize: 12, fontWeight: "700" }}>{error}</Text>
           </View>
         )}
 
-        {assessmentType !== "file_upload" ? (
+        {assessmentType !== "file_upload" && !attemptPreparationFailed ? (
           <Pressable
-            onPress={() => void handleSubmit()}
+            onPress={() => {
+              if (!attemptReady || submitMutation.isPending) {
+                return;
+              }
+              void handleSubmit();
+            }}
             style={{
               borderRadius: 18,
               backgroundColor: colors.text,

@@ -27,13 +27,14 @@ function formatDate(value?: string | null) {
 export function AssessmentHistoryScreen({ route, navigation }: Props) {
   const routeAssessmentId = route.params?.assessmentId;
   const routeClassId = route.params?.classId;
+  const isScopedHistory = !!routeAssessmentId || !!routeClassId;
   const [search, setSearch] = useState("");
   const [submission, setSubmission] = useState<SubmissionFilter>("all");
   const [page, setPage] = useState(1);
 
   const historyQuery = useAssessmentHistory({
-    page,
-    limit: 10,
+    page: isScopedHistory ? 1 : page,
+    limit: isScopedHistory ? 1000 : 10,
     submission,
     search: search.trim() || undefined,
   });
@@ -245,7 +246,7 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
           })
         )}
 
-        {(historyQuery.data?.totalPages ?? 1) > 1 ? (
+        {!isScopedHistory && (historyQuery.data?.totalPages ?? 1) > 1 ? (
           <Card>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <Text style={{ fontSize: 12, color: colors.textSecondary }}>
