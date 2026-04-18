@@ -6,7 +6,11 @@ import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-
 import { useAuth } from "../providers/AuthProvider";
 import { BottomTabBar } from "../components/ui/BottomTabBar";
 import { DashboardScreen } from "../screens/DashboardScreen";
+import { ClassDetailScreen } from "../screens/ClassDetailScreen";
+import { CoursesScreen } from "../screens/CoursesScreen";
 import { LessonsScreen as ClassesScreen } from "../screens/LessonsScreen";
+import { LessonDetailScreen } from "../screens/LessonDetailScreen";
+import { ModuleDetailScreen } from "../screens/ModuleDetailScreen";
 import { AssessmentsScreen } from "../screens/AssessmentsScreen";
 import { JaScreen } from "../screens/JaScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
@@ -100,26 +104,14 @@ const studentTabScreens = {
 } satisfies { [K in StudentTabRouteName]: TabScreenComponent<K> };
 
 const studentStackScreens = {
-  ClassDetail: createStackPlaceholderScreen<"ClassDetail">(
-    "Class Detail",
-    "Parity route placeholder for class details.",
-  ),
-  ModuleDetail: createStackPlaceholderScreen<"ModuleDetail">(
-    "Module Detail",
-    "Parity route placeholder for module details.",
-  ),
-  Courses: createStackPlaceholderScreen<"Courses">(
-    "Courses",
-    "Parity route placeholder for the student courses view.",
-  ),
+  ClassDetail: ClassDetailScreen,
+  ModuleDetail: ModuleDetailScreen,
+  Courses: CoursesScreen,
   Lessons: createStackPlaceholderScreen<"Lessons">(
     "Lessons",
     "Parity route placeholder for the student lessons view.",
   ),
-  LessonDetail: createStackPlaceholderScreen<"LessonDetail">(
-    "Lesson Detail",
-    "Parity route placeholder for a single lesson.",
-  ),
+  LessonDetail: LessonDetailScreen,
   AssessmentDetail: AssessmentDetailScreen,
   AssessmentTake: AssessmentTakeScreen,
   AssessmentResults: AssessmentResultsScreen,

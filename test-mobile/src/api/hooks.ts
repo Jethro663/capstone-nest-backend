@@ -20,6 +20,8 @@ export const queryKeys = {
   classModules: (classId: string) => ["class-modules", classId] as const,
   lessons: (classId: string) => ["lessons", classId] as const,
   lessonCompletions: (classId: string) => ["lesson-completions", classId] as const,
+  lessonCompletionStatus: (lessonId?: string) =>
+    ["lesson-completion-status", lessonId ?? "missing"] as const,
   lessonDetail: (lessonId?: string) => ["lesson-detail", lessonId ?? "missing"] as const,
   assessments: (classId: string) => ["assessments", classId] as const,
   assessmentDetail: (assessmentId: string) => ["assessment-detail", assessmentId] as const,
@@ -67,6 +69,13 @@ export const useLessonDetail = (lessonId?: string) =>
   useQuery({
     queryKey: queryKeys.lessonDetail(lessonId),
     queryFn: () => lessonsApi.getById(lessonId!),
+    enabled: !!lessonId,
+  });
+
+export const useLessonCompletionStatus = (lessonId?: string) =>
+  useQuery({
+    queryKey: queryKeys.lessonCompletionStatus(lessonId),
+    queryFn: () => lessonsApi.getCompletionStatus(lessonId!),
     enabled: !!lessonId,
   });
 

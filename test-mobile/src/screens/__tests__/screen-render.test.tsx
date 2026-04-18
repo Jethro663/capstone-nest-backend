@@ -1,13 +1,20 @@
 // @ts-nocheck
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "../../api/services/ai";
 import { useAuth } from "../../providers/AuthProvider";
 import {
+  useAnnouncements,
+  useClassDetail,
+  useClassModules,
   useSchoolEvents,
   useLessons,
+  useLessonDetail,
+  useLessonCompletionStatus,
   useLessonCompletions,
+  useLessonCompleteMutation,
+  useModuleDetail,
   useAssessments,
   useAssessmentAttempts,
   useLxpCheckpointMutation,
@@ -68,6 +75,12 @@ jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
 }));
 
+jest.mock("expo-secure-store", () => ({
+  getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
+}));
+
 jest.mock("expo-constants", () => ({
   expoConfig: {
     hostUri: "localhost:3000",
@@ -126,6 +139,7 @@ jest.mock("../../components/ui/primitives", () => {
       ReactRuntime.createElement("Pill", null, ReactRuntime.createElement(Text, null, label)),
     ProgressBar: component("ProgressBar"),
     Refreshable: component("Refreshable"),
+    SearchField: component("SearchField"),
     ScreenScroll: component("ScreenScroll"),
     SectionTitle: ({ title }: { title: string }) =>
       ReactRuntime.createElement("SectionTitle", null, ReactRuntime.createElement(Text, null, title)),
@@ -167,17 +181,21 @@ jest.mock("../../api/services/lessons", () => ({
 
 jest.mock("@tanstack/react-query", () => ({
   useQueries: jest.fn(),
+  useQueryClient: jest.fn(),
 }));
 
 jest.mock("../../api/hooks", () => ({
   queryKeys: {
     lessons: (classId: string) => ["lessons", classId],
     lessonCompletions: (classId: string) => ["lesson-completions", classId],
+    lessonCompletionStatus: (lessonId: string) => ["lesson-completion-status", lessonId],
     assessments: (classId: string) => ["assessments", classId],
     assessmentAttempts: (assessmentId: string) => ["assessment-attempts", assessmentId],
     announcements: (classId: string) => ["announcements", classId],
   },
   useStudentClasses: jest.fn(),
+  useClassDetail: jest.fn(),
+  useClassModules: jest.fn(),
   useLxpEligibility: jest.fn(),
   useTutorBootstrap: jest.fn(),
   useLxpPlaylist: jest.fn(),
@@ -188,8 +206,13 @@ jest.mock("../../api/hooks", () => ({
   useProfileAvatarMutation: jest.fn(),
   usePerformanceSummary: jest.fn(),
   useSchoolEvents: jest.fn(),
+  useAnnouncements: jest.fn(),
   useLessons: jest.fn(),
+  useLessonDetail: jest.fn(),
+  useLessonCompletionStatus: jest.fn(),
   useLessonCompletions: jest.fn(),
+  useLessonCompleteMutation: jest.fn(),
+  useModuleDetail: jest.fn(),
   useAssessments: jest.fn(),
   useAssessmentAttempts: jest.fn(),
 }));
@@ -213,6 +236,15 @@ jest.mock("../../data/mappers", () => ({
       status: "ongoing",
     },
   ]),
+  toAnnouncementPreview: jest.fn((announcement: { id: string; title?: string; content?: string }, subject: { name: string }) => ({
+    id: announcement.id,
+    title: announcement.title || "Announcement",
+    content: announcement.content || "Announcement content",
+    subject: subject.name,
+    createdAt: "Today",
+    isPinned: false,
+    emoji: "!",
+  })),
   toTutorRecommendationCards: jest.fn(() => [
     {
       id: "checkpoint-1",
@@ -318,6 +350,8 @@ function findTextInputByPlaceholder(
 
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockedUseStudentClasses = useStudentClasses as jest.MockedFunction<typeof useStudentClasses>;
+const mockedUseClassDetail = useClassDetail as jest.MockedFunction<typeof useClassDetail>;
+const mockedUseClassModules = useClassModules as jest.MockedFunction<typeof useClassModules>;
 const mockedUseLxpEligibility = useLxpEligibility as jest.MockedFunction<typeof useLxpEligibility>;
 const mockedUseTutorBootstrap = useTutorBootstrap as jest.MockedFunction<typeof useTutorBootstrap>;
 const mockedUseLxpPlaylist = useLxpPlaylist as jest.MockedFunction<typeof useLxpPlaylist>;
@@ -328,13 +362,20 @@ const mockedUseProfileUpdateMutation = useProfileUpdateMutation as jest.MockedFu
 const mockedUseProfileAvatarMutation = useProfileAvatarMutation as jest.MockedFunction<typeof useProfileAvatarMutation>;
 const mockedUsePerformanceSummary = usePerformanceSummary as jest.MockedFunction<typeof usePerformanceSummary>;
 const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<typeof useSchoolEvents>;
+const mockedUseAnnouncements = useAnnouncements as jest.MockedFunction<typeof useAnnouncements>;
 const mockedUseLessons = useLessons as jest.MockedFunction<typeof useLessons>;
+const mockedUseLessonDetail = useLessonDetail as jest.MockedFunction<typeof useLessonDetail>;
+const mockedUseLessonCompletionStatus = useLessonCompletionStatus as jest.MockedFunction<typeof useLessonCompletionStatus>;
 const mockedUseLessonCompletions = useLessonCompletions as jest.MockedFunction<typeof useLessonCompletions>;
+const mockedUseLessonCompleteMutation = useLessonCompleteMutation as jest.MockedFunction<typeof useLessonCompleteMutation>;
+const mockedUseModuleDetail = useModuleDetail as jest.MockedFunction<typeof useModuleDetail>;
 const mockedUseAssessments = useAssessments as jest.MockedFunction<typeof useAssessments>;
 const mockedUseAssessmentAttempts = useAssessmentAttempts as jest.MockedFunction<typeof useAssessmentAttempts>;
 const mockedUseQueries = useQueries as jest.Mock;
+const mockedUseQueryClient = useQueryClient as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
 let checkpointMutateAsync: jest.Mock;
+let lessonCompleteMutateAsync: jest.Mock;
 let profileUpdateMutateAsync: jest.Mock;
 let consoleErrorSpy: jest.SpyInstance;
 
@@ -374,6 +415,73 @@ describe("mobile rendered screen flows", () => {
 
     mockedUseStudentClasses.mockReturnValue(
       createQueryState([{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1", schoolYear: "2025-2026" }]) as ReturnType<typeof useStudentClasses>,
+    );
+    mockedUseClassDetail.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? {
+                id: classId,
+                subjectName: "Mathematics",
+                subjectCode: "MATH-1",
+                subjectGradeLevel: "10",
+                sectionId: "section-1",
+                section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+                teacherId: "teacher-1",
+                teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+                schoolYear: "2025-2026",
+                isActive: true,
+                room: "Room 201",
+                schedules: [{ id: "schedule-1", days: ["Mon", "Wed"], startTime: "08:00", endTime: "09:00" }],
+                enrollments: [
+                  { id: "enrollment-1", student: { id: "student-1", firstName: "Alex", lastName: "Reyes", email: "alex@example.com" } },
+                  { id: "enrollment-2", student: { id: "student-2", firstName: "Jamie", lastName: "Cruz", email: "jamie@example.com" } },
+                ],
+              }
+            : undefined,
+        )) as ReturnType<typeof useClassDetail>,
+    );
+    mockedUseClassModules.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "module-1",
+                  classId,
+                  title: "Number Sense Module",
+                  description: "Foundations for fractions and decimals",
+                  order: 1,
+                  progressPercent: 40,
+                  sections: [
+                    {
+                      id: "section-1",
+                      title: "Core Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-lesson-1",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-1",
+                          completed: false,
+                          lessonPoints: 25,
+                          lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+                        },
+                        {
+                          id: "item-assessment-1",
+                          itemType: "assessment",
+                          order: 2,
+                          assessmentId: "assessment-1",
+                          assessment: { id: "assessment-1", title: "Assessment 1", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: true },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useClassModules>,
     );
     mockedUseLxpEligibility.mockReturnValue(
       createQueryState({
@@ -482,13 +590,115 @@ describe("mobile rendered screen flows", () => {
         },
       ]) as ReturnType<typeof useSchoolEvents>,
     );
+    mockedUseAnnouncements.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "announcement-1",
+                  classId,
+                  title: "Bring your notebook",
+                  content: "We will use it for guided practice.",
+                  isPinned: true,
+                  isArchived: false,
+                  author: { firstName: "Teacher", lastName: "One" },
+                  createdAt: "2026-04-18T08:00:00.000Z",
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useAnnouncements>,
+    );
     mockedUseLessons.mockImplementation(
       ((classId?: string) =>
-        createQueryState(classId ? [{ id: "lesson-1", classId, title: "Lesson 1", order: 1, isDraft: false }] : [])) as ReturnType<typeof useLessons>,
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "lesson-1",
+                  classId,
+                  title: "Lesson 1",
+                  description: "Start with number sense foundations.",
+                  order: 1,
+                  isDraft: false,
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useLessons>,
+    );
+    mockedUseLessonDetail.mockImplementation(
+      ((lessonId?: string) =>
+        createQueryState(
+          lessonId
+            ? {
+                id: lessonId,
+                classId: "class-1",
+                title: "Lesson 1",
+                description: "Start with number sense foundations.",
+                order: 1,
+                isDraft: false,
+                contentBlocks: [
+                  { id: "block-1", lessonId, type: "text", order: 1, content: "<p>Understand equivalent fractions.</p>" },
+                  { id: "block-2", lessonId, type: "question", order: 2, content: { text: "What is 1/2 equal to?" } },
+                ],
+              }
+            : undefined,
+        )) as ReturnType<typeof useLessonDetail>,
+    );
+    mockedUseLessonCompletionStatus.mockImplementation(
+      ((lessonId?: string) =>
+        createQueryState(lessonId ? { completed: false } : { completed: false })) as ReturnType<typeof useLessonCompletionStatus>,
     );
     mockedUseLessonCompletions.mockImplementation(
       ((classId?: string) =>
         createQueryState(classId ? [{ lessonId: "lesson-1", completed: false }] : [])) as ReturnType<typeof useLessonCompletions>,
+    );
+    lessonCompleteMutateAsync = jest.fn().mockResolvedValue({ completed: true });
+    mockedUseLessonCompleteMutation.mockReturnValue({
+      mutateAsync: lessonCompleteMutateAsync,
+      isPending: false,
+      error: null,
+    } as ReturnType<typeof useLessonCompleteMutation>);
+    mockedUseModuleDetail.mockImplementation(
+      ((classId?: string, moduleId?: string) =>
+        createQueryState(
+          classId && moduleId
+            ? {
+                id: moduleId,
+                classId,
+                title: "Number Sense Module",
+                description: "Foundations for fractions and decimals",
+                order: 1,
+                progressPercent: 40,
+                sections: [
+                  {
+                    id: "section-1",
+                    title: "Core Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-1",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-1",
+                        completed: false,
+                        lessonPoints: 25,
+                        isRequired: true,
+                        lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+                      },
+                      {
+                        id: "item-assessment-1",
+                        itemType: "assessment",
+                        order: 2,
+                        assessmentId: "assessment-1",
+                        assessment: { id: "assessment-1", title: "Assessment 1", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: true },
+                      },
+                    ],
+                  },
+                ],
+              }
+            : undefined,
+        )) as ReturnType<typeof useModuleDetail>,
     );
     mockedUseAssessments.mockImplementation(
       ((classId?: string) =>
@@ -518,6 +728,9 @@ describe("mobile rendered screen flows", () => {
     mockedAiApi.startTutorSession.mockResolvedValue({ sessionId: "session-1" } as Awaited<ReturnType<typeof aiApi.startTutorSession>>);
     mockedAiApi.sendTutorMessage.mockResolvedValue(undefined as never);
     mockedAiApi.submitTutorAnswers.mockResolvedValue(undefined as never);
+    mockedUseQueryClient.mockReturnValue({
+      invalidateQueries: jest.fn().mockResolvedValue(undefined),
+    });
   });
 
   it("renders LXP screen and routes to tutor from quick launcher", () => {
@@ -580,6 +793,157 @@ describe("mobile rendered screen flows", () => {
     expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
     expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
+  });
+
+  it("renders Courses screen and opens class detail from a course card", () => {
+    const { CoursesScreen } = require("../CoursesScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(CoursesScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Courses", name: "Courses" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("My Courses");
+    expect(renderedText).toContain("Mathematics");
+
+    const courseCard = findPressableByText(testRenderer!.root, "Mathematics");
+    act(() => {
+      courseCard.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", { classId: "class-1" });
+  });
+
+  it("routes Lessons screen class actions into class detail parity", () => {
+    const { LessonsScreen } = require("../LessonsScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LessonsScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Classes", name: "Classes" } as never,
+        }),
+      );
+    });
+
+    const continueCard = findPressableByText(testRenderer!.root, "Lesson 1");
+    act(() => {
+      continueCard.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", { classId: "class-1" });
+  });
+
+  it("renders Class detail screen and opens module detail", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Mathematics");
+    expect(renderedText).toContain("Number Sense Module");
+
+    const moduleCard = findPressableByText(testRenderer!.root, "Number Sense Module");
+    act(() => {
+      moduleCard.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
+  });
+
+  it("renders legacy class workspace and routes lesson actions to lesson detail", () => {
+    const { SubjectLessonsScreen } = require("../SubjectLessonsScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(SubjectLessonsScreen, {
+          navigation: { goBack: jest.fn(), navigate } as never,
+          route: { key: "ClassWorkspace", name: "ClassWorkspace", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const lessonAction = findPressableByText(testRenderer!.root, "Continue Lesson");
+    act(() => {
+      lessonAction.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-1", classId: "class-1" });
+  });
+
+  it("renders Module detail screen and opens lesson detail", () => {
+    const { ModuleDetailScreen } = require("../ModuleDetailScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ModuleDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate } as never,
+          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+        }),
+      );
+    });
+
+    const lessonCard = findPressableByText(testRenderer!.root, "Lesson 1");
+    act(() => {
+      lessonCard.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-1", classId: "class-1" });
+  });
+
+  it("renders Lesson detail screen and completes the lesson", async () => {
+    const { LessonDetailScreen } = require("../LessonDetailScreen");
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LessonDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Understand equivalent fractions.")),
+    ).toBeTruthy();
+
+    const completeButton = findPressableByText(testRenderer!.root, "Mark Complete");
+    await act(async () => {
+      await completeButton.props.onPress();
+    });
+
+    expect(lessonCompleteMutateAsync).toHaveBeenCalledWith("lesson-1");
   });
 
   it("excludes submitted assessments from dashboard pending work", () => {

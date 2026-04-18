@@ -204,7 +204,7 @@ export function LessonsScreen({ navigation }: Props) {
                   {continueLearning.map(({ lesson, subject }, index) => (
                     <AnimatedEntrance key={lesson.id} delay={index * 80}>
                       <Pressable
-                        onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}
+                        onPress={() => navigation.navigate("ClassDetail", { classId: subject.id })}
                         style={[
                           {
                             flexDirection: "row",
@@ -302,7 +302,7 @@ export function LessonsScreen({ navigation }: Props) {
                 <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
                   {filteredSubjects.map((subject, index) => (
                     <AnimatedEntrance key={subject.id} delay={index * 70} style={{ width: "48%" }}>
-                      <Pressable onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}>
+                      <Pressable onPress={() => navigation.navigate("ClassDetail", { classId: subject.id })}>
                         <Card style={{ minHeight: 190 }}>
                           <View
                             style={{
