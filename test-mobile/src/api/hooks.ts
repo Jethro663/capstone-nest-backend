@@ -18,6 +18,7 @@ export const queryKeys = {
   classes: (studentId: string) => ["classes", studentId] as const,
   classDetail: (classId: string) => ["class-detail", classId] as const,
   classModules: (classId: string) => ["class-modules", classId] as const,
+  moduleDetailsByClass: (classId: string) => ["module-detail", classId] as const,
   lessons: (classId: string) => ["lessons", classId] as const,
   lessonCompletions: (classId: string) => ["lesson-completions", classId] as const,
   lessonCompletionStatus: (lessonId?: string) =>
@@ -210,6 +211,9 @@ export function useLessonCompleteMutation(classId?: string) {
     mutationFn: (lessonId: string) => lessonsApi.complete(lessonId),
     onSuccess: async () => {
       if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetailsByClass(classId) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.lessonCompletions(classId) });
         await queryClient.invalidateQueries({ queryKey: queryKeys.lessons(classId) });
       }
