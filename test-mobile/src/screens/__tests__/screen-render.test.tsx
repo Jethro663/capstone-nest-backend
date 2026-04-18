@@ -671,8 +671,8 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("0 tasks still need attention");
-    expect(renderedText).toContain("No published assessments right now.");
+    expect(renderedText).toContain("Checking 1 assessment status");
+    expect(renderedText).toContain("Checking assessment submissions");
   });
 
   it("does not count assessments as pending when attempt loading fails", () => {
@@ -713,8 +713,8 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("0 tasks still need attention");
-    expect(renderedText).toContain("No published assessments right now.");
+    expect(renderedText).toContain("Checking 1 assessment status");
+    expect(renderedText).toContain("Checking assessment submissions");
     expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
   });
 
@@ -797,6 +797,41 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(mockedUseSchoolEvents).not.toHaveBeenCalled();
+  });
+
+  it("scopes dashboard hooks to the active current classes", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState([
+        {
+          id: "class-archived",
+          subjectName: "History",
+          subjectCode: "HIST-1",
+          schoolYear: "2023-2024",
+          isActive: false,
+        },
+        {
+          id: "class-active",
+          subjectName: "Mathematics",
+          subjectCode: "MATH-1",
+          schoolYear: "2025-2026",
+          isActive: true,
+        },
+      ]) as ReturnType<typeof useStudentClasses>,
+    );
+
+    act(() => {
+      TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    expect(mockedUseLessons).toHaveBeenCalledWith("class-active");
+    expect(mockedUseAssessments).toHaveBeenCalledWith("class-active");
+    expect(mockedUseSchoolEvents).toHaveBeenCalledWith({ schoolYear: "2025-2026" });
   });
 
   it("renders the student dashboard tab as Home and keeps Dashboard route navigation", () => {

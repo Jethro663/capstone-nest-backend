@@ -67,6 +67,13 @@ type SchoolEventsSnapshot = {
   isRefetching: boolean;
 };
 
+type PendingAssessmentItem = {
+  assessment: Assessment;
+  subject: ReturnType<typeof toSubjectCard>;
+  dueTime: number;
+  status: ReturnType<typeof toAssessmentCard>["status"];
+};
+
 function getErrorSignature(error: unknown) {
   if (!error) return "";
 
@@ -162,6 +169,30 @@ function formatClock(value: string) {
 
 function getDayIndexToken(day: string) {
   return DAY_TO_INDEX[day.trim().toUpperCase()];
+}
+
+function getSchoolYearRank(value?: string | null) {
+  if (!value) return 0;
+  const match = value.match(/\d{4}/);
+  return match ? Number.parseInt(match[0], 10) : 0;
+}
+
+function selectDashboardClasses(classes: NonNullable<ReturnType<typeof useStudentClasses>["data"]>) {
+  const activeClasses = classes.filter((classItem) => classItem.isActive !== false);
+  const candidateClasses = activeClasses.length > 0 ? activeClasses : classes;
+
+  if (candidateClasses.length <= 1) {
+    return candidateClasses;
+  }
+
+  const latestSchoolYearRank = Math.max(
+    ...candidateClasses.map((classItem) => getSchoolYearRank(classItem.schoolYear)),
+  );
+  const scopedClasses = candidateClasses.filter(
+    (classItem) => getSchoolYearRank(classItem.schoolYear) === latestSchoolYearRank,
+  );
+
+  return scopedClasses.length > 0 ? scopedClasses : candidateClasses;
 }
 
 function buildTodaySchedule(classes: NonNullable<ReturnType<typeof useStudentClasses>["data"]>, now = new Date()): ScheduleEntry[] {
@@ -423,11 +454,15 @@ export function DashboardScreen({ navigation }: Props) {
   const classRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
   const [schoolEventsSnapshot, setSchoolEventsSnapshot] = useState<SchoolEventsSnapshot | null>(null);
   const schoolEventsRefresherRef = useRef<(() => Promise<unknown>) | null>(null);
-  const schoolYear = classesQuery.data?.[0]?.schoolYear ?? null;
+  const dashboardClasses = useMemo(
+    () => selectDashboardClasses(classesQuery.data ?? []),
+    [classesQuery.data],
+  );
+  const schoolYear = dashboardClasses[0]?.schoolYear ?? null;
 
   const classIds = useMemo(
-    () => classesQuery.data?.map((classItem) => classItem.id) ?? [],
-    [classesQuery.data],
+    () => dashboardClasses.map((classItem) => classItem.id),
+    [dashboardClasses],
   );
   const handleClassDataChange = useCallback((classId: string, snapshot: ClassDashboardSnapshot) => {
     setClassDataMap((current) => {
@@ -502,7 +537,7 @@ export function DashboardScreen({ navigation }: Props) {
 
   const subjects = useMemo(
     () =>
-      (classesQuery.data ?? []).map((classItem) =>
+      dashboardClasses.map((classItem) =>
         toSubjectCard(
           classItem,
           classDataMap[classItem.id]?.lessons ?? [],
@@ -510,7 +545,7 @@ export function DashboardScreen({ navigation }: Props) {
           performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
         ),
       ),
-    [classDataMap, classesQuery.data, performanceQuery.data?.classes],
+    [classDataMap, dashboardClasses, performanceQuery.data?.classes],
   );
 
   const lessonMap = useMemo(
@@ -539,47 +574,52 @@ export function DashboardScreen({ navigation }: Props) {
     [lessonMap, subjects],
   );
 
-  const pendingAssessments = useMemo(() => {
+  const pendingAssessmentState = useMemo(() => {
     const subjectByClassId = new Map(subjects.map((subject) => [subject.id, subject]));
+    const actionableItems: PendingAssessmentItem[] = [];
+    let unresolvedCount = 0;
 
-    return Object.values(classDataMap)
-      .flatMap((entry) =>
-        entry.assessments
-          .filter((assessment) => assessment.isPublished)
-          .map((assessment) => {
-            const subject = subjectByClassId.get(assessment.classId);
-            if (!subject) return null;
-            const attemptSnapshot = entry.assessmentAttempts[assessment.id];
-            if (!attemptSnapshot?.isResolved) {
-              return null;
-            }
+    Object.values(classDataMap).forEach((entry) => {
+      entry.assessments
+        .filter((assessment) => assessment.isPublished)
+        .forEach((assessment) => {
+          const subject = subjectByClassId.get(assessment.classId);
+          if (!subject) return;
 
-            const card = toAssessmentCard(
-              assessment,
-              subject,
-              attemptSnapshot.attempts,
-            );
+          const attemptSnapshot = entry.assessmentAttempts[assessment.id];
+          if (!attemptSnapshot || !attemptSnapshot.isResolved || attemptSnapshot.error) {
+            unresolvedCount += 1;
+            return;
+          }
 
-            if (card.status === "completed") {
-              return null;
-            }
+          const card = toAssessmentCard(assessment, subject, attemptSnapshot.attempts);
+          if (card.status === "completed") {
+            return;
+          }
 
-            return {
-              assessment,
-              subject,
-              dueTime: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
-              status: card.status,
-            };
-          }),
-      )
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-      .sort((left, right) => left.dueTime - right.dueTime)
-      .slice(0, 4);
+          actionableItems.push({
+            assessment,
+            subject,
+            dueTime: assessment.dueDate ? new Date(assessment.dueDate).getTime() : Number.POSITIVE_INFINITY,
+            status: card.status,
+          });
+        });
+    });
+
+    return {
+      items: actionableItems
+        .sort((left, right) => left.dueTime - right.dueTime)
+        .slice(0, 4),
+      unresolvedCount,
+    };
   }, [classDataMap, subjects]);
+  const pendingAssessments = pendingAssessmentState.items;
+  const pendingAssessmentStatusCount = pendingAssessmentState.unresolvedCount;
+  const hasPendingAssessmentSync = pendingAssessmentStatusCount > 0;
 
   const todaySchedule = useMemo(
-    () => buildTodaySchedule(classesQuery.data ?? []),
-    [classesQuery.data],
+    () => buildTodaySchedule(dashboardClasses),
+    [dashboardClasses],
   );
 
   const upcomingEvents = useMemo(() => {
@@ -664,16 +704,20 @@ export function DashboardScreen({ navigation }: Props) {
         >
           <Text style={{ color: colors.white, fontSize: 12, fontWeight: "800" }}>Profile and learning snapshot</Text>
           <Text style={{ marginTop: 6, color: colors.white, fontSize: 24, fontWeight: "900" }}>
-            {pendingAssessments.length} task{pendingAssessments.length === 1 ? "" : "s"} still need attention
+            {hasPendingAssessmentSync && pendingAssessments.length === 0
+              ? `Checking ${pendingAssessmentStatusCount} assessment status${pendingAssessmentStatusCount === 1 ? "" : "es"}`
+              : `${pendingAssessments.length} task${pendingAssessments.length === 1 ? "" : "s"} still need attention`}
           </Text>
           <Text style={{ marginTop: 8, color: "rgba(255,255,255,0.88)", fontSize: 12, lineHeight: 18 }}>
-            Keep your streak moving by finishing the next lesson, checking today&apos;s schedule, and clearing due work.
+            {hasPendingAssessmentSync
+              ? "We&apos;re syncing your latest assessment submissions before finalizing what still needs attention."
+              : "Keep your streak moving by finishing the next lesson, checking today&apos;s schedule, and clearing due work."}
           </Text>
 
           <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
             <Pressable
               onPress={() => {
-                const nextClassId = continueLearning[0]?.subject.id ?? classesQuery.data?.[0]?.id;
+                const nextClassId = continueLearning[0]?.subject.id ?? dashboardClasses[0]?.id;
                 if (nextClassId) {
                   navigation.navigate("ClassWorkspace", { classId: nextClassId });
                 } else {
@@ -709,7 +753,7 @@ export function DashboardScreen({ navigation }: Props) {
         </View>
 
         <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-          <StatCard icon="book-open-page-variant" iconColor={colors.white} value={classesQuery.data?.length ?? 0} label="Classes" translucent />
+          <StatCard icon="book-open-page-variant" iconColor={colors.white} value={dashboardClasses.length} label="Classes" translucent />
           <StatCard icon="chart-line" iconColor={colors.white} value={`${averageScore}%`} label="Average" translucent />
           <StatCard icon="account-check" iconColor={colors.white} value={`${profileReadiness}%`} label="Profile" translucent />
         </View>
@@ -865,13 +909,20 @@ export function DashboardScreen({ navigation }: Props) {
             title="Pending Assessments"
             right={
               <Pill
-                label={`${pendingAssessments.length} due`}
+                label={hasPendingAssessmentSync && pendingAssessments.length === 0 ? "Syncing" : `${pendingAssessments.length} due`}
                 backgroundColor={colors.paleRed}
                 color={colors.red}
               />
             }
           />
-          {pendingAssessments.length === 0 ? (
+          {pendingAssessments.length === 0 && hasPendingAssessmentSync ? (
+            <Card>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Checking assessment submissions</Text>
+              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
+                We&apos;re verifying {pendingAssessmentStatusCount} assessment status{pendingAssessmentStatusCount === 1 ? "" : "es"} before listing what is still due.
+              </Text>
+            </Card>
+          ) : pendingAssessments.length === 0 ? (
             <Card>
               <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No published assessments right now.</Text>
               <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
