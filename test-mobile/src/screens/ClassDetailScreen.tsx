@@ -23,7 +23,6 @@ import {
   useClassDetail,
   useClassModules,
   useLessonCompletions,
-  useLessons,
 } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
@@ -74,6 +73,42 @@ function summarizeModule(moduleEntry: ClassModule) {
     },
     { lessons: 0, assessments: 0 },
   );
+}
+
+function getVisibleLessons(modules: ClassModule[]) {
+  return modules.flatMap((moduleEntry) => {
+    if (moduleEntry.isLocked) return [];
+
+    return moduleEntry.sections
+      .slice()
+      .sort((left, right) => left.order - right.order)
+      .flatMap((section) =>
+        section.items
+          .slice()
+          .sort((left, right) => left.order - right.order)
+          .flatMap((item) => {
+            if (item.itemType !== "lesson") return [];
+            if (!("lessonId" in item) || typeof item.lessonId !== "string") return [];
+            if ("lesson" in item && item.lesson && typeof item.lesson === "object" && "isDraft" in item.lesson && item.lesson.isDraft) {
+              return [];
+            }
+
+            return [
+              {
+                id: item.lessonId,
+                title:
+                  "lesson" in item &&
+                  item.lesson &&
+                  typeof item.lesson === "object" &&
+                  "title" in item.lesson &&
+                  typeof item.lesson.title === "string"
+                    ? item.lesson.title
+                    : "Next lesson",
+              },
+            ];
+          }),
+      );
+  });
 }
 
 function resolveNextLessonId(
@@ -176,14 +211,13 @@ export function StudentClassDetailContent({
   const [activeTab, setActiveTab] = useState<DetailTab>("modules");
   const classQuery = useClassDetail(classId);
   const modulesQuery = useClassModules(classId);
-  const lessonsQuery = useLessons(classId);
   const lessonCompletionsQuery = useLessonCompletions(classId);
   const assessmentsQuery = useAssessments(classId);
   const announcementsQuery = useAnnouncements(classId);
 
   const classItem = classQuery.data;
   const modules = useMemo(() => [...(modulesQuery.data ?? [])].sort((left, right) => left.order - right.order), [modulesQuery.data]);
-  const lessons = useMemo(() => [...(lessonsQuery.data ?? [])].sort((left, right) => left.order - right.order), [lessonsQuery.data]);
+  const visibleLessons = useMemo(() => getVisibleLessons(modules), [modules]);
   const lessonCompletions = lessonCompletionsQuery.data ?? [];
   const assessments = useMemo(() => [...(assessmentsQuery.data ?? [])].filter((entry) => entry.isPublished), [assessmentsQuery.data]);
   const attemptQueries = useQueries({
@@ -202,9 +236,10 @@ export function StudentClassDetailContent({
     [announcementsQuery.data],
   );
 
-  const completedLessonCount = lessonCompletions.filter((entry) => entry.completed).length;
-  const lessonProgress = lessons.length > 0 ? Math.round((completedLessonCount / lessons.length) * 100) : 0;
-  const nextLessonId = resolveNextLessonId(lessons, lessonCompletions);
+  const visibleLessonIds = useMemo(() => new Set(visibleLessons.map((lesson) => lesson.id)), [visibleLessons]);
+  const completedLessonCount = lessonCompletions.filter((entry) => entry.completed && visibleLessonIds.has(entry.lessonId)).length;
+  const lessonProgress = visibleLessons.length > 0 ? Math.round((completedLessonCount / visibleLessons.length) * 100) : 0;
+  const nextLessonId = resolveNextLessonId(visibleLessons, lessonCompletions);
   const gradeRows = useMemo(
     () =>
       assessments.map((assessment, index) => {
@@ -251,7 +286,6 @@ export function StudentClassDetailContent({
   const refreshing =
     classQuery.isRefetching ||
     modulesQuery.isRefetching ||
-    lessonsQuery.isRefetching ||
     lessonCompletionsQuery.isRefetching ||
     assessmentsQuery.isRefetching ||
     announcementsQuery.isRefetching ||
@@ -259,7 +293,6 @@ export function StudentClassDetailContent({
   const primaryError =
     classQuery.error ||
     modulesQuery.error ||
-    lessonsQuery.error ||
     lessonCompletionsQuery.error ||
     assessmentsQuery.error ||
     announcementsQuery.error ||
@@ -269,7 +302,6 @@ export function StudentClassDetailContent({
     void Promise.all([
       classQuery.refetch(),
       modulesQuery.refetch(),
-      lessonsQuery.refetch(),
       lessonCompletionsQuery.refetch(),
       assessmentsQuery.refetch(),
       announcementsQuery.refetch(),
@@ -325,7 +357,7 @@ export function StudentClassDetailContent({
         </Text>
         <View style={{ marginTop: 16, flexDirection: "row", gap: 12 }}>
           <StatCard icon="folder-outline" iconColor={colors.white} value={modules.length} label="Modules" translucent />
-          <StatCard icon="book-open-page-variant-outline" iconColor={colors.white} value={lessons.length} label="Lessons" translucent />
+          <StatCard icon="book-open-page-variant-outline" iconColor={colors.white} value={visibleLessons.length} label="Lessons" translucent />
           <StatCard icon="clipboard-text-outline" iconColor={colors.white} value={assessments.length} label="Tasks" translucent />
         </View>
       </GradientHeader>
@@ -344,7 +376,7 @@ export function StudentClassDetailContent({
           <SectionTitle title="Class Snapshot" right={<Pill label={`${lessonProgress}% progress`} backgroundColor={colors.paleAmber} color={colors.orange} />} />
           <ProgressBar value={lessonProgress} color={colors.orange} trackColor={colors.paleAmber} />
           <Text style={{ marginTop: 10, fontSize: 12, color: colors.textSecondary }}>
-            {completedLessonCount}/{lessons.length} lessons completed • {classmates.length} classmates
+            {completedLessonCount}/{visibleLessons.length} lessons completed • {classmates.length} classmates
           </Text>
         </Card>
 
@@ -356,7 +388,7 @@ export function StudentClassDetailContent({
                 right={<Pill label="Resume" backgroundColor={colors.paleIndigo} color={colors.indigo} />}
               />
               <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>
-                {lessons.find((entry) => entry.id === nextLessonId)?.title || "Next lesson"}
+                {visibleLessons.find((entry) => entry.id === nextLessonId)?.title || "Next lesson"}
               </Text>
               <Text style={{ marginTop: 6, fontSize: 12, color: colors.textSecondary }}>
                 Open the next lesson directly, or browse the rest of the class tabs below.
@@ -474,7 +506,17 @@ export function StudentClassDetailContent({
           </Card>
         ) : null}
 
-        {activeTab === "announcements" ? <View style={{ gap: 12 }}>{announcements.map(renderAnnouncement)}</View> : null}
+        {activeTab === "announcements" ? (
+          announcements.length === 0 ? (
+            <EmptyState
+              emoji=".."
+              title="No announcements yet"
+              subtitle="Your teacher has not posted any class announcements yet."
+            />
+          ) : (
+            <View style={{ gap: 12 }}>{announcements.map(renderAnnouncement)}</View>
+          )
+        ) : null}
 
         {activeTab === "classmates" ? (
           <Card>

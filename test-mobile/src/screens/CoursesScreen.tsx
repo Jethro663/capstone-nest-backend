@@ -19,12 +19,43 @@ import {
 import { toAppError } from "../api/http";
 import { queryKeys, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
+import { modulesApi } from "../api/services/modules";
 import { lessonsApi } from "../api/services/lessons";
 import { useAuth } from "../providers/AuthProvider";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
+import type { ClassModule, ModuleItem } from "../types/module";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Courses">;
+
+type ModuleLessonItem = ModuleItem & {
+  lessonId?: string;
+  lesson?: { isDraft?: boolean | null } | null;
+};
+
+function getVisibleLessons(modules: ClassModule[]) {
+  return modules.flatMap((moduleEntry) => {
+    if (moduleEntry.isLocked) return [];
+
+    return moduleEntry.sections
+      .slice()
+      .sort((left, right) => left.order - right.order)
+      .flatMap((section) =>
+        section.items
+          .map((item) => item as ModuleLessonItem)
+          .slice()
+          .sort((left, right) => left.order - right.order)
+          .flatMap((item) => {
+            if (item.itemType !== "lesson" || !item.lessonId) return [];
+            if (item.lesson?.isDraft) {
+              return [];
+            }
+
+            return [{ id: item.lessonId }];
+          }),
+      );
+  });
+}
 
 export function CoursesScreen({ navigation }: Props) {
   const { user } = useAuth();
@@ -33,10 +64,10 @@ export function CoursesScreen({ navigation }: Props) {
   const classesQuery = useStudentClasses(studentId);
   const classIds = useMemo(() => classesQuery.data?.map((entry) => entry.id) ?? [], [classesQuery.data]);
 
-  const lessonQueries = useQueries({
+  const moduleQueries = useQueries({
     queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessons(classId),
-      queryFn: () => lessonsApi.getByClass(classId),
+      queryKey: queryKeys.classModules(classId),
+      queryFn: () => modulesApi.getByClass(classId),
       enabled: classIds.length > 0,
     })),
   });
@@ -60,11 +91,13 @@ export function CoursesScreen({ navigation }: Props) {
   const courseCards = useMemo(
     () =>
       (classesQuery.data ?? []).map((classItem, index) => {
-        const lessons = lessonQueries[index]?.data ?? [];
+        const modules = moduleQueries[index]?.data ?? [];
+        const visibleLessons = getVisibleLessons(modules);
+        const visibleLessonIds = new Set(visibleLessons.map((lesson) => lesson.id));
         const completions = completionQueries[index]?.data ?? [];
         const assessments = assessmentQueries[index]?.data ?? [];
-        const completedLessonCount = completions.filter((entry) => entry.completed).length;
-        const totalLessons = lessons.length;
+        const completedLessonCount = completions.filter((entry) => entry.completed && visibleLessonIds.has(entry.lessonId)).length;
+        const totalLessons = visibleLessons.length;
         const progress = totalLessons > 0 ? Math.round((completedLessonCount / totalLessons) * 100) : 0;
         const classmateCount = classItem.enrollments?.length ?? classItem.enrollmentCount ?? 0;
 
@@ -80,7 +113,7 @@ export function CoursesScreen({ navigation }: Props) {
           progress,
         };
       }),
-    [assessmentQueries, classesQuery.data, completionQueries, lessonQueries],
+    [assessmentQueries, classesQuery.data, completionQueries, moduleQueries],
   );
 
   const filteredCourses = courseCards.filter((course) =>
@@ -99,19 +132,19 @@ export function CoursesScreen({ navigation }: Props) {
 
   const refreshing =
     classesQuery.isRefetching ||
-    lessonQueries.some((query) => query.isRefetching) ||
+    moduleQueries.some((query) => query.isRefetching) ||
     completionQueries.some((query) => query.isRefetching) ||
     assessmentQueries.some((query) => query.isRefetching);
   const primaryError =
     classesQuery.error ||
-    lessonQueries.find((query) => query.error)?.error ||
+    moduleQueries.find((query) => query.error)?.error ||
     completionQueries.find((query) => query.error)?.error ||
     assessmentQueries.find((query) => query.error)?.error;
 
   const handleRefresh = () => {
     void Promise.all([
       classesQuery.refetch(),
-      ...lessonQueries.map((query) => query.refetch()),
+      ...moduleQueries.map((query) => query.refetch()),
       ...completionQueries.map((query) => query.refetch()),
       ...assessmentQueries.map((query) => query.refetch()),
     ]);

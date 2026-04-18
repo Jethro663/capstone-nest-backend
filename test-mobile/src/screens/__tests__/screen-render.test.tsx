@@ -172,6 +172,12 @@ jest.mock("../../api/services/assessments", () => ({
   },
 }));
 
+jest.mock("../../api/services/modules", () => ({
+  modulesApi: {
+    getByClass: jest.fn().mockResolvedValue([]),
+  },
+}));
+
 jest.mock("../../api/services/lessons", () => ({
   lessonsApi: {
     getByClass: jest.fn().mockResolvedValue([]),
@@ -186,6 +192,7 @@ jest.mock("@tanstack/react-query", () => ({
 
 jest.mock("../../api/hooks", () => ({
   queryKeys: {
+    classModules: (classId: string) => ["class-modules", classId],
     lessons: (classId: string) => ["lessons", classId],
     lessonCompletions: (classId: string) => ["lesson-completions", classId],
     lessonCompletionStatus: (lessonId: string) => ["lesson-completion-status", lessonId],
@@ -717,7 +724,34 @@ describe("mobile rendered screen flows", () => {
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
       useQueriesCall += 1;
       if (useQueriesCall === 1) {
-        return queries.map(() => ({ data: [{ id: "lesson-1" }], error: null }));
+        return queries.map(() => ({
+          data: [
+            {
+              id: "module-1",
+              classId: "class-1",
+              title: "Number Sense Module",
+              order: 1,
+              isLocked: false,
+              sections: [
+                {
+                  id: "section-1",
+                  title: "Core Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-lesson-1",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-1",
+                      lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          error: null,
+        }));
       }
       if (useQueriesCall === 2) {
         return queries.map(() => ({ data: [{ id: "completed-1" }], error: null }));
@@ -828,7 +862,7 @@ describe("mobile rendered screen flows", () => {
   it("refreshes course-derived lesson, completion, and assessment queries from pull-to-refresh", async () => {
     const { CoursesScreen } = require("../CoursesScreen");
     const classesRefetch = jest.fn().mockResolvedValue(undefined);
-    const lessonRefetch = jest.fn().mockResolvedValue(undefined);
+    const moduleRefetch = jest.fn().mockResolvedValue(undefined);
     const completionRefetch = jest.fn().mockResolvedValue(undefined);
     const assessmentRefetch = jest.fn().mockResolvedValue(undefined);
 
@@ -844,10 +878,34 @@ describe("mobile rendered screen flows", () => {
       useQueriesCall += 1;
       if (useQueriesCall === 1) {
         return queries.map(() => ({
-          data: [{ id: "lesson-1" }],
+          data: [
+            {
+              id: "module-1",
+              classId: "class-1",
+              title: "Number Sense Module",
+              order: 1,
+              isLocked: false,
+              sections: [
+                {
+                  id: "section-1",
+                  title: "Core Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-lesson-1",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-1",
+                      lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
           error: null,
           isRefetching: false,
-          refetch: lessonRefetch,
+          refetch: moduleRefetch,
         }));
       }
       if (useQueriesCall === 2) {
@@ -882,9 +940,105 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(classesRefetch).toHaveBeenCalled();
-    expect(lessonRefetch).toHaveBeenCalled();
+    expect(moduleRefetch).toHaveBeenCalled();
     expect(completionRefetch).toHaveBeenCalled();
     expect(assessmentRefetch).toHaveBeenCalled();
+  });
+
+  it("derives course progress from visible module lessons instead of locked module content", () => {
+    const { CoursesScreen } = require("../CoursesScreen");
+
+    let useQueriesCall = 0;
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
+      useQueriesCall += 1;
+      if (useQueriesCall === 1) {
+        return queries.map(() => ({
+          data: [
+            {
+              id: "module-open",
+              classId: "class-1",
+              title: "Open Module",
+              order: 1,
+              isLocked: false,
+              sections: [
+                {
+                  id: "section-open",
+                  title: "Visible Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-visible-lesson",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-visible",
+                      lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "module-locked",
+              classId: "class-1",
+              title: "Locked Module",
+              order: 2,
+              isLocked: true,
+              sections: [
+                {
+                  id: "section-locked",
+                  title: "Locked Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-locked-lesson",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-locked",
+                      lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+      if (useQueriesCall === 2) {
+        return queries.map(() => ({
+          data: [{ lessonId: "lesson-locked", completed: true }],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+      return queries.map(() => ({
+        data: [{ id: "assessment-1" }],
+        error: null,
+        isRefetching: false,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      }));
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(CoursesScreen, {
+          navigation: { navigate: jest.fn(), goBack: jest.fn() } as never,
+          route: { key: "Courses", name: "Courses" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("0/1 lessons");
+    expect(renderedText).not.toContain("1/2 lessons");
   });
 
   it("renders Courses screen fetch errors without collapsing into the empty state", () => {
@@ -974,6 +1128,122 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
+  });
+
+  it("routes continue lesson toward the latest visible unlocked module lesson", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    const navigate = jest.fn();
+
+    mockedUseClassModules.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "module-open",
+                  classId,
+                  title: "Open Module",
+                  order: 1,
+                  progressPercent: 0,
+                  isLocked: false,
+                  sections: [
+                    {
+                      id: "section-open",
+                      title: "Visible Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-visible-lesson",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-visible",
+                          lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  id: "module-locked",
+                  classId,
+                  title: "Locked Module",
+                  order: 2,
+                  progressPercent: 100,
+                  isLocked: true,
+                  sections: [
+                    {
+                      id: "section-locked",
+                      title: "Locked Lessons",
+                      order: 1,
+                      items: [
+                        {
+                          id: "item-locked-lesson",
+                          itemType: "lesson",
+                          order: 1,
+                          lessonId: "lesson-locked",
+                          lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useClassModules>,
+    );
+    mockedUseLessons.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "lesson-locked",
+                  classId,
+                  title: "Locked Lesson",
+                  description: "Should stay hidden behind the locked module.",
+                  order: 1,
+                  isDraft: false,
+                },
+                {
+                  id: "lesson-visible",
+                  classId,
+                  title: "Visible Lesson",
+                  description: "The first student-visible lesson.",
+                  order: 2,
+                  isDraft: false,
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useLessons>,
+    );
+    mockedUseLessonCompletions.mockReturnValue(
+      createQueryState([{ lessonId: "lesson-locked", completed: true }]) as ReturnType<typeof useLessonCompletions>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("0/1 lessons completed");
+    expect(renderedText).not.toContain("1/2 lessons completed");
+
+    const continueCard = findPressableByText(testRenderer!.root, "Visible Lesson");
+    act(() => {
+      continueCard.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-visible", classId: "class-1" });
   });
 
   it("renders Class detail fetch errors without collapsing into not-found copy", () => {
@@ -1206,6 +1476,34 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("Attempt history unavailable");
     expect(renderedText).not.toContain("Pending");
+  });
+
+  it("renders an explicit empty state when the announcements tab has no class announcements", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseAnnouncements.mockReturnValue(createQueryState([]) as ReturnType<typeof useAnnouncements>);
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const announcementsTab = findPressableByText(testRenderer!.root, "announcements");
+    act(() => {
+      announcementsTab.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("No announcements yet");
+    expect(renderedText).toContain("Your teacher has not posted any class announcements yet.");
   });
 
   it("renders legacy class workspace and routes lesson actions to lesson detail", () => {
