@@ -939,7 +939,7 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
   });
 
-  it("renders latest attempt-based grades on the shared class detail surface", () => {
+  it("keeps the latest submitted score visible when a newer attempt is still in progress", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
     mockedUseAssessments.mockImplementation(
       ((classId?: string) =>
@@ -963,11 +963,21 @@ describe("mobile rendered screen flows", () => {
       queries.map(() => ({
         data: [
           {
+            id: "attempt-3",
+            assessmentId: "assessment-1",
+            studentId: "student-1",
+            score: undefined,
+            totalPoints: 100,
+            isSubmitted: false,
+            createdAt: "2026-04-19T11:00:00.000Z",
+          },
+          {
             id: "attempt-2",
             assessmentId: "assessment-1",
             studentId: "student-1",
             score: 92,
             totalPoints: 100,
+            isSubmitted: true,
             submittedAt: "2026-04-18T11:00:00.000Z",
           },
           {
@@ -1006,6 +1016,121 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("92/100");
+    expect(renderedText).not.toContain("Pending");
+  });
+
+  it("does not collapse unresolved attempt queries into a false pending grade", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseAssessments.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "assessment-1",
+                  classId,
+                  title: "Assessment 1",
+                  type: "quiz",
+                  totalPoints: 100,
+                  isPublished: true,
+                  dueDate: "2026-04-20T09:00:00.000Z",
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useAssessments>,
+    );
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
+      queries.map(() => ({
+        data: undefined,
+        error: null,
+        isRefetching: true,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      })),
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const gradesTab = findPressableByText(testRenderer!.root, "grades");
+    act(() => {
+      gradesTab.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Checking submissions");
+    expect(renderedText).not.toContain("Pending");
+  });
+
+  it("does not collapse failed attempt queries into a false pending grade", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseAssessments.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "assessment-1",
+                  classId,
+                  title: "Assessment 1",
+                  type: "quiz",
+                  totalPoints: 100,
+                  isPublished: true,
+                  dueDate: "2026-04-20T09:00:00.000Z",
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useAssessments>,
+    );
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
+      queries.map(() => ({
+        data: undefined,
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 503,
+            data: {
+              message: "Attempt history unavailable",
+            },
+          },
+          message: "Request failed",
+        },
+        isRefetching: false,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      })),
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const gradesTab = findPressableByText(testRenderer!.root, "grades");
+    act(() => {
+      gradesTab.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Attempt history unavailable");
     expect(renderedText).not.toContain("Pending");
   });
 

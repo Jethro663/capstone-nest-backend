@@ -83,12 +83,45 @@ function resolveNextLessonId(
   return lessons.find((lesson) => !completedIds.has(lesson.id))?.id ?? lessons[0]?.id;
 }
 
-function getLatestAttempt(attempts: AssessmentAttempt[]) {
+function getLatestSubmittedAttempt(attempts: AssessmentAttempt[]) {
+  return [...attempts]
+    .filter((attempt) => attempt.isSubmitted || Boolean(attempt.submittedAt))
+    .sort((left, right) => {
+      const leftTime = new Date(left.submittedAt || left.createdAt || 0).getTime();
+      const rightTime = new Date(right.submittedAt || right.createdAt || 0).getTime();
+      return rightTime - leftTime;
+    })[0];
+}
+
+function getAttemptErrorMessage(error: unknown) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "message" in error.response.data &&
+    typeof error.response.data.message === "string"
+  ) {
+    return error.response.data.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
+    return error.message;
+  }
+
+  return "Attempt history unavailable";
+}
+
+function sortAttemptsByNewest(attempts: AssessmentAttempt[]) {
   return [...attempts].sort((left, right) => {
     const leftTime = new Date(left.submittedAt || left.createdAt || 0).getTime();
     const rightTime = new Date(right.submittedAt || right.createdAt || 0).getTime();
     return rightTime - leftTime;
-  })[0];
+  });
 }
 
 function buildCalendarRows(classItem: ClassItem | undefined, assessments: Assessment[]) {
@@ -174,21 +207,40 @@ export function StudentClassDetailContent({
   const gradeRows = useMemo(
     () =>
       assessments.map((assessment, index) => {
-        const latestAttempt = getLatestAttempt(attemptQueries[index]?.data ?? []);
-        const possiblePoints = latestAttempt?.totalPoints ?? assessment.totalPoints ?? 0;
-        const hasScore = typeof latestAttempt?.score === "number";
+        const attemptQuery = attemptQueries[index];
+        const attempts = attemptQuery?.data ?? [];
+        const latestSubmittedAttempt = getLatestSubmittedAttempt(attempts);
+        const possiblePoints = latestSubmittedAttempt?.totalPoints ?? assessment.totalPoints ?? 0;
+        const hasScore = typeof latestSubmittedAttempt?.score === "number";
         const percent =
-          hasScore && possiblePoints > 0 ? Math.round(((latestAttempt?.score as number) / possiblePoints) * 100) : null;
+          hasScore && possiblePoints > 0 ? Math.round(((latestSubmittedAttempt?.score as number) / possiblePoints) * 100) : null;
+
+        const newestAttempt = sortAttemptsByNewest(attempts)[0];
+        const hasOnlyInProgressAttempts = Boolean(newestAttempt) && !latestSubmittedAttempt;
+        const isAttemptStateUnresolved = typeof attemptQuery?.data === "undefined" || Boolean(attemptQuery?.isRefetching);
+        const hasAttemptError = Boolean(attemptQuery?.error);
+
+        let scoreText = "Pending";
+        let metaText = `${assessment.totalPoints ?? 0} pts • ${formatDate(assessment.dueDate)}`;
+        let pending = true;
+
+        if (hasScore) {
+          scoreText = `${latestSubmittedAttempt?.score}/${possiblePoints}`;
+          metaText = `${percent}% • ${formatDate(latestSubmittedAttempt?.submittedAt || assessment.dueDate)}`;
+          pending = false;
+        } else if (hasAttemptError && !hasOnlyInProgressAttempts) {
+          scoreText = getAttemptErrorMessage(attemptQuery?.error);
+        } else if (isAttemptStateUnresolved && !hasOnlyInProgressAttempts) {
+          scoreText = "Checking submissions";
+          metaText = "Latest submitted score is still loading";
+        }
 
         return {
           id: assessment.id,
           title: assessment.title,
-          scoreText: hasScore ? `${latestAttempt?.score}/${possiblePoints}` : "Pending",
-          metaText:
-            percent != null
-              ? `${percent}% • ${formatDate(latestAttempt?.submittedAt || assessment.dueDate)}`
-              : `${assessment.totalPoints ?? 0} pts • ${formatDate(assessment.dueDate)}`,
-          pending: !hasScore,
+          scoreText,
+          metaText,
+          pending,
         };
       }),
     [assessments, attemptQueries],
