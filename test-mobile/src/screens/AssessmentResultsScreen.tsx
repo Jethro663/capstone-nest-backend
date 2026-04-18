@@ -1,7 +1,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
 import { Card, GradientHeader, Pill, Refreshable, ScreenScroll } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { useAssessmentResult } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients } from "../theme/tokens";
@@ -86,7 +86,7 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
               Unable to load this attempt
             </Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(resultQuery.error).message}
+              {peekAppError(resultQuery.error).message}
             </Text>
           </Card>
         ) : null}

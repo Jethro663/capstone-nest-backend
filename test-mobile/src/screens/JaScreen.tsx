@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { useJaHub } from "../api/hooks";
 import { jaApi } from "../api/services/ja";
 import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
@@ -61,6 +61,8 @@ export function JaScreen({ navigation }: Props) {
   const practiceSessions = jaHubQuery.data?.practice.sessions ?? [];
   const reviewSessions = jaHubQuery.data?.review.sessions ?? [];
   const askThreads = jaHubQuery.data?.ask.threads ?? [];
+  const classContextClasses = jaHubQuery.data?.classes ?? [];
+  const hasClassContext = classContextClasses.length > 0;
 
   const headlineRecommendation = useMemo(
     () => practiceRecommendations[0],
@@ -165,11 +167,20 @@ export function JaScreen({ navigation }: Props) {
           </View>
         </Card>
 
-        {jaHubQuery.data?.classes.length ? (
+        {jaHubQuery.error ? (
+          <Card style={{ borderWidth: 1, borderColor: colors.red, backgroundColor: colors.paleRed }}>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+              JA data is partially unavailable
+            </Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {peekAppError(jaHubQuery.error).message}
+            </Text>
+          </Card>
+        ) : hasClassContext ? (
           <Card>
             <SectionTitle title="Class Context" />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {jaHubQuery.data.classes.map((classItem) => (
+              {classContextClasses.map((classItem) => (
                 <Pressable
                   key={classItem.id}
                   onPress={() => setSelectedClassId(classItem.id)}
@@ -189,8 +200,14 @@ export function JaScreen({ navigation }: Props) {
               ))}
             </View>
           </Card>
-        ) : (
+        ) : jaHubQuery.isPending ? (
           <EmptyState emoji="🤖" title="Loading JA classes" subtitle="Fetching your class-grounded JA hub..." />
+        ) : (
+          <EmptyState
+            emoji="?"
+            title="No JA classes yet"
+            subtitle="Your enrolled classes will appear here once JA context is available."
+          />
         )}
 
         {activeTab === "practice" ? (

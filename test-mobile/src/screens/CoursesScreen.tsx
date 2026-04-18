@@ -16,7 +16,7 @@ import {
   SectionTitle,
   StatCard,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { queryKeys, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { modulesApi } from "../api/services/modules";
@@ -178,7 +178,7 @@ export function CoursesScreen({ navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Course data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}

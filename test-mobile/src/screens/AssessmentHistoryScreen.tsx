@@ -3,7 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
 import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SearchField, SectionTitle } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { useAssessmentHistory } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients } from "../theme/tokens";
@@ -135,7 +135,7 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
               Assessment history is unavailable
             </Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(historyQuery.error).message}
+              {peekAppError(historyQuery.error).message}
             </Text>
           </Card>
         ) : null}

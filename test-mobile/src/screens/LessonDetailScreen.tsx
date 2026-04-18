@@ -11,7 +11,7 @@ import {
   ScreenScroll,
   SectionTitle,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { useLessonCompleteMutation, useLessonCompletionStatus, useLessonDetail } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
@@ -59,7 +59,7 @@ function blockLabel(type: ContentBlock["type"]) {
 }
 
 function isNotFoundError(error: unknown) {
-  return toAppError(error).status === 404;
+  return peekAppError(error).status === 404;
 }
 
 export function LessonDetailScreen({ route, navigation }: Props) {
@@ -126,7 +126,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Lesson data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         </View>
@@ -162,7 +162,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Lesson data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}

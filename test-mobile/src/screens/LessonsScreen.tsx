@@ -18,7 +18,7 @@ import {
   SearchField,
   SectionTitle,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { queryKeys, useStudentClasses } from "../api/hooks";
 import { announcementsApi } from "../api/services/announcements";
 import { lessonsApi } from "../api/services/lessons";
@@ -234,7 +234,7 @@ export function LessonsScreen({ navigation }: Props) {
               <Card>
                 <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Some class data could not load</Text>
                 <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-                  {toAppError(primaryError).message}
+                  {peekAppError(primaryError).message}
                 </Text>
               </Card>
             ) : null}

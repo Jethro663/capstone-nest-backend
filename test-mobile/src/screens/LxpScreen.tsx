@@ -13,7 +13,7 @@ import {
   ScreenScroll,
   SectionTitle,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { useLxpCheckpointMutation, useLxpEligibility, useLxpPlaylist, useStudentClasses, useTutorBootstrap } from "../api/hooks";
 import { toTutorRecommendationCards, toSubjectCard } from "../data/mappers";
 import type { MainTabParamList } from "../navigation/types";
@@ -68,7 +68,7 @@ export function LxpScreen({ navigation }: Props) {
   const refreshing =
     eligibilityQuery.isRefetching || playlistQuery.isRefetching || tutorBootstrapQuery.isRefetching || classesQuery.isRefetching;
   const primaryError =
-    classesQuery.error || eligibilityQuery.error || tutorBootstrapQuery.error || playlistQuery.error || checkpointMutation.error;
+    classesQuery.error || eligibilityQuery.error || playlistQuery.error || checkpointMutation.error;
   const eligibleClassCards =
     eligibilityQuery.data?.eligibleClasses.length
       ? eligibilityQuery.data.eligibleClasses
@@ -193,7 +193,7 @@ export function LxpScreen({ navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>LXP data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}

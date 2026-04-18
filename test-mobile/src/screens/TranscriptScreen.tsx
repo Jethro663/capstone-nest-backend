@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { useTranscript } from "../api/hooks";
 import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
 import type { RootStackParamList } from "../navigation/types";
@@ -138,7 +138,7 @@ export function TranscriptScreen({ navigation }: Props) {
               Transcript data is temporarily unavailable
             </Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(transcriptQuery.error).message}
+              {peekAppError(transcriptQuery.error).message}
             </Text>
           </Card>
         ) : null}

@@ -13,7 +13,7 @@ import {
   ScreenScroll,
   SectionTitle,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { useClassDetail, useModuleDetail } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
@@ -65,7 +65,7 @@ function getItemAction(item: ModuleContentItem) {
 }
 
 function isNotFoundError(error: unknown) {
-  return toAppError(error).status === 404;
+  return peekAppError(error).status === 404;
 }
 
 function isVisibleModuleItem(item: ModuleContentItem, moduleLocked?: boolean) {
@@ -145,7 +145,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Module data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         </View>
@@ -181,7 +181,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Module data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}

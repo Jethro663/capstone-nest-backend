@@ -17,7 +17,7 @@ import {
   SectionTitle,
   StatCard,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import {
   useAssessments,
   useAssessmentAttempts,
@@ -735,7 +735,7 @@ export function DashboardScreen({ navigation }: Props) {
               <Text style={{ color: colors.text, fontSize: 13, fontWeight: "900" }}>Continue Learning</Text>
             </Pressable>
             <Pressable
-              onPress={() => navigation.navigate("Profile")}
+              onPress={() => navigation.navigate("Courses")}
               style={{
                 borderRadius: 18,
                 borderWidth: 1,
@@ -745,9 +745,7 @@ export function DashboardScreen({ navigation }: Props) {
                 justifyContent: "center",
               }}
             >
-              <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>
-                {profileCueComplete ? "View Profile" : "Complete Profile"}
-              </Text>
+              <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>My Courses</Text>
             </Pressable>
           </View>
         </View>
@@ -764,7 +762,7 @@ export function DashboardScreen({ navigation }: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>Some dashboard data could not load</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}
@@ -797,6 +795,58 @@ export function DashboardScreen({ navigation }: Props) {
               />
             </View>
           </Card>
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={40}>
+          <View>
+            <SectionTitle
+              title="Student Tools"
+              right={<Pill label="Web parity" backgroundColor={colors.paleBlue} color={colors.blueDeep} />}
+            />
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              {[
+                {
+                  icon: "clipboard-list-outline" as const,
+                  label: "LXP",
+                  detail: "Recovery path and tutor launchers",
+                  color: colors.purpleDeep,
+                  backgroundColor: colors.palePurple,
+                  onPress: () => navigation.navigate("LXP"),
+                },
+                {
+                  icon: "chart-line" as const,
+                  label: "Performance",
+                  detail: "See blended scores and risk flags",
+                  color: colors.green,
+                  backgroundColor: colors.paleGreen,
+                  onPress: () => navigation.navigate("Performance"),
+                },
+              ].map((action) => (
+                <Pressable
+                  key={action.label}
+                  onPress={action.onPress}
+                  style={{ flex: 1 }}
+                >
+                  <Card style={{ minHeight: 132 }}>
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: action.backgroundColor,
+                      }}
+                    >
+                      <MaterialCommunityIcons name={action.icon} size={22} color={action.color} />
+                    </View>
+                    <Text style={{ marginTop: 14, fontSize: 15, fontWeight: "900", color: colors.text }}>{action.label}</Text>
+                    <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>{action.detail}</Text>
+                  </Card>
+                </Pressable>
+              ))}
+            </View>
+          </View>
         </AnimatedEntrance>
 
         <View>

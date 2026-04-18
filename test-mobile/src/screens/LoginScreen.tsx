@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,6 +7,7 @@ import { API_BASE_URL } from "../api/config";
 import { toAppError } from "../api/http";
 import type { AuthStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { resolveDevLoginSeed } from "./screen-flow";
 import { colors, gradients, radii, shadow } from "../theme/tokens";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
@@ -17,9 +18,21 @@ export function LoginScreen(_: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const seededCredentialsAppliedRef = useRef(false);
+  const autoLoginAttemptedRef = useRef(false);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
+  const devLoginSeed = resolveDevLoginSeed({
+    isDev: __DEV__,
+    email: process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL,
+    password: process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD,
+    autoLogin: process.env.EXPO_PUBLIC_DEV_AUTO_LOGIN,
+  });
+
+  const handleLogin = async (credentials?: { email?: string; password?: string }) => {
+    const nextEmail = credentials?.email ?? email;
+    const nextPassword = credentials?.password ?? password;
+
+    if (!nextEmail.trim() || !nextPassword.trim()) {
       setError("Email and password are required.");
       return;
     }
@@ -27,13 +40,28 @@ export function LoginScreen(_: Props) {
     try {
       setLoading(true);
       setError("");
-      await login(email.trim(), password);
+      await login(nextEmail.trim(), nextPassword);
     } catch (rawError) {
       setError(toAppError(rawError).message);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!devLoginSeed || seededCredentialsAppliedRef.current) return;
+
+    setEmail((current) => current || devLoginSeed.email);
+    setPassword((current) => current || devLoginSeed.password);
+    seededCredentialsAppliedRef.current = true;
+  }, [devLoginSeed]);
+
+  useEffect(() => {
+    if (!devLoginSeed?.autoLogin || autoLoginAttemptedRef.current || loading) return;
+
+    autoLoginAttemptedRef.current = true;
+    void handleLogin(devLoginSeed);
+  }, [devLoginSeed, loading]);
 
   return (
     <LinearGradient colors={[colors.text, "#111827"]} style={{ flex: 1 }}>

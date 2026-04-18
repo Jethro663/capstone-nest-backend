@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Text, View } from "react-native";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { usePerformanceSummary } from "../api/hooks";
 import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
 import type { RootStackParamList } from "../navigation/types";
@@ -66,7 +66,7 @@ export function PerformanceScreen(_: Props) {
               Performance data is partially unavailable
             </Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(performanceQuery.error).message}
+              {peekAppError(performanceQuery.error).message}
             </Text>
           </Card>
         ) : null}

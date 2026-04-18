@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
@@ -68,6 +69,8 @@ const JA_ASK_MAX_HISTORY = 8;
 
 @Injectable()
 export class JaService {
+  private readonly logger = new Logger(JaService.name);
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly aiProxyService: AiProxyService,
@@ -386,19 +389,68 @@ export class JaService {
       throw new ForbiddenException('You do not have access to this class.');
     }
   }
+
+  private async loadStudentJaClasses(studentId: string) {
+    const enrollmentRows = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: {
+        classId: true,
+      },
+      with: {
+        class: {
+          columns: {
+            id: true,
+            subjectName: true,
+            subjectCode: true,
+          },
+          with: {
+            section: {
+              columns: {
+                name: true,
+                gradeLevel: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const deduped = new Map<
+      string,
+      {
+        id: string;
+        subjectName: string;
+        subjectCode: string;
+        sectionName?: string | null;
+        gradeLevel?: string | null;
+      }
+    >();
+
+    enrollmentRows.forEach((row) => {
+      const cls = row.class;
+      if (!cls?.id || deduped.has(cls.id)) {
+        return;
+      }
+
+      deduped.set(cls.id, {
+        id: cls.id,
+        subjectName: cls.subjectName,
+        subjectCode: cls.subjectCode,
+        sectionName: cls.section?.name ?? null,
+        gradeLevel: cls.section?.gradeLevel ?? null,
+      });
+    });
+
+    return Array.from(deduped.values());
+  }
+
   private async loadPracticeBootstrap(user: UserContext, classId?: string) {
     const studentId = this.resolveUserId(user);
     const querySuffix = classId ? `?classId=${classId}` : '';
-    const payload = await this.aiProxyService.forward(
-      'GET',
-      `/student/ja/practice/bootstrap${querySuffix}`,
-      {
-        id: studentId,
-        email: user.email,
-        roles: user.roles,
-      },
-    );
-    const data = this.unwrapEnvelope<{
+    let data: {
       classes: Array<{
         id: string;
         subjectName?: string;
@@ -410,7 +462,50 @@ export class JaService {
       recommendations?: unknown[];
       recentLessons?: unknown[];
       recentAttempts?: unknown[];
-    }>(payload);
+    };
+
+    try {
+      const payload = await this.aiProxyService.forward(
+        'GET',
+        `/student/ja/practice/bootstrap${querySuffix}`,
+        {
+          id: studentId,
+          email: user.email,
+          roles: user.roles,
+        },
+      );
+      data = this.unwrapEnvelope<{
+        classes: Array<{
+          id: string;
+          subjectName?: string;
+          subjectCode?: string;
+          sectionName?: string | null;
+          gradeLevel?: string | null;
+        }>;
+        selectedClassId?: string | null;
+        recommendations?: unknown[];
+        recentLessons?: unknown[];
+        recentAttempts?: unknown[];
+      }>(payload);
+    } catch (error) {
+      const fallbackClasses = await this.loadStudentJaClasses(studentId);
+      this.logger.warn(
+        `JA practice bootstrap fallback engaged for student ${studentId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+
+      data = {
+        classes: fallbackClasses,
+        selectedClassId:
+          fallbackClasses.find((entry) => entry.id === classId)?.id ??
+          fallbackClasses[0]?.id ??
+          null,
+        recommendations: [],
+        recentLessons: [],
+        recentAttempts: [],
+      };
+    }
 
     const selectedClassId =
       classId ?? data.selectedClassId ?? data.classes?.[0]?.id ?? null;

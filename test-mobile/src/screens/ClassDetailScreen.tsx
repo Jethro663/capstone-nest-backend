@@ -24,7 +24,7 @@ import {
   useClassModules,
   useLessonCompletions,
 } from "../api/hooks";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
 import { assessmentsApi } from "../api/services/assessments";
@@ -153,7 +153,7 @@ function getAttemptErrorMessage(error: unknown) {
 }
 
 function isNotFoundError(error: unknown) {
-  return toAppError(error).status === 404;
+  return peekAppError(error).status === 404;
 }
 
 function sortAttemptsByNewest(attempts: AssessmentAttempt[]) {
@@ -341,7 +341,7 @@ export function StudentClassDetailContent({
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Class data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         </View>
@@ -382,7 +382,7 @@ export function StudentClassDetailContent({
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Class data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}

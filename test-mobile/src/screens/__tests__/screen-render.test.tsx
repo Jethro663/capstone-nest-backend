@@ -984,6 +984,34 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("AiTutor", { classId: "class-1" });
   });
 
+  it("keeps LXP usable when tutor bootstrap is unavailable", () => {
+    mockedUseTutorBootstrap.mockReturnValue(
+      createQueryState(undefined, {
+        error: new Error("Tutor bootstrap offline"),
+      }) as ReturnType<typeof useTutorBootstrap>,
+    );
+
+    const { LxpScreen } = require("../LxpScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LxpScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "LXP", name: "LXP" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("LXP Dashboard");
+    expect(renderedText).toContain("Open Tutor");
+    expect(renderedText).not.toContain("LXP data is partially unavailable");
+  });
+
   it("renders Dashboard screen shell with student home sections", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
@@ -1012,6 +1040,56 @@ describe("mobile rendered screen flows", () => {
     expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
     expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
+  });
+
+  it("routes dashboard hero secondary action to My Courses", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const myCoursesButton = findPressableByText(testRenderer!.root, "My Courses");
+    act(() => {
+      myCoursesButton.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("Courses");
+  });
+
+  it("routes dashboard shortcut cards to LXP and Performance", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const lxpShortcut = findPressableByText(testRenderer!.root, "LXP");
+    const performanceShortcut = findPressableByText(testRenderer!.root, "Performance");
+
+    act(() => {
+      lxpShortcut.props.onPress();
+    });
+    act(() => {
+      performanceShortcut.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("LXP");
+    expect(navigate).toHaveBeenCalledWith("Performance");
   });
 
   it("renders Courses screen and opens class detail from a course card", () => {

@@ -14,7 +14,7 @@ import {
   SectionTitle,
 } from "../components/ui/primitives";
 import { useProfile, useProfileAvatarMutation, useProfileUpdateMutation } from "../api/hooks";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { API_BASE_URL } from "../api/config";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
@@ -231,7 +231,7 @@ export function ProfileScreen(props: Props) {
           <SectionTitle title="Profile Details" />
           {profileQuery.error ? (
             <View style={{ marginBottom: 12, borderRadius: 16, backgroundColor: colors.paleRed, padding: 12 }}>
-              <Text style={{ color: colors.red, fontWeight: "700" }}>{toAppError(profileQuery.error).message}</Text>
+              <Text style={{ color: colors.red, fontWeight: "700" }}>{peekAppError(profileQuery.error).message}</Text>
             </View>
           ) : null}
           <View style={{ gap: 12 }}>

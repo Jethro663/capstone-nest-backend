@@ -4,6 +4,7 @@ import {
   canSendTutorMessage,
   canSubmitTutorAnswers,
   computeProfileReadiness,
+  resolveDevLoginSeed,
   studentParityRouteInventory,
   studentSupportRouteInventory,
   resolveInitialLxpClassId,
@@ -118,6 +119,7 @@ describe('mobile screen flow helpers', () => {
         phone: '09171234567',
         address: '123 Main St',
         familyName: 'Parent Name',
+        familyRelationship: 'Guardian',
         familyContact: '09998887777',
         profilePicture: '/uploads/avatar.jpg',
       }),
@@ -128,17 +130,55 @@ describe('mobile screen flow helpers', () => {
         phone: '09171234567',
         address: '   ',
         familyName: '',
+        familyRelationship: '',
         familyContact: null,
         profilePicture: '/uploads/avatar.jpg',
       }),
-    ).toBe(40);
+    ).toBe(33);
   });
 
   it('declares the required student parity route inventory in order', () => {
     expect(studentParityRouteInventory.map((entry) => entry.name)).toEqual(studentParityRouteNames);
   });
 
+  it('keeps all student web parity routes reachable in mobile', () => {
+    expect(studentParityRouteInventory).toHaveLength(19);
+  });
+
   it('declares the support route inventory separately from parity routes', () => {
     expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual(studentSupportRouteNames);
+  });
+
+  it('resolves dev login seed only in development with complete credentials', () => {
+    expect(
+      resolveDevLoginSeed({
+        isDev: true,
+        email: ' student71@lms.local ',
+        password: 'Student123!',
+        autoLogin: 'true',
+      }),
+    ).toEqual({
+      email: 'student71@lms.local',
+      password: 'Student123!',
+      autoLogin: true,
+    });
+
+    expect(
+      resolveDevLoginSeed({
+        isDev: false,
+        email: 'student71@lms.local',
+        password: 'Student123!',
+        autoLogin: true,
+      }),
+    ).toBeNull();
+
+    expect(
+      resolveDevLoginSeed({
+        isDev: true,
+        email: 'student71@lms.local',
+        password: '   ',
+        autoLogin: true,
+      }),
+    ).toBeNull();
   });
 });

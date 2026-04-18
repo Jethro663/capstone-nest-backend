@@ -118,3 +118,46 @@ export function computeProfileReadiness(params: {
   const completeCount = checkpoints.filter(hasNonEmptyValue).length;
   return Math.round((completeCount / checkpoints.length) * 100);
 }
+
+export type DevLoginSeed = {
+  email: string;
+  password: string;
+  autoLogin: boolean;
+};
+
+function parseBooleanFlag(value: boolean | string | null | undefined): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+
+  switch (value.trim().toLowerCase()) {
+    case "1":
+    case "true":
+    case "yes":
+    case "on":
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function resolveDevLoginSeed(params: {
+  isDev: boolean;
+  email?: string | null;
+  password?: string | null;
+  autoLogin?: boolean | string | null;
+}): DevLoginSeed | null {
+  if (!params.isDev) return null;
+
+  const email = typeof params.email === "string" ? params.email.trim() : "";
+  const password = typeof params.password === "string" ? params.password : "";
+
+  if (!email || !password.trim()) {
+    return null;
+  }
+
+  return {
+    email,
+    password,
+    autoLogin: parseBooleanFlag(params.autoLogin),
+  };
+}

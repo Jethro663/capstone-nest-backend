@@ -3,7 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
 import { Card, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { useAssessmentAttempts, useAssessmentDetail } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients } from "../theme/tokens";
@@ -117,7 +117,7 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
               Assessment unavailable
             </Text>
             <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-              {toAppError(hasQueryError).message}
+              {peekAppError(hasQueryError).message}
             </Text>
           </Card>
         </View>
@@ -192,7 +192,7 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
               Some assessment data is unavailable
             </Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(hasQueryError).message}
+              {peekAppError(hasQueryError).message}
             </Text>
           </Card>
         ) : null}
