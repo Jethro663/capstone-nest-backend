@@ -103,7 +103,12 @@ export function CoursesScreen({ navigation }: Props) {
     assessmentQueries.some((query) => query.isRefetching);
 
   const handleRefresh = () => {
-    void classesQuery.refetch();
+    void Promise.all([
+      classesQuery.refetch(),
+      ...lessonQueries.map((query) => query.refetch()),
+      ...completionQueries.map((query) => query.refetch()),
+      ...assessmentQueries.map((query) => query.refetch()),
+    ]);
   };
 
   return (

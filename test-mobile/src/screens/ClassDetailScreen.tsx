@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -16,6 +17,7 @@ import {
   StatCard,
 } from "../components/ui/primitives";
 import {
+  queryKeys,
   useAnnouncements,
   useAssessments,
   useClassDetail,
@@ -25,20 +27,15 @@ import {
 } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
-import type { Assessment } from "../types/assessment";
+import { assessmentsApi } from "../api/services/assessments";
+import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { Announcement } from "../types/announcement";
-import type { ClassItem, ClassSchedule } from "../types/class";
-import type { ClassModule, ModuleItem } from "../types/module";
+import type { ClassItem } from "../types/class";
+import type { ClassModule } from "../types/module";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ClassDetail">;
 type DetailNavigation = NativeStackNavigationProp<RootStackParamList>;
 type DetailTab = "modules" | "assignments" | "announcements" | "classmates" | "grades" | "calendar";
-
-type ModuleItemLike = ModuleItem & {
-  lessonId?: string;
-  assessmentId?: string;
-  completed?: boolean;
-};
 
 const tabs: DetailTab[] = ["modules", "assignments", "announcements", "classmates", "grades", "calendar"];
 
@@ -84,6 +81,14 @@ function resolveNextLessonId(
 ) {
   const completedIds = new Set(completions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
   return lessons.find((lesson) => !completedIds.has(lesson.id))?.id ?? lessons[0]?.id;
+}
+
+function getLatestAttempt(attempts: AssessmentAttempt[]) {
+  return [...attempts].sort((left, right) => {
+    const leftTime = new Date(left.submittedAt || left.createdAt || 0).getTime();
+    const rightTime = new Date(right.submittedAt || right.createdAt || 0).getTime();
+    return rightTime - leftTime;
+  })[0];
 }
 
 function buildCalendarRows(classItem: ClassItem | undefined, assessments: Assessment[]) {
@@ -147,6 +152,13 @@ export function StudentClassDetailContent({
   const lessons = useMemo(() => [...(lessonsQuery.data ?? [])].sort((left, right) => left.order - right.order), [lessonsQuery.data]);
   const lessonCompletions = lessonCompletionsQuery.data ?? [];
   const assessments = useMemo(() => [...(assessmentsQuery.data ?? [])].filter((entry) => entry.isPublished), [assessmentsQuery.data]);
+  const attemptQueries = useQueries({
+    queries: assessments.map((assessment) => ({
+      queryKey: queryKeys.assessmentAttempts(assessment.id),
+      queryFn: () => assessmentsApi.getStudentAttempts(assessment.id),
+      enabled: assessments.length > 0,
+    })),
+  });
   const announcements = useMemo(
     () =>
       [...(announcementsQuery.data ?? [])].sort((left, right) => {
@@ -159,6 +171,28 @@ export function StudentClassDetailContent({
   const completedLessonCount = lessonCompletions.filter((entry) => entry.completed).length;
   const lessonProgress = lessons.length > 0 ? Math.round((completedLessonCount / lessons.length) * 100) : 0;
   const nextLessonId = resolveNextLessonId(lessons, lessonCompletions);
+  const gradeRows = useMemo(
+    () =>
+      assessments.map((assessment, index) => {
+        const latestAttempt = getLatestAttempt(attemptQueries[index]?.data ?? []);
+        const possiblePoints = latestAttempt?.totalPoints ?? assessment.totalPoints ?? 0;
+        const hasScore = typeof latestAttempt?.score === "number";
+        const percent =
+          hasScore && possiblePoints > 0 ? Math.round(((latestAttempt?.score as number) / possiblePoints) * 100) : null;
+
+        return {
+          id: assessment.id,
+          title: assessment.title,
+          scoreText: hasScore ? `${latestAttempt?.score}/${possiblePoints}` : "Pending",
+          metaText:
+            percent != null
+              ? `${percent}% • ${formatDate(latestAttempt?.submittedAt || assessment.dueDate)}`
+              : `${assessment.totalPoints ?? 0} pts • ${formatDate(assessment.dueDate)}`,
+          pending: !hasScore,
+        };
+      }),
+    [assessments, attemptQueries],
+  );
   const calendarRows = buildCalendarRows(classItem, assessments);
   const classmates = classItem?.enrollments ?? [];
   const refreshing =
@@ -167,7 +201,8 @@ export function StudentClassDetailContent({
     lessonsQuery.isRefetching ||
     lessonCompletionsQuery.isRefetching ||
     assessmentsQuery.isRefetching ||
-    announcementsQuery.isRefetching;
+    announcementsQuery.isRefetching ||
+    attemptQueries.some((query) => query.isRefetching);
 
   const handleRefresh = () => {
     void Promise.all([
@@ -177,6 +212,7 @@ export function StudentClassDetailContent({
       lessonCompletionsQuery.refetch(),
       assessmentsQuery.refetch(),
       announcementsQuery.refetch(),
+      ...attemptQueries.map((query) => query.refetch()),
     ]);
   };
 
@@ -394,15 +430,24 @@ export function StudentClassDetailContent({
         {activeTab === "grades" ? (
           <Card>
             <SectionTitle title="Grades" />
-            {assessments.length === 0 ? (
+            {gradeRows.length === 0 ? (
               <Text style={{ fontSize: 12, color: colors.textSecondary }}>No graded assessments are available yet.</Text>
             ) : (
               <View style={{ gap: 10 }}>
-                {assessments.map((assessment) => (
-                  <View key={assessment.id} style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 12 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>{assessment.title}</Text>
+                {gradeRows.map((grade) => (
+                  <View
+                    key={grade.id}
+                    style={{
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: grade.pending ? colors.white : colors.paleGreen,
+                      padding: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>{grade.title}</Text>
                     <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-                      Pending • {assessment.totalPoints ?? 0} pts • {formatDate(assessment.dueDate)}
+                      {grade.scoreText} • {grade.metaText}
                     </Text>
                   </View>
                 ))}

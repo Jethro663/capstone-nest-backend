@@ -825,6 +825,68 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("ClassDetail", { classId: "class-1" });
   });
 
+  it("refreshes course-derived lesson, completion, and assessment queries from pull-to-refresh", async () => {
+    const { CoursesScreen } = require("../CoursesScreen");
+    const classesRefetch = jest.fn().mockResolvedValue(undefined);
+    const lessonRefetch = jest.fn().mockResolvedValue(undefined);
+    const completionRefetch = jest.fn().mockResolvedValue(undefined);
+    const assessmentRefetch = jest.fn().mockResolvedValue(undefined);
+
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState(
+        [{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1", schoolYear: "2025-2026" }],
+        { refetch: classesRefetch },
+      ) as ReturnType<typeof useStudentClasses>,
+    );
+
+    let useQueriesCall = 0;
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
+      useQueriesCall += 1;
+      if (useQueriesCall === 1) {
+        return queries.map(() => ({
+          data: [{ id: "lesson-1" }],
+          error: null,
+          isRefetching: false,
+          refetch: lessonRefetch,
+        }));
+      }
+      if (useQueriesCall === 2) {
+        return queries.map(() => ({
+          data: [{ lessonId: "lesson-1", completed: false }],
+          error: null,
+          isRefetching: false,
+          refetch: completionRefetch,
+        }));
+      }
+      return queries.map(() => ({
+        data: [{ id: "assessment-1" }],
+        error: null,
+        isRefetching: false,
+        refetch: assessmentRefetch,
+      }));
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(CoursesScreen, {
+          navigation: { navigate: jest.fn(), goBack: jest.fn() } as never,
+          route: { key: "Courses", name: "Courses" } as never,
+        }),
+      );
+    });
+
+    const screenScroll = testRenderer!.root.find((node) => node.type === "ScreenScroll");
+    await act(async () => {
+      await screenScroll.props.refreshControl.props.onRefresh();
+    });
+
+    expect(classesRefetch).toHaveBeenCalled();
+    expect(lessonRefetch).toHaveBeenCalled();
+    expect(completionRefetch).toHaveBeenCalled();
+    expect(assessmentRefetch).toHaveBeenCalled();
+  });
+
   it("routes Lessons screen class actions into class detail parity", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const navigate = jest.fn();
@@ -875,6 +937,76 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
+  });
+
+  it("renders latest attempt-based grades on the shared class detail surface", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseAssessments.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? [
+                {
+                  id: "assessment-1",
+                  classId,
+                  title: "Assessment 1",
+                  type: "quiz",
+                  totalPoints: 100,
+                  isPublished: true,
+                  dueDate: "2026-04-20T09:00:00.000Z",
+                },
+              ]
+            : [],
+        )) as ReturnType<typeof useAssessments>,
+    );
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
+      queries.map(() => ({
+        data: [
+          {
+            id: "attempt-2",
+            assessmentId: "assessment-1",
+            studentId: "student-1",
+            score: 92,
+            totalPoints: 100,
+            submittedAt: "2026-04-18T11:00:00.000Z",
+          },
+          {
+            id: "attempt-1",
+            assessmentId: "assessment-1",
+            studentId: "student-1",
+            score: 70,
+            totalPoints: 100,
+            submittedAt: "2026-04-17T11:00:00.000Z",
+          },
+        ],
+        error: null,
+        isRefetching: false,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      })),
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const gradesTab = findPressableByText(testRenderer!.root, "grades");
+    act(() => {
+      gradesTab.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("92/100");
+    expect(renderedText).not.toContain("Pending");
   });
 
   it("renders legacy class workspace and routes lesson actions to lesson detail", () => {
