@@ -11,6 +11,7 @@ import {
   ScreenScroll,
   SectionTitle,
 } from "../components/ui/primitives";
+import { toAppError } from "../api/http";
 import { useLessonCompleteMutation, useLessonCompletionStatus, useLessonDetail } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
@@ -60,6 +61,7 @@ function blockLabel(type: ContentBlock["type"]) {
 export function LessonDetailScreen({ route, navigation }: Props) {
   const { lessonId, classId } = route.params;
   const [completedOverride, setCompletedOverride] = useState<boolean | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const lessonQuery = useLessonDetail(lessonId);
   const completionStatusQuery = useLessonCompletionStatus(lessonId);
   const completeMutation = useLessonCompleteMutation(classId);
@@ -71,18 +73,25 @@ export function LessonDetailScreen({ route, navigation }: Props) {
   );
   const isCompleted = completedOverride ?? Boolean(completionStatusQuery.data?.completed);
   const refreshing = lessonQuery.isRefetching || completionStatusQuery.isRefetching;
+  const primaryError = lessonQuery.error || completionStatusQuery.error;
 
   const handleRefresh = () => {
+    setActionError(null);
     void Promise.all([lessonQuery.refetch(), completionStatusQuery.refetch()]);
   };
 
   const handleComplete = async () => {
-    const result = await completeMutation.mutateAsync(lessonId);
-    if (result && typeof result === "object" && "completed" in result) {
-      setCompletedOverride(Boolean((result as { completed?: boolean }).completed));
-      return;
+    try {
+      setActionError(null);
+      const result = await completeMutation.mutateAsync(lessonId);
+      if (result && typeof result === "object" && "completed" in result) {
+        setCompletedOverride(Boolean((result as { completed?: boolean }).completed));
+        return;
+      }
+      setCompletedOverride(true);
+    } catch (error) {
+      setActionError(toAppError(error).message);
     }
-    setCompletedOverride(true);
   };
 
   if (!lesson && lessonQuery.isLoading) {
@@ -90,6 +99,21 @@ export function LessonDetailScreen({ route, navigation }: Props) {
       <ScreenScroll>
         <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
           <EmptyState emoji=".." title="Loading lesson" subtitle="Preparing the lesson detail view." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (!lesson && primaryError) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Lesson data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
         </View>
       </ScreenScroll>
     );
@@ -119,12 +143,37 @@ export function LessonDetailScreen({ route, navigation }: Props) {
       </GradientHeader>
 
       <View style={{ paddingHorizontal: 20, marginTop: 18, gap: 16 }}>
+        {primaryError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Lesson data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
+        ) : null}
+
         <Card>
-          <SectionTitle title="Lesson Progress" right={<Pill label={isCompleted ? "Completed" : "In Progress"} backgroundColor={isCompleted ? colors.paleGreen : colors.paleAmber} color={isCompleted ? colors.greenDeep : colors.orange} />} />
+          <SectionTitle
+            title="Lesson Progress"
+            right={
+              <Pill
+                label={isCompleted ? "Completed" : "In Progress"}
+                backgroundColor={isCompleted ? colors.paleGreen : colors.paleAmber}
+                color={isCompleted ? colors.greenDeep : colors.orange}
+              />
+            }
+          />
           <Text style={{ fontSize: 12, color: colors.textSecondary }}>
             {blocks.length} content blocks • Order {lesson.order}
           </Text>
         </Card>
+
+        {actionError ? (
+          <Card>
+            <Text style={{ fontSize: 13, fontWeight: "800", color: colors.red }}>Lesson action unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>{actionError}</Text>
+          </Card>
+        ) : null}
 
         {blocks.length === 0 ? (
           <EmptyState emoji=".." title="No lesson content" subtitle="This lesson does not have published content blocks yet." />

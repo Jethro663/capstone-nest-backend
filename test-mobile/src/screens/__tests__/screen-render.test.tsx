@@ -887,6 +887,43 @@ describe("mobile rendered screen flows", () => {
     expect(assessmentRefetch).toHaveBeenCalled();
   });
 
+  it("renders Courses screen fetch errors without collapsing into the empty state", () => {
+    const { CoursesScreen } = require("../CoursesScreen");
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState([], {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 503,
+            data: {
+              message: "Courses API unavailable",
+            },
+          },
+          message: "Request failed",
+        },
+      }) as ReturnType<typeof useStudentClasses>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(CoursesScreen, {
+          navigation: { navigate: jest.fn(), goBack: jest.fn() } as never,
+          route: { key: "Courses", name: "Courses" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Course data is partially unavailable");
+    expect(renderedText).toContain("Courses API unavailable");
+    expect(renderedText).not.toContain("No courses found");
+  });
+
   it("routes Lessons screen class actions into class detail parity", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const navigate = jest.fn();
@@ -937,6 +974,43 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
+  });
+
+  it("renders Class detail fetch errors without collapsing into not-found copy", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseClassDetail.mockReturnValue(
+      createQueryState(undefined, {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 503,
+            data: {
+              message: "Class detail unavailable",
+            },
+          },
+          message: "Request failed",
+        },
+      }) as ReturnType<typeof useClassDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Class data is partially unavailable");
+    expect(renderedText).toContain("Class detail unavailable");
+    expect(renderedText).not.toContain("Class not found");
   });
 
   it("keeps the latest submitted score visible when a newer attempt is still in progress", () => {
@@ -1178,6 +1252,43 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-1", classId: "class-1" });
   });
 
+  it("renders Module detail fetch errors without collapsing into not-found copy", () => {
+    const { ModuleDetailScreen } = require("../ModuleDetailScreen");
+    mockedUseModuleDetail.mockReturnValue(
+      createQueryState(undefined, {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 503,
+            data: {
+              message: "Module detail unavailable",
+            },
+          },
+          message: "Request failed",
+        },
+      }) as ReturnType<typeof useModuleDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ModuleDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Module data is partially unavailable");
+    expect(renderedText).toContain("Module detail unavailable");
+    expect(renderedText).not.toContain("Module not found");
+  });
+
   it("renders Lesson detail screen and completes the lesson", async () => {
     const { LessonDetailScreen } = require("../LessonDetailScreen");
 
@@ -1201,6 +1312,78 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(lessonCompleteMutateAsync).toHaveBeenCalledWith("lesson-1");
+  });
+
+  it("renders Lesson detail fetch errors without collapsing into not-found copy", () => {
+    const { LessonDetailScreen } = require("../LessonDetailScreen");
+    mockedUseLessonDetail.mockReturnValue(
+      createQueryState(undefined, {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 503,
+            data: {
+              message: "Lesson detail unavailable",
+            },
+          },
+          message: "Request failed",
+        },
+      }) as ReturnType<typeof useLessonDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LessonDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Lesson data is partially unavailable");
+    expect(renderedText).toContain("Lesson detail unavailable");
+    expect(renderedText).not.toContain("Lesson not found");
+  });
+
+  it("shows a recoverable lesson completion error when the mutation rejects", async () => {
+    const { LessonDetailScreen } = require("../LessonDetailScreen");
+    lessonCompleteMutateAsync.mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 503,
+        data: {
+          message: "Unable to mark lesson complete right now",
+        },
+      },
+      message: "Request failed",
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LessonDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const completeButton = findPressableByText(testRenderer!.root, "Mark Complete");
+    await act(async () => {
+      await completeButton.props.onPress();
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Unable to mark lesson complete right now"),
+      ),
+    ).toBeTruthy();
   });
 
   it("excludes submitted assessments from dashboard pending work", () => {

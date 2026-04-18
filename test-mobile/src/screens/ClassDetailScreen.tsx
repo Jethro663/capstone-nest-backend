@@ -25,6 +25,7 @@ import {
   useLessonCompletions,
   useLessons,
 } from "../api/hooks";
+import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
 import { assessmentsApi } from "../api/services/assessments";
@@ -255,6 +256,14 @@ export function StudentClassDetailContent({
     assessmentsQuery.isRefetching ||
     announcementsQuery.isRefetching ||
     attemptQueries.some((query) => query.isRefetching);
+  const primaryError =
+    classQuery.error ||
+    modulesQuery.error ||
+    lessonsQuery.error ||
+    lessonCompletionsQuery.error ||
+    assessmentsQuery.error ||
+    announcementsQuery.error ||
+    attemptQueries.find((query) => query.error)?.error;
 
   const handleRefresh = () => {
     void Promise.all([
@@ -273,6 +282,21 @@ export function StudentClassDetailContent({
       <ScreenScroll>
         <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
           <EmptyState emoji=".." title="Loading class detail" subtitle="Preparing the student class view." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (!classItem && primaryError) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Class data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
         </View>
       </ScreenScroll>
     );
@@ -307,6 +331,15 @@ export function StudentClassDetailContent({
       </GradientHeader>
 
       <View style={{ paddingHorizontal: 20, marginTop: 18, gap: 18 }}>
+        {primaryError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Class data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
+        ) : null}
+
         <Card>
           <SectionTitle title="Class Snapshot" right={<Pill label={`${lessonProgress}% progress`} backgroundColor={colors.paleAmber} color={colors.orange} />} />
           <ProgressBar value={lessonProgress} color={colors.orange} trackColor={colors.paleAmber} />

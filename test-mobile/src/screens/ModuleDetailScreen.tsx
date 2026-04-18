@@ -13,6 +13,7 @@ import {
   ScreenScroll,
   SectionTitle,
 } from "../components/ui/primitives";
+import { toAppError } from "../api/http";
 import { useClassDetail, useModuleDetail } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
@@ -71,6 +72,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
   const lessonCount = flatItems.filter((item) => item.itemType === "lesson").length;
   const assessmentCount = flatItems.filter((item) => item.itemType === "assessment").length;
   const refreshing = classQuery.isRefetching || moduleQuery.isRefetching;
+  const primaryError = moduleQuery.error || classQuery.error;
 
   const handleRefresh = () => {
     void Promise.all([classQuery.refetch(), moduleQuery.refetch()]);
@@ -91,6 +93,21 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       <ScreenScroll>
         <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
           <EmptyState emoji=".." title="Loading module" subtitle="Preparing the module detail view." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (!moduleEntry && primaryError) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Module data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
         </View>
       </ScreenScroll>
     );
@@ -120,6 +137,15 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       </GradientHeader>
 
       <View style={{ paddingHorizontal: 20, marginTop: 18, gap: 18 }}>
+        {primaryError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Module data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
+        ) : null}
+
         <Card>
           <SectionTitle title="Module Snapshot" right={<Pill label={`${moduleEntry.progressPercent ?? 0}% complete`} backgroundColor={colors.paleAmber} color={colors.orange} />} />
           <View style={{ flexDirection: "row", gap: 10 }}>

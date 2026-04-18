@@ -16,6 +16,7 @@ import {
   SectionTitle,
   StatCard,
 } from "../components/ui/primitives";
+import { toAppError } from "../api/http";
 import { queryKeys, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
@@ -101,6 +102,11 @@ export function CoursesScreen({ navigation }: Props) {
     lessonQueries.some((query) => query.isRefetching) ||
     completionQueries.some((query) => query.isRefetching) ||
     assessmentQueries.some((query) => query.isRefetching);
+  const primaryError =
+    classesQuery.error ||
+    lessonQueries.find((query) => query.error)?.error ||
+    completionQueries.find((query) => query.error)?.error ||
+    assessmentQueries.find((query) => query.error)?.error;
 
   const handleRefresh = () => {
     void Promise.all([
@@ -135,9 +141,18 @@ export function CoursesScreen({ navigation }: Props) {
           </Text>
         </Card>
 
+        {primaryError ? (
+          <Card>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Course data is partially unavailable</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+              {toAppError(primaryError).message}
+            </Text>
+          </Card>
+        ) : null}
+
         {classesQuery.isLoading && courseCards.length === 0 ? (
           <EmptyState emoji=".." title="Loading courses" subtitle="Pulling your enrolled classes now." />
-        ) : filteredCourses.length === 0 ? (
+        ) : !primaryError && filteredCourses.length === 0 ? (
           <EmptyState emoji=".." title="No courses found" subtitle="Try a different course keyword." />
         ) : (
           <View style={{ gap: 12 }}>
