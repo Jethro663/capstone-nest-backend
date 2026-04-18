@@ -7,7 +7,11 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 jest.mock('../services/ai', () => ({ aiApi: {} }));
 jest.mock('../services/announcements', () => ({ announcementsApi: {} }));
-jest.mock('../services/assessments', () => ({ assessmentsApi: {} }));
+jest.mock('../services/assessments', () => ({
+  assessmentsApi: {
+    getAssessmentHistory: jest.fn(),
+  },
+}));
 jest.mock('../services/classes', () => ({ classesApi: {} }));
 jest.mock('../services/lessons', () => ({ lessonsApi: {} }));
 jest.mock('../services/lxp', () => ({ lxpApi: { completeCheckpoint: jest.fn() } }));
@@ -44,6 +48,7 @@ const {
   useTranscript,
   useTutorSession,
 } = require('../hooks');
+const { assessmentsApi } = require('../services/assessments');
 
 describe('api hooks', () => {
   const mockedUseQuery = useQuery as jest.Mock;
@@ -110,11 +115,17 @@ describe('api hooks', () => {
 
     useAssessmentHistory(query);
 
+    const config = mockedUseQuery.mock.calls.at(-1)?.[0];
+
     expect(mockedUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         queryKey: queryKeys.assessmentHistory(query),
       }),
     );
+
+    void config.queryFn();
+
+    expect(assessmentsApi.getAssessmentHistory).toHaveBeenCalledWith(query);
   });
 
   it('queries lesson detail by lesson id', () => {

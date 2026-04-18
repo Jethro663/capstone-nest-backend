@@ -116,7 +116,7 @@ export const useTranscript = (query?: TranscriptQuery) =>
 export const useAssessmentHistory = (query?: AssessmentHistoryQuery) =>
   useQuery({
     queryKey: queryKeys.assessmentHistory(query),
-    queryFn: () => reportsApi.getAssessmentHistory(query),
+    queryFn: () => assessmentsApi.getAssessmentHistory(query),
   });
 
 export const useAssessments = (classId?: string) =>

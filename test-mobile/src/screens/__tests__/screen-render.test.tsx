@@ -6,6 +6,8 @@ import { aiApi } from "../../api/services/ai";
 import { useAuth } from "../../providers/AuthProvider";
 import {
   useAnnouncements,
+  useAssessmentDetail,
+  useAssessmentHistory,
   useClassDetail,
   useClassModules,
   useSchoolEvents,
@@ -17,6 +19,7 @@ import {
   useModuleDetail,
   useAssessments,
   useAssessmentAttempts,
+  useAssessmentResult,
   useLxpCheckpointMutation,
   useLxpEligibility,
   useLxpPlaylist,
@@ -121,10 +124,12 @@ jest.mock("../../components/ui/primitives", () => {
     GradientHeader: ({
       eyebrow,
       title,
+      rightContent,
       children,
     }: {
       eyebrow?: string;
       title: string;
+      rightContent?: React.ReactNode;
       children?: React.ReactNode;
     }) =>
       ReactRuntime.createElement(
@@ -132,6 +137,7 @@ jest.mock("../../components/ui/primitives", () => {
         null,
         eyebrow ? ReactRuntime.createElement(Text, null, eyebrow) : null,
         title ? ReactRuntime.createElement(Text, null, title) : null,
+        rightContent,
         children,
       ),
     FloatingIconButton: component("FloatingIconButton"),
@@ -220,8 +226,11 @@ jest.mock("../../api/hooks", () => ({
   useLessonCompletions: jest.fn(),
   useLessonCompleteMutation: jest.fn(),
   useModuleDetail: jest.fn(),
+  useAssessmentDetail: jest.fn(),
+  useAssessmentHistory: jest.fn(),
   useAssessments: jest.fn(),
   useAssessmentAttempts: jest.fn(),
+  useAssessmentResult: jest.fn(),
 }));
 
 jest.mock("../../data/mappers", () => ({
@@ -376,8 +385,11 @@ const mockedUseLessonCompletionStatus = useLessonCompletionStatus as jest.Mocked
 const mockedUseLessonCompletions = useLessonCompletions as jest.MockedFunction<typeof useLessonCompletions>;
 const mockedUseLessonCompleteMutation = useLessonCompleteMutation as jest.MockedFunction<typeof useLessonCompleteMutation>;
 const mockedUseModuleDetail = useModuleDetail as jest.MockedFunction<typeof useModuleDetail>;
+const mockedUseAssessmentDetail = useAssessmentDetail as jest.MockedFunction<typeof useAssessmentDetail>;
+const mockedUseAssessmentHistory = useAssessmentHistory as jest.MockedFunction<typeof useAssessmentHistory>;
 const mockedUseAssessments = useAssessments as jest.MockedFunction<typeof useAssessments>;
 const mockedUseAssessmentAttempts = useAssessmentAttempts as jest.MockedFunction<typeof useAssessmentAttempts>;
+const mockedUseAssessmentResult = useAssessmentResult as jest.MockedFunction<typeof useAssessmentResult>;
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedUseQueryClient = useQueryClient as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
@@ -707,6 +719,93 @@ describe("mobile rendered screen flows", () => {
             : undefined,
         )) as ReturnType<typeof useModuleDetail>,
     );
+    mockedUseAssessmentDetail.mockImplementation(
+      ((assessmentId?: string) =>
+        createQueryState(
+          assessmentId
+            ? {
+                id: assessmentId,
+                classId: "class-1",
+                title: "Assessment 1",
+                description: "Show your work before submitting.",
+                type: "quiz",
+                isPublished: true,
+                totalPoints: 100,
+                passingScore: 75,
+                maxAttempts: 2,
+                timeLimitMinutes: 30,
+                dueDate: "2026-04-20T09:00:00.000Z",
+                questions: [
+                  {
+                    id: "question-1",
+                    assessmentId,
+                    type: "multiple_choice",
+                    content: "What is 2 + 2?",
+                    points: 5,
+                    order: 1,
+                    options: [
+                      { id: "option-1", text: "4", isCorrect: true, order: 1 },
+                      { id: "option-2", text: "5", isCorrect: false, order: 2 },
+                    ],
+                  },
+                ],
+              }
+            : undefined,
+        )) as ReturnType<typeof useAssessmentDetail>,
+    );
+    mockedUseAssessmentHistory.mockReturnValue(
+      createQueryState({
+        data: [
+          {
+            id: "attempt-returned",
+            assessmentId: "assessment-1",
+            attemptNumber: 1,
+            score: 92,
+            isSubmitted: true,
+            submittedAt: "2026-04-18T08:00:00.000Z",
+            startedAt: "2026-04-18T07:30:00.000Z",
+            assessment: {
+              id: "assessment-1",
+              title: "Assessment 1",
+              classId: "class-1",
+              dueDate: "2026-04-20T09:00:00.000Z",
+              type: "quiz",
+              totalPoints: 100,
+              class: {
+                id: "class-1",
+                subjectName: "Mathematics",
+                subjectCode: "MATH-1",
+              },
+            },
+          },
+          {
+            id: "attempt-draft",
+            assessmentId: "assessment-2",
+            attemptNumber: 2,
+            score: null,
+            isSubmitted: false,
+            startedAt: "2026-04-18T10:00:00.000Z",
+            assessment: {
+              id: "assessment-2",
+              title: "Assessment 2",
+              classId: "class-1",
+              dueDate: "2026-04-22T09:00:00.000Z",
+              type: "quiz",
+              totalPoints: 50,
+              class: {
+                id: "class-1",
+                subjectName: "Mathematics",
+                subjectCode: "MATH-1",
+              },
+            },
+          },
+        ],
+        page: 1,
+        limit: 10,
+        total: 2,
+        totalPages: 1,
+      }) as ReturnType<typeof useAssessmentHistory>,
+    );
     mockedUseAssessments.mockImplementation(
       ((classId?: string) =>
         createQueryState(
@@ -718,6 +817,33 @@ describe("mobile rendered screen flows", () => {
     mockedUseAssessmentAttempts.mockImplementation(
       ((assessmentId?: string) =>
         createQueryState(assessmentId ? [] : [])) as ReturnType<typeof useAssessmentAttempts>,
+    );
+    mockedUseAssessmentResult.mockImplementation(
+      ((attemptId?: string) =>
+        createQueryState(
+          attemptId
+            ? {
+                attempt: {
+                  id: attemptId,
+                  assessmentId: "assessment-1",
+                  isSubmitted: true,
+                  isReturned: true,
+                },
+                score: 92,
+                passed: true,
+                isReturned: true,
+                attemptNumber: 1,
+                teacherFeedback: "Strong work.",
+                responses: [],
+                assessment: {
+                  id: "assessment-1",
+                  title: "Assessment 1",
+                  type: "quiz",
+                  totalPoints: 100,
+                },
+              }
+            : undefined,
+        )) as ReturnType<typeof useAssessmentResult>,
     );
 
     let useQueriesCall = 0;
@@ -3113,6 +3239,115 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
       assessmentId: "assessment-1",
       classId: "class-1",
+    });
+  });
+
+  it("routes from the assessments tab into assessment history", () => {
+    const { AssessmentsScreen } = require("../AssessmentsScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentsScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Assessments", name: "Assessments" } as never,
+        }),
+      );
+    });
+
+    const historyButton = findPressableByIcon(testRenderer!.root, "history");
+    act(() => {
+      historyButton.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("AssessmentHistory");
+  });
+
+  it("routes the latest submitted attempt from assessment detail into results", () => {
+    const { AssessmentDetailScreen } = require("../AssessmentDetailScreen");
+    const navigate = jest.fn();
+    const attemptsRefetch = jest.fn().mockResolvedValue(undefined);
+
+    mockedUseAssessmentAttempts.mockReturnValue(
+      createQueryState(
+        [
+          {
+            id: "attempt-returned",
+            assessmentId: "assessment-1",
+            attemptNumber: 1,
+            score: 92,
+            isSubmitted: true,
+            isReturned: true,
+            submittedAt: "2026-04-18T08:00:00.000Z",
+          },
+        ],
+        { refetch: attemptsRefetch },
+      ) as ReturnType<typeof useAssessmentAttempts>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentDetailScreen, {
+          navigation: { navigate, goBack: jest.fn() } as never,
+          route: {
+            key: "AssessmentDetail",
+            name: "AssessmentDetail",
+            params: { assessmentId: "assessment-1", classId: "class-1" },
+          } as never,
+        }),
+      );
+    });
+
+    const resultButton = findPressableByText(testRenderer!.root, "View Results");
+    act(() => {
+      resultButton.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("AssessmentResults", {
+      attemptId: "attempt-returned",
+      assessmentId: "assessment-1",
+    });
+  });
+
+  it("renders assessment history actions for submitted and in-progress attempts", () => {
+    const { AssessmentHistoryScreen } = require("../AssessmentHistoryScreen");
+    const navigate = jest.fn();
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentHistoryScreen, {
+          navigation: { navigate, goBack: jest.fn() } as never,
+          route: { key: "AssessmentHistory", name: "AssessmentHistory" } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Assessment History"),
+      ),
+    ).toBeTruthy();
+
+    const resultAction = findPressableByText(testRenderer!.root, "View Results");
+    act(() => {
+      resultAction.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("AssessmentResults", {
+      attemptId: "attempt-returned",
+      assessmentId: "assessment-1",
+    });
+
+    const continueAction = findPressableByText(testRenderer!.root, "Continue Attempt");
+    act(() => {
+      continueAction.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("AssessmentTake", {
+      assessmentId: "assessment-2",
     });
   });
 

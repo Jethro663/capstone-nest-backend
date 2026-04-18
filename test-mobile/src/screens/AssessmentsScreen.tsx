@@ -7,7 +7,6 @@ import {
   AnimatedEntrance,
   Card,
   EmptyState,
-  FloatingIconButton,
   GradientHeader,
   Pill,
   Refreshable,
@@ -129,11 +128,16 @@ export function AssessmentsScreen({ navigation }: Props) {
 
   const refreshing =
     classesQuery.isRefetching ||
+    performanceQuery.isRefetching ||
+    lessonQueries.some((query) => query.isRefetching) ||
+    completionQueries.some((query) => query.isRefetching) ||
     assessmentQueries.some((query) => query.isRefetching) ||
     attemptQueries.some((query) => query.isRefetching);
   const primaryError =
     classesQuery.error ||
     performanceQuery.error ||
+    lessonQueries.find((query) => query.error)?.error ||
+    completionQueries.find((query) => query.error)?.error ||
     assessmentQueries.find((query) => query.error)?.error ||
     attemptQueries.find((query) => query.error)?.error;
 
@@ -143,7 +147,14 @@ export function AssessmentsScreen({ navigation }: Props) {
         <Refreshable
           refreshing={refreshing}
           onRefresh={() => {
-            void Promise.all([classesQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
+            void Promise.all([
+              classesQuery.refetch(),
+              performanceQuery.refetch(),
+              ...lessonQueries.map((query) => query.refetch()),
+              ...completionQueries.map((query) => query.refetch()),
+              ...assessmentQueries.map((query) => query.refetch()),
+              ...attemptQueries.map((query) => query.refetch()),
+            ]);
           }}
         />
       }
@@ -152,7 +163,21 @@ export function AssessmentsScreen({ navigation }: Props) {
         colors={gradients.assessments}
         eyebrow="Track your work 📝"
         title="Assessments"
-        rightContent={<FloatingIconButton icon="clipboard-check-outline" />}
+        rightContent={
+          <Pressable
+            onPress={() => (navigation as any).navigate("AssessmentHistory")}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(255,255,255,0.2)",
+            }}
+          >
+            <MaterialCommunityIcons name="history" size={18} color={colors.white} />
+          </Pressable>
+        }
       >
         <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
           {[

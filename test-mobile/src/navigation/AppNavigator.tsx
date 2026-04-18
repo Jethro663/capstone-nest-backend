@@ -18,6 +18,7 @@ import { AnnouncementsScreen } from "../screens/AnnouncementsScreen";
 import { SubjectLessonsScreen as ClassWorkspaceScreen } from "../screens/SubjectLessonsScreen";
 import { LoginScreen } from "../screens/LoginScreen";
 import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
+import { AssessmentHistoryScreen } from "../screens/AssessmentHistoryScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
@@ -115,10 +116,7 @@ const studentStackScreens = {
   AssessmentDetail: AssessmentDetailScreen,
   AssessmentTake: AssessmentTakeScreen,
   AssessmentResults: AssessmentResultsScreen,
-  AssessmentHistory: createStackPlaceholderScreen<"AssessmentHistory">(
-    "Assessment History",
-    "Parity route placeholder for assessment history.",
-  ),
+  AssessmentHistory: AssessmentHistoryScreen,
   Chatbot: createStackPlaceholderScreen<"Chatbot">(
     "Chatbot",
     "Parity route placeholder for the student chatbot route.",
