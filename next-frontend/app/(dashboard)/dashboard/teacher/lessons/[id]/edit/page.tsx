@@ -39,12 +39,50 @@ import {
 import { plainTextToRichHtml } from '@/lib/rich-text';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
 import type { LessonVersion } from '@/types/lesson';
+import {
+  createStructuredLessonBlockContent,
+  getStructuredLessonBlockHeading,
+  getStructuredLessonBlockHtml,
+  getStructuredLessonQuestionModel,
+  normalizeStructuredLessonBlock,
+  type StructuredLessonTextVariant,
+} from '@/features/lesson-blocks/structured-content';
 
-const BLOCK_TYPES = [
+type LessonBlockPaletteItem = {
+  type: CreateContentBlockDto['type'];
+  variant?: StructuredLessonTextVariant;
+  label: string;
+  hint: string;
+  icon: typeof PencilLine;
+};
+
+const BLOCK_TYPES: ReadonlyArray<LessonBlockPaletteItem> = [
   {
     type: 'text',
-    label: 'Text',
+    variant: 'body',
+    label: 'Body paragraph',
     hint: 'Use this for explanations, instructions, or summaries.',
+    icon: PencilLine,
+  },
+  {
+    type: 'text',
+    variant: 'objectives',
+    label: 'Learning objectives',
+    hint: 'Highlight what learners should reach by the end of the lesson.',
+    icon: Sparkles,
+  },
+  {
+    type: 'text',
+    variant: 'key_points',
+    label: 'Key points',
+    hint: 'Emphasize the ideas students need to remember.',
+    icon: BookOpenText,
+  },
+  {
+    type: 'text',
+    variant: 'example',
+    label: 'Worked example',
+    hint: 'Add a concrete example that makes the concept easier to understand.',
     icon: PencilLine,
   },
   {
@@ -61,9 +99,23 @@ const BLOCK_TYPES = [
   },
   {
     type: 'question',
-    label: 'Question',
+    label: 'Checkpoint',
     hint: 'Add a reflection prompt or quick learner checkpoint.',
     icon: CircleHelp,
+  },
+  {
+    type: 'text',
+    variant: 'recap',
+    label: 'Recap',
+    hint: 'Close the lesson with a short summary of the core idea.',
+    icon: Rocket,
+  },
+  {
+    type: 'text',
+    variant: 'reflection',
+    label: 'Reflection',
+    hint: 'Ask learners to connect the lesson to what they already know.',
+    icon: Sparkles,
   },
   {
     type: 'file',
@@ -77,12 +129,7 @@ const BLOCK_TYPES = [
     hint: 'Break the lesson into clearer parts without extra text.',
     icon: Minus,
   },
-] as const satisfies Array<{
-  type: CreateContentBlockDto['type'];
-  label: string;
-  hint: string;
-  icon: typeof PencilLine;
-}>;
+] as const;
 
 function getDefaultBlockContent(type: CreateContentBlockDto['type']): string {
   switch (type) {
@@ -101,16 +148,6 @@ function getDefaultBlockContent(type: CreateContentBlockDto['type']): string {
     default:
       return 'New content block';
   }
-}
-
-function getBlockTextValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-    return JSON.stringify(content, null, 2);
-  }
-  return '';
 }
 
 function getBlockUrlValue(content: ContentBlock['content']): string {
@@ -162,7 +199,11 @@ export default function LessonEditorPage() {
       setLesson(res.data);
       setTitle(res.data.title);
       setDescription(normalizeRichValue(res.data.description));
-      setBlocks((res.data.contentBlocks || []).sort((a, b) => a.order - b.order));
+      setBlocks(
+        (res.data.contentBlocks || [])
+          .sort((a, b) => a.order - b.order)
+          .map((block) => normalizeStructuredLessonBlock(block)),
+      );
       setVersions(versionsRes.data || []);
       setSelectedVersionId((versionsRes.data || [])[0]?.id ?? '');
     } catch {
@@ -210,15 +251,22 @@ export default function LessonEditorPage() {
     }
   };
 
-  const handleAddBlock = async (type: CreateContentBlockDto['type']) => {
+  const handleAddBlock = async (
+    type: CreateContentBlockDto['type'],
+    options?: { variant?: StructuredLessonTextVariant },
+  ) => {
     try {
       const dto: CreateContentBlockDto = {
         type,
         order: blocks.length + 1,
-        content: getDefaultBlockContent(type),
+        content:
+          type === 'text' || type === 'question'
+            ? createStructuredLessonBlockContent(type, options?.variant)
+            : getDefaultBlockContent(type),
+        metadata: options?.variant ? { variant: options.variant } : undefined,
       };
       const res = await lessonService.createBlock(lessonId, dto);
-      setBlocks((prev) => [...prev, res.data]);
+      setBlocks((prev) => [...prev, normalizeStructuredLessonBlock(res.data)]);
       await refreshVersions();
       setShowAddMenu(false);
       if (type !== 'divider') setEditingBlockId(res.data.id);
@@ -228,11 +276,14 @@ export default function LessonEditorPage() {
     }
   };
 
-  const handleUpdateBlock = async (blockId: string, content: string) => {
+  const handleUpdateBlock = async (
+    blockId: string,
+    patch: { content: ContentBlock['content']; metadata?: ContentBlock['metadata'] },
+  ) => {
     try {
-      await lessonService.updateBlock(blockId, { content });
+      await lessonService.updateBlock(blockId, patch);
       setBlocks((prev) => prev.map((block) => (
-        block.id === blockId ? { ...block, content } : block
+        block.id === blockId ? normalizeStructuredLessonBlock({ ...block, ...patch }) : block
       )));
       setEditingBlockId(null);
       await refreshVersions();
@@ -431,8 +482,8 @@ export default function LessonEditorPage() {
                     const Icon = blockType.icon;
                     return (
                       <button
-                        key={blockType.type}
-                        onClick={() => handleAddBlock(blockType.type)}
+                        key={`${blockType.type}-${blockType.variant ?? 'default'}-menu`}
+                        onClick={() => handleAddBlock(blockType.type, { variant: blockType.variant })}
                         className="flex w-full items-start gap-3 rounded-2xl border border-slate-200/70 px-3 py-3 text-left transition hover:border-[var(--teacher-accent)]/35 hover:bg-emerald-50/60"
                       >
                         <span className="mt-0.5 rounded-xl bg-[var(--teacher-surface-soft)] p-2 text-[var(--teacher-accent-strong)]">
@@ -456,9 +507,9 @@ export default function LessonEditorPage() {
                 const Icon = blockType.icon;
                 return (
                   <button
-                    key={blockType.type}
+                    key={`${blockType.type}-${blockType.variant ?? 'default'}-card`}
                     type="button"
-                    onClick={() => handleAddBlock(blockType.type)}
+                    onClick={() => handleAddBlock(blockType.type, { variant: blockType.variant })}
                     className="rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:bg-white"
                   >
                     <div className="flex items-start gap-3">
@@ -504,7 +555,7 @@ export default function LessonEditorPage() {
                           {editingBlockId === block.id ? (
                             <BlockEditor
                               block={block}
-                              onSave={(content) => handleUpdateBlock(block.id, content)}
+                              onSave={(patch) => handleUpdateBlock(block.id, patch)}
                               onCancel={() => setEditingBlockId(null)}
                             />
                           ) : (
@@ -543,29 +594,167 @@ function BlockEditor({
   onCancel,
 }: {
   block: ContentBlock;
-  onSave: (content: string) => void;
+  onSave: (patch: { content: ContentBlock['content']; metadata?: ContentBlock['metadata'] }) => void;
   onCancel: () => void;
 }) {
-  const [value, setValue] = useState(
-    block.type === 'text' || block.type === 'question'
-      ? getBlockTextValue(block.content)
-      : getBlockUrlValue(block.content),
-  );
+  const normalizedBlock = normalizeStructuredLessonBlock(block);
+  const questionModel = getStructuredLessonQuestionModel(normalizedBlock);
+  const [heading, setHeading] = useState(getStructuredLessonBlockHeading(normalizedBlock));
+  const [html, setHtml] = useState(getStructuredLessonBlockHtml(normalizedBlock));
+  const [prompt, setPrompt] = useState(questionModel.prompt);
+  const [answerType, setAnswerType] = useState(questionModel.answerType);
+  const [choicesInput, setChoicesInput] = useState(questionModel.choices.join('\n'));
+  const [explanation, setExplanation] = useState(questionModel.explanation);
+  const [points, setPoints] = useState(questionModel.points ? String(questionModel.points) : '0');
+  const [urlValue, setUrlValue] = useState(getBlockUrlValue(normalizedBlock.content));
+
+  const handleSave = () => {
+    if (normalizedBlock.type === 'text') {
+      onSave({
+        content: {
+          heading,
+          html,
+        },
+        metadata: normalizedBlock.metadata,
+      });
+      return;
+    }
+
+    if (normalizedBlock.type === 'question') {
+      const choices = choicesInput
+        .split(/\r?\n/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+
+      onSave({
+        content: {
+          prompt,
+          answerType,
+          choices: answerType === 'short_answer' ? [] : choices,
+        },
+        metadata: {
+          ...(normalizedBlock.metadata ?? {}),
+          explanation,
+          points: Number.isFinite(Number(points)) ? Number(points) : 0,
+        },
+      });
+      return;
+    }
+
+    onSave({
+      content: urlValue,
+      metadata: normalizedBlock.metadata,
+    });
+  };
 
   return (
-    <div className="space-y-3">
-      {block.type === 'text' || block.type === 'question' ? (
-        <RichTextEditor
-          value={value}
-          onChange={setValue}
-          minHeight={200}
-          placeholder={block.type === 'question' ? 'Write your prompt...' : 'Write lesson content...'}
-        />
-      ) : (
-        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Enter ${block.type} URL...`} className="teacher-input h-12 rounded-2xl" />
-      )}
+    <div className="space-y-4">
+      {normalizedBlock.type === 'text' ? (
+        <>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)]">
+            <div className="space-y-2">
+              <Label htmlFor={`heading-${block.id}`}>Section heading</Label>
+              <Input
+                id={`heading-${block.id}`}
+                value={heading}
+                onChange={(e) => setHeading(e.target.value)}
+                placeholder="Add an optional heading for this section"
+                className="teacher-input h-12 rounded-2xl"
+              />
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-xs leading-5 text-emerald-800">
+              Structured text blocks stay AI-readable and render with the lesson reader&apos;s semantic styling.
+            </div>
+          </div>
+          <RichTextEditor
+            value={html}
+            onChange={setHtml}
+            minHeight={220}
+            placeholder="Write lesson content..."
+          />
+        </>
+      ) : null}
+
+      {normalizedBlock.type === 'question' ? (
+        <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={`prompt-${block.id}`}>Checkpoint prompt</Label>
+              <Input
+                id={`prompt-${block.id}`}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="What should learners answer here?"
+                className="teacher-input h-12 rounded-2xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`answer-type-${block.id}`}>Answer type</Label>
+              <select
+                id={`answer-type-${block.id}`}
+                value={answerType}
+                onChange={(e) => setAnswerType(e.target.value as typeof answerType)}
+                className="teacher-input h-12 w-full rounded-2xl border border-[var(--teacher-outline)] bg-white px-4 text-sm text-[var(--teacher-text-strong)]"
+              >
+                <option value="single_select">Single select</option>
+                <option value="multi_select">Multi-select</option>
+                <option value="short_answer">Short answer</option>
+              </select>
+            </div>
+          </div>
+          {answerType !== 'short_answer' ? (
+            <div className="space-y-2">
+              <Label htmlFor={`choices-${block.id}`}>Choices</Label>
+              <textarea
+                id={`choices-${block.id}`}
+                value={choicesInput}
+                onChange={(e) => setChoicesInput(e.target.value)}
+                placeholder="One choice per line"
+                className="teacher-input min-h-[140px] w-full rounded-2xl border border-[var(--teacher-outline)] bg-white px-4 py-3 text-sm text-[var(--teacher-text-strong)]"
+              />
+            </div>
+          ) : null}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
+            <div className="space-y-2">
+              <Label htmlFor={`explanation-${block.id}`}>Explanation</Label>
+              <RichTextEditor
+                value={explanation}
+                onChange={setExplanation}
+                minHeight={160}
+                placeholder="Explain the expected response or feedback learners should see."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`points-${block.id}`}>Points</Label>
+              <Input
+                id={`points-${block.id}`}
+                type="number"
+                min="0"
+                step="1"
+                value={points}
+                onChange={(e) => setPoints(e.target.value)}
+                className="teacher-input h-12 rounded-2xl"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {normalizedBlock.type !== 'text' && normalizedBlock.type !== 'question' ? (
+        <div className="space-y-2">
+          <Label htmlFor={`url-${block.id}`}>{block.type === 'file' ? 'File link' : `${block.type} URL`}</Label>
+          <Input
+            id={`url-${block.id}`}
+            value={urlValue}
+            onChange={(e) => setUrlValue(e.target.value)}
+            placeholder={`Enter ${block.type} URL...`}
+            className="teacher-input h-12 rounded-2xl"
+          />
+        </div>
+      ) : null}
+
       <div className="flex gap-2">
-        <Button size="sm" onClick={() => onSave(value)} className="teacher-button-solid rounded-xl font-black">Save</Button>
+        <Button size="sm" onClick={handleSave} className="teacher-button-solid rounded-xl font-black">Save</Button>
         <Button size="sm" variant="outline" onClick={onCancel} className="teacher-button-outline rounded-xl font-black">Cancel</Button>
       </div>
     </div>
@@ -574,34 +763,55 @@ function BlockEditor({
 
 function BlockPreview({ block }: { block: ContentBlock }) {
   const baseClass = 'rounded-2xl border border-white/60 bg-white/70 px-4 py-4 text-sm text-slate-700';
+  const normalizedBlock = normalizeStructuredLessonBlock(block);
 
-  switch (block.type) {
-    case 'text':
+  switch (normalizedBlock.type) {
+    case 'text': {
+      const heading = getStructuredLessonBlockHeading(normalizedBlock);
+      const html = getStructuredLessonBlockHtml(normalizedBlock);
       return (
         <div className={baseClass}>
-          {getBlockTextValue(block.content).trim() ? (
-            <RichTextRenderer html={normalizeRichValue(getBlockTextValue(block.content))} />
+          {heading ? <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-700">{heading}</p> : null}
+          {html.trim() ? (
+            <RichTextRenderer html={normalizeRichValue(html)} />
           ) : (
             'Empty text block'
           )}
         </div>
       );
+    }
     case 'image':
-      return <p className={baseClass}>Image URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
+      return <p className={baseClass}>Image URL: {getBlockUrlValue(normalizedBlock.content) || 'No URL yet'}</p>;
     case 'video':
-      return <p className={baseClass}>Video URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
-    case 'question':
+      return <p className={baseClass}>Video URL: {getBlockUrlValue(normalizedBlock.content) || 'No URL yet'}</p>;
+    case 'question': {
+      const question = getStructuredLessonQuestionModel(normalizedBlock);
       return (
-        <div className={baseClass}>
-          {getBlockTextValue(block.content).trim() ? (
-            <RichTextRenderer html={normalizeRichValue(getBlockTextValue(block.content))} />
-          ) : (
-            'Empty question block'
-          )}
+        <div className={`${baseClass} space-y-3`}>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Checkpoint</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{question.prompt || 'Empty question block'}</p>
+          </div>
+          {question.answerType !== 'short_answer' && question.choices.length > 0 ? (
+            <ul className="space-y-2">
+              {question.choices.map((choice, index) => (
+                <li key={`${block.id}-preview-choice-${index}`} className="rounded-xl border border-slate-200/70 bg-white/75 px-3 py-2">
+                  {choice}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {question.explanation ? (
+            <div className="rounded-xl border border-slate-200/70 bg-white/75 px-3 py-3">
+              <RichTextRenderer html={normalizeRichValue(question.explanation)} />
+            </div>
+          ) : null}
+          <p className="text-xs font-semibold text-slate-500">{question.points} point{question.points === 1 ? '' : 's'}</p>
         </div>
       );
+    }
     case 'file':
-      return <p className={baseClass}>File link: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
+      return <p className={baseClass}>File link: {getBlockUrlValue(normalizedBlock.content) || 'No URL yet'}</p>;
     case 'divider':
       return (
         <div className="rounded-2xl border border-dashed border-[var(--teacher-outline)] bg-white/60 px-4 py-4">

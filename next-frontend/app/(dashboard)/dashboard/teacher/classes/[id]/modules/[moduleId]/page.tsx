@@ -26,6 +26,7 @@ import { moduleService } from '@/services/module-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { fileService } from '@/services/file-service';
+import { LibraryFilePickerDialog } from '@/components/library/LibraryFilePickerDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ import './module-workspace.css';
 
 type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes' | 'grading';
 type AssessmentAttachMode = 'create-new' | 'attach-existing';
+type FileAttachSource = 'upload' | 'library';
 
 type AttachState = {
   open: boolean;
@@ -127,6 +129,27 @@ function formatScheduleSummary(classItem: ClassItem) {
   if (!schedule) return 'Schedule unavailable';
   const day = schedule.days?.[0] || 'Day';
   return `${day} ${schedule.startTime}-${schedule.endTime}`;
+}
+
+function normalizeLibrarySubjectKey(
+  subjectCode?: string | null,
+  subjectName?: string | null,
+) {
+  const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+  if (raw.includes('science') || raw.includes('sci')) return 'science' as const;
+  if (raw.includes('math')) return 'math' as const;
+  if (raw.includes('english') || raw.includes('eng')) return 'english' as const;
+  if (raw.includes('filipino') || raw.includes('fil')) return 'filipino' as const;
+  if (raw.includes('araling') || raw.includes('panlipunan') || /\bap\b/.test(raw)) return 'ap' as const;
+  if (raw.includes('tle')) return 'tle' as const;
+  if (raw.includes('mapeh')) return 'mapeh' as const;
+  if (raw.includes('esp') || raw.includes('values') || raw.includes('pagpapakatao')) return 'esp' as const;
+  return undefined;
+}
+
+function normalizeLibraryGradeLevel(value?: string | null) {
+  const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+  return match?.[1] as '7' | '8' | '9' | '10' | undefined;
 }
 
 function iconForItemType(itemType: ModuleItemType) {
@@ -221,6 +244,8 @@ export default function TeacherModuleDetailPage() {
   const [gradingRows, setGradingRows] = useState<GradingRow[]>([]);
   const [updatingModule, setUpdatingModule] = useState(false);
   const [attachingItem, setAttachingItem] = useState(false);
+  const [attachSource, setAttachSource] = useState<FileAttachSource>('upload');
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
   const [attachState, setAttachState] = useState<AttachState>({
     open: false,
     sectionId: '',
@@ -325,12 +350,14 @@ export default function TeacherModuleDetailPage() {
       : attachState.itemType === 'assessment'
         ? 'Create a new empty assessment or attach an existing one.'
         : attachState.itemType === 'file'
-          ? 'Upload a PDF and attach it as a downloadable module block.'
+          ? 'Upload a new PDF or attach an existing library file as a downloadable module block.'
           : 'Choose the block type you want to add to this section.';
 
   const canSubmitAttach =
     attachState.itemType === 'file'
-      ? Boolean(attachState.file)
+      ? attachSource === 'library'
+        ? Boolean(attachState.itemId)
+        : Boolean(attachState.file)
       : attachState.itemType === 'lesson'
         ? true
       : attachState.itemType === 'assessment'
@@ -757,20 +784,33 @@ export default function TeacherModuleDetailPage() {
           };
         }
       } else {
-        if (!attachState.file) {
-          toast.error('Upload a PDF file first');
-          setAttachingItem(false);
-          return;
+        if (attachSource === 'library') {
+          if (!attachState.itemId) {
+            toast.error('Choose a library file first');
+            setAttachingItem(false);
+            return;
+          }
+          payload = {
+            itemType: 'file',
+            fileId: attachState.itemId,
+            metadata: { fileSubtype: 'library' },
+          };
+        } else {
+          if (!attachState.file) {
+            toast.error('Upload a PDF file first');
+            setAttachingItem(false);
+            return;
+          }
+          const uploaded = await fileService.upload(attachState.file, {
+            classId,
+            scope: 'private',
+          });
+          payload = {
+            itemType: 'file',
+            fileId: uploaded.data.id,
+            metadata: { fileSubtype: 'pdf' },
+          };
         }
-        const uploaded = await fileService.upload(attachState.file, {
-          classId,
-          scope: 'private',
-        });
-        payload = {
-          itemType: 'file',
-          fileId: uploaded.data.id,
-          metadata: { fileSubtype: 'pdf' },
-        };
       }
       await moduleService.attachItem(attachState.sectionId, payload);
       setAttachState({
@@ -782,6 +822,8 @@ export default function TeacherModuleDetailPage() {
         lessonPoints: '0',
         file: null,
       });
+      setAttachSource('upload');
+      setLibraryPickerOpen(false);
       await fetchData();
       if (attachState.itemType === 'lesson' && payload.itemType === 'lesson') {
         toast.success('Lesson block created');
@@ -1710,24 +1752,79 @@ export default function TeacherModuleDetailPage() {
 
             {attachState.itemType === 'file' ? (
               <div className="teacher-module-detail__attach-field">
-                <label htmlFor="attach-file">PDF File</label>
-                <Input
-                  id="attach-file"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(event) =>
-                    setAttachState((current) => ({
-                      ...current,
-                      file: event.target.files?.[0] || null,
-                    }))
-                  }
-                />
-                {attachState.file ? (
-                  <p className="teacher-module-detail__attach-note">
-                    Selected file: <strong>{attachState.file.name}</strong>
-                  </p>
+                <div className="teacher-module-detail__attach-type-grid">
+                  <button
+                    type="button"
+                    className="teacher-module-detail__attach-type"
+                    data-active={attachSource === 'upload'}
+                    onClick={() => {
+                      setAttachSource('upload');
+                      setAttachState((current) => ({ ...current, itemId: '', file: null }));
+                    }}
+                  >
+                    <div>
+                      <strong>Upload New PDF</strong>
+                      <p>Upload a fresh PDF file for this module block.</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="teacher-module-detail__attach-type"
+                    data-active={attachSource === 'library'}
+                    onClick={() => {
+                      setAttachSource('library');
+                      setAttachState((current) => ({ ...current, file: null }));
+                      setLibraryPickerOpen(true);
+                    }}
+                  >
+                    <div>
+                      <strong>Choose from Library</strong>
+                      <p>Attach an existing General Module or My Library file.</p>
+                    </div>
+                  </button>
+                </div>
+
+                {attachSource === 'upload' ? (
+                  <>
+                    <label htmlFor="attach-file">PDF File</label>
+                    <Input
+                      id="attach-file"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(event) =>
+                        setAttachState((current) => ({
+                          ...current,
+                          file: event.target.files?.[0] || null,
+                          itemId: '',
+                        }))
+                      }
+                    />
+                    {attachState.file ? (
+                      <p className="teacher-module-detail__attach-note">
+                        Selected file: <strong>{attachState.file.name}</strong>
+                      </p>
+                    ) : (
+                      <p className="teacher-module-detail__attach-note">Upload a PDF to continue.</p>
+                    )}
+                  </>
                 ) : (
-                  <p className="teacher-module-detail__attach-note">Upload a PDF to continue.</p>
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-fit"
+                      onClick={() => setLibraryPickerOpen(true)}
+                    >
+                      Choose from Library
+                    </Button>
+                    {attachState.itemId ? (
+                      <p className="teacher-module-detail__attach-note">
+                        Library file selected. Add block to attach it to this section.
+                      </p>
+                    ) : (
+                      <p className="teacher-module-detail__attach-note">Choose a library file to continue.</p>
+                    )}
+                  </>
                 )}
               </div>
             ) : attachState.itemType ? (
@@ -1871,6 +1968,21 @@ export default function TeacherModuleDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LibraryFilePickerDialog
+        open={libraryPickerOpen}
+        onOpenChange={setLibraryPickerOpen}
+        subjectKey={normalizeLibrarySubjectKey(classItem.subjectCode, classItem.subjectName)}
+        gradeLevel={normalizeLibraryGradeLevel(classItem.subjectGradeLevel ?? classItem.section?.gradeLevel)}
+        onSelect={(file) =>
+          setAttachState((current) => ({
+            ...current,
+            itemType: 'file',
+            itemId: file.id,
+            file: null,
+          }))
+        }
+      />
 
       <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </div>

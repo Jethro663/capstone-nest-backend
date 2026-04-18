@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, isNotNull, max, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, max, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   assessmentAttempts,
@@ -259,6 +259,19 @@ export class ContentModulesService {
     }
 
     return item;
+  }
+
+  private findModuleItemById(
+    module: { sections: Array<{ items: Array<{ id: string }> }> },
+    itemId: string,
+  ) {
+    for (const section of module.sections) {
+      const matched = section.items.find((item) => item.id === itemId);
+      if (matched) {
+        return matched;
+      }
+    }
+    return null;
   }
 
   private ensureSingleTargetForType(dto: AttachModuleItemDto) {
@@ -602,6 +615,81 @@ export class ContentModulesService {
       throw new NotFoundException(`Module with ID "${moduleId}" not found`);
     }
     return module;
+  }
+
+  async getAttachedFileForDownload(
+    itemId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const item = await this.getModuleContextFromItem(itemId);
+    const classId = item.section.module.classId;
+    const moduleId = item.section.module.id;
+
+    await this.assertClassReadAccess(classId, userId, userRoles);
+
+    if (item.itemType !== ModuleItemType.File || !item.fileId) {
+      throw new BadRequestException(
+        'This module item does not have a downloadable file attachment',
+      );
+    }
+
+    if (this.hasRole(userRoles, RoleName.Student)) {
+      const module = await this.getModuleByClass(
+        classId,
+        moduleId,
+        userId,
+        userRoles,
+      );
+      const accessibleItem = this.findModuleItemById(module, itemId);
+      if (!accessibleItem) {
+        throw new ForbiddenException(
+          'You do not have access to this module attachment',
+        );
+      }
+    }
+
+    const file = await this.db.query.uploadedFiles.findFirst({
+      where: and(
+        eq(uploadedFiles.id, item.fileId),
+        isNull(uploadedFiles.deletedAt),
+      ),
+      columns: {
+        id: true,
+        classId: true,
+        scope: true,
+        originalName: true,
+        mimeType: true,
+        filePath: true,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException(
+        `File with ID "${item.fileId}" not found`,
+      );
+    }
+
+    if (file.classId && file.classId !== classId) {
+      throw new ForbiddenException(
+        'Attached file does not belong to this class context',
+      );
+    }
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'module.item_file_downloaded',
+      targetType: 'module_item',
+      targetId: itemId,
+      metadata: {
+        moduleId,
+        classId,
+        fileId: file.id,
+        scope: file.scope,
+      },
+    });
+
+    return file;
   }
 
   async createModule(

@@ -7,6 +7,7 @@ export interface UploadedFile {
   subjectKey?: LibrarySubjectKey | null;
   gradeLevel?: LibraryGradeLevel | null;
   teacherVisible?: boolean;
+  aiEnabled?: boolean;
   indexStatus?: LibraryIndexStatus;
   indexError?: string | null;
   indexedAt?: string | null;
@@ -97,6 +98,7 @@ export interface FileLibraryQuery {
   subjectKey?: LibrarySubjectKey;
   gradeLevel?: LibraryGradeLevel;
   teacherVisible?: boolean;
+  aiEnabled?: boolean;
   indexStatus?: LibraryIndexStatus;
   search?: string;
   page?: number;

@@ -11,7 +11,7 @@ import { LibraryIndexStatusDto } from '../dto/file-upload.dto';
 type LibraryIndexJobData = {
   fileId: string;
   actorId?: string | null;
-  reason: 'upload' | 'retry' | 'backfill';
+  reason: 'upload' | 'retry' | 'backfill' | 'metadata_update';
   queuedAt: string;
 };
 

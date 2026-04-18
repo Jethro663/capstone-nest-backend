@@ -8,8 +8,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { toast } from 'sonner';
 import type { Lesson, ContentBlock } from '@/types/lesson';
+import {
+  getStructuredLessonBlockHeading,
+  getStructuredLessonBlockHtml,
+  getStructuredLessonQuestionModel,
+  normalizeStructuredLessonBlock,
+} from '@/features/lesson-blocks/structured-content';
 
 function getBlockTextValue(content: ContentBlock['content']): string {
   if (typeof content === 'string') return content;
@@ -55,7 +62,11 @@ export default function StudentLessonViewPage() {
         lessonService.getCompletionStatus(lessonId).catch(() => ({ data: { completed: false } })),
       ]);
       setLesson(lessonRes.data);
-      setBlocks(lessonRes.data?.contentBlocks?.sort((a, b) => a.order - b.order) || []);
+      setBlocks(
+        lessonRes.data?.contentBlocks
+          ?.sort((a, b) => a.order - b.order)
+          .map((block) => normalizeStructuredLessonBlock(block)) || [],
+      );
       setIsCompleted(statusRes.data?.completed ?? false);
     } catch {
       toast.error('Failed to load lesson');
@@ -121,8 +132,8 @@ export default function StudentLessonViewPage() {
         <div className="h-full student-progress-fill transition-all" style={{ width: `${scrollProgress}%` }} />
       </div>
 
-      <div className="mx-auto max-w-3xl space-y-6">
-        <div>
+      <div className="mx-auto max-w-4xl space-y-6 px-4 pb-10 pt-4">
+        <section className="overflow-hidden rounded-[2rem] border border-[var(--student-outline)] bg-[linear-gradient(135deg,var(--student-elevated),white)] p-6 shadow-sm">
           <Button
             variant="ghost"
             size="sm"
@@ -135,9 +146,39 @@ export default function StudentLessonViewPage() {
           {lesson.description && (
             <p className="mt-1 text-[var(--student-text-muted)]">{lesson.description}</p>
           )}
-        </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Badge className="student-badge">{isCompleted ? 'Completed' : 'In progress'}</Badge>
+            <Badge variant="outline" className="border-[var(--student-outline)] bg-white/70 text-[var(--student-text-muted)]">
+              {blocks.length} sections
+            </Badge>
+          </div>
+        </section>
 
-        <div className="space-y-6">
+        {blocks.some((block) => Boolean(getStructuredLessonBlockHeading(block))) ? (
+          <Card className="student-card">
+            <CardContent className="p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
+                Lesson outline
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {blocks
+                  .map((block) => ({ id: block.id, heading: getStructuredLessonBlockHeading(block) }))
+                  .filter((entry) => entry.heading)
+                  .map((entry) => (
+                    <a
+                      key={entry.id}
+                      href={`#lesson-block-${entry.id}`}
+                      className="rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-sm text-[var(--student-text-strong)] transition hover:border-[var(--student-accent)] hover:text-[var(--student-accent)]"
+                    >
+                      {entry.heading}
+                    </a>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        <div className="space-y-5">
           {blocks.map((block) => (
             <ContentBlockRenderer key={block.id} block={block} />
           ))}
@@ -183,19 +224,45 @@ export default function StudentLessonViewPage() {
 }
 
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
+  const heading = getStructuredLessonBlockHeading(block);
   switch (block.type) {
-    case 'text':
+    case 'text': {
+      const html = getStructuredLessonBlockHtml(block);
+      const variant = typeof block.metadata?.variant === 'string' ? block.metadata.variant : 'body';
+      const surfaceClass =
+        variant === 'objectives'
+          ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]'
+          : variant === 'key_points'
+            ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)]'
+            : variant === 'example'
+              ? 'border-amber-200 bg-amber-50'
+              : variant === 'recap'
+                ? 'border-sky-200 bg-sky-50'
+                : variant === 'reflection'
+                  ? 'border-fuchsia-200 bg-fuchsia-50'
+                  : 'border-[var(--student-outline)] bg-white';
       return (
-        <div
-          className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]"
-          dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }}
-        />
+        <Card id={`lesson-block-${block.id}`} className={`student-card ${surfaceClass}`}>
+          <CardContent className="space-y-3 p-5">
+            {heading ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
+                  {heading}
+                </p>
+              </div>
+            ) : null}
+            <div className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]">
+              <RichTextRenderer html={html} />
+            </div>
+          </CardContent>
+        </Card>
       );
+    }
     case 'image': {
       const src = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
       const caption = (block.metadata as Record<string, string>)?.caption;
       return (
-        <figure>
+        <figure id={`lesson-block-${block.id}`}>
           {src && (
             <Image
               src={src}
@@ -218,7 +285,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         ? url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')
         : url;
       return (
-        <div className="aspect-video overflow-hidden rounded-lg">
+        <div id={`lesson-block-${block.id}`} className="aspect-video overflow-hidden rounded-lg">
           <iframe
             src={embedUrl}
             className="h-full w-full"
@@ -228,22 +295,52 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         </div>
       );
     }
-    case 'question':
+    case 'question': {
+      const model = getStructuredLessonQuestionModel(block);
       return (
-        <Card className="student-card border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]">
-          <CardContent className="p-4">
-            <Badge className="student-badge mb-2">Quiz Question</Badge>
-            <p className="whitespace-pre-wrap font-medium text-[var(--student-text-strong)]">
-              {getBlockTextValue(block.content)}
+        <Card id={`lesson-block-${block.id}`} className="student-card border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]">
+          <CardContent className="space-y-4 p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="student-badge">Checkpoint</Badge>
+              {model.points > 0 ? (
+                <Badge variant="outline" className="border-[var(--student-outline)] bg-white/70 text-[var(--student-text-muted)]">
+                  {model.points} pts
+                </Badge>
+              ) : null}
+            </div>
+            <p className="whitespace-pre-wrap text-base font-semibold text-[var(--student-text-strong)]">
+              {model.prompt}
             </p>
+            {model.choices.length > 0 ? (
+              <div className="space-y-2">
+                {model.choices.map((choice) => (
+                  <div
+                    key={choice}
+                    className="rounded-2xl border border-[var(--student-outline)] bg-white/80 px-4 py-3 text-sm text-[var(--student-text-strong)]"
+                  >
+                    {choice}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-[var(--student-outline)] bg-white/60 px-4 py-3 text-sm text-[var(--student-text-muted)]">
+                Answer in your own words.
+              </div>
+            )}
+            {model.explanation ? (
+              <div className="rounded-2xl border border-[var(--student-outline)] bg-white/60 px-4 py-3 text-sm text-[var(--student-text-muted)]">
+                {model.explanation}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       );
+    }
     case 'file': {
       const fileName = (block.metadata as Record<string, string>)?.fileName || getBlockTextValue(block.content) || 'File';
       const fileUrl = (block.metadata as Record<string, string>)?.url;
       return (
-        <Card className="student-card">
+        <Card id={`lesson-block-${block.id}`} className="student-card">
           <CardContent className="flex items-center gap-3 p-4">
             <span className="text-2xl">File</span>
             <div>
@@ -259,10 +356,10 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
       );
     }
     case 'divider':
-      return <hr className="my-6 border-[var(--student-outline)]" />;
+      return <hr id={`lesson-block-${block.id}`} className="my-6 border-[var(--student-outline)]" />;
     default:
       return (
-        <Card className="student-card">
+        <Card id={`lesson-block-${block.id}`} className="student-card">
           <CardContent className="p-4 text-[var(--student-text-muted)]">
             Unsupported content type: {block.type}
           </CardContent>

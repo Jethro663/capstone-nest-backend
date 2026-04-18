@@ -84,6 +84,11 @@ export class UploadFileDto {
   @IsBoolean()
   @IsOptional()
   teacherVisible?: boolean;
+
+  @Transform(({ value }) => toBoolean(value))
+  @IsBoolean()
+  @IsOptional()
+  aiEnabled?: boolean;
 }
 
 export class FileQueryDto {
@@ -202,6 +207,11 @@ export class UpdateFileMetadataDto {
   })
   @IsOptional()
   gradeLevel?: GradeLevelDto;
+
+  @Transform(({ value }) => toBoolean(value))
+  @IsBoolean()
+  @IsOptional()
+  aiEnabled?: boolean;
 
   @IsBoolean()
   @IsOptional()

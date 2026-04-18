@@ -34,6 +34,44 @@ export interface UseLibraryWorkspaceOptions {
   enabled?: boolean;
 }
 
+function normalizeLibrarySubjectKey(
+  subjectCode?: string | null,
+  subjectName?: string | null,
+): LibrarySubjectKey | undefined {
+  const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+  if (raw.includes('science') || raw.includes('sci')) return 'science';
+  if (raw.includes('math')) return 'math';
+  if (raw.includes('english') || raw.includes('eng')) return 'english';
+  if (raw.includes('filipino') || raw.includes('fil')) return 'filipino';
+  if (raw.includes('araling') || raw.includes('panlipunan') || /\bap\b/.test(raw)) return 'ap';
+  if (raw.includes('tle')) return 'tle';
+  if (raw.includes('mapeh')) return 'mapeh';
+  if (raw.includes('esp') || raw.includes('values') || raw.includes('pagpapakatao')) return 'esp';
+  return undefined;
+}
+
+function normalizeLibraryGradeLevel(value?: string | null): LibraryGradeLevel | undefined {
+  const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+  if (!match) return undefined;
+  return match[1] as LibraryGradeLevel;
+}
+
+function getClassLibraryPartition(classItem?: ClassItem | null): {
+  subjectKey?: LibrarySubjectKey;
+  gradeLevel?: LibraryGradeLevel;
+} {
+  if (!classItem) {
+    return {};
+  }
+
+  return {
+    subjectKey: normalizeLibrarySubjectKey(classItem.subjectCode, classItem.subjectName),
+    gradeLevel: normalizeLibraryGradeLevel(
+      classItem.subjectGradeLevel ?? classItem.section?.gradeLevel,
+    ),
+  };
+}
+
 export interface LibraryWorkspaceController {
   role: LibraryRole;
   mode: LibraryMode;
@@ -47,7 +85,10 @@ export interface LibraryWorkspaceController {
   classFilter: string;
   subjectFilter: LibrarySubjectKey | '';
   gradeFilter: LibraryGradeLevel | '';
+  uploadDestination: 'personal' | 'class';
   uploadClassId: string;
+  uploadSubjectKey: LibrarySubjectKey | '';
+  uploadGradeLevel: LibraryGradeLevel | '';
   page: number;
   limit: number;
   total: number;
@@ -64,7 +105,10 @@ export interface LibraryWorkspaceController {
   setClassFilter: (value: string) => void;
   setSubjectFilter: (value: LibrarySubjectKey | '') => void;
   setGradeFilter: (value: LibraryGradeLevel | '') => void;
+  setUploadDestination: (value: 'personal' | 'class') => void;
   setUploadClassId: (value: string) => void;
+  setUploadSubjectKey: (value: LibrarySubjectKey | '') => void;
+  setUploadGradeLevel: (value: LibraryGradeLevel | '') => void;
   setPage: (value: number) => void;
   setFolderTrail: (updater: LibraryFolder[] | ((prev: LibraryFolder[]) => LibraryFolder[])) => void;
   setCreateFolderOpen: (open: boolean) => void;
@@ -81,6 +125,7 @@ export interface LibraryWorkspaceController {
   handleRenameSubmit: () => Promise<void>;
   handlePublishToggle: (file: UploadedFile) => Promise<void>;
   handleVisibilityToggle: (file: UploadedFile) => Promise<void>;
+  handleAiEnabledToggle: (file: UploadedFile) => Promise<void>;
   handleRetryIndex: (file: UploadedFile) => Promise<void>;
   handleMoveSubmit: () => Promise<void>;
   openMoveDialog: (file: UploadedFile) => void;
@@ -99,6 +144,7 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
   const [classFilter, setClassFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState<LibrarySubjectKey | ''>('');
   const [gradeFilter, setGradeFilter] = useState<LibraryGradeLevel | ''>('');
+  const [uploadDestination, setUploadDestination] = useState<'personal' | 'class'>('personal');
   const [loading, setLoading] = useState(enabled);
   const [uploading, setUploading] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
@@ -108,6 +154,8 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedUpload, setSelectedUpload] = useState<File | null>(null);
   const [uploadClassId, setUploadClassId] = useState('');
+  const [uploadSubjectKey, setUploadSubjectKey] = useState<LibrarySubjectKey | ''>('');
+  const [uploadGradeLevel, setUploadGradeLevel] = useState<LibraryGradeLevel | ''>('');
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [total, setTotal] = useState(0);
@@ -144,7 +192,7 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     try {
       const scope = role === 'admin' ? 'general' : mode;
       const folderId = currentFolder?.id;
-      const folderPromise = role === 'admin'
+      const folderPromise = role === 'admin' || scope === 'general'
         ? Promise.resolve({ data: [] as LibraryFolder[] })
         : fileService.getFolders({
             scope,
@@ -156,7 +204,10 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
         fileService.getAll({
           scope,
           folderId,
-          classId: role === 'admin' ? undefined : classFilter || undefined,
+          classId:
+            role === 'admin' || scope === 'general'
+              ? undefined
+              : classFilter || undefined,
           subjectKey: subjectFilter || undefined,
           gradeLevel: gradeFilter || undefined,
           teacherVisible: role === 'admin' ? undefined : scope === 'general' ? true : undefined,
@@ -201,6 +252,13 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
 
   useEffect(() => {
     setFolderTrail([]);
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === 'general') {
+      setUploadClassId('');
+      setSelectedUpload(null);
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -341,6 +399,26 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     }
   }, [gradeFilter, loadLibrary, subjectFilter]);
 
+  const handleAiEnabledToggle = useCallback(async (file: UploadedFile) => {
+    try {
+      await fileService.update(file.id, {
+        aiEnabled: !(file.aiEnabled ?? true),
+        classId: file.classId ?? null,
+        folderId: file.folderId ?? null,
+        scope: file.scope,
+        subjectKey: file.subjectKey ?? undefined,
+        gradeLevel: file.gradeLevel ?? undefined,
+      });
+      toast.success(file.aiEnabled === false ? 'AI access enabled' : 'AI access disabled');
+      await loadLibrary();
+    } catch (error: unknown) {
+      toast.error(
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          'Failed to update AI usage',
+      );
+    }
+  }, [loadLibrary]);
+
   const handleRetryIndex = useCallback(async (file: UploadedFile) => {
     try {
       await fileService.retryIndex(file.id);
@@ -389,20 +467,66 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
       toast.error('Choose a subject and grade before uploading to General Modules.');
       return;
     }
+    if (role === 'teacher' && mode !== 'private') {
+      toast.error('Teachers can only upload files inside My Library.');
+      return;
+    }
+
+    const teacherUploadClass =
+      role !== 'teacher' || uploadDestination !== 'class'
+        ? undefined
+        : classes.find((item) => item.id === uploadClassId);
+    const teacherUploadPartition = getClassLibraryPartition(teacherUploadClass);
+
+    if (role === 'teacher' && (!uploadSubjectKey || !uploadGradeLevel)) {
+      toast.error('Choose a subject and grade before uploading to My Library.');
+      return;
+    }
+
+    if (role === 'teacher' && uploadDestination === 'class' && !uploadClassId) {
+      toast.error('Choose a class for class-specific library files.');
+      return;
+    }
+
+    if (
+      role === 'teacher' &&
+      uploadDestination === 'class' &&
+      teacherUploadClass &&
+      (teacherUploadPartition.subjectKey !== uploadSubjectKey ||
+        teacherUploadPartition.gradeLevel !== uploadGradeLevel)
+    ) {
+      toast.error('Selected subject and grade must match the chosen class.');
+      return;
+    }
 
     try {
       setUploading(true);
       await fileService.upload(selectedUpload, {
         scope: role === 'admin' ? 'general' : mode,
         folderId: role === 'admin' ? undefined : currentFolder?.id,
-        classId: role === 'admin' ? undefined : uploadClassId || undefined,
-        subjectKey: role === 'admin' ? subjectFilter || undefined : undefined,
-        gradeLevel: role === 'admin' ? gradeFilter || undefined : undefined,
+        classId:
+          role === 'admin'
+            ? undefined
+            : uploadDestination === 'class'
+              ? uploadClassId || undefined
+              : undefined,
+        subjectKey:
+          role === 'admin'
+            ? subjectFilter || undefined
+            : uploadSubjectKey || undefined,
+        gradeLevel:
+          role === 'admin'
+            ? gradeFilter || undefined
+            : uploadGradeLevel || undefined,
+        aiEnabled: role === 'teacher' ? true : undefined,
         teacherVisible: true,
       });
       toast.success('Module uploaded successfully');
       setSelectedUpload(null);
+      setUploadDestination('personal');
       setUploadClassId('');
+      setUploadSubjectKey('');
+      setUploadGradeLevel('');
       await loadLibrary();
     } catch (error: unknown) {
       toast.error(
@@ -412,7 +536,20 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     } finally {
       setUploading(false);
     }
-  }, [currentFolder?.id, gradeFilter, loadLibrary, mode, role, selectedUpload, subjectFilter, uploadClassId]);
+  }, [
+    classes,
+    currentFolder?.id,
+    gradeFilter,
+    loadLibrary,
+    mode,
+    role,
+    selectedUpload,
+    subjectFilter,
+    uploadClassId,
+    uploadDestination,
+    uploadGradeLevel,
+    uploadSubjectKey,
+  ]);
 
   return {
     role,
@@ -427,7 +564,10 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     classFilter,
     subjectFilter,
     gradeFilter,
+    uploadDestination,
     uploadClassId,
+    uploadSubjectKey,
+    uploadGradeLevel,
     page,
     limit,
     total,
@@ -444,7 +584,10 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     setClassFilter,
     setSubjectFilter,
     setGradeFilter,
+    setUploadDestination,
     setUploadClassId,
+    setUploadSubjectKey,
+    setUploadGradeLevel,
     setPage,
     setFolderTrail,
     setCreateFolderOpen,
@@ -461,6 +604,7 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     handleRenameSubmit,
     handlePublishToggle,
     handleVisibilityToggle,
+    handleAiEnabledToggle,
     handleRetryIndex,
     handleMoveSubmit,
     openMoveDialog,

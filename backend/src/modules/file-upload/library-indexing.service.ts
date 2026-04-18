@@ -4,7 +4,7 @@ import { Queue } from 'bullmq';
 
 interface QueueFileIndexOptions {
   actorId?: string;
-  reason: 'upload' | 'retry' | 'backfill';
+  reason: 'upload' | 'retry' | 'backfill' | 'metadata_update';
 }
 
 @Injectable()

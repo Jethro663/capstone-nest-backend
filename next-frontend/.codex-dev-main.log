@@ -1,0 +1,135 @@
+
+> next-frontend@0.1.0 dev:webpack
+> next dev --webpack -p 3001
+
+▲ Next.js 16.1.6 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://26.144.237.3:3001
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 18.4s
+○ Compiling proxy ...
+○ Compiling /login ...
+ GET /login 200 in 4.4s (compile: 75ms, proxy.ts: 3.1s, render: 1220ms)
+ GET /login?from=%2Fdashboard%2Fteacher%2Flibrary 200 in 478ms (compile: 188ms, proxy.ts: 21ms, render: 270ms)
+(node:53672) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+○ Compiling /dashboard/teacher/library ...
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: RangeError: Array buffer allocation failed
+ GET /dashboard/teacher/library 200 in 67s (compile: 46s, proxy.ts: 573ms, render: 20.3s)
+ GET /dashboard/teacher/library 200 in 1702ms (compile: 97ms, proxy.ts: 104ms, render: 1500ms)
+○ Compiling /login ...
+ GET /login 200 in 3.7s (compile: 7ms, proxy.ts: 18ms, render: 3.6s)
+ GET /login?email=teacher1%40lms.local&password=Teacher123%21 200 in 2.1s (compile: 453ms, proxy.ts: 208ms, render: 1456ms)
+ GET /dashboard/teacher/library 200 in 2.5s (compile: 358ms, proxy.ts: 107ms, render: 1996ms)
+ GET /dashboard/teacher/library 200 in 626ms (compile: 57ms, proxy.ts: 26ms, render: 543ms)
+○ Compiling /dashboard/student ...
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ GET /dashboard/student 200 in 109s (compile: 103s, proxy.ts: 159ms, render: 5.3s)
+ GET /login 200 in 9.5s (compile: 1034ms, proxy.ts: 7.6s, render: 843ms)
+ GET /dashboard/teacher/library 200 in 10.0s (compile: 773ms, proxy.ts: 7.6s, render: 1621ms)
+ GET /dashboard/teacher/library 200 in 5.4s (compile: 186ms, proxy.ts: 276ms, render: 4.9s)
+ GET /login 200 in 1989ms (compile: 376ms, proxy.ts: 362ms, render: 1251ms)
+ GET /login 200 in 5.7s (compile: 1160ms, proxy.ts: 392ms, render: 4.1s)
+ GET /dashboard/teacher/library 200 in 4.8s (compile: 246ms, proxy.ts: 161ms, render: 4.4s)
+○ Compiling /dashboard/teacher/classes/[id]/modules/[moduleId] ...
+ GET /dashboard/teacher/library 200 in 1192ms (compile: 452ms, proxy.ts: 268ms, render: 473ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 62s (compile: 55s, proxy.ts: 40ms, render: 6.5s)
+ GET /login 200 in 1168ms (compile: 519ms, proxy.ts: 25ms, render: 624ms)
+ GET /login 200 in 3.0s (compile: 239ms, proxy.ts: 177ms, render: 2.6s)
+ GET /login 200 in 989ms (compile: 79ms, proxy.ts: 34ms, render: 877ms)
+○ Compiling /dashboard/teacher ...
+ GET /login 200 in 3.1s (compile: 218ms, proxy.ts: 33ms, render: 2.9s)
+ GET /dashboard/teacher 200 in 5.5s (compile: 523ms, proxy.ts: 429ms, render: 4.6s)
+ GET /dashboard/teacher/library 200 in 5.9s (compile: 3.7s, proxy.ts: 430ms, render: 1806ms)
+ GET /login 200 in 1105ms (compile: 99ms, proxy.ts: 21ms, render: 986ms)
+ GET /dashboard/teacher 200 in 1039ms (compile: 134ms, proxy.ts: 91ms, render: 814ms)
+ GET /dashboard/teacher/library 200 in 1349ms (compile: 313ms, proxy.ts: 155ms, render: 882ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 863ms (compile: 194ms, proxy.ts: 17ms, render: 651ms)
+ GET /login 200 in 771ms (compile: 80ms, proxy.ts: 21ms, render: 670ms)
+ GET /dashboard/teacher 200 in 806ms (compile: 163ms, proxy.ts: 65ms, render: 577ms)
+ GET /dashboard/teacher/library 200 in 1939ms (compile: 406ms, proxy.ts: 496ms, render: 1038ms)
+ GET /login 200 in 1972ms (compile: 541ms, proxy.ts: 47ms, render: 1384ms)
+ GET /login 200 in 4.0s (compile: 705ms, proxy.ts: 530ms, render: 2.7s)
+ GET /login 200 in 2.6s (compile: -464663µs, proxy.ts: 1840ms, render: 1188ms)
+ GET /dashboard/teacher 200 in 1644ms (compile: 174ms, proxy.ts: 27ms, render: 1443ms)
+○ Compiling /dashboard/teacher/classes ...
+ GET /dashboard/teacher/classes 200 in 43s (compile: 42s, proxy.ts: 30ms, render: 725ms)
+ GET /dashboard/teacher/library 200 in 46s (compile: 897ms, proxy.ts: 42s, render: 2.7s)
+ GET /login 200 in 3.2s (compile: 665ms, proxy.ts: 190ms, render: 2.3s)
+ GET /dashboard/teacher 200 in 1232ms (compile: 254ms, proxy.ts: 65ms, render: 912ms)
+ GET /dashboard/teacher/library 200 in 1988ms (compile: 424ms, proxy.ts: 384ms, render: 1180ms)
+ GET /login 200 in 2.7s (compile: 1250ms, proxy.ts: 35ms, render: 1376ms)
+ GET /dashboard/teacher 200 in 596ms (compile: 135ms, proxy.ts: 110ms, render: 351ms)
+ GET /dashboard/teacher/library 200 in 1877ms (compile: 184ms, proxy.ts: 146ms, render: 1547ms)
+ GET /login 200 in 1251ms (compile: 150ms, proxy.ts: 33ms, render: 1067ms)
+ GET /login 200 in 3.0s (compile: 837ms, proxy.ts: 443ms, render: 1729ms)
+ GET /login 200 in 1880ms (compile: 272ms, proxy.ts: 327ms, render: 1281ms)
+ GET /login?from=%2Fdashboard%2Fteacher%2Flibrary 200 in 2.1s (compile: 111ms, proxy.ts: 681ms, render: 1261ms)
+ GET /login?from=%2Fdashboard%2Fteacher%2Fclasses%2Ff71bebea-e122-4cd4-9d01-10d543ff1bf1%2Fmodules%2F866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 951ms (compile: 163ms, proxy.ts: 165ms, render: 622ms)
+ GET /login?from=%2Fdashboard%2Fstudent%2Fclasses%2Ff71bebea-e122-4cd4-9d01-10d543ff1bf1%2Fmodules%2F866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 1689ms (compile: 102ms, proxy.ts: 108ms, render: 1479ms)
+ GET /login 200 in 1473ms (compile: 177ms, proxy.ts: 80ms, render: 1216ms)
+ GET /login?email=teacher1%40lms.local&password=Teacher123%21 200 in 1651ms (compile: 218ms, proxy.ts: 221ms, render: 1213ms)
+ GET /login 200 in 1411ms (compile: 94ms, proxy.ts: 255ms, render: 1062ms)
+ GET /dashboard/teacher 200 in 561ms (compile: 118ms, proxy.ts: 62ms, render: 380ms)
+ GET /login 200 in 1074ms (compile: 278ms, proxy.ts: 47ms, render: 749ms)
+ GET /login 200 in 994ms (compile: 80ms, proxy.ts: 274ms, render: 641ms)
+ GET /login 200 in 1498ms (compile: 103ms, proxy.ts: 486ms, render: 909ms)
+ GET /dashboard/teacher/library 200 in 1249ms (compile: 251ms, proxy.ts: 256ms, render: 742ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 713ms (compile: 280ms, proxy.ts: 20ms, render: 412ms)
+ GET /login 200 in 5.7s (compile: 837ms, proxy.ts: 1490ms, render: 3.3s)
+ GET /login 200 in 5.7s (compile: 836ms, proxy.ts: 1491ms, render: 3.3s)
+ GET /login 200 in 1090ms (compile: 110ms, proxy.ts: 91ms, render: 888ms)
+ GET /dashboard/teacher 200 in 354ms (compile: 64ms, proxy.ts: 76ms, render: 215ms)
+ GET /login 200 in 756ms (compile: 94ms, proxy.ts: 20ms, render: 642ms)
+ GET /login 200 in 863ms (compile: 201ms, proxy.ts: 361ms, render: 300ms)
+ GET /dashboard/teacher/library 200 in 992ms (compile: 267ms, proxy.ts: 132ms, render: 593ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 999ms (compile: 352ms, proxy.ts: 28ms, render: 618ms)
+ GET /login 200 in 2.1s (compile: 482ms, proxy.ts: 73ms, render: 1584ms)
+ GET /dashboard/teacher 200 in 788ms (compile: 307ms, proxy.ts: 125ms, render: 356ms)
+ GET /dashboard/teacher/library 200 in 2000ms (compile: 126ms, proxy.ts: 437ms, render: 1436ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 799ms (compile: 106ms, proxy.ts: 25ms, render: 668ms)
+ GET /login 200 in 1002ms (compile: 29ms, proxy.ts: 26ms, render: 947ms)
+ GET /dashboard/teacher 200 in 589ms (compile: 283ms, proxy.ts: 32ms, render: 274ms)
+ GET /dashboard/teacher/library 200 in 1526ms (compile: 399ms, proxy.ts: 205ms, render: 922ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 1247ms (compile: 197ms, proxy.ts: 244ms, render: 805ms)
+ GET /login 200 in 3.9s (compile: 153ms, proxy.ts: 375ms, render: 3.4s)
+ GET /dashboard/teacher 200 in 630ms (compile: 17ms, proxy.ts: 21ms, render: 592ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 5.1s (compile: 1411ms, proxy.ts: 579ms, render: 3.1s)
+ GET /login 200 in 7.4s (compile: 979ms, proxy.ts: 3.4s, render: 3.0s)
+ GET /login 200 in 7.5s (compile: 620ms, proxy.ts: 3.0s, render: 3.9s)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 2.8s (compile: 375ms, proxy.ts: 153ms, render: 2.3s)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 1396ms (compile: 191ms, proxy.ts: 56ms, render: 1149ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 1314ms (compile: 222ms, proxy.ts: 179ms, render: 912ms)
+ GET /dashboard/teacher/library 200 in 970ms (compile: 138ms, proxy.ts: 333ms, render: 499ms)
+ GET /dashboard/teacher/library 200 in 1572ms (compile: 176ms, proxy.ts: 326ms, render: 1070ms)
+ GET /login 200 in 8.7s (compile: 2.5s, proxy.ts: 1688ms, render: 4.6s)
+ GET /login 200 in 9.1s (compile: 2.5s, proxy.ts: 1681ms, render: 4.9s)
+ GET /dashboard/teacher/library 200 in 652ms (compile: 79ms, proxy.ts: 133ms, render: 441ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 987ms (compile: 228ms, proxy.ts: 104ms, render: 654ms)
+○ Compiling /dashboard/student/classes/[id]/modules/[moduleId] ...
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 31.4s (compile: 29.3s, proxy.ts: 380ms, render: 1715ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 6.0s (compile: 5.4s, proxy.ts: 275ms, render: 339ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 446ms (compile: 96ms, proxy.ts: 99ms, render: 250ms)
+ GET /dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 916ms (compile: 83ms, proxy.ts: 24ms, render: 809ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 803ms (compile: 230ms, proxy.ts: 88ms, render: 486ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 946ms (compile: 118ms, proxy.ts: 413ms, render: 415ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 333ms (compile: 36ms, proxy.ts: 20ms, render: 278ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 874ms (compile: 151ms, proxy.ts: 78ms, render: 645ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 395ms (compile: 65ms, proxy.ts: 21ms, render: 309ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 432ms (compile: 55ms, proxy.ts: 35ms, render: 341ms)
+ GET /dashboard/teacher/library 200 in 331ms (compile: 93ms, proxy.ts: 18ms, render: 220ms)
+Failed to proxy http://127.0.0.1:3000/api/files/upload?scope=private&classId=f71bebea-e122-4cd4-9d01-10d543ff1bf1&subjectKey=math&gradeLevel=7&aiEnabled=true&teacherVisible=true Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+○ Compiling /_error ...
+ GET /login 200 in 3.0s (compile: 2.5s, proxy.ts: 23ms, render: 489ms)
+○ Compiling /dashboard/teacher/classes ...
+ GET /dashboard/teacher/classes 200 in 4.8s (compile: 4.5s, proxy.ts: 13ms, render: 272ms)
+ GET /dashboard/student/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/modules/866a3138-cc87-45ff-9bd8-9646d6a5356b 200 in 765ms (compile: 72ms, proxy.ts: 18ms, render: 675ms)

@@ -154,6 +154,7 @@ describe('FileUploadController', () => {
           subjectKey: undefined,
           gradeLevel: undefined,
           teacherVisible: undefined,
+          aiEnabled: undefined,
           contentHash: expect.any(String),
           fileKind: 'pdf',
         },
@@ -408,6 +409,29 @@ describe('FileUploadController', () => {
       await expect(
         controller.deleteFile(FILE_ID, TEACHER_USER),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  // =========================================================================
+  // retryIndex â€” POST /files/:id/index/retry
+  // =========================================================================
+
+  describe('retryIndex', () => {
+    it('allows a teacher to retry indexing their file', async () => {
+      const record = makeRecord();
+      mockFileUploadService.retryIndex.mockResolvedValue(record);
+
+      const result = await controller.retryIndex(FILE_ID, TEACHER_USER);
+
+      expect(result).toEqual({
+        success: true,
+        message: 'Library indexing queued',
+        data: record,
+      });
+      expect(mockFileUploadService.retryIndex).toHaveBeenCalledWith(
+        FILE_ID,
+        TEACHER_USER,
+      );
     });
   });
 });

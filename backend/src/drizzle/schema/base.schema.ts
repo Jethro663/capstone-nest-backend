@@ -1150,6 +1150,7 @@ export const uploadedFiles = pgTable(
       onDelete: 'cascade',
     }),
     scope: fileScopeEnum('scope').notNull().default('private'),
+    aiEnabled: boolean('ai_enabled').notNull().default(true),
     subjectKey: librarySubjectKeyEnum('subject_key'),
     gradeLevel: gradeLevelEnum('grade_level'),
     teacherVisible: boolean('teacher_visible').notNull().default(true),
@@ -1173,6 +1174,16 @@ export const uploadedFiles = pgTable(
     teacherIdx: index('uploaded_files_teacher_idx').on(table.teacherId),
     classIdx: index('uploaded_files_class_idx').on(table.classId),
     scopeIdx: index('uploaded_files_scope_idx').on(table.scope),
+    teacherAiEnabledLookupIdx: index(
+      'uploaded_files_teacher_ai_enabled_lookup_idx',
+    ).on(
+      table.teacherId,
+      table.aiEnabled,
+      table.scope,
+      table.subjectKey,
+      table.gradeLevel,
+      table.deletedAt,
+    ),
     generalPartitionIdx: index('uploaded_files_general_partition_idx').on(
       table.scope,
       table.subjectKey,

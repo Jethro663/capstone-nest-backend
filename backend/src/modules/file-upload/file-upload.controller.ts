@@ -127,6 +127,7 @@ export class FileUploadController {
         subjectKey: query.subjectKey,
         gradeLevel: query.gradeLevel,
         teacherVisible: query.teacherVisible,
+        aiEnabled: query.aiEnabled,
         contentHash,
         fileKind,
       },
@@ -321,7 +322,7 @@ export class FileUploadController {
   }
 
   @Post(':id/index/retry')
-  @Roles(RoleName.Admin)
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async retryIndex(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: any,

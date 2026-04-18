@@ -63,14 +63,14 @@ export interface CreateContentBlockDto {
   lessonId?: string;
   type: ContentBlockType;
   order: number;
-  content?: string;
+  content?: string | Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 
 export interface UpdateContentBlockDto {
   type?: ContentBlockType;
   order?: number;
-  content?: string;
+  content?: string | Record<string, unknown>;
   metadata?: Record<string, unknown>;
 }
 

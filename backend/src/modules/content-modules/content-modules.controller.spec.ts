@@ -1,13 +1,35 @@
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import * as fs from 'fs';
 import { ContentModulesController } from './content-modules.controller';
 import { ContentModulesService } from './content-modules.service';
 
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
+  existsSync: jest.fn(),
+}));
+
 const CLASS_ID = '00000000-0000-0000-0000-000000000201';
 const MODULE_ID = '00000000-0000-0000-0000-000000000202';
+const ITEM_ID = '00000000-0000-0000-0000-000000000204';
 const USER = {
   userId: '00000000-0000-0000-0000-000000000203',
   roles: ['student'],
 };
+
+const mockExistsSync = fs.existsSync as jest.MockedFunction<typeof fs.existsSync>;
+
+function makeMockRes() {
+  const res: any = {
+    setHeader: jest.fn(),
+    sendFile: jest.fn(),
+    status: jest.fn(),
+    json: jest.fn(),
+  };
+  res.status.mockReturnValue(res);
+  res.json.mockReturnValue(res);
+  return res;
+}
 
 describe('ContentModulesController', () => {
   let controller: ContentModulesController;
@@ -15,10 +37,12 @@ describe('ContentModulesController', () => {
   const mockService = {
     getModulesByClass: jest.fn(),
     getModuleByClass: jest.fn(),
+    getAttachedFileForDownload: jest.fn(),
   };
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockExistsSync.mockReturnValue(true);
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ContentModulesController],
       providers: [
@@ -71,6 +95,61 @@ describe('ContentModulesController', () => {
       success: true,
       message: 'Module retrieved successfully',
       data: { id: MODULE_ID },
+    });
+  });
+
+  describe('downloadAttachedFile', () => {
+    it('sends the resolved attached file and applies headers', async () => {
+      mockService.getAttachedFileForDownload.mockResolvedValue({
+        id: 'file-1',
+        originalName: 'Private Notes.pdf',
+        mimeType: 'application/pdf',
+        filePath: './uploads/library/private-notes.pdf',
+      });
+
+      const res = makeMockRes();
+      await controller.downloadAttachedFile(ITEM_ID, USER, res);
+
+      expect(mockService.getAttachedFileForDownload).toHaveBeenCalledWith(
+        ITEM_ID,
+        USER.userId,
+        USER.roles,
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/pdf',
+      );
+      expect(res.sendFile).toHaveBeenCalled();
+    });
+
+    it('returns 404 json when the attached file is missing on disk', async () => {
+      mockExistsSync.mockReturnValue(false);
+      mockService.getAttachedFileForDownload.mockResolvedValue({
+        id: 'file-1',
+        originalName: 'Private Notes.pdf',
+        mimeType: 'application/pdf',
+        filePath: './uploads/library/private-notes.pdf',
+      });
+
+      const res = makeMockRes();
+      await controller.downloadAttachedFile(ITEM_ID, USER, res);
+
+      expect(res.status).toHaveBeenCalledWith(404);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, statusCode: 404 }),
+      );
+    });
+
+    it('propagates service not found before touching disk', async () => {
+      mockService.getAttachedFileForDownload.mockRejectedValue(
+        new NotFoundException(`File with ID "${ITEM_ID}" not found`),
+      );
+
+      const res = makeMockRes();
+      await expect(
+        controller.downloadAttachedFile(ITEM_ID, USER, res),
+      ).rejects.toThrow(NotFoundException);
+      expect(res.sendFile).not.toHaveBeenCalled();
     });
   });
 });

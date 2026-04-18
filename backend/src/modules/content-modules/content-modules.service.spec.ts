@@ -304,4 +304,109 @@ describe('ContentModulesService', () => {
       }),
     );
   });
+
+  it('allows students to download a teacher-private file when it is attached to an accessible module item', async () => {
+    db.query.moduleItems.findFirst.mockResolvedValue({
+      id: ITEM_ID,
+      itemType: ModuleItemType.File,
+      fileId: 'file-private-1',
+      isVisible: true,
+      section: {
+        module: {
+          id: MODULE_ID,
+          classId: CLASS_ID,
+        },
+      },
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    db.query.uploadedFiles.findFirst.mockResolvedValue({
+      id: 'file-private-1',
+      classId: null,
+      scope: 'private',
+      originalName: 'Private Notes.pdf',
+      mimeType: 'application/pdf',
+      filePath: 'uploads/library/private-notes.pdf',
+    });
+
+    const moduleByClassSpy = jest
+      .spyOn(service, 'getModuleByClass')
+      .mockResolvedValue({
+        id: MODULE_ID,
+        sections: [
+          {
+            id: SECTION_ID,
+            items: [
+              {
+                id: ITEM_ID,
+                itemType: ModuleItemType.File,
+                fileId: 'file-private-1',
+              },
+            ],
+          },
+        ],
+      } as any);
+
+    const result = await service.getAttachedFileForDownload(ITEM_ID, STUDENT_ID, [
+      RoleName.Student,
+    ]);
+
+    expect(moduleByClassSpy).toHaveBeenCalledWith(
+      CLASS_ID,
+      MODULE_ID,
+      STUDENT_ID,
+      [RoleName.Student],
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'file-private-1',
+        originalName: 'Private Notes.pdf',
+      }),
+    );
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'module.item_file_downloaded',
+        targetId: ITEM_ID,
+      }),
+    );
+  });
+
+  it('blocks students from downloading a module file that is not accessible in the student-visible module payload', async () => {
+    db.query.moduleItems.findFirst.mockResolvedValue({
+      id: ITEM_ID,
+      itemType: ModuleItemType.File,
+      fileId: 'file-private-1',
+      isVisible: true,
+      section: {
+        module: {
+          id: MODULE_ID,
+          classId: CLASS_ID,
+        },
+      },
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+
+    jest.spyOn(service, 'getModuleByClass').mockResolvedValue({
+      id: MODULE_ID,
+      sections: [
+        {
+          id: SECTION_ID,
+          items: [],
+        },
+      ],
+    } as any);
+
+    await expect(
+      service.getAttachedFileForDownload(ITEM_ID, STUDENT_ID, [
+        RoleName.Student,
+      ]),
+    ).rejects.toThrow('You do not have access to this module attachment');
+  });
 });

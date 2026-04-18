@@ -68,6 +68,11 @@ describe('DashboardTeacherLibraryPage', () => {
           id: 'class-1',
           subjectCode: 'MATH',
           subjectName: 'Mathematics',
+          subjectGradeLevel: '7',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
         },
       ],
     } as ClassByTeacherResponse);
@@ -110,7 +115,7 @@ describe('DashboardTeacherLibraryPage', () => {
     } as UploadResponse);
   });
 
-  it('renders teacher library page and uploads selected PDF', async () => {
+  it('uploads teacher library files with explicit destination metadata and aiEnabled', async () => {
     const { container } = render(<DashboardTeacherLibraryPage />);
 
     expect(await screen.findByRole('heading', { name: 'Nexora Library' })).toBeInTheDocument();
@@ -120,15 +125,25 @@ describe('DashboardTeacherLibraryPage', () => {
     const file = new File(['pdf'], 'module.pdf', { type: 'application/pdf' });
 
     fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Class-specific' }));
+    fireEvent.change(await screen.findByLabelText('Upload subject'), { target: { value: 'math' } });
+    fireEvent.change(await screen.findByLabelText('Upload grade'), { target: { value: '7' } });
+    fireEvent.change(await screen.findByLabelText('Upload class'), { target: { value: 'class-1' } });
 
-    const uploadButtons = await screen.findAllByRole('button', { name: 'Upload PDF' });
+    const uploadButtons = await screen.findAllByRole('button', { name: 'Upload File' });
     fireEvent.click(uploadButtons[uploadButtons.length - 1]);
 
     await waitFor(() =>
       expect(mockedFileService.upload).toHaveBeenCalledWith(
         file,
-        expect.objectContaining({ scope: 'private' }),
+        expect.objectContaining({
+          scope: 'private',
+          classId: 'class-1',
+          subjectKey: 'math',
+          gradeLevel: '7',
+          aiEnabled: true,
+        }),
       ),
     );
-  });
+  }, 15000);
 });

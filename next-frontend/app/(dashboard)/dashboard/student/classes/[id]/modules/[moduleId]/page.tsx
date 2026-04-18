@@ -21,7 +21,6 @@ import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
-import { fileService } from '@/services/file-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getTeacherName } from '@/utils/helpers';
@@ -458,7 +457,7 @@ export default function StudentModuleDetailPage() {
   const handleDownloadAttachment = useCallback(async (item: ModuleItem) => {
     if (!item.fileId) return;
     try {
-      const blob = await fileService.download(item.fileId);
+      const blob = await moduleService.downloadAttachedFile(item.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -889,3 +888,4 @@ export default function StudentModuleDetailPage() {
     </div>
   );
 }
+

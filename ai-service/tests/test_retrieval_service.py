@@ -185,7 +185,13 @@ class RetrievalTeacherOwnershipTests(unittest.IsolatedAsyncioTestCase):
 
         async def execute_side_effect(query, params=None):
             sql = str(query)
-            if "c.metadata_json->>'teacherId' = :teacherId" in sql and "c.metadata_json->>'scope' = 'private'" in sql:
+            if (
+                "c.metadata_json->>'teacherId' = :teacherId" in sql
+                and "c.metadata_json->>'scope' = 'private'" in sql
+                and "c.metadata_json->>'aiEnabled' = 'true'" in sql
+                and params is not None
+                and params.get("teacherId") == "teacher-1"
+            ):
                 return build_result([teacher_owned_row, general_row])
             return build_result([general_row, other_teacher_row])
 

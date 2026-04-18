@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FileUploadService } from './file-upload.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { contentChunks } from '../../drizzle/schema';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -34,6 +35,7 @@ const OTHER_TEACHER = {
 const makeSaveDto = (overrides: Partial<any> = {}) => ({
   teacherId: TEACHER_ID,
   classId: CLASS_ID,
+  aiEnabled: true,
   originalName: 'lecture.pdf',
   storedName: 'abc123_1700000000.pdf',
   mimeType: 'application/pdf',
@@ -46,6 +48,7 @@ const makeFileRecord = (overrides: Partial<any> = {}) => ({
   id: FILE_ID,
   teacherId: TEACHER_ID,
   classId: CLASS_ID,
+  aiEnabled: true,
   originalName: 'lecture.pdf',
   storedName: 'abc123_1700000000.pdf',
   mimeType: 'application/pdf',
@@ -143,7 +146,12 @@ describe('FileUploadService', () => {
       const record = makeFileRecord();
       mockDb.insert.mockReturnValue(makeInsertChain([record]));
 
-      const result = await service.saveFileRecord(makeSaveDto());
+      const result = await service.saveFileRecord(
+        makeSaveDto({
+          subjectKey: 'science',
+          gradeLevel: '7',
+        }),
+      );
 
       expect(mockDb.insert).toHaveBeenCalledTimes(1);
       expect(result).toEqual(record);
@@ -153,6 +161,8 @@ describe('FileUploadService', () => {
       const dto = makeSaveDto({
         originalName: 'chapter1.pdf',
         sizeBytes: 2_097_152,
+        subjectKey: 'science',
+        gradeLevel: '7',
       });
       const returnedRecord = makeFileRecord({
         originalName: 'chapter1.pdf',
@@ -185,7 +195,7 @@ describe('FileUploadService', () => {
           ADMIN_USER,
         ),
       ).rejects.toThrow(
-        'General module uploads must specify subjectKey and gradeLevel',
+        'AI-ready library files must specify subjectKey and gradeLevel',
       );
     });
 
@@ -214,6 +224,36 @@ describe('FileUploadService', () => {
 
       expect(queueFileIndex).toHaveBeenCalledWith(record.id, {
         actorId: ADMIN_ID,
+        reason: 'upload',
+      });
+    });
+
+    it('queues indexing for teacher private uploads when aiEnabled is true and a partition is provided', async () => {
+      const record = makeFileRecord({
+        scope: 'private',
+        classId: null,
+        subjectKey: 'science',
+        gradeLevel: '7',
+        aiEnabled: true,
+        indexStatus: 'pending',
+      });
+      mockDb.insert.mockReturnValue(makeInsertChain([record]));
+      const queueFileIndex = jest.fn().mockResolvedValue(undefined);
+      (service as any).libraryIndexingService = { queueFileIndex };
+
+      await service.saveFileRecord(
+        makeSaveDto({
+          classId: undefined,
+          scope: 'private',
+          subjectKey: 'science',
+          gradeLevel: '7',
+          aiEnabled: true,
+        }),
+        TEACHER_USER,
+      );
+
+      expect(queueFileIndex).toHaveBeenCalledWith(record.id, {
+        actorId: TEACHER_ID,
         reason: 'upload',
       });
     });
@@ -309,6 +349,157 @@ describe('FileUploadService', () => {
   });
 
   // =========================================================================
+  // updateFileMetadata
+  // =========================================================================
+
+  describe('updateFileMetadata', () => {
+    it('clears indexing state and preserves metadata when aiEnabled is turned off', async () => {
+      const record = makeFileRecord({
+        aiEnabled: true,
+        subjectKey: 'science',
+        gradeLevel: '7',
+        indexStatus: 'completed',
+        indexError: 'stale error',
+        indexedAt: new Date('2026-02-24T00:00:00Z'),
+      });
+      const updatedRecord = {
+        ...record,
+        aiEnabled: false,
+        indexStatus: 'not_indexed',
+        indexError: null,
+        indexedAt: null,
+      };
+      mockDb.query.uploadedFiles.findFirst
+        .mockResolvedValueOnce(record)
+        .mockResolvedValueOnce(updatedRecord);
+      const updateChain = makeUpdateChain();
+      mockDb.update.mockReturnValue(updateChain);
+      const deleteChain = makeDeleteChain();
+      mockDb.delete.mockReturnValue(deleteChain);
+
+      await service.updateFileMetadata(
+        FILE_ID,
+        { aiEnabled: false },
+        TEACHER_USER,
+      );
+
+      expect(updateChain.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiEnabled: false,
+          indexStatus: 'not_indexed',
+          indexError: null,
+          indexedAt: null,
+          subjectKey: 'science',
+          gradeLevel: '7',
+        }),
+      );
+      expect(mockDb.delete).toHaveBeenCalledWith(contentChunks);
+      expect(deleteChain.where).toHaveBeenCalled();
+    });
+
+    it('requires subject and grade before enabling aiEnabled on an existing private file', async () => {
+      const record = makeFileRecord({
+        aiEnabled: false,
+        subjectKey: null,
+        gradeLevel: null,
+        indexStatus: 'not_indexed',
+      });
+      mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
+
+      await expect(
+        service.updateFileMetadata(
+          FILE_ID,
+          { aiEnabled: true },
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow(
+        'AI-ready library files must specify subjectKey and gradeLevel',
+      );
+    });
+
+    it('queues indexing when aiEnabled is turned on with a partition using a metadata update reason', async () => {
+      const record = makeFileRecord({
+        aiEnabled: false,
+        subjectKey: 'science',
+        gradeLevel: '7',
+        indexStatus: 'not_indexed',
+      });
+      const updatedRecord = {
+        ...record,
+        aiEnabled: true,
+        indexStatus: 'pending',
+        indexError: null,
+        indexedAt: null,
+      };
+      mockDb.query.uploadedFiles.findFirst
+        .mockResolvedValueOnce(record)
+        .mockResolvedValueOnce(updatedRecord);
+      const updateChain = makeUpdateChain();
+      mockDb.update.mockReturnValue(updateChain);
+      const queueFileIndex = jest.fn().mockResolvedValue(undefined);
+      (service as any).libraryIndexingService = { queueFileIndex };
+
+      const result = await service.updateFileMetadata(
+        FILE_ID,
+        { aiEnabled: true, subjectKey: 'science', gradeLevel: '7' },
+        TEACHER_USER,
+      );
+
+      expect(updateChain.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          aiEnabled: true,
+          indexStatus: 'pending',
+          indexError: null,
+          indexedAt: null,
+          subjectKey: 'science',
+          gradeLevel: '7',
+        }),
+      );
+      expect(queueFileIndex).toHaveBeenCalledWith(FILE_ID, {
+        actorId: TEACHER_USER.id,
+        reason: 'metadata_update',
+      });
+      expect(result).toEqual(updatedRecord);
+    });
+
+    it('resyncs chunk partition metadata when a private AI-enabled file changes subject and grade', async () => {
+      const record = makeFileRecord({
+        scope: 'private',
+        classId: null,
+        aiEnabled: true,
+        subjectKey: 'science',
+        gradeLevel: '7',
+      });
+      const updatedRecord = {
+        ...record,
+        subjectKey: 'math',
+        gradeLevel: '8',
+      };
+      mockDb.query.uploadedFiles.findFirst
+        .mockResolvedValueOnce(record)
+        .mockResolvedValueOnce(updatedRecord);
+      const fileUpdateChain = makeUpdateChain();
+      const chunkUpdateChain = makeUpdateChain();
+      mockDb.update
+        .mockReturnValueOnce(fileUpdateChain)
+        .mockReturnValueOnce(chunkUpdateChain);
+
+      await service.updateFileMetadata(
+        FILE_ID,
+        { subjectKey: 'math', gradeLevel: '8' },
+        TEACHER_USER,
+      );
+
+      expect(chunkUpdateChain.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subjectKey: 'math',
+          gradeLevel: '8',
+        }),
+      );
+    });
+  });
+
+  // =========================================================================
   // softDelete
   // =========================================================================
 
@@ -353,6 +544,43 @@ describe('FileUploadService', () => {
         ForbiddenException,
       );
       expect(mockDb.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // retryIndex
+  // =========================================================================
+
+  describe('retryIndex', () => {
+    it('allows retrying indexing for a teacher-owned private AI-enabled file', async () => {
+      const record = makeFileRecord({
+        scope: 'private',
+        classId: null,
+        aiEnabled: true,
+        subjectKey: 'science',
+        gradeLevel: '7',
+        indexStatus: 'failed',
+      });
+      mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
+      const updateChain = makeUpdateChain();
+      mockDb.update.mockReturnValue(updateChain);
+      const queueFileIndex = jest.fn().mockResolvedValue(undefined);
+      (service as any).libraryIndexingService = { queueFileIndex };
+
+      const result = await service.retryIndex(FILE_ID, TEACHER_USER);
+
+      expect(updateChain.set).toHaveBeenCalledWith(
+        expect.objectContaining({
+          indexStatus: 'pending',
+          indexError: null,
+          indexedAt: null,
+        }),
+      );
+      expect(queueFileIndex).toHaveBeenCalledWith(FILE_ID, {
+        actorId: TEACHER_ID,
+        reason: 'retry',
+      });
+      expect(result).toEqual(record);
     });
   });
 

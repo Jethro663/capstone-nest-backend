@@ -57,7 +57,7 @@ jest.mock('@/services/assessment-service', () => ({
 }));
 
 jest.mock('@/services/file-service', () => ({
-  fileService: { upload: jest.fn() },
+  fileService: { upload: jest.fn(), getAll: jest.fn() },
 }));
 
 jest.mock('@/components/shared/ConfirmationDialog', () => ({
@@ -164,6 +164,31 @@ describe('TeacherModuleDetailPage', () => {
       message: 'ok',
       data: { id: 'file-1' } as never,
     });
+    mockedFileService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'general-file-1',
+          teacherId: 'admin-1',
+          scope: 'general',
+          originalName: 'General Science File',
+          storedName: 'general-science-file.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          filePath: 'uploads/library/general-science-file.pdf',
+          uploadedAt: '2026-04-17T00:00:00.000Z',
+          subjectKey: 'math',
+          gradeLevel: '7',
+          teacherVisible: true,
+        },
+      ],
+      count: 1,
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    } as never);
   });
 
   it('creates and attaches a new lesson block then opens lesson editor', async () => {
@@ -435,5 +460,35 @@ describe('TeacherModuleDetailPage', () => {
     await waitFor(() => {
       expect(mockedLessonService.delete).toHaveBeenCalledWith('lesson-orphan');
     });
+  });
+
+  it('attaches an existing library file instead of uploading a new pdf', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const fileTypeButton = within(dialog).getByText('PDF').closest('button');
+    if (!fileTypeButton) {
+      throw new Error('PDF block type button was not rendered');
+    }
+    fireEvent.click(fileTypeButton);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Choose from Library/i }));
+    const picker = await screen.findByRole('dialog', { name: 'Choose from Library' });
+    fireEvent.click(await within(picker).findByRole('button', { name: /General Science File/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+
+    await waitFor(() => {
+      expect(mockedModuleService.attachItem).toHaveBeenCalledWith(
+        'section-1',
+        expect.objectContaining({
+          itemType: 'file',
+          fileId: 'general-file-1',
+        }),
+      );
+    });
+    expect(mockedFileService.upload).not.toHaveBeenCalled();
   });
 });

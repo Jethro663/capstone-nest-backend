@@ -42,6 +42,7 @@ interface SaveFileRecordDto {
   classId?: string;
   folderId?: string;
   scope?: FileScopeDto;
+  aiEnabled?: boolean;
   originalName: string;
   storedName: string;
   mimeType: string;
@@ -163,16 +164,19 @@ export class FileUploadService {
     }
   }
 
-  private ensureGeneralPartition(input: {
+  private ensureAiReadyPartition(input: {
     scope?: FileScopeDto | 'private' | 'general' | null;
+    aiEnabled?: boolean | null;
     subjectKey?: LibrarySubjectKeyDto | string | null;
     gradeLevel?: GradeLevelDto | string | null;
   }) {
-    if (input.scope !== FileScopeDto.General) return;
+    if (input.scope !== FileScopeDto.General && input.aiEnabled !== true) {
+      return;
+    }
 
     if (!input.subjectKey || !input.gradeLevel) {
       throw new BadRequestException(
-        'General module uploads must specify subjectKey and gradeLevel.',
+        'AI-ready library files must specify subjectKey and gradeLevel.',
       );
     }
   }
@@ -287,10 +291,12 @@ export class FileUploadService {
       email: '',
       roles: ['teacher'],
     };
+    const aiEnabled = dto.aiEnabled ?? true;
 
     this.ensureCanWriteScope(dto.scope, actingUser);
-    this.ensureGeneralPartition({
+    this.ensureAiReadyPartition({
       scope: dto.scope ?? FileScopeDto.Private,
+      aiEnabled,
       subjectKey: dto.subjectKey,
       gradeLevel: dto.gradeLevel,
     });
@@ -315,6 +321,7 @@ export class FileUploadService {
         classId: dto.classId ?? null,
         folderId: dto.folderId ?? null,
         scope: dto.scope ?? FileScopeDto.Private,
+        aiEnabled,
         originalName: dto.originalName,
         storedName: dto.storedName,
         mimeType: dto.mimeType,
@@ -323,10 +330,9 @@ export class FileUploadService {
         subjectKey: dto.subjectKey ?? null,
         gradeLevel: dto.gradeLevel ?? null,
         teacherVisible: dto.teacherVisible ?? true,
-        indexStatus:
-          (dto.scope ?? FileScopeDto.Private) === FileScopeDto.General
-            ? LibraryIndexStatusDto.Pending
-            : LibraryIndexStatusDto.NotIndexed,
+        indexStatus: aiEnabled
+          ? LibraryIndexStatusDto.Pending
+          : LibraryIndexStatusDto.NotIndexed,
         indexError: null,
         contentHash: dto.contentHash ?? null,
         fileKind: dto.fileKind ?? LibraryFileKindDto.Pdf,
@@ -343,7 +349,7 @@ export class FileUploadService {
       sizeBytes: record.sizeBytes,
     });
 
-    if (record.scope === FileScopeDto.General) {
+    if (record.aiEnabled) {
       await this.libraryIndexingService?.queueFileIndex(record.id, {
         actorId: actingUser.id,
         reason: 'upload',
@@ -548,13 +554,17 @@ export class FileUploadService {
       dto.subjectKey === undefined ? record.subjectKey : dto.subjectKey;
     const nextGradeLevel =
       dto.gradeLevel === undefined ? record.gradeLevel : dto.gradeLevel;
+    const nextAiEnabled =
+      dto.aiEnabled === undefined ? record.aiEnabled : dto.aiEnabled;
+    const aiEnabledChanged = nextAiEnabled !== record.aiEnabled;
     const normalizedNextScope = nextScope as FileScopeDto;
     const normalizedSubjectKey = nextSubjectKey as LibrarySubjectKeyDto | null;
     const normalizedGradeLevel = nextGradeLevel as GradeLevelDto | null;
 
     this.ensureCanWriteScope(normalizedNextScope, user);
-    this.ensureGeneralPartition({
+    this.ensureAiReadyPartition({
       scope: normalizedNextScope,
+      aiEnabled: nextAiEnabled,
       subjectKey: normalizedSubjectKey,
       gradeLevel: normalizedGradeLevel,
     });
@@ -582,25 +592,27 @@ export class FileUploadService {
         classId:
           dto.classId === undefined ? record.classId : (dto.classId ?? null),
         scope: normalizedNextScope,
-        subjectKey:
-          normalizedNextScope === FileScopeDto.General
-            ? normalizedSubjectKey
-            : null,
-        gradeLevel:
-          normalizedNextScope === FileScopeDto.General
-            ? normalizedGradeLevel
-            : null,
+        aiEnabled: nextAiEnabled,
+        subjectKey: normalizedSubjectKey,
+        gradeLevel: normalizedGradeLevel,
+        indexStatus: aiEnabledChanged
+          ? nextAiEnabled
+            ? LibraryIndexStatusDto.Pending
+            : LibraryIndexStatusDto.NotIndexed
+          : record.indexStatus,
+        indexError: aiEnabledChanged ? null : record.indexError,
+        indexedAt: aiEnabledChanged ? null : record.indexedAt,
         teacherVisible:
           dto.teacherVisible === undefined
             ? record.teacherVisible
             : dto.teacherVisible,
-      })
+        })
       .where(eq(uploadedFiles.id, id));
 
     const partitionChanged =
       record.subjectKey !== nextSubjectKey ||
       record.gradeLevel !== nextGradeLevel;
-    if (normalizedNextScope === FileScopeDto.General && partitionChanged) {
+    if (partitionChanged && nextAiEnabled) {
       await this.db
         .update(contentChunks)
         .set({
@@ -611,6 +623,24 @@ export class FileUploadService {
         .where(eq(contentChunks.libraryFileId, id));
     }
 
+    if (aiEnabledChanged && nextAiEnabled) {
+      await this.libraryIndexingService?.queueFileIndex(id, {
+        actorId: user.id,
+        reason: 'metadata_update',
+      });
+      await this.logFileAction(user.id, 'file.index_queued', id, {
+        reason: 'metadata_update',
+        subjectKey: normalizedSubjectKey,
+        gradeLevel: normalizedGradeLevel,
+      });
+    }
+
+    if (record.aiEnabled && aiEnabledChanged && !nextAiEnabled) {
+      await this.db
+        .delete(contentChunks)
+        .where(eq(contentChunks.libraryFileId, id));
+    }
+
     await this.logFileAction(user.id, 'file.updated', id, {
       previousScope: record.scope,
       nextScope,
@@ -618,6 +648,8 @@ export class FileUploadService {
       nextSubjectKey,
       previousGradeLevel: record.gradeLevel,
       nextGradeLevel,
+      previousAiEnabled: record.aiEnabled,
+      nextAiEnabled,
       teacherVisible:
         dto.teacherVisible === undefined
           ? record.teacherVisible
@@ -666,13 +698,14 @@ export class FileUploadService {
 
   async retryIndex(id: string, user: RequestUser) {
     const record = await this.ensureFileWritable(id, user);
-    if (record.scope !== FileScopeDto.General) {
+    if (!record.aiEnabled) {
       throw new BadRequestException(
-        'Only general module files can be indexed.',
+        'Only AI-enabled files can be indexed.',
       );
     }
-    this.ensureGeneralPartition({
+    this.ensureAiReadyPartition({
       scope: record.scope as FileScopeDto,
+      aiEnabled: record.aiEnabled as boolean,
       subjectKey: record.subjectKey as LibrarySubjectKeyDto | null,
       gradeLevel: record.gradeLevel as GradeLevelDto | null,
     });

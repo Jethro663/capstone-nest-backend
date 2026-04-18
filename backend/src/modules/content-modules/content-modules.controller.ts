@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Param,
   Patch,
+  ParseUUIDPipe,
   Post,
   Put,
   Res,
@@ -76,16 +77,24 @@ const moduleCoverMulterOptions = {
 export class ContentModulesController {
   constructor(private readonly contentModulesService: ContentModulesService) {}
 
+  private normalizeUser(user: any) {
+    return {
+      userId: user?.userId ?? user?.id,
+      roles: Array.isArray(user?.roles) ? user.roles : [],
+    };
+  }
+
   @Get('class/:classId')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
   async getByClass(
     @Param('classId') classId: string,
     @CurrentUser() user: any,
   ) {
+    const currentUser = this.normalizeUser(user);
     const data = await this.contentModulesService.getModulesByClass(
       classId,
-      user?.userId,
-      user?.roles ?? [],
+      currentUser.userId,
+      currentUser.roles,
     );
 
     return {
@@ -103,11 +112,12 @@ export class ContentModulesController {
     @Param('moduleId') moduleId: string,
     @CurrentUser() user: any,
   ) {
+    const currentUser = this.normalizeUser(user);
     const data = await this.contentModulesService.getModuleByClass(
       classId,
       moduleId,
-      user?.userId,
-      user?.roles ?? [],
+      currentUser.userId,
+      currentUser.roles,
     );
 
     return {
@@ -373,6 +383,48 @@ export class ContentModulesController {
       message: 'Module item detached successfully',
       data,
     };
+  }
+
+  @Get('items/:itemId/file/download')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async downloadAttachedFile(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const currentUser = this.normalizeUser(user);
+    const record = await this.contentModulesService.getAttachedFileForDownload(
+      itemId,
+      currentUser.userId,
+      currentUser.roles,
+    );
+    const absolutePath = path.resolve(record.filePath);
+    const uploadsRoot = path.resolve('uploads');
+
+    if (!absolutePath.startsWith(uploadsRoot)) {
+      res.status(403).json({
+        success: false,
+        statusCode: 403,
+        message: 'Access denied',
+      });
+      return;
+    }
+
+    if (!fs.existsSync(absolutePath)) {
+      res.status(404).json({
+        success: false,
+        statusCode: 404,
+        message: 'File not found on disk',
+      });
+      return;
+    }
+
+    res.setHeader('Content-Type', record.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${record.originalName.replace(/"/g, '')}"`,
+    );
+    res.sendFile(absolutePath);
   }
 
   @Put('sections/:sectionId/items/reorder')
