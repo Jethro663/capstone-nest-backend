@@ -19,32 +19,69 @@ import {
   SectionTitle,
 } from "../components/ui/primitives";
 import { toAppError } from "../api/http";
-import { queryKeys, usePerformanceSummary, useStudentClasses } from "../api/hooks";
+import { queryKeys, useStudentClasses } from "../api/hooks";
 import { announcementsApi } from "../api/services/announcements";
 import { lessonsApi } from "../api/services/lessons";
+import { modulesApi } from "../api/services/modules";
 import { findContinueLearning, toAnnouncementPreview, toLessonCards, toSubjectCard } from "../data/mappers";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { colors, gradients, shadow } from "../theme/tokens";
+import type { Lesson, LessonCompletion } from "../types/lesson";
+import type { ClassModule, ModuleItem } from "../types/module";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Classes">,
   NativeStackScreenProps<RootStackParamList>
 >;
 
+type ModuleLessonItem = ModuleItem & {
+  lessonId?: string;
+  lesson?: { title?: string; isDraft?: boolean | null } | null;
+};
+
+function getVisibleLessons(modules: ClassModule[]): Lesson[] {
+  return modules.flatMap((moduleEntry) => {
+    if (moduleEntry.isLocked) return [];
+
+    return moduleEntry.sections
+      .slice()
+      .sort((left, right) => left.order - right.order)
+      .flatMap((section) =>
+        section.items
+          .map((item) => item as ModuleLessonItem)
+          .slice()
+          .sort((left, right) => left.order - right.order)
+          .flatMap((item) => {
+            if (item.itemType !== "lesson" || !item.lessonId || item.lesson?.isDraft) return [];
+
+            return [
+              {
+                id: item.lessonId,
+                classId: moduleEntry.classId,
+                title: item.lesson?.title || "Untitled lesson",
+                description: "Lesson content is available in the class module.",
+                order: item.order,
+                isDraft: false,
+              } as Lesson,
+            ];
+          }),
+      );
+  });
+}
+
 export function LessonsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const classesQuery = useStudentClasses(user?.userId || user?.id);
-  const performanceQuery = usePerformanceSummary();
 
   const classIds = useMemo(() => classesQuery.data?.map((classItem) => classItem.id) ?? [], [classesQuery.data]);
 
-  const lessonQueries = useQueries({
+  const moduleQueries = useQueries({
     queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessons(classId),
-      queryFn: () => lessonsApi.getByClass(classId),
+      queryKey: queryKeys.classModules(classId),
+      queryFn: () => modulesApi.getByClass(classId),
       enabled: classIds.length > 0,
     })),
   });
@@ -65,28 +102,45 @@ export function LessonsScreen({ navigation }: Props) {
     })),
   });
 
+  const visibleLearningByClass = useMemo(
+    () =>
+      classIds.map((classId, index) => {
+        const lessons = getVisibleLessons(moduleQueries[index]?.data ?? []);
+        const visibleLessonIds = new Set(lessons.map((lesson) => lesson.id));
+        const completions = (completionQueries[index]?.data ?? []).filter((entry: LessonCompletion) =>
+          visibleLessonIds.has(entry.lessonId),
+        );
+
+        return {
+          classId,
+          lessons,
+          completions,
+        };
+      }),
+    [classIds, completionQueries, moduleQueries],
+  );
+
   const subjectCards = useMemo(() => {
     if (!classesQuery.data) return [];
 
     return classesQuery.data.map((classItem, index) =>
       toSubjectCard(
         classItem,
-        lessonQueries[index]?.data ?? [],
-        completionQueries[index]?.data ?? [],
-        performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
+        visibleLearningByClass[index]?.lessons ?? [],
+        visibleLearningByClass[index]?.completions ?? [],
       ),
     );
-  }, [classesQuery.data, completionQueries, lessonQueries, performanceQuery.data?.classes]);
+  }, [classesQuery.data, visibleLearningByClass]);
 
   const lessonMap = useMemo(
     () =>
       Object.fromEntries(
         subjectCards.map((subject, index) => [
           subject.id,
-          toLessonCards(lessonQueries[index]?.data ?? [], completionQueries[index]?.data ?? [], subject),
+          toLessonCards(visibleLearningByClass[index]?.lessons ?? [], visibleLearningByClass[index]?.completions ?? [], subject),
         ]),
       ),
-    [completionQueries, lessonQueries, subjectCards],
+    [subjectCards, visibleLearningByClass],
   );
 
   const announcements = useMemo(
@@ -111,23 +165,20 @@ export function LessonsScreen({ navigation }: Props) {
 
   const refreshing =
     classesQuery.isRefetching ||
-    performanceQuery.isRefetching ||
-    lessonQueries.some((query) => query.isRefetching) ||
+    moduleQueries.some((query) => query.isRefetching) ||
     completionQueries.some((query) => query.isRefetching) ||
     announcementQueries.some((query) => query.isRefetching);
   const primaryError =
     classesQuery.error ||
-    performanceQuery.error ||
-    lessonQueries.find((query) => query.error)?.error ||
+    moduleQueries.find((query) => query.error)?.error ||
     completionQueries.find((query) => query.error)?.error ||
     announcementQueries.find((query) => query.error)?.error;
 
   const handleRefresh = () => {
     void Promise.all([
       classesQuery.refetch(),
-      performanceQuery.refetch(),
       ...classIds.flatMap((classId) => [
-        queryClient.invalidateQueries({ queryKey: queryKeys.lessons(classId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.lessonCompletions(classId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.announcements(classId) }),
       ]),

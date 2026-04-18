@@ -1100,6 +1100,169 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("ClassDetail", { classId: "class-1" });
   });
 
+  it("excludes locked module lessons from the lessons workspace progress and continue-learning flow", () => {
+    const { LessonsScreen } = require("../LessonsScreen");
+    const mappers = require("../../data/mappers");
+    const originalToSubjectCard = mappers.toSubjectCard.getMockImplementation();
+    const originalToLessonCards = mappers.toLessonCards.getMockImplementation();
+    const originalFindContinueLearning = mappers.findContinueLearning.getMockImplementation();
+
+    mappers.toSubjectCard.mockImplementation(
+      (classItem: { id: string; subjectName: string; subjectCode: string }, lessons: Array<{ id: string }>, completions: Array<{ lessonId: string; completed: boolean }>) => {
+        const completedIds = new Set(completions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
+        const totalLessons = lessons.length;
+        const completedLessons = lessons.filter((lesson) => completedIds.has(lesson.id)).length;
+        const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+        return {
+          id: classItem.id,
+          name: classItem.subjectName,
+          emoji: "📘",
+          progress,
+          color: "#4f46e5",
+          bgColor: "#EEF2FF",
+          section: "Section A",
+          teacherName: "Teacher One",
+          subjectCode: classItem.subjectCode,
+          totalLessons,
+          completedLessons,
+        };
+      },
+    );
+    mappers.toLessonCards.mockImplementation(
+      (
+        lessons: Array<{ id: string; title: string; description?: string; order?: number }>,
+        completions: Array<{ lessonId: string; completed: boolean }>,
+        subject: { id: string },
+      ) => {
+        const completedIds = new Set(completions.filter((entry) => entry.completed).map((entry) => entry.lessonId));
+        const ordered = [...lessons].sort((left, right) => (left.order ?? 0) - (right.order ?? 0));
+        const firstIncompleteIndex = ordered.findIndex((lesson) => !completedIds.has(lesson.id));
+
+        return ordered.map((lesson, index) => ({
+          id: lesson.id,
+          subjectId: subject.id,
+          title: lesson.title,
+          description: lesson.description || "Lesson content is available in the class module.",
+          duration: "15 min",
+          status: completedIds.has(lesson.id) ? "completed" : firstIncompleteIndex === -1 || index === firstIncompleteIndex ? "ongoing" : "locked",
+        }));
+      },
+    );
+    mappers.findContinueLearning.mockImplementation(
+      (
+        subjects: Array<{ id: string }>,
+        lessonMap: Record<string, Array<{ status: string }>>,
+      ) =>
+        subjects.flatMap((subject) =>
+          (lessonMap[subject.id] ?? [])
+            .filter((lesson) => lesson.status === "ongoing")
+            .map((lesson) => ({ lesson, subject })),
+        ),
+    );
+
+    let useQueriesCall = 0;
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
+      useQueriesCall += 1;
+      if (useQueriesCall === 1) {
+        return queries.map(() => ({
+          data: [
+            {
+              id: "module-open",
+              classId: "class-1",
+              title: "Visible Module",
+              order: 1,
+              isLocked: false,
+              sections: [
+                {
+                  id: "section-open",
+                  title: "Visible Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-visible-lesson",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-visible",
+                      lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              id: "module-locked",
+              classId: "class-1",
+              title: "Locked Module",
+              order: 2,
+              isLocked: true,
+              sections: [
+                {
+                  id: "section-locked",
+                  title: "Locked Lessons",
+                  order: 1,
+                  items: [
+                    {
+                      id: "item-locked-lesson",
+                      itemType: "lesson",
+                      order: 1,
+                      lessonId: "lesson-locked",
+                      lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+      if (useQueriesCall === 2) {
+        return queries.map(() => ({
+          data: [{ lessonId: "lesson-locked", completed: true }],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+      return queries.map(() => ({
+        data: [],
+        error: null,
+        isRefetching: false,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      }));
+    });
+
+    try {
+      let testRenderer: TestRenderer.ReactTestRenderer;
+      act(() => {
+        testRenderer = TestRenderer.create(
+          React.createElement(LessonsScreen, {
+            navigation: { navigate: jest.fn() } as never,
+            route: { key: "Classes", name: "Classes" } as never,
+          }),
+        );
+      });
+
+      const renderedText = testRenderer!.root
+        .findAll((node) => node.type === "Text")
+        .map((node) => flattenText(node))
+        .join(" ");
+
+      expect(renderedText).toContain("0% learning rhythm");
+      expect(renderedText).toContain("0/1 lessons");
+      expect(renderedText).toContain("Visible Lesson");
+      expect(renderedText).not.toContain("1/2 lessons");
+      expect(renderedText).not.toContain("Locked Lesson");
+    } finally {
+      mappers.toSubjectCard.mockImplementation(originalToSubjectCard);
+      mappers.toLessonCards.mockImplementation(originalToLessonCards);
+      mappers.findContinueLearning.mockImplementation(originalFindContinueLearning);
+    }
+  });
+
   it("renders Class detail screen and opens module detail", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
     const navigate = jest.fn();
