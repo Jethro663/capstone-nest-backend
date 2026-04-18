@@ -373,7 +373,7 @@ describe("mobile rendered screen flows", () => {
     } as ReturnType<typeof useAuth>);
 
     mockedUseStudentClasses.mockReturnValue(
-      createQueryState([{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1" }]) as ReturnType<typeof useStudentClasses>,
+      createQueryState([{ id: "class-1", subjectName: "Mathematics", subjectCode: "MATH-1", schoolYear: "2025-2026" }]) as ReturnType<typeof useStudentClasses>,
     );
     mockedUseLxpEligibility.mockReturnValue(
       createQueryState({
@@ -753,6 +753,50 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Foundation Day");
     expect(renderedText).toContain("Apr 22");
     expect(renderedText).not.toContain("12:00 AM");
+  });
+
+  it("does not query school events until a concrete school year is available", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState(undefined, { isRefetching: true }) as ReturnType<typeof useStudentClasses>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(mockedUseSchoolEvents).not.toHaveBeenCalled();
+    expect(renderedText).toContain("Student Home");
+  });
+
+  it("does not query school events when the student has no classes", () => {
+    const { DashboardScreen } = require("../DashboardScreen");
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState([]) as ReturnType<typeof useStudentClasses>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(DashboardScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Dashboard", name: "Dashboard" } as never,
+        }),
+      );
+    });
+
+    expect(mockedUseSchoolEvents).not.toHaveBeenCalled();
   });
 
   it("renders the student dashboard tab as Home and keeps Dashboard route navigation", () => {

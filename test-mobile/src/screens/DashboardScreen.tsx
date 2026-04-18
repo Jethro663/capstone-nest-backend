@@ -35,6 +35,7 @@ import { computeProfileReadiness } from "./screen-flow";
 import { colors, gradients } from "../theme/tokens";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { Lesson, LessonCompletion } from "../types/lesson";
+import type { SchoolEvent } from "../types/school-event";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Dashboard">,
@@ -56,6 +57,12 @@ type ClassDashboardSnapshot = {
   completions: LessonCompletion[];
   assessments: Assessment[];
   assessmentAttempts: Record<string, AssessmentAttemptSnapshot>;
+  error: unknown;
+  isRefetching: boolean;
+};
+
+type SchoolEventsSnapshot = {
+  events: SchoolEvent[];
   error: unknown;
   isRefetching: boolean;
 };
@@ -185,6 +192,39 @@ type AssessmentAttemptSnapshot = {
   isRefetching: boolean;
   isResolved: boolean;
 };
+
+function DashboardSchoolEventsBridge({
+  schoolYear,
+  onChange,
+  onRefreshReady,
+}: {
+  schoolYear: string;
+  onChange: (snapshot: SchoolEventsSnapshot) => void;
+  onRefreshReady: (refresh: () => Promise<unknown>) => void;
+}) {
+  const schoolEventsQuery = useSchoolEvents({ schoolYear });
+
+  const refetchEvents = useCallback(() => schoolEventsQuery.refetch(), [schoolEventsQuery]);
+
+  const snapshot = useMemo<SchoolEventsSnapshot>(
+    () => ({
+      events: schoolEventsQuery.data ?? [],
+      error: schoolEventsQuery.error,
+      isRefetching: schoolEventsQuery.isRefetching,
+    }),
+    [schoolEventsQuery.data, schoolEventsQuery.error, schoolEventsQuery.isRefetching],
+  );
+
+  useEffect(() => {
+    onRefreshReady(refetchEvents);
+  }, [onRefreshReady, refetchEvents]);
+
+  useEffect(() => {
+    onChange(snapshot);
+  }, [onChange, snapshot]);
+
+  return null;
+}
 
 function DashboardAssessmentAttemptBridge({
   assessmentId,
@@ -381,12 +421,9 @@ export function DashboardScreen({ navigation }: Props) {
   const performanceQuery = usePerformanceSummary();
   const [classDataMap, setClassDataMap] = useState<Record<string, ClassDashboardSnapshot>>({});
   const classRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
-
-  const schoolEventFilters = useMemo(() => {
-    const schoolYear = classesQuery.data?.[0]?.schoolYear;
-    return schoolYear ? { schoolYear } : undefined;
-  }, [classesQuery.data]);
-  const schoolEventsQuery = useSchoolEvents(schoolEventFilters);
+  const [schoolEventsSnapshot, setSchoolEventsSnapshot] = useState<SchoolEventsSnapshot | null>(null);
+  const schoolEventsRefresherRef = useRef<(() => Promise<unknown>) | null>(null);
+  const schoolYear = classesQuery.data?.[0]?.schoolYear ?? null;
 
   const classIds = useMemo(
     () => classesQuery.data?.map((classItem) => classItem.id) ?? [],
@@ -437,6 +474,31 @@ export function DashboardScreen({ navigation }: Props) {
       return changed ? next : current;
     });
   }, [classIds]);
+
+  const handleSchoolEventsChange = useCallback((snapshot: SchoolEventsSnapshot) => {
+    setSchoolEventsSnapshot((current) => {
+      if (
+        current &&
+        getErrorSignature(current.error) === getErrorSignature(snapshot.error) &&
+        current.isRefetching === snapshot.isRefetching &&
+        JSON.stringify(current.events) === JSON.stringify(snapshot.events)
+      ) {
+        return current;
+      }
+
+      return snapshot;
+    });
+  }, []);
+
+  const handleSchoolEventsRefreshReady = useCallback((refresh: () => Promise<unknown>) => {
+    schoolEventsRefresherRef.current = refresh;
+  }, []);
+
+  useEffect(() => {
+    if (schoolYear) return;
+    schoolEventsRefresherRef.current = null;
+    setSchoolEventsSnapshot(null);
+  }, [schoolYear]);
 
   const subjects = useMemo(
     () =>
@@ -524,14 +586,14 @@ export function DashboardScreen({ navigation }: Props) {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    return (schoolEventsQuery.data ?? [])
+    return (schoolEventsSnapshot?.events ?? [])
       .filter((event) => {
         const endTime = new Date(event.endsAt).getTime();
         return Number.isFinite(endTime) ? endTime >= startOfToday.getTime() : true;
       })
       .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime())
       .slice(0, 4);
-  }, [schoolEventsQuery.data]);
+  }, [schoolEventsSnapshot?.events]);
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Student";
   const firstName = user?.firstName || fullName;
@@ -547,13 +609,13 @@ export function DashboardScreen({ navigation }: Props) {
     classesQuery.error ||
     profileQuery.error ||
     performanceQuery.error ||
-    schoolEventsQuery.error ||
+    schoolEventsSnapshot?.error ||
     Object.values(classDataMap).find((entry) => entry.error)?.error;
   const refreshing =
     classesQuery.isRefetching ||
     profileQuery.isRefetching ||
     performanceQuery.isRefetching ||
-    schoolEventsQuery.isRefetching ||
+    (schoolEventsSnapshot?.isRefetching ?? false) ||
     Object.values(classDataMap).some((entry) => entry.isRefetching);
 
   const handleRefresh = () => {
@@ -561,7 +623,7 @@ export function DashboardScreen({ navigation }: Props) {
       classesQuery.refetch(),
       profileQuery.refetch(),
       performanceQuery.refetch(),
-      schoolEventsQuery.refetch(),
+      ...(schoolEventsRefresherRef.current ? [schoolEventsRefresherRef.current()] : []),
       ...Object.values(classRefreshersRef.current).map((refresh) => refresh()),
     ]);
   };
@@ -570,6 +632,13 @@ export function DashboardScreen({ navigation }: Props) {
 
   return (
     <ScreenScroll refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}>
+      {schoolYear ? (
+        <DashboardSchoolEventsBridge
+          schoolYear={schoolYear}
+          onChange={handleSchoolEventsChange}
+          onRefreshReady={handleSchoolEventsRefreshReady}
+        />
+      ) : null}
       {classIds.map((classId) => (
         <DashboardClassDataBridge
           key={classId}
