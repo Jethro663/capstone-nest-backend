@@ -1713,6 +1713,137 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-1", classId: "class-1" });
   });
 
+  it("filters locked, draft, and unpublished module content from the student module detail view", () => {
+    const { ModuleDetailScreen } = require("../ModuleDetailScreen");
+    const navigate = jest.fn();
+
+    mockedUseModuleDetail.mockReturnValue(
+      createQueryState({
+        id: "module-1",
+        classId: "class-1",
+        title: "Number Sense Module",
+        description: "Foundations for fractions and decimals",
+        order: 1,
+        isLocked: false,
+        progressPercent: 40,
+        sections: [
+          {
+            id: "section-1",
+            title: "Visible Lessons",
+            order: 1,
+            items: [
+              {
+                id: "item-visible-lesson",
+                itemType: "lesson",
+                order: 1,
+                lessonId: "lesson-visible",
+                lesson: { id: "lesson-visible", title: "Visible Lesson", isDraft: false },
+              },
+              {
+                id: "item-draft-lesson",
+                itemType: "lesson",
+                order: 2,
+                lessonId: "lesson-draft",
+                lesson: { id: "lesson-draft", title: "Draft Lesson", isDraft: true },
+              },
+              {
+                id: "item-published-assessment",
+                itemType: "assessment",
+                order: 3,
+                assessmentId: "assessment-visible",
+                assessment: { id: "assessment-visible", title: "Visible Task", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: true },
+              },
+              {
+                id: "item-hidden-assessment",
+                itemType: "assessment",
+                order: 4,
+                assessmentId: "assessment-hidden",
+                assessment: { id: "assessment-hidden", title: "Hidden Task", totalPoints: 100, dueDate: "2026-04-20T09:00:00.000Z", isPublished: false },
+              },
+            ],
+          },
+        ],
+      }) as ReturnType<typeof useModuleDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ModuleDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate } as never,
+          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Visible Lesson");
+    expect(renderedText).toContain("Visible Task");
+    expect(renderedText).not.toContain("Draft Lesson");
+    expect(renderedText).not.toContain("Hidden Task");
+
+    const lessonCard = findPressableByText(testRenderer!.root, "Visible Lesson");
+    act(() => {
+      lessonCard.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-visible", classId: "class-1" });
+  });
+
+  it("does not leak locked module items into the student module detail view", () => {
+    const { ModuleDetailScreen } = require("../ModuleDetailScreen");
+    mockedUseModuleDetail.mockReturnValue(
+      createQueryState({
+        id: "module-1",
+        classId: "class-1",
+        title: "Number Sense Module",
+        description: "Foundations for fractions and decimals",
+        order: 1,
+        isLocked: true,
+        progressPercent: 40,
+        sections: [
+          {
+            id: "section-1",
+            title: "Locked Lessons",
+            order: 1,
+            items: [
+              {
+                id: "item-locked-lesson",
+                itemType: "lesson",
+                order: 1,
+                lessonId: "lesson-locked",
+                lesson: { id: "lesson-locked", title: "Locked Lesson", isDraft: false },
+              },
+            ],
+          },
+        ],
+      }) as ReturnType<typeof useModuleDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ModuleDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Module locked");
+    expect(renderedText).toContain("No module items yet");
+    expect(renderedText).not.toContain("Locked Lesson");
+  });
+
   it("renders Module detail fetch errors without collapsing into not-found copy", () => {
     const { ModuleDetailScreen } = require("../ModuleDetailScreen");
     mockedUseModuleDetail.mockReturnValue(
@@ -1748,6 +1879,78 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Module data is partially unavailable");
     expect(renderedText).toContain("Module detail unavailable");
     expect(renderedText).not.toContain("Module not found");
+  });
+
+  it("renders Class detail 404 responses with the not-found state", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    mockedUseClassDetail.mockReturnValue(
+      createQueryState(undefined, {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 404,
+            data: {
+              message: "Class not found",
+            },
+          },
+          message: "Request failed with status code 404",
+        },
+      }) as ReturnType<typeof useClassDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Class not found");
+    expect(renderedText).not.toContain("Class data is partially unavailable");
+  });
+
+  it("renders Module detail 404 responses with the not-found state", () => {
+    const { ModuleDetailScreen } = require("../ModuleDetailScreen");
+    mockedUseModuleDetail.mockReturnValue(
+      createQueryState(undefined, {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 404,
+            data: {
+              message: "Module not found",
+            },
+          },
+          message: "Request failed with status code 404",
+        },
+      }) as ReturnType<typeof useModuleDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ModuleDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Module not found");
+    expect(renderedText).not.toContain("Module data is partially unavailable");
   });
 
   it("renders Lesson detail screen and completes the lesson", async () => {
@@ -1810,6 +2013,42 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Lesson data is partially unavailable");
     expect(renderedText).toContain("Lesson detail unavailable");
     expect(renderedText).not.toContain("Lesson not found");
+  });
+
+  it("renders Lesson detail 404 responses with the not-found state", () => {
+    const { LessonDetailScreen } = require("../LessonDetailScreen");
+    mockedUseLessonDetail.mockReturnValue(
+      createQueryState(undefined, {
+        error: {
+          isAxiosError: true,
+          response: {
+            status: 404,
+            data: {
+              message: "Lesson not found",
+            },
+          },
+          message: "Request failed with status code 404",
+        },
+      }) as ReturnType<typeof useLessonDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LessonDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "LessonDetail", name: "LessonDetail", params: { lessonId: "lesson-1", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Lesson not found");
+    expect(renderedText).not.toContain("Lesson data is partially unavailable");
   });
 
   it("shows a recoverable lesson completion error when the mutation rejects", async () => {

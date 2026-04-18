@@ -152,6 +152,10 @@ function getAttemptErrorMessage(error: unknown) {
   return "Attempt history unavailable";
 }
 
+function isNotFoundError(error: unknown) {
+  return toAppError(error).status === 404;
+}
+
 function sortAttemptsByNewest(attempts: AssessmentAttempt[]) {
   return [...attempts].sort((left, right) => {
     const leftTime = new Date(left.submittedAt || left.createdAt || 0).getTime();
@@ -297,6 +301,7 @@ export function StudentClassDetailContent({
     assessmentsQuery.error ||
     announcementsQuery.error ||
     attemptQueries.find((query) => query.error)?.error;
+  const classNotFound = !classItem && isNotFoundError(classQuery.error);
 
   const handleRefresh = () => {
     void Promise.all([
@@ -314,6 +319,16 @@ export function StudentClassDetailContent({
       <ScreenScroll>
         <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
           <EmptyState emoji=".." title="Loading class detail" subtitle="Preparing the student class view." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (classNotFound) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
+          <EmptyState emoji="?" title="Class not found" subtitle="This class is unavailable right now." />
         </View>
       </ScreenScroll>
     );

@@ -32,6 +32,13 @@ type ModuleContentItem = ModuleItem & {
   file?: { originalName?: string } | null;
 };
 
+type ModuleContentSection = {
+  id: string;
+  title: string;
+  order: number;
+  items: ModuleContentItem[];
+};
+
 function formatDate(value?: string | null) {
   if (!value) return "TBA";
   const date = new Date(value);
@@ -57,6 +64,17 @@ function getItemAction(item: ModuleContentItem) {
   return "View";
 }
 
+function isNotFoundError(error: unknown) {
+  return toAppError(error).status === 404;
+}
+
+function isVisibleModuleItem(item: ModuleContentItem, moduleLocked?: boolean) {
+  if (moduleLocked) return false;
+  if (item.itemType === "lesson") return Boolean(item.lessonId) && !item.lesson?.isDraft;
+  if (item.itemType === "assessment") return Boolean(item.assessmentId) && item.assessment?.isPublished !== false;
+  return true;
+}
+
 export function ModuleDetailScreen({ route, navigation }: Props) {
   const { classId, moduleId } = route.params;
   const classQuery = useClassDetail(classId);
@@ -64,15 +82,27 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
 
   const moduleEntry = moduleQuery.data;
   const classItem = classQuery.data;
-  const sectionCount = moduleEntry?.sections.length ?? 0;
+  const visibleSections = useMemo(
+    () =>
+      (moduleEntry?.sections ?? [])
+        .map((section) => ({
+          ...section,
+          items: (section.items as ModuleContentItem[]).filter((item) => isVisibleModuleItem(item, moduleEntry?.isLocked)),
+        }))
+        .filter((section) => section.items.length > 0)
+        .sort((left, right) => left.order - right.order) as ModuleContentSection[],
+    [moduleEntry?.isLocked, moduleEntry?.sections],
+  );
+  const sectionCount = visibleSections.length;
   const flatItems = useMemo(
-    () => (moduleEntry?.sections ?? []).flatMap((section) => section.items as ModuleContentItem[]),
-    [moduleEntry?.sections],
+    () => visibleSections.flatMap((section) => section.items),
+    [visibleSections],
   );
   const lessonCount = flatItems.filter((item) => item.itemType === "lesson").length;
   const assessmentCount = flatItems.filter((item) => item.itemType === "assessment").length;
   const refreshing = classQuery.isRefetching || moduleQuery.isRefetching;
   const primaryError = moduleQuery.error || classQuery.error;
+  const moduleNotFound = !moduleEntry && (isNotFoundError(moduleQuery.error) || isNotFoundError(classQuery.error));
 
   const handleRefresh = () => {
     void Promise.all([classQuery.refetch(), moduleQuery.refetch()]);
@@ -93,6 +123,16 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       <ScreenScroll>
         <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
           <EmptyState emoji=".." title="Loading module" subtitle="Preparing the module detail view." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (moduleNotFound) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
+          <EmptyState emoji="?" title="Module not found" subtitle="This module is unavailable right now." />
         </View>
       </ScreenScroll>
     );
@@ -164,13 +204,13 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
           </Card>
         ) : null}
 
-        {(moduleEntry.sections ?? []).length === 0 ? (
+        {visibleSections.length === 0 ? (
           <EmptyState emoji=".." title="No module items yet" subtitle="This module does not have published content yet." />
         ) : (
-          (moduleEntry.sections ?? []).map((section, sectionIndex) => (
+          visibleSections.map((section, sectionIndex) => (
             <View key={section.id} style={{ gap: 12 }}>
               <SectionTitle title={section.title || `Section ${sectionIndex + 1}`} />
-              {(section.items as ModuleContentItem[]).map((item, itemIndex) => (
+              {section.items.map((item, itemIndex) => (
                 <AnimatedEntrance key={item.id} delay={(sectionIndex * 3 + itemIndex) * 50}>
                   <Pressable
                     disabled={!item.lessonId && !item.assessmentId}

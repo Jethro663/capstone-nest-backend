@@ -58,6 +58,10 @@ function blockLabel(type: ContentBlock["type"]) {
   }
 }
 
+function isNotFoundError(error: unknown) {
+  return toAppError(error).status === 404;
+}
+
 export function LessonDetailScreen({ route, navigation }: Props) {
   const { lessonId, classId } = route.params;
   const [completedOverride, setCompletedOverride] = useState<boolean | null>(null);
@@ -74,6 +78,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
   const isCompleted = completedOverride ?? Boolean(completionStatusQuery.data?.completed);
   const refreshing = lessonQuery.isRefetching || completionStatusQuery.isRefetching;
   const primaryError = lessonQuery.error || completionStatusQuery.error;
+  const lessonNotFound = !lesson && isNotFoundError(lessonQuery.error);
 
   const handleRefresh = () => {
     setActionError(null);
@@ -99,6 +104,16 @@ export function LessonDetailScreen({ route, navigation }: Props) {
       <ScreenScroll>
         <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
           <EmptyState emoji=".." title="Loading lesson" subtitle="Preparing the lesson detail view." />
+        </View>
+      </ScreenScroll>
+    );
+  }
+
+  if (lessonNotFound) {
+    return (
+      <ScreenScroll>
+        <View style={{ paddingTop: 40, paddingHorizontal: 20 }}>
+          <EmptyState emoji="?" title="Lesson not found" subtitle="This lesson is unavailable right now." />
         </View>
       </ScreenScroll>
     );
