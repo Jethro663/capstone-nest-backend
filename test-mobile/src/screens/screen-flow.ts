@@ -103,6 +103,7 @@ export function computeProfileReadiness(params: {
   phone?: string | null;
   address?: string | null;
   familyName?: string | null;
+  familyRelationship?: string | null;
   familyContact?: string | null;
   profilePicture?: string | null;
 }): number {
@@ -110,6 +111,7 @@ export function computeProfileReadiness(params: {
     params.phone,
     params.address,
     params.familyName,
+    params.familyRelationship,
     params.familyContact,
     params.profilePicture,
   ];

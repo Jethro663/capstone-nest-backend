@@ -5,6 +5,7 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   Card,
+  EmptyState,
   GradientHeader,
   Pill,
   ProgressBar,
@@ -24,7 +25,7 @@ type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
 const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");
 
-export function ProfileScreen(_: Props) {
+export function ProfileScreen(props: Props) {
   const { user, logout } = useAuth();
   const profileQuery = useProfile();
   const profile = profileQuery.data;
@@ -33,6 +34,7 @@ export function ProfileScreen(_: Props) {
   const [phone, setPhone] = useState(profile?.phone || "");
   const [address, setAddress] = useState(profile?.address || "");
   const [familyName, setFamilyName] = useState(profile?.familyName || "");
+  const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship || "");
   const [familyContact, setFamilyContact] = useState(profile?.familyContact || "");
   const [error, setError] = useState("");
 
@@ -50,8 +52,9 @@ export function ProfileScreen(_: Props) {
     setPhone(profile?.phone || "");
     setAddress(profile?.address || "");
     setFamilyName(profile?.familyName || "");
+    setFamilyRelationship(profile?.familyRelationship || "");
     setFamilyContact(profile?.familyContact || "");
-  }, [profile?.address, profile?.familyContact, profile?.familyName, profile?.phone]);
+  }, [profile?.address, profile?.familyContact, profile?.familyName, profile?.familyRelationship, profile?.phone]);
 
   const overallProgress = useMemo(
     () =>
@@ -59,6 +62,7 @@ export function ProfileScreen(_: Props) {
         phone: profile?.phone,
         address: profile?.address,
         familyName: profile?.familyName,
+        familyRelationship: profile?.familyRelationship,
         familyContact: profile?.familyContact,
         profilePicture: profile?.profilePicture || user?.profilePicture || null,
       }),
@@ -66,6 +70,7 @@ export function ProfileScreen(_: Props) {
       profile?.address,
       profile?.familyContact,
       profile?.familyName,
+      profile?.familyRelationship,
       profile?.phone,
       profile?.profilePicture,
       user?.profilePicture,
@@ -79,6 +84,7 @@ export function ProfileScreen(_: Props) {
         phone,
         address,
         familyName,
+        familyRelationship,
         familyContact,
       });
     } catch (rawError) {
@@ -233,6 +239,7 @@ export function ProfileScreen(_: Props) {
               { label: "Phone", value: phone, setter: setPhone, placeholder: "0917..." },
               { label: "Address", value: address, setter: setAddress, placeholder: "Student address" },
               { label: "Guardian Name", value: familyName, setter: setFamilyName, placeholder: "Guardian name" },
+              { label: "Relationship", value: familyRelationship, setter: setFamilyRelationship, placeholder: "Father / Mother / Guardian" },
               { label: "Guardian Contact", value: familyContact, setter: setFamilyContact, placeholder: "Guardian contact" },
             ].map((field) => (
               <View key={field.label}>
@@ -280,19 +287,52 @@ export function ProfileScreen(_: Props) {
           <SectionTitle title="Quick Actions" right={<Pill label="Live API" backgroundColor={colors.paleGreen} color={colors.green} />} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
             {[
-              { icon: "account-box-outline", label: "Student Record", color: colors.blue },
-              { icon: "security", label: "Session Safe", color: colors.green },
-              { icon: "camera-outline", label: "Avatar Upload", color: colors.amber },
+              {
+                icon: "school-outline",
+                label: "Open Transcript",
+                color: colors.blue,
+                onPress: () => props.navigation.navigate("Transcript" as never),
+              },
+              {
+                icon: "clipboard-search-outline",
+                label: "Assessment History",
+                color: colors.green,
+                onPress: () => props.navigation.navigate("AssessmentHistory" as never),
+              },
+              {
+                icon: "camera-outline",
+                label: "Avatar Upload",
+                color: colors.amber,
+                onPress: () => void handleAvatarPick(),
+              },
             ].map((item) => (
-              <Card key={item.label} style={{ width: 120, alignItems: "center" }}>
-                <MaterialCommunityIcons name={item.icon as never} size={22} color={item.color} />
-                <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: colors.text, textAlign: "center" }}>
-                  {item.label}
-                </Text>
-              </Card>
+              <Pressable key={item.label} onPress={item.onPress}>
+                <Card style={{ width: 140, alignItems: "center" }}>
+                  <MaterialCommunityIcons name={item.icon as never} size={22} color={item.color} />
+                  <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: colors.text, textAlign: "center" }}>
+                    {item.label}
+                  </Text>
+                </Card>
+              </Pressable>
             ))}
           </ScrollView>
         </View>
+
+        <Card style={{ marginBottom: 18 }}>
+          <SectionTitle title="Profile Status" />
+          {overallProgress === 100 ? (
+            <Pill label="All required details complete" backgroundColor={colors.paleGreen} color={colors.green} />
+          ) : (
+            <EmptyState
+              emoji="⚠️"
+              title="Profile still needs attention"
+              subtitle="Complete your contact and guardian details so school records stay up to date."
+            />
+          )}
+          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+            Your profile information supports official student records and student-side transcript access.
+          </Text>
+        </Card>
 
         <Pressable
           onPress={() => void logout()}

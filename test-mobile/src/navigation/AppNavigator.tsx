@@ -24,6 +24,7 @@ import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { AiTutorScreen } from "../screens/AiTutorScreen";
 import { LxpScreen } from "../screens/LxpScreen";
 import { PerformanceScreen } from "../screens/PerformanceScreen";
+import { TranscriptScreen } from "../screens/TranscriptScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { colors } from "../theme/tokens";
 import {
@@ -133,10 +134,7 @@ const studentStackScreens = {
   AssessmentHistory: AssessmentHistoryScreen,
   Chatbot: ChatbotRouteScreen,
   Performance: PerformanceScreen,
-  Transcript: createStackPlaceholderScreen<"Transcript">(
-    "Transcript",
-    "Parity route placeholder for the student transcript.",
-  ),
+  Transcript: TranscriptScreen,
   LXP: LxpRouteScreen,
 } satisfies { [K in StudentStackRouteName]: StackScreenComponent<K> };
 

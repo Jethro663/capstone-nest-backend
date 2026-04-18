@@ -29,6 +29,7 @@ import {
   useProfileAvatarMutation,
   useProfileUpdateMutation,
   useStudentClasses,
+  useTranscript,
   useTutorBootstrap,
   useTutorSession,
 } from "../../api/hooks";
@@ -227,6 +228,7 @@ jest.mock("../../api/hooks", () => ({
   useProfile: jest.fn(),
   useProfileUpdateMutation: jest.fn(),
   useProfileAvatarMutation: jest.fn(),
+  useTranscript: jest.fn(),
   usePerformanceSummary: jest.fn(),
   useSchoolEvents: jest.fn(),
   useAnnouncements: jest.fn(),
@@ -387,6 +389,7 @@ const mockedUseTutorSession = useTutorSession as jest.MockedFunction<typeof useT
 const mockedUseProfile = useProfile as jest.MockedFunction<typeof useProfile>;
 const mockedUseProfileUpdateMutation = useProfileUpdateMutation as jest.MockedFunction<typeof useProfileUpdateMutation>;
 const mockedUseProfileAvatarMutation = useProfileAvatarMutation as jest.MockedFunction<typeof useProfileAvatarMutation>;
+const mockedUseTranscript = useTranscript as jest.MockedFunction<typeof useTranscript>;
 const mockedUsePerformanceSummary = usePerformanceSummary as jest.MockedFunction<typeof usePerformanceSummary>;
 const mockedUseSchoolEvents = useSchoolEvents as jest.MockedFunction<typeof useSchoolEvents>;
 const mockedUseAnnouncements = useAnnouncements as jest.MockedFunction<typeof useAnnouncements>;
@@ -591,6 +594,7 @@ describe("mobile rendered screen flows", () => {
         phone: "09170001111",
         address: "Sample address",
         familyName: "Parent",
+        familyRelationship: "Guardian",
         familyContact: "09990002222",
         profilePicture: "",
       }) as ReturnType<typeof useProfile>,
@@ -604,6 +608,37 @@ describe("mobile rendered screen flows", () => {
       mutateAsync: jest.fn().mockResolvedValue(undefined),
       isPending: false,
     } as ReturnType<typeof useProfileAvatarMutation>);
+    mockedUseTranscript.mockReturnValue(
+      createQueryState({
+        data: [
+          {
+            id: "transcript-1",
+            studentId: "student-1",
+            classId: "class-1",
+            sectionId: "section-1",
+            status: "enrolled",
+            enrolledAt: "2026-04-18T08:00:00.000Z",
+            class: {
+              id: "class-1",
+              subjectName: "Mathematics",
+              subjectCode: "MATH-1",
+              schoolYear: "2025-2026",
+            },
+            section: {
+              id: "section-1",
+              name: "Section A",
+              gradeLevel: "10",
+              schoolYear: "2025-2026",
+            },
+          },
+        ],
+        page: 1,
+        limit: 15,
+        total: 1,
+        totalPages: 1,
+        success: true,
+      }) as ReturnType<typeof useTranscript>,
+    );
 
     mockedUsePerformanceSummary.mockReturnValue(
       createQueryState({
@@ -3164,8 +3199,31 @@ describe("mobile rendered screen flows", () => {
       phone: "09170001111",
       address: "Sample address",
       familyName: "Parent",
+      familyRelationship: "Guardian",
       familyContact: "09990002222",
     });
+  });
+
+  it("opens transcript from the profile quick actions", async () => {
+    const { ProfileScreen } = require("../ProfileScreen");
+    const navigate = jest.fn();
+    let testRenderer: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ProfileScreen, {
+          navigation: { navigate } as never,
+          route: { key: "Profile", name: "Profile" } as never,
+        }),
+      );
+    });
+
+    const openTranscript = findPressableByText(testRenderer!.root, "Open Transcript");
+    await act(async () => {
+      openTranscript.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("Transcript");
   });
 
   it("shows profile save error when update mutation fails", async () => {
@@ -3201,6 +3259,26 @@ describe("mobile rendered screen flows", () => {
         (node) =>
           node.type === "Text" &&
           flattenText(node).includes("Unable to save profile right now"),
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders the transcript parity screen", () => {
+    const { TranscriptScreen } = require("../TranscriptScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(TranscriptScreen, {
+          navigation: { goBack: jest.fn() } as never,
+          route: { key: "Transcript", name: "Transcript" } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Transcript"),
       ),
     ).toBeTruthy();
   });
