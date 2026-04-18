@@ -3351,6 +3351,57 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
+  it("routes assessment results back to assessment detail without fabricating classId", () => {
+    const { AssessmentResultsScreen } = require("../AssessmentResultsScreen");
+    const navigate = jest.fn();
+
+    mockedUseAssessmentResult.mockReturnValue(
+      createQueryState({
+        attempt: {
+          id: "attempt-returned",
+          assessmentId: "assessment-1",
+          attemptNumber: 2,
+          isSubmitted: true,
+          isReturned: true,
+        },
+        attemptNumber: 2,
+        score: 94,
+        passed: true,
+        isReturned: true,
+        responses: [],
+        assessment: {
+          id: "assessment-1",
+          title: "Assessment 1",
+          type: "quiz",
+          totalPoints: 100,
+        },
+      }) as ReturnType<typeof useAssessmentResult>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentResultsScreen, {
+          navigation: { navigate, goBack: jest.fn() } as never,
+          route: {
+            key: "AssessmentResults",
+            name: "AssessmentResults",
+            params: { attemptId: "attempt-returned", assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
+    });
+
+    const backToAssessment = findPressableByText(testRenderer!.root, "Back to Assessment");
+    act(() => {
+      backToAssessment.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
+      assessmentId: "assessment-1",
+    });
+  });
+
   it("surfaces assessments backend error state in rendered screen flow", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
     let useQueriesCall = 0;

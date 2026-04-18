@@ -51,7 +51,6 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
 
     navigation.navigate("AssessmentDetail", {
       assessmentId,
-      classId: resultAssessment?.id || assessmentId,
     } as never);
   };
 
