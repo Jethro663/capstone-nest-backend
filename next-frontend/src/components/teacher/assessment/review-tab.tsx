@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/cn';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type {
   SubmissionsResponse,
   StudentSubmission,
@@ -477,7 +478,7 @@ function ResponseCard({ response: r, index }: { response: AttemptResponse; index
                 {question.type?.replace('_', ' ')}
               </Badge>
             </div>
-            <p className="text-sm font-medium">{question.content}</p>
+            <RichTextRenderer html={question.content ?? '<p>No question content.</p>'} className="text-sm" />
           </div>
           <div className="text-right shrink-0">
             <span className={cn(
@@ -534,9 +535,10 @@ function ResponseCard({ response: r, index }: { response: AttemptResponse; index
 
         {/* Explanation */}
         {question.explanation && (
-          <p className="text-xs text-muted-foreground italic mt-1">
-            💡 {question.explanation}
-          </p>
+          <div className="text-xs text-muted-foreground italic mt-1">
+            <span className="mr-1">💡</span>
+            <RichTextRenderer html={question.explanation} />
+          </div>
         )}
       </CardContent>
     </Card>

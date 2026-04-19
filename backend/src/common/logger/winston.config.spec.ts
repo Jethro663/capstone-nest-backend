@@ -18,20 +18,22 @@ describe('winston.config', () => {
   });
 
   it('enables Loki transport when LOKI_HOST is configured', () => {
-    const LokiTransport = jest.fn().mockImplementation(function MockLokiTransport(
-      this: any,
-      options: Record<string, unknown>,
-    ) {
-      this.name = 'LokiTransport';
-      this.options = options;
-      this.log = jest.fn((_info: unknown, callback?: () => void) =>
-        callback?.(),
-      );
-      this.close = jest.fn();
-      this.on = jest.fn();
-      this.once = jest.fn();
-      this.removeListener = jest.fn();
-    });
+    const LokiTransport = jest
+      .fn()
+      .mockImplementation(function MockLokiTransport(
+        this: any,
+        options: Record<string, unknown>,
+      ) {
+        this.name = 'LokiTransport';
+        this.options = options;
+        this.log = jest.fn((_info: unknown, callback?: () => void) =>
+          callback?.(),
+        );
+        this.close = jest.fn();
+        this.on = jest.fn();
+        this.once = jest.fn();
+        this.removeListener = jest.fn();
+      });
 
     jest.doMock('winston-loki', () => ({
       __esModule: true,
@@ -44,7 +46,8 @@ describe('winston.config', () => {
 
     let winstonLogger: typeof import('./winston.config').winstonLogger;
     jest.isolateModules(() => {
-      ({ winstonLogger } = require('./winston.config') as typeof import('./winston.config'));
+      ({ winstonLogger } =
+        require('./winston.config') as typeof import('./winston.config'));
     });
 
     expect(LokiTransport).toHaveBeenCalledTimes(1);

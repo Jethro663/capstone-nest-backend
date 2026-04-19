@@ -17,7 +17,9 @@ const USER = {
   roles: ['student'],
 };
 
-const mockExistsSync = fs.existsSync as jest.MockedFunction<typeof fs.existsSync>;
+const mockExistsSync = fs.existsSync as jest.MockedFunction<
+  typeof fs.existsSync
+>;
 
 function makeMockRes() {
   const res: any = {

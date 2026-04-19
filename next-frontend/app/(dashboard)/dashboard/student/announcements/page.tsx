@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Calendar, Inbox, Megaphone, Pin, User2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
-import { plainTextToRichHtml } from '@/lib/rich-text';
+import { normalizeRichText } from '@/lib/rich-text';
 import { classService } from '@/services/class-service';
 import { announcementService } from '@/services/announcement-service';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,13 +14,6 @@ import type { ClassItem } from '@/types/class';
 interface AnnouncementWithClass extends Announcement {
   className: string;
   subjectCode: string;
-}
-
-function announcementContentToHtml(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) return '';
-  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
-  return plainTextToRichHtml(trimmed);
 }
 
 export default function StudentAnnouncementsPage() {
@@ -155,7 +148,7 @@ export default function StudentAnnouncementsPage() {
                   </div>
 
                   <RichTextRenderer
-                    html={announcementContentToHtml(ann.content)}
+                    html={normalizeRichText(ann.content)}
                     className="student-announcements-item__content"
                   />
 

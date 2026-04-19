@@ -38,7 +38,7 @@ import type { ClassModule } from '@/types/module';
 import type { SchoolEvent } from '@/types/school-event';
 import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
 import { getTeacherName } from '@/utils/helpers';
-import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
+import { normalizeRichText } from '@/lib/rich-text';
 
 type StudentClassTab =
   | 'modules'
@@ -138,6 +138,16 @@ const RichTextRenderer = dynamic(
   () =>
     import('@/components/shared/rich-text/RichTextRenderer').then(
       (mod) => mod.RichTextRenderer,
+    ),
+  {
+    loading: () => <Skeleton className="h-16 w-full rounded-xl" />,
+  },
+);
+
+const RichTextEditor = dynamic(
+  () =>
+    import('@/components/shared/rich-text/RichTextEditor').then(
+      (mod) => mod.RichTextEditor,
     ),
   {
     loading: () => <Skeleton className="h-16 w-full rounded-xl" />,
@@ -499,9 +509,7 @@ export default function StudentClassDetailPage() {
 
   const handleSubmitDiscussionComment = useCallback(async () => {
     if (!selectedDiscussionThread || discussionSubmitting) return;
-    const safeBody = sanitizeRichTextHtml(
-      plainTextToRichHtml(discussionCommentBody.trim()),
-    ).trim();
+    const safeBody = normalizeRichText(discussionCommentBody).trim();
     if (!safeBody && discussionCommentImages.length === 0) return;
 
     try {
@@ -808,7 +816,11 @@ export default function StudentClassDetailPage() {
                         <span className="student-class-module-card__index">{index + 1}</span>
                         <div>
                           <h3>{moduleEntry.title}</h3>
-                          <p>{moduleEntry.description || 'Extended learning and higher-order thinking activities.'}</p>
+                          {moduleEntry.description ? (
+                            <RichTextRenderer html={moduleEntry.description} />
+                          ) : (
+                            <p>Extended learning and higher-order thinking activities.</p>
+                          )}
                         </div>
                       </header>
 
@@ -928,13 +940,13 @@ export default function StudentClassDetailPage() {
                   className="student-class-announcement-card"
                   data-pinned={entry.isPinned}
                   variants={staggerItem}
-                >
-                  {entry.isPinned ? <span className="student-class-announcement-card__pin">Pinned</span> : null}
-                  <h3>{entry.title}</h3>
-                  <p>{entry.content}</p>
-                  <small>
-                    {entry.author?.firstName} {entry.author?.lastName} -{' '}
-                    {formatDateLong(parseDate(entry.createdAt || null))}
+                  >
+                    {entry.isPinned ? <span className="student-class-announcement-card__pin">Pinned</span> : null}
+                    <h3>{entry.title}</h3>
+                    <RichTextRenderer html={normalizeRichText(entry.content)} />
+                    <small>
+                      {entry.author?.firstName} {entry.author?.lastName} -{' '}
+                      {formatDateLong(parseDate(entry.createdAt || null))}
                   </small>
                 </motion.article>
               ))}
@@ -1050,12 +1062,11 @@ export default function StudentClassDetailPage() {
 
               {selectedDiscussionThread.status === 'published' && selectedDiscussionThread.allowComments ? (
                 <div className="teacher-class-workspace__announcement-form">
-                  <textarea
-                    className="teacher-module-modal__textarea"
+                  <RichTextEditor
                     value={discussionCommentBody}
-                    onChange={(event) => setDiscussionCommentBody(event.target.value)}
+                    onChange={setDiscussionCommentBody}
                     placeholder="Write your comment..."
-                    rows={4}
+                    minHeight={140}
                   />
                   <Input
                     type="file"

@@ -15,6 +15,9 @@ export interface AssessmentComposerQuestionDraft {
   isRequired: boolean;
   explanation: string;
   imageUrl: string;
+  conceptTags: string[];
+  fillBlankSmartCaseInsensitive: boolean;
+  fillBlankExperimentalSmartMatch: boolean;
   options: AssessmentComposerOptionDraft[];
   isNew?: boolean;
 }

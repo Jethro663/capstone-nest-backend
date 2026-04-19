@@ -66,13 +66,14 @@ const studentNav: NavItem[] = [
 
 const teacherNav: NavItem[] = [
   { label: "My Classes", href: "/dashboard/teacher/classes", icon: BookOpen },
+  
+  { label: "My Sections", href: "/dashboard/teacher/sections", icon: Users },
+  { label: "Calendar", href: "/dashboard/teacher/calendar", icon: Activity },
   {
     label: "Nexora Library",
     href: "/dashboard/teacher/library",
     icon: FolderOpen,
   },
-  { label: "My Sections", href: "/dashboard/teacher/sections", icon: Users },
-  { label: "Calendar", href: "/dashboard/teacher/calendar", icon: Activity },
   {
     label: "Class Record",
     href: "/dashboard/teacher/class-record",

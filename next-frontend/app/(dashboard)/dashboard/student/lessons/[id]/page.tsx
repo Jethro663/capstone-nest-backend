@@ -144,7 +144,10 @@ export default function StudentLessonViewPage() {
           </Button>
           <h1 className="text-2xl font-bold text-[var(--student-text-strong)]">{lesson.title}</h1>
           {lesson.description && (
-            <p className="mt-1 text-[var(--student-text-muted)]">{lesson.description}</p>
+            <RichTextRenderer
+              html={lesson.description}
+              className="mt-1 text-[var(--student-text-muted)]"
+            />
           )}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Badge className="student-badge">{isCompleted ? 'Completed' : 'In progress'}</Badge>
@@ -308,9 +311,10 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
                 </Badge>
               ) : null}
             </div>
-            <p className="whitespace-pre-wrap text-base font-semibold text-[var(--student-text-strong)]">
-              {model.prompt}
-            </p>
+            <RichTextRenderer
+              className="text-base font-semibold text-[var(--student-text-strong)]"
+              html={model.prompt || '<p>Empty question prompt.</p>'}
+            />
             {model.choices.length > 0 ? (
               <div className="space-y-2">
                 {model.choices.map((choice) => (
@@ -329,7 +333,7 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
             )}
             {model.explanation ? (
               <div className="rounded-2xl border border-[var(--student-outline)] bg-white/60 px-4 py-3 text-sm text-[var(--student-text-muted)]">
-                {model.explanation}
+                <RichTextRenderer html={model.explanation} />
               </div>
             ) : null}
           </CardContent>

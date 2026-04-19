@@ -6,7 +6,8 @@ import { ArrowLeft, BookOpen, ClipboardList, FileText, Plus, Save, Trash2 } from
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { normalizeRichText } from '@/lib/rich-text';
 import {
   buildIndexKey,
   buildLessonItemKey,
@@ -33,6 +34,82 @@ import '../../../teacher/classes/[id]/workspace.css';
 import '../../../teacher/classes/[id]/modules/[moduleId]/module-workspace.css';
 
 type WorkspaceTab = 'modules' | 'assessments' | 'announcements';
+
+function normalizeRichTemplateField(value: string | undefined) {
+  return normalizeRichText(value || '');
+}
+
+function normalizeTemplateSections(
+  sections: ClassTemplateModuleSection[] | undefined,
+): ClassTemplateModuleSection[] {
+  return (sections ?? []).map((section) => ({
+    ...section,
+    description: normalizeRichTemplateField(section.description),
+  }));
+}
+
+function normalizeTemplateModules(modules: ClassTemplateModule[]) {
+  return modules.map((module) => {
+    const sections = normalizeTemplateSections(module.sections);
+    const description = normalizeRichTemplateField(module.description);
+    const mappedSections = sections.map((section) => {
+      const items = (section.items ?? []).map((item) => {
+        if (item.itemType !== 'lesson') return item;
+        const metadata = item.metadata;
+        if (!metadata || typeof metadata !== 'object') return item;
+        const lessonSummary = normalizeRichTemplateField(
+          (metadata as { lessonSummary?: string }).lessonSummary,
+        );
+        return {
+          ...item,
+          metadata: {
+            ...metadata,
+            lessonSummary,
+          },
+        };
+      });
+
+      if (!items.length) return { ...section, description: section.description };
+
+      return {
+        ...section,
+        items,
+      };
+    });
+
+    return {
+      ...module,
+      description,
+      sections: mappedSections,
+    };
+  });
+}
+
+function normalizeTemplateAnnouncements(announcements: ClassTemplateAnnouncement[]) {
+  return announcements.map((announcement) => ({
+    ...announcement,
+    content: normalizeRichTemplateField(announcement.content),
+  }));
+}
+
+function normalizeTemplateAssessments(assessments: ClassTemplateAssessment[]) {
+  return assessments.map((assessment) => ({
+    ...assessment,
+    description: normalizeRichTemplateField(assessment.description),
+  }));
+}
+
+function normalizeTemplatePayload(
+  modules: ClassTemplateModule[],
+  assessments: ClassTemplateAssessment[],
+  announcements: ClassTemplateAnnouncement[],
+) {
+  return {
+    modules: normalizeTemplateModules(modules),
+    assessments: normalizeTemplateAssessments(assessments),
+    announcements: normalizeTemplateAnnouncements(announcements),
+  };
+}
 
 export default function ClassTemplateEditorPage() {
   const params = useParams<{ id: string }>();
@@ -102,11 +179,8 @@ export default function ClassTemplateEditorPage() {
         const updated = await classTemplateService.update(templateId, { name: name.trim() });
         setTemplate(updated.data);
       }
-      const saved = await resolveAndSaveTemplateContent(templateId, {
-        modules,
-        assessments,
-        announcements,
-      });
+      const normalizedPayload = normalizeTemplatePayload(modules, assessments, announcements);
+      const saved = await resolveAndSaveTemplateContent(templateId, normalizedPayload);
       setModules(saved.modules);
       setAssessments(saved.assessments);
       setAnnouncements(saved.announcements);
@@ -571,10 +645,11 @@ export default function ClassTemplateEditorPage() {
                   </header>
 
                   <div className="teacher-module-detail__items">
-                    <Textarea
+                    <RichTextEditor
                       value={module.description ?? ''}
-                      onChange={(event) => updateModule(moduleIndex, { description: event.target.value })}
+                      onChange={(value) => updateModule(moduleIndex, { description: value })}
                       placeholder="Add a short module description."
+                      minHeight={110}
                     />
 
                     {(module.sections ?? []).map((section, sectionIndex) => (
@@ -590,10 +665,11 @@ export default function ClassTemplateEditorPage() {
                               onChange={(event) => updateSection(moduleIndex, sectionIndex, { title: event.target.value })}
                               className="font-semibold"
                             />
-                            <Textarea
+                            <RichTextEditor
                               value={section.description ?? ''}
-                              onChange={(event) => updateSection(moduleIndex, sectionIndex, { description: event.target.value })}
+                              onChange={(value) => updateSection(moduleIndex, sectionIndex, { description: value })}
                               placeholder="Section/block description"
+                              minHeight={110}
                             />
                           </div>
                         </div>
@@ -759,17 +835,18 @@ export default function ClassTemplateEditorPage() {
                                       }
                                       placeholder="Lesson block title"
                                     />
-                                    <Textarea
+                                    <RichTextEditor
                                       value={lessonSummary}
-                                      onChange={(event) =>
+                                      onChange={(value) =>
                                         updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
                                           metadata: {
                                             ...(item.metadata ?? {}),
-                                            lessonSummary: event.target.value,
+                                            lessonSummary: value,
                                           },
                                         })
                                       }
                                       placeholder="Lesson summary/instructions"
+                                      minHeight={110}
                                     />
                                     <Button
                                       type="button"
@@ -853,10 +930,11 @@ export default function ClassTemplateEditorPage() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              <Textarea
+              <RichTextEditor
                 value={assessment.description ?? ''}
-                onChange={(event) => updateAssessment(assessmentIndex, { description: event.target.value })}
+                onChange={(value) => updateAssessment(assessmentIndex, { description: value })}
                 placeholder="Assessment description"
+                minHeight={110}
               />
               <div className="mt-2 grid gap-2 md:grid-cols-3">
                 <div>
@@ -886,10 +964,11 @@ export default function ClassTemplateEditorPage() {
                 {(assessment.questions ?? []).map((question, questionIndex) => (
                   <div key={`${question.id ?? 'new'}-${questionIndex}`} className="rounded-lg border border-[var(--admin-outline)] p-3">
                     <div className="mb-2 flex items-center gap-2">
-                      <Input
+                      <RichTextEditor
                         value={question.content}
-                        onChange={(event) => updateQuestion(assessmentIndex, questionIndex, { content: event.target.value })}
+                        onChange={(nextContent) => updateQuestion(assessmentIndex, questionIndex, { content: nextContent })}
                         className="font-medium"
+                        minHeight={64}
                       />
                       <Button variant="outline" onClick={() => removeQuestion(assessmentIndex, questionIndex)}>
                         <Trash2 className="h-4 w-4" />
@@ -960,14 +1039,15 @@ export default function ClassTemplateEditorPage() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              <Textarea
+              <RichTextEditor
                 value={announcement.content}
-                onChange={(event) => {
+                onChange={(value) => {
                   const next = announcements.slice();
-                  next[index] = { ...announcement, content: event.target.value };
+                  next[index] = { ...announcement, content: value };
                   setAnnouncements(next);
                 }}
                 placeholder="Announcement content"
+                minHeight={140}
               />
             </div>
           ))}

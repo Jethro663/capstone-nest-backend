@@ -92,6 +92,7 @@ export interface AssessmentQuestion {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  conceptTags?: string[];
   options?: QuestionOption[];
 }
 
@@ -166,6 +167,7 @@ export interface CreateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  conceptTags?: string[];
   options?: { text: string; isCorrect: boolean; order: number }[];
 }
 
@@ -176,6 +178,7 @@ export interface UpdateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  conceptTags?: string[];
   options?: { text: string; isCorrect: boolean; order: number }[];
 }
 

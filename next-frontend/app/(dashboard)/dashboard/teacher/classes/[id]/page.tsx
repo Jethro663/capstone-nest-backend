@@ -52,7 +52,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
-import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
+import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
@@ -313,13 +313,6 @@ function normalizeModulePresentation(module: ClassModule): ModulePresentationDra
     imagePositionY: clamp(module.imagePositionY, 0, 100, 50),
     imageScale: clamp(module.imageScale, 100, 220, 120),
   };
-}
-
-function announcementContentToHtml(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) return '';
-  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
-  return plainTextToRichHtml(trimmed);
 }
 
 export default function TeacherClassDetailPage() {
@@ -858,7 +851,7 @@ export default function TeacherClassDetailPage() {
       await moduleService.create({
         classId,
         title,
-        description: newModuleDescription.trim() || undefined,
+        description: normalizeRichText(newModuleDescription).trim() || undefined,
       });
       toast.success('Module created');
       setShowAddModuleModal(false);
@@ -1219,7 +1212,7 @@ export default function TeacherClassDetailPage() {
   };
 
   const handleCreateAnnouncement = async () => {
-    const safeContent = sanitizeRichTextHtml(announcementContent).trim();
+    const safeContent = normalizeRichText(announcementContent).trim();
     if (!announcementTitle.trim() || !safeContent || creatingAnnouncement) return;
     try {
       setCreatingAnnouncement(true);
@@ -1278,7 +1271,7 @@ export default function TeacherClassDetailPage() {
   };
 
   const handleCreateDiscussionThread = async (publishImmediately: boolean) => {
-    const safeBody = sanitizeRichTextHtml(discussionBody).trim();
+    const safeBody = normalizeRichText(discussionBody).trim();
     if (!discussionTitle.trim() || !safeBody || creatingDiscussion) return;
 
     const commentLimit = Number.parseInt(discussionCommentLimit, 10);
@@ -1593,7 +1586,7 @@ export default function TeacherClassDetailPage() {
                               Core Module
                             </span>
                           ) : null}
-                          <p>{module.description || 'Add a short module description.'}</p>
+                          {module.description ? <RichTextRenderer html={module.description} /> : <p>Add a short module description.</p>}
                         </div>
                       </header>
                       <div className="teacher-class-workspace__module-stats">
@@ -1964,7 +1957,7 @@ export default function TeacherClassDetailPage() {
                     {announcement.isPinned ? <span className="teacher-class-workspace__pin">Pinned</span> : null}
                     <h3>{announcement.title}</h3>
                     <RichTextRenderer
-                      html={announcementContentToHtml(announcement.content)}
+                      html={normalizeRichText(announcement.content)}
                       className="teacher-class-workspace__announcement-rich"
                     />
                     <small>{formatDateYmd(announcement.createdAt)}</small>
@@ -2515,13 +2508,11 @@ export default function TeacherClassDetailPage() {
             </div>
             <div>
               <label htmlFor="new-module-description">Description</label>
-              <textarea
-                id="new-module-description"
-                className="teacher-module-modal__textarea"
+              <RichTextEditor
                 value={newModuleDescription}
-                onChange={(event) => setNewModuleDescription(event.target.value)}
+                onChange={setNewModuleDescription}
                 placeholder="What should students learn in this module?"
-                rows={4}
+                minHeight={120}
               />
             </div>
             <button

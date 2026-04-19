@@ -8,6 +8,7 @@ import { ArrowLeft, Clock3, Medal, Target } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import {
   StudentActionCard,
   StudentEmptyState,
@@ -21,7 +22,7 @@ import {
   getLatestSubmittedAttempt,
   getSubmittedAttempts,
 } from '@/utils/student-assessment-routing';
-import { getDescription, formatDate } from '@/utils/helpers';
+import { formatDate } from '@/utils/helpers';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 
 type StatusTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info';
@@ -226,7 +227,10 @@ export default function StudentAssessmentPage() {
             />
 
             {assessment.description && (
-              <p className="mt-3 max-w-3xl text-sm student-muted-text">{getDescription(assessment.description)}</p>
+              <RichTextRenderer
+                html={assessment.description}
+                className="mt-3 max-w-3xl text-sm student-muted-text rich-text-renderer"
+              />
             )}
 
             <div className="mt-4 flex flex-wrap gap-2">

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import {
   buildIndexKey,
   buildLessonItemKey,
@@ -31,7 +31,59 @@ import type {
   ClassTemplateModuleSection,
 } from '@/types/class-template';
 import type { UploadedFile } from '@/types/file';
+import { normalizeRichText } from '@/lib/rich-text';
 import '../../../../../teacher/classes/[id]/modules/[moduleId]/module-workspace.css';
+
+function normalizeTemplateRichText(value: string | undefined) {
+  return normalizeRichText(value || '');
+}
+
+function normalizeTemplateModules(modules: ClassTemplateModule[]) {
+  return modules.map((module) => ({
+    ...module,
+    description: normalizeTemplateRichText(module.description),
+    sections: (module.sections ?? []).map((section) => {
+      const items = (section.items ?? []).map((item) => {
+        if (item.itemType !== 'lesson') return item;
+        const metadata = item.metadata;
+        if (!metadata || typeof metadata !== 'object') return item;
+        return {
+          ...item,
+          metadata: {
+            ...metadata,
+            lessonSummary: normalizeTemplateRichText(
+              (metadata as { lessonSummary?: string }).lessonSummary,
+            ),
+          },
+        };
+      });
+
+      return {
+        ...section,
+        description: normalizeTemplateRichText(section.description),
+        items,
+      };
+    }),
+  }));
+}
+
+function normalizePayload(
+  modules: ClassTemplateModule[],
+  assessments: ClassTemplateAssessment[],
+  announcements: ClassTemplateAnnouncement[],
+) {
+  return {
+    modules: normalizeTemplateModules(modules),
+    assessments: assessments.map((assessment) => ({
+      ...assessment,
+      description: normalizeTemplateRichText(assessment.description),
+    })),
+    announcements: announcements.map((announcement) => ({
+      ...announcement,
+      content: normalizeTemplateRichText(announcement.content),
+    })),
+  };
+}
 
 export default function AdminTemplateModuleWorkspacePage() {
   const params = useParams<{ id: string; moduleKey: string }>();
@@ -294,11 +346,10 @@ export default function AdminTemplateModuleWorkspacePage() {
   const saveModuleWorkspace = async () => {
     try {
       setSaving(true);
-      const saved = await resolveAndSaveTemplateContent(templateId, {
-        modules,
-        assessments,
-        announcements,
-      });
+      const saved = await resolveAndSaveTemplateContent(
+        templateId,
+        normalizePayload(modules, assessments, announcements),
+      );
       setModules(saved.modules);
       setAssessments(saved.assessments);
       setAnnouncements(saved.announcements);
@@ -398,10 +449,11 @@ export default function AdminTemplateModuleWorkspacePage() {
                 className="font-semibold"
                 placeholder="Module title"
               />
-              <Textarea
+              <RichTextEditor
                 value={activeModule.description ?? ''}
-                onChange={(event) => updateModule({ description: event.target.value })}
+                onChange={(value) => updateModule({ description: value })}
                 placeholder="Module description"
+                minHeight={120}
               />
             </div>
           </article>
@@ -429,10 +481,11 @@ export default function AdminTemplateModuleWorkspacePage() {
                 </div>
               </header>
 
-              <Textarea
+              <RichTextEditor
                 value={section.description ?? ''}
-                onChange={(event) => updateSection(sectionIndex, { description: event.target.value })}
+                onChange={(value) => updateSection(sectionIndex, { description: value })}
                 placeholder="Section description"
+                minHeight={110}
               />
 
               <div className="teacher-module-detail__section-footer">
@@ -527,17 +580,18 @@ export default function AdminTemplateModuleWorkspacePage() {
                               }
                               placeholder="Lesson block title"
                             />
-                            <Textarea
+                            <RichTextEditor
                               value={lessonSummary}
-                              onChange={(event) =>
+                              onChange={(value) =>
                                 updateModuleBlock(sectionIndex, itemIndex, {
                                   metadata: {
                                     ...(item.metadata ?? {}),
-                                    lessonSummary: event.target.value,
+                                    lessonSummary: value,
                                   },
                                 })
                               }
                               placeholder="Lesson summary"
+                              minHeight={110}
                             />
                             <Button
                               type="button"

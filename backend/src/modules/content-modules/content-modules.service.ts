@@ -21,6 +21,7 @@ import {
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 import {
   AttachModuleItemDto,
   CreateModuleDto,
@@ -46,6 +47,11 @@ export class ContentModulesService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private sanitizeOptionalRichText(value: string | null | undefined) {
+    if (value === undefined || value === null) return value;
+    return sanitizeRichTextHtml(value);
   }
 
   private hasRole(userRoles: string[], role: RoleName) {
@@ -665,9 +671,7 @@ export class ContentModulesService {
     });
 
     if (!file) {
-      throw new NotFoundException(
-        `File with ID "${item.fileId}" not found`,
-      );
+      throw new NotFoundException(`File with ID "${item.fileId}" not found`);
     }
 
     if (file.classId && file.classId !== classId) {
@@ -710,7 +714,7 @@ export class ContentModulesService {
       .values({
         classId: dto.classId,
         title: dto.title.trim(),
-        description: dto.description,
+        description: this.sanitizeOptionalRichText(dto.description),
         order: dto.order ?? nextOrder,
       })
       .returning();
@@ -750,12 +754,12 @@ export class ContentModulesService {
       .set({
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.description !== undefined
-          ? { description: dto.description }
+          ? { description: this.sanitizeOptionalRichText(dto.description) }
           : {}),
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
         ...(dto.isLocked !== undefined ? { isLocked: dto.isLocked } : {}),
         ...(dto.teacherNotes !== undefined
-          ? { teacherNotes: dto.teacherNotes }
+          ? { teacherNotes: this.sanitizeOptionalRichText(dto.teacherNotes) }
           : {}),
         ...(dto.themeKind !== undefined ? { themeKind: dto.themeKind } : {}),
         ...(dto.gradientId !== undefined ? { gradientId: dto.gradientId } : {}),
@@ -881,7 +885,7 @@ export class ContentModulesService {
       .values({
         moduleId,
         title: dto.title.trim(),
-        description: dto.description,
+        description: this.sanitizeOptionalRichText(dto.description),
         order: dto.order ?? nextOrder,
       })
       .returning();
@@ -921,7 +925,7 @@ export class ContentModulesService {
       .set({
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.description !== undefined
-          ? { description: dto.description }
+          ? { description: this.sanitizeOptionalRichText(dto.description) }
           : {}),
         updatedAt: new Date(),
       })

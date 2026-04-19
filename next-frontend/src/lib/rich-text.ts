@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 
 export type RichTextHtml = string & { readonly __richTextHtmlBrand: unique symbol };
+const RICH_TEXT_TAG_PATTERN = /<[a-z][\s\S]*?>/i;
 
 const ALLOWED_TAGS = [
   'p',
@@ -91,15 +92,104 @@ export function sanitizeRichTextHtml(input: string): RichTextHtml {
   return root.innerHTML.trim() as RichTextHtml;
 }
 
+function stripText(html: string) {
+  return html
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s/g, '');
+}
+
+export function normalizeRichText(value: string): RichTextHtml {
+  const text = value.trim();
+  if (!text) return '' as RichTextHtml;
+
+  if (RICH_TEXT_TAG_PATTERN.test(text)) {
+    const cleaned = sanitizeRichTextHtml(text);
+    return stripText(cleaned) ? cleaned : '' as RichTextHtml;
+  }
+
+  return plainTextToRichHtml(text);
+}
+
 export function plainTextToRichHtml(input: string): RichTextHtml {
   const text = input.trim();
   if (!text) return '' as RichTextHtml;
+
   const escaped = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-  return escaped
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${paragraph.replace(/\n/g, '<br />')}</p>`)
-    .join('') as RichTextHtml;
+
+  const lines = escaped.split('\n');
+  const blocks: string[] = [];
+  let paragraph: string[] = [];
+  let listItems: string[] = [];
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return;
+    blocks.push(`<p>${paragraph.join('<br />')}</p>`);
+    paragraph = [];
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const headingMatch = line.match(/^\s*(#{1,3})\s+(.*)$/);
+    const unorderedMatch = line.match(/^\s*(?:[-*+])\s+(.*)$/);
+    const orderedMatch = line.match(/^\s*(?:\d+[.)])\s+(.*)$/);
+
+    if (headingMatch) {
+      const headingText = headingMatch[2].trim();
+      const headingLevel = headingMatch[1].length;
+      flushParagraph();
+      if (headingText) {
+        blocks.push(`<h${headingLevel}>${headingText}</h${headingLevel}>`);
+      }
+      continue;
+    }
+
+    if (unorderedMatch) {
+      flushParagraph();
+      listItems = [unorderedMatch[1]];
+      while (index + 1 < lines.length) {
+        const nextLine = lines[index + 1];
+        const nextMatch = nextLine.match(/^\s*(?:[-*+])\s+(.*)$/);
+        if (!nextMatch) break;
+        index += 1;
+        listItems.push(nextMatch[1]);
+      }
+      blocks.push(
+        `<ul>${listItems.map((item) => `<li>${item}</li>`).join('')}</ul>`,
+      );
+      listItems = [];
+      continue;
+    }
+
+    if (orderedMatch) {
+      flushParagraph();
+      listItems = [orderedMatch[1]];
+      while (index + 1 < lines.length) {
+        const nextLine = lines[index + 1];
+        const nextMatch = nextLine.match(/^\s*(?:\d+[.)])\s+(.*)$/);
+        if (!nextMatch) break;
+        index += 1;
+        listItems.push(nextMatch[1]);
+      }
+      blocks.push(
+        `<ol>${listItems.map((item) => `<li>${item}</li>`).join('')}</ol>`,
+      );
+      listItems = [];
+      continue;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      continue;
+    }
+
+    paragraph.push(line);
+  }
+
+  flushParagraph();
+
+  return blocks.join('') as RichTextHtml;
 }

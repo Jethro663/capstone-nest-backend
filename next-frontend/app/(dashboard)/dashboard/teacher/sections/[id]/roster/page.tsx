@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  CalendarDays,
-  GraduationCap,
+  ChevronDown,
+  ChevronUp,
   Trash2,
-  User,
   UserPlus,
-  Users,
 } from 'lucide-react';
 import {
   sectionService,
@@ -51,6 +49,7 @@ export default function SectionRosterPage() {
   const [busyStudentIds, setBusyStudentIds] = useState<string[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [removingSelected, setRemovingSelected] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
@@ -180,7 +179,7 @@ export default function SectionRosterPage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-40 rounded-xl" />
-        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-56 rounded-xl" />
         <Skeleton className="h-20 rounded-xl" />
         <Skeleton className="h-[22rem] rounded-xl" />
       </div>
@@ -225,38 +224,53 @@ export default function SectionRosterPage() {
         </header>
 
         <section
-          className="teacher-section-roster__stats teacher-section-roster__soft-enter"
+          className="teacher-section-roster__panel teacher-section-roster__soft-enter"
           style={getEnterStyle(55)}
         >
-          <article className="teacher-section-roster__stat-card">
-            <Users className="h-4 w-4" />
-            <strong>{dedupedRoster.length}</strong>
-            <span>Students</span>
-          </article>
-          <article className="teacher-section-roster__stat-card">
-            <GraduationCap className="h-4 w-4" />
-            <strong>Grade {section?.gradeLevel || 'N/A'}</strong>
-            <span>Grade Level</span>
-          </article>
-          <article className="teacher-section-roster__stat-card">
-            <CalendarDays className="h-4 w-4" />
-            <strong>{section?.schoolYear || 'N/A'}</strong>
-            <span>School Year</span>
-          </article>
-          <article className="teacher-section-roster__stat-card">
-            <User className="h-4 w-4" />
-            <strong>{adviserName}</strong>
-            <span>Adviser</span>
-          </article>
+          <div className="teacher-section-roster__panel-head teacher-section-roster__panel-head--schedule">
+            <h2>Section Schedule</h2>
+            <button
+              type="button"
+              className="teacher-section-roster__collapse"
+              onClick={() => setScheduleOpen((current) => !current)}
+              aria-expanded={scheduleOpen}
+              aria-controls="teacher-section-schedule"
+            >
+              {scheduleOpen ? 'Hide' : 'Show'}
+              {scheduleOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+          {scheduleOpen ? (
+            <div id="teacher-section-schedule" className="teacher-section-roster__schedule-compact">
+              <SectionScheduleViewer sectionId={sectionId} theme="teacher" chrome="flat" />
+            </div>
+          ) : (
+            <p className="teacher-section-roster__schedule-collapsed">
+              Schedule hidden. Click Show to expand.
+            </p>
+          )}
         </section>
 
         <section
-          className="teacher-section-roster__panel teacher-section-roster__soft-enter"
+          className="teacher-section-roster__stats teacher-section-roster__soft-enter"
           style={getEnterStyle(95)}
         >
-          <div className="teacher-section-roster__schedule-compact">
-            <SectionScheduleViewer sectionId={sectionId} theme="teacher" chrome="flat" />
-          </div>
+          <article className="teacher-section-roster__stat-chip">
+            <small>Students</small>
+            <strong>{dedupedRoster.length}</strong>
+          </article>
+          <article className="teacher-section-roster__stat-chip">
+            <small>Grade Level</small>
+            <strong>Grade {section?.gradeLevel || 'N/A'}</strong>
+          </article>
+          <article className="teacher-section-roster__stat-chip">
+            <small>School Year</small>
+            <strong>{section?.schoolYear || 'N/A'}</strong>
+          </article>
+          <article className="teacher-section-roster__stat-chip">
+            <small>Adviser</small>
+            <strong>{adviserName}</strong>
+          </article>
         </section>
 
         <section

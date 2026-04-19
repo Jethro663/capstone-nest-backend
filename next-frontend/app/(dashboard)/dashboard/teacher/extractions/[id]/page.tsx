@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type { Extraction, ExtractionBlock, ExtractionSection, ExtractionStatus } from '@/types/extraction';
 
 const STATUS_VARIANT: Record<ExtractionStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -811,7 +812,52 @@ export default function ExtractionReviewPage() {
                   </div>
                   <div className="mt-3 rounded-[10px] border border-[#e2e8f0] bg-white p-3">
                     <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Assessment Draft</span>{isEditable && !isApplied && !section.assessmentDraft ? <Button variant="outline" size="sm" onClick={() => updateSection(sectionIndex, { assessmentDraft: { title: `${section.title} Checkpoint`, description: '', type: 'quiz', passingScore: 60, feedbackLevel: 'standard', questions: [] } })}>Add Draft</Button> : null}</div>
-                    {!section.assessmentDraft ? <p className="text-xs text-[var(--teacher-text-muted)]">No draft assessment for this section.</p> : <div className="space-y-2"><Input value={section.assessmentDraft.title || ''} onChange={(event) => updateSection(sectionIndex, { assessmentDraft: { ...section.assessmentDraft!, title: event.target.value } })} disabled={!isEditable || isApplied} /><Textarea value={section.assessmentDraft.description || ''} onChange={(event) => updateSection(sectionIndex, { assessmentDraft: { ...section.assessmentDraft!, description: event.target.value } })} disabled={!isEditable || isApplied} rows={2} /><p className="text-xs text-[var(--teacher-text-muted)]">Questions: {section.assessmentDraft.questions?.length || 0}</p><div className="space-y-1">{section.assessmentDraft.questions?.slice(0, 3).map((question, questionIndex) => <div key={`${sectionIndex}-question-${questionIndex}`} className="flex items-center justify-between rounded-md border border-[#e2e8f0] bg-[var(--student-surface-soft)] px-2 py-1 text-xs"><span className="truncate pr-2">{question.content}</span>{question.imageUrl ? <Badge variant="outline">Image linked</Badge> : <Badge variant="secondary">No image</Badge>}</div>)}</div></div>}
+                    {!section.assessmentDraft ? (
+                      <p className="text-xs text-[var(--teacher-text-muted)]">
+                        No draft assessment for this section.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          value={section.assessmentDraft.title || ''}
+                          onChange={(event) =>
+                            updateSection(sectionIndex, {
+                              assessmentDraft: { ...section.assessmentDraft!, title: event.target.value },
+                            })
+                          }
+                          disabled={!isEditable || isApplied}
+                        />
+                        <Textarea
+                          value={section.assessmentDraft.description || ''}
+                          onChange={(event) =>
+                            updateSection(sectionIndex, {
+                              assessmentDraft: {
+                                ...section.assessmentDraft!,
+                                description: event.target.value,
+                              },
+                            })
+                          }
+                          disabled={!isEditable || isApplied}
+                          rows={2}
+                        />
+                        <p className="text-xs text-[var(--teacher-text-muted)]">
+                          Questions: {section.assessmentDraft.questions?.length || 0}
+                        </p>
+                        <div className="space-y-1">
+                          {section.assessmentDraft.questions?.slice(0, 3).map((question, questionIndex) => (
+                            <div
+                              key={`${sectionIndex}-question-${questionIndex}`}
+                              className="flex items-center justify-between rounded-md border border-[#e2e8f0] bg-[var(--student-surface-soft)] px-2 py-1 text-xs"
+                            >
+                              <span className="min-w-0 flex-1 pr-2">
+                                <RichTextRenderer html={question.content || '<p>No question content.</p>'} />
+                              </span>
+                              {question.imageUrl ? <Badge variant="outline">Image linked</Badge> : <Badge variant="secondary">No image</Badge>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

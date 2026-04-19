@@ -31,8 +31,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { normalizeRichText } from '@/lib/rich-text';
 import { ActionTooltip } from '@/components/shared/ActionTooltip';
 import { cn } from '@/utils/cn';
 import type { Assessment } from '@/types/assessment';
@@ -97,6 +99,14 @@ function toParamValue(input: string | string[] | undefined) {
 function toSafeNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function getPlainTextLength(html: string) {
+  return normalizeRichText(html)
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim()
+    .length;
 }
 
 function normalizeModule(raw: ClassModule) {
@@ -857,8 +867,9 @@ export default function TeacherModuleDetailPage() {
     if (!module || savingNotes) return;
     try {
       setSavingNotes(true);
-      await moduleService.update(module.id, { teacherNotes: notesDraft.trim() || '' });
-      setModule((current) => (current ? { ...current, teacherNotes: notesDraft.trim() || '' } : current));
+      const safeNotes = normalizeRichText(notesDraft).trim() || '';
+      await moduleService.update(module.id, { teacherNotes: safeNotes });
+      setModule((current) => (current ? { ...current, teacherNotes: safeNotes } : current));
       toast.success('Notes saved');
     } catch {
       toast.error('Unable to save notes');
@@ -947,7 +958,7 @@ export default function TeacherModuleDetailPage() {
           <span className="teacher-module-detail__pill">M{module.order}</span>
           <div className="teacher-module-detail__hero-copy">
             <h1>{module.title}</h1>
-            <p>{module.description || 'No module description yet.'}</p>
+            {module.description ? <RichTextRenderer html={module.description} /> : <p>No module description yet.</p>}
             <div className="teacher-module-detail__hero-meta">
               {isCoreModule ? (
                 <span data-tone="warn">
@@ -1522,14 +1533,14 @@ export default function TeacherModuleDetailPage() {
               Private notes visible only to you. Use this for reminders and pacing notes.
             </p>
             <article className="teacher-module-detail__notes-card">
-              <Textarea
+              <RichTextEditor
                 value={notesDraft}
-                onChange={(event) => setNotesDraft(event.target.value)}
-                rows={8}
+                onChange={setNotesDraft}
                 placeholder="Add your private notes for this module..."
+                minHeight={240}
               />
               <div className="teacher-module-detail__notes-foot">
-                <span>{notesDraft.trim().length} characters</span>
+                <span>{getPlainTextLength(notesDraft)} characters</span>
                 <Button
                   type="button"
                   className="teacher-module-detail__primary"

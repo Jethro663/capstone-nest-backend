@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { getApiErrorMessage } from '@/lib/api-error';
 import {
   isAiDraftTerminalStatus,
@@ -600,7 +601,7 @@ export default function TeacherAiDraftQuizPage() {
           <div className="teacher-ai-draft__preview-body">
             <div className="teacher-ai-draft__preview-copy">
               <h4>{result.title}</h4>
-              <p>{result.description || 'No description provided.'}</p>
+              <RichTextRenderer html={result.description || '<p>No description provided.</p>'} />
             </div>
             <div className="teacher-ai-draft__chips">
               {selectedLessons.map((lesson) => (
@@ -614,7 +615,8 @@ export default function TeacherAiDraftQuizPage() {
               {result.questions.map((question, index) => (
                 <article key={`${question.content}-${index}`} className="teacher-ai-draft__question">
                   <div className="teacher-ai-draft__question-head">
-                    <strong>Q{index + 1}. {question.content}</strong>
+                    <strong>Q{index + 1}.</strong>
+                    <RichTextRenderer html={question.content || '<p>Untitled question</p>'} />
                     <Badge variant="outline">{question.type}</Badge>
                   </div>
                   {question.options && question.options.length > 0 ? (

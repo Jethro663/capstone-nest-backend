@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type { SharedQuestionType } from '@/components/assessment/shared-answer-input';
 import { toast } from 'sonner';
 import {
@@ -790,9 +791,16 @@ export default function StudentAssessmentTakePage() {
 
               <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
                 <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)] mb-2">Instruction</p>
-                <p className="text-sm leading-relaxed text-[var(--student-text-strong)] whitespace-pre-wrap">
-                  {assessment.fileUploadInstructions || 'No additional instruction provided.'}
-                </p>
+                {assessment.fileUploadInstructions ? (
+                  <RichTextRenderer
+                    html={assessment.fileUploadInstructions}
+                    className="text-sm leading-relaxed text-[var(--student-text-strong)]"
+                  />
+                ) : (
+                  <p className="text-sm leading-relaxed text-[var(--student-text-strong)]">
+                    No additional instruction provided.
+                  </p>
+                )}
               </div>
 
               {(assessment.rubricCriteria?.length ?? 0) > 0 && (
@@ -975,7 +983,10 @@ export default function StudentAssessmentTakePage() {
                   onCut={(event) => event.preventDefault()}
                   onContextMenu={(event) => event.preventDefault()}
                 >
-                  <h2 className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]">{current.content}</h2>
+                  <RichTextRenderer
+                    html={current.content ?? '<p></p>'}
+                    className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]"
+                  />
                   {current.imageUrl ? (
                     <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3">
                       <Image

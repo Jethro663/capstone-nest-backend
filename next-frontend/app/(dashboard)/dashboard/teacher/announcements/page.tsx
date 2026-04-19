@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
-import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
+import { normalizeRichText, sanitizeRichTextHtml } from '@/lib/rich-text';
 import { toast } from 'sonner';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
@@ -23,13 +23,6 @@ function toTimestamp(value?: string) {
   if (!value) return 0;
   const ts = new Date(value).getTime();
   return Number.isNaN(ts) ? 0 : ts;
-}
-
-function announcementContentToHtml(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) return '';
-  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
-  return plainTextToRichHtml(trimmed);
 }
 
 export default function TeacherAnnouncementsPage() {
@@ -129,7 +122,7 @@ export default function TeacherAnnouncementsPage() {
   const handleEdit = (announcement: Announcement) => {
     setEditingAnnouncementId(announcement.id);
     setTitle(announcement.title);
-    setContentHtml(announcementContentToHtml(announcement.content));
+    setContentHtml(normalizeRichText(announcement.content));
     setPinned(Boolean(announcement.isPinned));
     setShowComposer(true);
   };
@@ -300,7 +293,7 @@ export default function TeacherAnnouncementsPage() {
                     </div>
                   </div>
                   <RichTextRenderer
-                    html={announcementContentToHtml(announcement.content)}
+                    html={normalizeRichText(announcement.content)}
                     className="teacher-announcements-item__content"
                   />
                   <p className="teacher-announcements-item__author">

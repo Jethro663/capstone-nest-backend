@@ -71,44 +71,6 @@
   padding: 0.38rem 0.9rem;
 }
 
-.teacher-student-profile__stats {
-  display: grid;
-  gap: 0.8rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.teacher-student-profile__stats article {
-  border: 1px solid #dce5f2;
-  border-radius: 0.9rem;
-  background: #fff;
-  padding: 0.95rem;
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  gap: 0.3rem;
-  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.34);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.teacher-student-profile__stats article:hover {
-  border-color: #cddaea;
-  box-shadow: 0 14px 28px -24px rgba(15, 23, 42, 0.4);
-}
-
-.teacher-student-profile__stats article svg {
-  color: #5c769f;
-}
-
-.teacher-student-profile__stats article strong {
-  font-size: 1.45rem;
-  line-height: 1.05;
-}
-
-.teacher-student-profile__stats article span {
-  color: #7f95b5;
-  font-size: 0.84rem;
-}
-
 .teacher-student-profile__panel-grid {
   display: grid;
   gap: 0.85rem;
@@ -245,10 +207,6 @@
 }
 
 @media (max-width: 1080px) {
-  .teacher-student-profile__stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .teacher-student-profile__panel-grid {
     grid-template-columns: 1fr;
   }
@@ -264,7 +222,6 @@
     justify-self: flex-start;
   }
 
-  .teacher-student-profile__stats,
   .teacher-student-profile__info-grid {
     grid-template-columns: 1fr;
   }
@@ -277,7 +234,6 @@
     transform: none;
   }
 
-  .teacher-student-profile__stats article,
   .teacher-student-profile__panel,
   .teacher-student-profile__info-grid article,
   .teacher-student-profile__back {

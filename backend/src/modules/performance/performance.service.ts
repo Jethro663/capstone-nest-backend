@@ -712,6 +712,7 @@ export class PerformanceService {
     if (Array.isArray(conceptTags)) {
       const tags = conceptTags
         .map((tag) => this.normalizeConceptKey(String(tag)))
+        .filter((tag) => !tag.startsWith('fill_blank:'))
         .filter((tag) => tag.length > 0);
       if (tags.length > 0) return tags;
     }

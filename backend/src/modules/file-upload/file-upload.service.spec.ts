@@ -407,11 +407,7 @@ describe('FileUploadService', () => {
       mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
 
       await expect(
-        service.updateFileMetadata(
-          FILE_ID,
-          { aiEnabled: true },
-          TEACHER_USER,
-        ),
+        service.updateFileMetadata(FILE_ID, { aiEnabled: true }, TEACHER_USER),
       ).rejects.toThrow(
         'AI-ready library files must specify subjectKey and gradeLevel',
       );

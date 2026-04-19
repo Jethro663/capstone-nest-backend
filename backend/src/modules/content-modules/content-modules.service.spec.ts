@@ -350,9 +350,11 @@ describe('ContentModulesService', () => {
         ],
       } as any);
 
-    const result = await service.getAttachedFileForDownload(ITEM_ID, STUDENT_ID, [
-      RoleName.Student,
-    ]);
+    const result = await service.getAttachedFileForDownload(
+      ITEM_ID,
+      STUDENT_ID,
+      [RoleName.Student],
+    );
 
     expect(moduleByClassSpy).toHaveBeenCalledWith(
       CLASS_ID,

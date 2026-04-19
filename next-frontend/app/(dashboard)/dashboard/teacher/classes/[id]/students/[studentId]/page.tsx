@@ -3,14 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  BookOpenText,
-  ClipboardCheck,
-  IdCard,
-  LineChart,
-  Medal,
-} from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 import type {
@@ -85,7 +78,7 @@ function HistorySection({
               <div>
                 <p>{item.title}</p>
                 <small>
-                  {item.type.replace(/_/g, ' ')} · Due {formatDate(item.dueDate)}
+                  {item.type.replace(/_/g, ' ')} - Due {formatDate(item.dueDate)}
                 </small>
               </div>
               <div className="teacher-student-overview__history-meta">
@@ -145,15 +138,9 @@ export default function TeacherStudentProfilePage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-36 rounded-2xl" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-28 rounded-2xl" />
-          ))}
-        </div>
-        <Skeleton className="h-44 rounded-2xl" />
-        <Skeleton className="h-60 rounded-2xl" />
+      <div className="space-y-3">
+        <Skeleton className="h-52 rounded-xl" />
+        <Skeleton className="h-60 rounded-xl" />
       </div>
     );
   }
@@ -172,132 +159,101 @@ export default function TeacherStudentProfilePage() {
 
   return (
     <div className="teacher-student-overview">
-      <section className="teacher-student-overview__hero">
-        <Link
-          href={`/dashboard/teacher/classes/${classId}?view=students`}
-          className="teacher-student-overview__back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Class
-        </Link>
-        <div className="teacher-student-overview__hero-row">
-          <div className="teacher-student-overview__hero-avatar">{initials}</div>
-          <div>
-            <h1>{fullName}</h1>
-            <p>{overview.classInfo.sectionLabel}</p>
-          </div>
-          <div className="teacher-student-overview__status-pill">
-            {prettifyStatus(overview.student.status)}
-          </div>
-        </div>
-      </section>
-
-      <section className="teacher-student-overview__stats">
-        <article>
-          <LineChart className="h-5 w-5" />
-          <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
-          <span>Current Grade</span>
-        </article>
-        <article>
-          <BookOpenText className="h-5 w-5" />
-          <strong>{overview.classInfo.sectionLabel.replace(/^Grade\s+\d+\s+-\s+/i, '')}</strong>
-          <span>Section</span>
-        </article>
-        <article>
-          <IdCard className="h-5 w-5" />
-          <strong>{profile?.lrn || '--'}</strong>
-          <span>LRN</span>
-        </article>
-        <article>
-          <ClipboardCheck className="h-5 w-5" />
-          <strong>{prettifyStatus(overview.student.status)}</strong>
-          <span>Status</span>
-        </article>
-      </section>
-
-      <section className="teacher-student-overview__panel">
-        <header>
-          <h2>Student Information</h2>
-        </header>
-        <div className="teacher-student-overview__student-info">
-          <div className="teacher-student-overview__student-profile">
-            <Avatar className="h-18 w-18">
-              {profile?.profilePicture ? (
-                <AvatarImage src={profile.profilePicture} alt={fullName} />
-              ) : null}
-              <AvatarFallback>{initials}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p>{fullName}</p>
-              <small>{overview.student.email}</small>
-            </div>
-          </div>
-          <div className="teacher-student-overview__info-grid">
-            <article>
-              <small>Full Name</small>
-              <p>{fullName}</p>
-            </article>
-            <article>
-              <small>Email Address</small>
-              <p>{overview.student.email}</p>
-            </article>
-            <article>
-              <small>LRN</small>
-              <p>{profile?.lrn || '--'}</p>
-            </article>
-            <article>
-              <small>Section</small>
-              <p>{overview.classInfo.sectionLabel}</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section className="teacher-student-overview__panel">
-        <header>
-          <h2>Academic Standing</h2>
-          <small>
+      <section className="teacher-student-overview__summary">
+        <div className="teacher-student-overview__summary-head">
+          <Link
+            href={`/dashboard/teacher/classes/${classId}?view=students`}
+            className="teacher-student-overview__back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Class
+          </Link>
+          <small className="teacher-student-overview__period">
             {overview.standing.gradingPeriod
               ? `Period: ${overview.standing.gradingPeriod.toUpperCase()}`
               : 'No grading period data'}
           </small>
-        </header>
-        <div className="teacher-student-overview__overall">
-          <div>
-            <span>Overall Grade</span>
-            <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
-          </div>
-          <div className="teacher-student-overview__overall-track">
-            <div
-              style={{
-                width: `${Math.max(
-                  0,
-                  Math.min(100, overview.standing.overallGradePercent ?? 0),
-                )}%`,
-              }}
-            />
-          </div>
         </div>
-        <div className="teacher-student-overview__components">
-          <article>
-            <span>Written Work</span>
-            <strong>{toPercent(overview.standing.components.writtenWorkPercent)}</strong>
-          </article>
-          <article>
-            <span>Performance Task</span>
-            <strong>{toPercent(overview.standing.components.performanceTaskPercent)}</strong>
-          </article>
-          <article>
-            <span>Quarterly Exam</span>
-            <strong>{toPercent(overview.standing.components.quarterlyExamPercent)}</strong>
-          </article>
+
+        <div className="teacher-student-overview__summary-grid">
+          <div className="teacher-student-overview__student-column">
+            <div className="teacher-student-overview__student-profile">
+              <Avatar className="h-14 w-14">
+                {profile?.profilePicture ? (
+                  <AvatarImage src={profile.profilePicture} alt={fullName} />
+                ) : null}
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h1>{fullName}</h1>
+                <p>{overview.student.email}</p>
+              </div>
+              <span className="teacher-student-overview__status-pill">
+                {prettifyStatus(overview.student.status)}
+              </span>
+            </div>
+
+            <div className="teacher-student-overview__meta-grid">
+              <article>
+                <small>Section</small>
+                <p>{overview.classInfo.sectionLabel}</p>
+              </article>
+              <article>
+                <small>LRN</small>
+                <p>{profile?.lrn || '--'}</p>
+              </article>
+              <article>
+                <small>Current Grade</small>
+                <p>{toPercent(overview.standing.overallGradePercent)}</p>
+              </article>
+            </div>
+          </div>
+
+          <div className="teacher-student-overview__standing-compact">
+            <div className="teacher-student-overview__overall">
+              <div>
+                <span>Overall Grade</span>
+                <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
+              </div>
+              <div className="teacher-student-overview__overall-track">
+                <div
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, overview.standing.overallGradePercent ?? 0),
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="teacher-student-overview__components">
+              <article>
+                <span>Written Work</span>
+                <strong>
+                  {toPercent(overview.standing.components.writtenWorkPercent)}
+                </strong>
+              </article>
+              <article>
+                <span>Performance Task</span>
+                <strong>
+                  {toPercent(overview.standing.components.performanceTaskPercent)}
+                </strong>
+              </article>
+              <article>
+                <span>Quarterly Exam</span>
+                <strong>
+                  {toPercent(overview.standing.components.quarterlyExamPercent)}
+                </strong>
+              </article>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="teacher-student-overview__panel">
+      <section className="teacher-student-overview__panel teacher-student-overview__panel--history">
         <header className="teacher-student-overview__history-heading">
           <h2>Assessment History</h2>
-          <Medal className="h-5 w-5" />
         </header>
         <div className="teacher-student-overview__history-grid">
           <HistorySection

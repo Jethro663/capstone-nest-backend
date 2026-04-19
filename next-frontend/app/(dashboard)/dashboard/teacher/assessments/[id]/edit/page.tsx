@@ -3,17 +3,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
+  ArrowLeft,
+  BarChart3,
   Eye,
+  FileText,
+  GripVertical,
   Loader2,
   Plus,
+  Save,
+  Settings2,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import {
   Dialog,
   DialogContent,
@@ -23,10 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
-import {
-  AssessmentComposerShell,
-  type AssessmentComposerSaveState,
-} from '@/features/assessment-composer/AssessmentComposerShell';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import { AssessmentQuestionEditor } from '@/features/assessment-composer/AssessmentQuestionEditor';
 import {
   createAssessmentComposerQuestion,
@@ -34,7 +38,10 @@ import {
   duplicateAssessmentComposerQuestion,
   reorderAssessmentComposerQuestions,
 } from '@/features/assessment-composer/reducer';
-import { ASSESSMENT_COMPOSER_LABELS } from '@/features/assessment-composer/question-config';
+import {
+  ASSESSMENT_COMPOSER_LABELS,
+  ASSESSMENT_COMPOSER_QUESTION_TYPES,
+} from '@/features/assessment-composer/question-config';
 import type { AssessmentComposerQuestionDraft as QuestionDraft } from '@/features/assessment-composer/types';
 import { assessmentService } from '@/services/assessment-service';
 import { classRecordService } from '@/services/class-record-service';
@@ -56,6 +63,7 @@ import './assessment-editor.css';
 type RightTab = 'settings' | 'rubric' | 'analytics';
 type Availability = 'given' | 'draft';
 type ShowResultMode = 'immediate' | 'scheduled';
+type AssessmentComposerSaveState = 'saved' | 'saving' | 'dirty' | 'error';
 
 const ASSESSMENT_TYPE_TABS: Array<{ value: AssessmentType; label: string }> = [
   { value: 'quiz', label: 'Question Assessment' },
@@ -111,7 +119,44 @@ function supportsOptions(type: QuestionType) {
   );
 }
 
+const FILL_BLANK_CASE_SENSITIVE_TAG = 'fill_blank:smart_case_sensitive';
+const FILL_BLANK_EXPERIMENTAL_SMART_TAG = 'fill_blank:experimental_smart_match';
+const FILL_BLANK_META_TAG_PREFIX = 'fill_blank:';
+
+function normalizeConceptTags(rawConceptTags: unknown): string[] {
+  if (!Array.isArray(rawConceptTags)) return [];
+  return rawConceptTags
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter((entry) => entry.length > 0);
+}
+
+function parseFillBlankSettings(conceptTags: string[]) {
+  return {
+    fillBlankSmartCaseInsensitive: !conceptTags.includes(FILL_BLANK_CASE_SENSITIVE_TAG),
+    fillBlankExperimentalSmartMatch: conceptTags.includes(FILL_BLANK_EXPERIMENTAL_SMART_TAG),
+  };
+}
+
+function buildFillBlankConceptTags(
+  conceptTags: string[],
+  fillBlankSmartCaseInsensitive: boolean,
+  fillBlankExperimentalSmartMatch: boolean,
+) {
+  const passthroughTags = conceptTags.filter((tag) => !tag.startsWith(FILL_BLANK_META_TAG_PREFIX));
+  if (!fillBlankSmartCaseInsensitive) {
+    passthroughTags.push(FILL_BLANK_CASE_SENSITIVE_TAG);
+  }
+  if (fillBlankExperimentalSmartMatch) {
+    passthroughTags.push(FILL_BLANK_EXPERIMENTAL_SMART_TAG);
+  }
+  return passthroughTags;
+}
+
 function normalizeQuestion(question: AssessmentQuestion): QuestionDraft {
+  const conceptTags = normalizeConceptTags(
+    (question as AssessmentQuestion & { conceptTags?: unknown }).conceptTags,
+  );
+  const fillBlankSettings = parseFillBlankSettings(conceptTags);
   return {
     id: question.id,
     type: question.type,
@@ -120,6 +165,9 @@ function normalizeQuestion(question: AssessmentQuestion): QuestionDraft {
     isRequired: question.isRequired ?? true,
     explanation: question.explanation || '',
     imageUrl: question.imageUrl || '',
+    conceptTags,
+    fillBlankSmartCaseInsensitive: fillBlankSettings.fillBlankSmartCaseInsensitive,
+    fillBlankExperimentalSmartMatch: fillBlankSettings.fillBlankExperimentalSmartMatch,
     options: (question.options || []).map((option) => ({
       id: option.id,
       text: option.text,
@@ -152,17 +200,38 @@ function fromDateInputValue(value: string) {
   return date.toISOString();
 }
 
+function stripTitleFromSerializedDraft(serializedDraft: string) {
+  try {
+    const parsed = JSON.parse(serializedDraft) as Record<string, unknown>;
+    delete parsed.title;
+    return JSON.stringify(parsed);
+  } catch {
+    return serializedDraft;
+  }
+}
+
 export default function AssessmentEditorPage() {
   const params = useParams();
   const assessmentId = toParamValue(params.id);
   const initializedDraftRef = useRef(false);
   const lastSavedFingerprintRef = useRef<string | null>(null);
+  const lastSavedTitleRef = useRef('');
+  const latestSerializedDraftRef = useRef('');
+  const latestTitleRef = useRef('');
+  const titleAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [saveState, setSaveState] = useState<AssessmentComposerSaveState>('saved');
   const [previewEnabled, setPreviewEnabled] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [addQuestionDialogOpen, setAddQuestionDialogOpen] = useState(false);
+  const [insertAfterQuestionIndex, setInsertAfterQuestionIndex] = useState<number | null>(null);
+  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
+  const [dropTargetQuestionId, setDropTargetQuestionId] = useState<string | null>(null);
+  const [hideFloatingAdd, setHideFloatingAdd] = useState(false);
+  const questionListBottomRef = useRef<HTMLDivElement | null>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -224,6 +293,7 @@ export default function AssessmentEditorPage() {
 
       setAssessment(data);
       setTitle(data.title || '');
+      lastSavedTitleRef.current = data.title || '';
       setDescription(data.description || '');
       setQuestions(normalizedQuestions);
       setSelectedQuestionId(normalizedQuestions[0]?.id || null);
@@ -355,11 +425,6 @@ export default function AssessmentEditorPage() {
     };
   }, [advancedOpen, assessment?.classId, assessmentId, category, quarter]);
 
-  const selectedQuestion = useMemo(
-    () => questions.find((question) => question.id === selectedQuestionId) || null,
-    [questions, selectedQuestionId],
-  );
-
   const serializedDraft = useMemo(
     () =>
       JSON.stringify({
@@ -421,6 +486,14 @@ export default function AssessmentEditorPage() {
   );
 
   useEffect(() => {
+    latestSerializedDraftRef.current = serializedDraft;
+  }, [serializedDraft]);
+
+  useEffect(() => {
+    latestTitleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
     if (loading) return;
 
     if (!initializedDraftRef.current) {
@@ -435,6 +508,84 @@ export default function AssessmentEditorPage() {
     }
   }, [loading, serializedDraft]);
 
+  const autoSaveTitle = useCallback(
+    async (nextTitle: string) => {
+      if (!assessment || !assessmentId || saving) return;
+      try {
+        setSaveState('saving');
+        await assessmentService.update(assessment.id, { title: nextTitle });
+        lastSavedTitleRef.current = nextTitle;
+        setAssessment((current) => (current ? { ...current, title: nextTitle } : current));
+
+        if (latestTitleRef.current.trim() !== nextTitle) {
+          setSaveState('dirty');
+          return;
+        }
+
+        const latestDraft = latestSerializedDraftRef.current;
+        const lastSavedDraft = lastSavedFingerprintRef.current;
+
+        if (
+          lastSavedDraft &&
+          stripTitleFromSerializedDraft(lastSavedDraft) === stripTitleFromSerializedDraft(latestDraft)
+        ) {
+          lastSavedFingerprintRef.current = latestDraft;
+          setSaveState('saved');
+          return;
+        }
+
+        setSaveState('dirty');
+      } catch {
+        setSaveState('error');
+        toast.error('Unable to auto-save assessment title');
+      }
+    },
+    [assessment, assessmentId, saving],
+  );
+
+  useEffect(() => {
+    if (!assessment || loading || saving || !initializedDraftRef.current) return;
+    const nextTitle = title.trim();
+    const lastSavedTitle = lastSavedTitleRef.current.trim();
+
+    if (!nextTitle || nextTitle === lastSavedTitle) return;
+
+    if (titleAutosaveTimerRef.current) {
+      clearTimeout(titleAutosaveTimerRef.current);
+    }
+
+    titleAutosaveTimerRef.current = setTimeout(() => {
+      void autoSaveTitle(nextTitle);
+    }, 5000);
+
+    return () => {
+      if (titleAutosaveTimerRef.current) {
+        clearTimeout(titleAutosaveTimerRef.current);
+        titleAutosaveTimerRef.current = null;
+      }
+    };
+  }, [assessment, autoSaveTitle, loading, saving, title]);
+
+  useEffect(() => {
+    if (assessmentType !== 'file_upload' && rightTab === 'rubric') {
+      setRightTab('settings');
+    }
+  }, [assessmentType, rightTab]);
+
+  useEffect(() => {
+    const observerTarget = questionListBottomRef.current;
+    if (!observerTarget) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setHideFloatingAdd(Boolean(entries[0]?.isIntersecting));
+      },
+      { root: null, threshold: 0.12 },
+    );
+    observer.observe(observerTarget);
+    return () => observer.disconnect();
+  }, [questions.length, previewEnabled, assessmentType]);
+
   const totalPoints = useMemo(
     () => questions.reduce((sum, question) => sum + (Number(question.points) || 0), 0),
     [questions],
@@ -445,14 +596,44 @@ export default function AssessmentEditorPage() {
     return slotOverview.categories.find((entry) => entry.key === category) || null;
   }, [category, slotOverview]);
 
-  const handleAddQuestion = (type: QuestionType) => {
+  const handleAddQuestion = (type: QuestionType, afterIndex: number | null = null) => {
     if (assessmentType === 'file_upload') {
       toast.info('Switch to Question Assessment mode to add questions.');
       return;
     }
-    const question = createAssessmentComposerQuestion(type, 5);
-    setQuestions((current) => [...current, question]);
+    const question = createAssessmentComposerQuestion(type, questions.length + 1);
+    setQuestions((current) => {
+      const insertAt = afterIndex === null ? current.length : Math.min(afterIndex + 1, current.length);
+      const next = current.slice();
+      next.splice(insertAt, 0, question);
+      return next;
+    });
     setSelectedQuestionId(question.id);
+    setAddQuestionDialogOpen(false);
+    setInsertAfterQuestionIndex(null);
+  };
+
+  const openQuestionTypeDialog = (afterIndex: number | null = null) => {
+    setInsertAfterQuestionIndex(afterIndex);
+    setAddQuestionDialogOpen(true);
+  };
+
+  const handleQuestionDrop = (targetQuestionId: string) => {
+    const sourceQuestionId = draggingQuestionId;
+    setDraggingQuestionId(null);
+    setDropTargetQuestionId(null);
+    if (!sourceQuestionId || sourceQuestionId === targetQuestionId) return;
+
+    const fromIndex = questions.findIndex((question) => question.id === sourceQuestionId);
+    const toIndex = questions.findIndex((question) => question.id === targetQuestionId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+    setQuestions((current) => reorderAssessmentComposerQuestions(current, fromIndex, toIndex));
+  };
+
+  const openPanelTab = (tab: RightTab) => {
+    setRightTab(tab);
+    setPanelOpen(true);
   };
 
   const handleDuplicateQuestion = (questionId: string) => {
@@ -495,13 +676,34 @@ export default function AssessmentEditorPage() {
       const question = questions[index];
       const content = question.content.trim();
       const points = Number(question.points);
+      const isFillBlank = question.type === 'fill_blank';
+
+      const fillBlankAnswerOptions = isFillBlank
+        ? question.options
+            .map((option) => option.text.trim())
+            .filter((answer) => answer.length > 0)
+            .map((answer, answerIndex) => ({
+              text: answer,
+              isCorrect: true,
+              order: answerIndex + 1,
+            }))
+        : [];
+
       const options = supportsOptions(question.type)
         ? question.options.map((option, optionIndex) => ({
             text: option.text.trim(),
             isCorrect: option.isCorrect,
             order: optionIndex + 1,
           }))
-        : [];
+        : fillBlankAnswerOptions;
+
+      const conceptTags = isFillBlank
+        ? buildFillBlankConceptTags(
+            question.conceptTags,
+            question.fillBlankSmartCaseInsensitive,
+            question.fillBlankExperimentalSmartMatch,
+          )
+        : question.conceptTags.filter((tag) => !tag.startsWith(FILL_BLANK_META_TAG_PREFIX));
 
       if (!content) {
         throw new Error(`Question ${index + 1} is empty`);
@@ -511,7 +713,11 @@ export default function AssessmentEditorPage() {
         throw new Error(`Question ${index + 1} needs valid points`);
       }
 
-      if (supportsOptions(question.type)) {
+      if (isFillBlank) {
+        if (options.length === 0) {
+          throw new Error(`Question ${index + 1} needs at least one correct answer`);
+        }
+      } else if (supportsOptions(question.type)) {
         if (options.some((option) => !option.text)) {
           throw new Error(`Question ${index + 1} has empty answer choices`);
         }
@@ -533,6 +739,7 @@ export default function AssessmentEditorPage() {
         isRequired: question.isRequired,
         explanation: question.explanation || undefined,
         imageUrl: question.imageUrl || undefined,
+        conceptTags,
         options,
       };
 
@@ -546,6 +753,7 @@ export default function AssessmentEditorPage() {
           isRequired: question.isRequired,
           explanation: question.explanation || undefined,
           imageUrl: question.imageUrl || undefined,
+          conceptTags,
           options,
         };
         await assessmentService.createQuestion(createPayload);
@@ -656,6 +864,7 @@ export default function AssessmentEditorPage() {
       toast.success('Assessment saved');
       await fetchAssessment();
       lastSavedFingerprintRef.current = serializedDraft;
+      lastSavedTitleRef.current = title.trim();
       setSaveState('saved');
     } catch (error: unknown) {
       const message =
@@ -832,28 +1041,6 @@ export default function AssessmentEditorPage() {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-            Availability
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {(['given', 'draft'] as Availability[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                  availability === mode
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
-                }`}
-                onClick={() => setAvailability(mode)}
-              >
-                {mode === 'given' ? 'Given' : 'Draft'}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <Button
           type="button"
           variant="outline"
@@ -865,6 +1052,19 @@ export default function AssessmentEditorPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           Total: <strong>{totalPoints} points</strong> across {questions.length} questions
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Notes
+          </label>
+          <RichTextEditor
+            value={description}
+            onChange={setDescription}
+            className="rounded-2xl"
+            placeholder="Add notes or instructions for this assessment."
+            minHeight={170}
+          />
         </div>
       </div>
     </div>
@@ -1010,248 +1210,487 @@ export default function AssessmentEditorPage() {
     </p>
   );
 
-  const settingsPanel = (
+  const controlPanelContent = (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-2 rounded-[1.4rem] border border-slate-200/80 bg-slate-50/80 p-2">
-        {(['settings', 'rubric', 'analytics'] as RightTab[]).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-              rightTab === tab
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-white hover:text-slate-900'
-            }`}
-            onClick={() => setRightTab(tab)}
-          >
-            {tab[0].toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
-
       {rightTab === 'settings' ? settingsContent : null}
       {rightTab === 'rubric' ? rubricContent : null}
       {rightTab === 'analytics' ? analyticsContent : null}
     </div>
   );
 
-  const centerContent =
-    assessmentType === 'file_upload' ? (
-      <article className="assessment-editor__card assessment-editor__file-mode">
-        <div className="assessment-editor__file-mode-head">
-          <h3>File Upload Assessment</h3>
-          <p>
-            Students submit files instead of answering question cards. Existing questions are kept for
-            future mode switches.
-          </p>
-        </div>
+  const saveStateMeta: { label: string; className: string } = (() => {
+    if (saveState === 'saving') {
+      return { label: 'Saving', className: 'border-amber-200 bg-amber-50 text-amber-700' };
+    }
+    if (saveState === 'dirty') {
+      return { label: 'Unsaved', className: 'border-slate-200 bg-slate-100 text-slate-700' };
+    }
+    if (saveState === 'error') {
+      return { label: 'Retry needed', className: 'border-rose-200 bg-rose-50 text-rose-700' };
+    }
+    return { label: 'Saved', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
+  })();
 
-        <div className="assessment-editor__field">
-          <label>Upload Instructions</label>
-          <Textarea
-            value={fileUploadInstructions}
-            onChange={(event) => setFileUploadInstructions(event.target.value)}
-            className="assessment-editor__question-text"
-            placeholder="Explain what students must upload and how they should format it."
-          />
-        </div>
-
-        <div className="assessment-editor__file-groups">
-          {FILE_UPLOAD_TYPE_GROUPS.map((group) => {
-            const enabled = group.extensions.every((ext) => allowedUploadExtensions.includes(ext));
-            return (
-              <label key={group.key} className="assessment-editor__file-group" data-active={enabled}>
-                <input type="checkbox" checked={enabled} onChange={() => toggleGroup(group.key)} />
-                <span>{group.label}</span>
-              </label>
-            );
-          })}
-        </div>
-
-        <div className="assessment-editor__field">
-          <label>Maximum upload size (MB)</label>
-          <Input
-            type="number"
-            min={1}
-            max={100}
-            value={Math.round(maxUploadSizeBytes / (1024 * 1024))}
-            onChange={(event) => {
-              const mb = Number(event.target.value) || 1;
-              setMaxUploadSizeBytes(Math.min(Math.max(mb, 1), 100) * 1024 * 1024);
-            }}
-          />
-        </div>
-
-        <div className="assessment-editor__file-attachment">
-          <div>
-            <p>Teacher Reference File</p>
-            <span>Optional file students can preview while submitting.</span>
-          </div>
-          <label className="assessment-editor__upload-btn">
-            <Upload className="h-4 w-4" />
-            {uploadingTeacherAttachment ? 'Uploading...' : 'Upload'}
-            <input
-              type="file"
-              className="hidden"
-              onChange={handleTeacherAttachmentUpload}
-              disabled={uploadingTeacherAttachment}
-            />
-          </label>
-        </div>
-
-        {teacherAttachmentFile ? (
-          <div className="assessment-editor__attachment-card">
-            <div>
-              <strong>{teacherAttachmentFile.originalName}</strong>
-              <p>{Math.round(teacherAttachmentFile.sizeBytes / 1024)} KB</p>
-            </div>
-            <div className="assessment-editor__attachment-actions">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  void assessmentService.downloadTeacherAttachment(
-                    assessment.id,
-                    teacherAttachmentFile.originalName,
-                  )
-                }
-              >
-                Download
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="text-rose-600"
-                onClick={() => setTeacherAttachmentFile(null)}
-              >
-                Remove
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </article>
-    ) : previewEnabled ? (
-      <div className="space-y-4">
-        {assessmentTypeSwitcher}
-        {questions.length === 0 ? (
-          <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center text-sm text-slate-500">
-            No questions yet. Add one from the strip below to preview the learner flow.
-          </div>
-        ) : (
-          questions.map((question, index) => (
-            <article
-              key={question.id}
-              className="rounded-[1.6rem] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.18)]"
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                  Question {index + 1}
-                </span>
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
-                  {ASSESSMENT_COMPOSER_LABELS[question.type]}
-                </span>
-                <span className="text-sm text-slate-500">
-                  {question.points} pts {question.isRequired ? '| Required' : '| Optional'}
-                </span>
-              </div>
-
-              <p className="mt-4 text-base font-semibold leading-7 text-slate-900">
-                {question.content || 'Untitled question'}
-              </p>
-
-              {question.imageUrl ? (
-                <div className="mt-4 overflow-hidden rounded-[1.2rem] border border-slate-200 bg-slate-50">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={question.imageUrl} alt="" className="h-56 w-full object-cover" />
-                </div>
-              ) : null}
-
-              {supportsOptions(question.type) ? (
-                <div className="mt-4 space-y-3">
-                  {question.options.map((option) => (
-                    <div
-                      key={option.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
-                    >
-                      {option.text || 'Untitled option'}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                  Learners answer this prompt with a written response.
-                </div>
-              )}
-
-              {question.explanation ? (
-                <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  Explanation preview: {question.explanation}
-                </div>
-              ) : null}
-            </article>
-          ))
-        )}
-      </div>
-    ) : selectedQuestion ? (
-      <div className="space-y-4">
-        {assessmentTypeSwitcher}
-        <AssessmentQuestionEditor
-          question={selectedQuestion}
-          questions={questions}
-          onQuestionsChange={setQuestions}
-        />
-      </div>
-    ) : (
-      <div className="space-y-4">
-        {assessmentTypeSwitcher}
-        <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center text-sm text-slate-500">
-          Select a question or add a new one.
-        </div>
-      </div>
-    );
+  const rubricDisabled = assessmentType !== 'file_upload';
 
   return (
-    <div className="assessment-editor">
-      <AssessmentComposerShell
-        backHref={backHref}
-        backLabel="Back to assessments"
-        title={title}
-        description={description}
-        onTitleChange={setTitle}
-        onDescriptionChange={setDescription}
-        saveState={saveState}
-        onSave={() => void handleSave()}
-        saveDisabled={saving}
-        previewEnabled={previewEnabled}
-        onTogglePreview={() => setPreviewEnabled((current) => !current)}
-        primaryAction={
+    <div className="assessment-editor mx-auto max-w-[1220px] px-4 pb-10 pt-3 lg:px-6">
+      <header className="sticky top-3 z-30 rounded-[1.9rem] border border-slate-200/80 bg-white/95 px-4 py-4 shadow-[0_20px_48px_-34px_rgba(15,23,42,0.28)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
             variant="outline"
             className="rounded-2xl"
-            onClick={() => setAvailability((current) => (current === 'given' ? 'draft' : 'given'))}
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+                return;
+              }
+              window.location.assign(backHref);
+            }}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to assessments
+          </Button>
+          <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${saveStateMeta.className}`}>
+            {saveStateMeta.label}
+          </span>
+          <Input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="h-12 min-w-[260px] flex-1 rounded-2xl border-slate-200 bg-slate-50 px-4 text-xl font-black"
+            placeholder="Untitled assessment"
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className={`rounded-2xl ${
+              panelOpen && rightTab === 'settings' ? 'border-slate-900 bg-slate-900 text-white' : ''
+            }`}
+            onClick={() => openPanelTab('settings')}
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={rubricDisabled}
+            className={`rounded-2xl ${
+              panelOpen && rightTab === 'rubric' ? 'border-slate-900 bg-slate-900 text-white' : ''
+            } ${rubricDisabled ? 'cursor-not-allowed opacity-55' : ''}`}
+            onClick={() => {
+              if (rubricDisabled) return;
+              openPanelTab('rubric');
+            }}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Rubric
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className={`rounded-2xl ${
+              panelOpen && rightTab === 'analytics' ? 'border-slate-900 bg-slate-900 text-white' : ''
+            }`}
+            onClick={() => openPanelTab('analytics')}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Analytics
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-2xl"
+            onClick={() => setPreviewEnabled((current) => !current)}
           >
             <Eye className="mr-2 h-4 w-4" />
-            {availability === 'given' ? 'Given' : 'Draft'}
+            {previewEnabled ? 'Back to edit' : 'Preview'}
           </Button>
-        }
-        questions={questions}
-        selectedQuestionId={selectedQuestionId}
-        onSelectQuestion={setSelectedQuestionId}
-        onDuplicateQuestion={handleDuplicateQuestion}
-        onDeleteQuestion={handleDeleteQuestion}
-        onAddQuestion={handleAddQuestion}
-        onReorderQuestions={(fromIndex, toIndex) =>
-          setQuestions((current) => reorderAssessmentComposerQuestions(current, fromIndex, toIndex))
-        }
-        leftFooterNote={
-          assessmentType === 'file_upload'
-            ? 'Questions are preserved in File Upload mode and editable again when you switch back.'
-            : 'Use the rail to switch between questions, then refine the active card in the center canvas.'
-        }
-        center={centerContent}
-        settingsPanel={settingsPanel}
-      />
+          <Button
+            type="button"
+            className="rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
+            onClick={() => void handleSave()}
+            disabled={saving}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {!saving ? <Save className="mr-2 h-4 w-4" /> : null}
+            Save now
+          </Button>
+        </div>
+      </header>
+
+      <main className="mt-5 space-y-4">
+        {assessmentType === 'file_upload' ? (
+          <article className="assessment-editor__card assessment-editor__file-mode">
+            <div className="assessment-editor__file-mode-head">
+              <h3>File Upload Assessment</h3>
+              <p>
+                Students submit files instead of answering question cards. Existing questions are kept for
+                future mode switches.
+              </p>
+            </div>
+
+            <div className="assessment-editor__field">
+              <label>Upload Instructions</label>
+              <RichTextEditor
+                value={fileUploadInstructions}
+                onChange={setFileUploadInstructions}
+                className="assessment-editor__question-text"
+                placeholder="Explain what students must upload and how they should format it."
+                minHeight={190}
+              />
+            </div>
+
+            <div className="assessment-editor__file-groups">
+              {FILE_UPLOAD_TYPE_GROUPS.map((group) => {
+                const enabled = group.extensions.every((ext) => allowedUploadExtensions.includes(ext));
+                return (
+                  <label key={group.key} className="assessment-editor__file-group" data-active={enabled}>
+                    <input type="checkbox" checked={enabled} onChange={() => toggleGroup(group.key)} />
+                    <span>{group.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="assessment-editor__field">
+              <label>Maximum upload size (MB)</label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={Math.round(maxUploadSizeBytes / (1024 * 1024))}
+                onChange={(event) => {
+                  const mb = Number(event.target.value) || 1;
+                  setMaxUploadSizeBytes(Math.min(Math.max(mb, 1), 100) * 1024 * 1024);
+                }}
+              />
+            </div>
+
+            <div className="assessment-editor__file-attachment">
+              <div>
+                <p>Teacher Reference File</p>
+                <span>Optional file students can preview while submitting.</span>
+              </div>
+              <label className="assessment-editor__upload-btn">
+                <Upload className="h-4 w-4" />
+                {uploadingTeacherAttachment ? 'Uploading...' : 'Upload'}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={handleTeacherAttachmentUpload}
+                  disabled={uploadingTeacherAttachment}
+                />
+              </label>
+            </div>
+
+            {teacherAttachmentFile ? (
+              <div className="assessment-editor__attachment-card">
+                <div>
+                  <strong>{teacherAttachmentFile.originalName}</strong>
+                  <p>{Math.round(teacherAttachmentFile.sizeBytes / 1024)} KB</p>
+                </div>
+                <div className="assessment-editor__attachment-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      void assessmentService.downloadTeacherAttachment(
+                        assessment.id,
+                        teacherAttachmentFile.originalName,
+                      )
+                    }
+                  >
+                    Download
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-rose-600"
+                    onClick={() => setTeacherAttachmentFile(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </article>
+        ) : previewEnabled ? (
+          <div className="space-y-4">
+            {questions.length === 0 ? (
+              <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center text-sm text-slate-500">
+                No questions yet. Add one to preview the learner flow.
+              </div>
+            ) : (
+              questions.map((question, index) => (
+                <article
+                  key={question.id}
+                  className="rounded-[1.6rem] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.18)]"
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                      Question {index + 1}
+                    </span>
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+                      {ASSESSMENT_COMPOSER_LABELS[question.type]}
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      {question.points} pts {question.isRequired ? '| Required' : '| Optional'}
+                    </span>
+                  </div>
+
+                  <RichTextRenderer
+                    html={question.content || '<p>Untitled question</p>'}
+                    className="mt-4 text-base font-semibold leading-7 text-slate-900"
+                  />
+                </article>
+              ))
+            )}
+          </div>
+        ) : questions.length === 0 ? (
+          <div className="space-y-4 rounded-[1.7rem] border border-slate-200/80 bg-white p-5 shadow-[0_20px_40px_-34px_rgba(15,23,42,0.25)]">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Quick start with</p>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ASSESSMENT_COMPOSER_QUESTION_TYPES.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <button
+                    key={entry.type}
+                    type="button"
+                    onClick={() => handleAddQuestion(entry.type)}
+                    className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50/70"
+                  >
+                    <span className="rounded-xl bg-white p-2 text-sky-700 shadow-sm">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">{entry.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {questions.map((question, index) => {
+              const isSelected = selectedQuestionId === question.id;
+              const isLastQuestion = index === questions.length - 1;
+              return (
+                <div key={question.id} className="group space-y-2">
+                  <article
+                    draggable
+                    onClick={() => setSelectedQuestionId(question.id)}
+                    onDragStart={(event) => {
+                      setDraggingQuestionId(question.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', question.id);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      if (draggingQuestionId && draggingQuestionId !== question.id) {
+                        setDropTargetQuestionId(question.id);
+                      }
+                    }}
+                    onDrop={() => handleQuestionDrop(question.id)}
+                    onDragEnd={() => {
+                      setDraggingQuestionId(null);
+                      setDropTargetQuestionId(null);
+                    }}
+                    className={`rounded-[1.5rem] border bg-white p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.28)] ${
+                      dropTargetQuestionId === question.id
+                        ? 'border-emerald-300'
+                        : isSelected
+                          ? 'border-sky-300'
+                          : 'border-slate-200/80'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="flex cursor-grab items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500"
+                          aria-label={`Drag to reorder question ${index + 1}`}
+                        >
+                          <GripVertical className="h-4 w-4" />
+                          Q{index + 1}
+                        </button>
+                        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+                          {ASSESSMENT_COMPOSER_LABELS[question.type]}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDuplicateQuestion(question.id);
+                          }}
+                        >
+                          Duplicate
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteQuestion(question.id);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      {isSelected ? (
+                        <AssessmentQuestionEditor
+                          question={question}
+                          questions={questions}
+                          onQuestionsChange={setQuestions}
+                        />
+                      ) : (
+                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                          <RichTextRenderer
+                            html={question.content || '<p>Untitled question</p>'}
+                            className="text-base font-semibold leading-7 text-slate-900"
+                          />
+                          {supportsOptions(question.type) && question.options.length > 0 ? (
+                            <div className="space-y-2">
+                              {question.options.map((option) => (
+                                <div
+                                  key={option.id}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                                >
+                                  {option.text || 'Untitled option'}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </article>
+
+                  <div className="flex justify-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => openQuestionTypeDialog(index)}
+                      className={`h-10 min-w-14 rounded-full border-sky-200 bg-white/95 px-4 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.42)] transition hover:scale-[1.03] hover:border-sky-300 hover:bg-sky-50 ${
+                        isLastQuestion
+                          ? ''
+                          : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'
+                      }`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={questionListBottomRef} className="h-2" />
+          </div>
+        )}
+      </main>
+
+      {assessmentType !== 'file_upload' && questions.length > 0 && !hideFloatingAdd ? (
+        <Button
+          type="button"
+          onClick={() => openQuestionTypeDialog(null)}
+          className="fixed bottom-5 right-5 z-30 h-10 w-10 rounded-full p-0 shadow-[0_20px_36px_-20px_rgba(15,23,42,0.45)]"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      ) : null}
+
+      <Dialog
+        open={addQuestionDialogOpen}
+        onOpenChange={(open) => {
+          setAddQuestionDialogOpen(open);
+          if (!open) setInsertAfterQuestionIndex(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl rounded-3xl border-slate-200 p-0">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5">
+            <DialogTitle className="text-xl font-black text-slate-900">Add Question</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Choose the next question type for this assessment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[62vh] overflow-y-auto px-6 py-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ASSESSMENT_COMPOSER_QUESTION_TYPES.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <button
+                    key={`${entry.type}-dialog`}
+                    type="button"
+                    onClick={() => handleAddQuestion(entry.type, insertAfterQuestionIndex)}
+                    className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50/70"
+                  >
+                    <span className="rounded-xl bg-white p-2 text-sky-700 shadow-sm">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">{entry.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-100 px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl font-black"
+              onClick={() => {
+                setAddQuestionDialogOpen(false);
+                setInsertAfterQuestionIndex(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className={`fixed inset-0 z-40 transition ${panelOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        <button
+          type="button"
+          aria-label="Close panel"
+          className={`absolute inset-0 bg-slate-900/35 transition-opacity duration-300 ${panelOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setPanelOpen(false)}
+        />
+        <aside
+          className={`absolute right-0 top-0 h-full w-full max-w-[440px] border-l border-slate-200 bg-white px-5 pb-5 pt-4 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.42)] transition-transform duration-300 ${
+            panelOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-black text-slate-900">
+              {rightTab[0].toUpperCase() + rightTab.slice(1)}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setPanelOpen(false)}
+              className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:bg-slate-100"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="h-[calc(100%-56px)] overflow-y-auto pr-1">
+            {controlPanelContent}
+          </div>
+        </aside>
+      </div>
 
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <DialogContent className="assessment-editor__advanced-dialog">

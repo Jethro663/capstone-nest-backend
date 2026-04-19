@@ -19,6 +19,7 @@ const ASSESSMENT_ID = '00000000-0000-0000-0000-000000000010';
 const QUESTION_ID = '00000000-0000-0000-0000-000000000020';
 const OPTION_ID_A = '00000000-0000-0000-0000-000000000030';
 const OPTION_ID_B = '00000000-0000-0000-0000-000000000031';
+const FILL_BLANK_OPTION_ID = '00000000-0000-0000-0000-000000000032';
 const STUDENT_ID = '00000000-0000-0000-0000-000000000040';
 const ATTEMPT_ID = '00000000-0000-0000-0000-000000000050';
 
@@ -68,6 +69,20 @@ const MOCK_PUBLISHED_ASSESSMENT = {
   timedQuestionsEnabled: false,
   questionTimeLimitSeconds: null,
   questions: [MOCK_QUESTION],
+};
+
+const MOCK_FILL_BLANK_QUESTION = {
+  ...MOCK_QUESTION,
+  type: 'fill_blank',
+  content: 'Type the fruit name.',
+  options: [
+    { id: FILL_BLANK_OPTION_ID, text: 'apple', isCorrect: true, order: 1 },
+  ],
+};
+
+const MOCK_FILL_BLANK_ASSESSMENT = {
+  ...MOCK_PUBLISHED_ASSESSMENT,
+  questions: [MOCK_FILL_BLANK_QUESTION],
 };
 
 const MOCK_FILE_UPLOAD_ASSESSMENT = {
@@ -1100,6 +1115,126 @@ describe('AssessmentsService', () => {
         assessmentId: ASSESSMENT_ID,
         responses: [{ questionId: QUESTION_ID, selectedOptionId: OPTION_ID_B }],
         timeSpentSeconds: 30,
+      });
+
+      expect(result.score).toBe(0);
+      expect(result.passed).toBe(false);
+    });
+
+    it('should auto-grade fill_blank answers using smart case-insensitive matching by default', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_FILL_BLANK_ASSESSMENT,
+      );
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
+      mockInsert(db, [
+        {
+          id: 'resp-fill-blank-1',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          studentAnswer: 'ApPle',
+          isCorrect: true,
+          pointsEarned: 5,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 100,
+          passed: true,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [{ questionId: QUESTION_ID, studentAnswer: 'ApPle' }],
+        timeSpentSeconds: 90,
+      });
+
+      expect(result.score).toBe(100);
+      expect(result.passed).toBe(true);
+    });
+
+    it('should auto-grade fill_blank answers using experimental smart cleaning when enabled', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_FILL_BLANK_ASSESSMENT,
+        questions: [
+          {
+            ...MOCK_FILL_BLANK_QUESTION,
+            conceptTags: ['fill_blank:experimental_smart_match'],
+          },
+        ],
+      });
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
+      mockInsert(db, [
+        {
+          id: 'resp-fill-blank-2',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          studentAnswer: '----AppL--e',
+          isCorrect: true,
+          pointsEarned: 5,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 100,
+          passed: true,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [{ questionId: QUESTION_ID, studentAnswer: '----AppL--e' }],
+        timeSpentSeconds: 90,
+      });
+
+      expect(result.score).toBe(100);
+      expect(result.passed).toBe(true);
+    });
+
+    it('should honor disabled smart case matching for fill_blank when configured as case-sensitive', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_FILL_BLANK_ASSESSMENT,
+        questions: [
+          {
+            ...MOCK_FILL_BLANK_QUESTION,
+            conceptTags: ['fill_blank:smart_case_sensitive'],
+          },
+        ],
+      });
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
+      mockInsert(db, [
+        {
+          id: 'resp-fill-blank-3',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          studentAnswer: 'ApPle',
+          isCorrect: false,
+          pointsEarned: 0,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 0,
+          passed: false,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [{ questionId: QUESTION_ID, studentAnswer: 'ApPle' }],
+        timeSpentSeconds: 90,
       });
 
       expect(result.score).toBe(0);

@@ -27,6 +27,7 @@ import {
   UpdateClassTemplateContentDto,
   UpdateClassTemplateDto,
 } from './dto/class-template.dto';
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 
 @Injectable()
 export class ClassTemplatesService {
@@ -37,6 +38,25 @@ export class ClassTemplatesService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private sanitizeMetadata(metadata: Record<string, unknown> | null | undefined) {
+    if (!metadata || typeof metadata !== 'object' || metadata === null) {
+      return metadata as Record<string, unknown> | null;
+    }
+
+    const next = { ...metadata };
+    const lessonSummary = next.lessonSummary;
+    if (typeof lessonSummary === 'string') {
+      next.lessonSummary = sanitizeRichTextHtml(lessonSummary);
+    }
+
+    const lessonTitle = next.lessonTitle;
+    if (typeof lessonTitle === 'string') {
+      next.lessonTitle = lessonTitle.trim();
+    }
+
+    return next;
   }
 
   private assertAdmin(roles: string[]) {
@@ -271,13 +291,28 @@ export class ClassTemplatesService {
         await tx
           .delete(classTemplateAssessments)
           .where(eq(classTemplateAssessments.templateId, id));
-        if (dto.assessments.length > 0) {
+            if (dto.assessments.length > 0) {
+          const sanitizedAssessmentQuestions = dto.assessments.map((assessment) => {
+            const sanitizedQuestions = (assessment.questions ?? []).map((question) => ({
+              ...question,
+              content: sanitizeRichTextHtml(question.content ?? ''),
+              explanation: question.explanation
+                ? sanitizeRichTextHtml(question.explanation)
+                : undefined,
+            }));
+
+            return {
+              ...assessment,
+              questions: sanitizedQuestions,
+            };
+          });
+
           await tx.insert(classTemplateAssessments).values(
-            dto.assessments.map((assessment, index) => ({
+            sanitizedAssessmentQuestions.map((assessment, index) => ({
               ...(assessment.id ? { id: assessment.id } : {}),
               templateId: id,
               title: assessment.title,
-              description: assessment.description ?? null,
+              description: sanitizeRichTextHtml(assessment.description ?? ''),
               type: assessment.type ?? 'quiz',
               dueDateOffsetDays: assessment.settings?.dueDateOffsetDays ?? null,
               settings: assessment.settings ?? {},
@@ -295,16 +330,16 @@ export class ClassTemplatesService {
           .where(eq(classTemplateModules.templateId, id));
         if (dto.modules.length > 0) {
           const insertedModules = await tx
-            .insert(classTemplateModules)
-            .values(
-              dto.modules.map((module, index) => ({
-                ...(module.id ? { id: module.id } : {}),
-                templateId: id,
-                title: module.title,
-                description: module.description ?? null,
-                order: module.order ?? index + 1,
-                themeKind: module.themeKind ?? 'gradient',
-                gradientId: module.gradientId ?? 'oceanic-blue',
+              .insert(classTemplateModules)
+              .values(
+                dto.modules.map((module, index) => ({
+                  ...(module.id ? { id: module.id } : {}),
+                  templateId: id,
+                  title: module.title,
+                  description: sanitizeRichTextHtml(module.description ?? ''),
+                  order: module.order ?? index + 1,
+                  themeKind: module.themeKind ?? 'gradient',
+                  gradientId: module.gradientId ?? 'oceanic-blue',
                 coverImageUrl: module.coverImageUrl ?? null,
                 imagePositionX: module.imagePositionX ?? 50,
                 imagePositionY: module.imagePositionY ?? 50,
@@ -325,12 +360,12 @@ export class ClassTemplatesService {
 
             const insertedSections = await tx
               .insert(classTemplateModuleSections)
-              .values(
+                  .values(
                 sectionInputs.map((section, sectionIndex) => ({
                   ...(section.id ? { id: section.id } : {}),
                   templateModuleId: moduleRow.id,
                   title: section.title,
-                  description: section.description ?? null,
+                  description: sanitizeRichTextHtml(section.description ?? ''),
                   order: section.order ?? sectionIndex + 1,
                 })),
               )
@@ -354,7 +389,9 @@ export class ClassTemplatesService {
                   templateAssessmentId: item.templateAssessmentId ?? null,
                   order: item.order ?? itemIndex + 1,
                   isRequired: item.isRequired ?? false,
-                  metadata: item.metadata ?? {},
+                  metadata: item.itemType === 'lesson'
+                    ? this.sanitizeMetadata(item.metadata as Record<string, unknown>)
+                    : (item.metadata ?? {}),
                   points: item.points ?? null,
                 })),
               );
@@ -372,7 +409,7 @@ export class ClassTemplatesService {
             dto.announcements.map((announcement, index) => ({
               templateId: id,
               title: announcement.title,
-              content: announcement.content,
+              content: sanitizeRichTextHtml(announcement.content),
               isPinned: announcement.isPinned ?? false,
               order: announcement.order ?? index + 1,
             })),

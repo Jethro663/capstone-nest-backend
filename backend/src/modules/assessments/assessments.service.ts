@@ -40,6 +40,7 @@ import { FeedbackService } from './feedback.service';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
 import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -173,6 +174,12 @@ export class AssessmentsService {
     }
 
     return normalized;
+  }
+
+  private sanitizeOptionalRichText(value?: string | null) {
+    if (value === undefined || value === null) return null;
+    const trimmed = value.trim();
+    return trimmed ? sanitizeRichTextHtml(trimmed) : null;
   }
 
   private sumRubricPoints(criteria: RubricCriterion[]) {
@@ -1174,8 +1181,18 @@ export class AssessmentsService {
       assessment.rubricParseStatus,
     );
 
+    const sanitizedQuestions =
+      viewerRole === 'student'
+        ? assessment.questions.map((question) =>
+            question.type === QuestionType.FILL_BLANK
+              ? { ...question, options: [] }
+              : question,
+          )
+        : assessment.questions;
+
     const assessmentWithAttachment = {
       ...assessment,
+      questions: sanitizedQuestions,
       teacherAttachmentFile,
       rubricSourceFile: rubricSourceFile
         ? {
@@ -1258,7 +1275,7 @@ export class AssessmentsService {
       .insert(assessments)
       .values({
         title: createAssessmentDto.title,
-        description: createAssessmentDto.description,
+        description: this.sanitizeOptionalRichText(createAssessmentDto.description),
         classId: createAssessmentDto.classId,
         type: createAssessmentDto.type,
         dueDate: createAssessmentDto.dueDate
@@ -1272,7 +1289,7 @@ export class AssessmentsService {
           createAssessmentDto.questionTimeLimitSeconds ?? null,
         strictMode: createAssessmentDto.strictMode ?? false,
         fileUploadInstructions: isFileUpload
-          ? createAssessmentDto.fileUploadInstructions?.trim()
+          ? this.sanitizeOptionalRichText(createAssessmentDto.fileUploadInstructions)
           : null,
         teacherAttachmentFileId: isFileUpload
           ? createAssessmentDto.teacherAttachmentFileId
@@ -1428,6 +1445,16 @@ export class AssessmentsService {
               );
             }
           }
+        } else if (q.type === QuestionType.FILL_BLANK) {
+          const validAnswerKeys = (q.options || [])
+            .filter((option) => option.isCorrect)
+            .map((option) => option.text?.trim())
+            .filter((answer) => Boolean(answer));
+          if (validAnswerKeys.length === 0) {
+            errors.push(
+              `Question ${i + 1}: Fill in the blank needs at least one correct answer`,
+            );
+          }
         }
       }
     }
@@ -1524,7 +1551,8 @@ export class AssessmentsService {
     if (updateAssessmentDto.title !== undefined)
       updateData.title = updateAssessmentDto.title;
     if (updateAssessmentDto.description !== undefined)
-      updateData.description = updateAssessmentDto.description;
+      updateData.description =
+        this.sanitizeOptionalRichText(updateAssessmentDto.description);
     if (updateAssessmentDto.type !== undefined)
       updateData.type = updateAssessmentDto.type;
     if (updateAssessmentDto.dueDate !== undefined)
@@ -1544,8 +1572,9 @@ export class AssessmentsService {
     if (updateAssessmentDto.strictMode !== undefined)
       updateData.strictMode = updateAssessmentDto.strictMode;
     if (updateAssessmentDto.fileUploadInstructions !== undefined)
-      updateData.fileUploadInstructions =
-        updateAssessmentDto.fileUploadInstructions?.trim() || null;
+      updateData.fileUploadInstructions = this.sanitizeOptionalRichText(
+        updateAssessmentDto.fileUploadInstructions,
+      );
     if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
       updateData.teacherAttachmentFileId =
         updateAssessmentDto.teacherAttachmentFileId;
@@ -1826,12 +1855,13 @@ export class AssessmentsService {
       .values({
         assessmentId: createQuestionDto.assessmentId,
         type: createQuestionDto.type,
-        content: createQuestionDto.content,
+        content: this.sanitizeOptionalRichText(createQuestionDto.content) || '<p></p>',
         points: createQuestionDto.points,
         order: createQuestionDto.order,
         isRequired: createQuestionDto.isRequired,
-        explanation: createQuestionDto.explanation,
+        explanation: this.sanitizeOptionalRichText(createQuestionDto.explanation),
         imageUrl: createQuestionDto.imageUrl,
+        conceptTags: createQuestionDto.conceptTags,
       })
       .returning();
 
@@ -1926,11 +1956,12 @@ export class AssessmentsService {
       updateQuestionDto.order !== undefined ||
       updateQuestionDto.isRequired !== undefined ||
       updateQuestionDto.explanation !== undefined ||
-      updateQuestionDto.imageUrl !== undefined
+      updateQuestionDto.imageUrl !== undefined ||
+      updateQuestionDto.conceptTags !== undefined
     ) {
       const setData: Record<string, any> = { updatedAt: new Date() };
       if (updateQuestionDto.content !== undefined)
-        setData.content = updateQuestionDto.content;
+        setData.content = this.sanitizeOptionalRichText(updateQuestionDto.content) || '<p></p>';
       if (updateQuestionDto.points !== undefined)
         setData.points = updateQuestionDto.points;
       if (updateQuestionDto.order !== undefined)
@@ -1938,9 +1969,11 @@ export class AssessmentsService {
       if (updateQuestionDto.isRequired !== undefined)
         setData.isRequired = updateQuestionDto.isRequired;
       if (updateQuestionDto.explanation !== undefined)
-        setData.explanation = updateQuestionDto.explanation;
+        setData.explanation = this.sanitizeOptionalRichText(updateQuestionDto.explanation);
       if (updateQuestionDto.imageUrl !== undefined)
         setData.imageUrl = updateQuestionDto.imageUrl;
+      if (updateQuestionDto.conceptTags !== undefined)
+        setData.conceptTags = updateQuestionDto.conceptTags;
 
       await this.db
         .update(assessmentQuestions)
@@ -3271,6 +3304,75 @@ export class AssessmentsService {
    * Auto-grade objective questions and store responses.
    * Returns total points earned and the stored response records.
    */
+  private getFillBlankMatchOptions(question: { conceptTags?: unknown }): {
+    smartCaseInsensitive: boolean;
+    experimentalSmartMatch: boolean;
+  } {
+    const conceptTags = Array.isArray(question.conceptTags)
+      ? question.conceptTags
+          .map((tag) => String(tag).trim())
+          .filter((tag) => tag.length > 0)
+      : [];
+    return {
+      smartCaseInsensitive: !conceptTags.includes(
+        'fill_blank:smart_case_sensitive',
+      ),
+      experimentalSmartMatch: conceptTags.includes(
+        'fill_blank:experimental_smart_match',
+      ),
+    };
+  }
+
+  private normalizeFillBlankAnswer(
+    value: string,
+    matchOptions: {
+      smartCaseInsensitive: boolean;
+      experimentalSmartMatch: boolean;
+    },
+  ): string {
+    let normalized = value.trim();
+    if (matchOptions.experimentalSmartMatch) {
+      normalized = normalized.replace(/[^a-z0-9]+/gi, '');
+    }
+    if (matchOptions.smartCaseInsensitive) {
+      normalized = normalized.toLowerCase();
+    }
+    return normalized;
+  }
+
+  private isFillBlankResponseCorrect(
+    question: {
+      options?: Array<{ text?: string; isCorrect?: boolean }>;
+      conceptTags?: unknown;
+    },
+    response: { studentAnswer?: string },
+  ): boolean {
+    if (!response.studentAnswer || !Array.isArray(question.options)) {
+      return false;
+    }
+
+    const matchOptions = this.getFillBlankMatchOptions(question);
+    const normalizedStudentAnswer = this.normalizeFillBlankAnswer(
+      response.studentAnswer,
+      matchOptions,
+    );
+
+    if (!normalizedStudentAnswer) {
+      return false;
+    }
+
+    const normalizedAnswerKeys = question.options
+      .filter((option) => option.isCorrect)
+      .map((option) =>
+        this.normalizeFillBlankAnswer(option.text ?? '', matchOptions),
+      )
+      .filter((answer) => answer.length > 0);
+
+    return normalizedAnswerKeys.some(
+      (answerKey) => answerKey === normalizedStudentAnswer,
+    );
+  }
+
   private async autoGradeResponses(
     submittedResponses: any[],
     questions: any[],
@@ -3326,8 +3428,13 @@ export class AssessmentsService {
             pointsEarned = question.points;
           }
         }
+      } else if (question.type === QuestionType.FILL_BLANK) {
+        if (this.isFillBlankResponseCorrect(question, response)) {
+          isCorrect = true;
+          pointsEarned = question.points;
+        }
       }
-      // Short answer and fill blank are not auto-graded
+      // Short answer remains ungraded by design.
 
       totalPoints += pointsEarned;
 
@@ -3343,7 +3450,8 @@ export class AssessmentsService {
             question.type === QuestionType.MULTIPLE_CHOICE ||
             question.type === QuestionType.TRUE_FALSE ||
             question.type === QuestionType.DROPDOWN ||
-            question.type === QuestionType.MULTIPLE_SELECT
+            question.type === QuestionType.MULTIPLE_SELECT ||
+            question.type === QuestionType.FILL_BLANK
               ? isCorrect
               : null,
           pointsEarned,

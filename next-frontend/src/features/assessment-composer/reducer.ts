@@ -22,6 +22,10 @@ function createDefaultOptionsForType(type: QuestionType): AssessmentComposerOpti
     ];
   }
 
+  if (type === 'fill_blank') {
+    return [{ id: createTempId(), text: '', isCorrect: true, order: 1 }];
+  }
+
   return [
     { id: createTempId(), text: '', isCorrect: false, order: 1 },
     { id: createTempId(), text: '', isCorrect: false, order: 2 },
@@ -40,7 +44,13 @@ export function createAssessmentComposerQuestion(
     isRequired: true,
     explanation: '',
     imageUrl: '',
-    options: supportsAssessmentComposerOptions(type) ? createDefaultOptionsForType(type) : [],
+    conceptTags: [],
+    fillBlankSmartCaseInsensitive: true,
+    fillBlankExperimentalSmartMatch: false,
+    options:
+      supportsAssessmentComposerOptions(type) || type === 'fill_blank'
+        ? createDefaultOptionsForType(type)
+        : [],
     isNew: true,
   };
 }

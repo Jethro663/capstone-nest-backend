@@ -23,6 +23,7 @@ import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { getTeacherName } from '@/utils/helpers';
 import {
   getStudentAssessmentAvailability,
@@ -32,6 +33,11 @@ import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 import type { ContentBlock, Lesson } from '@/types/lesson';
 import type { ClassModule, ModuleItem } from '@/types/module';
+import {
+  getStructuredLessonBlockHtml,
+  getStructuredLessonQuestionModel,
+  normalizeStructuredLessonBlock,
+} from '@/features/lesson-blocks/structured-content';
 import './student-module-detail.css';
 
 const LESSON_COMPLETE_WAIT_SECONDS = 30;
@@ -68,6 +74,10 @@ function getBlockTextValue(content: ContentBlock['content']): string {
   if (content && typeof content === 'object') {
     const maybeText = content.text;
     if (typeof maybeText === 'string') return maybeText;
+    const maybeHtml = content.html;
+    if (typeof maybeHtml === 'string') return maybeHtml;
+    const maybePrompt = content.prompt;
+    if (typeof maybePrompt === 'string') return maybePrompt;
   }
   return '';
 }
@@ -86,11 +96,11 @@ function getBlockUrlValue(content: ContentBlock['content']): string {
 function ContentBlockRenderer({ block }: { block: ContentBlock }) {
   switch (block.type) {
     case 'text':
+      const html = getStructuredLessonBlockHtml(block);
       return (
-        <div
-          className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]"
-          dangerouslySetInnerHTML={{ __html: getBlockTextValue(block.content) || '' }}
-        />
+        <div className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]">
+          <RichTextRenderer html={html} />
+        </div>
       );
     case 'image': {
       const src =
@@ -137,17 +147,32 @@ function ContentBlockRenderer({ block }: { block: ContentBlock }) {
         </div>
       );
     }
-    case 'question':
+    case 'question': {
+      const model = getStructuredLessonQuestionModel(block);
       return (
         <div className="rounded-2xl border border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)] p-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--student-accent)]">
             Quiz Question
           </p>
-          <p className="whitespace-pre-wrap font-medium text-[var(--student-text-strong)]">
-            {getBlockTextValue(block.content)}
-          </p>
+          <RichTextRenderer
+            className="font-medium text-[var(--student-text-strong)]"
+            html={model.prompt || getBlockTextValue(block.content) || '<p>Empty question prompt.</p>'}
+          />
+          {model.choices.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {model.choices.map((choice) => (
+                <div
+                  key={choice}
+                  className="rounded-xl border border-[var(--student-outline)] bg-white/80 px-3 py-2 text-sm text-[var(--student-text-strong)]"
+                >
+                  {choice}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       );
+    }
     case 'file': {
       const fileName =
         (block.metadata as Record<string, string>)?.fileName ||
@@ -318,7 +343,9 @@ export default function StudentModuleDetailPage() {
         const lessonData = lessonResponse.data;
         setLesson(lessonData);
         setLessonBlocks(
-          [...(lessonData.contentBlocks || [])].sort((left, right) => left.order - right.order),
+          [...(lessonData.contentBlocks || [])]
+            .sort((left, right) => left.order - right.order)
+            .map((block) => normalizeStructuredLessonBlock(block)),
         );
         setLessonCompleted(Boolean(completionStatus.data?.completed));
         setBottomReachedAt(null);
@@ -568,11 +595,15 @@ export default function StudentModuleDetailPage() {
                   ? assessment?.title || module.title
                   : module.title}
             </h1>
-            <p>
-              {currentMode === 'overview'
-                ? module.description || 'Explore lessons, assessments, and required checkpoints.'
-                : formatClassLine(classItem)}
-            </p>
+            {currentMode === 'overview' ? (
+              module.description ? (
+                <RichTextRenderer html={module.description} />
+              ) : (
+                <p>Explore lessons, assessments, and required checkpoints.</p>
+              )
+            ) : (
+              <p>{formatClassLine(classItem)}</p>
+            )}
             <div className="student-module-view__meta">
               <span>
                 <BookOpen className="h-3.5 w-3.5" />

@@ -17,6 +17,9 @@ function makeQuestion(overrides: Partial<AssessmentComposerQuestionDraft> = {}):
     isRequired: overrides.isRequired ?? true,
     explanation: overrides.explanation ?? '',
     imageUrl: overrides.imageUrl ?? '',
+    conceptTags: overrides.conceptTags ?? [],
+    fillBlankSmartCaseInsensitive: overrides.fillBlankSmartCaseInsensitive ?? true,
+    fillBlankExperimentalSmartMatch: overrides.fillBlankExperimentalSmartMatch ?? false,
     options: overrides.options ?? [
       { id: 'option-1', text: '3', isCorrect: false, order: 1 },
       { id: 'option-2', text: '4', isCorrect: true, order: 2 },

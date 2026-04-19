@@ -12,11 +12,12 @@ const transports: winston.transport[] = [
       winston.format.colorize(),
       winston.format.printf(
         ({ timestamp, level, message, context, trace, stack }) => {
-        const ctx = context ? `[${context}]` : '';
-        const traceText = trace ? `\n${trace}` : '';
-        const err = stack ? `\n${stack}` : '';
-        return `${timestamp} ${level} ${ctx} ${message}${traceText}${err}`;
-      }),
+          const ctx = context ? `[${context}]` : '';
+          const traceText = trace ? `\n${trace}` : '';
+          const err = stack ? `\n${stack}` : '';
+          return `${timestamp} ${level} ${ctx} ${message}${traceText}${err}`;
+        },
+      ),
     ),
   }),
 

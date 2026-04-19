@@ -606,7 +606,7 @@ export class FileUploadService {
           dto.teacherVisible === undefined
             ? record.teacherVisible
             : dto.teacherVisible,
-        })
+      })
       .where(eq(uploadedFiles.id, id));
 
     const partitionChanged =
@@ -699,9 +699,7 @@ export class FileUploadService {
   async retryIndex(id: string, user: RequestUser) {
     const record = await this.ensureFileWritable(id, user);
     if (!record.aiEnabled) {
-      throw new BadRequestException(
-        'Only AI-enabled files can be indexed.',
-      );
+      throw new BadRequestException('Only AI-enabled files can be indexed.');
     }
     this.ensureAiReadyPartition({
       scope: record.scope as FileScopeDto,

@@ -484,7 +484,9 @@ describe('LessonsService', () => {
       db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
 
       const snapshotReturning = jest.fn().mockResolvedValue([]);
-      const snapshotValues = jest.fn().mockReturnValue({ returning: snapshotReturning });
+      const snapshotValues = jest
+        .fn()
+        .mockReturnValue({ returning: snapshotReturning });
       const blockReturning = jest.fn().mockResolvedValue([
         {
           ...MOCK_BLOCK,
@@ -493,13 +495,17 @@ describe('LessonsService', () => {
           metadata: structuredDto.metadata,
         },
       ]);
-      const blockValues = jest.fn().mockReturnValue({ returning: blockReturning });
+      const blockValues = jest
+        .fn()
+        .mockReturnValue({ returning: blockReturning });
 
       db.insert
         .mockReturnValueOnce({ values: snapshotValues })
         .mockReturnValueOnce({ values: blockValues });
 
-      await service.addContentBlock(structuredDto, TEACHER_ID, [RoleName.Teacher]);
+      await service.addContentBlock(structuredDto, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
 
       expect(blockValues).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -664,7 +670,9 @@ describe('LessonsService', () => {
       });
 
       const snapshotReturning = jest.fn().mockResolvedValue([]);
-      const snapshotValues = jest.fn().mockReturnValue({ returning: snapshotReturning });
+      const snapshotValues = jest
+        .fn()
+        .mockReturnValue({ returning: snapshotReturning });
       const restoredBlocksValues = jest.fn().mockResolvedValue(undefined);
       db.insert
         .mockReturnValueOnce({ values: snapshotValues })

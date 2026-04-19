@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type { AttemptResult } from '@/types/assessment';
 
 export default function TeacherAttemptResultsPage() {
@@ -148,7 +149,10 @@ export default function TeacherAttemptResultsPage() {
                     </span>
                   </div>
 
-                  <p className="font-medium">{response.question?.content}</p>
+                  <RichTextRenderer
+                    html={response.question?.content ?? '<p>No question content.</p>'}
+                    className="font-medium"
+                  />
                   {response.question?.imageUrl && (
                     <div className="mt-2">
                       <Image

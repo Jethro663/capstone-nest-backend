@@ -62,6 +62,7 @@ import {
   STUDENT_COURSE_VIEW_MODES,
 } from './DTO/update-student-course-view.dto';
 import { normalizeGradeLevel } from '../../common/utils/grade-level.util';
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 import {
   areSubjectCodesEquivalent,
   normalizeSubjectCode,
@@ -664,16 +665,22 @@ export class ClassesService {
         questionIndex += 1
       ) {
         const templateQuestion = questionRows[questionIndex];
+        const normalizedQuestionContent = sanitizeRichTextHtml(
+          templateQuestion.content ?? '<p></p>',
+        );
+        const normalizedQuestionExplanation = templateQuestion.explanation
+          ? sanitizeRichTextHtml(templateQuestion.explanation)
+          : null;
         const [question] = await database
           .insert(assessmentQuestions)
           .values({
             assessmentId: assessment.id,
             type: templateQuestion.type ?? 'multiple_choice',
-            content: templateQuestion.content ?? '',
+            content: normalizedQuestionContent,
             points: templateQuestion.points ?? 1,
             order: templateQuestion.order ?? questionIndex + 1,
             isRequired: templateQuestion.isRequired ?? true,
-            explanation: templateQuestion.explanation ?? null,
+            explanation: normalizedQuestionExplanation,
             imageUrl: templateQuestion.imageUrl ?? null,
           })
           .returning();

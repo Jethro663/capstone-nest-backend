@@ -6,9 +6,10 @@ import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { AssessmentComposerShell, type AssessmentComposerSaveState } from '@/features/assessment-composer/AssessmentComposerShell';
 import { AssessmentQuestionEditor } from '@/features/assessment-composer/AssessmentQuestionEditor';
 import {
@@ -61,6 +62,9 @@ function normalizeTemplateQuestion(
     isRequired: question.isRequired ?? true,
     explanation: question.explanation ?? '',
     imageUrl: question.imageUrl ?? '',
+    conceptTags: [],
+    fillBlankSmartCaseInsensitive: true,
+    fillBlankExperimentalSmartMatch: false,
     options: normalizedOptions,
   };
 }
@@ -76,6 +80,18 @@ function normalizeOptionsForQuestionType(
 
   if (type === 'multiple_select') {
     return base;
+  }
+
+  if (type === 'fill_blank') {
+    if (base.length === 0) {
+      return [{ text: '', isCorrect: true, order: 1 }];
+    }
+
+    return base.map((option, index) => ({
+      ...option,
+      isCorrect: true,
+      order: index + 1,
+    }));
   }
 
   if (base.length === 0) {
@@ -244,7 +260,9 @@ export default function AdminTemplateAssessmentEditorPage() {
       isRequired: question.isRequired,
       explanation: question.explanation || undefined,
       imageUrl: question.imageUrl || undefined,
-      options: supportsAssessmentComposerOptions(question.type)
+      options:
+        supportsAssessmentComposerOptions(question.type) ||
+        question.type === 'fill_blank'
         ? normalizeOptionsForQuestionType(question.type, question.options)
         : [],
     }));
@@ -458,7 +476,10 @@ export default function AdminTemplateAssessmentEditorPage() {
                       {question.points} pts
                     </Badge>
                   </div>
-                  <p className="text-base font-semibold text-slate-900">{question.content || 'Untitled question'}</p>
+                  <RichTextRenderer
+                    html={question.content || '<p>Untitled question</p>'}
+                    className="text-base font-semibold text-slate-900"
+                  />
                   {question.imageUrl ? (
                     <p className="mt-3 text-sm text-slate-500">{question.imageUrl}</p>
                   ) : null}
@@ -576,10 +597,11 @@ export default function AdminTemplateAssessmentEditorPage() {
 
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Notes</label>
-              <Textarea
+              <RichTextEditor
                 value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className="min-h-[120px] rounded-[1.4rem] border-slate-200 bg-slate-50/70 px-4 py-4"
+                onChange={setDescription}
+                className="rounded-[1.4rem]"
+                minHeight={150}
                 placeholder="Add setup notes for the template or explain when teachers should use this assessment."
               />
             </div>

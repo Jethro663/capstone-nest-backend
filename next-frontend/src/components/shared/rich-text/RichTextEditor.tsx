@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Editor } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import {
   Bold,
   Eraser,
+  Heading1,
+  Heading2,
   Heading3,
   Italic,
   Link2,
@@ -19,7 +22,7 @@ import {
   Underline as UnderlineIcon,
   Undo2,
 } from 'lucide-react';
-import { sanitizeRichTextHtml } from '@/lib/rich-text';
+import { normalizeRichText } from '@/lib/rich-text';
 import { cn } from '@/utils/cn';
 
 interface RichTextEditorProps {
@@ -45,12 +48,21 @@ export function RichTextEditor({
   className,
   minHeight = 140,
 }: RichTextEditorProps) {
+  const editorRef = useRef<Editor | null>(null);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3],
+        },
+        bulletList: {
+          keepMarks: true,
+          keepAttributes: true,
+        },
+        orderedList: {
+          keepMarks: true,
+          keepAttributes: true,
         },
         link: false,
       }),
@@ -65,21 +77,83 @@ export function RichTextEditor({
         placeholder,
       }),
     ],
-    content: value || '',
+    content: normalizeRichText(value || ''),
     editorProps: {
       attributes: {
         class: 'rich-text-editor__canvas',
       },
+      handleKeyDown: (_view, event) => {
+        const currentEditor = editorRef.current;
+        if (!currentEditor) return false;
+
+        const key = event.key.toLowerCase();
+        if ((event.metaKey || event.ctrlKey) && key === 'b') {
+          event.preventDefault();
+          currentEditor.chain().focus().toggleBold().run();
+          return true;
+        }
+
+        if ((event.metaKey || event.ctrlKey) && key === 'i') {
+          event.preventDefault();
+          currentEditor.chain().focus().toggleItalic().run();
+          return true;
+        }
+
+        if ((event.metaKey || event.ctrlKey) && key === 'u') {
+          event.preventDefault();
+          currentEditor.chain().focus().toggleUnderline().run();
+          return true;
+        }
+
+        if (event.key === ' ') {
+          const selection = currentEditor.state.selection;
+          if (selection.empty) {
+            const cursor = selection.from;
+            const lineStart = currentEditor.state.doc.resolve(cursor).start();
+            const lineText = currentEditor.state.doc.textBetween(
+              lineStart,
+              cursor,
+              '\n',
+              '\n',
+            );
+            const isBulletMarker = /^\s*[-*+]\s*$/.test(lineText);
+            const isOrderedMarker = /^\s*\d+[.)]\s*$/.test(lineText);
+
+            if (isBulletMarker || isOrderedMarker) {
+              event.preventDefault();
+              const deleteFrom = cursor - lineText.length;
+              const chain = currentEditor.chain().focus().deleteRange({
+                from: deleteFrom,
+                to: cursor,
+              });
+
+              if (isOrderedMarker) {
+                chain.toggleOrderedList();
+              } else {
+                chain.toggleBulletList();
+              }
+
+              chain.run();
+              return true;
+            }
+          }
+        }
+
+        return false;
+      },
+    },
+    onCreate: ({ editor: editorInstance }) => {
+      editorRef.current = editorInstance;
     },
     onUpdate: ({ editor: editorInstance }) => {
-      onChange(sanitizeRichTextHtml(editorInstance.getHTML()));
+      onChange(normalizeRichText(editorInstance.getHTML()));
     },
   });
 
   useEffect(() => {
     if (!editor) return;
-    const current = sanitizeRichTextHtml(editor.getHTML());
-    const incoming = sanitizeRichTextHtml(value || '');
+    const current = normalizeRichText(editor.getHTML());
+    const incoming = normalizeRichText(value || '');
     if (current === incoming) return;
     editor.commands.setContent(incoming || '<p></p>', { emitUpdate: false });
   }, [editor, value]);
@@ -119,7 +193,19 @@ export function RichTextEditor({
         isActive: editor.isActive('underline'),
       },
       {
-        label: 'Heading',
+        label: 'Heading 1',
+        icon: Heading1,
+        onClick: () => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+        isActive: editor.isActive('heading', { level: 1 }),
+      },
+      {
+        label: 'Heading 2',
+        icon: Heading2,
+        onClick: () => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+        isActive: editor.isActive('heading', { level: 2 }),
+      },
+      {
+        label: 'Heading 3',
         icon: Heading3,
         onClick: () => editor.chain().focus().toggleHeading({ level: 3 }).run(),
         isActive: editor.isActive('heading', { level: 3 }),

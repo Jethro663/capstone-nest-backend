@@ -7,26 +7,13 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { and, eq, isNull, desc, sql } from 'drizzle-orm';
-import type { IOptions as SanitizeOptions } from 'sanitize-html';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const sanitizeHtml = require('sanitize-html') as (
-  dirty: string,
-  options?: SanitizeOptions,
-) => string;
 import { DatabaseService } from '../../database/database.service';
 import { announcements, classes, enrollments } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
 import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
 import { AuditService } from '../audit/audit.service';
-
-const ALLOWED_TAGS: SanitizeOptions = {
-  allowedTags: ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li', 'a'],
-  allowedAttributes: {
-    a: ['href', 'target'],
-  },
-  allowedSchemes: ['http', 'https', 'mailto'],
-};
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 
 @Injectable()
 export class AnnouncementsService {
@@ -111,7 +98,7 @@ export class AnnouncementsService {
   }
 
   private sanitize(html: string): string {
-    return sanitizeHtml(html, ALLOWED_TAGS);
+    return sanitizeRichTextHtml(html);
   }
 
   private ensureMutableAnnouncement(

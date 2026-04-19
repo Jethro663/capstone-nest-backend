@@ -10142,7 +10142,10 @@ html[data-theme='dark'] {
 
 .rich-text-editor__canvas .ProseMirror h1,
 .rich-text-editor__canvas .ProseMirror h2,
-.rich-text-editor__canvas .ProseMirror h3 {
+.rich-text-editor__canvas .ProseMirror h3,
+.rich-text-editor__canvas .ProseMirror h4,
+.rich-text-editor__canvas .ProseMirror h5,
+.rich-text-editor__canvas .ProseMirror h6 {
   margin: 0.55rem 0 0.32rem;
   color: #132a4a;
   line-height: 1.25;
@@ -10169,6 +10172,17 @@ html[data-theme='dark'] {
 .rich-text-renderer a {
   color: #1f5fbf;
   text-decoration: underline;
+}
+
+.rich-text-renderer h1,
+.rich-text-renderer h2,
+.rich-text-renderer h3,
+.rich-text-renderer h4,
+.rich-text-renderer h5,
+.rich-text-renderer h6 {
+  margin: 0.55rem 0 0.32rem;
+  color: #132a4a;
+  line-height: 1.25;
 }
 
 /* Shared route/auth loading experience */

@@ -3,6 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type {
   Assessment,
   AssessmentStats,
@@ -143,7 +144,7 @@ function QuestionCard({
               </Badge>
               <Badge variant="secondary" className="text-[11px]">{q.points} pt{q.points !== 1 ? 's' : ''}</Badge>
             </div>
-            <p className="font-medium">{q.content}</p>
+            <RichTextRenderer className="font-medium" html={q.content} />
           </div>
           <div className="text-right shrink-0">
             <p className={`text-lg font-bold ${q.correctPercent >= 70 ? 'text-emerald-600' : q.correctPercent >= 40 ? 'text-amber-600' : 'text-red-500'}`}>

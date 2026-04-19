@@ -364,7 +364,11 @@ describe('PerformanceService', () => {
       'teacher',
     ]);
 
-    expect(bulkSpy).toHaveBeenCalledWith('class-1', ['student-2'], 'view_refresh');
+    expect(bulkSpy).toHaveBeenCalledWith(
+      'class-1',
+      ['student-2'],
+      'view_refresh',
+    );
     expect(singleSpy).not.toHaveBeenCalled();
     expect(summary.totalStudents).toBe(2);
     expect(summary.atRiskCount).toBe(1);
