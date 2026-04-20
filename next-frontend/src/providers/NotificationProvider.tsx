@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
-import { getFrontendApiOrigin } from '@/lib/api-origin';
+import { getBrowserSocketOrigin } from '@/lib/api-origin';
 import { normalizeNotification, notificationService } from '@/services/notification-service';
 import type { Notification } from '@/types/notification';
 
@@ -93,7 +93,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!sessionUserId) return;
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || getFrontendApiOrigin();
+    const wsUrl = getBrowserSocketOrigin();
     const token = getAccessToken();
     if (!token) return;
     const activeUserId = sessionUserId;

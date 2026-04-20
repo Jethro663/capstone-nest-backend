@@ -35,6 +35,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       });
     }
 
+    if (
+      exception instanceof Error &&
+      (exception as { type?: string }).type === 'entity.too.large'
+    ) {
+      return response.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
+        success: false,
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        message: 'Request payload is too large',
+        timestamp: new Date().toISOString(),
+        path: request.url,
+      });
+    }
+
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();

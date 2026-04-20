@@ -1292,7 +1292,8 @@ export class ClassTemplatesService {
     }
 
     const templateId = manifest.template.id;
-    await this.db.transaction(async (tx) => {
+    try {
+      await this.db.transaction(async (tx) => {
       const nextStatus = publish
         ? ClassTemplateStatus.Published
         : (manifest.template.status as ClassTemplateStatus) ??
@@ -1505,18 +1506,25 @@ export class ClassTemplatesService {
           })),
         );
       }
-    });
+      });
 
-    await this.auditService.log({
-      actorId,
-      action: 'class_template.engine_imported',
-      targetType: 'class_template',
-      targetId: templateId,
-      metadata: {
-        schemaVersion: manifest.schemaVersion,
-        engineVersion: manifest.engineVersion,
-      },
-    });
+      await this.auditService.log({
+        actorId,
+        action: 'class_template.engine_imported',
+        targetType: 'class_template',
+        targetId: templateId,
+        metadata: {
+          schemaVersion: manifest.schemaVersion,
+          engineVersion: manifest.engineVersion,
+        },
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error
+          ? `Template import failed: ${error.message}`
+          : 'Template import failed',
+      );
+    }
 
     return {
       template: await this.findOne(templateId),

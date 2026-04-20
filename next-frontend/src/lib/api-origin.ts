@@ -33,4 +33,23 @@ export function getServerApiOrigin(
   return configuredOrigin || LOCAL_BACKEND_ORIGIN;
 }
 
+export function getBrowserSocketOrigin(
+  configuredSocketOrigin = process.env.NEXT_PUBLIC_WS_URL,
+  configuredApiOrigin = process.env.NEXT_PUBLIC_API_URL,
+): string {
+  if (configuredSocketOrigin && !isDockerInternalHostname(configuredSocketOrigin)) {
+    return configuredSocketOrigin;
+  }
+
+  if (configuredApiOrigin && !isDockerInternalHostname(configuredApiOrigin)) {
+    return configuredApiOrigin;
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return LOCAL_BACKEND_ORIGIN;
+}
+
 export { LOCAL_BACKEND_ORIGIN };
