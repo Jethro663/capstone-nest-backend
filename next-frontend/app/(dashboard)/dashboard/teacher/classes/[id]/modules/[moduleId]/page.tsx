@@ -229,6 +229,11 @@ export default function TeacherModuleDetailPage() {
   const [draggingItem, setDraggingItem] = useState<DraggingItem>(null);
   const [pendingItemIds, setPendingItemIds] = useState<Record<string, boolean>>({});
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
+  const [previewItem, setPreviewItem] = useState<ModuleItem | null>(null);
+  const [previewLesson, setPreviewLesson] = useState<Lesson | null>(null);
+  const [previewAssessment, setPreviewAssessment] = useState<Assessment | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!classId || !moduleId) return;
@@ -651,6 +656,36 @@ export default function TeacherModuleDetailPage() {
         delete next[itemId];
         return next;
       });
+    }
+  };
+
+  const handleOpenCoreItemPreview = async (item: ModuleItem) => {
+    if (!item.isCoreTemplateAsset) return;
+
+    setPreviewItem(item);
+    setPreviewLesson(null);
+    setPreviewAssessment(null);
+    setPreviewError(null);
+    setPreviewLoading(true);
+
+    try {
+      if (item.itemType === 'lesson' && item.lessonId) {
+        const response = await lessonService.getById(item.lessonId);
+        setPreviewLesson(response.data);
+        return;
+      }
+
+      if (item.itemType === 'assessment' && item.assessmentId) {
+        const response = await assessmentService.getById(item.assessmentId);
+        setPreviewAssessment(response.data);
+        return;
+      }
+
+      setPreviewError('No preview is available for this item.');
+    } catch {
+      setPreviewError('Unable to load preview content.');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -1130,21 +1165,35 @@ export default function TeacherModuleDetailPage() {
                                     <button
                                       type="button"
                                       className="teacher-module-detail__outline"
-                                      onClick={() => void handleReleaseCoreItem(section.id, item.id, { isVisible: !item.isVisible })}
+                                      onClick={() => void handleOpenCoreItemPreview(item)}
                                       disabled={pending}
-                                      aria-label={item.isVisible ? 'Hide Item' : 'Release Item'}
+                                      aria-label="View Content"
                                     >
-                                      {item.isVisible ? 'Hide Item' : 'Release Item'}
+                                      View Content
                                     </button>
-                                    {item.itemType === 'assessment' ? (
-                                      <button
-                                        type="button"
-                                        className="teacher-module-detail__outline"
-                                        onClick={() => void handleReleaseCoreItem(section.id, item.id, { isGiven: !item.isGiven })}
+                                    <label className="teacher-module-detail__control-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={!item.isVisible}
                                         disabled={pending}
-                                      >
-                                        {item.isGiven ? 'Ungive Assessment' : 'Give Assessment'}
-                                      </button>
+                                        onChange={(event) =>
+                                          void handleReleaseCoreItem(section.id, item.id, { isVisible: !event.target.checked })
+                                        }
+                                      />
+                                      Hide
+                                    </label>
+                                    {item.itemType === 'assessment' ? (
+                                      <label className="teacher-module-detail__control-toggle">
+                                        <input
+                                          type="checkbox"
+                                          checked={item.isGiven}
+                                          disabled={pending}
+                                          onChange={(event) =>
+                                            void handleReleaseCoreItem(section.id, item.id, { isGiven: event.target.checked })
+                                          }
+                                        />
+                                        Give
+                                      </label>
                                     ) : null}
                                   </>
                                 ) : (
@@ -1457,6 +1506,95 @@ export default function TeacherModuleDetailPage() {
         ) : null}
 
       </section>
+
+      <Dialog
+        open={Boolean(previewItem)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setPreviewItem(null);
+          setPreviewLesson(null);
+          setPreviewAssessment(null);
+          setPreviewError(null);
+          setPreviewLoading(false);
+        }}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {previewLesson?.title || previewAssessment?.title || (previewItem ? titleForItem(previewItem) : 'Content Preview')}
+            </DialogTitle>
+            <DialogDescription>
+              Read-only preview of template-managed content.
+            </DialogDescription>
+          </DialogHeader>
+          {previewLoading ? <p className="text-sm text-slate-500">Loading preview...</p> : null}
+          {!previewLoading && previewError ? (
+            <p className="text-sm text-rose-600">{previewError}</p>
+          ) : null}
+          {!previewLoading && !previewError && previewLesson ? (
+            <div className="space-y-4">
+              {previewLesson.description ? (
+                <RichTextRenderer html={previewLesson.description} />
+              ) : (
+                <p className="text-sm text-slate-500">No lesson description.</p>
+              )}
+              <div className="space-y-3">
+                {(previewLesson.contentBlocks ?? [])
+                  .slice()
+                  .sort((left, right) => left.order - right.order)
+                  .map((block) => (
+                    <article key={block.id} className="rounded-xl border border-slate-200 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Block {block.order} · {block.type}
+                      </p>
+                      {typeof block.content === 'string' ? (
+                        <RichTextRenderer html={block.content || '<p></p>'} />
+                      ) : (
+                        <pre className="overflow-x-auto rounded-lg bg-slate-100 p-3 text-xs text-slate-700">
+                          {JSON.stringify(block.content ?? {}, null, 2)}
+                        </pre>
+                      )}
+                    </article>
+                  ))}
+                {(previewLesson.contentBlocks ?? []).length === 0 ? (
+                  <p className="text-sm text-slate-500">No lesson blocks available.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {!previewLoading && !previewError && previewAssessment ? (
+            <div className="space-y-4">
+              {previewAssessment.description ? (
+                <RichTextRenderer html={previewAssessment.description} />
+              ) : (
+                <p className="text-sm text-slate-500">No assessment description.</p>
+              )}
+              <div className="space-y-3">
+                {(previewAssessment.questions ?? []).map((question, index) => (
+                  <article key={question.id} className="rounded-xl border border-slate-200 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Question {index + 1} · {question.type}
+                    </p>
+                    <RichTextRenderer html={question.content || '<p></p>'} />
+                    {(question.options ?? []).length > 0 ? (
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                        {(question.options ?? []).map((option) => (
+                          <li key={option.id}>
+                            {option.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </article>
+                ))}
+                {(previewAssessment.questions ?? []).length === 0 ? (
+                  <p className="text-sm text-slate-500">No questions available.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={attachState.open}

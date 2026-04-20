@@ -616,17 +616,15 @@ export class ClassesService {
     }
 
     if (
-      !areSubjectCodesEquivalent(
-        template.subjectCode,
-        createClassDto.subjectCode,
-      ) ||
       normalizeGradeLevel(template.subjectGradeLevel) !==
-        normalizeGradeLevel(createClassDto.subjectGradeLevel)
+      normalizeGradeLevel(createClassDto.subjectGradeLevel)
     ) {
       throw new BadRequestException(
-        'Template subjectCode and subjectGradeLevel must exactly match class subject',
+        'Template grade level must match class grade level',
       );
     }
+
+    const templateAssetsPublished = template.status === 'published';
 
     const [
       templateAssessments,
@@ -737,7 +735,7 @@ export class ClassesService {
           type: templateAssessment.type,
           dueDate,
           totalPoints: templateAssessment.totalPoints ?? 0,
-          isPublished: false,
+          isPublished: templateAssetsPublished,
           randomizeQuestions: Boolean(settings.randomizeQuestions ?? false),
           closeWhenDue:
             settings.closeWhenDue === undefined
@@ -834,7 +832,7 @@ export class ClassesService {
           title: templateLesson.title,
           description: templateLesson.summary,
           order: templateLesson.order,
-          isDraft: true,
+          isDraft: !templateAssetsPublished,
           isCoreTemplateAsset: true,
           templateId,
           templateSourceId: templateLesson.id,
@@ -973,7 +971,7 @@ export class ClassesService {
               title: fallbackTemplateLesson.title,
               description: fallbackTemplateLesson.summary,
               order: fallbackTemplateLesson.order,
-              isDraft: true,
+              isDraft: !templateAssetsPublished,
               isCoreTemplateAsset: true,
               templateId,
               templateSourceId: fallbackTemplateLesson.id,

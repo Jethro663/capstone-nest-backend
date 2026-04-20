@@ -408,6 +408,24 @@ describe('ClassesService', () => {
       ).resolves.toEqual(makeClass());
     });
 
+    it('allows template selection when grade matches even if subjectCode differs', async () => {
+      setupHappyPath();
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-3',
+        status: 'published',
+        subjectCode: 'SCI-7',
+        subjectGradeLevel: '7',
+      });
+
+      await expect(
+        service.create(
+          { ...dto, templateId: 'template-uuid-3' } as any,
+          'admin-actor-1',
+          ['admin'],
+        ),
+      ).resolves.toEqual(makeClass());
+    });
+
     it('copies template module teacherNotes, visibility, and locking into class modules', async () => {
       setupHappyPath();
       const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
@@ -452,6 +470,64 @@ describe('ClassesService', () => {
           isVisible: true,
           isLocked: false,
           teacherNotes: '<p>Template note</p>',
+        }),
+      );
+    });
+
+    it('publishes template-derived lesson and assessment content on class creation', async () => {
+      setupHappyPath();
+      const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
+      const assessmentInsertChain = makeInsertChain([{ id: 'assessment-1' }]);
+      const lessonInsertChain = makeInsertChain([{ id: 'lesson-1' }]);
+      mockDb.insert
+        .mockImplementationOnce(() => classInsertChain)
+        .mockImplementationOnce(() => assessmentInsertChain)
+        .mockImplementationOnce(() => lessonInsertChain);
+
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-publish',
+        status: 'published',
+        subjectCode: 'MATH-7',
+        subjectGradeLevel: '7',
+      });
+      mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([
+        {
+          id: 'template-assessment-1',
+          title: 'Core Quiz',
+          description: '<p>Core description</p>',
+          type: 'quiz',
+          dueDateOffsetDays: null,
+          totalPoints: 10,
+          settings: {},
+        },
+      ]);
+      mockDb.query.classTemplateLessons.findMany.mockResolvedValue([
+        {
+          id: 'template-lesson-1',
+          title: 'Core Lesson',
+          summary: '<p>Core lesson summary</p>',
+          order: 1,
+        },
+      ]);
+
+      await service.create(
+        { ...dto, templateId: 'template-uuid-publish' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(assessmentInsertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: CLASS_ID,
+          isPublished: true,
+          isCoreTemplateAsset: true,
+        }),
+      );
+      expect(lessonInsertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: CLASS_ID,
+          isDraft: false,
+          isCoreTemplateAsset: true,
         }),
       );
     });

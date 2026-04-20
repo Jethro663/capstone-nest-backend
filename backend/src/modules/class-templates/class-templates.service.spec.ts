@@ -29,6 +29,11 @@ describe('ClassTemplatesService', () => {
 
   const mockDatabaseService = { db: mockDb };
   const mockAuditService = { log: jest.fn() };
+  const makeUpdateReturningChain = (rows: any[] = []) => ({
+    set: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    returning: jest.fn().mockResolvedValue(rows),
+  });
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -104,5 +109,69 @@ chunks: []
         ['admin'],
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('publishes template and cascades core lessons/assessments to published state', async () => {
+    mockDb.update.mockReset();
+    const templateUpdateChain = makeUpdateReturningChain([
+      { id: '11111111-1111-1111-1111-111111111111', status: 'published' },
+    ]);
+    const lessonUpdateChain = makeUpdateReturningChain([{ id: 'lesson-1' }]);
+    const assessmentUpdateChain = makeUpdateReturningChain([
+      { id: 'assessment-1' },
+    ]);
+    mockDb.update
+      .mockImplementationOnce(() => templateUpdateChain)
+      .mockImplementationOnce(() => lessonUpdateChain)
+      .mockImplementationOnce(() => assessmentUpdateChain);
+
+    await service.publish(
+      '11111111-1111-1111-1111-111111111111',
+      { status: 'published' } as any,
+      'admin-id',
+      ['admin'],
+    );
+
+    expect(templateUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'published' }),
+    );
+    expect(lessonUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ isDraft: false }),
+    );
+    expect(assessmentUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ isPublished: true }),
+    );
+  });
+
+  it('unpublishes template and cascades core lessons/assessments to draft state', async () => {
+    mockDb.update.mockReset();
+    const templateUpdateChain = makeUpdateReturningChain([
+      { id: '11111111-1111-1111-1111-111111111111', status: 'draft' },
+    ]);
+    const lessonUpdateChain = makeUpdateReturningChain([{ id: 'lesson-1' }]);
+    const assessmentUpdateChain = makeUpdateReturningChain([
+      { id: 'assessment-1' },
+    ]);
+    mockDb.update
+      .mockImplementationOnce(() => templateUpdateChain)
+      .mockImplementationOnce(() => lessonUpdateChain)
+      .mockImplementationOnce(() => assessmentUpdateChain);
+
+    await service.publish(
+      '11111111-1111-1111-1111-111111111111',
+      { status: 'draft' } as any,
+      'admin-id',
+      ['admin'],
+    );
+
+    expect(templateUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'draft', publishedAt: null }),
+    );
+    expect(lessonUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ isDraft: true }),
+    );
+    expect(assessmentUpdateChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ isPublished: false }),
+    );
   });
 });

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Megaphone, Pencil, Pin, Plus, Trash2 } from 'lucide-react';
+import { BookOpen, Calendar, Hash, Megaphone, Pencil, Pin, Plus, Trash2, User2 } from 'lucide-react';
 import { announcementService } from '@/services/announcement-service';
 import { classService } from '@/services/class-service';
 import { useAuth } from '@/providers/AuthProvider';
@@ -18,6 +18,36 @@ import { normalizeRichText, sanitizeRichTextHtml } from '@/lib/rich-text';
 import { toast } from 'sonner';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
+
+type AnnouncementViewFilter = 'all' | 'pinned';
+
+const ANNOUNCEMENT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+};
+
+function formatAnnouncementDate(value?: string | null) {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return date.toLocaleDateString('en-US', ANNOUNCEMENT_DATE_OPTIONS);
+}
+
+function summarizeAnnouncement(content: string) {
+  const text = normalizeRichText(content)
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!text) {
+    return 'Open this announcement to view the full class update.';
+  }
+
+  return text.length > 160 ? `${text.slice(0, 157)}...` : text;
+}
 
 function toTimestamp(value?: string) {
   if (!value) return 0;
@@ -43,6 +73,7 @@ export default function TeacherAnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const [pinningAnnouncementId, setPinningAnnouncementId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
+  const [viewFilter, setViewFilter] = useState<AnnouncementViewFilter>('all');
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -102,6 +133,22 @@ export default function TeacherAnnouncementsPage() {
       }),
     [announcements],
   );
+
+  const filteredAnnouncements = useMemo(
+    () =>
+      sortedAnnouncements.filter((announcement) => {
+        if (viewFilter === 'pinned' && !announcement.isPinned) return false;
+        return true;
+      }),
+    [sortedAnnouncements, viewFilter],
+  );
+
+  const pinnedCount = announcements.filter((announcement) => announcement.isPinned).length;
+  const latestAnnouncement = announcements[0];
+  const latestAnnouncementDate = latestAnnouncement
+    ? formatAnnouncementDate(latestAnnouncement.createdAt)
+    : 'No posts yet';
+  const hasActiveFilters = viewFilter !== 'all';
 
   const resetComposer = () => {
     setShowComposer(false);
@@ -221,29 +268,54 @@ export default function TeacherAnnouncementsPage() {
   }
 
   return (
-    <div className="teacher-announcements-page space-y-5">
-      <section className="teacher-announcements-header">
-        <div className="teacher-announcements-header__copy">
-          <span className="teacher-announcements-header__icon" aria-hidden="true">
-            <Megaphone className="h-5 w-5" />
-          </span>
-          <div>
-            <h1>Announcements</h1>
-            <p>Post updates to your classes</p>
+      <div className="teacher-announcements-page space-y-5">
+        <section className="teacher-announcements-header">
+          <div className="teacher-announcements-header__copy">
+            <span className="teacher-announcements-header__icon" aria-hidden="true">
+              <Megaphone className="h-5 w-5" />
+            </span>
+            <div>
+              <h1>Announcements</h1>
+              <p>Keep class updates structured with fast scanning and side metadata.</p>
+            </div>
           </div>
-        </div>
-        <Button
-          className="teacher-announcements-header__create"
-          disabled={!selectedClassId}
-          onClick={openComposer}
-        >
-          <Plus className="h-4 w-4" />
-          Create Announcement
-        </Button>
-      </section>
+          <div className="teacher-announcements-header__actions">
+            <Button
+              className="teacher-announcements-header__create"
+              disabled={!selectedClassId}
+              onClick={openComposer}
+            >
+              <Plus className="h-4 w-4" />
+              Create Announcement
+            </Button>
+          </div>
+          <div className="teacher-announcements-header__stats">
+            <article className="teacher-announcements-header__stat">
+              <p>Total posts</p>
+              <strong>{announcements.length}</strong>
+            </article>
+            <article className="teacher-announcements-header__stat">
+              <p>Pinned</p>
+              <strong>{pinnedCount}</strong>
+            </article>
+            <article className="teacher-announcements-header__stat">
+              <p>Latest</p>
+              <strong>{latestAnnouncementDate}</strong>
+            </article>
+            <article className="teacher-announcements-header__stat">
+              <p>Active class</p>
+              <strong>{selectedClass?.subjectName || 'N/A'}</strong>
+            </article>
+          </div>
+        </section>
 
       <section className="teacher-announcements-body">
         <div className="teacher-announcements-toolbar">
+          <p>
+            Showing <strong>{filteredAnnouncements.length}</strong> of{' '}
+            <strong>{announcements.length}</strong> announcements.
+          </p>
+
           <select
             value={selectedClassId}
             onChange={(event) => setSelectedClassId(event.target.value)}
@@ -256,16 +328,51 @@ export default function TeacherAnnouncementsPage() {
               </option>
             ))}
           </select>
+
+          <div className="teacher-announcements-toolbar__controls">
+            <div
+              className="teacher-announcements-toolbar__toggle-group"
+              role="group"
+              aria-label="Announcement visibility filter"
+            >
+              <button
+                type="button"
+                data-active={viewFilter === 'all'}
+                onClick={() => setViewFilter('all')}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                data-active={viewFilter === 'pinned'}
+                onClick={() => setViewFilter('pinned')}
+              >
+                <Pin className="h-3.5 w-3.5" />
+                Pinned
+              </button>
+            </div>
+          </div>
         </div>
 
         {!selectedClassId ? (
           <div className="teacher-announcements-empty">
             <p>Select a class to load announcements.</p>
           </div>
-        ) : announcements.length === 0 ? (
+        ) : filteredAnnouncements.length === 0 ? (
           <div className="teacher-announcements-empty">
             <div className="space-y-3">
-              <p>No announcements for this class yet.</p>
+              <p>
+                {announcements.length === 0
+                  ? 'No announcements for this class yet.'
+                  : hasActiveFilters
+                    ? 'No announcements match your current filter.'
+                    : 'No announcements for this class yet.'}
+              </p>
+              {hasActiveFilters ? (
+                <Button className="teacher-announcements-header__create" onClick={() => setViewFilter('all')}>
+                  Show all announcements
+                </Button>
+              ) : null}
               <Button className="teacher-announcements-header__create" onClick={openComposer}>
                 Create First Announcement
               </Button>
@@ -273,62 +380,109 @@ export default function TeacherAnnouncementsPage() {
           </div>
         ) : (
           <div className="teacher-announcements-list">
-            {sortedAnnouncements.map((announcement) => (
+            {filteredAnnouncements.map((announcement) => (
               <article
                 key={announcement.id}
                 className={`teacher-announcements-item ${announcement.isPinned ? 'teacher-announcements-item--pinned' : ''}`}
               >
-                <div className="teacher-announcements-item__main">
-                  <div className="teacher-announcements-item__title-row">
-                    <h2>{announcement.title}</h2>
-                    <div className="teacher-announcements-item__meta">
-                      {announcement.isPinned ? (
-                        <span className="teacher-announcements-item__pin-label">
-                          <Pin className="h-3 w-3" />
-                          Pinned
-                        </span>
-                      ) : null}
-                      <span>{new Date(announcement.createdAt || '').toLocaleDateString()}</span>
-                      <span>{selectedClass?.subjectName}</span>
-                    </div>
+                <div className="teacher-announcements-item__layout">
+                  <div className="teacher-announcements-item__main">
+                    <header className="teacher-announcements-item__headline">
+                      <div className="teacher-announcements-item__headline-top">
+                        <h2>{announcement.title}</h2>
+                        {announcement.isPinned ? (
+                          <span className="teacher-announcements-item__pin-label">
+                            <Pin className="h-3.5 w-3.5" />
+                            Pinned
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="teacher-announcements-item__summary">
+                        {summarizeAnnouncement(announcement.content)}
+                      </p>
+                    </header>
+
+                    <section className="teacher-announcements-item__segment">
+                      <p className="teacher-announcements-item__segment-label">Announcement details</p>
+                      <RichTextRenderer
+                        html={normalizeRichText(announcement.content)}
+                        className="teacher-announcements-item__content"
+                      />
+                    </section>
                   </div>
-                  <RichTextRenderer
-                    html={normalizeRichText(announcement.content)}
-                    className="teacher-announcements-item__content"
-                  />
-                  <p className="teacher-announcements-item__author">
-                    {announcement.author?.firstName || user?.firstName || 'Teacher'} {announcement.author?.lastName || user?.lastName || ''}
-                  </p>
-                </div>
-                <div className="teacher-announcements-item__actions">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="teacher-announcements-action"
-                    onClick={() => void handleTogglePin(announcement)}
-                    disabled={pinningAnnouncementId === announcement.id}
+
+                  <aside
+                    className="teacher-announcements-item__side"
+                    aria-label={`Announcement metadata for ${announcement.title}`}
                   >
-                    <Pin className="h-3.5 w-3.5" />
-                    {announcement.isPinned ? 'Unpin' : 'Pin'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="teacher-announcements-action"
-                    onClick={() => handleEdit(announcement)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="teacher-announcements-action teacher-announcements-action--danger"
-                    onClick={() => handleDelete(announcement)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </Button>
+                    <p className="teacher-announcements-item__side-title">Quick actions</p>
+                    <div className="teacher-announcements-item__actions">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="teacher-announcements-action"
+                        onClick={() => void handleTogglePin(announcement)}
+                        disabled={pinningAnnouncementId === announcement.id}
+                      >
+                        <Pin className="h-3.5 w-3.5" />
+                        {announcement.isPinned ? 'Unpin' : 'Pin'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="teacher-announcements-action"
+                        onClick={() => handleEdit(announcement)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="teacher-announcements-action teacher-announcements-action--danger"
+                        onClick={() => handleDelete(announcement)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    </div>
+
+                    <p className="teacher-announcements-item__side-title">Quick details</p>
+                    <dl className="teacher-announcements-item__facts">
+                      <div className="teacher-announcements-item__fact">
+                        <dt>
+                          <Calendar className="h-3.5 w-3.5" />
+                          Date
+                        </dt>
+                        <dd>{formatAnnouncementDate(announcement.createdAt)}</dd>
+                      </div>
+                      <div className="teacher-announcements-item__fact">
+                        <dt>
+                          <BookOpen className="h-3.5 w-3.5" />
+                          Subject
+                        </dt>
+                        <dd>{selectedClass?.subjectName || 'Class announcement'}</dd>
+                      </div>
+                      <div className="teacher-announcements-item__fact">
+                        <dt>
+                          <Hash className="h-3.5 w-3.5" />
+                          Subject code
+                        </dt>
+                        <dd>{selectedClass?.subjectCode || 'Not set'}</dd>
+                      </div>
+                      <div className="teacher-announcements-item__fact">
+                        <dt>
+                          <User2 className="h-3.5 w-3.5" />
+                          Posted by
+                        </dt>
+                        <dd>
+                          {announcement.author
+                            ? `${announcement.author.firstName} ${announcement.author.lastName}`
+                            : `${user?.firstName || 'Teacher'} ${user?.lastName || ''}`}
+                        </dd>
+                      </div>
+                    </dl>
+                  </aside>
                 </div>
               </article>
             ))}

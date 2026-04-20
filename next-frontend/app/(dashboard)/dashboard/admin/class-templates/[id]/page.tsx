@@ -225,19 +225,30 @@ export default function ClassTemplateEditorPage() {
     }
   };
 
-  const publishNow = async () => {
+  const updateTemplatePublication = async (nextStatus: 'published' | 'draft') => {
     try {
       setPublishing(true);
       await saveNow({ rethrow: true });
-      await classTemplateService.publish(templateId, 'published');
-      setTemplate((current) => (current ? { ...current, status: 'published' } : current));
-      toast.success('Template published');
+      await classTemplateService.publish(templateId, nextStatus);
+      setTemplate((current) => (current ? { ...current, status: nextStatus } : current));
+      toast.success(
+        nextStatus === 'published'
+          ? 'Template published and core content released'
+          : 'Template unpublished and core content set to draft',
+      );
     } catch {
-      toast.error('Failed to publish template');
+      toast.error(
+        nextStatus === 'published'
+          ? 'Failed to publish template'
+          : 'Failed to unpublish template',
+      );
     } finally {
       setPublishing(false);
     }
   };
+
+  const publishNow = async () => updateTemplatePublication('published');
+  const unpublishNow = async () => updateTemplatePublication('draft');
 
   const handleExportEngine = async () => {
     try {
@@ -562,14 +573,26 @@ export default function ClassTemplateEditorPage() {
               >
                 {saving ? 'Saving...' : 'Save Draft'}
               </Button>
-              <Button
-                data-testid="publish-template-button"
-                onClick={() => void publishNow()}
-                disabled={publishing}
-                className="teacher-class-workspace__solid"
-              >
-                {publishing ? 'Publishing...' : 'Publish'}
-              </Button>
+              {template?.status === 'published' ? (
+                <Button
+                  data-testid="unpublish-template-button"
+                  onClick={() => void unpublishNow()}
+                  disabled={publishing}
+                  className="teacher-class-workspace__outline admin-template-editor__hero-outline"
+                  variant="outline"
+                >
+                  {publishing ? 'Updating...' : 'Unpublish'}
+                </Button>
+              ) : (
+                <Button
+                  data-testid="publish-template-button"
+                  onClick={() => void publishNow()}
+                  disabled={publishing}
+                  className="teacher-class-workspace__solid"
+                >
+                  {publishing ? 'Publishing...' : 'Publish'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

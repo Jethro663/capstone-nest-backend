@@ -47,13 +47,14 @@ jest.mock('@/services/module-service', () => ({
 jest.mock('@/services/lesson-service', () => ({
   lessonService: {
     getByClass: jest.fn(),
+    getById: jest.fn(),
     create: jest.fn(),
     delete: jest.fn(),
   },
 }));
 
 jest.mock('@/services/assessment-service', () => ({
-  assessmentService: { getByClass: jest.fn(), create: jest.fn() },
+  assessmentService: { getByClass: jest.fn(), getById: jest.fn(), create: jest.fn() },
 }));
 
 jest.mock('@/services/file-service', () => ({
@@ -133,6 +134,19 @@ describe('TeacherModuleDetailPage', () => {
       pageSize: 20,
       totalPages: 1,
     } as never);
+    mockedLessonService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'lesson-1',
+        classId: 'class-1',
+        title: 'Core Lesson',
+        description: '<p>Core lesson content</p>',
+        order: 1,
+        isDraft: false,
+        contentBlocks: [],
+      } as never,
+    });
     mockedAssessmentService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -143,6 +157,20 @@ describe('TeacherModuleDetailPage', () => {
       totalPages: 1,
       total: 0,
     } as never);
+    mockedAssessmentService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'assessment-existing',
+        classId: 'class-1',
+        title: 'Core Quiz',
+        description: '<p>Assessment content</p>',
+        type: 'quiz',
+        isPublished: true,
+        totalPoints: 10,
+        questions: [],
+      } as never,
+    });
     mockedAssessmentService.create.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -281,10 +309,75 @@ describe('TeacherModuleDetailPage', () => {
     await screen.findByText('Default Module');
     expect(screen.getByText('Default module')).toBeInTheDocument();
     expect(screen.getByText('Default item')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Release Item' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Hide' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Give' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View Content' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Visibility' }));
     expect(screen.getByRole('button', { name: 'Release Module' })).toBeInTheDocument();
+  });
+
+  it('opens read-only preview for core default assessment content', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: true,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [
+            {
+              id: 'section-1',
+              moduleId: 'module-1',
+              title: 'Section A',
+              description: '',
+              order: 1,
+              items: [
+                {
+                  id: 'item-1',
+                  moduleSectionId: 'section-1',
+                  itemType: 'assessment',
+                  assessmentId: 'assessment-existing',
+                  order: 1,
+                  isVisible: true,
+                  isRequired: true,
+                  isGiven: true,
+                  isCoreTemplateAsset: true,
+                  assessment: {
+                    id: 'assessment-existing',
+                    classId: 'class-1',
+                    title: 'Core Quiz',
+                    type: 'quiz',
+                    totalPoints: 10,
+                    isPublished: true,
+                  },
+                },
+              ],
+            },
+          ],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    fireEvent.click(screen.getByRole('button', { name: 'View Content' }));
+
+    await waitFor(() => {
+      expect(mockedAssessmentService.getById).toHaveBeenCalledWith('assessment-existing');
+    });
+    expect(await screen.findByRole('heading', { name: 'Core Quiz' })).toBeInTheDocument();
+    expect(screen.getByText('Read-only preview of template-managed content.')).toBeInTheDocument();
   });
 
   it('creates and attaches a new assessment block then opens assessment editor', async () => {

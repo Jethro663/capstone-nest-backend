@@ -58,7 +58,7 @@ describe('classTemplateService', () => {
           ],
         },
       ],
-    } as any);
+    } as never);
 
     expect(mockedApi.put).toHaveBeenCalledWith(
       '/class-templates/template-1/content',
@@ -124,6 +124,26 @@ describe('classTemplateService', () => {
       2,
       '/class-templates/engine-import',
       { manifest: 'schemaVersion: 1.0', publish: true },
+    );
+  });
+
+  it('posts publish status updates for publish and unpublish actions', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: { success: true, data: { id: 'template-1' } },
+    });
+
+    await classTemplateService.publish('template-1', 'published');
+    await classTemplateService.publish('template-1', 'draft');
+
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      1,
+      '/class-templates/template-1/publish',
+      { status: 'published' },
+    );
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      2,
+      '/class-templates/template-1/publish',
+      { status: 'draft' },
     );
   });
 });

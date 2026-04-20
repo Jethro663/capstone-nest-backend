@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bot, ExternalLink, Sparkles, Target, Trophy } from 'lucide-react';
+import {
+  Award,
+  CalendarDays,
+  Crown,
+  ExternalLink,
+  Flame,
+  Sparkles,
+  Star,
+  Target,
+  Trophy,
+  TrendingUp,
+} from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
@@ -35,6 +46,28 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { toast } from 'sonner';
 
+const LEADERBOARD_SCOPE_OPTIONS = [
+  { key: 'xp', label: 'XP', icon: Flame, suffix: 'XP', description: 'XP earned from interventions' },
+  { key: 'streak', label: 'Streak', icon: Star, suffix: 'day streak', description: 'Consecutive activity streak' },
+  {
+    key: 'checkpoints',
+    label: 'Checkpoints',
+    icon: Trophy,
+    suffix: 'checkpoints',
+    description: 'Completed learning checkpoints',
+  },
+] as const;
+
+const LEADERBOARD_TIER_ICONS = {
+  champion: Crown,
+  challenger: Award,
+  riser: TrendingUp,
+  contender: Target,
+} as const;
+
+type LeaderboardScope = (typeof LEADERBOARD_SCOPE_OPTIONS)[number]['key'];
+type LeaderboardTier = keyof typeof LEADERBOARD_TIER_ICONS;
+
 function studentName(entry: {
   firstName?: string | null;
   lastName?: string | null;
@@ -47,6 +80,53 @@ function studentName(entry: {
   if (first) return first;
   return entry.email ?? 'Unknown student';
 }
+
+function studentInitials(entry?: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+} | null): string {
+  const first = entry?.firstName?.trim()?.[0] ?? '';
+  const last = entry?.lastName?.trim()?.[0] ?? '';
+  if (first || last) return `${first}${last}`.toUpperCase();
+  if (entry?.email?.trim()) return entry.email.trim().slice(0, 2).toUpperCase();
+  return 'ST';
+}
+
+function formatShortDate(value?: string | null): string {
+  if (!value) return 'Date unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getCaseSeverity(triggerScore: number | null, threshold: number | null) {
+  if (triggerScore === null || triggerScore === undefined) {
+    return { label: 'Monitoring', tone: 'monitoring' as const };
+  }
+  if (threshold === null || threshold === undefined) {
+    if (triggerScore <= 45) return { label: 'Critical', tone: 'critical' as const };
+    if (triggerScore <= 65) return { label: 'Needs Focus', tone: 'focus' as const };
+    return { label: 'Monitoring', tone: 'monitoring' as const };
+  }
+  const gap = threshold - triggerScore;
+  if (gap >= 15) return { label: 'Critical', tone: 'critical' as const };
+  if (gap >= 5) return { label: 'Needs Focus', tone: 'focus' as const };
+  return { label: 'Monitoring', tone: 'monitoring' as const };
+}
+
+type LeaderboardScoreRow = LxpClassReport['leaderboard'][number] & {
+  score: number;
+  scoreLabel: string;
+  scoreHint: string;
+  scorePercent: number;
+  leaderDistanceLabel: string;
+  tier: LeaderboardTier;
+};
 
 export default function TeacherInterventionsPage() {
   const { user } = useAuth();
@@ -65,12 +145,106 @@ export default function TeacherInterventionsPage() {
   const [selectedCaseDetail, setSelectedCaseDetail] = useState<
     Awaited<ReturnType<typeof lxpService.getTeacherCaseDetail>>['data'] | null
   >(null);
+  const [leaderboardScope, setLeaderboardScope] = useState<LeaderboardScope>('xp');
+  const [leaderboardExpanded, setLeaderboardExpanded] = useState(false);
+  const [highlightedLeaderboardStudentId, setHighlightedLeaderboardStudentId] = useState<string | null>(null);
 
   const selectedClass = useMemo(
     () => classes.find((entry) => entry.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
   const thresholdLabel = report?.threshold ?? queue?.threshold ?? null;
+  const queueEntries = useMemo(() => queue?.queue ?? [], [queue]);
+  const leaderboardRows = useMemo(() => report?.leaderboard ?? [], [report]);
+  const leaderboardRowsByScope = useMemo(() => {
+    const activeScope = leaderboardScope;
+    const mapped = leaderboardRows.map((entry) => {
+      const score =
+        activeScope === 'streak'
+          ? entry.streakDays
+          : activeScope === 'checkpoints'
+            ? entry.checkpointsCompleted
+            : entry.xpTotal;
+      const scoreHint =
+        activeScope === 'xp'
+          ? `${entry.starsTotal} stars`
+          : activeScope === 'streak'
+            ? `${entry.xpTotal} XP total`
+            : `${entry.xpTotal} XP total`;
+      const scoreLabel =
+        activeScope === 'streak'
+          ? `${entry.streakDays} day streak`
+          : activeScope === 'checkpoints'
+            ? `${entry.checkpointsCompleted} checkpoints`
+            : `${entry.xpTotal} XP`;
+      return {
+        ...entry,
+        score,
+        scoreLabel,
+        scoreHint,
+      };
+    });
+    const sortedRows = mapped
+      .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
+    const maxScore = sortedRows.reduce((top, entry) => Math.max(top, entry.score ?? 0), 0);
+    return sortedRows.map((entry) => {
+      const isLeader = entry.rank === 1;
+      const distance = maxScore > 0 ? Math.max(Math.max(0, maxScore - entry.score), 0) : 0;
+      const leaderDistanceLabel = isLeader
+        ? 'Top learner for selected metric'
+        : `${distance} ${activeScope === 'xp' ? 'XP' : activeScope === 'streak' ? 'days' : 'checkpoints'} behind #1`;
+      const tier: LeaderboardTier = isLeader
+        ? 'champion'
+        : entry.rank === 2
+          ? 'challenger'
+          : entry.rank === 3
+            ? 'riser'
+            : 'contender';
+      return {
+        ...entry,
+        scorePercent: maxScore > 0 ? Math.round((entry.score / maxScore) * 100) : 0,
+        leaderDistanceLabel,
+        tier,
+      };
+    });
+  }, [leaderboardRows, leaderboardScope]);
+  const activeLeaderboardRows = leaderboardExpanded
+    ? leaderboardRowsByScope
+    : leaderboardRowsByScope.slice(0, 5);
+  const leaderboardMode = useMemo(() => {
+    return LEADERBOARD_SCOPE_OPTIONS.find((entry) => entry.key === leaderboardScope) ?? LEADERBOARD_SCOPE_OPTIONS[0];
+  }, [leaderboardScope]);
+  const queueCaseByStudent = useMemo(() => {
+    const map = new Map<string, string>();
+    queueEntries.forEach((entry) => {
+      map.set(entry.student?.id ?? entry.studentId, entry.id);
+    });
+    return map;
+  }, [queueEntries]);
+  const highestPriorityCase = useMemo(() => {
+    return queueEntries.reduce<(typeof queueEntries)[number] | null>((current, entry) => {
+      if (!current) return entry;
+      const currentScore = current.triggerScore ?? 100;
+      const nextScore = entry.triggerScore ?? 100;
+      return nextScore < currentScore ? entry : current;
+    }, null);
+  }, [queueEntries]);
+  const highestDeltaCase = useMemo(() => {
+    const rows = (report?.rows ?? []).filter(
+      (row) => row.improvementDelta !== null && row.improvementDelta !== undefined,
+    );
+    if (rows.length === 0) return null;
+    return [...rows].sort(
+      (left, right) => (right.improvementDelta ?? -Infinity) - (left.improvementDelta ?? -Infinity),
+    )[0];
+  }, [report?.rows]);
+  const handleScrollToArchives = () => {
+    if (typeof window === 'undefined') return;
+    const target = window.document.getElementById('intervention-archives');
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const fetchClassList = useCallback(async () => {
     if (!user?.id) return;
@@ -171,6 +345,16 @@ export default function TeacherInterventionsPage() {
     }
   };
 
+  const handleLeaderboardProfile = (row: LeaderboardScoreRow) => {
+    const queueCaseId = queueCaseByStudent.get(row.studentId);
+    setHighlightedLeaderboardStudentId(row.studentId);
+    if (!queueCaseId) {
+      toast.info(`${studentName(row.student ?? {})} has no active intervention case to open.`);
+      return;
+    }
+    void handleOpenDetail(queueCaseId);
+  };
+
   if (loadingClasses) {
     return (
       <div className="space-y-6">
@@ -183,18 +367,19 @@ export default function TeacherInterventionsPage() {
 
   return (
     <TeacherPageShell
-      badge="Interventions"
-      title="Intervention Queue"
+      badge="Scholastic Oversight"
+      title="Interventions"
       description={
         thresholdLabel !== null
-          ? `AI-assisted student support queue (threshold ${thresholdLabel}%).`
-          : 'AI-assisted student support queue'
+          ? `AI-assisted support for active cohorts. Current trigger threshold: ${thresholdLabel}%.`
+          : 'AI-assisted management of student development paths across active cohorts.'
       }
+      className="teacher-interventions-page"
       actions={
         <select
           value={selectedClassId}
           onChange={(event) => setSelectedClassId(event.target.value)}
-          className="teacher-select min-w-[260px] text-sm"
+          className="teacher-select teacher-interventions-page__class-select min-w-[260px] text-sm"
         >
           <option value="">Select class...</option>
           {classes.map((entry) => (
@@ -209,14 +394,18 @@ export default function TeacherInterventionsPage() {
           <TeacherStatCard
             label="Active Cases"
             value={report?.summary.activeCases ?? 0}
-            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} intervention load` : 'Select a class'}
+            caption={
+              selectedClass?.subjectCode
+                ? `${selectedClass.subjectCode} students currently in focus`
+                : 'Select a class to load live queues'
+            }
             icon={Target}
             accent="rose"
           />
           <TeacherStatCard
             label="Completed Cases"
             value={report?.summary.completedCases ?? 0}
-            caption="Resolved intervention cases"
+            caption="Resolved support pathways this cycle"
             icon={Sparkles}
             accent="teal"
           />
@@ -228,15 +417,15 @@ export default function TeacherInterventionsPage() {
                 ? `${report.summary.averageDelta.toFixed(2)}%`
                 : '--'
             }
-            caption="Average score lift after intervention"
+            caption="Average blended-score lift after intervention"
             icon={Trophy}
             accent="amber"
           />
           <TeacherStatCard
             label="Top XP"
-            value={report?.leaderboard[0]?.xpTotal ?? 0}
-            caption="Highest XP in selected class"
-            icon={Bot}
+            value={leaderboardRows[0]?.xpTotal ?? 0}
+            caption="Highest intervention engagement XP"
+            icon={Flame}
             accent="sky"
           />
         </>
@@ -264,132 +453,154 @@ export default function TeacherInterventionsPage() {
 
       {selectedClassId && !loadingData ? (
         <>
-          <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr] teacher-figma-stagger">
+          <div className="teacher-interventions-page__layout teacher-figma-stagger">
             <TeacherSectionCard
-              title="Active Intervention Queue"
-              description="Prioritize cases, launch AI plans, and resolve completed interventions."
+              title="Priority Intervention Queue"
+              description="Take action on at-risk learners without leaving the queue."
+              className="teacher-interventions-page__queue-card"
+              contentClassName="teacher-interventions-page__queue-content"
+              action={
+                <button
+                  type="button"
+                  className="teacher-interventions-page__queue-link"
+                  onClick={handleScrollToArchives}
+                >
+                  View All Archives
+                </button>
+              }
             >
-              {(queue?.queue.length ?? 0) === 0 ? (
+              {queueEntries.length === 0 ? (
                 <TeacherEmptyState
                   title="No active intervention cases"
                   description="New at-risk learners will appear here when trigger thresholds are crossed."
                 />
               ) : (
-                <div className="teacher-table-shell">
-                  <Table>
-                    <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                      <TableRow className="border-white/10 hover:bg-transparent">
-                        <TableHead>Student</TableHead>
-                        <TableHead>Trigger</TableHead>
-                        <TableHead>Progress</TableHead>
-                        <TableHead>XP</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="[&_tr:last-child]:border-0">
-                      {(queue?.queue ?? []).map((entry) => (
-                        <TableRow key={entry.id} className="teacher-table-row border-white/10">
-                          <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                            <button
-                              type="button"
-                              onClick={() => void handleOpenDetail(entry.id)}
-                              className="text-left underline-offset-2 hover:underline"
-                            >
-                              {studentName(entry.student ?? {})}
-                            </button>
-                          </TableCell>
-                          <TableCell className="text-[var(--teacher-text-strong)]">
-                            {entry.triggerScore !== null && entry.triggerScore !== undefined
-                              ? `${entry.triggerScore.toFixed(1)}%`
-                              : '--'}
-                          </TableCell>
-                          <TableCell className="min-w-[220px]">
-                            <div className="space-y-2">
-                              <Progress
-                                value={entry.completionPercent}
-                                className="teacher-progress-track h-2.5"
-                                indicatorClassName="teacher-progress-fill"
-                              />
-                              <p className="text-xs text-[var(--teacher-text-muted)]">
-                                {entry.completedCheckpoints}/{entry.totalCheckpoints} checkpoints
-                              </p>
+                <div className="teacher-interventions-queue">
+                  {queueEntries.map((entry) => {
+                    const severity = getCaseSeverity(entry.triggerScore, thresholdLabel);
+                    return (
+                      <article
+                        key={entry.id}
+                        className={`teacher-interventions-case teacher-panel-hover ${entry.status === 'active' ? 'is-active' : ''}`}
+                      >
+                        <div className="teacher-interventions-case__head">
+                          <div className="teacher-interventions-case__identity">
+                            <div className="teacher-interventions-case__avatar">
+                              {studentInitials(entry.student)}
                             </div>
-                          </TableCell>
-                          <TableCell className="text-[var(--teacher-text-strong)]">{entry.progress.xpTotal}</TableCell>
-                          <TableCell>
-                            <Badge
-                              className={
-                                entry.status === 'pending'
-                                  ? 'teacher-badge-success border-0'
-                                  : 'teacher-badge-danger border-0'
-                              }
-                            >
-                              {entry.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              {entry.aiPlanEligible ? (
-                                <Button
-                                  size="sm"
-                                  variant="teacher"
-                                  className="rounded-lg"
-                                  onClick={() => handleRecommend(entry.id)}
-                                >
-                                  AI Plan
-                                </Button>
-                              ) : null}
-                              {entry.status === 'pending' ? (
-                                <Button
-                                  size="sm"
-                                  variant="teacherOutline"
-                                  className="rounded-lg"
-                                  disabled={activatingCaseId === entry.id}
-                                  onClick={() => handleActivate(entry.id)}
-                                >
-                                  {activatingCaseId === entry.id ? 'Activating...' : 'Activate'}
-                                </Button>
-                              ) : null}
-                              <Button
-                                size="sm"
-                                variant="teacherOutline"
-                                className="rounded-lg"
+                            <div className="min-w-0">
+                              <button
+                                type="button"
                                 onClick={() => void handleOpenDetail(entry.id)}
+                                className="teacher-interventions-case__name"
                               >
-                                View
+                                {studentName(entry.student ?? {})}
+                              </button>
+                              <div className="teacher-interventions-case__chips">
+                                <span className={`teacher-interventions-case__risk is-${severity.tone}`}>
+                                  {severity.label}
+                                </span>
+                                <Badge
+                                  className={
+                                    entry.status === 'pending'
+                                      ? 'teacher-badge-success border-0'
+                                      : 'teacher-badge-danger border-0'
+                                  }
+                                >
+                                  {entry.status}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="teacher-interventions-case__actions">
+                            {entry.aiPlanEligible ? (
+                              <Button
+                                size="sm"
+                                variant="teacher"
+                                className="rounded-lg"
+                                onClick={() => handleRecommend(entry.id)}
+                              >
+                                AI Plan
                               </Button>
+                            ) : null}
+                            {entry.status === 'pending' ? (
                               <Button
                                 size="sm"
                                 variant="teacherOutline"
                                 className="rounded-lg"
-                                disabled={resolvingCaseId === entry.id}
-                                onClick={() => handleResolve(entry.id)}
+                                disabled={activatingCaseId === entry.id}
+                                onClick={() => handleActivate(entry.id)}
                               >
-                                {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
+                                {activatingCaseId === entry.id ? 'Activating...' : 'Activate'}
                               </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant="teacherOutline"
+                              className="rounded-lg"
+                              onClick={() => void handleOpenDetail(entry.id)}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="teacherOutline"
+                              className="rounded-lg"
+                              disabled={resolvingCaseId === entry.id}
+                              onClick={() => handleResolve(entry.id)}
+                            >
+                              {resolvingCaseId === entry.id ? 'Resolving...' : 'Resolve'}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <p className="teacher-interventions-case__summary">
+                          Trigger {entry.triggerScore !== null ? `${entry.triggerScore.toFixed(1)}%` : '--'} vs
+                          threshold {entry.thresholdApplied.toFixed(1)}%. Latest blended score:{' '}
+                          {entry.latestBlendedScore !== null ? `${entry.latestBlendedScore.toFixed(1)}%` : '--'}.
+                        </p>
+
+                        <div className="teacher-interventions-case__progress">
+                          <Progress
+                            value={entry.completionPercent}
+                            className="teacher-progress-track h-2.5"
+                            indicatorClassName="teacher-progress-fill"
+                          />
+                          <div className="teacher-interventions-case__meta">
+                            <span>
+                              <CalendarDays className="h-3.5 w-3.5" />
+                              {formatShortDate(entry.openedAt)}
+                            </span>
+                            <span>
+                              {entry.completedCheckpoints}/{entry.totalCheckpoints} checkpoints
+                            </span>
+                            <span>{entry.progress.xpTotal} XP</span>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </TeacherSectionCard>
 
-            <div className="space-y-4">
-              <TeacherSectionCard title="Queue Summary">
-                <div className="space-y-3 text-sm">
-                  <div className="teacher-figma-kv">
+            <div className="teacher-interventions-page__side-rail">
+              <TeacherSectionCard title="Queue Snapshot" className="teacher-interventions-page__side-card">
+                <div className="teacher-interventions-summary">
+                  <div className="teacher-interventions-summary__row">
                     <span>Threshold</span>
                     <strong>{thresholdLabel !== null ? `${thresholdLabel}%` : '--'}</strong>
                   </div>
-                  <div className="teacher-figma-kv">
+                  <div className="teacher-interventions-summary__row">
                     <span>Total Cases</span>
                     <strong>{report?.summary.totalCases ?? 0}</strong>
                   </div>
-                  <div className="teacher-figma-kv">
+                  <div className="teacher-interventions-summary__row">
+                    <span>Pending Cases</span>
+                    <strong>{report?.summary.pendingCases ?? 0}</strong>
+                  </div>
+                  <div className="teacher-interventions-summary__row">
                     <span>Participation</span>
                     <strong>{report?.summary.interventionParticipation ?? 0}</strong>
                   </div>
@@ -398,79 +609,171 @@ export default function TeacherInterventionsPage() {
 
               <TeacherSectionCard
                 title="XP Leaderboard"
-                description="Top learners responding to intervention checkpoints."
+                description="Track learner momentum and jump into active intervention cases."
+                className="teacher-interventions-page__side-card"
               >
-                {(report?.leaderboard.length ?? 0) === 0 ? (
+                {leaderboardRows.length === 0 ? (
                   <TeacherEmptyState
                     title="No XP records yet"
                     description="Leaderboard appears after learners complete assigned activities."
                   />
                 ) : (
-                  <div className="space-y-2">
-                    {(report?.leaderboard ?? []).slice(0, 5).map((row) => (
-                      <div key={row.studentId} className="teacher-figma-list-row">
-                        <span className="teacher-figma-list-row__rank">#{row.rank}</span>
-                        <span className="teacher-figma-list-row__name">{studentName(row.student ?? {})}</span>
-                        <span className="teacher-figma-list-row__value">{row.xpTotal} XP</span>
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <div className="teacher-interventions-leaderboard__toolbar">
+                      {LEADERBOARD_SCOPE_OPTIONS.map((mode) => {
+                        const Icon = mode.icon;
+                        return (
+                          <button
+                            key={mode.key}
+                            type="button"
+                            className={`teacher-interventions-leaderboard__toggle ${leaderboardScope === mode.key ? 'is-active' : ''}`}
+                            onClick={() => setLeaderboardScope(mode.key)}
+                          >
+                            <Icon className="teacher-interventions-leaderboard__toggle-icon" />
+                            <span>{mode.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="teacher-interventions-leaderboard__mode-copy">{leaderboardMode.description}</p>
+                      <div className="teacher-interventions-leaderboard">
+                      {activeLeaderboardRows.map((row) => {
+                        const caseInQueue = queueCaseByStudent.get(row.studentId);
+                        const TierIcon = LEADERBOARD_TIER_ICONS[row.tier];
+                        const isTopTier = row.rank === 1;
+                        const isHighlighted = row.studentId === highlightedLeaderboardStudentId;
+                        const isActiveInQueue = Boolean(caseInQueue);
+                        const tierClass = row.tier === 'champion'
+                          ? 'is-champion'
+                          : row.tier === 'challenger'
+                            ? 'is-challenger'
+                            : row.tier === 'riser'
+                              ? 'is-riser'
+                              : 'is-contender';
+                        return (
+                          <button
+                            key={row.studentId}
+                            type="button"
+                            className={`teacher-interventions-leaderboard__row ${tierClass} ${isActiveInQueue ? 'is-active' : 'is-idle'} ${isHighlighted ? 'is-highlighted' : ''}`}
+                            onClick={() => handleLeaderboardProfile(row)}
+                            title={isActiveInQueue ? 'Open intervention case' : 'No active intervention case'}
+                          >
+                            <span className={`teacher-interventions-leaderboard__rank ${isTopTier ? 'is-leading' : ''}`}>
+                              <TierIcon className="teacher-interventions-leaderboard__rank-icon" />
+                              <span>{row.rank}</span>
+                            </span>
+                            <div className="teacher-interventions-leaderboard__name-wrap">
+                              <span className="teacher-interventions-leaderboard__name">
+                                {studentName(row.student ?? {})}
+                              </span>
+                              <span className="teacher-interventions-leaderboard__meta">
+                                {isActiveInQueue ? 'Active intervention case' : 'No active case'} •{' '}
+                                {row.lastActivityAt ? formatShortDate(row.lastActivityAt) : 'No activity yet'}
+                              </span>
+                            </div>
+                            <div className="teacher-interventions-leaderboard__value-wrap">
+                              <div className="teacher-interventions-leaderboard__value-row">
+                                <span className="teacher-interventions-leaderboard__value">{row.scoreLabel}</span>
+                                <span className="teacher-interventions-leaderboard__value-meta">{row.scoreHint}</span>
+                              </div>
+                              <Progress
+                                value={row.scorePercent}
+                                className="teacher-leaderboard-progress-track h-1.8"
+                                indicatorClassName="teacher-leaderboard-progress-fill"
+                              />
+                              <span className="teacher-interventions-leaderboard__meta">{row.leaderDistanceLabel}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {leaderboardRowsByScope.length > 5 ? (
+                      <button
+                        type="button"
+                        className="teacher-interventions-leaderboard__show-more"
+                        onClick={() => setLeaderboardExpanded((previous) => !previous)}
+                      >
+                        {leaderboardExpanded ? 'Show top 5 only' : 'Show more movers'}
+                      </button>
+                    ) : null}
+                  </>
                 )}
+              </TeacherSectionCard>
+
+              <TeacherSectionCard
+                title="Insight of the Week"
+                description="A quick coaching signal based on live intervention data."
+                className="teacher-interventions-page__side-card"
+              >
+                <div className="teacher-interventions-insight">
+                  <p>
+                    {highestPriorityCase
+                      ? `${studentName(highestPriorityCase.student ?? {})} currently has the strongest priority signal (${highestPriorityCase.triggerScore?.toFixed(1) ?? '--'}%).`
+                      : 'No high-priority case detected yet for this class.'}
+                  </p>
+                  <p>
+                    {highestDeltaCase
+                      ? `${studentName(highestDeltaCase.student ?? {})} has the highest improvement trend (${highestDeltaCase.improvementDelta?.toFixed(1) ?? '--'}%).`
+                      : 'Outcome trends will appear once completed interventions are recorded.'}
+                  </p>
+                </div>
               </TeacherSectionCard>
             </div>
           </div>
 
-          <TeacherSectionCard
-            title="Intervention Outcomes"
-            description="Compare baseline and current blended scores for all intervention cases."
-            className="teacher-figma-stagger"
-          >
-            {(report?.rows.length ?? 0) === 0 ? (
-              <TeacherEmptyState
-                title="No intervention outcomes yet"
-                description="Outcome rows will appear once intervention progress has been recorded."
-              />
-            ) : (
-              <div className="teacher-table-shell">
-                <Table>
-                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                    <TableRow className="border-white/10 hover:bg-transparent">
-                      <TableHead>Student</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Baseline</TableHead>
-                      <TableHead>Current</TableHead>
-                      <TableHead>Delta</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="[&_tr:last-child]:border-0">
-                    {(report?.rows ?? []).map((row) => (
-                      <TableRow key={row.id} className="teacher-table-row border-white/10">
-                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                          {studentName(row.student ?? {})}
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={row.status === 'active' ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
-                            {row.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">
-                          {row.triggerScore !== null ? `${row.triggerScore.toFixed(1)}%` : '--'}
-                        </TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">
-                          {row.currentBlendedScore !== null ? `${row.currentBlendedScore.toFixed(1)}%` : '--'}
-                        </TableCell>
-                        <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                          {row.improvementDelta !== null
-                            ? `${row.improvementDelta > 0 ? '+' : ''}${row.improvementDelta.toFixed(1)}%`
-                            : '--'}
-                        </TableCell>
+          <section id="intervention-archives" className="teacher-figma-stagger">
+            <TeacherSectionCard
+              title="Intervention Outcomes"
+              description="Archived and ongoing outcomes across intervention cycles."
+              className="teacher-interventions-page__archive-card"
+            >
+              {(report?.rows.length ?? 0) === 0 ? (
+                <TeacherEmptyState
+                  title="No intervention outcomes yet"
+                  description="Outcome rows will appear once intervention progress has been recorded."
+                />
+              ) : (
+                <div className="teacher-table-shell">
+                  <Table>
+                    <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                      <TableRow className="border-white/10 hover:bg-transparent">
+                        <TableHead>Student</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Baseline</TableHead>
+                        <TableHead>Current</TableHead>
+                        <TableHead>Delta</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </TeacherSectionCard>
+                    </TableHeader>
+                    <TableBody className="[&_tr:last-child]:border-0">
+                      {(report?.rows ?? []).map((row) => (
+                        <TableRow key={row.id} className="teacher-table-row border-white/10">
+                          <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                            {studentName(row.student ?? {})}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={row.status === 'active' ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
+                              {row.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-[var(--teacher-text-strong)]">
+                            {row.triggerScore !== null ? `${row.triggerScore.toFixed(1)}%` : '--'}
+                          </TableCell>
+                          <TableCell className="text-[var(--teacher-text-strong)]">
+                            {row.currentBlendedScore !== null ? `${row.currentBlendedScore.toFixed(1)}%` : '--'}
+                          </TableCell>
+                          <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                            {row.improvementDelta !== null
+                              ? `${row.improvementDelta > 0 ? '+' : ''}${row.improvementDelta.toFixed(1)}%`
+                              : '--'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TeacherSectionCard>
+          </section>
         </>
       ) : null}
 
@@ -486,7 +789,7 @@ export default function TeacherInterventionsPage() {
       >
         <SheetContent
           side="right"
-          className="w-full max-w-[36rem] overflow-y-auto bg-[#0f1a2b] text-white sm:max-w-[36rem]"
+          className="teacher-interventions-detail-sheet w-full max-w-[36rem] overflow-y-auto text-white sm:max-w-[36rem]"
         >
           <SheetHeader>
             <SheetTitle className="text-white">Intervention Student Detail</SheetTitle>
@@ -623,3 +926,5 @@ export default function TeacherInterventionsPage() {
     </TeacherPageShell>
   );
 }
+
+

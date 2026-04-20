@@ -13,8 +13,8 @@ import { classTemplateService } from '@/services/class-template-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
 import {
-  getSubjectCodeCandidates,
   isTemplateCompatibleWithClass,
+  matchesTemplateToSubject,
 } from '@/lib/class-template-compat';
 import type { Section } from '@/types/section';
 import type { ClassTemplate } from '@/types/class-template';
@@ -98,46 +98,22 @@ export default function CreateClassPage() {
     const loadCompatibleTemplates = async () => {
       try {
         setTemplatesLoading(true);
-
-        const subjectCodeCandidates = getSubjectCodeCandidates(
-          formValues.subjectName,
-          formValues.subjectCode,
-        );
-
-        if (subjectCodeCandidates.length === 0) {
-          if (mounted) {
-            setCompatibleTemplates([]);
-          }
-          return;
-        }
-
-        const responses = await Promise.allSettled(
-          subjectCodeCandidates.map((subjectCode) =>
-            classTemplateService.getCompatible(subjectCode, formValues.subjectGradeLevel),
-          ),
-        );
-
+        const response = await classTemplateService.getAll({
+          subjectGradeLevel: formValues.subjectGradeLevel,
+        });
         if (!mounted) return;
-
-        const mergedTemplates = new Map<string, ClassTemplate>();
-        for (const response of responses) {
-          if (response.status !== 'fulfilled') continue;
-          for (const template of response.value.data || []) {
-            mergedTemplates.set(template.id, template);
-          }
-        }
-
-        const filtered = Array.from(mergedTemplates.values()).filter(
+        const filtered = (response.data || []).filter(
           (template) =>
             template.status === 'published' &&
-            template.subjectGradeLevel === formValues.subjectGradeLevel,
+            template.subjectGradeLevel === formValues.subjectGradeLevel &&
+            matchesTemplateToSubject(
+              template,
+              formValues.subjectName,
+              formValues.subjectCode,
+            ),
         );
 
         setCompatibleTemplates(filtered);
-
-        if (responses.every((response) => response.status === 'rejected')) {
-          toast.error('Failed to load compatible templates');
-        }
       } catch {
         if (mounted) {
           setCompatibleTemplates([]);
@@ -181,6 +157,7 @@ export default function CreateClassPage() {
         const isValidTemplateSelection =
           selectedTemplate &&
           isTemplateCompatibleWithClass(selectedTemplate, {
+            subjectName: values.subjectName,
             subjectCode: values.subjectCode,
             subjectGradeLevel: values.subjectGradeLevel,
           });

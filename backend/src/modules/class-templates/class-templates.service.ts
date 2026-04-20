@@ -8,6 +8,7 @@ import {
 import { and, asc, eq, inArray, SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
+  assessments,
   classTemplateAnnouncements,
   classTemplateAssessmentQuestionOptions,
   classTemplateAssessmentQuestions,
@@ -19,6 +20,7 @@ import {
   classTemplateModuleSections,
   classTemplateModules,
   classTemplates,
+  lessons,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
@@ -489,23 +491,57 @@ export class ClassTemplatesService {
     this.assertAdmin(actorRoles);
     await this.findOne(id);
     const status = dto.status ?? ClassTemplateStatus.Published;
+    const now = new Date();
     const [updated] = await this.db
       .update(classTemplates)
       .set({
         status,
         publishedAt:
-          status === ClassTemplateStatus.Published ? new Date() : null,
-        updatedAt: new Date(),
+          status === ClassTemplateStatus.Published ? now : null,
+        updatedAt: now,
       })
       .where(eq(classTemplates.id, id))
       .returning();
+
+    const [updatedLessons, updatedAssessments] = await Promise.all([
+      this.db
+        .update(lessons)
+        .set({
+          isDraft: status !== ClassTemplateStatus.Published,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(lessons.templateId, id),
+            eq(lessons.isCoreTemplateAsset, true),
+          ),
+        )
+        .returning({ id: lessons.id }),
+      this.db
+        .update(assessments)
+        .set({
+          isPublished: status === ClassTemplateStatus.Published,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(assessments.templateId, id),
+            eq(assessments.isCoreTemplateAsset, true),
+          ),
+        )
+        .returning({ id: assessments.id }),
+    ]);
 
     await this.auditService.log({
       actorId,
       action: 'class_template.published',
       targetType: 'class_template',
       targetId: id,
-      metadata: { status: updated.status },
+      metadata: {
+        status: updated.status,
+        updatedCoreLessons: updatedLessons.length,
+        updatedCoreAssessments: updatedAssessments.length,
+      },
     });
 
     return updated;
