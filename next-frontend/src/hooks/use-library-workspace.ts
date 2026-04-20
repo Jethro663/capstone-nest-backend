@@ -506,18 +506,18 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
         ? undefined
         : classes.find((item) => item.id === uploadClassId);
     const teacherUploadPartition = getClassLibraryPartition(teacherUploadClass);
+    const normalizedUploadSubjectKey = uploadSubjectKey === '' ? undefined : uploadSubjectKey;
+    const normalizedUploadGradeLevel = uploadGradeLevel === '' ? undefined : uploadGradeLevel;
     const resolvedTeacherSubjectKey =
       uploadDestination === 'class'
         ? (teacherUploadPartition.subjectKey ??
-          uploadSubjectKey ??
-          undefined)
-        : uploadSubjectKey || undefined;
+          normalizedUploadSubjectKey)
+        : normalizedUploadSubjectKey;
     const resolvedTeacherGradeLevel =
       uploadDestination === 'class'
         ? (teacherUploadPartition.gradeLevel ??
-          uploadGradeLevel ??
-          undefined)
-        : uploadGradeLevel || undefined;
+          normalizedUploadGradeLevel)
+        : normalizedUploadGradeLevel;
 
     if (
       role === 'teacher' &&

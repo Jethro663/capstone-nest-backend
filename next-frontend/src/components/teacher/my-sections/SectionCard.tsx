@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { type KeyboardEvent, type MouseEvent } from 'react';
+import { type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react';
 import { ArrowRight, CalendarDays, MoreHorizontal, School, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -69,6 +69,7 @@ export function SectionCard({
   const capacity = Math.max(1, section.capacity ?? 1);
   const occupancy = Math.min(100, Math.round((students / capacity) * 100));
   const ctaLabel = occupancy >= 60 ? 'Continue Learning' : 'Open Class';
+  const cardStyle = { '--enter-delay': `${animateDelayMs}ms` } as CSSProperties;
 
   const handleCardClick = (event: MouseEvent<HTMLElement>) => {
     if (isInteractiveTarget(event.target)) return;
@@ -89,7 +90,7 @@ export function SectionCard({
       aria-label={`Open ${section.name}`}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      style={{ ['--enter-delay' as const]: `${animateDelayMs}ms` }}
+      style={cardStyle}
       className={cn(
         'group overflow-hidden rounded-[1.45rem] border border-[#e1deeb] bg-white shadow-[0_20px_36px_-30px_rgba(17,25,47,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] transition',
         'hover:-translate-y-1 hover:border-[#d4d0df] hover:shadow-[0_26px_40px_-28px_rgba(17,25,47,0.55)]',
