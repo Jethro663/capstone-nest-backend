@@ -28,7 +28,11 @@ import {
   announcements,
   classModules,
   classTemplateAnnouncements,
+  classTemplateAssessmentQuestionOptions,
+  classTemplateAssessmentQuestions,
   classTemplateAssessments,
+  classTemplateLessonBlocks,
+  classTemplateLessons,
   classTemplateModuleItems,
   classTemplateModules,
   classTemplateModuleSections,
@@ -52,6 +56,7 @@ import {
   enrollments,
   studentProfiles,
   lessons,
+  lessonContentBlocks,
 } from '../../drizzle/schema';
 import {
   type StudentPresentationMode,
@@ -597,21 +602,90 @@ export class ClassesService {
       );
     }
 
-    const [templateAssessments, templateModules, templateAnnouncements] =
-      await Promise.all([
-        database.query.classTemplateAssessments.findMany({
-          where: eq(classTemplateAssessments.templateId, templateId),
+    const [
+      templateAssessments,
+      templateModules,
+      templateAnnouncements,
+      templateLessons,
+    ] = await Promise.all([
+      database.query.classTemplateAssessments.findMany({
+        where: eq(classTemplateAssessments.templateId, templateId),
+        orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+      }),
+      database.query.classTemplateModules.findMany({
+        where: eq(classTemplateModules.templateId, templateId),
+        orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+      }),
+      database.query.classTemplateAnnouncements.findMany({
+        where: eq(classTemplateAnnouncements.templateId, templateId),
+        orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+      }),
+      database.query.classTemplateLessons.findMany({
+        where: eq(classTemplateLessons.templateId, templateId),
+        orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+      }),
+    ]);
+
+    const templateAssessmentIds = templateAssessments.map((entry) => entry.id);
+    const templateLessonIds = templateLessons.map((entry) => entry.id);
+    const [templateAssessmentQuestions, templateLessonBlocks] = await Promise.all([
+      templateAssessmentIds.length
+        ? database.query.classTemplateAssessmentQuestions.findMany({
+            where: inArray(
+              classTemplateAssessmentQuestions.templateAssessmentId,
+              templateAssessmentIds,
+            ),
+            orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+          })
+        : Promise.resolve([]),
+      templateLessonIds.length
+        ? database.query.classTemplateLessonBlocks.findMany({
+            where: inArray(
+              classTemplateLessonBlocks.templateLessonId,
+              templateLessonIds,
+            ),
+            orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const templateQuestionIds = templateAssessmentQuestions.map(
+      (entry) => entry.id,
+    );
+    const templateAssessmentQuestionOptions = templateQuestionIds.length
+      ? await database.query.classTemplateAssessmentQuestionOptions.findMany({
+          where: inArray(
+            classTemplateAssessmentQuestionOptions.templateAssessmentQuestionId,
+            templateQuestionIds,
+          ),
           orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-        }),
-        database.query.classTemplateModules.findMany({
-          where: eq(classTemplateModules.templateId, templateId),
-          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-        }),
-        database.query.classTemplateAnnouncements.findMany({
-          where: eq(classTemplateAnnouncements.templateId, templateId),
-          orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-        }),
-      ]);
+        })
+      : [];
+
+    const templateAssessmentIdSet = new Set(templateAssessmentIds);
+    const optionsByTemplateQuestion = new Map<string, any[]>();
+    for (const option of templateAssessmentQuestionOptions) {
+      if (!optionsByTemplateQuestion.has(option.templateAssessmentQuestionId)) {
+        optionsByTemplateQuestion.set(option.templateAssessmentQuestionId, []);
+      }
+      optionsByTemplateQuestion
+        .get(option.templateAssessmentQuestionId)!
+        .push(option);
+    }
+
+    const questionsByTemplateAssessment = new Map<string, any[]>();
+    for (const question of templateAssessmentQuestions) {
+      if (!templateAssessmentIdSet.has(question.templateAssessmentId)) {
+        continue;
+      }
+      if (!questionsByTemplateAssessment.has(question.templateAssessmentId)) {
+        questionsByTemplateAssessment.set(question.templateAssessmentId, []);
+      }
+      questionsByTemplateAssessment.get(question.templateAssessmentId)!.push({
+        ...question,
+        options: optionsByTemplateQuestion.get(question.id) ?? [],
+      });
+    }
 
     const assessmentIdMap = new Map<string, string>();
     for (const templateAssessment of templateAssessments) {
@@ -655,9 +729,8 @@ export class ClassesService {
         } as any)
         .returning();
 
-      const questionRows = Array.isArray(templateAssessment.questions)
-        ? (templateAssessment.questions as any[])
-        : [];
+      const questionRows =
+        questionsByTemplateAssessment.get(templateAssessment.id) ?? [];
 
       for (
         let questionIndex = 0;
@@ -703,6 +776,87 @@ export class ClassesService {
       assessmentIdMap.set(templateAssessment.id, assessment.id);
     }
 
+    const templateLessonIdSet = new Set(templateLessonIds);
+    const blocksByTemplateLessonId = new Map<string, any[]>();
+    for (const block of templateLessonBlocks) {
+      if (!templateLessonIdSet.has(block.templateLessonId)) continue;
+      if (!blocksByTemplateLessonId.has(block.templateLessonId)) {
+        blocksByTemplateLessonId.set(block.templateLessonId, []);
+      }
+      blocksByTemplateLessonId.get(block.templateLessonId)!.push(block);
+    }
+
+    const allowedLessonContentTypes = new Set([
+      'text',
+      'image',
+      'video',
+      'question',
+      'file',
+      'divider',
+    ]);
+    const lessonIdMap = new Map<string, string>();
+    const templateLessonsById = new Map<
+      string,
+      { id: string; title: string; summary: string | null; order: number }
+    >(templateLessons.map((entry: any) => [entry.id, entry]));
+
+    for (const templateLesson of templateLessons) {
+      const [lesson] = await database
+        .insert(lessons)
+        .values({
+          classId,
+          title: templateLesson.title,
+          description: templateLesson.summary,
+          order: templateLesson.order,
+          isDraft: true,
+          isCoreTemplateAsset: true,
+          templateId,
+          templateSourceId: templateLesson.id,
+        } as any)
+        .returning();
+
+      lessonIdMap.set(templateLesson.id, lesson.id);
+
+      const blocks = blocksByTemplateLessonId.get(templateLesson.id) ?? [];
+      if (blocks.length === 0) continue;
+
+      await database.insert(lessonContentBlocks).values(
+        blocks.map((block: any, blockIndex: number) => {
+          const payload =
+            block.payload && typeof block.payload === 'object'
+              ? (block.payload as Record<string, unknown>)
+              : {};
+          const rawContent = payload.content ?? '';
+          const rawMetadata = payload.metadata;
+          const nextMetadata =
+            rawMetadata && typeof rawMetadata === 'object'
+              ? { ...(rawMetadata as Record<string, unknown>) }
+              : {};
+          const rawType =
+            typeof block.blockType === 'string' ? block.blockType : 'text';
+          const normalizedType = allowedLessonContentTypes.has(rawType)
+            ? rawType
+            : 'text';
+
+          return {
+            lessonId: lesson.id,
+            type: normalizedType,
+            order: block.order ?? blockIndex + 1,
+            content:
+              typeof rawContent === 'string' || typeof rawContent === 'number'
+                ? rawContent
+                : JSON.parse(JSON.stringify(rawContent ?? '')),
+            metadata: {
+              ...nextMetadata,
+              templateBlockType: rawType,
+              templateBlockVersion:
+                typeof block.blockVersion === 'number' ? block.blockVersion : 1,
+            },
+          };
+        }),
+      );
+    }
+
     const templateModuleIds = templateModules.map((module) => module.id);
     const templateSections = templateModuleIds.length
       ? await database.query.classTemplateModuleSections.findMany({
@@ -739,8 +893,8 @@ export class ClassesService {
           imagePositionX: templateModule.imagePositionX,
           imagePositionY: templateModule.imagePositionY,
           imageScale: templateModule.imageScale,
-          isVisible: false,
-          isLocked: true,
+          isVisible: templateModule.isVisible ?? false,
+          isLocked: templateModule.isLocked ?? true,
           isCoreTemplateAsset: true,
           templateId,
           templateSourceId: templateModule.id,
@@ -772,16 +926,62 @@ export class ClassesService {
       const mappedAssessmentId = templateItem.templateAssessmentId
         ? (assessmentIdMap.get(templateItem.templateAssessmentId) ?? null)
         : null;
+      let mappedLessonId = templateItem.templateLessonId
+        ? (lessonIdMap.get(templateItem.templateLessonId) ?? null)
+        : null;
+
+      if (
+        templateItem.itemType === 'lesson' &&
+        !mappedLessonId &&
+        templateItem.templateLessonId
+      ) {
+        const fallbackTemplateLesson = templateLessonsById.get(
+          templateItem.templateLessonId,
+        );
+        if (fallbackTemplateLesson) {
+          const [fallbackLesson] = await database
+            .insert(lessons)
+            .values({
+              classId,
+              title: fallbackTemplateLesson.title,
+              description: fallbackTemplateLesson.summary,
+              order: fallbackTemplateLesson.order,
+              isDraft: true,
+              isCoreTemplateAsset: true,
+              templateId,
+              templateSourceId: fallbackTemplateLesson.id,
+            } as any)
+            .returning();
+          mappedLessonId = fallbackLesson.id;
+          lessonIdMap.set(fallbackTemplateLesson.id, fallbackLesson.id);
+        }
+      }
+
+      const normalizedMetadata =
+        templateItem.metadata && typeof templateItem.metadata === 'object'
+          ? { ...(templateItem.metadata as Record<string, unknown>) }
+          : {};
+
+      if (templateItem.itemType === 'lesson' && templateItem.templateLessonId) {
+        const templateLesson = templateLessonsById.get(
+          templateItem.templateLessonId,
+        );
+        if (templateLesson) {
+          normalizedMetadata.lessonTitle = templateLesson.title;
+          normalizedMetadata.lessonSummary = templateLesson.summary ?? '';
+        }
+      }
 
       await database.insert(moduleItems).values({
         moduleSectionId: sectionId,
         itemType: templateItem.itemType,
+        lessonId: mappedLessonId,
         assessmentId: mappedAssessmentId,
         order: templateItem.order,
         isVisible: false,
         isGiven: false,
         isRequired: templateItem.isRequired,
-        metadata: templateItem.metadata,
+        metadata: normalizedMetadata,
         isCoreTemplateAsset: true,
         templateId,
         templateSourceId: templateItem.id,

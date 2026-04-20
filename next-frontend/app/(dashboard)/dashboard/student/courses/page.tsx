@@ -204,14 +204,6 @@ export default function StudentCoursesPage() {
     return source;
   }, [courses, hiddenCourses, showHiddenOnly, tab]);
 
-  const enrolledCount = courses.length;
-  const totalLessons = courses.reduce((sum, course) => sum + course.totalLessons, 0);
-  const totalAssessments = courses.reduce(
-    (sum, course) => sum + course.totalAssessments,
-    0,
-  );
-  const totalClassmates = courses.reduce((sum, course) => sum + course.classmatesCount, 0);
-
   const setAndPersistViewMode = useCallback(
     async (nextViewMode: StudentCourseViewMode) => {
       if (viewMode === nextViewMode || !user?.id) return;
@@ -314,11 +306,6 @@ export default function StudentCoursesPage() {
     return (
       <div className="student-courses-page space-y-6 p-4 md:p-6">
         <Skeleton className="h-28 rounded-2xl" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((entry) => (
-            <Skeleton key={entry} className="h-28 rounded-2xl" />
-          ))}
-        </div>
         <div className="flex items-center justify-between gap-4">
           <Skeleton className="h-12 w-72 rounded-full" />
           <Skeleton className="h-10 w-40 rounded-full" />
@@ -348,42 +335,6 @@ export default function StudentCoursesPage() {
           <p>All your enrolled classes</p>
         </div>
       </motion.header>
-
-      <motion.section
-        className="student-courses-stats"
-        variants={containerReveal}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.article variants={itemReveal}>
-          <p>Enrolled</p>
-          <strong>{enrolledCount}</strong>
-          <span className="student-courses-stat-icon student-courses-stat-icon--red">
-            <BookOpen className="h-5 w-5" />
-          </span>
-        </motion.article>
-        <motion.article variants={itemReveal}>
-          <p>Total Lessons</p>
-          <strong>{totalLessons}</strong>
-          <span className="student-courses-stat-icon student-courses-stat-icon--blue">
-            <LibraryBig className="h-5 w-5" />
-          </span>
-        </motion.article>
-        <motion.article variants={itemReveal}>
-          <p>Assessments</p>
-          <strong>{totalAssessments}</strong>
-          <span className="student-courses-stat-icon student-courses-stat-icon--orange">
-            <ClipboardList className="h-5 w-5" />
-          </span>
-        </motion.article>
-        <motion.article variants={itemReveal}>
-          <p>Classmates</p>
-          <strong>~{totalClassmates}</strong>
-          <span className="student-courses-stat-icon student-courses-stat-icon--green">
-            <Users className="h-5 w-5" />
-          </span>
-        </motion.article>
-      </motion.section>
 
       <section className="student-courses-toolbar">
         <div className="student-courses-tabs" role="tablist" aria-label="Course filters">

@@ -8,6 +8,7 @@ import type { MainTabParamList } from "../../navigation/types";
 import { colors, gradients, shadow } from "../../theme/tokens";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+const studentTabOrder: Array<keyof MainTabParamList> = ["Dashboard", "Classes", "JA", "Assessments", "Profile"];
 
 const routeConfig: Record<
   keyof MainTabParamList,
@@ -29,7 +30,7 @@ const routeConfig: Record<
     inactiveIcon: "book-open-variant-outline",
   },
   Assessments: {
-    label: "Assessments",
+    label: "Assessment",
     activeIcon: "clipboard-text",
     inactiveIcon: "clipboard-text-outline",
   },
@@ -67,6 +68,21 @@ const routeConfig: Record<
 
 export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const activeRouteKey = state.routes[state.index]?.key;
+  const isStudentTabSet = state.routes.some((route) => route.name === "JA");
+  const visibleRoutes = state.routes.filter((route) => {
+    if (isStudentTabSet && route.name === "Announcements") {
+      return false;
+    }
+    return Boolean(routeConfig[route.name as keyof MainTabParamList]);
+  });
+  const orderedRoutes = isStudentTabSet
+    ? [...visibleRoutes].sort((a, b) => {
+        const leftIndex = studentTabOrder.indexOf(a.name as keyof MainTabParamList);
+        const rightIndex = studentTabOrder.indexOf(b.name as keyof MainTabParamList);
+        return (leftIndex < 0 ? Number.MAX_SAFE_INTEGER : leftIndex) - (rightIndex < 0 ? Number.MAX_SAFE_INTEGER : rightIndex);
+      })
+    : visibleRoutes;
 
   return (
     <View
@@ -96,10 +112,10 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           shadow.card,
         ]}
       >
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
+        {orderedRoutes.map((route) => {
+          const focused = activeRouteKey === route.key;
           const config = routeConfig[route.name as keyof MainTabParamList];
-          const isCenter = route.name === "JA";
+          const isCenter = isStudentTabSet && route.name === "JA";
           const onPress = () => {
             const event = navigation.emit({
               type: "tabPress",

@@ -283,9 +283,13 @@ export function ProfileScreen(props: Props) {
           </Pressable>
         </Card>
 
-        <View style={{ marginBottom: 18 }}>
+        <View style={{ marginBottom: 26 }}>
           <SectionTitle title="Quick Actions" right={<Pill label="Live API" backgroundColor={colors.paleGreen} color={colors.green} />} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 12, paddingRight: 4 }}
+          >
             {[
               {
                 icon: "school-outline",
@@ -307,9 +311,20 @@ export function ProfileScreen(props: Props) {
               },
             ].map((item) => (
               <Pressable key={item.label} onPress={item.onPress}>
-                <Card style={{ width: 140, alignItems: "center" }}>
-                  <MaterialCommunityIcons name={item.icon as never} size={22} color={item.color} />
-                  <Text style={{ marginTop: 10, fontSize: 12, fontWeight: "800", color: colors.text, textAlign: "center" }}>
+                <Card style={{ width: 146, minHeight: 102, alignItems: "center", justifyContent: "center" }}>
+                  <MaterialCommunityIcons name={item.icon as never} size={20} color={item.color} />
+                  <Text
+                    numberOfLines={2}
+                    style={{
+                      marginTop: 8,
+                      minHeight: 30,
+                      fontSize: 12,
+                      lineHeight: 16,
+                      fontWeight: "800",
+                      color: colors.text,
+                      textAlign: "center",
+                    }}
+                  >
                     {item.label}
                   </Text>
                 </Card>

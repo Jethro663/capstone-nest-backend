@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "refreshToken",
+      "value": "dbeffc8a613b8b1a1f5a659a280b77bc60fac2c5d5343d8b7cf3fc59f78c9d614153df0b1017288499c498507c304953458293101a2210e689d59959278fedce",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "expires": 1777202772.641929,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:3001",
+      "localStorage": [
+        {
+          "name": "nexora-student-theme",
+          "value": "nexora-red"
+        }
+      ]
+    }
+  ]
+}

@@ -181,6 +181,10 @@ export class ClassTemplateModuleItemDto {
   templateAssessmentId?: string;
 
   @IsOptional()
+  @IsUUID()
+  templateLessonId?: string;
+
+  @IsOptional()
   @IsInt()
   order?: number;
 
@@ -196,6 +200,52 @@ export class ClassTemplateModuleItemDto {
   @IsInt()
   @Min(0)
   points?: number;
+}
+
+export class ClassTemplateLessonBlockDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  blockType: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  blockVersion?: number;
+
+  @IsObject()
+  payload: Record<string, unknown>;
+
+  @IsOptional()
+  @IsInt()
+  order?: number;
+}
+
+export class ClassTemplateLessonDto {
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  summary?: string;
+
+  @IsOptional()
+  @IsInt()
+  order?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ClassTemplateLessonBlockDto)
+  blocks?: ClassTemplateLessonBlockDto[];
 }
 
 export class ClassTemplateModuleSectionDto {
@@ -264,6 +314,14 @@ export class ClassTemplateModuleDto {
   imageScale?: number;
 
   @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isLocked?: boolean;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ClassTemplateModuleSectionDto)
@@ -310,10 +368,28 @@ export class UpdateClassTemplateContentDto {
   @ValidateNested({ each: true })
   @Type(() => ClassTemplateAnnouncementDto)
   announcements?: ClassTemplateAnnouncementDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ClassTemplateLessonDto)
+  lessons?: ClassTemplateLessonDto[];
 }
 
 export class PublishClassTemplateDto {
   @IsOptional()
   @IsEnum(ClassTemplateStatus)
   status?: ClassTemplateStatus;
+}
+
+export class EngineImportValidateDto {
+  @IsString()
+  @IsNotEmpty()
+  manifest: string;
+}
+
+export class EngineImportDto extends EngineImportValidateDto {
+  @IsOptional()
+  @IsBoolean()
+  publish?: boolean;
 }

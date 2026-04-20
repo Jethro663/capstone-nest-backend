@@ -412,6 +412,11 @@ export const lessons = pgTable(
 
     /** Links AI-generated lessons back to the extraction that created them (null for manually created) */
     sourceExtractionId: uuid('source_extraction_id'),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -424,6 +429,10 @@ export const lessons = pgTable(
     ),
     sourceExtractionIdx: index('lessons_source_extraction_idx').on(
       table.sourceExtractionId,
+    ),
+    templateIdIdx: index('lessons_template_id_idx').on(table.templateId),
+    templateSourceIdIdx: index('lessons_template_source_id_idx').on(
+      table.templateSourceId,
     ),
   }),
 );

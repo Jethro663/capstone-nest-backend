@@ -10,6 +10,7 @@
     "perf:auth-smoke": "node scripts/auth-perf-smoke.js",
     "perf:nav-smoke": "node scripts/nav-perf-smoke.js",
     "perf:discussion-smoke": "node scripts/discussion-perf-smoke.js",
+    "perf:engine-smoke": "node scripts/engine-perf-smoke.js",
     "build": "next build",
     "start": "node scripts/start-standalone.js",
     "lint": "eslint",

@@ -43,7 +43,7 @@ import type { Lesson } from '@/types/lesson';
 import type { ClassModule, ModuleItem, ModuleItemType } from '@/types/module';
 import './module-workspace.css';
 
-type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes' | 'grading';
+type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes';
 type AssessmentAttachMode = 'create-new' | 'attach-existing';
 type FileAttachSource = 'upload' | 'library';
 
@@ -62,44 +62,18 @@ type DraggingItem = {
   itemId: string;
 } | null;
 
-type GradingRow = {
-  id: string;
-  letter: string;
-  label: string;
-  minScore: string;
-  maxScore: string;
-  description: string;
-};
-
 const TAB_ITEMS: Array<{ key: ModuleTab; label: string; icon: typeof Layers3 }> = [
   { key: 'sections', label: 'Sections', icon: Layers3 },
   { key: 'visibility', label: 'Visibility', icon: Eye },
   { key: 'locking', label: 'Locking', icon: Lock },
   { key: 'notes', label: 'Notes', icon: NotebookPen },
-  { key: 'grading', label: 'Grading Scale', icon: ClipboardList },
 ];
-
-const DEFAULT_GRADING_ROWS: Array<Omit<GradingRow, 'id'>> = [
-  { letter: 'A', label: 'Outstanding', minScore: '90', maxScore: '100', description: 'Exceptional performance' },
-  { letter: 'B+', label: 'Very Satisfactory', minScore: '85', maxScore: '89', description: 'Above average performance' },
-  { letter: 'B', label: 'Satisfactory', minScore: '80', maxScore: '84', description: 'Meets expected standards' },
-  { letter: 'C', label: 'Fairly Satisfactory', minScore: '75', maxScore: '79', description: 'Partially meets standards' },
-  { letter: 'F', label: 'Did Not Meet Expectation', minScore: '0', maxScore: '74', description: 'Below passing threshold' },
-];
-
-function createRowId() {
-  return `row-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 function toParamValue(input: string | string[] | undefined) {
   if (Array.isArray(input)) return input[0] || '';
   return input || '';
 }
 
-function toSafeNumber(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : NaN;
-}
 
 function getPlainTextLength(html: string) {
   return normalizeRichText(html)
@@ -216,22 +190,6 @@ function getItemEditorHref(item: ModuleItem, classId: string, moduleId: string) 
   return null;
 }
 
-function buildGradingRows(module: ClassModule | null) {
-  if (!module || module.gradingScaleEntries.length === 0) {
-    return DEFAULT_GRADING_ROWS.map((entry) => ({ ...entry, id: createRowId() }));
-  }
-
-  return [...module.gradingScaleEntries]
-    .sort((a, b) => a.order - b.order)
-    .map((entry) => ({
-      id: entry.id || createRowId(),
-      letter: entry.letter || '',
-      label: entry.label || '',
-      minScore: String(entry.minScore ?? ''),
-      maxScore: String(entry.maxScore ?? ''),
-      description: entry.description || '',
-    }));
-}
 
 export default function TeacherModuleDetailPage() {
   const params = useParams();
@@ -250,8 +208,6 @@ export default function TeacherModuleDetailPage() {
   const [sectionTitle, setSectionTitle] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
-  const [savingScale, setSavingScale] = useState(false);
-  const [gradingRows, setGradingRows] = useState<GradingRow[]>([]);
   const [updatingModule, setUpdatingModule] = useState(false);
   const [attachingItem, setAttachingItem] = useState(false);
   const [attachSource, setAttachSource] = useState<FileAttachSource>('upload');
@@ -299,7 +255,6 @@ export default function TeacherModuleDetailPage() {
       setLessons(lessonResponse.data || []);
       setAssessments(assessmentResponse.data || []);
       setNotesDraft(currentModule?.teacherNotes || '');
-      setGradingRows(buildGradingRows(currentModule));
       setExpandedSections((current) => {
         if (!currentModule) return {};
         const next: Record<string, boolean> = {};
@@ -875,61 +830,6 @@ export default function TeacherModuleDetailPage() {
       toast.error('Unable to save notes');
     } finally {
       setSavingNotes(false);
-    }
-  };
-
-  const handleSaveScale = async () => {
-    if (!module || savingScale) return;
-
-    const sanitizedRows = gradingRows
-      .map((row, index) => ({
-        ...row,
-        order: index + 1,
-        letter: row.letter.trim(),
-        label: row.label.trim(),
-        description: row.description.trim(),
-        minValue: toSafeNumber(row.minScore),
-        maxValue: toSafeNumber(row.maxScore),
-      }))
-      .filter((row) => row.letter || row.label || row.minScore || row.maxScore || row.description);
-
-    if (sanitizedRows.length === 0) {
-      toast.error('Add at least one grading row');
-      return;
-    }
-
-    const hasInvalidRow = sanitizedRows.some(
-      (row) =>
-        !row.letter ||
-        !row.label ||
-        Number.isNaN(row.minValue) ||
-        Number.isNaN(row.maxValue) ||
-        row.minValue > row.maxValue,
-    );
-
-    if (hasInvalidRow) {
-      toast.error('Check grading rows: letter, label, and valid min/max ranges are required');
-      return;
-    }
-
-    try {
-      setSavingScale(true);
-      await moduleService.replaceGradingScale(module.id, {
-        entries: sanitizedRows.map((row) => ({
-          letter: row.letter,
-          label: row.label,
-          minScore: row.minValue,
-          maxScore: row.maxValue,
-          description: row.description,
-          order: row.order,
-        })),
-      });
-      await fetchData();
-      toast.success('Grading scale saved');
-    } catch {
-      toast.error('Unable to save grading scale');
-    } finally {
-      setSavingScale(false);
     }
   };
 
@@ -1556,135 +1456,6 @@ export default function TeacherModuleDetailPage() {
           </div>
         ) : null}
 
-        {activeTab === 'grading' ? (
-          <div className="teacher-module-detail__stack" data-animate="fade">
-            <div className="teacher-module-detail__grading-head">
-              <div>
-                <h2>Grading Scale</h2>
-                <p className="teacher-module-detail__lead">
-                  Define grade thresholds and labels for this module.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="teacher-module-detail__outline"
-                data-priority="secondary"
-                onClick={() =>
-                  setGradingRows((current) => [
-                    ...current,
-                    { id: createRowId(), letter: '', label: '', minScore: '', maxScore: '', description: '' },
-                  ])
-                }
-              >
-                <Plus className="h-4 w-4" />
-                Add Row
-              </button>
-            </div>
-
-            <div className="teacher-module-detail__grading-table-wrap">
-              <table className="teacher-module-detail__grading-table">
-                <thead>
-                  <tr>
-                    <th>Letter</th>
-                    <th>Label</th>
-                    <th>Min Score</th>
-                    <th>Max Score</th>
-                    <th>Description</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {gradingRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <span className="teacher-module-detail__grade-pill">{row.letter || '--'}</span>
-                      </td>
-                      <td>
-                        <input
-                          value={row.label}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, label: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="Label"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={row.minScore}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, minScore: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="0"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={row.maxScore}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, maxScore: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="100"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={row.description}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, description: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="Description"
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                          onClick={() =>
-                            setGradingRows((current) =>
-                              current.length > 1 ? current.filter((entry) => entry.id !== row.id) : current,
-                            )
-                          }
-                          aria-label="Remove grade row"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="teacher-module-detail__save-row">
-              <Button
-                type="button"
-                className="teacher-module-detail__primary"
-                data-priority="primary"
-                onClick={() => void handleSaveScale()}
-                disabled={savingScale}
-              >
-                <Save className="h-4 w-4" />
-                {savingScale ? 'Saving...' : 'Save Scale'}
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </section>
 
       <Dialog

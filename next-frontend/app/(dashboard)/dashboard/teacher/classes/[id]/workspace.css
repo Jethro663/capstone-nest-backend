@@ -151,6 +151,63 @@
   flex-wrap: wrap;
 }
 
+.admin-template-editor__hero-row {
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.admin-template-editor__hero-main {
+  min-width: min(100%, 20rem);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  flex: 1 1 34rem;
+}
+
+.admin-template-editor__hero-tools {
+  width: min(100%, 24rem);
+  display: grid;
+  gap: 0.55rem;
+  justify-items: end;
+  flex: 0 0 auto;
+}
+
+.admin-template-editor__hero-name-input {
+  width: 100%;
+  min-height: 2.5rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(150, 173, 206, 0.38);
+  background: rgba(11, 20, 38, 0.46);
+  color: #f4f8ff;
+  font-weight: 700;
+}
+
+.admin-template-editor__hero-name-input::placeholder {
+  color: rgba(214, 226, 243, 0.72);
+}
+
+.admin-template-editor__hero-name-input:focus-visible {
+  border-color: rgba(186, 207, 237, 0.62);
+}
+
+.admin-template-editor__hero-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.48rem;
+}
+
+.admin-template-editor__hero-outline {
+  border-color: rgba(170, 191, 219, 0.5);
+  background: rgba(236, 243, 252, 0.1);
+  color: #d3e2f5;
+}
+
+.admin-template-editor__hero-outline:hover {
+  background: rgba(236, 243, 252, 0.18);
+  color: #e8f1fc;
+}
+
 .teacher-class-workspace__solid,
 .teacher-class-workspace__outline {
   min-height: 2.5rem;
@@ -1340,6 +1397,15 @@
 }
 
 @media (max-width: 980px) {
+  .admin-template-editor__hero-tools {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .admin-template-editor__hero-actions {
+    justify-content: flex-start;
+  }
+
   .teacher-class-workspace__panel-head {
     flex-direction: column;
     align-items: flex-start;

@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { loginAs, missingRoleCredentials } from './helpers/auth';
-
-const lessonEditorUrl = process.env.PLAYWRIGHT_TEACHER_LESSON_EDIT_URL;
+import { resolveTeacherLessonEditUrl } from './helpers/seeded-routes';
 
 test('opens the teacher lesson editor and captures the structured authoring surface', async ({ page }) => {
+  const lessonEditorUrl = await resolveTeacherLessonEditUrl();
   test.skip(
     missingRoleCredentials('teacher') || !lessonEditorUrl,
-    'Set PLAYWRIGHT_TEACHER_EMAIL, PLAYWRIGHT_TEACHER_PASSWORD, and PLAYWRIGHT_TEACHER_LESSON_EDIT_URL.',
+    'Set PLAYWRIGHT_TEACHER_EMAIL and PLAYWRIGHT_TEACHER_PASSWORD. Optionally set PLAYWRIGHT_TEACHER_LESSON_EDIT_URL.',
   );
 
   await loginAs(page, 'teacher');

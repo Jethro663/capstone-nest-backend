@@ -67,7 +67,8 @@
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",
-    "winston-loki": "^6.1.4"
+    "winston-loki": "^6.1.4",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

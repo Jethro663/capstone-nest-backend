@@ -55,6 +55,7 @@ export interface ClassTemplateModuleItem {
   id?: string;
   itemType: ClassTemplateItemType;
   templateAssessmentId?: string;
+  templateLessonId?: string;
   order?: number;
   isRequired?: boolean;
   metadata?: Record<string, unknown>;
@@ -74,6 +75,8 @@ export interface ClassTemplateModule {
   title: string;
   description?: string;
   order?: number;
+  isVisible?: boolean;
+  isLocked?: boolean;
   themeKind?: string;
   gradientId?: string;
   coverImageUrl?: string | null;
@@ -95,10 +98,75 @@ export interface ClassTemplateContent {
   modules: ClassTemplateModule[];
   assessments: ClassTemplateAssessment[];
   announcements: ClassTemplateAnnouncement[];
+  lessons?: ClassTemplateLesson[];
+  chunks?: ClassTemplateEngineChunk[];
 }
 
 export interface CreateClassTemplateDto {
   name: string;
   subjectCode: string;
   subjectGradeLevel: string;
+}
+
+export interface ClassTemplateLessonBlock {
+  id?: string;
+  blockType: string;
+  blockVersion?: number;
+  order?: number;
+  payload: Record<string, unknown>;
+}
+
+export interface ClassTemplateLesson {
+  id?: string;
+  title: string;
+  summary?: string;
+  order?: number;
+  blocks?: ClassTemplateLessonBlock[];
+}
+
+export interface ClassTemplateEngineChunk {
+  id: string;
+  sourceType: 'lesson_block' | 'assessment_question';
+  sourceId: string;
+  chunkOrder: number;
+  content: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EngineImportValidationIssue {
+  path: string;
+  message: string;
+}
+
+export interface EngineImportValidationSummary {
+  modules: number;
+  sections: number;
+  items: number;
+  lessons: number;
+  lessonBlocks: number;
+  assessments: number;
+  questions: number;
+  options: number;
+  chunks: number;
+}
+
+export interface EngineImportValidationResult {
+  valid: boolean;
+  errors: EngineImportValidationIssue[];
+  warnings: EngineImportValidationIssue[];
+  summary: EngineImportValidationSummary;
+  normalizedPreview: Record<string, unknown> | null;
+}
+
+export interface EngineTemplateExportPayload {
+  fileName: string;
+  yaml: string;
+  manifest: Record<string, unknown>;
+}
+
+export interface EngineTemplateImportResult {
+  template: ClassTemplate;
+  summary: EngineImportValidationSummary;
+  warnings: EngineImportValidationIssue[];
+  regeneratedChunkJobs: unknown[];
 }

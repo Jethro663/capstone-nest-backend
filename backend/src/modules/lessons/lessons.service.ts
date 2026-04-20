@@ -63,8 +63,10 @@ export class LessonsService {
     return this.databaseService.db;
   }
 
-  private sanitizeOptionalRichText(value: string | null | undefined) {
-    if (value === undefined || value === null) return value;
+  private sanitizeOptionalRichText(
+    value: string | null | undefined,
+  ): string | undefined {
+    if (value === undefined || value === null) return undefined;
     return sanitizeRichTextHtml(value);
   }
 

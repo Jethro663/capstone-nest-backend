@@ -74,6 +74,8 @@ export const classTemplateModules = pgTable(
     imagePositionX: integer('image_position_x').notNull().default(50),
     imagePositionY: integer('image_position_y').notNull().default(50),
     imageScale: integer('image_scale').notNull().default(120),
+    isVisible: boolean('is_visible').notNull().default(false),
+    isLocked: boolean('is_locked').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -118,7 +120,6 @@ export const classTemplateAssessments = pgTable(
     type: text('type').notNull().default('quiz'),
     dueDateOffsetDays: integer('due_date_offset_days'),
     settings: json('settings'),
-    questions: json('questions'),
     totalPoints: integer('total_points').notNull().default(0),
     order: integer('order').notNull().default(0),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -128,6 +129,125 @@ export const classTemplateAssessments = pgTable(
     templateOrderIdx: index('class_template_assessments_template_order_idx').on(
       table.templateId,
       table.order,
+    ),
+  }),
+);
+
+export const classTemplateLessons = pgTable(
+  'class_template_lessons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    templateId: uuid('template_id')
+      .notNull()
+      .references(() => classTemplates.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    summary: text('summary'),
+    order: integer('order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    templateOrderIdx: index('class_template_lessons_template_order_idx').on(
+      table.templateId,
+      table.order,
+    ),
+  }),
+);
+
+export const classTemplateLessonBlocks = pgTable(
+  'class_template_lesson_blocks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    templateLessonId: uuid('template_lesson_id')
+      .notNull()
+      .references(() => classTemplateLessons.id, { onDelete: 'cascade' }),
+    blockType: text('block_type').notNull(),
+    blockVersion: integer('block_version').notNull().default(1),
+    payload: json('payload').notNull(),
+    order: integer('order').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    lessonOrderIdx: index('class_template_lesson_blocks_lesson_order_idx').on(
+      table.templateLessonId,
+      table.order,
+    ),
+  }),
+);
+
+export const classTemplateAssessmentQuestions = pgTable(
+  'class_template_assessment_questions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    templateAssessmentId: uuid('template_assessment_id')
+      .notNull()
+      .references(() => classTemplateAssessments.id, { onDelete: 'cascade' }),
+    type: text('type').notNull().default('multiple_choice'),
+    content: text('content').notNull(),
+    points: integer('points').notNull().default(1),
+    order: integer('order').notNull().default(0),
+    isRequired: boolean('is_required').notNull().default(true),
+    explanation: text('explanation'),
+    imageUrl: text('image_url'),
+    metadata: json('metadata'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    assessmentOrderIdx: index(
+      'class_template_assessment_questions_assessment_order_idx',
+    ).on(table.templateAssessmentId, table.order),
+  }),
+);
+
+export const classTemplateAssessmentQuestionOptions = pgTable(
+  'class_template_assessment_question_options',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    templateAssessmentQuestionId: uuid('template_assessment_question_id')
+      .notNull()
+      .references(() => classTemplateAssessmentQuestions.id, {
+        onDelete: 'cascade',
+      }),
+    text: text('text').notNull(),
+    isCorrect: boolean('is_correct').notNull().default(false),
+    order: integer('order').notNull().default(0),
+    metadata: json('metadata'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    questionOrderIdx: index(
+      'class_template_assessment_question_options_question_order_idx',
+    ).on(table.templateAssessmentQuestionId, table.order),
+  }),
+);
+
+export const classTemplateEngineChunks = pgTable(
+  'class_template_engine_chunks',
+  {
+    id: varchar('id', { length: 190 }).primaryKey(),
+    templateId: uuid('template_id')
+      .notNull()
+      .references(() => classTemplates.id, { onDelete: 'cascade' }),
+    sourceType: text('source_type').notNull(),
+    sourceId: text('source_id').notNull(),
+    chunkOrder: integer('chunk_order').notNull().default(0),
+    content: text('content').notNull(),
+    metadata: json('metadata'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    templateOrderIdx: index('class_template_engine_chunks_template_order_idx').on(
+      table.templateId,
+      table.chunkOrder,
+    ),
+    sourceIdx: index('class_template_engine_chunks_source_idx').on(
+      table.templateId,
+      table.sourceType,
+      table.sourceId,
     ),
   }),
 );
@@ -146,6 +266,10 @@ export const classTemplateModuleItems = pgTable(
       .default('assessment'),
     templateAssessmentId: uuid('template_assessment_id').references(
       () => classTemplateAssessments.id,
+      { onDelete: 'set null' },
+    ),
+    templateLessonId: uuid('template_lesson_id').references(
+      () => classTemplateLessons.id,
       { onDelete: 'set null' },
     ),
     order: integer('order').notNull().default(0),

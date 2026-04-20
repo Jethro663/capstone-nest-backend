@@ -540,6 +540,7 @@ export default function TeacherClassesPage() {
                     { value: students, label: 'Lessons' },
                     { value: taskCount, label: 'Tasks' },
                   ]}
+                  showProgress={false}
                   progressPercent={rosterPercent}
                   progressColor={gradient.accent}
                   actions={actions}

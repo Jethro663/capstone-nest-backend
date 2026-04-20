@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { loginAs, missingRoleCredentials } from './helpers/auth';
-
-const assessmentEditorUrl = process.env.PLAYWRIGHT_TEACHER_ASSESSMENT_EDIT_URL;
+import { resolveTeacherAssessmentEditUrl } from './helpers/seeded-routes';
 
 test('opens the teacher assessment editor and captures the composer surface', async ({ page }) => {
+  const assessmentEditorUrl = await resolveTeacherAssessmentEditUrl();
   test.skip(
     missingRoleCredentials('teacher') || !assessmentEditorUrl,
-    'Set PLAYWRIGHT_TEACHER_EMAIL, PLAYWRIGHT_TEACHER_PASSWORD, and PLAYWRIGHT_TEACHER_ASSESSMENT_EDIT_URL.',
+    'Set PLAYWRIGHT_TEACHER_EMAIL and PLAYWRIGHT_TEACHER_PASSWORD. Optionally set PLAYWRIGHT_TEACHER_ASSESSMENT_EDIT_URL.',
   );
 
   await loginAs(page, 'teacher');

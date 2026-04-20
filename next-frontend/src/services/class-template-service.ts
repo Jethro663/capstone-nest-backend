@@ -5,12 +5,18 @@ import type {
   ClassTemplateAssessment,
   ClassTemplateAssessmentSettings,
   ClassTemplateContent,
+  ClassTemplateEngineChunk,
+  ClassTemplateLesson,
+  ClassTemplateLessonBlock,
   ClassTemplateModule,
   ClassTemplateModuleItem,
   ClassTemplateModuleSection,
   ClassTemplateQuestion,
   ClassTemplateQuestionOption,
   CreateClassTemplateDto,
+  EngineImportValidationResult,
+  EngineTemplateExportPayload,
+  EngineTemplateImportResult,
 } from '@/types/class-template';
 
 function sanitizeQuestionOption(option: ClassTemplateQuestionOption): ClassTemplateQuestionOption {
@@ -67,6 +73,7 @@ function sanitizeModuleItem(item: ClassTemplateModuleItem): ClassTemplateModuleI
     id: item.id,
     itemType: item.itemType,
     templateAssessmentId: item.templateAssessmentId || undefined,
+    templateLessonId: item.templateLessonId || undefined,
     order: item.order,
     isRequired: item.isRequired,
     metadata: item.metadata,
@@ -90,6 +97,8 @@ function sanitizeModule(module: ClassTemplateModule): ClassTemplateModule {
     title: module.title,
     description: module.description,
     order: module.order,
+    isVisible: module.isVisible ?? false,
+    isLocked: module.isLocked ?? true,
     themeKind: module.themeKind,
     gradientId: module.gradientId,
     coverImageUrl: module.coverImageUrl,
@@ -112,11 +121,46 @@ function sanitizeAnnouncement(
   };
 }
 
+function sanitizeLessonBlock(
+  block: ClassTemplateLessonBlock,
+): ClassTemplateLessonBlock {
+  return {
+    id: block.id,
+    blockType: block.blockType,
+    blockVersion: block.blockVersion,
+    order: block.order,
+    payload: block.payload,
+  };
+}
+
+function sanitizeLesson(lesson: ClassTemplateLesson): ClassTemplateLesson {
+  return {
+    id: lesson.id,
+    title: lesson.title,
+    summary: lesson.summary,
+    order: lesson.order,
+    blocks: lesson.blocks?.map(sanitizeLessonBlock),
+  };
+}
+
+function sanitizeChunk(chunk: ClassTemplateEngineChunk): ClassTemplateEngineChunk {
+  return {
+    id: chunk.id,
+    sourceType: chunk.sourceType,
+    sourceId: chunk.sourceId,
+    chunkOrder: chunk.chunkOrder,
+    content: chunk.content,
+    metadata: chunk.metadata,
+  };
+}
+
 function sanitizeContentPayload(content: Partial<ClassTemplateContent>): Partial<ClassTemplateContent> {
   return {
     modules: content.modules?.map(sanitizeModule),
     assessments: content.assessments?.map(sanitizeAssessment),
     announcements: content.announcements?.map(sanitizeAnnouncement),
+    lessons: content.lessons?.map(sanitizeLesson),
+    chunks: content.chunks?.map(sanitizeChunk),
   };
 }
 
@@ -135,6 +179,11 @@ export const classTemplateService = {
 
   async create(dto: CreateClassTemplateDto) {
     const { data } = await api.post('/class-templates', dto);
+    return data as { success: boolean; message: string; data: ClassTemplate };
+  },
+
+  async getById(id: string) {
+    const { data } = await api.get(`/class-templates/${id}`);
     return data as { success: boolean; message: string; data: ClassTemplate };
   },
 
@@ -164,5 +213,37 @@ export const classTemplateService = {
       sanitizeContentPayload(content),
     );
     return data as { success: boolean; message: string; data: ClassTemplateContent };
+  },
+
+  async exportEngine(id: string) {
+    const { data } = await api.get(`/class-templates/${id}/engine-export`);
+    return data as {
+      success: boolean;
+      message: string;
+      data: EngineTemplateExportPayload;
+    };
+  },
+
+  async validateEngineImport(manifest: string) {
+    const { data } = await api.post('/class-templates/engine-import/validate', {
+      manifest,
+    });
+    return data as {
+      success: boolean;
+      message: string;
+      data: EngineImportValidationResult;
+    };
+  },
+
+  async importEngine(manifest: string, options?: { publish?: boolean }) {
+    const { data } = await api.post('/class-templates/engine-import', {
+      manifest,
+      publish: options?.publish ?? false,
+    });
+    return data as {
+      success: boolean;
+      message: string;
+      data: EngineTemplateImportResult;
+    };
   },
 };

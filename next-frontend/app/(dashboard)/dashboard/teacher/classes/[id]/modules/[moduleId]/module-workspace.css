@@ -60,6 +60,43 @@
   line-height: 1.1;
 }
 
+.teacher-module-detail__hero-title-input {
+  width: min(100%, 40rem);
+  appearance: none;
+  min-height: 2.4rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  padding: 0.08rem 0;
+  box-shadow: none;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+  caret-color: #fff;
+}
+
+.teacher-module-detail__hero-title-input::placeholder {
+  color: rgba(239, 219, 221, 0.85);
+}
+
+.teacher-module-detail__hero-title-input:hover {
+  border-bottom-color: rgba(247, 233, 233, 0.34);
+}
+
+.teacher-module-detail__hero-title-input:focus-visible {
+  outline: none;
+  border-bottom-color: rgba(255, 242, 242, 0.82);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 66%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
+}
+
 .teacher-module-detail__hero-copy > p {
   margin: 0.38rem 0 0;
   color: #e7d8d9;
@@ -280,6 +317,40 @@
   color: #231c1c;
   font-size: 1rem;
   font-weight: 800;
+}
+
+.teacher-module-detail__section-title-input {
+  width: min(100%, 24rem);
+  appearance: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  color: #231c1c;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 0.1rem 0;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.teacher-module-detail__section-title-input::placeholder {
+  color: #827774;
+}
+
+.teacher-module-detail__section-title-input:hover {
+  border-bottom-color: #d6cac0;
+}
+
+.teacher-module-detail__section-title-input:focus-visible {
+  outline: none;
+  border-bottom-color: #bdaea1;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 72%,
+    rgba(243, 235, 228, 0.9) 100%
+  );
 }
 
 .teacher-module-detail__section-main > span {
@@ -812,6 +883,10 @@
 
 @media (max-width: 768px) {
   .teacher-module-detail__hero-copy h1 {
+    font-size: 1.65rem;
+  }
+
+  .teacher-module-detail__hero-title-input {
     font-size: 1.65rem;
   }
 

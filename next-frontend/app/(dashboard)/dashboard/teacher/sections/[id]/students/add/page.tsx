@@ -167,7 +167,6 @@ export default function TeacherAddSectionStudentsPage() {
   const inFlightFetchRef = useRef<Promise<void> | null>(null);
   const selectAllRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(true);
-  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -207,7 +206,6 @@ export default function TeacherAddSectionStudentsPage() {
         }
 
         toast.error(getApiErrorMessage(error, 'Failed to load candidate students'));
-        router.push('/dashboard/teacher/sections');
       } finally {
         if (isMountedRef.current) {
           setLoading(false);
@@ -221,10 +219,9 @@ export default function TeacherAddSectionStudentsPage() {
   }, [router, sectionId]);
 
   useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
+    if (!sectionId) return;
     void fetchData();
-  }, [fetchData]);
+  }, [fetchData, sectionId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

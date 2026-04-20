@@ -245,8 +245,10 @@ export default function TeacherSectionsPage() {
   const [homeTab, setHomeTab] = useState<TeacherHomeTab>('dashboard');
   const [viewMode, setViewMode] = useState<CardViewMode>('card');
   const [customizationBySection, setCustomizationBySection] = useState<Record<string, SectionCardCustomization>>({});
+  const [hasHydratedLocalPrefs, setHasHydratedLocalPrefs] = useState(false);
   const [customizingSection, setCustomizingSection] = useState<Section | null>(null);
   const [uploadingThemeImage, setUploadingThemeImage] = useState(false);
+  const [savingThemeCustomization, setSavingThemeCustomization] = useState(false);
   const [openCardMenuId, setOpenCardMenuId] = useState<string | null>(null);
   const [updatingVisibilitySectionId, setUpdatingVisibilitySectionId] = useState<string | null>(null);
   const [draftCustomization, setDraftCustomization] = useState<SectionCardCustomization>(
@@ -309,22 +311,26 @@ export default function TeacherSectionsPage() {
       if (savedView === 'card' || savedView === 'wide') setViewMode(savedView);
     } catch {
       // ignore parse errors
+    } finally {
+      setHasHydratedLocalPrefs(true);
     }
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!hasHydratedLocalPrefs) return;
     window.localStorage.setItem(STORAGE_KEY_VIEW, viewMode);
-  }, [viewMode]);
+  }, [hasHydratedLocalPrefs, viewMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (!hasHydratedLocalPrefs) return;
     try {
       window.localStorage.setItem(STORAGE_KEY_CUSTOMIZE, JSON.stringify(customizationBySection));
     } catch {
       // ignore quota errors
     }
-  }, [customizationBySection]);
+  }, [customizationBySection, hasHydratedLocalPrefs]);
 
   useEffect(() => {
     if (!openCardMenuId || typeof document === 'undefined') return;
@@ -439,10 +445,34 @@ export default function TeacherSectionsPage() {
     [openSectionDetails],
   );
 
-  const saveCustomization = () => {
+  const saveCustomization = async () => {
     if (!customizingSection) return;
-    setCustomizationBySection((current) => ({ ...current, [customizingSection.id]: draftCustomization }));
+    const sectionId = customizingSection.id;
+    const nextCustomization = draftCustomization;
+
+    setCustomizationBySection((current) => ({
+      ...current,
+      [sectionId]: nextCustomization,
+    }));
     setCustomizingSection(null);
+
+    try {
+      setSavingThemeCustomization(true);
+      const response = await sectionService.updatePresentation(sectionId, {
+        cardBannerUrl:
+          nextCustomization.themeKind === 'image' && nextCustomization.imageUrl
+            ? nextCustomization.imageUrl
+            : null,
+      });
+
+      setSections((current) =>
+        current.map((section) => (section.id === sectionId ? response.data : section)),
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to save card theme.'));
+    } finally {
+      setSavingThemeCustomization(false);
+    }
   };
 
   const resetCustomization = () => {
@@ -730,7 +760,18 @@ export default function TeacherSectionsPage() {
             <p>Gradient Palette</p>
             <div className="teacher-customize-dialog__gradients">
               {GRADIENT_OPTIONS.map((gradient) => (
-                <button key={gradient.id} type="button" data-active={draftCustomization.gradientId === gradient.id} onClick={() => setDraftCustomization((current) => ({ ...current, gradientId: gradient.id }))}>
+                <button
+                  key={gradient.id}
+                  type="button"
+                  data-active={draftCustomization.gradientId === gradient.id}
+                  onClick={() =>
+                    setDraftCustomization((current) => ({
+                      ...current,
+                      themeKind: 'gradient',
+                      gradientId: gradient.id,
+                    }))
+                  }
+                >
                   <span style={{ background: gradient.background }} />
                   {gradient.label}
                 </button>
@@ -777,11 +818,16 @@ export default function TeacherSectionsPage() {
           </div>
 
           <DialogFooter className="teacher-customize-dialog__footer">
-            <Button type="button" variant="outline" onClick={resetCustomization}>
+            <Button type="button" variant="outline" onClick={resetCustomization} disabled={savingThemeCustomization}>
               Reset
             </Button>
-            <Button type="button" className="teacher-home-refresh" onClick={saveCustomization}>
-              Save Theme
+            <Button
+              type="button"
+              className="teacher-home-refresh"
+              onClick={() => void saveCustomization()}
+              disabled={savingThemeCustomization}
+            >
+              {savingThemeCustomization ? 'Saving...' : 'Save Theme'}
             </Button>
           </DialogFooter>
         </DialogContent>

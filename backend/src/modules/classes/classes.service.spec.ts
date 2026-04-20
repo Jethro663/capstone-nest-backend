@@ -97,8 +97,12 @@ describe('ClassesService', () => {
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
       classTemplates: { findFirst: jest.fn(), findMany: jest.fn() },
       classTemplateAssessments: { findMany: jest.fn() },
+      classTemplateAssessmentQuestions: { findMany: jest.fn() },
+      classTemplateAssessmentQuestionOptions: { findMany: jest.fn() },
       classTemplateModules: { findMany: jest.fn() },
       classTemplateAnnouncements: { findMany: jest.fn() },
+      classTemplateLessons: { findMany: jest.fn() },
+      classTemplateLessonBlocks: { findMany: jest.fn() },
       classTemplateModuleSections: { findMany: jest.fn() },
       classTemplateModuleItems: { findMany: jest.fn() },
       classVisibilityPreferences: { findFirst: jest.fn(), findMany: jest.fn() },
@@ -138,8 +142,16 @@ describe('ClassesService', () => {
     mockAuditService.log.mockResolvedValue(undefined);
     mockDb.query.classTemplates.findFirst.mockResolvedValue(null);
     mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateAssessmentQuestions.findMany.mockResolvedValue(
+      [],
+    );
+    mockDb.query.classTemplateAssessmentQuestionOptions.findMany.mockResolvedValue(
+      [],
+    );
     mockDb.query.classTemplateModules.findMany.mockResolvedValue([]);
     mockDb.query.classTemplateAnnouncements.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateLessons.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateLessonBlocks.findMany.mockResolvedValue([]);
     mockDb.query.classTemplateModuleSections.findMany.mockResolvedValue([]);
     mockDb.query.classTemplateModuleItems.findMany.mockResolvedValue([]);
     mockDb.query.classes.findMany.mockResolvedValue([]);
