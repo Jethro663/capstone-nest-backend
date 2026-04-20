@@ -35,6 +35,7 @@ export interface EngineModuleManifest {
   id: string;
   title: string;
   description?: string | null;
+  teacherNotes?: string | null;
   order: number;
   isVisible?: boolean;
   isLocked?: boolean;

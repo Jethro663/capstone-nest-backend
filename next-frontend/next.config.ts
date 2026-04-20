@@ -1,5 +1,5 @@
 import type { NextConfig } from 'next';
-import { getFrontendApiOrigin } from './src/lib/api-origin';
+import { getServerApiOrigin } from './src/lib/api-origin';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     'localhost',
   ],
   async rewrites() {
-    const apiOrigin = getFrontendApiOrigin();
+    const apiOrigin = getServerApiOrigin();
 
     return [
       {

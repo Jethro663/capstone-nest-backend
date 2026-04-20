@@ -8,13 +8,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
 import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { classService } from '@/services/class-service';
+import { academicStateService } from '@/services/academic-state-service';
 import { classTemplateService } from '@/services/class-template-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
 import {
   getSubjectCodeCandidates,
   isTemplateCompatibleWithClass,
-  matchesTemplateToSubject,
 } from '@/lib/class-template-compat';
 import type { Section } from '@/types/section';
 import type { ClassTemplate } from '@/types/class-template';
@@ -23,13 +23,19 @@ import { toast } from 'sonner';
 
 export default function CreateClassPage() {
   const router = useRouter();
+  const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
 
   const schoolYears = useMemo(() => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const startYear = now.getMonth() >= 5 ? year : year - 1;
+    const resolved = activeSchoolYear?.match(/^(\d{4})-(\d{4})$/);
+    const startYear = resolved
+      ? Number(resolved[1])
+      : (() => {
+          const now = new Date();
+          const year = now.getFullYear();
+          return now.getMonth() >= 5 ? year : year - 1;
+        })();
     return Array.from({ length: 4 }, (_, i) => `${startYear + i}-${startYear + i + 1}`);
-  }, []);
+  }, [activeSchoolYear]);
 
   const initialValues = useMemo(
     () => createEmptyClassForm(schoolYears[0] || ''),
@@ -59,6 +65,12 @@ export default function CreateClassPage() {
       ]);
       setSections(sectionsRes.data || []);
       setTeachers(teachersRes.users || []);
+      try {
+        const academicState = await academicStateService.getCurrent();
+        setActiveSchoolYear(academicState.data.schoolYear);
+      } catch {
+        setActiveSchoolYear(null);
+      }
     } catch {
       toast.error('Failed to load class form data');
     } finally {
@@ -121,23 +133,7 @@ export default function CreateClassPage() {
             template.subjectGradeLevel === formValues.subjectGradeLevel,
         );
 
-        if (filtered.length > 0) {
-          setCompatibleTemplates(filtered);
-          return;
-        }
-
-        const fallbackResponse = await classTemplateService.getAll({
-          subjectGradeLevel: formValues.subjectGradeLevel,
-        });
-
-        const fallbackFiltered = (fallbackResponse.data || []).filter(
-          (template) =>
-            template.status === 'published' &&
-            template.subjectGradeLevel === formValues.subjectGradeLevel &&
-            matchesTemplateToSubject(template, formValues.subjectName, formValues.subjectCode),
-        );
-
-        setCompatibleTemplates(fallbackFiltered);
+        setCompatibleTemplates(filtered);
 
         if (responses.every((response) => response.status === 'rejected')) {
           toast.error('Failed to load compatible templates');
@@ -177,23 +173,26 @@ export default function CreateClassPage() {
   const handleSubmit = async (values: ClassFormValues) => {
     try {
       setSaving(true);
-      const selectedTemplate = compatibleTemplates.find((template) => template.id === selectedTemplateId);
-      const validatedTemplateId =
-        selectedTemplate &&
-        isTemplateCompatibleWithClass(
-          selectedTemplate,
-          {
+      let validatedTemplateId: string | undefined;
+
+      if (selectedTemplateId) {
+        const selectedTemplateResponse = await classTemplateService.getById(selectedTemplateId);
+        const selectedTemplate = selectedTemplateResponse.data;
+        const isValidTemplateSelection =
+          selectedTemplate &&
+          isTemplateCompatibleWithClass(selectedTemplate, {
             subjectCode: values.subjectCode,
             subjectGradeLevel: values.subjectGradeLevel,
-          },
-        )
-          ? selectedTemplateId
-          : '';
+          });
 
-      if (selectedTemplateId && !validatedTemplateId) {
-        toast.warning(
-          'Selected template was skipped because it is no longer compatible with this class setup.',
-        );
+        if (!isValidTemplateSelection) {
+          toast.error(
+            'Selected template is no longer compatible or unpublished. Publish a compatible template before creating this class.',
+          );
+          return;
+        }
+
+        validatedTemplateId = selectedTemplate.id;
       }
 
       await classService.create({
@@ -204,7 +203,7 @@ export default function CreateClassPage() {
         teacherId: values.teacherId,
         schoolYear: values.schoolYear,
         room: values.room || undefined,
-        templateId: validatedTemplateId || undefined,
+        templateId: validatedTemplateId,
         schedules: values.schedules,
       });
       toast.success('Class created');

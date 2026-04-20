@@ -8,19 +8,17 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
-  Bot,
-  BrainCircuit,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
   Clock3,
   Flame,
   Map,
-  MessageSquareText,
   RefreshCw,
   Sparkles,
   Star,
@@ -33,7 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
+import StudentJaWorkspace from "@/components/student/ja/StudentJaWorkspace";
 import {
   StudentPageShell,
   StudentPageStat,
@@ -60,15 +58,30 @@ type LxpTabKey =
   | "roadmap"
   | "assessments"
   | "interventions"
-  | "ai-tutor";
+  | "ja";
 
 const TABS: Array<{ value: LxpTabKey; label: string }> = [
   { value: "overview", label: "Overview" },
   { value: "roadmap", label: "Roadmap" },
   { value: "assessments", label: "Assessments" },
   { value: "interventions", label: "Interventions" },
-  { value: "ai-tutor", label: "AI Tutor" },
+  { value: "ja", label: "JA Hub" },
 ];
+
+function parseTabValue(value: string | null): LxpTabKey {
+  if (value === "overview") return "overview";
+  if (value === "roadmap") return "roadmap";
+  if (value === "assessments") return "assessments";
+  if (value === "interventions") return "interventions";
+  if (value === "ja") return "ja";
+  return "overview";
+}
+
+function parseJaMode(value: string | null): "practice" | "ask" | "review" {
+  if (value === "ask") return "ask";
+  if (value === "review") return "review";
+  return "practice";
+}
 
 function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined) return "--";
@@ -116,10 +129,15 @@ function checkpointHref(checkpoint: LxpCheckpoint, classId?: string): string {
   if (checkpoint.lesson?.id)
     return `/dashboard/student/lessons/${checkpoint.lesson.id}`;
   if (checkpoint.assessment?.id && classId) {
-    return `/dashboard/student/ja?mode=review&classId=${classId}`;
+    const params = new URLSearchParams({
+      tab: "ja",
+      mode: "review",
+      classId,
+    });
+    return `/dashboard/student/lxp?${params.toString()}`;
   }
-  if (checkpoint.assessment?.id) return "/dashboard/student/ja?mode=review";
-  return "/dashboard/student/ja";
+  if (checkpoint.assessment?.id) return "/dashboard/student/lxp?tab=ja&mode=review";
+  return "/dashboard/student/lxp?tab=ja";
 }
 
 function checkpointProvenance(checkpoint: LxpCheckpoint): string {
@@ -250,7 +268,10 @@ function CompactEmptyState({
 }
 
 export default function StudentLxpExperience() {
-  const [tab, setTab] = useState<LxpTabKey>("overview");
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<LxpTabKey>(() =>
+    parseTabValue(searchParams.get("tab")),
+  );
   const [loadingEligibility, setLoadingEligibility] = useState(true);
   const [loadingExperience, setLoadingExperience] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -260,8 +281,6 @@ export default function StudentLxpExperience() {
   const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistResponse | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState("");
-  const [submittingEval, setSubmittingEval] = useState(false);
 
   const selectedClass = useMemo(
     () =>
@@ -357,26 +376,6 @@ export default function StudentLxpExperience() {
     }
   };
 
-  const submitEvaluation = async () => {
-    try {
-      setSubmittingEval(true);
-      await lxpService.submitEvaluation({
-        targetModule: "lxp",
-        usabilityScore: 4,
-        functionalityScore: 4,
-        performanceScore: 4,
-        satisfactionScore: 4,
-        feedback: feedback || undefined,
-      });
-      toast.success("LXP feedback submitted.");
-      setFeedback("");
-    } catch {
-      toast.error("Failed to submit LXP feedback.");
-    } finally {
-      setSubmittingEval(false);
-    }
-  };
-
   const assessmentCheckpoints = useMemo(
     () =>
       (playlist?.checkpoints ?? []).filter(
@@ -403,6 +402,7 @@ export default function StudentLxpExperience() {
   if (eligibleClasses.length === 0) {
     return (
       <StudentPageShell
+        className="lxp-shell"
         badge="LXP Mission Control"
         title="LXP"
         description="When a class needs recovery support, this space turns that work into a guided, theme-aware intervention journey."
@@ -419,6 +419,7 @@ export default function StudentLxpExperience() {
   if (!overview || !playlist) {
     return (
       <StudentPageShell
+        className="lxp-shell"
         badge="LXP Mission Control"
         title="LXP"
         description="We could not load the guided intervention view for the selected class."
@@ -433,10 +434,17 @@ export default function StudentLxpExperience() {
   }
 
   const statusTone = checkpointTone(overview.interventionStatus.code);
+  const initialJaMode = parseJaMode(searchParams.get("mode"));
+  const initialJaClassId = searchParams.get("classId") ?? undefined;
+
+  const handleTabChange = (value: string) => {
+    setTab(parseTabValue(value));
+  };
 
   return (
-    <Tabs value={tab} onValueChange={(value) => setTab(value as LxpTabKey)}>
+    <Tabs value={tab} onValueChange={handleTabChange}>
       <StudentPageShell
+        className="lxp-shell"
         badge="LXP Mission Control"
         title="LXP"
         description={overview.interventionStatus.message}
@@ -447,7 +455,7 @@ export default function StudentLxpExperience() {
                 <TabsTrigger
                   key={entry.value}
                   value={entry.value}
-                  className="student-tab px-4 py-2.5 text-sm font-bold"
+                  className="student-tab lxp-tab-trigger px-4 py-2.5 text-sm font-bold"
                 >
                   {entry.label}
                 </TabsTrigger>
@@ -456,7 +464,7 @@ export default function StudentLxpExperience() {
             <select
               value={selectedClassId}
               onChange={(event) => setSelectedClassId(event.target.value)}
-              className="student-input min-w-[240px] rounded-2xl border border-[var(--student-outline)] bg-[var(--student-elevated)] px-3 py-2 text-sm text-[var(--student-text-strong)]"
+              className="student-input lxp-class-select min-w-[240px] rounded-2xl border border-[var(--student-outline)] bg-[var(--student-elevated)] px-3 py-2 text-sm text-[var(--student-text-strong)]"
             >
               {eligibleClasses.map((entry) => (
                 <option key={entry.classId} value={entry.classId}>
@@ -467,7 +475,7 @@ export default function StudentLxpExperience() {
             <Button
               type="button"
               variant="outline"
-              className="rounded-2xl border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)]"
+              className="lxp-action-button lxp-action-button--ghost rounded-2xl border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)]"
               onClick={handleRefresh}
               disabled={refreshing}
             >
@@ -511,7 +519,12 @@ export default function StudentLxpExperience() {
           </>
         }
       >
-        <TabsContent value="overview" className="mt-0 space-y-6">
+        <TabsContent
+          value="overview"
+          forceMount
+          hidden={tab !== "overview"}
+          className="mt-0 space-y-6"
+        >
           <StudentSectionCard
             title={`${overview.selectedClass.subjectName} Recovery Snapshot`}
             description="A themed overview of your current intervention status, where you are strongest, and what should happen next."
@@ -546,7 +559,7 @@ export default function StudentLxpExperience() {
                       </p>
                     </div>
                   </div>
-                  <div className="rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] px-4 py-3 text-right">
+                  <div className="lxp-emboss-panel rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] px-4 py-3 text-right">
                     <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
                       Blended Score
                     </p>
@@ -780,7 +793,12 @@ export default function StudentLxpExperience() {
             </StudentSectionCard>
           </div>
         </TabsContent>
-        <TabsContent value="roadmap" className="mt-0">
+        <TabsContent
+          value="roadmap"
+          forceMount
+          hidden={tab !== "roadmap"}
+          className="mt-0"
+        >
           <StudentSectionCard
             title="Recovery Roadmap"
             description="A step-by-step view of the lesson reviews and assessment retries assigned to your current intervention case."
@@ -802,7 +820,7 @@ export default function StudentLxpExperience() {
                 playlist.checkpoints.map((checkpoint, index) => (
                   <div
                     key={checkpoint.id}
-                    className="student-panel student-panel-hover rounded-[1.6rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] p-5"
+                    className="student-panel student-panel-hover lxp-emboss-panel rounded-[1.6rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] p-5"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-2">
@@ -844,7 +862,7 @@ export default function StudentLxpExperience() {
                         <Button
                           asChild
                           variant="outline"
-                          className="rounded-2xl"
+                          className="lxp-action-button lxp-action-button--ghost rounded-2xl"
                         >
                           <Link href={checkpointHref(checkpoint, selectedClassId)}>
                             {checkpoint.type === "lesson_review"
@@ -855,7 +873,7 @@ export default function StudentLxpExperience() {
                         {checkpoint.type === "lesson_review" ? (
                           <Button
                             type="button"
-                            className="rounded-2xl"
+                            className="lxp-action-button lxp-action-button--solid rounded-2xl"
                             onClick={() =>
                               handleCompleteCheckpoint(checkpoint.id)
                             }
@@ -886,7 +904,12 @@ export default function StudentLxpExperience() {
           </StudentSectionCard>
         </TabsContent>
 
-        <TabsContent value="assessments" className="mt-0">
+        <TabsContent
+          value="assessments"
+          forceMount
+          hidden={tab !== "assessments"}
+          className="mt-0"
+        >
           <StudentSectionCard
             title="Assessment Retry Queue"
             description="Assessment checkpoints pulled from your active intervention playlist, with due dates when the backend has them."
@@ -938,7 +961,7 @@ export default function StudentLxpExperience() {
                         <Button
                           asChild
                           variant="outline"
-                          className="rounded-2xl"
+                          className="lxp-action-button lxp-action-button--ghost rounded-2xl"
                         >
                           <Link href={checkpointHref(checkpoint, selectedClassId)}>
                             Open JA Replay
@@ -958,7 +981,12 @@ export default function StudentLxpExperience() {
           </StudentSectionCard>
         </TabsContent>
 
-        <TabsContent value="interventions" className="mt-0">
+        <TabsContent
+          value="interventions"
+          forceMount
+          hidden={tab !== "interventions"}
+          className="mt-0"
+        >
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <StudentSectionCard
               title="Intervention Status"
@@ -1010,7 +1038,7 @@ export default function StudentLxpExperience() {
                   />
                 </div>
 
-                <div className="rounded-[1.5rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-5">
+                <div className="lxp-emboss-panel rounded-[1.5rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-5">
                   <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
                     Why this looks different from the Figma
                   </p>
@@ -1061,93 +1089,21 @@ export default function StudentLxpExperience() {
           </div>
         </TabsContent>
 
-        <TabsContent value="ai-tutor" className="mt-0">
-          <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <StudentSectionCard
-              title="AI Tutor Gateway"
-              description="The AI Tutor stays on its existing route. This tab gives LXP students a themed jump-off point into that experience."
-            >
-              <div className="student-dashboard-progress-card rounded-[1.7rem] p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="student-dashboard-hero-chip">
-                      <Bot className="h-3.5 w-3.5" />
-                      JAKIPIR Support
-                    </div>
-                    <h3 className="text-3xl font-black tracking-tight text-[var(--student-text-strong)]">
-                      Ask for guided help without leaving your recovery flow
-                    </h3>
-                    <p className="max-w-2xl text-sm leading-6 text-[var(--student-text-muted)]">
-                      Use the chatbot when you want a simplified explanation, a
-                      study walkthrough, or a confidence check before returning
-                      to your next checkpoint.
-                    </p>
-                  </div>
-                  <Button asChild className="rounded-2xl">
-                    <Link href="/dashboard/student/ja">
-                      Open AI Tutor
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                </div>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-3">
-                  <MiniInsightCard
-                    icon={<BrainCircuit className="h-4 w-4" />}
-                    label="Use It For"
-                    value="Explanations"
-                    caption="Clarify the checkpoint you are on"
-                  />
-                  <MiniInsightCard
-                    icon={<BookOpen className="h-4 w-4" />}
-                    label="Best Paired With"
-                    value="Roadmap"
-                    caption="Ask after opening a lesson checkpoint"
-                  />
-                  <MiniInsightCard
-                    icon={<Sparkles className="h-4 w-4" />}
-                    label="Theme Aware"
-                    value="Yes"
-                    caption="Matches your current student theme"
-                  />
-                </div>
-              </div>
-            </StudentSectionCard>
-
-            <StudentSectionCard
-              title="LXP Feedback"
-              description="The previous page allowed direct LXP feedback submission. That behavior stays here so the redesign does not remove it."
-            >
-              <div className="space-y-4">
-                <div className="rounded-[1.5rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] p-5">
-                  <p className="text-sm font-semibold text-[var(--student-text-strong)]">
-                    What is working well in this LXP experience?
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--student-text-muted)]">
-                    Share friction points, missing data, or parts of the
-                    intervention flow that still feel unclear.
-                  </p>
-                </div>
-                <Textarea
-                  value={feedback}
-                  onChange={(event) => setFeedback(event.target.value)}
-                  placeholder="Example: the roadmap looks good, but I still need more context on why a specific checkpoint was assigned."
-                  className="min-h-40 rounded-[1.4rem] border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)]"
-                />
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    className="rounded-2xl"
-                    onClick={submitEvaluation}
-                    disabled={submittingEval}
-                  >
-                    <MessageSquareText className="mr-2 h-4 w-4" />
-                    {submittingEval ? "Submitting..." : "Submit Feedback"}
-                  </Button>
-                </div>
-              </div>
-            </StudentSectionCard>
-          </div>
+        <TabsContent
+          value="ja"
+          forceMount
+          hidden={tab !== "ja"}
+          className="mt-0"
+        >
+          <StudentSectionCard
+            title="JA Mission Control"
+            description="Practice, Ask, and Review are now integrated inside LXP so recovery flow stays in one place."
+          >
+            <StudentJaWorkspace
+              initialMode={initialJaMode}
+              initialClassId={initialJaClassId}
+            />
+          </StudentSectionCard>
         </TabsContent>
       </StudentPageShell>
     </Tabs>

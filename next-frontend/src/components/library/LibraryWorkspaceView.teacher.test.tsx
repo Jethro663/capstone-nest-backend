@@ -129,4 +129,16 @@ describe('LibraryWorkspaceView teacher mode', () => {
 
     expect(screen.getByLabelText('Use in AI')).toBeInTheDocument();
   });
+
+  it('allows opening the upload picker before teacher metadata is selected', () => {
+    const workspace = createWorkspace({
+      mode: 'private',
+      uploadSubjectKey: '',
+      uploadGradeLevel: '',
+    });
+
+    render(<LibraryWorkspaceView variant="teacher" workspace={workspace} />);
+
+    expect(screen.getByRole('button', { name: 'Upload File' })).toBeEnabled();
+  });
 });

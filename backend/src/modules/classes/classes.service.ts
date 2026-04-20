@@ -86,6 +86,8 @@ import {
   type BulkClassLifecycleResult,
 } from './DTO/bulk-class-lifecycle.dto';
 import { AuditService } from '../audit/audit.service';
+import { ClassRecordService } from '../class-record/class-record.service';
+import { AcademicStateService } from '../academic-state/academic-state.service';
 
 type StandingComponentKey =
   | 'writtenWorkPercent'
@@ -109,6 +111,8 @@ export class ClassesService {
   constructor(
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly classRecordService: ClassRecordService,
+    private readonly academicStateService: AcademicStateService,
   ) {}
 
   private get db() {
@@ -420,6 +424,10 @@ export class ClassesService {
     actorId?: string,
     actorRoles: string[] = [],
   ) {
+    const activeAcademicState =
+      await this.academicStateService.getCurrentState();
+    const effectiveSchoolYear =
+      createClassDto.schoolYear?.trim() || activeAcademicState.schoolYear;
     const normalizedSubjectCode = normalizeSubjectCode(
       createClassDto.subjectCode,
     );
@@ -470,7 +478,7 @@ export class ClassesService {
       const classesForSectionYear = await tx.query.classes.findMany({
         where: and(
           eq(classes.sectionId, createClassDto.sectionId),
-          eq(classes.schoolYear, createClassDto.schoolYear),
+          eq(classes.schoolYear, effectiveSchoolYear),
         ),
         columns: {
           id: true,
@@ -494,7 +502,7 @@ export class ClassesService {
         subjectGradeLevel: normalizedSubjectGradeLevel,
         sectionId: createClassDto.sectionId,
         teacherId: createClassDto.teacherId,
-        schoolYear: createClassDto.schoolYear,
+        schoolYear: effectiveSchoolYear,
         room: createClassDto.room,
         cardPreset: createClassDto.cardPreset ?? 'aurora',
         cardBannerUrl: createClassDto.cardBannerUrl ?? null,
@@ -549,6 +557,23 @@ export class ClassesService {
       : actorRoles.includes('teacher')
         ? 'teacher'
         : 'system';
+    const classRecordActorRoles =
+      actorRoles.length > 0 ? actorRoles : ['teacher'];
+
+    try {
+      await this.classRecordService.generateClassRecord(
+        {
+          classId: newClassId,
+          gradingPeriod: activeAcademicState.quarter,
+        },
+        actorId ?? createClassDto.teacherId,
+        classRecordActorRoles,
+      );
+    } catch (error) {
+      if (!(error instanceof ConflictException)) {
+        throw error;
+      }
+    }
 
     await this.auditService.log({
       actorId: actorId ?? createClassDto.teacherId ?? 'system',
@@ -559,9 +584,10 @@ export class ClassesService {
         actorRole,
         sectionId: createClassDto.sectionId,
         teacherId: createClassDto.teacherId,
-        schoolYear: createClassDto.schoolYear,
+        schoolYear: effectiveSchoolYear,
         hasSchedules: Boolean(createClassDto.schedules?.length),
         templateId: createClassDto.templateId ?? null,
+        activeQuarter: activeAcademicState.quarter,
       },
     });
 
@@ -895,6 +921,7 @@ export class ClassesService {
           imageScale: templateModule.imageScale,
           isVisible: templateModule.isVisible ?? false,
           isLocked: templateModule.isLocked ?? true,
+          teacherNotes: templateModule.teacherNotes ?? null,
           isCoreTemplateAsset: true,
           templateId,
           templateSourceId: templateModule.id,

@@ -124,6 +124,9 @@ describe('FileUploadService', () => {
     mockDb.query.classes.findFirst.mockResolvedValue({
       id: CLASS_ID,
       teacherId: TEACHER_ID,
+      subjectCode: 'SCI-7',
+      subjectName: 'Science 7',
+      subjectGradeLevel: '7',
     });
 
     const module: TestingModule = await Test.createTestingModule({
@@ -256,6 +259,56 @@ describe('FileUploadService', () => {
         actorId: TEACHER_ID,
         reason: 'upload',
       });
+    });
+
+    it('derives subject and grade partition from class context when not provided', async () => {
+      const record = makeFileRecord({
+        scope: 'private',
+        subjectKey: 'science',
+        gradeLevel: '7',
+      });
+      const chain = makeInsertChain([record]);
+      mockDb.insert.mockReturnValue(chain);
+
+      await service.saveFileRecord(
+        makeSaveDto({
+          classId: CLASS_ID,
+          subjectKey: undefined,
+          gradeLevel: undefined,
+        }),
+        TEACHER_USER,
+      );
+
+      expect(chain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: CLASS_ID,
+          subjectKey: 'science',
+          gradeLevel: '7',
+        }),
+      );
+    });
+
+    it('fails when class partition cannot be derived and partition fields are missing', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValueOnce({
+        id: CLASS_ID,
+        teacherId: TEACHER_ID,
+        subjectCode: 'SPECIAL',
+        subjectName: 'Special Topic',
+        subjectGradeLevel: null,
+      });
+
+      await expect(
+        service.saveFileRecord(
+          makeSaveDto({
+            classId: CLASS_ID,
+            subjectKey: undefined,
+            gradeLevel: undefined,
+          }),
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow(
+        'AI-ready library files must specify subjectKey and gradeLevel',
+      );
     });
   });
 

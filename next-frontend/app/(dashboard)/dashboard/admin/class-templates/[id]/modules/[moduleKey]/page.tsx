@@ -85,6 +85,7 @@ function normalizeTemplateModules(modules: ClassTemplateModule[]) {
     isVisible: module.isVisible ?? false,
     isLocked: module.isLocked ?? true,
     description: normalizeTemplateRichText(module.description),
+    teacherNotes: normalizeTemplateRichText(module.teacherNotes),
     sections: (module.sections ?? []).map((section) => {
       const items = (section.items ?? []).map((item) => {
         if (item.itemType !== 'lesson') return item;
@@ -252,7 +253,7 @@ export default function AdminTemplateModuleWorkspacePage() {
     [moduleIndex, modules],
   );
   const activeModuleId = activeModule?.id;
-  const activeModuleDescription = activeModule?.description ?? '';
+  const activeModuleNotes = activeModule?.teacherNotes ?? '';
 
   useEffect(() => {
     let mounted = true;
@@ -299,8 +300,8 @@ export default function AdminTemplateModuleWorkspacePage() {
 
   useEffect(() => {
     if (!activeModuleId) return;
-    setNotesDraft(activeModuleDescription);
-  }, [activeModuleDescription, activeModuleId]);
+    setNotesDraft(activeModuleNotes);
+  }, [activeModuleId, activeModuleNotes]);
 
   const updateModule = (patch: Partial<ClassTemplateModule>) => {
     if (moduleIndex < 0 || !modules[moduleIndex]) return;
@@ -520,7 +521,7 @@ export default function AdminTemplateModuleWorkspacePage() {
       moduleIndex,
       (moduleEntry) => ({
         ...moduleEntry,
-        description: safeNotes,
+        teacherNotes: safeNotes,
       }),
     );
 
@@ -545,7 +546,7 @@ export default function AdminTemplateModuleWorkspacePage() {
       setModules(normalizedModules);
       setAssessments(saved.assessments);
       setAnnouncements(saved.announcements);
-      setNotesDraft(normalizedModules[moduleIndex]?.description ?? safeNotes);
+      setNotesDraft(normalizedModules[moduleIndex]?.teacherNotes ?? safeNotes);
       clearTemplateEditorDraft(templateId);
       toast.success('Notes saved');
     } catch {

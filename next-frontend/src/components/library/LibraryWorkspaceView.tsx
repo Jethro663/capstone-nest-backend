@@ -125,6 +125,13 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
       !uploadGradeLevel ||
       (uploadDestination === 'class' && !uploadClassId));
   const canOpenUploadDialog = isAdmin || isTeacherPrivateMode;
+  const openUploadDisabledReason = isAdmin
+    ? !subjectFilter || !gradeFilter
+      ? 'Choose a subject and grade partition first.'
+      : null
+    : isTeacherGeneralMode
+      ? 'General Modules are read-only for teachers.'
+      : null;
   const uploadDisabledReason = isAdmin
     ? !subjectFilter || !gradeFilter
       ? 'Choose a subject and grade partition first.'
@@ -191,8 +198,8 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
                 type="button"
                 className="nexora-library__button nexora-library__button--solid"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={Boolean(uploadDisabledReason)}
-                title={uploadDisabledReason ?? undefined}
+                disabled={Boolean(openUploadDisabledReason)}
+                title={openUploadDisabledReason ?? undefined}
               >
                 <Upload className="h-4 w-4" />
                 Upload File

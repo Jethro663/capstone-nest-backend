@@ -1,6 +1,12 @@
 /.npm-cache
 /next-FrontendToRecover
 .env.compose
+/ai-service/tests/__pycache__/
+/.serena/cache/
+/.serena/logs/
+/.agents/tmp/*.log
+/tmp-*.png
+*.pyc
 
 # Prevent accidental in-place transpilation artifacts in the TS backend source tree.
 /backend/src/**/*.js

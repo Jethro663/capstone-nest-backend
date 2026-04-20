@@ -1,265 +1,281 @@
 @startuml erd_core_domain
+title Nexora Core Domain ERD (Compact, Print-Friendly)
+left to right direction
 hide circle
-skinparam linetype ortho
+skinparam monochrome true
 skinparam shadowing false
-skinparam class {
-  BackgroundColor #FFFFFF
-  BorderColor #333333
+skinparam linetype ortho
+skinparam dpi 180
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+skinparam packageTitleFontStyle bold
+skinparam ArrowColor Black
+skinparam entity {
+  BackgroundColor White
+  BorderColor Black
+  FontColor Black
+  FontSize 11
 }
 
-entity users {
-  *id : uuid
-  --
-  email : text
-  account_status : text
-}
-entity roles {
-  *id : uuid
-  --
-  name : text
-}
-entity user_roles {
-  *user_id : uuid
-  *role_id : uuid
-}
-entity student_profiles {
-  *user_id : uuid
-  --
-  grade_level : text
-  lrn : varchar
-}
-entity sections {
-  *id : uuid
-  --
-  adviser_id : uuid
-}
-entity classes {
-  *id : uuid
-  --
-  section_id : uuid
-  teacher_id : uuid
-}
-entity class_schedules {
-  *id : uuid
-  --
-  class_id : uuid
-}
-entity enrollments {
-  *id : uuid
-  --
-  student_id : uuid
-  class_id : uuid
-  section_id : uuid
-}
-entity lessons {
-  *id : uuid
-  --
-  class_id : uuid
-}
-entity lesson_content_blocks {
-  *id : uuid
-  --
-  lesson_id : uuid
-}
-entity lesson_completions {
-  *id : uuid
-  --
-  student_id : uuid
-  lesson_id : uuid
-}
-entity assessments {
-  *id : uuid
-  --
-  class_id : uuid
-}
-entity assessment_questions {
-  *id : uuid
-  --
-  assessment_id : uuid
-}
-entity assessment_question_options {
-  *id : uuid
-  --
-  question_id : uuid
-}
-entity assessment_attempts {
-  *id : uuid
-  --
-  student_id : uuid
-  assessment_id : uuid
-}
-entity assessment_responses {
-  *id : uuid
-  --
-  attempt_id : uuid
-  question_id : uuid
-  selected_option_id : uuid
-}
-entity class_records {
-  *id : uuid
-  --
-  class_id : uuid
-  teacher_id : uuid
-}
-entity class_record_categories {
-  *id : uuid
-  --
-  class_record_id : uuid
-}
-entity class_record_items {
-  *id : uuid
-  --
-  class_record_id : uuid
-  category_id : uuid
-  assessment_id : uuid
-}
-entity class_record_scores {
-  *id : uuid
-  --
-  class_record_item_id : uuid
-  student_id : uuid
-}
-entity class_record_final_grades {
-  *id : uuid
-  --
-  class_record_id : uuid
-  student_id : uuid
-}
-entity performance_snapshots {
-  *id : uuid
-  --
-  class_id : uuid
-  student_id : uuid
-}
-entity performance_logs {
-  *id : uuid
-  --
-  class_id : uuid
-  student_id : uuid
-}
-entity intervention_cases {
-  *id : uuid
-  --
-  class_id : uuid
-  student_id : uuid
-}
-entity intervention_assignments {
-  *id : uuid
-  --
-  case_id : uuid
-  lesson_id : uuid
-  assessment_id : uuid
-}
-entity lxp_progress {
-  *student_id : uuid
-  *class_id : uuid
-}
-entity system_evaluations {
-  *id : uuid
-  --
-  submitted_by : uuid
-}
-entity ai_interaction_logs {
-  *id : uuid
-  --
-  user_id : uuid
-}
-entity extracted_modules {
-  *id : uuid
-  --
-  file_id : uuid
-  class_id : uuid
-  teacher_id : uuid
-}
-entity uploaded_files {
-  *id : uuid
-  --
-  folder_id : uuid
-  teacher_id : uuid
-  class_id : uuid
-}
-entity library_folders {
-  *id : uuid
-  --
-  owner_id : uuid
-  parent_id : uuid
-}
-entity announcements {
-  *id : uuid
-  --
-  class_id : uuid
-  author_id : uuid
-}
-entity notifications {
-  *id : uuid
-  --
-  user_id : uuid
+legend top
+Core LMS/LXP schema only (AI support layer removed).
+Designed for clear black-and-white paper printouts.
+endlegend
+
+package "Identity & Access" {
+  entity users {
+    *id : uuid
+    --
+    email : text
+    account_status : text
+  }
+  entity roles {
+    *id : uuid
+    --
+    name : text
+  }
+  entity user_roles {
+    *user_id : uuid
+    *role_id : uuid
+  }
+  entity student_profiles {
+    *user_id : uuid
+    --
+    grade_level : text
+    lrn : varchar
+  }
 }
 
-users ||--o{ user_roles
-roles ||--o{ user_roles
-users ||--|| student_profiles
+package "Academic Structure" {
+  entity sections {
+    *id : uuid
+    --
+    adviser_id : uuid
+  }
+  entity classes {
+    *id : uuid
+    --
+    section_id : uuid
+    teacher_id : uuid
+  }
+  entity class_schedules {
+    *id : uuid
+    --
+    class_id : uuid
+  }
+  entity enrollments {
+    *id : uuid
+    --
+    student_id : uuid
+    class_id : uuid
+    section_id : uuid
+  }
+}
 
-users ||--o{ sections
-sections ||--o{ classes
-users ||--o{ classes
-classes ||--o{ class_schedules
-users ||--o{ enrollments
-classes ||--o{ enrollments
-sections ||--o{ enrollments
+package "Learning & Assessment" {
+  entity lessons {
+    *id : uuid
+    --
+    class_id : uuid
+    title : text
+  }
+  entity lesson_content_blocks {
+    *id : uuid
+    --
+    lesson_id : uuid
+    type : text
+  }
+  entity lesson_completions {
+    *id : uuid
+    --
+    student_id : uuid
+    lesson_id : uuid
+  }
+  entity assessments {
+    *id : uuid
+    --
+    class_id : uuid
+    type : text
+  }
+  entity assessment_questions {
+    *id : uuid
+    --
+    assessment_id : uuid
+    type : text
+  }
+  entity assessment_question_options {
+    *id : uuid
+    --
+    question_id : uuid
+    is_correct : boolean
+  }
+  entity assessment_attempts {
+    *id : uuid
+    --
+    student_id : uuid
+    assessment_id : uuid
+  }
+  entity assessment_responses {
+    *id : uuid
+    --
+    attempt_id : uuid
+    question_id : uuid
+    selected_option_id : uuid
+  }
+}
 
-classes ||--o{ lessons
-lessons ||--o{ lesson_content_blocks
-users ||--o{ lesson_completions
-lessons ||--o{ lesson_completions
+package "Records, Performance & Interventions" {
+  entity class_records {
+    *id : uuid
+    --
+    class_id : uuid
+    teacher_id : uuid
+  }
+  entity class_record_categories {
+    *id : uuid
+    --
+    class_record_id : uuid
+  }
+  entity class_record_items {
+    *id : uuid
+    --
+    class_record_id : uuid
+    category_id : uuid
+    assessment_id : uuid
+  }
+  entity class_record_scores {
+    *id : uuid
+    --
+    class_record_item_id : uuid
+    student_id : uuid
+  }
+  entity class_record_final_grades {
+    *id : uuid
+    --
+    class_record_id : uuid
+    student_id : uuid
+  }
+  entity performance_snapshots {
+    *id : uuid
+    --
+    class_id : uuid
+    student_id : uuid
+  }
+  entity performance_logs {
+    *id : uuid
+    --
+    class_id : uuid
+    student_id : uuid
+  }
+  entity intervention_cases {
+    *id : uuid
+    --
+    class_id : uuid
+    student_id : uuid
+  }
+  entity intervention_assignments {
+    *id : uuid
+    --
+    case_id : uuid
+    lesson_id : uuid
+    assessment_id : uuid
+  }
+  entity lxp_progress {
+    *student_id : uuid
+    *class_id : uuid
+  }
+  entity system_evaluations {
+    *id : uuid
+    --
+    submitted_by : uuid
+  }
+}
 
-classes ||--o{ assessments
-assessments ||--o{ assessment_questions
-assessment_questions ||--o{ assessment_question_options
-users ||--o{ assessment_attempts
-assessments ||--o{ assessment_attempts
-assessment_attempts ||--o{ assessment_responses
-assessment_questions ||--o{ assessment_responses
-assessment_question_options ||--o{ assessment_responses
+package "Files, Announcements & Notifications" {
+  entity library_folders {
+    *id : uuid
+    --
+    owner_id : uuid
+    parent_id : uuid
+  }
+  entity uploaded_files {
+    *id : uuid
+    --
+    folder_id : uuid
+    teacher_id : uuid
+    class_id : uuid
+  }
+  entity announcements {
+    *id : uuid
+    --
+    class_id : uuid
+    author_id : uuid
+  }
+  entity notifications {
+    *id : uuid
+    --
+    user_id : uuid
+  }
+}
 
-classes ||--o{ class_records
-users ||--o{ class_records
-class_records ||--o{ class_record_categories
-class_records ||--o{ class_record_items
-class_record_categories ||--o{ class_record_items
-assessments ||--o{ class_record_items
-class_record_items ||--o{ class_record_scores
-users ||--o{ class_record_scores
-class_records ||--o{ class_record_final_grades
-users ||--o{ class_record_final_grades
+users ||--o{ user_roles : has
+roles ||--o{ user_roles : grants
+users ||--|| student_profiles : has
 
-classes ||--o{ performance_snapshots
-users ||--o{ performance_snapshots
-classes ||--o{ performance_logs
-users ||--o{ performance_logs
+users ||--o{ sections : advises
+sections ||--o{ classes : contains
+users ||--o{ classes : teaches
+classes ||--o{ class_schedules : schedules
+users ||--o{ enrollments : enrolls_as_student
+classes ||--o{ enrollments : has_members
+sections ||--o{ enrollments : section_membership
 
-classes ||--o{ intervention_cases
-users ||--o{ intervention_cases
-intervention_cases ||--o{ intervention_assignments
-lessons ||--o{ intervention_assignments
-assessments ||--o{ intervention_assignments
-users ||--o{ lxp_progress
-classes ||--o{ lxp_progress
-users ||--o{ system_evaluations
+classes ||--o{ lessons : has
+lessons ||--o{ lesson_content_blocks : contains
+users ||--o{ lesson_completions : completes
+lessons ||--o{ lesson_completions : completion_rows
 
-users ||--o{ ai_interaction_logs
-uploaded_files ||--o{ extracted_modules
-classes ||--o{ extracted_modules
-users ||--o{ extracted_modules
+classes ||--o{ assessments : has
+assessments ||--o{ assessment_questions : has
+assessment_questions ||--o{ assessment_question_options : has
+users ||--o{ assessment_attempts : attempts
+assessments ||--o{ assessment_attempts : receives
+assessment_attempts ||--o{ assessment_responses : contains
+assessment_questions ||--o{ assessment_responses : answered_for
+assessment_question_options ||--o{ assessment_responses : selected_option
 
-users ||--o{ uploaded_files
-classes ||--o{ uploaded_files
-library_folders ||--o{ uploaded_files
-users ||--o{ library_folders
-library_folders ||--o{ library_folders
+classes ||--o{ class_records : has
+users ||--o{ class_records : managed_by
+class_records ||--o{ class_record_categories : has
+class_records ||--o{ class_record_items : has
+class_record_categories ||--o{ class_record_items : groups
+assessments ||--o{ class_record_items : optional_link
+class_record_items ||--o{ class_record_scores : scores
+users ||--o{ class_record_scores : student_score
+class_records ||--o{ class_record_final_grades : finalizes
+users ||--o{ class_record_final_grades : student_grade
 
-classes ||--o{ announcements
-users ||--o{ announcements
-users ||--o{ notifications
+classes ||--o{ performance_snapshots : snapshots
+users ||--o{ performance_snapshots : snapshot_student
+classes ||--o{ performance_logs : logs
+users ||--o{ performance_logs : log_student
+classes ||--o{ intervention_cases : intervention_pool
+users ||--o{ intervention_cases : intervention_student
+intervention_cases ||--o{ intervention_assignments : contains
+lessons ||--o{ intervention_assignments : lesson_review
+assessments ||--o{ intervention_assignments : assessment_retry
+users ||--o{ lxp_progress : progress_student
+classes ||--o{ lxp_progress : progress_class
+users ||--o{ system_evaluations : submits
+
+users ||--o{ library_folders : owns
+library_folders ||--o{ library_folders : parent_child
+users ||--o{ uploaded_files : uploads
+classes ||--o{ uploaded_files : class_materials
+library_folders ||--o{ uploaded_files : contains
+classes ||--o{ announcements : has
+users ||--o{ announcements : authors
+users ||--o{ notifications : receives
 
 @enduml

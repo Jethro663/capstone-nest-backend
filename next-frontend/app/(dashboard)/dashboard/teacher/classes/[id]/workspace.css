@@ -297,6 +297,173 @@
   grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
 }
 
+.teacher-class-workspace__module-deadline-panel {
+  border: 1px solid #21395f;
+  border-radius: 0.98rem;
+  background: linear-gradient(140deg, #0e1b36 0%, #162a4b 54%, #1e3a64 100%);
+  box-shadow: 0 18px 30px -24px rgba(8, 18, 36, 0.9);
+  color: #fff;
+  padding: 0.82rem;
+  display: grid;
+  gap: 0.72rem;
+}
+
+.teacher-class-workspace__module-deadline-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.teacher-class-workspace__module-deadline-head h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.teacher-class-workspace__module-deadline-head p {
+  margin: 0.24rem 0 0;
+  color: #c2d4ef;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.teacher-class-workspace__module-deadline-head .teacher-class-workspace__outline {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.teacher-class-workspace__module-deadline-head .teacher-class-workspace__outline:hover {
+  border-color: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.teacher-class-workspace__module-deadline-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(16rem, 1fr);
+  gap: 0.62rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.teacher-class-workspace__module-deadline-card {
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.86rem;
+  background: rgba(255, 255, 255, 0.08);
+  min-height: 4.5rem;
+  padding: 0.56rem 0.62rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.58rem;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.teacher-class-workspace__module-deadline-card:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.teacher-class-workspace__module-deadline-card[data-kind='assessment'] {
+  border-color: rgba(251, 113, 133, 0.44);
+}
+
+.teacher-class-workspace__module-deadline-card[data-kind='event'] {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.teacher-class-workspace__module-deadline-card[data-kind='holiday'] {
+  border-color: rgba(245, 158, 11, 0.44);
+}
+
+.teacher-class-workspace__module-deadline-date {
+  width: 2.9rem;
+  min-height: 2.9rem;
+  border-radius: 0.78rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(7, 15, 30, 0.38);
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.teacher-class-workspace__module-deadline-date strong {
+  color: #fff;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.teacher-class-workspace__module-deadline-date span {
+  margin-top: 0.12rem;
+  color: #c2d4ef;
+  font-size: 0.64rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.teacher-class-workspace__module-deadline-copy {
+  min-width: 0;
+}
+
+.teacher-class-workspace__module-deadline-copy h4 {
+  margin: 0;
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.teacher-class-workspace__module-deadline-copy p {
+  margin: 0.2rem 0 0;
+  color: #c2d4ef;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.teacher-class-workspace__module-deadline-copy span {
+  margin-top: 0.32rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.11);
+  color: #eef4ff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.16rem 0.44rem;
+  display: inline-flex;
+}
+
+.teacher-class-workspace__module-deadline-copy span[data-urgent='true'] {
+  border-color: rgba(251, 113, 133, 0.52);
+  background: rgba(251, 113, 133, 0.2);
+  color: #ffdbe3;
+}
+
+.teacher-class-workspace__module-deadline-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #d7e4f9;
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-height: 4.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .teacher-class-workspace__module-card {
   border: 1px solid #dae4f1;
   border-radius: 0.86rem;
@@ -1428,6 +1595,15 @@
   .teacher-class-workspace__calendar-board {
     grid-template-columns: 1fr;
   }
+
+  .teacher-class-workspace__module-deadline-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .teacher-class-workspace__module-deadline-row {
+    grid-auto-columns: minmax(14.4rem, 85%);
+  }
 }
 
 @media (max-width: 768px) {
@@ -1485,5 +1661,9 @@
   .teacher-class-workspace__calendar-kind {
     grid-column: 1 / -1;
     justify-self: flex-start;
+  }
+
+  .teacher-class-workspace__module-deadline-row {
+    grid-auto-columns: minmax(13.4rem, 92%);
   }
 }

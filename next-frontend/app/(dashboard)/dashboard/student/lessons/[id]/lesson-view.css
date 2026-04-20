@@ -1,0 +1,410 @@
+.lxp-lesson-shell {
+  --lesson-surface-top: color-mix(in srgb, var(--student-surface) 84%, #fff7df);
+  --lesson-surface-bottom: color-mix(in srgb, var(--student-surface-soft) 88%, #dbeafe);
+  --lesson-outline-soft: color-mix(in srgb, var(--student-outline) 78%, #ffffff);
+  --lesson-outline-strong: color-mix(in srgb, var(--student-outline-strong) 76%, #fbbf24);
+  --lesson-accent-primary: color-mix(in srgb, var(--student-accent) 76%, #2563eb);
+  --lesson-accent-secondary: color-mix(in srgb, var(--student-accent) 42%, #fb923c);
+  --lesson-shadow-outer:
+    0 22px 34px -30px rgba(15, 23, 42, 0.48),
+    0 12px 24px -24px rgba(15, 23, 42, 0.45);
+  --lesson-shadow-emboss:
+    inset 1px 1px 0 color-mix(in srgb, #ffffff 82%, transparent),
+    inset -1px -1px 0 color-mix(in srgb, #0f172a 14%, transparent);
+  --lesson-text-body: color-mix(in srgb, var(--student-text-strong) 92%, #0f172a);
+  --lesson-text-soft: color-mix(in srgb, var(--student-text-muted) 86%, #334155);
+}
+
+.lxp-lesson-loading {
+  padding: 1.5rem 1rem;
+}
+
+.lxp-lesson-not-found {
+  margin: 2rem auto;
+  max-width: 56rem;
+  border: 1px dashed var(--lesson-outline-strong);
+  border-radius: 1.1rem;
+  padding: 1.15rem;
+  text-align: center;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--student-surface-soft) 84%, #fff7e6),
+    color-mix(in srgb, var(--student-elevated) 92%, #e8f1ff)
+  );
+}
+
+.lxp-lesson-progress-track {
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--lesson-outline-soft) 72%, transparent);
+}
+
+.lxp-lesson-progress-fill {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--lesson-accent-primary) 86%, #2563eb),
+    color-mix(in srgb, var(--lesson-accent-secondary) 72%, #fb923c)
+  );
+  box-shadow: 0 8px 14px -8px color-mix(in srgb, var(--lesson-accent-primary) 74%, transparent);
+}
+
+.lxp-lesson-container {
+  padding-top: 0.7rem;
+}
+
+.lxp-lesson-hero,
+.lxp-lesson-outline,
+.lxp-lesson-block,
+.lxp-lesson-empty,
+.lxp-lesson-footer {
+  border: 1px solid var(--lesson-outline-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.12)),
+    linear-gradient(180deg, var(--lesson-surface-top) 0%, var(--lesson-surface-bottom) 100%);
+  box-shadow: var(--lesson-shadow-outer), var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.lxp-lesson-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--lesson-accent-secondary) 20%, transparent), transparent 46%),
+    radial-gradient(circle at 12% 30%, color-mix(in srgb, var(--lesson-accent-primary) 15%, transparent), transparent 52%);
+}
+
+.lxp-lesson-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.lxp-lesson-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--lesson-outline-soft) 88%, #ffffff);
+  border-radius: 999px;
+  padding: 0.26rem 0.72rem;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--lesson-accent-primary) 66%, #1e40af);
+  background: color-mix(in srgb, var(--student-elevated) 86%, #ffffff);
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-nav-button {
+  border: 1px solid transparent;
+  border-radius: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    transform var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease,
+    background-color var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease;
+}
+
+.lxp-lesson-nav-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lesson-accent-primary) 32%, var(--lesson-outline-strong));
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-title {
+  margin-top: 0.35rem;
+  font-size: clamp(1.55rem, 2.1vw, 2rem);
+  line-height: 1.2;
+}
+
+.lxp-lesson-description {
+  margin-top: 0.5rem;
+  color: var(--lesson-text-soft);
+  line-height: 1.62;
+}
+
+.lxp-lesson-badge {
+  border-color: color-mix(in srgb, var(--lesson-accent-primary) 42%, var(--lesson-outline-soft));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-accent-soft) 72%, #fff6e6),
+    color-mix(in srgb, var(--student-elevated) 88%, #ffffff)
+  );
+  color: color-mix(in srgb, var(--student-text-strong) 90%, #1d4ed8);
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-badge--ghost {
+  font-weight: 700;
+}
+
+.lxp-lesson-outline-link {
+  border-color: color-mix(in srgb, var(--lesson-outline-soft) 92%, #ffffff);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-elevated) 90%, #ffffff),
+    color-mix(in srgb, var(--student-surface-soft) 90%, #eef2ff)
+  );
+  color: var(--lesson-text-body);
+  box-shadow: var(--lesson-shadow-emboss);
+  font-weight: 700;
+  transition:
+    transform var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease;
+}
+
+.lxp-lesson-outline-link:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lesson-accent-primary) 48%, var(--lesson-outline-strong));
+  box-shadow:
+    0 12px 20px -22px color-mix(in srgb, var(--lesson-accent-primary) 72%, transparent),
+    var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-outline-link:focus-visible,
+.lxp-lesson-action:focus-visible,
+.lxp-lesson-nav-button:focus-visible,
+.lxp-lesson-file-link:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #ffffff 70%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--lesson-accent-primary) 45%, #f59e0b);
+}
+
+.lxp-lesson-block-heading {
+  color: color-mix(in srgb, var(--student-text-muted) 76%, #475569);
+}
+
+.lxp-lesson-rich {
+  color: var(--lesson-text-body);
+  line-height: 1.7;
+}
+
+.lxp-lesson-rich p,
+.lxp-lesson-rich li,
+.lxp-lesson-rich blockquote {
+  color: inherit;
+}
+
+.lxp-lesson-block--body {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.15)),
+    linear-gradient(180deg, var(--lesson-surface-top), var(--lesson-surface-bottom));
+}
+
+.lxp-lesson-block--objectives {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.12)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-accent-soft) 72%, #fff6e8),
+      color-mix(in srgb, var(--student-surface-soft) 88%, #eef6ff)
+    );
+}
+
+.lxp-lesson-block--key-points {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.15)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-success-bg) 82%, #f0fdf4),
+      color-mix(in srgb, var(--student-surface-soft) 90%, #ecfeff)
+    );
+}
+
+.lxp-lesson-block--example {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.15)),
+    linear-gradient(180deg, #fff9e8, #fef3c7);
+}
+
+.lxp-lesson-block--recap {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.15)),
+    linear-gradient(180deg, #eff6ff, #e0f2fe);
+}
+
+.lxp-lesson-block--reflection {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.15)),
+    linear-gradient(180deg, #fdf4ff, #f5d0fe);
+}
+
+.lxp-lesson-figure img,
+.lxp-lesson-video iframe {
+  border: 1px solid color-mix(in srgb, var(--lesson-outline-soft) 92%, #ffffff);
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-block--question {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.12)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-accent-soft) 70%, #fff7e8),
+      color-mix(in srgb, var(--student-surface-soft) 88%, #eaf2ff)
+    );
+}
+
+.lxp-lesson-question-prompt {
+  line-height: 1.52;
+}
+
+.lxp-lesson-choice {
+  border-color: color-mix(in srgb, var(--lesson-outline-soft) 90%, #ffffff);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-elevated) 90%, #ffffff),
+    color-mix(in srgb, var(--student-surface-soft) 90%, #eef2ff)
+  );
+  box-shadow: var(--lesson-shadow-emboss);
+  font-weight: 600;
+  line-height: 1.45;
+  transition:
+    transform var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease;
+}
+
+.lxp-lesson-choice:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lesson-accent-primary) 42%, var(--lesson-outline-strong));
+  box-shadow:
+    0 12px 20px -22px color-mix(in srgb, var(--lesson-accent-primary) 72%, transparent),
+    var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-choice--fallback {
+  font-weight: 500;
+  color: var(--lesson-text-soft);
+}
+
+.lxp-lesson-explanation {
+  border-color: color-mix(in srgb, var(--lesson-outline-soft) 86%, #ffffff);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-surface-soft) 82%, #ffffff),
+    color-mix(in srgb, var(--student-elevated) 92%, #eef2ff)
+  );
+  color: var(--lesson-text-soft);
+  line-height: 1.55;
+}
+
+.lxp-lesson-block--file {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.15)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-surface-soft) 86%, #fff8e6),
+      color-mix(in srgb, var(--student-elevated) 92%, #eef2ff)
+    );
+}
+
+.lxp-lesson-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4rem;
+  height: 2.4rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--lesson-accent-primary) 30%, var(--lesson-outline-soft));
+  color: color-mix(in srgb, var(--lesson-accent-primary) 80%, #1d4ed8);
+  background: color-mix(in srgb, var(--student-accent-soft) 74%, #ffffff);
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-file-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.2rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in srgb, var(--lesson-accent-primary) 42%, transparent);
+}
+
+.lxp-lesson-divider {
+  opacity: 0.78;
+  border-color: color-mix(in srgb, var(--lesson-outline-soft) 76%, #cbd5e1);
+}
+
+.lxp-lesson-footer {
+  border-top-color: color-mix(in srgb, var(--lesson-outline-soft) 82%, #ffffff);
+  border-radius: 1.1rem 1.1rem 0 0;
+  padding: 0.8rem 0.9rem;
+  backdrop-filter: blur(8px);
+  gap: 0.65rem;
+}
+
+.lxp-lesson-action {
+  border-radius: 0.9rem;
+  min-height: 2.6rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  transition:
+    transform var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease,
+    filter var(--student-motion-fast) ease;
+}
+
+.lxp-lesson-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.lxp-lesson-action--primary {
+  border: none;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--lesson-accent-primary) 78%, #2563eb),
+    color-mix(in srgb, var(--lesson-accent-secondary) 68%, #fb923c)
+  );
+  color: #ffffff;
+  box-shadow:
+    0 18px 24px -20px color-mix(in srgb, var(--lesson-accent-primary) 76%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+}
+
+.lxp-lesson-action--primary:hover:not(:disabled) {
+  filter: saturate(1.06);
+}
+
+.lxp-lesson-action--ghost {
+  border-color: color-mix(in srgb, var(--lesson-accent-primary) 36%, var(--lesson-outline-soft));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-elevated) 90%, #ffffff),
+    color-mix(in srgb, var(--student-surface-soft) 90%, #eef2ff)
+  );
+  color: color-mix(in srgb, var(--student-text-strong) 90%, #1e40af);
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+.lxp-lesson-action--ghost:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--lesson-accent-primary) 54%, var(--lesson-outline-strong));
+}
+
+.lxp-lesson-action--done {
+  border-radius: 0.9rem;
+  box-shadow: var(--lesson-shadow-emboss);
+}
+
+@media (max-width: 900px) {
+  .lxp-lesson-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lxp-lesson-action {
+    width: 100%;
+  }
+}

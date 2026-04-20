@@ -1,0 +1,91 @@
+@startuml nexora_system_architecture_core
+title Figure 1. Nexora System Architecture (Compact Core View)
+top to bottom direction
+hide stereotype
+
+skinparam shadowing false
+skinparam dpi 240
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam ArrowColor #4D4D4D
+skinparam linetype ortho
+skinparam roundCorner 14
+skinparam nodesep 36
+skinparam ranksep 42
+skinparam packageStyle rectangle
+skinparam packageBorderStyle dashed
+skinparam packageBorderColor #8FA3AD
+skinparam packageBackgroundColor #FBFDFF
+skinparam rectangleBorderColor #6A9AB2
+skinparam rectangleBackgroundColor #F7FCFF
+skinparam rectangleFontColor #24323A
+skinparam componentBorderColor #6A9AB2
+skinparam componentBackgroundColor #FFFFFF
+skinparam componentFontColor #1F2A30
+skinparam componentFontSize 11
+skinparam usecase {
+  BorderColor #5B9AB7
+  BackgroundColor #74B9D6
+  FontColor #FFFFFF
+  FontStyle bold
+  FontSize 12
+}
+
+legend top
+Minimal but accurate current architecture.
+AI support layer removed. End-to-end summary removed.
+Optimized to stay readable in paper print.
+endlegend
+
+together {
+  usecase "A\nAdministrator" as AdminNode
+  usecase "T\nTeacher" as TeacherNode
+  usecase "S\nStudent" as StudentNode
+}
+
+AdminNode -[hidden]right- TeacherNode
+TeacherNode -[hidden]right- StudentNode
+
+together {
+package "Mobile Application" as MobileCol {
+  rectangle "Authentication and Account Access\n--\nLogin/session refresh\nRole-aware landing\nProfile updates" as MAuth
+  rectangle "Student Learning Workspace\n--\nClasses and schedules\nLessons and checkpoints\nProgress and parity tools" as MLearn
+  rectangle "Assessment and Intervention Access\n--\nAssessment attempts\nResults and feedback\nIntervention tasks" as MAssess
+
+  MAuth -[hidden]down- MLearn
+  MLearn -[hidden]down- MAssess
+}
+
+package "Web System and Service Layer" as WebCol {
+  rectangle "Web Client Entry Points\n--\nAdmin workspace\nTeacher workspace\nStudent parity routes" as WEntry
+  rectangle "Web and Service Core\n--\nNestJS domain modules\nAuth/session/RBAC\nClasses, lessons, assessments\nClass records and grading\nAnnouncements and notifications" as WCore
+  rectangle "LMS to LXP Data Processing\n--\nPerformance snapshots\nIntervention routing\nLXP progress tracking" as WLxp
+  rectangle "Integration Gateway\n--\nREST API contracts\nQueue-backed jobs (BullMQ)\nFile and library operations" as WIntegrate
+
+  WEntry -[hidden]down- WCore
+  WCore -[hidden]down- WLxp
+  WLxp -[hidden]down- WIntegrate
+}
+
+package "Data and Infrastructure" as InfraCol {
+  rectangle "Transactional Data\n--\nPostgreSQL (Drizzle)\nUsers, classes, enrollments\nLessons, assessments, records" as IData
+  rectangle "Operational Runtime\n--\nRedis cache and queue state\nBullMQ workers\nFile/object storage" as IRuntime
+  rectangle "Monitoring and Reliability\n--\nHealth checks and logs\nJob telemetry\nOperational metrics" as IObserve
+
+  IData -[hidden]down- IRuntime
+  IRuntime -[hidden]down- IObserve
+}
+
+MobileCol -[hidden]right- WebCol
+WebCol -[hidden]right- InfraCol
+}
+
+AdminNode --> WebCol
+TeacherNode --> WebCol
+StudentNode --> MobileCol
+
+MobileCol --> WebCol : API calls
+WebCol --> InfraCol : data + queue + storage
+InfraCol ..> WebCol : state + telemetry
+
+@enduml

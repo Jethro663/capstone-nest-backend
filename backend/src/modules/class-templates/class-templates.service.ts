@@ -856,6 +856,7 @@ export class ClassTemplatesService {
                 imageScale: module.imageScale ?? 120,
                 isVisible: module.isVisible ?? false,
                 isLocked: module.isLocked ?? true,
+                teacherNotes: sanitizeRichTextHtml(module.teacherNotes ?? ''),
               })),
             )
             .returning();
@@ -1078,6 +1079,7 @@ export class ClassTemplatesService {
         imageScale: module.imageScale ?? 120,
         isVisible: module.isVisible ?? false,
         isLocked: module.isLocked ?? true,
+        teacherNotes: module.teacherNotes ?? '',
         sections: (module.sections ?? []).map((section: any) => ({
           id: section.id,
           title: section.title,
@@ -1354,6 +1356,7 @@ export class ClassTemplatesService {
             imageScale: module.imageScale ?? 120,
             isVisible: module.isVisible ?? false,
             isLocked: module.isLocked ?? true,
+            teacherNotes: sanitizeRichTextHtml(module.teacherNotes ?? ''),
           })),
         );
 

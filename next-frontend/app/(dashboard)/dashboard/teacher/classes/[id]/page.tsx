@@ -60,6 +60,7 @@ import type { ClassItem } from '@/types/class';
 import type { ClassRecord } from '@/types/class-record';
 import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
 import type { Extraction } from '@/types/extraction';
+import type { LibraryGradeLevel, LibrarySubjectKey } from '@/types/file';
 import type { ClassModule } from '@/types/module';
 import './workspace.css';
 
@@ -125,6 +126,17 @@ interface CalendarEventItem {
   subtitle: string;
   date: Date;
   kind: CalendarKind;
+}
+
+interface ModuleDeadlineCardItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  dayLabel: string;
+  monthLabel: string;
+  kind: CalendarKind;
+  href: string;
+  isUrgent: boolean;
 }
 
 const CLASS_TABS: Array<{ key: WorkspaceTab; label: string; icon: typeof BookOpen }> = [
@@ -208,6 +220,28 @@ function formatRelativeTime(value?: string | null) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function normalizeLibrarySubjectKey(
+  subjectCode?: string | null,
+  subjectName?: string | null,
+): LibrarySubjectKey | undefined {
+  const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+  if (raw.includes('science') || raw.includes('sci')) return 'science';
+  if (raw.includes('math')) return 'math';
+  if (raw.includes('english') || raw.includes('eng')) return 'english';
+  if (raw.includes('filipino') || raw.includes('fil')) return 'filipino';
+  if (raw.includes('araling') || raw.includes('panlipunan') || /\bap\b/.test(raw)) return 'ap';
+  if (raw.includes('tle')) return 'tle';
+  if (raw.includes('mapeh')) return 'mapeh';
+  if (raw.includes('esp') || raw.includes('values') || raw.includes('pagpapakatao')) return 'esp';
+  return undefined;
+}
+
+function normalizeLibraryGradeLevel(value?: string | null): LibraryGradeLevel | undefined {
+  const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+  if (!match) return undefined;
+  return match[1] as LibraryGradeLevel;
+}
+
 function formatEventBadgeDate(date: Date) {
   return {
     day: String(date.getDate()),
@@ -255,6 +289,12 @@ function assignmentTagLabel(filter: AssignmentFilter) {
   if (filter === 'quarterly') return 'Quarterly Assessment';
   if (filter === 'discussion') return 'Discussion';
   return 'Assessment';
+}
+
+function calendarKindLabel(kind: CalendarKind) {
+  if (kind === 'assessment') return 'Assessment';
+  if (kind === 'holiday') return 'Holiday';
+  return 'Class Event';
 }
 
 function inferCalendarKindFromAnnouncement(announcement: Announcement): CalendarKind {
@@ -509,7 +549,7 @@ export default function TeacherClassDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [classId, isClassIdValid]);
+  }, [activeTab, classId, isClassIdValid]);
 
   useEffect(() => {
     void fetchData();
@@ -532,7 +572,7 @@ export default function TeacherClassDetailPage() {
       setSelectedDiscussionThread(null);
       toast.error(getApiErrorMessage(error, 'Failed to load discussion threads'));
     }
-  }, [activeTab, classId, isClassIdValid]);
+  }, [classId, isClassIdValid]);
 
   useEffect(() => {
     if (activeTab !== 'discussion') return;
@@ -720,13 +760,21 @@ export default function TeacherClassDetailPage() {
   const calendarItems = useMemo<CalendarEventItem[]>(() => {
     const fromAssessments = assessments
       .filter((assessment) => Boolean(assessment.dueDate))
-      .map((assessment) => ({
-        id: `assessment-${assessment.id}`,
-        title: assessment.title,
-        subtitle: classItem?.subjectName || 'Assessment',
-        date: new Date(assessment.dueDate as string),
-        kind: 'assessment' as CalendarKind,
-      }))
+      .map((assessment) => {
+        const dueDate = new Date(assessment.dueDate as string);
+        const hasTime = dueDate.getHours() !== 0 || dueDate.getMinutes() !== 0;
+        const dueLabel = hasTime
+          ? dueDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : 'All Day';
+
+        return {
+          id: `assessment-${assessment.id}`,
+          title: assessment.title,
+          subtitle: `${classItem?.subjectName || 'Assessment'} | Due ${dueLabel}`,
+          date: dueDate,
+          kind: 'assessment' as CalendarKind,
+        };
+      })
       .filter((item) => !Number.isNaN(item.date.getTime()));
 
     const fromAnnouncements = announcements
@@ -822,6 +870,30 @@ export default function TeacherClassDetailPage() {
     if (!selectedCalendarDateKey) return [];
     return calendarEventMap.get(selectedCalendarDateKey) || [];
   }, [calendarEventMap, selectedCalendarDateKey]);
+
+  const moduleDeadlineCards = useMemo<ModuleDeadlineCardItem[]>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const now = Date.now();
+    const urgentWindowMs = 1000 * 60 * 60 * 72;
+
+    const upcomingOnly = calendarItems.filter((event) => event.date.getTime() >= today.getTime());
+    const source = (upcomingOnly.length > 0 ? upcomingOnly : calendarItems).slice(0, 8);
+
+    return source.map((event) => ({
+      id: event.id,
+      title: event.title,
+      subtitle: event.subtitle,
+      dayLabel: String(event.date.getDate()).padStart(2, '0'),
+      monthLabel: event.date.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+      kind: event.kind,
+      href:
+        event.kind === 'assessment'
+          ? `/dashboard/teacher/classes/${classId}?view=assignments`
+          : `/dashboard/teacher/classes/${classId}?view=calendar`,
+      isUrgent: event.date.getTime() <= now + urgentWindowMs,
+    }));
+  }, [calendarItems, classId]);
 
   const moduleTone = (index: number) => {
     const tones = ['blue', 'green', 'violet', 'orange', 'rose', 'slate'] as const;
@@ -1198,9 +1270,26 @@ export default function TeacherClassDetailPage() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || uploadingExtraction) return;
+    const subjectKey = normalizeLibrarySubjectKey(
+      classItem?.subjectCode,
+      classItem?.subjectName,
+    );
+    const gradeLevel = normalizeLibraryGradeLevel(
+      classItem?.subjectGradeLevel ?? classItem?.section?.gradeLevel,
+    );
+    if (!subjectKey || !gradeLevel) {
+      toast.error('Unable to resolve class subject and grade for extraction upload.');
+      return;
+    }
     try {
       setUploadingExtraction(true);
-      const uploadRes = await fileService.upload(file, { classId, scope: 'private' });
+      const uploadRes = await fileService.upload(file, {
+        classId,
+        scope: 'private',
+        subjectKey,
+        gradeLevel,
+        aiEnabled: true,
+      });
       await extractionService.extractModule({ fileId: uploadRes.data.id });
       toast.success('Extraction started');
       await fetchData();
@@ -1643,6 +1732,49 @@ export default function TeacherClassDetailPage() {
                 <div className="teacher-class-workspace__empty">No modules yet.</div>
               ) : null}
             </div>
+
+            <article className="teacher-class-workspace__module-deadline-panel">
+              <div className="teacher-class-workspace__module-deadline-head">
+                <div>
+                  <h3>Upcoming Deadlines</h3>
+                  <p>Stay on top of quizzes, events, and announcements for this class.</p>
+                </div>
+                <Link href={`/dashboard/teacher/classes/${classId}?view=calendar`} className="teacher-class-workspace__outline">
+                  Open Calendar
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              {moduleDeadlineCards.length === 0 ? (
+                <div className="teacher-class-workspace__module-deadline-empty">
+                  No upcoming deadlines yet.
+                </div>
+              ) : (
+                <div className="teacher-class-workspace__module-deadline-row">
+                  {moduleDeadlineCards.map((deadline) => (
+                    <Link
+                      key={deadline.id}
+                      href={deadline.href}
+                      className="teacher-class-workspace__module-deadline-card"
+                      data-kind={deadline.kind}
+                    >
+                      <div className="teacher-class-workspace__module-deadline-date">
+                        <strong>{deadline.dayLabel}</strong>
+                        <span>{deadline.monthLabel}</span>
+                      </div>
+                      <div className="teacher-class-workspace__module-deadline-copy">
+                        <h4>{deadline.title}</h4>
+                        <p>{deadline.subtitle}</p>
+                        <span data-urgent={deadline.isUrgent}>
+                          {deadline.isUrgent ? 'Due Soon' : calendarKindLabel(deadline.kind)}
+                        </span>
+                      </div>
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </article>
           </div>
         ) : null}
 

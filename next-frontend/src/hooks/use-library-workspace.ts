@@ -265,6 +265,35 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
     setPage(1);
   }, [classFilter, subjectFilter, gradeFilter]);
 
+  useEffect(() => {
+    if (role !== 'teacher' || mode !== 'private') return;
+    const contextualClassId =
+      uploadDestination === 'class'
+        ? uploadClassId
+        : classFilter || uploadClassId;
+    if (!contextualClassId) return;
+
+    const contextualClass = classes.find((item) => item.id === contextualClassId);
+    if (!contextualClass) return;
+
+    const partition = getClassLibraryPartition(contextualClass);
+    if (partition.subjectKey && uploadSubjectKey !== partition.subjectKey) {
+      setUploadSubjectKey(partition.subjectKey);
+    }
+    if (partition.gradeLevel && uploadGradeLevel !== partition.gradeLevel) {
+      setUploadGradeLevel(partition.gradeLevel);
+    }
+  }, [
+    classFilter,
+    classes,
+    mode,
+    role,
+    uploadClassId,
+    uploadDestination,
+    uploadGradeLevel,
+    uploadSubjectKey,
+  ]);
+
   const handlePreview = useCallback(async (fileId: string) => {
     try {
       const blob = await fileService.download(fileId);
@@ -477,8 +506,23 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
         ? undefined
         : classes.find((item) => item.id === uploadClassId);
     const teacherUploadPartition = getClassLibraryPartition(teacherUploadClass);
+    const resolvedTeacherSubjectKey =
+      uploadDestination === 'class'
+        ? (teacherUploadPartition.subjectKey ??
+          uploadSubjectKey ??
+          undefined)
+        : uploadSubjectKey || undefined;
+    const resolvedTeacherGradeLevel =
+      uploadDestination === 'class'
+        ? (teacherUploadPartition.gradeLevel ??
+          uploadGradeLevel ??
+          undefined)
+        : uploadGradeLevel || undefined;
 
-    if (role === 'teacher' && (!uploadSubjectKey || !uploadGradeLevel)) {
+    if (
+      role === 'teacher' &&
+      (!resolvedTeacherSubjectKey || !resolvedTeacherGradeLevel)
+    ) {
       toast.error('Choose a subject and grade before uploading to My Library.');
       return;
     }
@@ -492,8 +536,8 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
       role === 'teacher' &&
       uploadDestination === 'class' &&
       teacherUploadClass &&
-      (teacherUploadPartition.subjectKey !== uploadSubjectKey ||
-        teacherUploadPartition.gradeLevel !== uploadGradeLevel)
+      (teacherUploadPartition.subjectKey !== resolvedTeacherSubjectKey ||
+        teacherUploadPartition.gradeLevel !== resolvedTeacherGradeLevel)
     ) {
       toast.error('Selected subject and grade must match the chosen class.');
       return;
@@ -513,11 +557,11 @@ export function useLibraryWorkspace({ role, userId, enabled = true }: UseLibrary
         subjectKey:
           role === 'admin'
             ? subjectFilter || undefined
-            : uploadSubjectKey || undefined,
+            : resolvedTeacherSubjectKey,
         gradeLevel:
           role === 'admin'
             ? gradeFilter || undefined
-            : uploadGradeLevel || undefined,
+            : resolvedTeacherGradeLevel,
         aiEnabled: role === 'teacher' ? true : undefined,
         teacherVisible: true,
       });

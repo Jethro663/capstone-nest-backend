@@ -322,6 +322,10 @@ export class ClassTemplateModuleDto {
   isLocked?: boolean;
 
   @IsOptional()
+  @IsString()
+  teacherNotes?: string;
+
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ClassTemplateModuleSectionDto)

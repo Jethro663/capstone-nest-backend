@@ -8,6 +8,8 @@ import {
 import { ClassesService } from './classes.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { ClassRecordService } from '../class-record/class-record.service';
+import { AcademicStateService } from '../academic-state/academic-state.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -133,6 +135,8 @@ describe('ClassesService', () => {
 
   const mockDatabaseService = { db: mockDb };
   const mockAuditService = { log: jest.fn() };
+  const mockClassRecordService = { generateClassRecord: jest.fn() };
+  const mockAcademicStateService = { getCurrentState: jest.fn() };
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -170,12 +174,22 @@ describe('ClassesService', () => {
     mockDb.query.classRecordScores.findMany.mockResolvedValue([]);
     mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
     mockDb.query.assessmentAttempts.findMany.mockResolvedValue([]);
+    mockClassRecordService.generateClassRecord.mockResolvedValue({});
+    mockAcademicStateService.getCurrentState.mockResolvedValue({
+      schoolYear: SCHOOL_YEAR,
+      quarter: 'Q1',
+      updatedAt: new Date().toISOString(),
+      updatedBy: null,
+      transitionConfirmationText: 'CONFIRM ACADEMIC STATE TRANSITION',
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ClassesService,
         { provide: DatabaseService, useValue: mockDatabaseService },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: ClassRecordService, useValue: mockClassRecordService },
+        { provide: AcademicStateService, useValue: mockAcademicStateService },
       ],
     }).compile();
 
@@ -340,6 +354,7 @@ describe('ClassesService', () => {
           sectionId: SECTION_ID,
           teacherId: TEACHER_ID,
           schoolYear: SCHOOL_YEAR,
+          activeQuarter: 'Q1',
           hasSchedules: false,
           templateId: null,
         },
@@ -391,6 +406,54 @@ describe('ClassesService', () => {
           ['admin'],
         ),
       ).resolves.toEqual(makeClass());
+    });
+
+    it('copies template module teacherNotes, visibility, and locking into class modules', async () => {
+      setupHappyPath();
+      const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
+      const moduleInsertChain = makeInsertChain([{ id: 'class-module-1' }]);
+      mockDb.insert
+        .mockImplementationOnce(() => classInsertChain)
+        .mockImplementationOnce(() => moduleInsertChain);
+
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-notes',
+        status: 'published',
+        subjectCode: 'MATH-7',
+        subjectGradeLevel: '7',
+      });
+      mockDb.query.classTemplateModules.findMany.mockResolvedValue([
+        {
+          id: 'template-module-1',
+          title: 'Numbers',
+          description: '<p>Module description</p>',
+          order: 1,
+          themeKind: 'gradient',
+          gradientId: 'oceanic-blue',
+          coverImageUrl: null,
+          imagePositionX: 50,
+          imagePositionY: 50,
+          imageScale: 120,
+          isVisible: true,
+          isLocked: false,
+          teacherNotes: '<p>Template note</p>',
+        },
+      ]);
+
+      await service.create(
+        { ...dto, templateId: 'template-uuid-notes' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(moduleInsertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: CLASS_ID,
+          isVisible: true,
+          isLocked: false,
+          teacherNotes: '<p>Template note</p>',
+        }),
+      );
     });
 
     it('throws BadRequestException when the section does not exist', async () => {

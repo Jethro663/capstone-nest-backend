@@ -76,6 +76,7 @@ export const classTemplateModules = pgTable(
     imageScale: integer('image_scale').notNull().default(120),
     isVisible: boolean('is_visible').notNull().default(false),
     isLocked: boolean('is_locked').notNull().default(true),
+    teacherNotes: text('teacher_notes'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

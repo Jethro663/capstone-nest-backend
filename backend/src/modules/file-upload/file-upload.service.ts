@@ -104,22 +104,95 @@ export class FileUploadService {
   }
 
   private async ensureClassOwnedByUser(classId: string, user: RequestUser) {
-    if (this.isAdmin(user)) return;
-
     const classRow = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
-      columns: { id: true, teacherId: true },
+      columns: {
+        id: true,
+        teacherId: true,
+        subjectCode: true,
+        subjectName: true,
+        subjectGradeLevel: true,
+      },
     });
 
     if (!classRow) {
       throw new NotFoundException(`Class with ID "${classId}" not found`);
     }
 
-    if (classRow.teacherId !== user.id) {
+    if (!this.isAdmin(user) && classRow.teacherId !== user.id) {
       throw new ForbiddenException(
         'You can only attach files to classes that you teach',
       );
     }
+
+    return classRow;
+  }
+
+  private normalizeSubjectKey(
+    subjectCode?: string | null,
+    subjectName?: string | null,
+  ): LibrarySubjectKeyDto | undefined {
+    const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+    if (raw.includes('science') || raw.includes('sci')) {
+      return LibrarySubjectKeyDto.Science;
+    }
+    if (raw.includes('math')) {
+      return LibrarySubjectKeyDto.Math;
+    }
+    if (raw.includes('english') || raw.includes('eng')) {
+      return LibrarySubjectKeyDto.English;
+    }
+    if (raw.includes('filipino') || raw.includes('fil')) {
+      return LibrarySubjectKeyDto.Filipino;
+    }
+    if (
+      raw.includes('araling') ||
+      raw.includes('panlipunan') ||
+      /\bap\b/.test(raw)
+    ) {
+      return LibrarySubjectKeyDto.AralingPanlipunan;
+    }
+    if (raw.includes('tle')) {
+      return LibrarySubjectKeyDto.Tle;
+    }
+    if (raw.includes('mapeh')) {
+      return LibrarySubjectKeyDto.Mapeh;
+    }
+    if (
+      raw.includes('esp') ||
+      raw.includes('values') ||
+      raw.includes('pagpapakatao')
+    ) {
+      return LibrarySubjectKeyDto.Esp;
+    }
+    return undefined;
+  }
+
+  private normalizeGradeLevel(value?: string | null): GradeLevelDto | undefined {
+    const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+    if (!match) {
+      return undefined;
+    }
+
+    if (match[1] === '7') return GradeLevelDto.Grade7;
+    if (match[1] === '8') return GradeLevelDto.Grade8;
+    if (match[1] === '9') return GradeLevelDto.Grade9;
+    if (match[1] === '10') return GradeLevelDto.Grade10;
+    return undefined;
+  }
+
+  private derivePartitionFromClass(classRow: {
+    subjectCode?: string | null;
+    subjectName?: string | null;
+    subjectGradeLevel?: string | null;
+  }) {
+    return {
+      subjectKey: this.normalizeSubjectKey(
+        classRow.subjectCode,
+        classRow.subjectName,
+      ),
+      gradeLevel: this.normalizeGradeLevel(classRow.subjectGradeLevel),
+    };
   }
 
   private async ensureFolderAccessible(id: string, user: RequestUser) {
@@ -292,18 +365,53 @@ export class FileUploadService {
       roles: ['teacher'],
     };
     const aiEnabled = dto.aiEnabled ?? true;
+    const scope = dto.scope ?? FileScopeDto.Private;
+    let classContext: Awaited<
+      ReturnType<typeof this.ensureClassOwnedByUser>
+    > | null = null;
 
-    this.ensureCanWriteScope(dto.scope, actingUser);
-    this.ensureAiReadyPartition({
-      scope: dto.scope ?? FileScopeDto.Private,
-      aiEnabled,
-      subjectKey: dto.subjectKey,
-      gradeLevel: dto.gradeLevel,
-    });
+    this.ensureCanWriteScope(scope, actingUser);
 
     if (dto.classId) {
-      await this.ensureClassOwnedByUser(dto.classId, actingUser);
+      classContext = await this.ensureClassOwnedByUser(dto.classId, actingUser);
     }
+
+    const derivedPartition = classContext
+      ? this.derivePartitionFromClass(classContext)
+      : { subjectKey: undefined, gradeLevel: undefined };
+    const resolvedSubjectKey =
+      dto.subjectKey ?? derivedPartition.subjectKey ?? null;
+    const resolvedGradeLevel =
+      dto.gradeLevel ?? derivedPartition.gradeLevel ?? null;
+
+    if (
+      dto.classId &&
+      dto.subjectKey &&
+      derivedPartition.subjectKey &&
+      dto.subjectKey !== derivedPartition.subjectKey
+    ) {
+      throw new BadRequestException(
+        'Class-specific uploads must use subjectKey that matches the class subject.',
+      );
+    }
+
+    if (
+      dto.classId &&
+      dto.gradeLevel &&
+      derivedPartition.gradeLevel &&
+      dto.gradeLevel !== derivedPartition.gradeLevel
+    ) {
+      throw new BadRequestException(
+        'Class-specific uploads must use gradeLevel that matches the class grade.',
+      );
+    }
+
+    this.ensureAiReadyPartition({
+      scope,
+      aiEnabled,
+      subjectKey: resolvedSubjectKey,
+      gradeLevel: resolvedGradeLevel,
+    });
 
     if (dto.folderId) {
       const folder = await this.ensureFolderWritable(dto.folderId, actingUser);
@@ -320,15 +428,15 @@ export class FileUploadService {
         teacherId: dto.teacherId,
         classId: dto.classId ?? null,
         folderId: dto.folderId ?? null,
-        scope: dto.scope ?? FileScopeDto.Private,
+        scope,
         aiEnabled,
         originalName: dto.originalName,
         storedName: dto.storedName,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
         filePath: dto.filePath,
-        subjectKey: dto.subjectKey ?? null,
-        gradeLevel: dto.gradeLevel ?? null,
+        subjectKey: resolvedSubjectKey,
+        gradeLevel: resolvedGradeLevel,
         teacherVisible: dto.teacherVisible ?? true,
         indexStatus: aiEnabled
           ? LibraryIndexStatusDto.Pending

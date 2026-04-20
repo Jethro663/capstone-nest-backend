@@ -96,6 +96,7 @@ function sanitizeModule(module: ClassTemplateModule): ClassTemplateModule {
     id: module.id,
     title: module.title,
     description: module.description,
+    teacherNotes: module.teacherNotes,
     order: module.order,
     isVisible: module.isVisible ?? false,
     isLocked: module.isLocked ?? true,

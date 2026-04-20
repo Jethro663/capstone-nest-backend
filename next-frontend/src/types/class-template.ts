@@ -74,6 +74,7 @@ export interface ClassTemplateModule {
   id?: string;
   title: string;
   description?: string;
+  teacherNotes?: string;
   order?: number;
   isVisible?: boolean;
   isLocked?: boolean;

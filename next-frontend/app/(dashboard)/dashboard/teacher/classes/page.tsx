@@ -1,1079 +1,534 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-} from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import {
-  Bell,
-  BookCopy,
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  Grid2X2,
-  LayoutPanelTop,
-  MoreHorizontal,
-  NotebookPen,
-  RefreshCcw,
-  Smile,
-  Users,
-} from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
-import { classService } from '@/services/class-service';
 import { announcementService } from '@/services/announcement-service';
+import { assessmentService } from '@/services/assessment-service';
+import { classService } from '@/services/class-service';
+import { lessonService } from '@/services/lesson-service';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CourseSurfaceCard } from '@/components/class/CourseSurfaceCard';
-import {
-  GRADIENT_OPTIONS,
-  createDefaultCustomization,
-  getFallbackGradient,
-  getGradientOption,
-  getHeroStyle,
-  normalizeCustomization,
-  type CardViewMode,
-  type ClassCardCustomization,
-} from '@/components/class/class-card-theme';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { cn } from '@/utils/cn';
 import type { Announcement } from '@/types/announcement';
+import type { Assessment } from '@/types/assessment';
 import type { ClassItem, ClassVisibilityStatus } from '@/types/class';
+import {
+  CalendarCard,
+  toDateKey,
+  type CalendarEventTag,
+} from '@/components/teacher/my-classes/CalendarCard';
+import {
+  ClassCard,
+  type ClassCardMetrics,
+} from '@/components/teacher/my-classes/ClassCard';
+import {
+  UpcomingEventsCard,
+  type UpcomingEventItem,
+} from '@/components/teacher/my-classes/UpcomingEventsCard';
 
-type TeacherHomeTab = 'dashboard' | 'news' | 'welcome';
-type EventTag = 'assessment' | 'event' | 'holiday';
-
-const STORAGE_KEY_CUSTOMIZE = 'teacher-class-card-customize-v2';
-const STORAGE_KEY_VIEW = 'teacher-class-view-mode-v1';
-
-const TAG_ORDER: EventTag[] = ['assessment', 'event', 'holiday'];
-const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-function formatScheduleLine(classItem: ClassItem) {
-  const schedule = classItem.schedules?.[0];
-  if (!schedule) return 'Schedule TBA';
-  return `${schedule.days.join('/')} ${schedule.startTime}-${schedule.endTime}`;
+interface AssessmentDueRecord {
+  id: string;
+  classId: string;
+  title: string;
+  dateKey: string;
+  dayLabel: string;
+  monthLabel: string;
+  meta: string;
+  href: string;
+  timestamp: number;
 }
 
-function formatEventDate(dateValue?: string | null) {
-  if (!dateValue) return { day: '--', month: '---' };
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return { day: '--', month: '---' };
-  return {
-    day: String(date.getDate()),
-    month: date
-      .toLocaleString('en-US', { month: 'short' })
-      .toUpperCase(),
-  };
+const STATUS_FILTERS: Array<{ value: ClassVisibilityStatus; label: string }> = [
+  { value: 'active', label: 'Active' },
+  { value: 'all', label: 'All' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'hidden', label: 'Hidden' },
+];
+
+const EMPTY_METRICS: ClassCardMetrics = {
+  lessonsCount: 0,
+  assessmentsCount: 0,
+  pendingCount: 0,
+  progressPercent: 0,
+};
+
+function parseDate(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
 }
 
-function formatDateKey(value: Date) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function monthLabel(date: Date) {
+  return date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
 }
 
-function getAnnouncementTag(announcement: Announcement): EventTag {
-  const content = `${announcement.title} ${announcement.content}`.toLowerCase();
-  if (content.includes('quiz') || content.includes('exam') || content.includes('assessment')) {
+function shiftMonth(baseDate: Date, delta: number) {
+  return new Date(baseDate.getFullYear(), baseDate.getMonth() + delta, 1);
+}
+
+function formatDueTime(date: Date) {
+  const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0;
+  if (!hasTime) return 'all day';
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function getAnnouncementDate(announcement: Announcement) {
+  return parseDate(announcement.scheduledAt || announcement.createdAt);
+}
+
+function getAnnouncementTag(announcement: Announcement): CalendarEventTag {
+  const text = `${announcement.title} ${announcement.content}`.toLowerCase();
+  if (text.includes('quiz') || text.includes('exam') || text.includes('assessment')) {
     return 'assessment';
   }
-  if (content.includes('holiday') || content.includes('break')) {
+  if (text.includes('holiday') || text.includes('break')) {
     return 'holiday';
   }
   return 'event';
 }
 
-function getEventTagColor(tag: EventTag) {
-  if (tag === 'assessment') return '#df4a61';
-  if (tag === 'holiday') return '#d4983e';
-  return '#3e72cc';
+function buildAssessmentDue(
+  classItem: ClassItem,
+  assessment: Assessment,
+): AssessmentDueRecord | null {
+  if (!assessment.isPublished) return null;
+  const dueDate = parseDate(assessment.dueDate);
+  if (!dueDate) return null;
+
+  const classLabel = classItem.subjectName || classItem.className || classItem.name || 'Class';
+
+  return {
+    id: `assessment-${assessment.id}`,
+    classId: classItem.id,
+    title: assessment.title,
+    dateKey: toDateKey(dueDate),
+    dayLabel: String(dueDate.getDate()).padStart(2, '0'),
+    monthLabel: monthLabel(dueDate),
+    meta: `${classLabel} | Due ${formatDueTime(dueDate)}`,
+    href: `/dashboard/teacher/classes/${classItem.id}?view=assignments`,
+    timestamp: dueDate.getTime(),
+  };
 }
 
-function addMonths(baseDate: Date, monthDelta: number) {
-  return new Date(baseDate.getFullYear(), baseDate.getMonth() + monthDelta, 1);
+function dedupeById<T extends { id: string }>(records: T[]) {
+  const map = new Map<string, T>();
+  for (const record of records) {
+    map.set(record.id, record);
+  }
+  return Array.from(map.values());
 }
 
 export default function TeacherClassesPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const latestFetchRef = useRef(0);
+
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [metricsByClass, setMetricsByClass] = useState<Record<string, ClassCardMetrics>>({});
+  const [assessmentDues, setAssessmentDues] = useState<AssessmentDueRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<ClassVisibilityStatus>('active');
-  const [homeTab, setHomeTab] = useState<TeacherHomeTab>('dashboard');
-  const [viewMode, setViewMode] = useState<CardViewMode>('card');
-  const [customizationByClass, setCustomizationByClass] = useState<Record<string, ClassCardCustomization>>({});
-  const [customizingClass, setCustomizingClass] = useState<ClassItem | null>(null);
-  const [uploadingThemeImage, setUploadingThemeImage] = useState(false);
-  const [openCardMenuId, setOpenCardMenuId] = useState<string | null>(null);
-  const [updatingVisibilityClassId, setUpdatingVisibilityClassId] = useState<string | null>(null);
-  const [draftCustomization, setDraftCustomization] = useState<ClassCardCustomization>(
-    createDefaultCustomization('oceanic-blue'),
-  );
+  const [searchQuery, setSearchQuery] = useState('');
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
+
+  const hydrateClassMetrics = useCallback(async (classList: ClassItem[], fetchNonce: number) => {
+    if (!classList.length) {
+      if (latestFetchRef.current === fetchNonce) {
+        setMetricsByClass({});
+        setAssessmentDues([]);
+      }
+      return;
+    }
+
+    const classRows = await Promise.all(
+      classList.map(async (classItem) => {
+        const [lessonsRes, assessmentsRes] = await Promise.all([
+          lessonService.getByClass(classItem.id).catch(() => null),
+          assessmentService.getByClass(classItem.id).catch(() => null),
+        ]);
+
+        const lessons = lessonsRes?.data ?? [];
+        const assessments = assessmentsRes?.data ?? [];
+
+        const lessonsCount = lessons.length;
+        const assessmentsCount = assessments.length;
+        const publishedLessons = lessons.filter((lesson) => !lesson.isDraft).length;
+        const publishedAssessments = assessments.filter((assessment) => assessment.isPublished).length;
+        const completed = publishedLessons + publishedAssessments;
+        const total = lessonsCount + assessmentsCount;
+
+        const metrics: ClassCardMetrics = {
+          lessonsCount,
+          assessmentsCount,
+          pendingCount: Math.max(total - completed, 0),
+          progressPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
+        };
+
+        const dues = assessments
+          .map((assessment) => buildAssessmentDue(classItem, assessment))
+          .filter((entry): entry is AssessmentDueRecord => entry !== null);
+
+        return {
+          classId: classItem.id,
+          metrics,
+          dues,
+        };
+      }),
+    );
+
+    if (latestFetchRef.current !== fetchNonce) return;
+
+    setMetricsByClass(
+      Object.fromEntries(classRows.map((row) => [row.classId, row.metrics])),
+    );
+
+    setAssessmentDues(
+      dedupeById(classRows.flatMap((row) => row.dues)).sort((left, right) => left.timestamp - right.timestamp),
+    );
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
 
+    const fetchNonce = latestFetchRef.current + 1;
+    latestFetchRef.current = fetchNonce;
+
     try {
       setLoading(true);
+      setError(null);
+
       const classesRes = await classService.getByTeacher(user.id, status);
-      const classesData = classesRes.data || [];
-      setClasses(classesData);
+      const classList = classesRes.data ?? [];
+      if (latestFetchRef.current !== fetchNonce) return;
+
+      setClasses(classList);
+      setMetricsByClass(
+        Object.fromEntries(classList.map((classItem) => [classItem.id, EMPTY_METRICS])),
+      );
+      setAssessmentDues([]);
+
+      void hydrateClassMetrics(classList, fetchNonce);
 
       const announcementResponses = await Promise.all(
-        classesData.slice(0, 12).map((classItem) =>
-          announcementService.getByClass(classItem.id, { limit: 3 }).catch(() => ({
-            success: true,
-            message: '',
+        classList.slice(0, 12).map((classItem) =>
+          announcementService.getByClass(classItem.id, { limit: 4 }).catch(() => ({
             data: [] as Announcement[],
           })),
         ),
       );
 
-      const merged = announcementResponses
-        .flatMap((response) => response.data || [])
-        .sort((left, right) => {
-          const leftTs = new Date(left.createdAt || 0).getTime();
-          const rightTs = new Date(right.createdAt || 0).getTime();
-          return rightTs - leftTs;
-        })
-        .slice(0, 18);
-      setAnnouncements(merged);
+      if (latestFetchRef.current !== fetchNonce) return;
+
+      const mergedAnnouncements = announcementResponses
+        .flatMap((response) => response.data ?? [])
+        .reduce<Map<string, Announcement>>((accumulator, announcement) => {
+          accumulator.set(announcement.id, announcement);
+          return accumulator;
+        }, new Map());
+
+      const sortedAnnouncements = Array.from(mergedAnnouncements.values()).sort((left, right) => {
+        const leftTimestamp = getAnnouncementDate(left)?.getTime() ?? 0;
+        const rightTimestamp = getAnnouncementDate(right)?.getTime() ?? 0;
+        return leftTimestamp - rightTimestamp;
+      });
+
+      setAnnouncements(sortedAnnouncements);
     } catch {
+      if (latestFetchRef.current !== fetchNonce) return;
       setClasses([]);
       setAnnouncements([]);
+      setMetricsByClass({});
+      setAssessmentDues([]);
+      setError('Unable to load your classes right now. Please try again.');
     } finally {
-      setLoading(false);
+      if (latestFetchRef.current === fetchNonce) {
+        setLoading(false);
+      }
     }
-  }, [status, user?.id]);
+  }, [hydrateClassMetrics, status, user?.id]);
 
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY_CUSTOMIZE);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-        const normalizedEntries = Object.entries(parsed).map(([classId, value]) => [
-          classId,
-          normalizeCustomization(value, 'oceanic-blue'),
-        ]);
-        setCustomizationByClass(Object.fromEntries(normalizedEntries));
-      }
-      const savedView = window.localStorage.getItem(STORAGE_KEY_VIEW);
-      if (savedView === 'card' || savedView === 'wide') {
-        setViewMode(savedView);
-      }
-    } catch {
-      // ignore storage parse errors
-    }
-  }, []);
+  const filteredClasses = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (!normalizedQuery) return classes;
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY_CUSTOMIZE, JSON.stringify(customizationByClass));
-    } catch {
-      // ignore storage quota errors; backend image URLs still persist via class banner storage
-    }
-  }, [customizationByClass]);
+    return classes.filter((classItem) => {
+      const haystack = [
+        classItem.subjectName,
+        classItem.subjectCode,
+        classItem.section?.name,
+        classItem.section?.gradeLevel,
+      ].filter((value): value is string => Boolean(value));
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(STORAGE_KEY_VIEW, viewMode);
-  }, [viewMode]);
-
-  useEffect(() => {
-    if (!openCardMenuId || typeof document === 'undefined') return;
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Element)) return;
-      if (event.target.closest('[data-class-card-menu]')) return;
-      setOpenCardMenuId(null);
-    };
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-    };
-  }, [openCardMenuId]);
-
-  const maxStudents = useMemo(
-    () => classes.reduce((max, classItem) => Math.max(max, classItem.enrollments?.length ?? 0), 0),
-    [classes],
-  );
-
-  const eventsByDate = useMemo(() => {
-    const map = new Map<string, Set<EventTag>>();
-    for (const announcement of announcements) {
-      if (!announcement.createdAt) continue;
-      const date = new Date(announcement.createdAt);
-      if (Number.isNaN(date.getTime())) continue;
-      const key = formatDateKey(date);
-      if (!map.has(key)) {
-        map.set(key, new Set<EventTag>());
-      }
-      map.get(key)?.add(getAnnouncementTag(announcement));
-    }
-    return map;
-  }, [announcements]);
-
-  const miniCalendarCells = useMemo(() => {
-    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-    const startOffset = monthStart.getDay();
-    const firstCellDate = new Date(monthStart);
-    firstCellDate.setDate(monthStart.getDate() - startOffset);
-
-    return Array.from({ length: 42 }, (_, index) => {
-      const date = new Date(firstCellDate);
-      date.setDate(firstCellDate.getDate() + index);
-      const dateKey = formatDateKey(date);
-      return {
-        date,
-        dateKey,
-        inMonth: date.getMonth() === calendarMonth.getMonth(),
-        isToday: dateKey === formatDateKey(new Date()),
-        tags: Array.from(eventsByDate.get(dateKey) ?? []),
-      };
+      return haystack.some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-  }, [calendarMonth, eventsByDate]);
+  }, [classes, searchQuery]);
 
-  const monthLabel = useMemo(
+  const totalPending = useMemo(
     () =>
-      calendarMonth.toLocaleString('en-US', {
-        month: 'long',
-        year: 'numeric',
-      }),
-    [calendarMonth],
+      filteredClasses.reduce(
+        (total, classItem) => total + (metricsByClass[classItem.id]?.pendingCount ?? 0),
+        0,
+      ),
+    [filteredClasses, metricsByClass],
   );
 
-  const openCustomize = (classItem: ClassItem, index: number) => {
-    setOpenCardMenuId(null);
-    const fallback = getFallbackGradient(index);
-    const existing = customizationByClass[classItem.id];
-    const fromBanner = classItem.cardBannerUrl
-      ? {
-          ...createDefaultCustomization(fallback),
-          themeKind: 'image' as const,
-          imageUrl: classItem.cardBannerUrl,
-        }
-      : createDefaultCustomization(fallback);
-    setDraftCustomization(existing ?? fromBanner);
-    setCustomizingClass(classItem);
-  };
+  const upcomingEvents = useMemo<UpcomingEventItem[]>(() => {
+    const classById = new Map(classes.map((classItem) => [classItem.id, classItem]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  const toggleClassVisibility = useCallback(
-    async (classItem: ClassItem) => {
-      const currentlyHidden = status === 'hidden' || Boolean(classItem.isHidden);
-      const nextHidden = !currentlyHidden;
-      setUpdatingVisibilityClassId(classItem.id);
-      setOpenCardMenuId(null);
-      try {
-        if (currentlyHidden) {
-          await classService.unhide(classItem.id);
-        } else {
-          await classService.hide(classItem.id);
-        }
-        setClasses((current) =>
-          current.flatMap((item) => {
-            if (item.id !== classItem.id) return [item];
-            if (status === 'all') return [{ ...item, isHidden: nextHidden }];
-            return [];
-          }),
-        );
-      } catch {
-        // keep current list unchanged when visibility update fails
-      } finally {
-        setUpdatingVisibilityClassId(null);
+    const assessmentEvents: Array<UpcomingEventItem & { timestamp: number }> = assessmentDues.map((due) => ({
+      id: due.id,
+      classId: due.classId,
+      title: due.title,
+      tag: 'assessment',
+      dateKey: due.dateKey,
+      dayLabel: due.dayLabel,
+      monthLabel: due.monthLabel,
+      meta: due.meta,
+      href: due.href,
+      timestamp: due.timestamp,
+    }));
+
+    const announcementEvents: Array<UpcomingEventItem & { timestamp: number }> = announcements.flatMap((announcement) => {
+      const date = getAnnouncementDate(announcement);
+      if (!date) return [];
+
+      const classItem = classById.get(announcement.classId);
+      return [
+        {
+          id: `announcement-${announcement.id}`,
+          classId: announcement.classId,
+          title: announcement.title,
+          tag: getAnnouncementTag(announcement),
+          dateKey: toDateKey(date),
+          dayLabel: String(date.getDate()).padStart(2, '0'),
+          monthLabel: monthLabel(date),
+          meta: [
+            classItem?.subjectName,
+            classItem?.section?.name ? `Section ${classItem.section.name}` : undefined,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .join(' | ') || 'Class update',
+          href: classItem
+            ? `/dashboard/teacher/classes/${classItem.id}?view=announcements`
+            : '/dashboard/teacher/announcements',
+          timestamp: date.getTime(),
+        },
+      ];
+    });
+
+    const merged = dedupeById([...assessmentEvents, ...announcementEvents]).sort((left, right) => left.timestamp - right.timestamp);
+    const upcomingOnly = merged.filter((entry) => entry.timestamp >= today.getTime());
+    const visible = (upcomingOnly.length > 0 ? upcomingOnly : merged).slice(0, 12);
+
+    return visible.map(({ timestamp, ...event }) => {
+      void timestamp;
+      return event;
+    });
+  }, [announcements, assessmentDues, classes]);
+
+  const eventTagsByDate = useMemo(() => {
+    const tagMap = new Map<string, CalendarEventTag[]>();
+
+    for (const event of upcomingEvents) {
+      const existing = tagMap.get(event.dateKey) ?? [];
+      if (!existing.includes(event.tag)) {
+        existing.push(event.tag);
       }
-    },
-    [status],
-  );
+      tagMap.set(event.dateKey, existing);
+    }
 
-  const openClassDetails = useCallback(
+    return tagMap;
+  }, [upcomingEvents]);
+
+  const handleOpenClass = useCallback(
     (classId: string) => {
       router.push(`/dashboard/teacher/classes/${classId}`);
     },
     [router],
   );
 
-  const isInteractiveTarget = (target: EventTarget | null) =>
-    target instanceof Element &&
-    Boolean(
-      target.closest('a, button, input, select, textarea, label, [role="button"], [data-class-card-menu]'),
-    );
-
-  const handleClassCardClick = useCallback(
-    (event: ReactMouseEvent<HTMLElement>, classId: string) => {
-      if (isInteractiveTarget(event.target)) return;
-      openClassDetails(classId);
+  const handleViewLessons = useCallback(
+    (classId: string) => {
+      router.push(`/dashboard/teacher/classes/${classId}?view=modules`);
     },
-    [openClassDetails],
+    [router],
   );
-
-  const handleClassCardKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLElement>, classId: string) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      if (isInteractiveTarget(event.target)) return;
-      event.preventDefault();
-      openClassDetails(classId);
-    },
-    [openClassDetails],
-  );
-
-  const saveCustomization = () => {
-    if (!customizingClass) return;
-    setCustomizationByClass((current) => ({
-      ...current,
-      [customizingClass.id]: draftCustomization,
-    }));
-    setCustomizingClass(null);
-  };
-
-  const resetCustomization = () => {
-    if (!customizingClass) return;
-    setCustomizationByClass((current) => {
-      const next = { ...current };
-      delete next[customizingClass.id];
-      return next;
-    });
-    setCustomizingClass(null);
-  };
-
-  const handleThemeImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || !customizingClass) return;
-
-    try {
-      setUploadingThemeImage(true);
-      const response = await classService.uploadBanner(customizingClass.id, file);
-      const uploadedUrl = response.data.cardBannerUrl;
-
-      setDraftCustomization((current) => ({
-        ...current,
-        themeKind: 'image',
-        imageUrl: uploadedUrl,
-      }));
-
-      setClasses((current) =>
-        current.map((classItem) =>
-          classItem.id === customizingClass.id ? response.data.class : classItem,
-        ),
-      );
-    } catch {
-      // keep dialog state unchanged if upload fails
-    } finally {
-      setUploadingThemeImage(false);
-    }
-  };
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-12 rounded-xl" />
-        <Skeleton className="h-12 rounded-xl" />
-        <Skeleton className="h-[28rem] rounded-2xl" />
+      <div className="space-y-5 p-1">
+        <Skeleton className="h-36 rounded-3xl" />
+        <Skeleton className="h-16 rounded-2xl" />
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
+          <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-[22rem] rounded-3xl" />
+            ))}
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-[21rem] rounded-3xl" />
+            <Skeleton className="h-[24rem] rounded-3xl" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="teacher-home-page">
-      <section className="teacher-home-tabs">
-        <button
-          type="button"
-          data-active={homeTab === 'dashboard'}
-          onClick={() => setHomeTab('dashboard')}
-        >
-          <BookCopy className="h-4 w-4" />
-          Dashboard
-        </button>
-        <button type="button" data-active={homeTab === 'news'} onClick={() => setHomeTab('news')}>
-          <NotebookPen className="h-4 w-4" />
-          News
-        </button>
-        <button
-          type="button"
-          data-active={homeTab === 'welcome'}
-          onClick={() => setHomeTab('welcome')}
-        >
-          <Smile className="h-4 w-4" />
-          Welcome
-        </button>
-      </section>
+    <div className="space-y-5 bg-[#f7f7fb] p-1">
+      <header className="rounded-[1.6rem] border border-[#dbe1ec] bg-white p-5 shadow-[0_18px_36px_-30px_rgba(11,23,54,0.45)] sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#6d7f9f]">Student Workspace</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#0b1736]">My Classes</h1>
+            <p className="mt-2 max-w-2xl text-sm text-[#536587]">
+              Open your next class in one tap, keep lessons moving, and never miss quizzes, tasks, or school events.
+            </p>
+          </div>
 
-      <section className="teacher-home-toolbar">
-        <div className="teacher-home-toolbar__left">
-          <div className="teacher-home-status">
-            {(['active', 'archived', 'hidden'] as const).map((value) => (
+          <div className="flex flex-wrap gap-2">
+            <div className="rounded-2xl border border-[#e2e7f2] bg-[#f7f9fd] px-3 py-2 text-xs text-[#4f6183]">
+              <p className="font-medium">Visible Classes</p>
+              <p className="text-lg font-semibold leading-tight text-[#0f172a]">{filteredClasses.length}</p>
+            </div>
+            <div className="rounded-2xl border border-[#fbd3dd] bg-[#fff2f5] px-3 py-2 text-xs text-[#8d2643]">
+              <p className="font-medium">Pending Items</p>
+              <p className="text-lg font-semibold leading-tight">{totalPending}</p>
+            </div>
+            <Button
+              type="button"
+              className="h-auto min-h-[3.2rem] rounded-2xl bg-[#f43f5e] px-4 text-sm font-semibold text-white shadow-[0_18px_30px_-22px_rgba(244,63,94,0.8)] hover:bg-[#e11d48]"
+              onClick={() => void fetchData()}
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <section className="rounded-[1.25rem] border border-[#dde4ef] bg-white p-3.5 shadow-[0_16px_30px_-30px_rgba(11,23,54,0.5)]">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7b8eb0]" />
+            <Input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search class, code, or section"
+              className="h-11 rounded-xl border-[#d7deec] bg-[#f7f9fd] pl-9 text-sm text-[#1e293b] placeholder:text-[#8394b2] focus-visible:ring-[#f43f5e]/40"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#e0e6f1] bg-[#f8fafd] px-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#5f7192]">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filter
+            </span>
+            {STATUS_FILTERS.map((filter) => (
               <button
-                key={value}
+                key={filter.value}
                 type="button"
-                data-active={status === value}
-                onClick={() => setStatus(value)}
+                onClick={() => setStatus(filter.value)}
+                className={cn(
+                  'h-9 rounded-full border px-3.5 text-sm font-semibold transition',
+                  status === filter.value
+                    ? 'border-[#f43f5e] bg-[#f43f5e] text-white shadow-[0_12px_24px_-20px_rgba(244,63,94,0.9)]'
+                    : 'border-[#d8deeb] bg-white text-[#425473] hover:border-[#c8d1e5] hover:bg-[#f6f8fd]',
+                )}
               >
-                {value}
+                {filter.label}
               </button>
             ))}
           </div>
         </div>
-        <div className="teacher-home-toolbar__right">
-          <div className="teacher-home-view-toggle">
-            <button
-              type="button"
-              data-active={viewMode === 'card'}
-              aria-label="Grid View"
-              title="Grid View"
-              onClick={() => setViewMode('card')}
-            >
-              <Grid2X2 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              data-active={viewMode === 'wide'}
-              aria-label="Wide Card View"
-              title="Wide Card View"
-              onClick={() => setViewMode('wide')}
-            >
-              <LayoutPanelTop className="h-4 w-4" />
-            </button>
-          </div>
-          <Button type="button" className="teacher-home-refresh" onClick={() => void fetchData()}>
-            <RefreshCcw className="h-4 w-4" />
-            Refresh
-          </Button>
-        </div>
       </section>
 
-      <section className="teacher-home-layout">
-        <div className={viewMode === 'wide' ? 'teacher-home-cards teacher-home-cards--wide' : 'teacher-home-cards'}>
-          {classes.length === 0 ? (
-            <div className="teacher-home-empty">
-              <p>No classes in this view.</p>
-            </div>
-          ) : (
-            classes.map((classItem, index) => {
-              const fallbackGradient = getFallbackGradient(index);
-              const theme =
-                customizationByClass[classItem.id] ??
-                (classItem.cardBannerUrl
-                  ? {
-                      ...createDefaultCustomization(fallbackGradient),
-                      themeKind: 'image' as const,
-                      imageUrl: classItem.cardBannerUrl,
-                    }
-                  : createDefaultCustomization(fallbackGradient));
-              const gradient = getGradientOption(theme.gradientId);
-              const heroStyle = getHeroStyle(theme);
-
-              const students = classItem.enrollments?.length ?? 0;
-              const taskCount = classItem.schedules?.length ?? 0;
-              const rosterPercent = maxStudents > 0 ? Math.round((students / maxStudents) * 100) : 0;
-              const isMenuOpen = openCardMenuId === classItem.id;
-              const actions = [
-                {
-                  href: `/dashboard/teacher/assessments?classId=${classItem.id}`,
-                  icon: NotebookPen,
-                  label: 'Assignments',
-                },
-                {
-                  href: `/dashboard/teacher/announcements?classId=${classItem.id}`,
-                  icon: Bell,
-                  label: 'Notify',
-                },
-                {
-                  href: `/dashboard/teacher/classes/${classItem.id}/students/add`,
-                  icon: Users,
-                  label: 'Students',
-                },
-                {
-                  href: `/dashboard/teacher/class-record?classId=${classItem.id}`,
-                  icon: ClipboardList,
-                  label: 'Record',
-                },
-                {
-                  href: `/dashboard/teacher/calendar?classId=${classItem.id}`,
-                  icon: CalendarDays,
-                  label: 'Calendar',
-                },
-              ] as const;
-
-              return (
-                <CourseSurfaceCard
-                  key={classItem.id}
-                  className="teacher-home-card"
-                  data-theme-kind={theme.themeKind}
-                  tabIndex={0}
-                  aria-label={`Open ${classItem.subjectName} class`}
-                  animateDelayMs={Math.min(index, 10) * 45}
-                  onClick={(event) => handleClassCardClick(event, classItem.id)}
-                  onKeyDown={(event) => handleClassCardKeyDown(event, classItem.id)}
-                  style={{ cursor: 'pointer' }}
-                  heroStyle={heroStyle}
-                  heroMeta={formatScheduleLine(classItem)}
-                  title={classItem.subjectName}
-                  subtitle={`Grade ${classItem.section?.gradeLevel ?? classItem.subjectGradeLevel ?? 'TBA'} - ${classItem.section?.name ?? 'Section not set'}`}
-                  statusLabel={classItem.isActive ? 'Active' : 'Archived'}
-                  stats={[
-                    { value: students, label: 'Lessons' },
-                    { value: taskCount, label: 'Tasks' },
-                  ]}
-                  showProgress={false}
-                  progressPercent={rosterPercent}
-                  progressColor={gradient.accent}
-                  actions={actions}
-                  heroControl={(
-                    <div
-                      className="teacher-home-card__menu"
-                      data-class-card-menu
-                      style={{ alignSelf: 'flex-end', position: 'relative', zIndex: 2 }}
-                    >
-                      <button
-                        type="button"
-                        className="teacher-home-card__menu-trigger"
-                        aria-label="Class menu"
-                        aria-expanded={isMenuOpen}
-                        style={{
-                          border: 0,
-                          width: '1.9rem',
-                          height: '1.9rem',
-                          borderRadius: '999px',
-                          color: '#ffffff',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background:
-                            theme.themeKind === 'image' && theme.imageUrl
-                              ? 'rgba(14, 27, 46, 0.72)'
-                              : gradient.buttonTint,
-                        }}
-                        onClick={() =>
-                          setOpenCardMenuId((current) =>
-                            current === classItem.id ? null : classItem.id,
-                          )
-                        }
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
-                      <div
-                        className="teacher-home-card__menu-panel"
-                        data-open={isMenuOpen}
-                        aria-hidden={!isMenuOpen}
-                        style={{
-                          position: 'absolute',
-                          right: 0,
-                          top: 'calc(100% + 0.35rem)',
-                          minWidth: '10.8rem',
-                          borderRadius: '0.68rem',
-                          border: '1px solid #dce5f2',
-                          background: '#ffffff',
-                          boxShadow: '0 14px 30px rgba(22, 37, 63, 0.2)',
-                          padding: '0.28rem',
-                          display: 'grid',
-                          gap: '0.18rem',
-                          opacity: isMenuOpen ? 1 : 0,
-                          pointerEvents: isMenuOpen ? 'auto' : 'none',
-                          transform: isMenuOpen
-                            ? 'translateY(0) scale(1)'
-                            : 'translateY(-6px) scale(0.98)',
-                          transformOrigin: 'top right',
-                          transition:
-                            'opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1)',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          tabIndex={isMenuOpen ? 0 : -1}
-                          style={{
-                            border: 0,
-                            background: 'transparent',
-                            color: '#1f3555',
-                            borderRadius: '0.5rem',
-                            minHeight: '2rem',
-                            padding: '0.4rem 0.58rem',
-                            textAlign: 'left',
-                            fontSize: '0.74rem',
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                          }}
-                          onClick={() => openCustomize(classItem, index)}
-                        >
-                          Customize class
-                        </button>
-                        <button
-                          type="button"
-                          tabIndex={isMenuOpen ? 0 : -1}
-                          onClick={() => void toggleClassVisibility(classItem)}
-                          disabled={updatingVisibilityClassId === classItem.id}
-                          style={{
-                            border: 0,
-                            background: 'transparent',
-                            color: '#1f3555',
-                            borderRadius: '0.5rem',
-                            minHeight: '2rem',
-                            padding: '0.4rem 0.58rem',
-                            textAlign: 'left',
-                            fontSize: '0.74rem',
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            opacity:
-                              updatingVisibilityClassId === classItem.id
-                                ? 0.58
-                                : 1,
-                          }}
-                        >
-                          {status === 'hidden' || classItem.isHidden
-                            ? 'Unhide class'
-                            : 'Hide class'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                />
-              );
-            })
-          )}
-        </div>
-
-        <aside className="teacher-home-events">
-          <article
-            className="teacher-home-mini-calendar"
-            style={{
-              border: '1px solid #dce5f2',
-              borderRadius: '0.76rem',
-              background: '#fff',
-              padding: '0.56rem',
-              display: 'grid',
-              gap: '0.42rem',
-            }}
-          >
-            <div
-              className="teacher-home-mini-calendar__head"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}
-            >
-              <h3>Calendar</h3>
-              <div className="teacher-home-mini-calendar__controls" style={{ display: 'inline-flex', gap: '0.24rem' }}>
-                <button
-                  type="button"
-                  aria-label="Previous month"
-                  onClick={() => setCalendarMonth((current) => addMonths(current, -1))}
-                  style={{
-                    border: '1px solid #d3deed',
-                    background: '#f8fbff',
-                    color: '#587499',
-                    width: '1.45rem',
-                    height: '1.45rem',
-                    borderRadius: '999px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next month"
-                  onClick={() => setCalendarMonth((current) => addMonths(current, 1))}
-                  style={{
-                    border: '1px solid #d3deed',
-                    background: '#f8fbff',
-                    color: '#587499',
-                    width: '1.45rem',
-                    height: '1.45rem',
-                    borderRadius: '999px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-            <p className="teacher-home-mini-calendar__label" style={{ margin: 0, color: '#5f7597', fontSize: '0.72rem', fontWeight: 700 }}>
-              {monthLabel}
+      {error ? (
+        <section className="rounded-[1.25rem] border border-[#fecdd8] bg-[#fff2f5] p-5 text-[#9f1239]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <AlertCircle className="h-4 w-4" />
+              {error}
             </p>
-            <div
-              className="teacher-home-mini-calendar__weekdays"
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.18rem' }}
+            <Button
+              type="button"
+              variant="outline"
+              className="border-[#f9a8bc] bg-white text-[#9f1239] hover:bg-[#ffe4eb]"
+              onClick={() => void fetchData()}
             >
-              {WEEKDAY_INITIALS.map((weekday, index) => (
-                <span
-                  key={`${weekday}-${index}`}
-                  style={{ textAlign: 'center', color: '#8599b5', fontSize: '0.58rem', fontWeight: 700 }}
-                >
-                  {weekday}
-                </span>
-              ))}
-            </div>
-            <div
-              className="teacher-home-mini-calendar__grid"
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: '0.18rem' }}
-            >
-              {miniCalendarCells.map((cell) => (
-                <div
-                  key={cell.dateKey}
-                  className="teacher-home-mini-calendar__cell"
-                  data-in-month={cell.inMonth}
-                  data-is-today={cell.isToday}
-                  style={{
-                    minHeight: '1.75rem',
-                    borderRadius: '0.34rem',
-                    border: cell.isToday ? '1px solid #b6c8e5' : '1px solid transparent',
-                    background: cell.isToday ? '#edf4ff' : 'transparent',
-                    display: 'grid',
-                    placeItems: 'center',
-                    padding: '0.14rem',
-                  }}
-                >
-                  <span
-                    style={{
-                      color: cell.inMonth ? '#3d5477' : '#b7c4d8',
-                      fontSize: '0.62rem',
-                      fontWeight: 700,
-                      lineHeight: 1,
-                    }}
-                  >
-                    {cell.date.getDate()}
-                  </span>
-                  <div
-                    className="teacher-home-mini-calendar__dots"
-                    style={{ minHeight: '0.3rem', display: 'inline-flex', alignItems: 'center', gap: '0.14rem' }}
-                  >
-                    {TAG_ORDER.filter((tag) => cell.tags.includes(tag)).map((tag) => (
-                      <i
-                        key={tag}
-                        data-tag={tag}
-                        style={{
-                          width: '0.24rem',
-                          height: '0.24rem',
-                          borderRadius: '999px',
-                          display: 'inline-flex',
-                          background: getEventTagColor(tag),
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <h3>Upcoming Events</h3>
-          <div className="teacher-home-events__list">
-            {announcements.length === 0 ? (
-              <p className="teacher-home-events__empty">No events available right now.</p>
-            ) : (
-              announcements.slice(0, 6).map((announcement) => {
-                const date = formatEventDate(announcement.createdAt);
-                const tag = getAnnouncementTag(announcement);
-                const tagClassName =
-                  tag === 'assessment'
-                    ? 'teacher-home-event-tag teacher-home-event-tag--assessment'
-                    : tag === 'holiday'
-                      ? 'teacher-home-event-tag teacher-home-event-tag--holiday'
-                      : 'teacher-home-event-tag teacher-home-event-tag--event';
-                return (
-                  <article key={announcement.id} className="teacher-home-event-item">
-                    <div className="teacher-home-event-item__date">
-                      <strong>{date.day}</strong>
-                      <span>{date.month}</span>
-                    </div>
-                    <div className="teacher-home-event-item__content">
-                      <p className="teacher-home-event-item__title">{announcement.title}</p>
-                      <p className="teacher-home-event-item__meta">{announcement.author?.firstName || 'Teacher'}</p>
-                      <span className={tagClassName}>{tag}</span>
-                    </div>
-                  </article>
-                );
-              })
-            )}
+              Try Again
+            </Button>
           </div>
-          <Link href="/dashboard/teacher/calendar" className="teacher-home-events__cta">
-            View full calendar
-          </Link>
-        </aside>
-      </section>
-
-      <Dialog open={Boolean(customizingClass)} onOpenChange={(open) => !open && setCustomizingClass(null)}>
-        <DialogContent className="teacher-customize-dialog">
-          <DialogHeader>
-            <DialogTitle>Customize Card Theme</DialogTitle>
-            <DialogDescription>
-              Choose a gradient or upload an image and reposition it like a class cover.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="teacher-customize-dialog__section">
-            <p>Theme Type</p>
-            <div
-              className="teacher-customize-dialog__mode"
-              style={{
-                display: 'inline-grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: '0.28rem',
-                border: '1px solid #d6e0ed',
-                background: '#f6f9fd',
-                borderRadius: '999px',
-                padding: '0.2rem',
-              }}
-            >
-              <button
-                type="button"
-                data-active={draftCustomization.themeKind === 'gradient'}
-                onClick={() => setDraftCustomization((current) => ({ ...current, themeKind: 'gradient' }))}
-                style={{
-                  border: 0,
-                  background: draftCustomization.themeKind === 'gradient' ? '#fff' : 'transparent',
-                  color: draftCustomization.themeKind === 'gradient' ? '#213859' : '#5d7496',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  borderRadius: '999px',
-                  minHeight: '1.7rem',
-                  paddingInline: '0.62rem',
-                }}
-              >
-                Gradient
-              </button>
-              <button
-                type="button"
-                data-active={draftCustomization.themeKind === 'image'}
-                onClick={() =>
-                  setDraftCustomization((current) => ({
-                    ...current,
-                    themeKind: current.imageUrl ? 'image' : 'gradient',
-                  }))
-                }
-                disabled={!draftCustomization.imageUrl}
-                style={{
-                  border: 0,
-                  background: draftCustomization.themeKind === 'image' ? '#fff' : 'transparent',
-                  color: draftCustomization.themeKind === 'image' ? '#213859' : '#5d7496',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  borderRadius: '999px',
-                  minHeight: '1.7rem',
-                  paddingInline: '0.62rem',
-                  opacity: draftCustomization.imageUrl ? 1 : 0.5,
-                }}
-              >
-                Image
-              </button>
-            </div>
-          </div>
-
-          <div className="teacher-customize-dialog__section">
-            <p>Gradient Palette</p>
-            <div
-              className="teacher-customize-dialog__gradients"
-              style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0.4rem' }}
-            >
-              {GRADIENT_OPTIONS.map((gradient) => (
-                <button
-                  key={gradient.id}
-                  type="button"
-                  data-active={draftCustomization.gradientId === gradient.id}
-                  onClick={() => setDraftCustomization((current) => ({ ...current, gradientId: gradient.id }))}
-                  style={{
-                    border: `1px solid ${draftCustomization.gradientId === gradient.id ? '#9eb5d4' : '#d6e0ed'}`,
-                    borderRadius: '0.62rem',
-                    background: draftCustomization.gradientId === gradient.id ? '#fff' : '#f7fafe',
-                    color: '#405673',
-                    minHeight: '2.2rem',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    gap: '0.35rem',
-                    paddingInline: '0.52rem',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: '1rem',
-                      height: '1rem',
-                      borderRadius: '999px',
-                      background: gradient.background,
-                    }}
-                  />
-                  {gradient.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="teacher-customize-dialog__section">
-            <div
-              className="teacher-customize-dialog__image-head"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}
-            >
-              <p>Image Theme</p>
-              <label
-                className="teacher-customize-dialog__upload"
-                style={{
-                  border: '1px solid #d0dced',
-                  background: '#f8fbff',
-                  color: '#435f87',
-                  borderRadius: '0.58rem',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  minHeight: '1.82rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  paddingInline: '0.55rem',
-                  cursor: 'pointer',
-                }}
-              >
-                {uploadingThemeImage ? 'Uploading...' : 'Upload Image'}
-                <input type="file" accept="image/*" onChange={(event) => void handleThemeImageUpload(event)} />
-              </label>
-            </div>
-
-            {draftCustomization.imageUrl ? (
-              <div className="teacher-customize-dialog__image-tools" style={{ display: 'grid', gap: '0.45rem' }}>
-                <div
-                  className="teacher-customize-dialog__image-preview"
-                  style={{
-                    border: '1px solid #d7e3f2',
-                    borderRadius: '0.64rem',
-                    minHeight: '6.3rem',
-                    backgroundColor: '#1f3d68',
-                    ...(getHeroStyle({
-                      ...draftCustomization,
-                      themeKind: 'image',
-                    }) as CSSProperties),
-                  }}
-                />
-
-                <div className="teacher-customize-dialog__slider">
-                  <label htmlFor="theme-image-position-x">Horizontal</label>
-                  <input
-                    id="theme-image-position-x"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={draftCustomization.imagePositionX}
-                    onChange={(event) =>
-                      setDraftCustomization((current) => ({
-                        ...current,
-                        imagePositionX: Number(event.target.value),
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="teacher-customize-dialog__slider">
-                  <label htmlFor="theme-image-position-y">Vertical</label>
-                  <input
-                    id="theme-image-position-y"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={draftCustomization.imagePositionY}
-                    onChange={(event) =>
-                      setDraftCustomization((current) => ({
-                        ...current,
-                        imagePositionY: Number(event.target.value),
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="teacher-customize-dialog__slider">
-                  <label htmlFor="theme-image-scale">Zoom</label>
-                  <input
-                    id="theme-image-scale"
-                    type="range"
-                    min={100}
-                    max={220}
-                    value={draftCustomization.imageScale}
-                    onChange={(event) =>
-                      setDraftCustomization((current) => ({
-                        ...current,
-                        imageScale: Number(event.target.value),
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="teacher-customize-dialog__image-actions" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.42rem' }}>
+        </section>
+      ) : (
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_21rem]">
+          <div>
+            {filteredClasses.length === 0 ? (
+              <div className="grid min-h-[18rem] place-items-center rounded-[1.35rem] border border-dashed border-[#ccd6e8] bg-[#f8fafe] p-6 text-center">
+                <div>
+                  <p className="text-lg font-semibold text-[#1e2c48]">No classes match your filter.</p>
+                  <p className="mt-1 text-sm text-[#65789b]">
+                    Try another search term or switch the status filter.
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() =>
-                      setDraftCustomization((current) => ({
-                        ...current,
-                        themeKind: 'gradient',
-                        imageUrl: null,
-                      }))
-                    }
+                    className="mt-4 border-[#cfd8e9] bg-white text-[#2f4a75] hover:bg-[#f1f5fb]"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setStatus('active');
+                    }}
                   >
-                    Remove Image
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setDraftCustomization((current) => ({ ...current, themeKind: 'image' }))}
-                  >
-                    Use Image Theme
+                    Reset Filters
                   </Button>
                 </div>
               </div>
             ) : (
-              <p
-                className="teacher-customize-dialog__empty"
-                style={{
-                  margin: 0,
-                  border: '1px dashed #cad8eb',
-                  borderRadius: '0.62rem',
-                  background: '#f8fbff',
-                  color: '#587194',
-                  fontSize: '0.74rem',
-                  padding: '0.55rem 0.6rem',
-                }}
-              >
-                No image uploaded yet.
-              </p>
+              <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                {filteredClasses.map((classItem, index) => (
+                  <ClassCard
+                    key={classItem.id}
+                    classItem={classItem}
+                    metrics={metricsByClass[classItem.id] ?? EMPTY_METRICS}
+                    accentIndex={index}
+                    onOpenClass={handleOpenClass}
+                    onViewLessons={handleViewLessons}
+                  />
+                ))}
+              </div>
             )}
           </div>
 
-          <DialogFooter className="teacher-customize-dialog__footer">
-            <Button type="button" variant="outline" onClick={resetCustomization}>
-              Reset
-            </Button>
-            <Button type="button" className="teacher-home-refresh" onClick={saveCustomization}>
-              Save Theme
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            <CalendarCard
+              month={calendarMonth}
+              selectedDateKey={selectedDateKey}
+              eventTagsByDate={eventTagsByDate}
+              onSelectDate={setSelectedDateKey}
+              onPrevMonth={() => setCalendarMonth((current) => shiftMonth(current, -1))}
+              onNextMonth={() => setCalendarMonth((current) => shiftMonth(current, 1))}
+            />
+            <UpcomingEventsCard events={upcomingEvents} selectedDateKey={selectedDateKey} />
+          </aside>
+        </section>
+      )}
     </div>
   );
 }

@@ -210,6 +210,12 @@ export default function LessonEditorPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
+  const detailsSaveInFlightRef = useRef(false);
+  const lastSavedDetailsRef = useRef<{ title: string; description: string }>({
+    title: '',
+    description: '',
+  });
+  const [detailsDirty, setDetailsDirty] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -220,7 +226,13 @@ export default function LessonEditorPage() {
       ]);
       setLesson(res.data);
       setTitle(res.data.title);
-      setDescription(normalizeRichValue(res.data.description));
+      const normalizedDescription = normalizeRichValue(res.data.description);
+      setDescription(normalizedDescription);
+      lastSavedDetailsRef.current = {
+        title: res.data.title,
+        description: normalizedDescription,
+      };
+      setDetailsDirty(false);
       setBlocks(
         (res.data.contentBlocks || [])
           .sort((a, b) => a.order - b.order)
@@ -249,18 +261,90 @@ export default function LessonEditorPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleSaveDetails = async () => {
+  const persistLessonDetails = useCallback(async (
+    options?: { notify?: boolean },
+  ) => {
+    const normalizedTitle = title.trim();
+    const normalizedDescription = normalizeRichValue(description);
+
+    if (!normalizedTitle) {
+      if (options?.notify) {
+        toast.error('Lesson title is required');
+      }
+      return;
+    }
+
+    if (
+      normalizedTitle === lastSavedDetailsRef.current.title &&
+      normalizedDescription === lastSavedDetailsRef.current.description
+    ) {
+      setDetailsDirty(false);
+      return;
+    }
+
+    if (detailsSaveInFlightRef.current) {
+      return;
+    }
+
     try {
+      detailsSaveInFlightRef.current = true;
       setSaving(true);
-      await lessonService.update(lessonId, { title, description });
+      await lessonService.update(lessonId, {
+        title: normalizedTitle,
+        description: normalizedDescription,
+      });
+      setLesson((prev) => (
+        prev
+          ? {
+              ...prev,
+              title: normalizedTitle,
+              description: normalizedDescription,
+            }
+          : prev
+      ));
+      lastSavedDetailsRef.current = {
+        title: normalizedTitle,
+        description: normalizedDescription,
+      };
+      setDetailsDirty(false);
       await refreshVersions();
-      toast.success('Lesson details saved');
+      if (options?.notify) {
+        toast.success('Lesson details saved');
+      }
     } catch {
-      toast.error('Failed to save lesson details');
+      if (options?.notify) {
+        toast.error('Failed to save lesson details');
+      } else {
+        toast.error('Autosave failed. Use Save Changes to retry.');
+      }
     } finally {
+      detailsSaveInFlightRef.current = false;
       setSaving(false);
     }
+  }, [description, lessonId, refreshVersions, title]);
+
+  const handleSaveDetails = async () => {
+    await persistLessonDetails({ notify: true });
   };
+
+  useEffect(() => {
+    if (loading) return;
+
+    const normalizedTitle = title.trim();
+    const normalizedDescription = normalizeRichValue(description);
+    const hasChanges =
+      normalizedTitle !== lastSavedDetailsRef.current.title ||
+      normalizedDescription !== lastSavedDetailsRef.current.description;
+    setDetailsDirty(hasChanges);
+
+    if (!hasChanges) return;
+
+    const timer = window.setTimeout(() => {
+      void persistLessonDetails({ notify: false });
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [description, loading, persistLessonDetails, title]);
 
   useEffect(() => {
     const observerTarget = bottomSentinelRef.current;
@@ -576,7 +660,14 @@ export default function LessonEditorPage() {
                 placeholder="Write lesson context, goals, and what students should expect in this lesson."
               />
             </div>
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                {saving
+                  ? 'Saving lesson details...'
+                  : detailsDirty
+                    ? 'Unsaved changes. Autosaving in 5 seconds.'
+                    : 'All detail changes saved.'}
+              </p>
               <Button onClick={handleSaveDetails} disabled={saving} className="teacher-button-solid rounded-xl font-black">
                 <PencilLine className="h-4 w-4" />
                 {saving ? 'Saving...' : 'Save Changes'}
