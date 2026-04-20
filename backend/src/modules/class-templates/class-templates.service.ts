@@ -1064,7 +1064,6 @@ export class ClassTemplatesService {
         })),
       })),
       (content.assessments ?? []).map((assessment: any) => ({
-        id: assessment.id,
         id: this.coerceString(assessment.id),
         title: this.coerceString(assessment.title, 'Untitled Assessment'),
         description: this.coerceString(assessment.description, ''),
