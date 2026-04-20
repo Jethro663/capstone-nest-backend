@@ -270,8 +270,11 @@ export default function ClassTemplateEditorPage() {
       anchor.remove();
       window.URL.revokeObjectURL(url);
       toast.success('Template export generated');
-    } catch {
-      toast.error('Failed to export template manifest');
+    } catch (error) {
+      const details =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message;
+      toast.error(details ? `Failed to export template manifest: ${details}` : 'Failed to export template manifest');
     } finally {
       setExportingEngine(false);
     }

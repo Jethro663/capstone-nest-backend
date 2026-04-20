@@ -156,7 +156,10 @@ const SUPPORTED_BLOCK_TYPES = new Set([
   'divider',
 ]);
 
-function stripHtml(value: string): string {
+function stripHtml(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
   return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
