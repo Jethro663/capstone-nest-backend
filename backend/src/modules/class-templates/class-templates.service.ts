@@ -1047,164 +1047,197 @@ export class ClassTemplatesService {
   }
 
   async getEngineExport(id: string) {
-    const template = await this.findOne(id);
-    const content = await this.getContent(id);
-    const derivedChunks = deriveEngineChunks(
-      (content.lessons ?? []).map((lesson: any) => ({
-        id: lesson.id,
-        title: this.coerceString(lesson.title, 'Untitled Lesson'),
-        summary: this.coerceString(lesson.summary, ''),
-        order: this.coerceNumber(lesson.order, 0),
-        blocks: (lesson.blocks ?? []).map((block: any) => ({
-          id: block.id,
-          blockType: this.coerceString(block.blockType, 'text'),
-          blockVersion: this.coerceNumber(block.blockVersion, 1),
-          order: this.coerceNumber(block.order, 0),
-          payload: (block.payload ?? {}) as JsonRecord,
-        })),
-      })),
-      (content.assessments ?? []).map((assessment: any) => ({
-        id: this.coerceString(assessment.id),
-        title: this.coerceString(assessment.title, 'Untitled Assessment'),
-        description: this.coerceString(assessment.description, ''),
-        type: this.coerceString(assessment.type, 'quiz'),
-        dueDateOffsetDays:
-          assessment.dueDateOffsetDays == null
-            ? null
-            : this.coerceNumber(assessment.dueDateOffsetDays, 0),
-        settings: (assessment.settings ?? {}) as JsonRecord,
-        totalPoints: this.coerceNumber(assessment.totalPoints, 0),
-        order: this.coerceNumber(assessment.order, 0),
-        questions: (assessment.questions ?? []).map((question: any) => ({
-          id: question.id,
-          type: this.coerceString(question.type, 'multiple_choice'),
-          content: this.coerceString(question.content),
-          points: this.coerceNumber(question.points, 1),
-          order: this.coerceNumber(question.order, 0),
-          isRequired: this.coerceBoolean(question.isRequired, true),
-          explanation: this.coerceString(question.explanation, ''),
-          imageUrl: this.coerceString(question.imageUrl, ''),
-          options: (question.options ?? []).map((option: any) => ({
-            id: option.id,
-            text: this.coerceString(option.text),
-            isCorrect: this.coerceBoolean(option.isCorrect, false),
-            order: this.coerceNumber(option.order, 0),
+    try {
+      const template = await this.findOne(id);
+      const content = await this.getContent(id);
+      const derivedChunks = deriveEngineChunks(
+        (content.lessons ?? []).map((lesson: any) => ({
+          id: lesson.id,
+          title: this.coerceString(lesson.title, 'Untitled Lesson'),
+          summary: this.coerceString(lesson.summary, ''),
+          order: this.coerceNumber(lesson.order, 0),
+          blocks: (lesson.blocks ?? []).map((block: any) => ({
+            id: block.id,
+            blockType: this.coerceString(block.blockType, 'text'),
+            blockVersion: this.coerceNumber(block.blockVersion, 1),
+            order: this.coerceNumber(block.order, 0),
+            payload: (block.payload ?? {}) as JsonRecord,
           })),
         })),
-      })),
-    );
+        (content.assessments ?? []).map((assessment: any) => ({
+          id: this.coerceString(assessment.id),
+          title: this.coerceString(assessment.title, 'Untitled Assessment'),
+          description: this.coerceString(assessment.description, ''),
+          type: this.coerceString(assessment.type, 'quiz'),
+          dueDateOffsetDays:
+            assessment.dueDateOffsetDays == null
+              ? null
+              : this.coerceNumber(assessment.dueDateOffsetDays, 0),
+          settings: (assessment.settings ?? {}) as JsonRecord,
+          totalPoints: this.coerceNumber(assessment.totalPoints, 0),
+          order: this.coerceNumber(assessment.order, 0),
+          questions: (assessment.questions ?? []).map((question: any) => ({
+            id: question.id,
+            type: this.coerceString(question.type, 'multiple_choice'),
+            content: this.coerceString(question.content),
+            points: this.coerceNumber(question.points, 1),
+            order: this.coerceNumber(question.order, 0),
+            isRequired: this.coerceBoolean(question.isRequired, true),
+            explanation: this.coerceString(question.explanation, ''),
+            imageUrl: this.coerceString(question.imageUrl, ''),
+            options: (question.options ?? []).map((option: any) => ({
+              id: option.id,
+              text: this.coerceString(option.text),
+              isCorrect: this.coerceBoolean(option.isCorrect, false),
+              order: this.coerceNumber(option.order, 0),
+            })),
+          })),
+        })),
+      );
 
-    const manifest: EngineTemplateManifest = {
-      schemaVersion: ENGINE_SCHEMA_VERSION,
-      engineVersion: ENGINE_VERSION,
-      exportedAt: new Date().toISOString(),
-      template: {
-        id: this.coerceString(template.id),
-        name: this.coerceString(template.name, 'Untitled Template'),
-        subjectCode: this.coerceString(template.subjectCode, 'UNKNOWN'),
-        subjectGradeLevel: this.coerceString(
-          template.subjectGradeLevel,
-          'Unknown',
-        ),
-        status: template.status,
-        notes: null,
-      },
-      modules: (content.modules ?? []).map((module: any) => ({
-        id: this.coerceString(module.id),
-        title: this.coerceString(module.title, 'Untitled Module'),
-        description: this.coerceString(module.description, ''),
-        order: this.coerceNumber(module.order, 0),
-        themeKind: this.coerceString(module.themeKind, 'gradient'),
-        gradientId: this.coerceString(module.gradientId, 'oceanic-blue'),
-        coverImageUrl:
-          typeof module.coverImageUrl === 'string' ? module.coverImageUrl : null,
-        imagePositionX: this.coerceNumber(module.imagePositionX, 50),
-        imagePositionY: this.coerceNumber(module.imagePositionY, 50),
-        imageScale: this.coerceNumber(module.imageScale, 120),
-        isVisible: this.coerceBoolean(module.isVisible, false),
-        isLocked: this.coerceBoolean(module.isLocked, true),
-        teacherNotes: this.coerceString(module.teacherNotes, ''),
-        sections: (module.sections ?? []).map((section: any) => ({
-          id: this.coerceString(section.id),
-          title: this.coerceString(section.title, 'Untitled Section'),
-          description: this.coerceString(section.description, ''),
-          order: this.coerceNumber(section.order, 0),
-          items: (section.items ?? []).map((item: any) => ({
-            id: this.coerceString(item.id),
-            itemType: this.coerceString(
-              item.itemType,
-              'file',
-            ) as EngineModuleItemManifest['itemType'],
-            order: this.coerceNumber(item.order, 0),
-            isRequired: this.coerceBoolean(item.isRequired, false),
-            points:
-              item.points == null ? null : this.coerceNumber(item.points, 0),
-            lessonId:
-              item.templateLessonId == null
-                ? null
-                : this.coerceString(item.templateLessonId),
-            assessmentId:
-              item.templateAssessmentId == null
-                ? null
-                : this.coerceString(item.templateAssessmentId),
-            metadata: (item.metadata ?? {}) as JsonRecord,
+      const manifest: EngineTemplateManifest = {
+        schemaVersion: ENGINE_SCHEMA_VERSION,
+        engineVersion: ENGINE_VERSION,
+        exportedAt: new Date().toISOString(),
+        template: {
+          id: this.coerceString(template.id),
+          name: this.coerceString(template.name, 'Untitled Template'),
+          subjectCode: this.coerceString(template.subjectCode, 'UNKNOWN'),
+          subjectGradeLevel: this.coerceString(
+            template.subjectGradeLevel,
+            'Unknown',
+          ),
+          status: template.status,
+          notes: null,
+        },
+        modules: (content.modules ?? []).map((module: any) => ({
+          id: this.coerceString(module.id),
+          title: this.coerceString(module.title, 'Untitled Module'),
+          description: this.coerceString(module.description, ''),
+          order: this.coerceNumber(module.order, 0),
+          themeKind: this.coerceString(module.themeKind, 'gradient'),
+          gradientId: this.coerceString(module.gradientId, 'oceanic-blue'),
+          coverImageUrl:
+            typeof module.coverImageUrl === 'string' ? module.coverImageUrl : null,
+          imagePositionX: this.coerceNumber(module.imagePositionX, 50),
+          imagePositionY: this.coerceNumber(module.imagePositionY, 50),
+          imageScale: this.coerceNumber(module.imageScale, 120),
+          isVisible: this.coerceBoolean(module.isVisible, false),
+          isLocked: this.coerceBoolean(module.isLocked, true),
+          teacherNotes: this.coerceString(module.teacherNotes, ''),
+          sections: (module.sections ?? []).map((section: any) => ({
+            id: this.coerceString(section.id),
+            title: this.coerceString(section.title, 'Untitled Section'),
+            description: this.coerceString(section.description, ''),
+            order: this.coerceNumber(section.order, 0),
+            items: (section.items ?? []).map((item: any) => ({
+              id: this.coerceString(item.id),
+              itemType: this.coerceString(
+                item.itemType,
+                'file',
+              ) as EngineModuleItemManifest['itemType'],
+              order: this.coerceNumber(item.order, 0),
+              isRequired: this.coerceBoolean(item.isRequired, false),
+              points:
+                item.points == null ? null : this.coerceNumber(item.points, 0),
+              lessonId:
+                item.templateLessonId == null
+                  ? null
+                  : this.coerceString(item.templateLessonId),
+              assessmentId:
+                item.templateAssessmentId == null
+                  ? null
+                  : this.coerceString(item.templateAssessmentId),
+              metadata: (item.metadata ?? {}) as JsonRecord,
+            })),
           })),
         })),
-      })),
-      lessons: (content.lessons ?? []).map((lesson: any) => ({
-        id: lesson.id,
-        title: lesson.title,
-        summary: lesson.summary ?? '',
-        order: lesson.order ?? 0,
-        blocks: (lesson.blocks ?? []).map((block: any) => ({
-          id: block.id,
-          blockType: block.blockType,
-          blockVersion: block.blockVersion ?? 1,
-          order: block.order ?? 0,
-          payload: (block.payload ?? {}) as JsonRecord,
-        })),
-      })),
-      assessments: (content.assessments ?? []).map((assessment: any) => ({
-        id: assessment.id,
-        title: assessment.title,
-        description: assessment.description ?? '',
-        type: assessment.type ?? 'quiz',
-        dueDateOffsetDays: assessment.dueDateOffsetDays ?? null,
-        settings: (assessment.settings ?? {}) as JsonRecord,
-        totalPoints: assessment.totalPoints ?? 0,
-        order: assessment.order ?? 0,
-        questions: (assessment.questions ?? []).map((question: any) => ({
-          id: question.id,
-          type: question.type ?? 'multiple_choice',
-          content: question.content ?? '',
-          points: question.points ?? 1,
-          order: question.order ?? 0,
-          isRequired: question.isRequired ?? true,
-          explanation: question.explanation ?? null,
-          imageUrl: question.imageUrl ?? null,
-          options: (question.options ?? []).map((option: any) => ({
-            id: option.id,
-            text: option.text ?? '',
-            isCorrect: option.isCorrect ?? false,
-            order: option.order ?? 0,
+        lessons: (content.lessons ?? []).map((lesson: any) => ({
+          id: lesson.id,
+          title: lesson.title,
+          summary: lesson.summary ?? '',
+          order: lesson.order ?? 0,
+          blocks: (lesson.blocks ?? []).map((block: any) => ({
+            id: block.id,
+            blockType: block.blockType,
+            blockVersion: block.blockVersion ?? 1,
+            order: block.order ?? 0,
+            payload: (block.payload ?? {}) as JsonRecord,
           })),
         })),
-      })),
-      announcements: (content.announcements ?? []).map((announcement: any) => ({
-        id: announcement.id,
-        title: announcement.title,
-        content: announcement.content,
-        isPinned: announcement.isPinned ?? false,
-        order: announcement.order ?? 0,
-      })),
-      chunks: derivedChunks,
-    };
+        assessments: (content.assessments ?? []).map((assessment: any) => ({
+          id: assessment.id,
+          title: assessment.title,
+          description: assessment.description ?? '',
+          type: assessment.type ?? 'quiz',
+          dueDateOffsetDays: assessment.dueDateOffsetDays ?? null,
+          settings: (assessment.settings ?? {}) as JsonRecord,
+          totalPoints: assessment.totalPoints ?? 0,
+          order: assessment.order ?? 0,
+          questions: (assessment.questions ?? []).map((question: any) => ({
+            id: question.id,
+            type: question.type ?? 'multiple_choice',
+            content: question.content ?? '',
+            points: question.points ?? 1,
+            order: question.order ?? 0,
+            isRequired: question.isRequired ?? true,
+            explanation: question.explanation ?? null,
+            imageUrl: question.imageUrl ?? null,
+            options: (question.options ?? []).map((option: any) => ({
+              id: option.id,
+              text: option.text ?? '',
+              isCorrect: option.isCorrect ?? false,
+              order: option.order ?? 0,
+            })),
+          })),
+        })),
+        announcements: (content.announcements ?? []).map((announcement: any) => ({
+          id: announcement.id,
+          title: announcement.title,
+          content: announcement.content,
+          isPinned: announcement.isPinned ?? false,
+          order: announcement.order ?? 0,
+        })),
+        chunks: derivedChunks,
+      };
 
-    return {
-      fileName: `engine-template-${template.subjectCode}-${template.id}.yaml`,
-      manifest,
-      yaml: stringifyEngineManifest(manifest),
-    };
+      let normalizedManifest: EngineTemplateManifest;
+      try {
+        normalizedManifest = JSON.parse(
+          JSON.stringify(manifest, (_key, value) => {
+            if (typeof value === 'bigint') {
+              return value.toString();
+            }
+            if (typeof value === 'number' && !Number.isFinite(value)) {
+              return 0;
+            }
+            if (value === undefined) {
+              return null;
+            }
+            return value;
+          }),
+        ) as EngineTemplateManifest;
+      } catch {
+        throw new BadRequestException(
+          'Template export failed: content contains unsupported or circular metadata',
+        );
+      }
+
+      return {
+        fileName: `engine-template-${template.subjectCode}-${template.id}.yaml`,
+        manifest: normalizedManifest,
+        yaml: stringifyEngineManifest(normalizedManifest),
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        error instanceof Error
+          ? `Template export failed: ${error.message}`
+          : 'Template export failed',
+      );
+    }
   }
 
   async validateEngineImport(manifestText: string) {
