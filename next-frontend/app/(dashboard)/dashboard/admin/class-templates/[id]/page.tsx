@@ -24,6 +24,7 @@ import { normalizeRichText } from '@/lib/rich-text';
 import {
   buildIndexKey,
   clearTemplateEditorDraft,
+  createTemplateAssessmentDraft,
   loadTemplateWorkspace,
   readTemplateEditorDraft,
   resolveAndSaveTemplateContent,
@@ -37,7 +38,6 @@ import type {
   EngineImportValidationResult,
   ClassTemplateModule,
   ClassTemplateModuleSection,
-  ClassTemplateQuestion,
 } from '@/types/class-template';
 import '../../../teacher/classes/[id]/workspace.css';
 import '../../../teacher/classes/[id]/modules/[moduleId]/module-workspace.css';
@@ -125,6 +125,26 @@ function normalizeTemplatePayload(
 function summarizeRichText(value: string | undefined) {
   if (!value) return '';
   return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function reindexTemplateAssessments(assessments: ClassTemplateAssessment[]) {
+  return assessments.map((assessment, index) => ({
+    ...assessment,
+    order: index + 1,
+  }));
+}
+
+function formatTemplateAssessmentType(type: string | undefined) {
+  switch (type) {
+    case 'file_upload':
+      return 'File Upload';
+    case 'exam':
+      return 'Exam';
+    case 'activity':
+      return 'Activity';
+    default:
+      return 'Quiz';
+  }
 }
 
 export default function ClassTemplateEditorPage() {
@@ -411,87 +431,32 @@ export default function ClassTemplateEditorPage() {
   };
 
   const addAssessment = () => {
-    setAssessments((current) => [
-      ...current,
-      {
-        title: 'New Assessment',
-        description: '',
-        type: 'quiz',
-        totalPoints: 10,
-        order: current.length + 1,
-        questions: [],
-      },
+    const nextAssessments = reindexTemplateAssessments([
+      ...assessments,
+      createTemplateAssessmentDraft(assessments.length + 1),
     ]);
-  };
 
-  const updateAssessment = (index: number, patch: Partial<ClassTemplateAssessment>) => {
-    setAssessments((current) => {
-      const next = current.slice();
-      next[index] = { ...next[index], ...patch };
-      return next;
+    writeTemplateEditorDraft(templateId, {
+      modules,
+      assessments: nextAssessments,
+      announcements,
     });
+    setAssessments(nextAssessments);
+    router.push(
+      `/dashboard/admin/class-templates/${templateId}/assessments/${buildIndexKey(nextAssessments.length - 1)}/edit`,
+    );
   };
 
   const removeAssessment = (index: number) => {
-    setAssessments((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  };
-
-  const addQuestion = (assessmentIndex: number) => {
     setAssessments((current) => {
-      const next = current.slice();
-      const assessment = next[assessmentIndex];
-      if (!assessment) return current;
-      const questions = assessment.questions ?? [];
-      const newQuestion: ClassTemplateQuestion = {
-        type: 'multiple_choice',
-        content: 'New question',
-        points: 1,
-        order: questions.length + 1,
-        options: [
-          { text: 'Option A', order: 1 },
-          { text: 'Option B', order: 2 },
-        ],
-      };
-
-      next[assessmentIndex] = {
-        ...assessment,
-        questions: [...questions, newQuestion],
-      };
-      return next;
-    });
-  };
-
-  const updateQuestion = (
-    assessmentIndex: number,
-    questionIndex: number,
-    patch: Partial<ClassTemplateQuestion>,
-  ) => {
-    setAssessments((current) => {
-      const next = current.slice();
-      const assessment = next[assessmentIndex];
-      if (!assessment) return current;
-      const questions = (assessment.questions ?? []).slice();
-      if (!questions[questionIndex]) return current;
-      questions[questionIndex] = { ...questions[questionIndex], ...patch };
-
-      next[assessmentIndex] = {
-        ...assessment,
-        questions,
-      };
-      return next;
-    });
-  };
-
-  const removeQuestion = (assessmentIndex: number, questionIndex: number) => {
-    setAssessments((current) => {
-      const next = current.slice();
-      const assessment = next[assessmentIndex];
-      if (!assessment) return current;
-
-      next[assessmentIndex] = {
-        ...assessment,
-        questions: (assessment.questions ?? []).filter((_, idx) => idx !== questionIndex),
-      };
+      const next = reindexTemplateAssessments(
+        current.filter((_, itemIndex) => itemIndex !== index),
+      );
+      writeTemplateEditorDraft(templateId, {
+        modules,
+        assessments: next,
+        announcements,
+      });
       return next;
     });
   };
@@ -505,10 +470,6 @@ export default function ClassTemplateEditorPage() {
 
   const openAssessmentStudio = (assessmentIndex: number) => {
     router.push(`/dashboard/admin/class-templates/${templateId}/assessments/${buildIndexKey(assessmentIndex)}/edit`);
-  };
-
-  const openNewAssessmentStudio = () => {
-    router.push(`/dashboard/admin/class-templates/${templateId}/assessments/new/edit`);
   };
 
   const openModuleWorkspace = (moduleIndex: number) => {
@@ -889,102 +850,87 @@ export default function ClassTemplateEditorPage() {
 
       {tab === 'assessments' ? (
         <div className="teacher-class-workspace__panel">
+          <div className="teacher-class-workspace__panel-head">
+            <div>
+              <h2 className="teacher-class-workspace__section-title">Assessments</h2>
+              <p>
+                {assessments.length} assessment{assessments.length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="teacher-class-workspace__head-actions">
+              <Button
+                data-testid="add-assessment-button"
+                className="teacher-class-workspace__outline"
+                variant="outline"
+                onClick={addAssessment}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Assessment
+              </Button>
+            </div>
+          </div>
           <div className="space-y-4">
-          {assessments.map((assessment, assessmentIndex) => (
-            <article key={`${assessment.id ?? 'new'}-${assessmentIndex}`} className="rounded-2xl border border-[var(--admin-outline)] bg-white p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Input
-                  data-testid={`assessment-title-${assessmentIndex}`}
-                  value={assessment.title}
-                  onChange={(event) => updateAssessment(assessmentIndex, { title: event.target.value })}
-                  className="font-bold"
-                />
-                <Button variant="outline" onClick={() => openAssessmentStudio(assessmentIndex)}>
-                  Open Studio
-                </Button>
-                <Button variant="outline" onClick={() => removeAssessment(assessmentIndex)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <RichTextEditor
-                value={assessment.description ?? ''}
-                onChange={(value) => updateAssessment(assessmentIndex, { description: value })}
-                placeholder="Assessment description"
-                minHeight={110}
-              />
-              <div className="mt-2 grid gap-2 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">Type</label>
-                  <select
-                    className="admin-select h-9 w-full rounded-lg px-2 text-sm"
-                    value={assessment.type ?? 'quiz'}
-                    onChange={(event) => updateAssessment(assessmentIndex, { type: event.target.value })}
-                  >
-                    <option value="quiz">Quiz</option>
-                    <option value="exam">Exam</option>
-                    <option value="activity">Activity</option>
-                    <option value="file_upload">File Upload</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">Total Points</label>
-                  <Input
-                    type="number"
-                    value={assessment.totalPoints ?? 0}
-                    onChange={(event) => updateAssessment(assessmentIndex, { totalPoints: Number(event.target.value || 0) })}
-                  />
-                </div>
-              </div>
+          {!assessments.length ? (
+            <div className="rounded-2xl border border-dashed border-[#c9d7ec] bg-white/90 p-8 text-center text-sm font-semibold text-[var(--admin-text-muted)]">
+              No assessments yet. Use Add Assessment to create a draft and open the editor.
+            </div>
+          ) : null}
+          {assessments.map((assessment, assessmentIndex) => {
+            const questionCount = assessment.questions?.length ?? 0;
+            const summary = summarizeRichText(assessment.description);
 
-              <div className="mt-3 space-y-2 rounded-xl border border-dashed border-[var(--admin-outline)] p-3">
-                {(assessment.questions ?? []).map((question, questionIndex) => (
-                  <div key={`${question.id ?? 'new'}-${questionIndex}`} className="rounded-lg border border-[var(--admin-outline)] p-3">
-                    <div className="mb-2 flex items-center gap-2">
-                      <RichTextEditor
-                        value={question.content}
-                        onChange={(nextContent) => updateQuestion(assessmentIndex, questionIndex, { content: nextContent })}
-                        className="font-medium"
-                        minHeight={64}
-                      />
-                      <Button variant="outline" onClick={() => removeQuestion(assessmentIndex, questionIndex)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-3">
-                      <select
-                        className="admin-select h-9 rounded-lg px-2 text-sm"
-                        value={question.type}
-                        onChange={(event) => updateQuestion(assessmentIndex, questionIndex, { type: event.target.value })}
-                      >
-                        <option value="multiple_choice">Multiple Choice</option>
-                        <option value="short_answer">Short Answer</option>
-                        <option value="true_false">True / False</option>
-                      </select>
-                      <Input
-                        type="number"
-                        value={question.points ?? 1}
-                        onChange={(event) => updateQuestion(assessmentIndex, questionIndex, { points: Number(event.target.value || 1) })}
-                        placeholder="Points"
-                      />
-                    </div>
+            return (
+              <article
+                key={`${assessment.id ?? 'new'}-${assessmentIndex}`}
+                className="teacher-class-workspace__assignment-card"
+              >
+                <button
+                  type="button"
+                  className="teacher-class-workspace__assignment-main text-left"
+                  onClick={() => openAssessmentStudio(assessmentIndex)}
+                >
+                  <div className="teacher-class-workspace__assignment-icon">
+                    <ClipboardList className="h-4 w-4" />
                   </div>
-                ))}
-                <Button variant="outline" onClick={() => addQuestion(assessmentIndex)}>
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add Question
-                </Button>
-              </div>
-            </article>
-          ))}
-          <Button
-            data-testid="add-assessment-button"
-            className="teacher-class-workspace__outline"
-            variant="outline"
-            onClick={addAssessment}
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Assessment
-          </Button>
+                  <div className="teacher-class-workspace__assignment-copy">
+                    <div className="teacher-class-workspace__assignment-tags">
+                      <span>{formatTemplateAssessmentType(assessment.type)}</span>
+                      <span data-status="draft">Template Draft</span>
+                    </div>
+                    <h3 className="mt-2">
+                      {assessment.title?.trim() || `Untitled Assessment ${assessmentIndex + 1}`}
+                    </h3>
+                    <p className="mt-1">
+                      {summary || 'Open the assessment editor to add questions, instructions, and settings.'}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-[var(--admin-text-muted)]">
+                      {questionCount} question{questionCount === 1 ? '' : 's'} •{' '}
+                      {assessment.totalPoints ?? 0} point{assessment.totalPoints === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                </button>
+
+                <div className="teacher-class-workspace__assignment-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="teacher-class-workspace__outline"
+                    onClick={() => openAssessmentStudio(assessmentIndex)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"
+                    onClick={() => removeAssessment(assessmentIndex)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
           </div>
         </div>
       ) : null}
@@ -1039,12 +985,6 @@ export default function ClassTemplateEditorPage() {
         </div>
       ) : null}
 
-      {tab === 'assessments' ? (
-        <Button className="teacher-class-workspace__solid" onClick={openNewAssessmentStudio}>
-          <Plus className="mr-1 h-4 w-4" />
-          Create In Studio
-        </Button>
-      ) : null}
       </section>
     </div>
   );

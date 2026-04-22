@@ -31,6 +31,23 @@ export interface LessonItemContext {
 
 const INDEX_KEY_PREFIX = 'idx-';
 
+export function createTemplateAssessmentDraft(order: number): ClassTemplateAssessment {
+  return {
+    title: 'Untitled Assessment',
+    description: '',
+    type: 'quiz',
+    totalPoints: 0,
+    order,
+    settings: {
+      maxAttempts: 1,
+      passingScore: 60,
+      randomizeQuestions: false,
+      closeWhenDue: false,
+    },
+    questions: [],
+  };
+}
+
 export const classTemplateDraftStorageKey = (templateId: string) => `class-template-editor:${templateId}:draft`;
 
 export function cloneTemplateEditorState(state: ClassTemplateEditorState): ClassTemplateEditorState {
