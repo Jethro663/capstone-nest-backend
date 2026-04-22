@@ -532,6 +532,46 @@ describe('ClassesService', () => {
       );
     });
 
+    it('normalizes template assessment type "activity" to class assessment type "assignment"', async () => {
+      setupHappyPath();
+      const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
+      const assessmentInsertChain = makeInsertChain([{ id: 'assessment-1' }]);
+      mockDb.insert
+        .mockImplementationOnce(() => classInsertChain)
+        .mockImplementationOnce(() => assessmentInsertChain);
+
+      mockDb.query.classTemplates.findFirst.mockResolvedValue({
+        id: 'template-uuid-type-map',
+        status: 'published',
+        subjectCode: 'MATH-7',
+        subjectGradeLevel: '7',
+      });
+      mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([
+        {
+          id: 'template-assessment-activity',
+          title: 'Core Activity',
+          description: '<p>Core activity</p>',
+          type: 'activity',
+          dueDateOffsetDays: null,
+          totalPoints: 10,
+          settings: {},
+        },
+      ]);
+
+      await service.create(
+        { ...dto, templateId: 'template-uuid-type-map' } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(assessmentInsertChain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          classId: CLASS_ID,
+          type: 'assignment',
+        }),
+      );
+    });
+
     it('throws BadRequestException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 

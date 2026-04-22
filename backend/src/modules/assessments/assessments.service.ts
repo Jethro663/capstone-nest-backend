@@ -723,6 +723,29 @@ export class AssessmentsService {
     }
   }
 
+  private assertCoreTemplatePlacementOnly(
+    updateAssessmentDto: UpdateAssessmentDto,
+  ) {
+    const allowedFields = new Set([
+      'classRecordCategory',
+      'quarter',
+      'classRecordItemId',
+    ]);
+    const disallowedKeys = Object.keys(
+      updateAssessmentDto as Record<string, unknown>,
+    ).filter(
+      (key) =>
+        (updateAssessmentDto as Record<string, unknown>)[key] !== undefined &&
+        !allowedFields.has(key),
+    );
+
+    if (disallowedKeys.length > 0) {
+      throw new ForbiddenException(
+        'Core template assessments are immutable; only class record placement can be updated',
+      );
+    }
+  }
+
   private assertTeacherClassOwnership(
     classTeacherId: string | null | undefined,
     currentUser: any,
@@ -1504,10 +1527,9 @@ export class AssessmentsService {
 
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(
-      existingAssessment,
-      'update publish state',
-    );
+    if (existingAssessment.isCoreTemplateAsset) {
+      this.assertCoreTemplatePlacementOnly(updateAssessmentDto);
+    }
     this.assertTeacherClassOwnership(
       existingAssessment.class?.teacherId,
       currentUser,
@@ -1517,6 +1539,11 @@ export class AssessmentsService {
     const nextType = updateAssessmentDto.type ?? existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
     const wasPublished = Boolean(existingAssessment.isPublished);
+    const shouldSyncClassRecordPlacement =
+      !existingAssessment.isCoreTemplateAsset ||
+      updateAssessmentDto.classRecordCategory !== undefined ||
+      updateAssessmentDto.quarter !== undefined ||
+      updateAssessmentDto.classRecordItemId !== undefined;
     const shouldRescheduleDueReminder =
       updateAssessmentDto.dueDate !== undefined ||
       updateAssessmentDto.isPublished !== undefined;
@@ -1548,117 +1575,125 @@ export class AssessmentsService {
 
     // Build update object with only provided fields
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (updateAssessmentDto.title !== undefined)
-      updateData.title = updateAssessmentDto.title;
-    if (updateAssessmentDto.description !== undefined)
-      updateData.description =
-        this.sanitizeOptionalRichText(updateAssessmentDto.description);
-    if (updateAssessmentDto.type !== undefined)
-      updateData.type = updateAssessmentDto.type;
-    if (updateAssessmentDto.dueDate !== undefined)
-      updateData.dueDate = updateAssessmentDto.dueDate
-        ? new Date(updateAssessmentDto.dueDate)
-        : null;
-    if (updateAssessmentDto.closeWhenDue !== undefined)
-      updateData.closeWhenDue = updateAssessmentDto.closeWhenDue;
-    if (updateAssessmentDto.randomizeQuestions !== undefined)
-      updateData.randomizeQuestions = updateAssessmentDto.randomizeQuestions;
-    if (updateAssessmentDto.timedQuestionsEnabled !== undefined)
-      updateData.timedQuestionsEnabled =
-        updateAssessmentDto.timedQuestionsEnabled;
-    if (updateAssessmentDto.questionTimeLimitSeconds !== undefined)
-      updateData.questionTimeLimitSeconds =
-        updateAssessmentDto.questionTimeLimitSeconds;
-    if (updateAssessmentDto.strictMode !== undefined)
-      updateData.strictMode = updateAssessmentDto.strictMode;
-    if (updateAssessmentDto.fileUploadInstructions !== undefined)
-      updateData.fileUploadInstructions = this.sanitizeOptionalRichText(
-        updateAssessmentDto.fileUploadInstructions,
-      );
-    if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
-      updateData.teacherAttachmentFileId =
-        updateAssessmentDto.teacherAttachmentFileId;
-    if (updateAssessmentDto.rubricSourceFileId !== undefined) {
-      updateData.rubricSourceFileId = updateAssessmentDto.rubricSourceFileId;
-      updateData.rubricParseStatus = updateAssessmentDto.rubricSourceFileId
-        ? (existingAssessment.rubricParseStatus ?? 'pending')
-        : 'pending';
-    }
-    if (updateAssessmentDto.allowedUploadMimeTypes !== undefined)
-      updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
-        updateAssessmentDto.allowedUploadMimeTypes,
-      );
-    if (updateAssessmentDto.allowedUploadExtensions !== undefined)
-      updateData.allowedUploadExtensions = this.normalizeExtensions(
-        updateAssessmentDto.allowedUploadExtensions,
-      );
-    if (updateAssessmentDto.maxUploadSizeBytes !== undefined)
-      updateData.maxUploadSizeBytes = updateAssessmentDto.maxUploadSizeBytes;
-    if (updateAssessmentDto.passingScore !== undefined)
-      updateData.passingScore = updateAssessmentDto.passingScore;
-    if (updateAssessmentDto.maxAttempts !== undefined)
-      updateData.maxAttempts = updateAssessmentDto.maxAttempts;
-    if (updateAssessmentDto.timeLimitMinutes !== undefined)
-      updateData.timeLimitMinutes = updateAssessmentDto.timeLimitMinutes;
-    if (updateAssessmentDto.isPublished !== undefined)
-      updateData.isPublished = updateAssessmentDto.isPublished;
-    if (updateAssessmentDto.feedbackLevel !== undefined)
-      updateData.feedbackLevel = updateAssessmentDto.feedbackLevel;
-    if (updateAssessmentDto.feedbackDelayHours !== undefined)
-      updateData.feedbackDelayHours = updateAssessmentDto.feedbackDelayHours;
-    if (updateAssessmentDto.classRecordCategory !== undefined)
-      updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
-    if (updateAssessmentDto.quarter !== undefined)
-      updateData.quarter = updateAssessmentDto.quarter;
-
-    if (updateAssessmentDto.rubricCriteria !== undefined) {
-      const rubricCriteria = this.normalizeRubricCriteria(
-        updateAssessmentDto.rubricCriteria,
-      );
-      updateData.rubricCriteria = rubricCriteria;
-      updateData.rubricParseStatus =
-        rubricCriteria.length > 0 ? 'reviewed' : 'pending';
-      updateData.rubricParsedAt = rubricCriteria.length > 0 ? new Date() : null;
-      updateData.totalPoints =
-        rubricCriteria.length > 0 ? this.sumRubricPoints(rubricCriteria) : 100;
-    }
-
-    if (!nextIsFileUpload) {
-      updateData.fileUploadInstructions = null;
-      updateData.teacherAttachmentFileId = null;
-      updateData.rubricSourceFileId = null;
-      updateData.rubricParseStatus = 'pending';
-      updateData.rubricParsedAt = null;
-      updateData.rubricRawText = null;
-      updateData.rubricParseError = null;
-      updateData.rubricCriteria = null;
-      updateData.allowedUploadMimeTypes = null;
-      updateData.allowedUploadExtensions = null;
-      updateData.maxUploadSizeBytes = null;
+    if (existingAssessment.isCoreTemplateAsset) {
+      if (updateAssessmentDto.classRecordCategory !== undefined)
+        updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
+      if (updateAssessmentDto.quarter !== undefined)
+        updateData.quarter = updateAssessmentDto.quarter;
     } else {
-      if (updateData.allowedUploadMimeTypes === undefined) {
+      if (updateAssessmentDto.title !== undefined)
+        updateData.title = updateAssessmentDto.title;
+      if (updateAssessmentDto.description !== undefined)
+        updateData.description = this.sanitizeOptionalRichText(
+          updateAssessmentDto.description,
+        );
+      if (updateAssessmentDto.type !== undefined)
+        updateData.type = updateAssessmentDto.type;
+      if (updateAssessmentDto.dueDate !== undefined)
+        updateData.dueDate = updateAssessmentDto.dueDate
+          ? new Date(updateAssessmentDto.dueDate)
+          : null;
+      if (updateAssessmentDto.closeWhenDue !== undefined)
+        updateData.closeWhenDue = updateAssessmentDto.closeWhenDue;
+      if (updateAssessmentDto.randomizeQuestions !== undefined)
+        updateData.randomizeQuestions = updateAssessmentDto.randomizeQuestions;
+      if (updateAssessmentDto.timedQuestionsEnabled !== undefined)
+        updateData.timedQuestionsEnabled =
+          updateAssessmentDto.timedQuestionsEnabled;
+      if (updateAssessmentDto.questionTimeLimitSeconds !== undefined)
+        updateData.questionTimeLimitSeconds =
+          updateAssessmentDto.questionTimeLimitSeconds;
+      if (updateAssessmentDto.strictMode !== undefined)
+        updateData.strictMode = updateAssessmentDto.strictMode;
+      if (updateAssessmentDto.fileUploadInstructions !== undefined)
+        updateData.fileUploadInstructions = this.sanitizeOptionalRichText(
+          updateAssessmentDto.fileUploadInstructions,
+        );
+      if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
+        updateData.teacherAttachmentFileId =
+          updateAssessmentDto.teacherAttachmentFileId;
+      if (updateAssessmentDto.rubricSourceFileId !== undefined) {
+        updateData.rubricSourceFileId = updateAssessmentDto.rubricSourceFileId;
+        updateData.rubricParseStatus = updateAssessmentDto.rubricSourceFileId
+          ? (existingAssessment.rubricParseStatus ?? 'pending')
+          : 'pending';
+      }
+      if (updateAssessmentDto.allowedUploadMimeTypes !== undefined)
         updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
-          existingAssessment.allowedUploadMimeTypes ?? undefined,
+          updateAssessmentDto.allowedUploadMimeTypes,
         );
-      }
-      if (updateData.allowedUploadExtensions === undefined) {
+      if (updateAssessmentDto.allowedUploadExtensions !== undefined)
         updateData.allowedUploadExtensions = this.normalizeExtensions(
-          existingAssessment.allowedUploadExtensions ?? undefined,
+          updateAssessmentDto.allowedUploadExtensions,
         );
-      }
-      if (updateData.maxUploadSizeBytes === undefined) {
-        updateData.maxUploadSizeBytes =
-          existingAssessment.maxUploadSizeBytes ??
-          MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
-      }
-      if (updateData.totalPoints === undefined) {
-        const existingRubricCriteria = this.normalizeRubricCriteria(
-          (existingAssessment.rubricCriteria as RubricCriterion[]) ?? [],
+      if (updateAssessmentDto.maxUploadSizeBytes !== undefined)
+        updateData.maxUploadSizeBytes = updateAssessmentDto.maxUploadSizeBytes;
+      if (updateAssessmentDto.passingScore !== undefined)
+        updateData.passingScore = updateAssessmentDto.passingScore;
+      if (updateAssessmentDto.maxAttempts !== undefined)
+        updateData.maxAttempts = updateAssessmentDto.maxAttempts;
+      if (updateAssessmentDto.timeLimitMinutes !== undefined)
+        updateData.timeLimitMinutes = updateAssessmentDto.timeLimitMinutes;
+      if (updateAssessmentDto.isPublished !== undefined)
+        updateData.isPublished = updateAssessmentDto.isPublished;
+      if (updateAssessmentDto.feedbackLevel !== undefined)
+        updateData.feedbackLevel = updateAssessmentDto.feedbackLevel;
+      if (updateAssessmentDto.feedbackDelayHours !== undefined)
+        updateData.feedbackDelayHours = updateAssessmentDto.feedbackDelayHours;
+      if (updateAssessmentDto.classRecordCategory !== undefined)
+        updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
+      if (updateAssessmentDto.quarter !== undefined)
+        updateData.quarter = updateAssessmentDto.quarter;
+
+      if (updateAssessmentDto.rubricCriteria !== undefined) {
+        const rubricCriteria = this.normalizeRubricCriteria(
+          updateAssessmentDto.rubricCriteria,
         );
+        updateData.rubricCriteria = rubricCriteria;
+        updateData.rubricParseStatus =
+          rubricCriteria.length > 0 ? 'reviewed' : 'pending';
+        updateData.rubricParsedAt = rubricCriteria.length > 0 ? new Date() : null;
         updateData.totalPoints =
-          existingRubricCriteria.length > 0
-            ? this.sumRubricPoints(existingRubricCriteria)
-            : 100;
+          rubricCriteria.length > 0 ? this.sumRubricPoints(rubricCriteria) : 100;
+      }
+
+      if (!nextIsFileUpload) {
+        updateData.fileUploadInstructions = null;
+        updateData.teacherAttachmentFileId = null;
+        updateData.rubricSourceFileId = null;
+        updateData.rubricParseStatus = 'pending';
+        updateData.rubricParsedAt = null;
+        updateData.rubricRawText = null;
+        updateData.rubricParseError = null;
+        updateData.rubricCriteria = null;
+        updateData.allowedUploadMimeTypes = null;
+        updateData.allowedUploadExtensions = null;
+        updateData.maxUploadSizeBytes = null;
+      } else {
+        if (updateData.allowedUploadMimeTypes === undefined) {
+          updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
+            existingAssessment.allowedUploadMimeTypes ?? undefined,
+          );
+        }
+        if (updateData.allowedUploadExtensions === undefined) {
+          updateData.allowedUploadExtensions = this.normalizeExtensions(
+            existingAssessment.allowedUploadExtensions ?? undefined,
+          );
+        }
+        if (updateData.maxUploadSizeBytes === undefined) {
+          updateData.maxUploadSizeBytes =
+            existingAssessment.maxUploadSizeBytes ??
+            MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
+        }
+        if (updateData.totalPoints === undefined) {
+          const existingRubricCriteria = this.normalizeRubricCriteria(
+            (existingAssessment.rubricCriteria as RubricCriterion[]) ?? [],
+          );
+          updateData.totalPoints =
+            existingRubricCriteria.length > 0
+              ? this.sumRubricPoints(existingRubricCriteria)
+              : 100;
+        }
       }
     }
 
@@ -1668,15 +1703,17 @@ export class AssessmentsService {
       .where(eq(assessments.id, assessmentId))
       .returning();
 
-    await this.syncClassRecordPlacement({
-      assessmentId: updated.id,
-      classId: updated.classId,
-      title: updated.title,
-      totalPoints: updated.totalPoints ?? 0,
-      classRecordCategory: updated.classRecordCategory ?? undefined,
-      quarter: updated.quarter ?? undefined,
-      classRecordItemId: updateAssessmentDto.classRecordItemId,
-    });
+    if (shouldSyncClassRecordPlacement) {
+      await this.syncClassRecordPlacement({
+        assessmentId: updated.id,
+        classId: updated.classId,
+        title: updated.title,
+        totalPoints: updated.totalPoints ?? 0,
+        classRecordCategory: updated.classRecordCategory ?? undefined,
+        quarter: updated.quarter ?? undefined,
+        classRecordItemId: updateAssessmentDto.classRecordItemId,
+      });
+    }
 
     const assessment = await this.getAssessmentById(updated.id);
 
@@ -1749,6 +1786,51 @@ export class AssessmentsService {
     }
 
     if (dto.isPublished) {
+      if (!assessment.classRecordCategory || !assessment.quarter) {
+        throw new BadRequestException(
+          'Core assessments must be assigned to a class record category and quarter before publishing',
+        );
+      }
+
+      const expectedCategoryName = this.getClassRecordCategoryName(
+        assessment.classRecordCategory,
+      );
+      if (!expectedCategoryName) {
+        throw new BadRequestException(
+          'Core assessments must be assigned to a valid class record category before publishing',
+        );
+      }
+
+      const linkedItem = await this.db.query.classRecordItems.findFirst({
+        where: eq(classRecordItems.assessmentId, assessmentId),
+        with: {
+          classRecord: {
+            columns: {
+              id: true,
+              classId: true,
+              gradingPeriod: true,
+            },
+          },
+          category: {
+            columns: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (
+        !linkedItem ||
+        linkedItem.classRecord.classId !== assessment.classId ||
+        linkedItem.classRecord.gradingPeriod !== assessment.quarter ||
+        linkedItem.category.name !== expectedCategoryName
+      ) {
+        throw new BadRequestException(
+          'Core assessments must be placed in a class record slot before publishing',
+        );
+      }
+
       await this.validateForPublish(assessmentId);
     }
 

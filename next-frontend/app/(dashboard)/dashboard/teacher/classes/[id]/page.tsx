@@ -1211,8 +1211,24 @@ export default function TeacherClassDetailPage() {
 
     try {
       setBusyAssessmentId(assessment.id);
+      const nextIsPublished = !assessment.isPublished;
+      const isCoreTemplateAssessment = Boolean(assessment.isCoreTemplateAsset);
+
+      if (
+        nextIsPublished &&
+        isCoreTemplateAssessment &&
+        (!assessment.classRecordCategory ||
+          !assessment.quarter ||
+          !(assessment.classRecordItemId || assessment.classRecordPlacement?.itemId))
+      ) {
+        toast.warning(
+          'Core assessments must be tagged in a class record category, quarter, and slot before publishing.',
+        );
+        return;
+      }
+
       const response = await assessmentService.releaseCore(assessment.id, {
-        isPublished: !assessment.isPublished,
+        isPublished: nextIsPublished,
       });
       setAssessments((current) =>
         current.map((entry) =>

@@ -16,6 +16,7 @@ function buildMockDb() {
       assessments: { findFirst: jest.fn() },
       classRecords: { findFirst: jest.fn() },
       classRecordCategories: { findFirst: jest.fn() },
+      classes: { findFirst: jest.fn() },
     },
     insert: jest.fn(),
     update: jest.fn(),
@@ -44,6 +45,10 @@ describe('ClassRecordSyncService performance events', () => {
     db = buildMockDb();
     eventEmitter = { emit: jest.fn() } as any;
     jest.clearAllMocks();
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -62,7 +67,7 @@ describe('ClassRecordSyncService performance events', () => {
       .mockResolvedValueOnce({
         id: 'item-1',
         assessmentId: 'assessment-1',
-        classRecord: { teacherId: 'teacher-1', status: 'draft' },
+        classRecord: { classId: 'class-1', status: 'draft' },
       })
       .mockResolvedValueOnce({
         id: 'item-1',

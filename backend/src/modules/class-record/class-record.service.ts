@@ -71,6 +71,29 @@ export class ClassRecordService {
     return roles.includes('admin');
   }
 
+  private async assertClassOwnership(
+    classId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    if (this.isAdmin(roles)) {
+      return;
+    }
+
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { id: true, teacherId: true },
+    });
+
+    if (!cls) {
+      throw new NotFoundException(`Class "${classId}" not found`);
+    }
+
+    if (cls.teacherId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
+  }
+
   private async assertClassRecord(
     classRecordId: string,
     userId: string,
@@ -85,14 +108,8 @@ export class ClassRecordService {
       throw new NotFoundException(`Class record "${classRecordId}" not found`);
     }
 
-    if (
-      requireOwnership &&
-      !this.isAdmin(roles) &&
-      record.teacherId !== userId
-    ) {
-      throw new ForbiddenException(
-        'Access denied: you do not own this class record',
-      );
+    if (requireOwnership) {
+      await this.assertClassOwnership(record.classId, userId, roles);
     }
 
     return record;
@@ -156,7 +173,7 @@ export class ClassRecordService {
       .insert(classRecords)
       .values({
         classId: dto.classId,
-        teacherId: userId,
+        teacherId: cls.teacherId,
         gradingPeriod: dto.gradingPeriod,
         status: 'draft',
       })
@@ -225,9 +242,7 @@ export class ClassRecordService {
       throw new NotFoundException(`Class record "${id}" not found`);
     }
 
-    if (!this.isAdmin(roles) && record.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(record.classId, userId, roles);
 
     return record;
   }
@@ -300,9 +315,7 @@ export class ClassRecordService {
       );
     }
 
-    if (!this.isAdmin(roles) && record.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(record.classId, userId, roles);
 
     return {
       classRecordId: record.id,
@@ -590,9 +603,7 @@ export class ClassRecordService {
       throw new NotFoundException(`Class record item "${itemId}" not found`);
     }
 
-    if (!this.isAdmin(roles) && item.classRecord.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
     this.assertEditable(item.classRecord);
 
@@ -641,9 +652,7 @@ export class ClassRecordService {
       throw new NotFoundException(`Class record item "${itemId}" not found`);
     }
 
-    if (!this.isAdmin(roles) && item.classRecord.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
     this.assertEditable(item.classRecord);
 
@@ -719,9 +728,7 @@ export class ClassRecordService {
       throw new NotFoundException(`Class record item "${itemId}" not found`);
     }
 
-    if (!this.isAdmin(roles) && item.classRecord.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
     this.assertEditable(item.classRecord);
 
@@ -803,11 +810,13 @@ export class ClassRecordService {
       throw new NotFoundException(`Class record item "${itemId}" not found`);
     }
 
-    if (!this.isAdmin(roles) && item.classRecord.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
-    const result = await this.syncService.syncFromAssessment(itemId, userId);
+    const result = await this.syncService.syncFromAssessment(
+      itemId,
+      userId,
+      roles,
+    );
 
     await this.auditService.log({
       actorId: userId,

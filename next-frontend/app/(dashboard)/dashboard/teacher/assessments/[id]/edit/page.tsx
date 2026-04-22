@@ -511,6 +511,7 @@ export default function AssessmentEditorPage() {
   const autoSaveTitle = useCallback(
     async (nextTitle: string) => {
       if (!assessment || !assessmentId || saving) return;
+      if (assessment.isCoreTemplateAsset) return;
       try {
         setSaveState('saving');
         await assessmentService.update(assessment.id, { title: nextTitle });
@@ -788,18 +789,27 @@ export default function AssessmentEditorPage() {
       toast.error('Assessment title is required');
       return;
     }
+    const isCoreTemplateAssessment = Boolean(assessment.isCoreTemplateAsset);
 
-    if (assessmentType !== 'file_upload' && questions.length === 0) {
+    if (!isCoreTemplateAssessment && assessmentType !== 'file_upload' && questions.length === 0) {
       toast.error('Add at least one question');
       return;
     }
 
-    if (assessmentType === 'file_upload' && !fileUploadInstructions.trim()) {
+    if (
+      !isCoreTemplateAssessment &&
+      assessmentType === 'file_upload' &&
+      !fileUploadInstructions.trim()
+    ) {
       toast.error('File upload instructions are required');
       return;
     }
 
-    if (assessmentType === 'file_upload' && allowedUploadExtensions.length === 0) {
+    if (
+      !isCoreTemplateAssessment &&
+      assessmentType === 'file_upload' &&
+      allowedUploadExtensions.length === 0
+    ) {
       toast.error('Select at least one allowed file type');
       return;
     }
@@ -818,24 +828,7 @@ export default function AssessmentEditorPage() {
       setSaving(true);
       setSaveState('saving');
 
-      await assessmentService.update(assessment.id, {
-        title: title.trim(),
-        description: description.trim() || undefined,
-        type: assessmentType,
-        passingScore,
-        maxAttempts,
-        timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : null,
-        dueDate: fromDateInputValue(dueDate),
-        closeWhenDue,
-        randomizeQuestions,
-        timedQuestionsEnabled,
-        questionTimeLimitSeconds:
-          timedQuestionsEnabled && questionTimeLimitSeconds
-            ? Number(questionTimeLimitSeconds)
-            : null,
-        strictMode,
-        feedbackLevel,
-        feedbackDelayHours: feedbackLevel === 'immediate' ? 0 : feedbackDelayHours,
+      const classRecordPlacementPayload = {
         classRecordCategory: category || undefined,
         quarter: quarter || undefined,
         classRecordItemId:
@@ -844,20 +837,45 @@ export default function AssessmentEditorPage() {
               ? selectedSlotId || null
               : null
             : null,
-        fileUploadInstructions:
-          assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
-        teacherAttachmentFileId:
-          assessmentType === 'file_upload' ? teacherAttachmentFile?.id ?? null : null,
-        allowedUploadExtensions:
-          assessmentType === 'file_upload' ? allowedUploadExtensions : undefined,
-        allowedUploadMimeTypes:
-          assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
-        maxUploadSizeBytes:
-          assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
-        isPublished: availability === 'given',
-      });
+      };
 
-      if (assessmentType !== 'file_upload') {
+      if (isCoreTemplateAssessment) {
+        await assessmentService.update(assessment.id, classRecordPlacementPayload);
+      } else {
+        await assessmentService.update(assessment.id, {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          type: assessmentType,
+          passingScore,
+          maxAttempts,
+          timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : null,
+          dueDate: fromDateInputValue(dueDate),
+          closeWhenDue,
+          randomizeQuestions,
+          timedQuestionsEnabled,
+          questionTimeLimitSeconds:
+            timedQuestionsEnabled && questionTimeLimitSeconds
+              ? Number(questionTimeLimitSeconds)
+              : null,
+          strictMode,
+          feedbackLevel,
+          feedbackDelayHours: feedbackLevel === 'immediate' ? 0 : feedbackDelayHours,
+          ...classRecordPlacementPayload,
+          fileUploadInstructions:
+            assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
+          teacherAttachmentFileId:
+            assessmentType === 'file_upload' ? teacherAttachmentFile?.id ?? null : null,
+          allowedUploadExtensions:
+            assessmentType === 'file_upload' ? allowedUploadExtensions : undefined,
+          allowedUploadMimeTypes:
+            assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
+          maxUploadSizeBytes:
+            assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
+          isPublished: availability === 'given',
+        });
+      }
+
+      if (!isCoreTemplateAssessment && assessmentType !== 'file_upload') {
         await syncQuestions();
       }
 

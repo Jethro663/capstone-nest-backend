@@ -343,13 +343,50 @@ export default function LessonEditorPage() {
     void fetchData();
   }, [fetchData]);
 
+  const buildDraftModulesWithLessonProgress = useCallback(() => {
+    const safeTitle = title.trim() || 'Untitled Lesson';
+    const safeDescription = normalizeRichValue(description);
+    const normalizedBlocks = blocks.map((block, index) => ({
+      ...block,
+      lessonId: lessonKey,
+      order: index + 1,
+      content:
+        typeof block.content === 'string'
+          ? block.content
+          : JSON.parse(JSON.stringify(block.content ?? {})),
+    }));
+
+    return updateLessonMetadataByKey(modules, lessonKey, {
+      lessonTitle: safeTitle,
+      lessonSummary: safeDescription,
+      lessonBlocks: normalizedBlocks,
+      isDraft: lesson?.isDraft ?? true,
+    });
+  }, [blocks, description, lesson?.isDraft, lessonKey, modules, title]);
+
+  const persistLessonDraft = useCallback(() => {
+    if (!templateId || loading) return;
+    const draftModules = buildDraftModulesWithLessonProgress();
+    writeTemplateEditorDraft(templateId, {
+      modules: draftModules,
+      assessments,
+      announcements,
+    });
+  }, [
+    announcements,
+    assessments,
+    buildDraftModulesWithLessonProgress,
+    loading,
+    templateId,
+  ]);
+
   useEffect(() => {
     if (!templateId || loading) return;
     const handle = window.setTimeout(() => {
-      writeTemplateEditorDraft(templateId, { modules, assessments, announcements });
-    }, 500);
+      persistLessonDraft();
+    }, 350);
     return () => window.clearTimeout(handle);
-  }, [templateId, modules, assessments, announcements, loading]);
+  }, [loading, persistLessonDraft, templateId]);
 
   const persistTemplateLesson = useCallback(async (
     {
@@ -709,7 +746,10 @@ export default function LessonEditorPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => router.back()}
+                onClick={() => {
+                  persistLessonDraft();
+                  router.back();
+                }}
                 className="teacher-button-outline rounded-xl font-black"
               >
                 <ArrowLeft className="h-4 w-4" />

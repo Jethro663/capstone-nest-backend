@@ -106,6 +106,13 @@ const STUDENT_STYLE_TOKEN_OPTIONS = {
   preset: ['preset-blue', 'preset-green', 'preset-violet'],
 } as const satisfies Record<StudentPresentationMode, readonly string[]>;
 
+const CLASS_ASSESSMENT_TYPES = new Set([
+  'quiz',
+  'exam',
+  'assignment',
+  'file_upload',
+] as const);
+
 @Injectable()
 export class ClassesService {
   constructor(
@@ -117,6 +124,28 @@ export class ClassesService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private normalizeTemplateAssessmentType(type: unknown) {
+    const normalized = typeof type === 'string' ? type.trim().toLowerCase() : '';
+
+    if (CLASS_ASSESSMENT_TYPES.has(normalized as any)) {
+      return normalized as 'quiz' | 'exam' | 'assignment' | 'file_upload';
+    }
+
+    if (
+      normalized === 'activity' ||
+      normalized === 'performance_task' ||
+      normalized === 'performance-task'
+    ) {
+      return 'assignment';
+    }
+
+    if (normalized === 'file' || normalized === 'upload') {
+      return 'file_upload';
+    }
+
+    return 'quiz';
   }
 
   private assertStudentPreferenceReadAccess(
@@ -732,7 +761,7 @@ export class ClassesService {
           classId,
           title: templateAssessment.title,
           description: templateAssessment.description,
-          type: templateAssessment.type,
+          type: this.normalizeTemplateAssessmentType(templateAssessment.type),
           dueDate,
           totalPoints: templateAssessment.totalPoints ?? 0,
           isPublished: templateAssetsPublished,

@@ -11,6 +11,7 @@ function buildMockDb() {
   return {
     query: {
       classRecordItems: { findFirst: jest.fn() },
+      classes: { findFirst: jest.fn() },
     },
     insert: jest.fn(),
   };
@@ -31,6 +32,10 @@ describe('ClassRecordService performance events', () => {
   beforeEach(async () => {
     db = buildMockDb();
     eventEmitter = { emit: jest.fn() } as any;
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

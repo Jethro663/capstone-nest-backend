@@ -149,6 +149,24 @@ export class ClassTemplatesService {
       : null;
   }
 
+  private coerceOptionalUniqueUuid(value: unknown, seen: Set<string>) {
+    const normalized = this.coerceOptionalUuid(value);
+    if (!normalized || seen.has(normalized)) {
+      return undefined;
+    }
+    seen.add(normalized);
+    return normalized;
+  }
+
+  private createUniqueUuid(seen: Set<string>) {
+    let next = randomUUID();
+    while (seen.has(next)) {
+      next = randomUUID();
+    }
+    seen.add(next);
+    return next;
+  }
+
   private normalizeModuleItemIdentifiers(
     modules: UpdateClassTemplateContentDto['modules'] | undefined,
   ) {
@@ -297,6 +315,146 @@ export class ClassTemplatesService {
         })),
       })),
     }));
+  }
+
+  private async remapCrossTemplateTemplateAssetIds(
+    templateId: string,
+    lessons: CanonicalTemplateLesson[],
+    assessments: CanonicalTemplateAssessment[],
+  ) {
+    const lessonIdRemap = new Map<string, string>();
+    const assessmentIdRemap = new Map<string, string>();
+
+    const lessonIds = Array.from(new Set(lessons.map((lesson) => lesson.id)));
+    if (lessonIds.length > 0) {
+      const existingLessons = await this.db.query.classTemplateLessons.findMany({
+        where: inArray(classTemplateLessons.id, lessonIds),
+        columns: {
+          id: true,
+          templateId: true,
+        },
+      });
+      const reservedLessonIds = new Set(existingLessons.map((row) => row.id));
+      const crossTemplateLessonIds = new Set(
+        existingLessons
+          .filter((row) => row.templateId !== templateId)
+          .map((row) => row.id),
+      );
+
+      for (const lesson of lessons) {
+        const currentLessonId = lesson.id;
+        if (!crossTemplateLessonIds.has(currentLessonId)) {
+          reservedLessonIds.add(currentLessonId);
+          continue;
+        }
+
+        const nextLessonId = this.createUniqueUuid(reservedLessonIds);
+        lessonIdRemap.set(currentLessonId, nextLessonId);
+        lesson.id = nextLessonId;
+        for (const block of lesson.blocks) {
+          block.payload = {
+            ...(block.payload ?? {}),
+            lessonId: nextLessonId,
+          };
+        }
+      }
+    }
+
+    const lessonBlocks = lessons.flatMap((lesson) => lesson.blocks);
+    const lessonBlockIds = Array.from(
+      new Set(lessonBlocks.map((block) => block.id)),
+    );
+    if (lessonBlockIds.length > 0) {
+      const existingBlocks = await this.db.query.classTemplateLessonBlocks.findMany({
+        where: inArray(classTemplateLessonBlocks.id, lessonBlockIds),
+        columns: {
+          id: true,
+          templateLessonId: true,
+        },
+      });
+      const existingBlockLessonIds = Array.from(
+        new Set(existingBlocks.map((row) => row.templateLessonId)),
+      );
+      const existingLessonsForBlocks =
+        existingBlockLessonIds.length > 0
+          ? await this.db.query.classTemplateLessons.findMany({
+              where: inArray(classTemplateLessons.id, existingBlockLessonIds),
+              columns: {
+                id: true,
+                templateId: true,
+              },
+            })
+          : [];
+      const templateByLessonId = new Map(
+        existingLessonsForBlocks.map((row) => [row.id, row.templateId]),
+      );
+      const reservedBlockIds = new Set(existingBlocks.map((row) => row.id));
+      const crossTemplateBlockIds = new Set(
+        existingBlocks
+          .filter(
+            (row) => templateByLessonId.get(row.templateLessonId) !== templateId,
+          )
+          .map((row) => row.id),
+      );
+
+      const seenBlockIds = new Set<string>();
+      for (const lesson of lessons) {
+        for (const block of lesson.blocks) {
+          const currentBlockId = block.id;
+          const shouldRemap =
+            crossTemplateBlockIds.has(currentBlockId) ||
+            seenBlockIds.has(currentBlockId);
+
+          if (shouldRemap) {
+            const nextBlockId = this.createUniqueUuid(reservedBlockIds);
+            block.id = nextBlockId;
+            seenBlockIds.add(nextBlockId);
+            continue;
+          }
+
+          seenBlockIds.add(currentBlockId);
+          reservedBlockIds.add(currentBlockId);
+        }
+      }
+    }
+
+    const assessmentIds = Array.from(
+      new Set(assessments.map((assessment) => assessment.id)),
+    );
+    if (assessmentIds.length > 0) {
+      const existingAssessments =
+        await this.db.query.classTemplateAssessments.findMany({
+          where: inArray(classTemplateAssessments.id, assessmentIds),
+          columns: {
+            id: true,
+            templateId: true,
+          },
+        });
+      const reservedAssessmentIds = new Set(
+        existingAssessments.map((row) => row.id),
+      );
+      const crossTemplateAssessmentIds = new Set(
+        existingAssessments
+          .filter((row) => row.templateId !== templateId)
+          .map((row) => row.id),
+      );
+
+      for (const assessment of assessments) {
+        const currentAssessmentId = assessment.id;
+        if (!crossTemplateAssessmentIds.has(currentAssessmentId)) {
+          reservedAssessmentIds.add(currentAssessmentId);
+          continue;
+        }
+        const nextAssessmentId = this.createUniqueUuid(reservedAssessmentIds);
+        assessmentIdRemap.set(currentAssessmentId, nextAssessmentId);
+        assessment.id = nextAssessmentId;
+      }
+    }
+
+    return {
+      lessonIdRemap,
+      assessmentIdRemap,
+    };
   }
 
   private async persistDerivedChunks(
@@ -761,10 +919,16 @@ export class ClassTemplatesService {
     this.assertAdmin(actorRoles);
     await this.findOne(id);
     this.normalizeModuleItemIdentifiers(dto.modules);
+    const canonicalLessons = this.deriveLessonsFromContent(dto);
+    const canonicalAssessments = this.normalizeAssessments(dto);
+    const { lessonIdRemap, assessmentIdRemap } =
+      await this.remapCrossTemplateTemplateAssetIds(
+        id,
+        canonicalLessons,
+        canonicalAssessments,
+      );
 
     await this.db.transaction(async (tx) => {
-      const canonicalLessons = this.deriveLessonsFromContent(dto);
-      const canonicalAssessments = this.normalizeAssessments(dto);
       const canonicalLessonIdSet = new Set(canonicalLessons.map((lesson) => lesson.id));
       const canonicalAssessmentIdSet = new Set(
         canonicalAssessments.map((assessment) => assessment.id),
@@ -861,15 +1025,20 @@ export class ClassTemplatesService {
           .delete(classTemplateModules)
           .where(eq(classTemplateModules.templateId, id));
         if (dto.modules.length > 0) {
+          const usedItemIds = new Set<string>();
           const lessonIdByItem = new Map<string, string>();
           for (const moduleEntry of dto.modules) {
             for (const section of moduleEntry.sections ?? []) {
               for (const item of section.items ?? []) {
                 if (item.itemType !== 'lesson') continue;
-                const itemId = this.coerceOptionalUuid(item.id) ?? randomUUID();
+                const itemId =
+                  this.coerceOptionalUniqueUuid(item.id, usedItemIds) ??
+                  this.createUniqueUuid(usedItemIds);
                 item.id = itemId;
-                const templateLessonId =
+                const templateLessonIdBase =
                   this.coerceOptionalUuid(item.templateLessonId) ?? itemId;
+                const templateLessonId =
+                  lessonIdRemap.get(templateLessonIdBase) ?? templateLessonIdBase;
                 item.templateLessonId = templateLessonId;
                 lessonIdByItem.set(itemId, templateLessonId);
               }
@@ -879,22 +1048,23 @@ export class ClassTemplatesService {
           const insertedModules = await tx
             .insert(classTemplateModules)
             .values(
-              dto.modules.map((module, index) => ({
-                ...(module.id ? { id: module.id } : {}),
-                templateId: id,
-                title: module.title,
-                description: sanitizeRichTextHtml(module.description ?? ''),
-                order: module.order ?? index + 1,
-                themeKind: module.themeKind ?? 'gradient',
-                gradientId: module.gradientId ?? 'oceanic-blue',
-                coverImageUrl: module.coverImageUrl ?? null,
-                imagePositionX: module.imagePositionX ?? 50,
-                imagePositionY: module.imagePositionY ?? 50,
-                imageScale: module.imageScale ?? 120,
-                isVisible: module.isVisible ?? false,
-                isLocked: module.isLocked ?? true,
-                teacherNotes: sanitizeRichTextHtml(module.teacherNotes ?? ''),
-              })),
+              dto.modules.map((module, index) => {
+                return {
+                  templateId: id,
+                  title: module.title,
+                  description: sanitizeRichTextHtml(module.description ?? ''),
+                  order: module.order ?? index + 1,
+                  themeKind: module.themeKind ?? 'gradient',
+                  gradientId: module.gradientId ?? 'oceanic-blue',
+                  coverImageUrl: module.coverImageUrl ?? null,
+                  imagePositionX: module.imagePositionX ?? 50,
+                  imagePositionY: module.imagePositionY ?? 50,
+                  imageScale: module.imageScale ?? 120,
+                  isVisible: module.isVisible ?? false,
+                  isLocked: module.isLocked ?? true,
+                  teacherNotes: sanitizeRichTextHtml(module.teacherNotes ?? ''),
+                };
+              }),
             )
             .returning();
 
@@ -911,13 +1081,14 @@ export class ClassTemplatesService {
             const insertedSections = await tx
               .insert(classTemplateModuleSections)
               .values(
-                sectionInputs.map((section, sectionIndex) => ({
-                  ...(section.id ? { id: section.id } : {}),
-                  templateModuleId: moduleRow.id,
-                  title: section.title,
-                  description: sanitizeRichTextHtml(section.description ?? ''),
-                  order: section.order ?? sectionIndex + 1,
-                })),
+                sectionInputs.map((section, sectionIndex) => {
+                  return {
+                    templateModuleId: moduleRow.id,
+                    title: section.title,
+                    description: sanitizeRichTextHtml(section.description ?? ''),
+                    order: section.order ?? sectionIndex + 1,
+                  };
+                }),
               )
               .returning();
 
@@ -933,20 +1104,29 @@ export class ClassTemplatesService {
 
               await tx.insert(classTemplateModuleItems).values(
                 itemInputs.map((item, itemIndex) => {
-                  const itemId = this.coerceOptionalUuid(item.id) ?? randomUUID();
-                  const templateAssessmentId =
+                  const itemId = this.createUniqueUuid(usedItemIds);
+                  const templateAssessmentIdBase =
                     item.itemType === 'assessment' && this.coerceOptionalUuid(item.templateAssessmentId)
                       ? this.coerceOptionalUuid(item.templateAssessmentId)
                       : null;
+                  const templateAssessmentId =
+                    templateAssessmentIdBase == null
+                      ? null
+                      : (assessmentIdRemap.get(templateAssessmentIdBase) ??
+                        templateAssessmentIdBase);
                   const normalizedAssessmentId =
                     templateAssessmentId && canonicalAssessmentIdSet.has(templateAssessmentId)
                       ? templateAssessmentId
                       : null;
                   const templateLessonId =
                     item.itemType === 'lesson'
-                      ? (this.coerceOptionalUuid(item.templateLessonId) ??
-                        lessonIdByItem.get(itemId) ??
-                        itemId)
+                      ? (() => {
+                          const rawLessonId =
+                            this.coerceOptionalUuid(item.templateLessonId) ??
+                            lessonIdByItem.get(itemId) ??
+                            itemId;
+                          return lessonIdRemap.get(rawLessonId) ?? rawLessonId;
+                        })()
                       : null;
                   const normalizedLessonId =
                     templateLessonId && canonicalLessonIdSet.has(templateLessonId)

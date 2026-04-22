@@ -15,6 +15,7 @@ import {
   classRecordScores,
   assessments,
   assessmentAttempts,
+  classes,
 } from '../../drizzle/schema';
 import {
   AssessmentSubmittedEvent,
@@ -34,6 +35,29 @@ export class ClassRecordSyncService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private isAdmin(roles: string[]): boolean {
+    return roles.includes('admin');
+  }
+
+  private async assertClassOwnership(
+    classId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    if (this.isAdmin(roles)) {
+      return;
+    }
+
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { id: true, teacherId: true },
+    });
+
+    if (!cls || cls.teacherId !== userId) {
+      throw new ForbiddenException('Access denied');
+    }
   }
 
   private async logAuditSafe(params: {
@@ -72,11 +96,12 @@ export class ClassRecordSyncService {
   async syncFromAssessment(
     classRecordItemId: string,
     userId: string,
+    roles: string[] = [],
   ): Promise<{ synced: number }> {
     const item = await this.db.query.classRecordItems.findFirst({
       where: eq(classRecordItems.id, classRecordItemId),
       with: {
-        classRecord: { columns: { teacherId: true, status: true } },
+        classRecord: { columns: { classId: true, status: true } },
       },
     });
 
@@ -98,9 +123,7 @@ export class ClassRecordSyncService {
       );
     }
 
-    if (item.classRecord.teacherId !== userId) {
-      throw new ForbiddenException('Access denied');
-    }
+    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
     const result = await this._syncItemFromAssessment(
       classRecordItemId,
