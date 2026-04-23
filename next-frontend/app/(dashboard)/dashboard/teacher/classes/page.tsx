@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
 import { announcementService } from '@/services/announcement-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -123,7 +122,6 @@ function dedupeById<T extends { id: string }>(records: T[]) {
 }
 
 export default function TeacherClassesPage() {
-  const router = useRouter();
   const { user } = useAuth();
   const latestFetchRef = useRef(0);
 
@@ -356,20 +354,6 @@ export default function TeacherClassesPage() {
     return tagMap;
   }, [upcomingEvents]);
 
-  const handleOpenClass = useCallback(
-    (classId: string) => {
-      router.push(`/dashboard/teacher/classes/${classId}`);
-    },
-    [router],
-  );
-
-  const handleViewLessons = useCallback(
-    (classId: string) => {
-      router.push(`/dashboard/teacher/classes/${classId}?view=modules`);
-    },
-    [router],
-  );
-
   if (loading) {
     return (
       <div className="space-y-5 p-1">
@@ -395,20 +379,20 @@ export default function TeacherClassesPage() {
       <header className="rounded-[1.6rem] border border-[#dbe1ec] bg-white p-5 shadow-[0_18px_36px_-30px_rgba(11,23,54,0.45)] sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#6d7f9f]">Student Workspace</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#6d7f9f]">Teacher Workspace</p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#0b1736]">My Classes</h1>
             <p className="mt-2 max-w-2xl text-sm text-[#536587]">
-              Open your next class in one tap, keep lessons moving, and never miss quizzes, tasks, or school events.
+              Jump into class management fast, track pending work, and keep lessons, assessments, and announcements moving.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <div className="rounded-2xl border border-[#e2e7f2] bg-[#f7f9fd] px-3 py-2 text-xs text-[#4f6183]">
-              <p className="font-medium">Visible Classes</p>
+              <p className="font-medium">Active Classes</p>
               <p className="text-lg font-semibold leading-tight text-[#0f172a]">{filteredClasses.length}</p>
             </div>
             <div className="rounded-2xl border border-[#fbd3dd] bg-[#fff2f5] px-3 py-2 text-xs text-[#8d2643]">
-              <p className="font-medium">Pending Items</p>
+              <p className="font-medium">Pending Work</p>
               <p className="text-lg font-semibold leading-tight">{totalPending}</p>
             </div>
             <Button
@@ -508,8 +492,8 @@ export default function TeacherClassesPage() {
                     classItem={classItem}
                     metrics={metricsByClass[classItem.id] ?? EMPTY_METRICS}
                     accentIndex={index}
-                    onOpenClass={handleOpenClass}
-                    onViewLessons={handleViewLessons}
+                    classHref={`/dashboard/teacher/classes/${classItem.id}`}
+                    lessonsHref={`/dashboard/teacher/classes/${classItem.id}?view=modules`}
                   />
                 ))}
               </div>

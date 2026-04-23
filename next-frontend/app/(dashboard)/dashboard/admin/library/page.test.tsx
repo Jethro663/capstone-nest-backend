@@ -131,12 +131,13 @@ describe('DashboardAdminLibraryPage', () => {
     const file = new File(['hello'], 'admin-module.txt', { type: 'text/plain' });
 
     fireEvent.change(fileInput, { target: { files: [file] } });
-    expect(screen.getByText('Select a subject and grade partition before uploading.')).toBeInTheDocument();
+    const uploadButtons = await screen.findAllByRole('button', { name: 'Upload File' });
+    const uploadButton = uploadButtons[uploadButtons.length - 1];
+    expect(uploadButton).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText('Subject filter'), { target: { value: 'science' } });
     fireEvent.change(screen.getByLabelText('Grade filter'), { target: { value: '7' } });
 
-    const uploadButtons = await screen.findAllByRole('button', { name: 'Upload File' });
     fireEvent.click(uploadButtons[uploadButtons.length - 1]);
 
     await waitFor(() =>

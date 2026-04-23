@@ -15,7 +15,11 @@ const checks = [
   { label: 'performance snapshots', query: 'SELECT COUNT(*)::int AS total FROM performance_snapshots' },
   { label: 'performance logs', query: 'SELECT COUNT(*)::int AS total FROM performance_logs' },
   { label: 'intervention cases', query: 'SELECT COUNT(*)::int AS total FROM intervention_cases' },
-  { label: 'pending intervention cases', query: "SELECT COUNT(*)::int AS total FROM intervention_cases WHERE status = 'pending'" },
+  {
+    label: 'open intervention cases',
+    query:
+      "SELECT COUNT(*)::int AS total FROM intervention_cases WHERE status IN ('pending', 'active')",
+  },
   { label: 'completed intervention cases', query: "SELECT COUNT(*)::int AS total FROM intervention_cases WHERE status = 'completed'" },
   { label: 'concept mastery rows', query: 'SELECT COUNT(*)::int AS total FROM student_concept_mastery' },
 ];
@@ -50,4 +54,3 @@ run().catch((error) => {
   console.error(error.message);
   process.exit(1);
 });
-

@@ -1,6 +1,6 @@
 'use client';
 
-import { type KeyboardEvent } from 'react';
+import Link from 'next/link';
 import {
   Atom,
   BookOpen,
@@ -31,8 +31,8 @@ interface ClassCardProps {
   classItem: ClassItem;
   metrics: ClassCardMetrics;
   accentIndex: number;
-  onOpenClass: (classId: string) => void;
-  onViewLessons?: (classId: string) => void;
+  classHref: string;
+  lessonsHref: string;
 }
 
 const CARD_ACCENTS = [
@@ -121,8 +121,8 @@ export function ClassCard({
   classItem,
   metrics,
   accentIndex,
-  onOpenClass,
-  onViewLessons,
+  classHref,
+  lessonsHref,
 }: ClassCardProps) {
   const accent = CARD_ACCENTS[accentIndex % CARD_ACCENTS.length];
   const progress = clampProgress(metrics.progressPercent);
@@ -133,26 +133,11 @@ export function ClassCard({
   const iconKey = resolveSubjectIcon(subjectName);
   const ctaLabel = metrics.pendingCount > 0 ? 'Continue Learning' : 'Open Class';
 
-  const openClass = () => onOpenClass(classItem.id);
-  const openLessons = () => onViewLessons?.(classItem.id);
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    openClass();
-  };
-
   return (
     <article
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ${subjectName}`}
-      onClick={openClass}
-      onKeyDown={handleKeyDown}
       className={cn(
         'group flex min-h-[22rem] cursor-pointer flex-col overflow-hidden rounded-[1.35rem] border border-[#dde3f0] bg-white shadow-[0_16px_35px_-26px_rgba(11,23,54,0.45),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-200 ease-out',
         'hover:-translate-y-1 hover:border-[#c7d2e8] hover:shadow-[0_26px_42px_-26px_rgba(11,23,54,0.48),inset_0_1px_0_rgba(255,255,255,0.9)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/45 focus-visible:ring-offset-2',
       )}
     >
       <div className={cn('relative overflow-hidden bg-gradient-to-br px-5 pb-5 pt-4 text-white', accent.hero)}>
@@ -176,68 +161,67 @@ export function ClassCard({
       </div>
 
       <div className="flex flex-1 flex-col gap-4 px-5 py-4">
-        <p className="rounded-xl border border-[#e4e9f4] bg-[#f7f9fe] px-3 py-2 text-xs font-medium text-[#3c4a67]">
-          {formatSchedule(classItem)}
-        </p>
+        <Link
+          href={classHref}
+          aria-label={`Open ${subjectName}`}
+          className="flex flex-1 flex-col gap-4 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/45 focus-visible:ring-inset"
+        >
+          <p className="rounded-xl border border-[#e4e9f4] bg-[#f7f9fe] px-3 py-2 text-xs font-medium text-[#3c4a67]">
+            {formatSchedule(classItem)}
+          </p>
 
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className={cn('rounded-xl border px-2 py-2.5', accent.chip)}>
-            <p className="text-lg font-semibold leading-none">{metrics.lessonsCount}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">Lessons</p>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className={cn('rounded-xl border px-2 py-2.5', accent.chip)}>
+              <p className="text-lg font-semibold leading-none">{metrics.lessonsCount}</p>
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">Lessons</p>
+            </div>
+            <div className={cn('rounded-xl border px-2 py-2.5', accent.chip)}>
+              <p className="text-lg font-semibold leading-none">{metrics.assessmentsCount}</p>
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">Assessments</p>
+            </div>
+            <div className={cn('rounded-xl border px-2 py-2.5', accent.chip)}>
+              <p className="text-lg font-semibold leading-none">{metrics.pendingCount}</p>
+              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">Pending</p>
+            </div>
           </div>
-          <div className={cn('rounded-xl border px-2 py-2.5', accent.chip)}>
-            <p className="text-lg font-semibold leading-none">{metrics.assessmentsCount}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">Assessments</p>
-          </div>
-          <div className={cn('rounded-xl border px-2 py-2.5', accent.chip)}>
-            <p className="text-lg font-semibold leading-none">{metrics.pendingCount}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">Pending</p>
-          </div>
-        </div>
 
-        <div className="space-y-2 rounded-2xl border border-[#e4e9f4] bg-[#f9fbff] p-3">
-          <div className="flex items-center justify-between text-xs font-semibold text-[#425374]">
-            <span>Class readiness</span>
-            <span className="text-[#f43f5e]">{progress}%</span>
+          <div className="space-y-2 rounded-2xl border border-[#e4e9f4] bg-[#f9fbff] p-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-[#425374]">
+              <span>Class readiness</span>
+              <span className="text-[#f43f5e]">{progress}%</span>
+            </div>
+            <Progress
+              value={progress}
+              className="h-2.5 bg-[#f0d8df]"
+              indicatorClassName="bg-gradient-to-r from-[#f43f5e] to-[#fb7185]"
+            />
           </div>
-          <Progress
-            value={progress}
-            className="h-2.5 bg-[#f0d8df]"
-            indicatorClassName="bg-gradient-to-r from-[#f43f5e] to-[#fb7185]"
-          />
-        </div>
 
-        <div className="mt-auto space-y-2.5">
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#eef3ff] px-2.5 py-1 text-[11px] font-semibold text-[#344f87]">
-            <Sparkles className="h-3.5 w-3.5" />
-            Next: {metrics.pendingCount > 0 ? `${metrics.pendingCount} items` : 'Open class'}
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 rounded-xl border-[#d5deef] bg-[#f5f8ff] px-3 text-sm font-semibold text-[#2f466f] hover:bg-[#ebf0fb]"
-              onClick={(event) => {
-                event.stopPropagation();
-                openLessons();
-              }}
-            >
-              View Lessons
-            </Button>
-            <Button
-              type="button"
-              className={cn(
-                'h-10 rounded-xl px-4 text-sm font-semibold shadow-[0_10px_20px_-16px_rgba(11,23,54,0.6)] transition',
-                accent.button,
-              )}
-              onClick={(event) => {
-                event.stopPropagation();
-                openClass();
-              }}
-            >
-              {ctaLabel}
-            </Button>
+          <div className="mt-auto">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#eef3ff] px-2.5 py-1 text-[11px] font-semibold text-[#344f87]">
+              <Sparkles className="h-3.5 w-3.5" />
+              Next: {metrics.pendingCount > 0 ? `${metrics.pendingCount} items` : 'Open class'}
+            </span>
           </div>
+        </Link>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            asChild
+            variant="outline"
+            className="h-10 rounded-xl border-[#d5deef] bg-[#f5f8ff] px-3 text-sm font-semibold text-[#2f466f] hover:bg-[#ebf0fb]"
+          >
+            <Link href={lessonsHref}>View Lessons</Link>
+          </Button>
+          <Button
+            asChild
+            className={cn(
+              'h-10 rounded-xl px-4 text-sm font-semibold shadow-[0_10px_20px_-16px_rgba(11,23,54,0.6)] transition',
+              accent.button,
+            )}
+          >
+            <Link href={classHref}>{ctaLabel}</Link>
+          </Button>
         </div>
       </div>
     </article>

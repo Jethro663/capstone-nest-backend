@@ -1,0 +1,163 @@
+{
+  "date": "2026-04-24",
+  "repo": "C:\\Users\\jethr\\Desktop\\capstone-nest-react-lms",
+  "scope": {
+    "live": ["backend", "next-frontend", "ai-service"],
+    "excluded_live": ["test-mobile"]
+  },
+  "services": {
+    "backendReady": true,
+    "frontendLoginPage": true,
+    "aiReady": true,
+    "aiHealth": true,
+    "backendRestartedDuringAudit": true
+  },
+  "baselines": {
+    "backendBuild": { "status": "pass", "durationMs": 60853 },
+    "backendJest": { "status": "pass", "durationMs": 63628, "suites": 65, "tests": 851 },
+    "backendEslintDirect": {
+      "status": "fail",
+      "note": "Pre-existing repo lint debt across formatting and unsafe-any rules"
+    },
+    "backendSeedSmokeBeforeFix": { "status": "fail", "note": "Expected pending intervention case count was zero" },
+    "backendSeedSmokeAfterFix": { "status": "pass" },
+    "frontendBuild": { "status": "pass", "durationMs": 175467 },
+    "frontendJestBeforeFix": {
+      "status": "fail",
+      "note": "Jest discovered Playwright e2e specs and had stale expectations in two unit tests"
+    },
+    "frontendJestAfterFix": { "status": "pass", "suites": 76, "tests": 227 },
+    "aiTests": { "status": "pass", "durationMs": 26839, "tests": 43 },
+    "aiImportProbe": { "status": "pass", "appTitle": "Nexora AI Service" }
+  },
+  "browser": {
+    "admin": {
+      "status": "pass",
+      "routes": [
+        "/dashboard/admin",
+        "/dashboard/admin/diagnostics",
+        "/dashboard/admin/users",
+        "/dashboard/admin/sections",
+        "/dashboard/admin/classes",
+        "/dashboard/admin/calendar",
+        "/dashboard/admin/library",
+        "/dashboard/admin/roster-import",
+        "/dashboard/admin/reports",
+        "/dashboard/admin/evaluations",
+        "/dashboard/admin/announcements",
+        "/dashboard/admin/chatbot",
+        "/dashboard/admin/audit",
+        "/dashboard/admin/system-settings",
+        "/dashboard/admin/profile"
+      ]
+    },
+    "teacher": {
+      "status": "pass_with_followup",
+      "routes": [
+        "/dashboard/teacher",
+        "/dashboard/teacher/classes",
+        "/dashboard/teacher/sections",
+        "/dashboard/teacher/calendar",
+        "/dashboard/teacher/library",
+        "/dashboard/teacher/class-record",
+        "/dashboard/teacher/reports",
+        "/dashboard/teacher/interventions",
+        "/dashboard/teacher/performance",
+        "/dashboard/teacher/evaluations",
+        "/dashboard/teacher/announcements",
+        "/dashboard/teacher/profile"
+      ],
+      "followup": "Teacher class-card hrefs are correct and synthetic click dispatch navigated, but direct Playwright pointer clicks remained inconsistent"
+    },
+    "student": {
+      "status": "pass",
+      "routes": [
+        "/dashboard/student",
+        "/dashboard/student/courses",
+        "/dashboard/student/lxp",
+        "/dashboard/student/performance",
+        "/dashboard/student/announcements",
+        "/dashboard/student/profile",
+        "/dashboard/student/ja",
+        "/dashboard/student/chatbot",
+        "/dashboard/student/transcript"
+      ],
+      "aliases": {
+        "/dashboard/student/ja": "/dashboard/student/lxp?tab=ja",
+        "/dashboard/student/chatbot": "/dashboard/student/lxp?tab=ja&mode=ask"
+      }
+    }
+  },
+  "performance": {
+    "authSmoke": {
+      "loginPageMs": 102,
+      "loginRequestMs": 101,
+      "dashboardRequestMs": 60,
+      "dashboardStatus": 200
+    },
+    "navSmoke": {
+      "admin_users_coldMs": 546,
+      "admin_users_warmMs": 440,
+      "admin_diagnostics_coldMs": 429,
+      "admin_diagnostics_warmMs": 444,
+      "teacher_classes_coldMs": 489,
+      "teacher_classes_warmMs": 449,
+      "student_courses_coldMs": 552,
+      "student_courses_warmMs": 505,
+      "student_ja_coldMs": 507,
+      "student_ja_warmMs": 492
+    },
+    "discussionSmoke": {
+      "teacher": {
+        "classDetailColdMs": 1014,
+        "classDetailWarmMs": 1019,
+        "discussionColdMs": 1096,
+        "discussionWarmMs": 934,
+        "threadOpenMs": 97
+      },
+      "student": {
+        "status": "fail",
+        "note": "Timed out waiting for URL in student leg on 2026-04-24"
+      }
+    },
+    "engineSmoke": {
+      "status": "fail",
+      "note": "Expected Export Engine YAML control not visible in current template workspace"
+    }
+  },
+  "aiService": {
+    "liveVerified": ["/ready", "/health"],
+    "routeSurfacesVerified": [
+      "/dashboard/admin/chatbot",
+      "/dashboard/student/lxp",
+      "/dashboard/student/ja"
+    ],
+    "testCoverageSignals": [
+      "tutor",
+      "ja practice",
+      "ja ask/review",
+      "quiz generation",
+      "intervention recommendation",
+      "indexing",
+      "library indexing",
+      "fallback",
+      "metrics/readiness"
+    ]
+  },
+  "fixedDuringAudit": [
+    "Ignored Playwright e2e specs in frontend Jest",
+    "Added teacher class-card and teacher classes page regression tests",
+    "Updated stale frontend unit expectations",
+    "Corrected teacher classes hero copy",
+    "Changed teacher class cards to concrete class and lesson links",
+    "Hardened backend seed smoke to accept open intervention cases"
+  ],
+  "remainingFindings": [
+    "Engine perf smoke script is stale against current template workspace",
+    "Teacher class-card pointer click still needs final manual confirmation",
+    "Discussion perf smoke student leg is flaky",
+    "Backend direct ESLint remains red from pre-existing debt",
+    "Student demo content quality still needs cleanup",
+    "Frontend Jest still reports a worker shutdown warning"
+  ]
+}
