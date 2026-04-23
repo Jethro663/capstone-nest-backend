@@ -119,6 +119,7 @@ export const libraryFileKindEnum = pgEnum('library_file_kind', [
   'pdf',
   'txt',
   'pptx',
+  'image',
 ]);
 export const moduleItemTypeEnum = pgEnum('module_item_type', [
   'lesson',

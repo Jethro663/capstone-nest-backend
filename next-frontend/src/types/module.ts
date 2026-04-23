@@ -111,6 +111,8 @@ export interface CreateClassModuleDto {
   title: string;
   description?: string;
   order?: number;
+  isVisible?: boolean;
+  isLocked?: boolean;
 }
 
 export interface UpdateClassModuleDto {

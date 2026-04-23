@@ -96,12 +96,12 @@ export function StudentClassCard({
 
   const openClass = useCallback(() => onOpenClass(course.id), [course.id, onOpenClass]);
 
-  const handleCardClick = (event: MouseEvent<HTMLElement>) => {
+  const handleBodyClick = (event: MouseEvent<HTMLElement>) => {
     if (isInteractiveTarget(event.target)) return;
     openClass();
   };
 
-  const handleCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+  const handleBodyKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (isInteractiveTarget(event.target)) return;
     event.preventDefault();
@@ -110,15 +110,9 @@ export function StudentClassCard({
 
   return (
     <article
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ${subjectName}`}
-      onClick={handleCardClick}
-      onKeyDown={handleCardKeyDown}
       className={cn(
         'group overflow-hidden rounded-[1.55rem] border border-[#e2dfeb] bg-white shadow-[0_22px_38px_-30px_rgba(17,25,47,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] transition',
         'hover:-translate-y-1 hover:border-[#d2cddf] hover:shadow-[0_28px_42px_-30px_rgba(17,25,47,0.55)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d81b50]/40 focus-visible:ring-offset-2',
       )}
     >
       <div
@@ -187,7 +181,14 @@ export function StudentClassCard({
         </div>
       </div>
 
-      <div className="space-y-4 px-5 pb-5 pt-4">
+      <div
+        role="link"
+        tabIndex={0}
+        aria-label={`Open ${subjectName}`}
+        onClick={handleBodyClick}
+        onKeyDown={handleBodyKeyDown}
+        className="space-y-4 px-5 pb-5 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d81b50]/40 focus-visible:ring-inset"
+      >
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-2xl border border-[#e8e4ef] bg-[#faf9fc] px-2 py-2.5 text-center">
             <p className="text-2xl font-semibold leading-none text-[#11192f]">{studentsCount}</p>

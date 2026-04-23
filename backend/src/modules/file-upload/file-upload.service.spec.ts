@@ -18,6 +18,7 @@ const FILE_ID_2 = 'file-uuid-2';
 const TEACHER_ID = 'teacher-uuid-1';
 const TEACHER_ID_2 = 'teacher-uuid-2';
 const ADMIN_ID = 'admin-uuid-1';
+const STUDENT_ID = 'student-uuid-1';
 const CLASS_ID = 'class-uuid-1';
 
 const TEACHER_USER = {
@@ -26,6 +27,11 @@ const TEACHER_USER = {
   roles: ['teacher'],
 };
 const ADMIN_USER = { id: ADMIN_ID, email: 'a@school.edu', roles: ['admin'] };
+const STUDENT_USER = {
+  id: STUDENT_ID,
+  email: 's@school.edu',
+  roles: ['student'],
+};
 const OTHER_TEACHER = {
   id: TEACHER_ID_2,
   email: 't2@school.edu',
@@ -103,6 +109,10 @@ describe('FileUploadService', () => {
       classes: {
         findFirst: jest.fn(),
       },
+      enrollments: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
       uploadedFiles: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -128,6 +138,8 @@ describe('FileUploadService', () => {
       subjectName: 'Science 7',
       subjectGradeLevel: '7',
     });
+    mockDb.query.enrollments.findFirst.mockResolvedValue(null);
+    mockDb.query.enrollments.findMany.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -259,6 +271,41 @@ describe('FileUploadService', () => {
         actorId: TEACHER_ID,
         reason: 'upload',
       });
+    });
+
+    it('stores image uploads without AI indexing even when aiEnabled is requested', async () => {
+      const record = makeFileRecord({
+        originalName: 'diagram.png',
+        mimeType: 'image/png',
+        fileKind: 'image',
+        aiEnabled: false,
+        indexStatus: 'not_indexed',
+      });
+      const chain = makeInsertChain([record]);
+      mockDb.insert.mockReturnValue(chain);
+      const queueFileIndex = jest.fn().mockResolvedValue(undefined);
+      (service as any).libraryIndexingService = { queueFileIndex };
+
+      await service.saveFileRecord(
+        makeSaveDto({
+          originalName: 'diagram.png',
+          storedName: 'diagram.png',
+          mimeType: 'image/png',
+          filePath: './uploads/library/diagram.png',
+          fileKind: 'image',
+          aiEnabled: true,
+        }),
+        TEACHER_USER,
+      );
+
+      expect(chain.values).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileKind: 'image',
+          aiEnabled: false,
+          indexStatus: 'not_indexed',
+        }),
+      );
+      expect(queueFileIndex).not.toHaveBeenCalled();
     });
 
     it('derives subject and grade partition from class context when not provided', async () => {
@@ -398,6 +445,20 @@ describe('FileUploadService', () => {
       await expect(service.findOne(FILE_ID, OTHER_TEACHER)).rejects.toThrow(
         ForbiddenException,
       );
+    });
+
+    it('allows an enrolled student to access a private file linked to their class', async () => {
+      const record = makeFileRecord({
+        scope: 'private',
+        classId: CLASS_ID,
+      });
+      mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
+      mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+
+      const result = await service.findOne(FILE_ID, STUDENT_USER);
+
+      expect(result).toEqual(record);
+      expect(mockDb.query.enrollments.findFirst).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -630,6 +691,18 @@ describe('FileUploadService', () => {
         reason: 'retry',
       });
       expect(result).toEqual(record);
+    });
+
+    it('rejects retrying AI indexing for image files', async () => {
+      const record = makeFileRecord({
+        fileKind: 'image',
+        aiEnabled: false,
+      });
+      mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
+
+      await expect(service.retryIndex(FILE_ID, TEACHER_USER)).rejects.toThrow(
+        'Image files cannot be indexed for AI search.',
+      );
     });
   });
 

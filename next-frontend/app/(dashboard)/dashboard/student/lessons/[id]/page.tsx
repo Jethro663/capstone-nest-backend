@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, BookOpenText, Compass, Sparkles } from 'lucide-react';
 import { lessonService } from '@/services/lesson-service';
@@ -13,33 +12,16 @@ import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer
 import { toast } from 'sonner';
 import type { Lesson, ContentBlock } from '@/types/lesson';
 import {
+  getLessonCheckpointGate,
   getStructuredLessonBlockHeading,
-  getStructuredLessonBlockHtml,
-  getStructuredLessonQuestionModel,
   normalizeStructuredLessonBlock,
 } from '@/features/lesson-blocks/structured-content';
+import {
+  LessonBlockStudentRenderer,
+  type LessonCheckpointResults,
+  type LessonCheckpointSelections,
+} from '@/features/lesson-blocks/LessonBlockStudentRenderer';
 import './lesson-view.css';
-
-function getBlockTextValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-    return '';
-  }
-  return '';
-}
-
-function getBlockUrlValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeUrl = content.url;
-    if (typeof maybeUrl === 'string') return maybeUrl;
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-  }
-  return '';
-}
 
 export default function StudentLessonViewPage() {
   const params = useParams();
@@ -55,6 +37,8 @@ export default function StudentLessonViewPage() {
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [checkpointSelections, setCheckpointSelections] = useState<LessonCheckpointSelections>({});
+  const [checkpointResults, setCheckpointResults] = useState<LessonCheckpointResults>({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -70,6 +54,8 @@ export default function StudentLessonViewPage() {
           .map((block) => normalizeStructuredLessonBlock(block)) || [],
       );
       setIsCompleted(statusRes.data?.completed ?? false);
+      setCheckpointSelections({});
+      setCheckpointResults({});
     } catch {
       toast.error('Failed to load lesson');
     } finally {
@@ -112,6 +98,23 @@ export default function StudentLessonViewPage() {
       setCompleting(false);
     }
   };
+
+  const checkpointGate = getLessonCheckpointGate(blocks, checkpointResults);
+
+  const handleCheckpointAnswer = useCallback((
+    blockId: string,
+    selectedChoiceIds: string[],
+    isCorrect: boolean,
+  ) => {
+    setCheckpointSelections((current) => ({
+      ...current,
+      [blockId]: selectedChoiceIds,
+    }));
+    setCheckpointResults((current) => ({
+      ...current,
+      [blockId]: isCorrect,
+    }));
+  }, []);
 
   if (loading) {
     return (
@@ -208,7 +211,13 @@ export default function StudentLessonViewPage() {
 
         <div className="lxp-lesson-blocks space-y-5">
           {blocks.map((block) => (
-            <ContentBlockRenderer key={block.id} block={block} />
+            <LessonBlockStudentRenderer
+              key={block.id}
+              block={block}
+              checkpointSelections={checkpointSelections}
+              checkpointResults={checkpointResults}
+              onCheckpointAnswer={handleCheckpointAnswer}
+            />
           ))}
         </div>
 
@@ -223,14 +232,20 @@ export default function StudentLessonViewPage() {
         <div className="lxp-lesson-footer sticky bottom-0 flex items-center justify-between border-t border-[var(--student-outline)] bg-[var(--student-elevated)] py-4">
           <Button
             onClick={handleComplete}
-            disabled={isCompleted || completing}
+            disabled={isCompleted || completing || !checkpointGate.ready}
             className={
               isCompleted
                 ? 'lxp-lesson-action lxp-lesson-action--done border border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
                 : 'lxp-lesson-action lxp-lesson-action--primary student-button-solid'
             }
           >
-            {isCompleted ? 'Completed' : completing ? 'Marking...' : 'Mark Complete'}
+            {isCompleted
+              ? 'Completed'
+              : completing
+                ? 'Marking...'
+                : checkpointGate.ready
+                  ? 'Mark Complete'
+                  : `Answer checkpoints ${checkpointGate.correct}/${checkpointGate.total}`}
           </Button>
           <Button
             variant="outline"
@@ -249,176 +264,4 @@ export default function StudentLessonViewPage() {
       </div>
     </div>
   );
-}
-
-function ContentBlockRenderer({ block }: { block: ContentBlock }) {
-  const heading = getStructuredLessonBlockHeading(block);
-  switch (block.type) {
-    case 'text': {
-      const html = getStructuredLessonBlockHtml(block);
-      const variant = typeof block.metadata?.variant === 'string' ? block.metadata.variant : 'body';
-      const surfaceClass =
-        variant === 'objectives'
-          ? 'lxp-lesson-block--objectives'
-          : variant === 'key_points'
-            ? 'lxp-lesson-block--key-points'
-            : variant === 'example'
-              ? 'lxp-lesson-block--example'
-              : variant === 'recap'
-                ? 'lxp-lesson-block--recap'
-                : variant === 'reflection'
-                  ? 'lxp-lesson-block--reflection'
-                  : 'lxp-lesson-block--body';
-      return (
-        <Card
-          id={`lesson-block-${block.id}`}
-          className={`student-card lxp-lesson-block lxp-lesson-block--text ${surfaceClass}`}
-        >
-          <CardContent className="space-y-3 p-5">
-            {heading ? (
-              <div>
-                <p className="lxp-lesson-block-heading text-xs font-semibold uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
-                  {heading}
-                </p>
-              </div>
-            ) : null}
-            <div className="lxp-lesson-rich prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]">
-              <RichTextRenderer html={html} />
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-    case 'image': {
-      const src = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
-      const caption = (block.metadata as Record<string, string>)?.caption;
-      return (
-        <Card id={`lesson-block-${block.id}`} className="student-card lxp-lesson-block lxp-lesson-block--media">
-          <CardContent className="p-4">
-            <figure className="lxp-lesson-figure">
-              {src && (
-                <Image
-                  src={src}
-                  alt={caption || 'Lesson image'}
-                  width={1200}
-                  height={675}
-                  unoptimized
-                  className="h-auto w-full rounded-2xl"
-                />
-              )}
-              {caption ? (
-                <figcaption className="mt-3 text-center text-sm text-[var(--student-text-muted)]">
-                  {caption}
-                </figcaption>
-              ) : null}
-            </figure>
-          </CardContent>
-        </Card>
-      );
-    }
-    case 'video': {
-      const url = getBlockUrlValue(block.content) || (block.metadata as Record<string, string>)?.url;
-      if (!url) return null;
-      const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-      const embedUrl = isYouTube
-        ? url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')
-        : url;
-      return (
-        <Card id={`lesson-block-${block.id}`} className="student-card lxp-lesson-block lxp-lesson-block--media">
-          <CardContent className="p-4">
-            <div className="lxp-lesson-video aspect-video overflow-hidden rounded-2xl">
-              <iframe
-                src={embedUrl}
-                className="h-full w-full"
-                allowFullScreen
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-    case 'question': {
-      const model = getStructuredLessonQuestionModel(block);
-      return (
-        <Card
-          id={`lesson-block-${block.id}`}
-          className="student-card lxp-lesson-block lxp-lesson-block--question"
-        >
-          <CardContent className="space-y-4 p-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="student-badge lxp-lesson-badge">Checkpoint</Badge>
-              {model.points > 0 ? (
-                <Badge
-                  variant="outline"
-                  className="lxp-lesson-badge lxp-lesson-badge--ghost border-[var(--student-outline)] bg-white/70 text-[var(--student-text-muted)]"
-                >
-                  {model.points} pts
-                </Badge>
-              ) : null}
-            </div>
-            <RichTextRenderer
-              className="lxp-lesson-question-prompt text-base font-semibold text-[var(--student-text-strong)]"
-              html={model.prompt || '<p>Empty question prompt.</p>'}
-            />
-            {model.choices.length > 0 ? (
-              <div className="space-y-2.5">
-                {model.choices.map((choice) => (
-                  <div
-                    key={choice}
-                    className="lxp-lesson-choice rounded-2xl border border-[var(--student-outline)] bg-white/80 px-4 py-3 text-sm text-[var(--student-text-strong)]"
-                  >
-                    {choice}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="lxp-lesson-choice lxp-lesson-choice--fallback rounded-2xl border border-dashed border-[var(--student-outline)] bg-white/60 px-4 py-3 text-sm text-[var(--student-text-muted)]">
-                Answer in your own words.
-              </div>
-            )}
-            {model.explanation ? (
-              <div className="lxp-lesson-explanation rounded-2xl border border-[var(--student-outline)] bg-white/60 px-4 py-3 text-sm text-[var(--student-text-muted)]">
-                <RichTextRenderer html={model.explanation} />
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      );
-    }
-    case 'file': {
-      const fileName = (block.metadata as Record<string, string>)?.fileName || getBlockTextValue(block.content) || 'File';
-      const fileUrl = (block.metadata as Record<string, string>)?.url;
-      return (
-        <Card id={`lesson-block-${block.id}`} className="student-card lxp-lesson-block lxp-lesson-block--file">
-          <CardContent className="flex items-center gap-3 p-4">
-            <span className="lxp-lesson-file-icon text-2xl">File</span>
-            <div>
-              <p className="font-medium text-[var(--student-text-strong)]">{fileName}</p>
-              {fileUrl && (
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="lxp-lesson-file-link text-sm text-[var(--student-accent)] hover:underline"
-                >
-                  Download
-                </a>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-    case 'divider':
-      return <hr id={`lesson-block-${block.id}`} className="lxp-lesson-divider my-6 border-[var(--student-outline)]" />;
-    default:
-      return (
-        <Card id={`lesson-block-${block.id}`} className="student-card lxp-lesson-block">
-          <CardContent className="p-4 text-[var(--student-text-muted)]">
-            Unsupported content type: {block.type}
-          </CardContent>
-        </Card>
-      );
-  }
 }

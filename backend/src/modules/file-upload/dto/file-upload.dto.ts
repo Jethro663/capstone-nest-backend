@@ -46,6 +46,7 @@ export enum LibraryFileKindDto {
   Pdf = 'pdf',
   Txt = 'txt',
   Pptx = 'pptx',
+  Image = 'image',
 }
 
 function toBoolean(value: unknown) {

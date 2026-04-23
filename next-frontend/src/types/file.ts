@@ -51,7 +51,7 @@ export type LibraryIndexStatus =
   | 'processing'
   | 'completed'
   | 'failed';
-export type LibraryFileKind = 'pdf' | 'txt' | 'pptx';
+export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'image';
 
 export const LIBRARY_SUBJECTS: Array<{ key: LibrarySubjectKey; label: string }> = [
   { key: 'math', label: 'Math' },

@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -43,20 +47,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
-import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { normalizeRichText } from '@/lib/rich-text';
 import { toast } from 'sonner';
 import { TeacherSectionCard } from '@/components/teacher/TeacherPageShell';
+import { classService } from '@/services/class-service';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
 import type { LessonVersion } from '@/types/lesson';
+import type { ClassItem } from '@/types/class';
 import {
   createStructuredLessonBlockContent,
-  getStructuredLessonBlockHeading,
-  getStructuredLessonBlockHtml,
-  getStructuredLessonQuestionModel,
   normalizeStructuredLessonBlock,
   type StructuredLessonTextVariant,
 } from '@/features/lesson-blocks/structured-content';
+import {
+  LessonBlockTeacherEditor,
+  LessonBlockTeacherPreview,
+} from '@/features/lesson-blocks/LessonBlockTeacherEditor';
 
 type LessonBlockPaletteItem = {
   type: CreateContentBlockDto['type'];
@@ -98,7 +104,7 @@ const BLOCK_TYPES: ReadonlyArray<LessonBlockPaletteItem> = [
   {
     type: 'image',
     label: 'Image',
-    hint: 'Paste an image URL for diagrams or visual examples.',
+    hint: 'Upload or select a secure image from Nexora Library.',
     icon: ImageIcon,
   },
   {
@@ -130,7 +136,7 @@ const BLOCK_TYPES: ReadonlyArray<LessonBlockPaletteItem> = [
   {
     type: 'file',
     label: 'File',
-    hint: 'Link to a worksheet, PDF, or external supporting file.',
+    hint: 'Upload or select a worksheet, PDF, text file, or deck.',
     icon: Paperclip,
   },
   {
@@ -140,36 +146,6 @@ const BLOCK_TYPES: ReadonlyArray<LessonBlockPaletteItem> = [
     icon: Minus,
   },
 ] as const;
-
-function getDefaultBlockContent(type: CreateContentBlockDto['type']): string {
-  switch (type) {
-    case 'text':
-      return 'Start writing the core explanation for this lesson section.';
-    case 'image':
-      return 'https://';
-    case 'video':
-      return 'https://';
-    case 'question':
-      return 'Add a short checkpoint question for learners.';
-    case 'file':
-      return 'https://';
-    case 'divider':
-      return 'Section break';
-    default:
-      return 'New content block';
-  }
-}
-
-function getBlockUrlValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeUrl = content.url;
-    if (typeof maybeUrl === 'string') return maybeUrl;
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-  }
-  return '';
-}
 
 function normalizeRichValue(input?: string | null) {
   return normalizeRichText(input || '').trim();
@@ -183,6 +159,16 @@ function reorderBlocksLocally(items: ContentBlock[], fromIndex: number, toIndex:
   return next.map((block, index) => ({ ...block, order: index + 1 }));
 }
 
+function isNestedInteractiveTarget(
+  event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLElement>,
+) {
+  if (!(event.target instanceof Element)) return false;
+  const interactive = event.target.closest(
+    'button, a, input, textarea, select, [contenteditable="true"], [role="button"]',
+  );
+  return Boolean(interactive && interactive !== event.currentTarget);
+}
+
 export default function LessonEditorPage() {
   const params = useParams();
   const router = useRouter();
@@ -190,6 +176,7 @@ export default function LessonEditorPage() {
   const lessonId = params.id as string;
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -225,6 +212,12 @@ export default function LessonEditorPage() {
         lessonService.getVersions(lessonId),
       ]);
       setLesson(res.data);
+      if (res.data.classId) {
+        const classResponse = await classService.getById(res.data.classId).catch(() => null);
+        setClassItem(classResponse?.data ?? null);
+      } else {
+        setClassItem(null);
+      }
       setTitle(res.data.title);
       const normalizedDescription = normalizeRichValue(res.data.description);
       setDescription(normalizedDescription);
@@ -415,11 +408,13 @@ export default function LessonEditorPage() {
       const dto: CreateContentBlockDto = {
         type,
         order: blocks.length + 1,
-        content:
-          type === 'text' || type === 'question'
-            ? createStructuredLessonBlockContent(type, options?.variant)
-            : getDefaultBlockContent(type),
-        metadata: options?.variant ? { variant: options.variant } : undefined,
+        content: createStructuredLessonBlockContent(type, options?.variant),
+        metadata:
+          type === 'text' && options?.variant
+            ? { variant: options.variant }
+            : type === 'question'
+              ? { correctAnswers: [], explanation: '', points: 0 }
+              : undefined,
       };
       const res = await lessonService.createBlock(lessonId, dto);
       const createdBlock = normalizeStructuredLessonBlock(res.data);
@@ -728,11 +723,30 @@ export default function LessonEditorPage() {
               <div className="space-y-3">
                 {blocks.map((block, index) => {
                   const isLastBlock = index === blocks.length - 1;
+                  const isEditing = editingBlockId === block.id;
+                  const canClickToEdit = block.type !== 'divider' && !isEditing;
                   return (
                   <div key={block.id} className="group space-y-2">
                     <Card
-                      draggable
+                      draggable={!isEditing}
+                      role={canClickToEdit ? 'button' : undefined}
+                      tabIndex={canClickToEdit ? 0 : undefined}
+                      aria-label={canClickToEdit ? `Edit ${block.type} block ${index + 1}` : undefined}
+                      onClick={(event) => {
+                        if (!canClickToEdit || isNestedInteractiveTarget(event)) return;
+                        setEditingBlockId(block.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (!canClickToEdit || isNestedInteractiveTarget(event)) return;
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        setEditingBlockId(block.id);
+                      }}
                       onDragStart={(event) => {
+                        if (isEditing) {
+                          event.preventDefault();
+                          return;
+                        }
                         setDraggingBlockId(block.id);
                         event.dataTransfer.effectAllowed = 'move';
                         event.dataTransfer.setData('text/plain', block.id);
@@ -752,7 +766,7 @@ export default function LessonEditorPage() {
                       }}
                       className={`overflow-hidden rounded-[1.45rem] border bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.84))] shadow-[0_24px_48px_-34px_rgba(15,23,42,0.26)] ${
                         dropTargetBlockId === block.id ? 'border-emerald-300' : 'border-white/35'
-                      }`}
+                      } ${canClickToEdit ? 'cursor-pointer transition hover:border-emerald-200 hover:shadow-[0_28px_54px_-36px_rgba(15,23,42,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2' : ''}`}
                     >
                       <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
                         <div className="flex flex-1 items-start gap-4">
@@ -770,27 +784,23 @@ export default function LessonEditorPage() {
                                 {block.type}
                               </Badge>
                               <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
-                                {editingBlockId === block.id ? 'Currently editing this block' : 'Ready to review'}
+                                {isEditing ? 'Currently editing this block' : block.type === 'divider' ? 'Section divider' : 'Click block to edit'}
                               </span>
                             </div>
-                            {editingBlockId === block.id ? (
-                              <BlockEditor
+                            {isEditing ? (
+                              <LessonBlockTeacherEditor
                                 block={block}
+                                classId={lesson.classId}
+                                classItem={classItem}
                                 onSave={(patch) => handleUpdateBlock(block.id, patch)}
                                 onCancel={() => setEditingBlockId(null)}
                               />
                             ) : (
-                              <BlockPreview block={block} />
+                              <LessonBlockTeacherPreview block={block} />
                             )}
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {block.type !== 'divider' ? (
-                            <Button variant="outline" size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setEditingBlockId(block.id)}>
-                              <PencilLine className="mr-1 h-3.5 w-3.5" />
-                              Edit Block
-                            </Button>
-                          ) : null}
                           <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/75 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteBlock(block.id)}>
                             <Trash2 className="mr-1 h-3.5 w-3.5" />
                             Delete
@@ -899,240 +909,4 @@ export default function LessonEditorPage() {
   );
 }
 
-function BlockEditor({
-  block,
-  onSave,
-  onCancel,
-}: {
-  block: ContentBlock;
-  onSave: (patch: { content: ContentBlock['content']; metadata?: ContentBlock['metadata'] }) => void;
-  onCancel: () => void;
-}) {
-  const normalizedBlock = normalizeStructuredLessonBlock(block);
-  const questionModel = getStructuredLessonQuestionModel(normalizedBlock);
-  const [heading, setHeading] = useState(getStructuredLessonBlockHeading(normalizedBlock));
-  const [html, setHtml] = useState(getStructuredLessonBlockHtml(normalizedBlock));
-  const [prompt, setPrompt] = useState(questionModel.prompt);
-  const [answerType, setAnswerType] = useState(questionModel.answerType);
-  const [choicesInput, setChoicesInput] = useState(questionModel.choices.join('\n'));
-  const [explanation, setExplanation] = useState(questionModel.explanation);
-  const [points, setPoints] = useState(questionModel.points ? String(questionModel.points) : '0');
-  const [urlValue, setUrlValue] = useState(getBlockUrlValue(normalizedBlock.content));
-
-  const handleSave = () => {
-    if (normalizedBlock.type === 'text') {
-      onSave({
-        content: {
-          heading,
-          html,
-        },
-        metadata: normalizedBlock.metadata,
-      });
-      return;
-    }
-
-    if (normalizedBlock.type === 'question') {
-      const choices = choicesInput
-        .split(/\r?\n/)
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-
-      onSave({
-        content: {
-          prompt,
-          answerType,
-          choices: answerType === 'short_answer' ? [] : choices,
-        },
-        metadata: {
-          ...(normalizedBlock.metadata ?? {}),
-          explanation,
-          points: Number.isFinite(Number(points)) ? Number(points) : 0,
-        },
-      });
-      return;
-    }
-
-    onSave({
-      content: urlValue,
-      metadata: normalizedBlock.metadata,
-    });
-  };
-
-  return (
-    <div className="space-y-4">
-      {normalizedBlock.type === 'text' ? (
-        <>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)]">
-            <div className="space-y-2">
-              <Label htmlFor={`heading-${block.id}`}>Section heading</Label>
-              <Input
-                id={`heading-${block.id}`}
-                value={heading}
-                onChange={(e) => setHeading(e.target.value)}
-                placeholder="Add an optional heading for this section"
-                className="teacher-input h-12 rounded-2xl"
-              />
-            </div>
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-xs leading-5 text-emerald-800">
-              Structured text blocks stay AI-readable and render with the lesson reader&apos;s semantic styling.
-            </div>
-          </div>
-          <RichTextEditor
-            value={html}
-            onChange={setHtml}
-            minHeight={220}
-            placeholder="Write lesson content..."
-          />
-        </>
-      ) : null}
-
-      {normalizedBlock.type === 'question' ? (
-        <div className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor={`prompt-${block.id}`}>Checkpoint prompt</Label>
-              <RichTextEditor
-                value={prompt}
-                onChange={setPrompt}
-                minHeight={120}
-                placeholder="What should learners answer here?"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`answer-type-${block.id}`}>Answer type</Label>
-              <select
-                id={`answer-type-${block.id}`}
-                value={answerType}
-                onChange={(e) => setAnswerType(e.target.value as typeof answerType)}
-                className="teacher-input h-12 w-full rounded-2xl border border-[var(--teacher-outline)] bg-white px-4 text-sm text-[var(--teacher-text-strong)]"
-              >
-                <option value="single_select">Single select</option>
-                <option value="multi_select">Multi-select</option>
-                <option value="short_answer">Short answer</option>
-              </select>
-            </div>
-          </div>
-          {answerType !== 'short_answer' ? (
-            <div className="space-y-2">
-              <Label htmlFor={`choices-${block.id}`}>Choices</Label>
-              <textarea
-                id={`choices-${block.id}`}
-                value={choicesInput}
-                onChange={(e) => setChoicesInput(e.target.value)}
-                placeholder="One choice per line"
-                className="teacher-input min-h-[140px] w-full rounded-2xl border border-[var(--teacher-outline)] bg-white px-4 py-3 text-sm text-[var(--teacher-text-strong)]"
-              />
-            </div>
-          ) : null}
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
-            <div className="space-y-2">
-              <Label htmlFor={`explanation-${block.id}`}>Explanation</Label>
-              <RichTextEditor
-                value={explanation}
-                onChange={setExplanation}
-                minHeight={160}
-                placeholder="Explain the expected response or feedback learners should see."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`points-${block.id}`}>Points</Label>
-              <Input
-                id={`points-${block.id}`}
-                type="number"
-                min="0"
-                step="1"
-                value={points}
-                onChange={(e) => setPoints(e.target.value)}
-                className="teacher-input h-12 rounded-2xl"
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {normalizedBlock.type !== 'text' && normalizedBlock.type !== 'question' ? (
-        <div className="space-y-2">
-          <Label htmlFor={`url-${block.id}`}>{block.type === 'file' ? 'File link' : `${block.type} URL`}</Label>
-          <Input
-            id={`url-${block.id}`}
-            value={urlValue}
-            onChange={(e) => setUrlValue(e.target.value)}
-            placeholder={`Enter ${block.type} URL...`}
-            className="teacher-input h-12 rounded-2xl"
-          />
-        </div>
-      ) : null}
-
-      <div className="flex gap-2">
-        <Button size="sm" onClick={handleSave} className="teacher-button-solid rounded-xl font-black">Save</Button>
-        <Button size="sm" variant="outline" onClick={onCancel} className="teacher-button-outline rounded-xl font-black">Cancel</Button>
-      </div>
-    </div>
-  );
-}
-
-function BlockPreview({ block }: { block: ContentBlock }) {
-  const baseClass = 'rounded-2xl border border-white/60 bg-white/70 px-4 py-4 text-sm text-slate-700';
-  const normalizedBlock = normalizeStructuredLessonBlock(block);
-
-  switch (normalizedBlock.type) {
-    case 'text': {
-      const heading = getStructuredLessonBlockHeading(normalizedBlock);
-      const html = getStructuredLessonBlockHtml(normalizedBlock);
-      return (
-        <div className={baseClass}>
-          {heading ? <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-emerald-700">{heading}</p> : null}
-          {html.trim() ? (
-            <RichTextRenderer html={normalizeRichValue(html)} />
-          ) : (
-            'Empty text block'
-          )}
-        </div>
-      );
-    }
-    case 'image':
-      return <p className={baseClass}>Image URL: {getBlockUrlValue(normalizedBlock.content) || 'No URL yet'}</p>;
-    case 'video':
-      return <p className={baseClass}>Video URL: {getBlockUrlValue(normalizedBlock.content) || 'No URL yet'}</p>;
-    case 'question': {
-      const question = getStructuredLessonQuestionModel(normalizedBlock);
-      return (
-        <div className={`${baseClass} space-y-3`}>
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Checkpoint</p>
-            <RichTextRenderer
-              className="mt-2 text-sm font-semibold text-slate-900"
-              html={normalizeRichValue(question.prompt || 'Empty question block')}
-            />
-          </div>
-          {question.answerType !== 'short_answer' && question.choices.length > 0 ? (
-            <ul className="space-y-2">
-              {question.choices.map((choice, index) => (
-                <li key={`${block.id}-preview-choice-${index}`} className="rounded-xl border border-slate-200/70 bg-white/75 px-3 py-2">
-                  {choice}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {question.explanation ? (
-            <div className="rounded-xl border border-slate-200/70 bg-white/75 px-3 py-3">
-              <RichTextRenderer html={normalizeRichValue(question.explanation)} />
-            </div>
-          ) : null}
-          <p className="text-xs font-semibold text-slate-500">{question.points} point{question.points === 1 ? '' : 's'}</p>
-        </div>
-      );
-    }
-    case 'file':
-      return <p className={baseClass}>File link: {getBlockUrlValue(normalizedBlock.content) || 'No URL yet'}</p>;
-    case 'divider':
-      return (
-        <div className="rounded-2xl border border-dashed border-[var(--teacher-outline)] bg-white/60 px-4 py-4">
-          <hr className="border-[var(--teacher-outline)]" />
-        </div>
-      );
-    default:
-      return <p className={baseClass}>Unknown block type</p>;
-  }
-}
 

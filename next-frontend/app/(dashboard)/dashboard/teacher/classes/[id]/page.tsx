@@ -924,6 +924,8 @@ export default function TeacherClassDetailPage() {
         classId,
         title,
         description: normalizeRichText(newModuleDescription).trim() || undefined,
+        isVisible: false,
+        isLocked: true,
       });
       toast.success('Module created');
       setShowAddModuleModal(false);

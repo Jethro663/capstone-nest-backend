@@ -52,6 +52,14 @@ export class CreateModuleDto {
   @IsInt()
   @Min(1)
   order?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isLocked?: boolean;
 }
 
 export class UpdateModuleDto {

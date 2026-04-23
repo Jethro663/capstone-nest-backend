@@ -72,10 +72,8 @@ export class LessonsService {
 
   private normalizeQuestionAnswerType(
     answerType: unknown,
-  ): 'single_select' | 'multi_select' | 'short_answer' {
-    return answerType === 'multi_select' || answerType === 'short_answer'
-      ? answerType
-      : 'single_select';
+  ): 'single_select' | 'multi_select' {
+    return answerType === 'multi_select' ? 'multi_select' : 'single_select';
   }
 
   private sanitizeTextBlockContent(content: unknown) {
@@ -97,6 +95,57 @@ export class LessonsService {
         normalized.text = this.sanitizeOptionalRichText(normalized.text) || '';
       }
 
+      if (Array.isArray(normalized.items)) {
+        normalized.items = normalized.items
+          .map((entry, index) => {
+            if (typeof entry === 'string') {
+              return {
+                id: `item-${index + 1}`,
+                html: this.sanitizeOptionalRichText(entry) || '',
+              };
+            }
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+              return null;
+            }
+            const item = { ...(entry as Record<string, unknown>) };
+            item.id = typeof item.id === 'string' ? item.id : `item-${index + 1}`;
+            item.html =
+              typeof item.html === 'string'
+                ? this.sanitizeOptionalRichText(item.html) || ''
+                : typeof item.text === 'string'
+                  ? this.sanitizeOptionalRichText(item.text) || ''
+                  : '';
+            return item;
+          })
+          .filter(Boolean);
+      }
+
+      if (Array.isArray(normalized.steps)) {
+        normalized.steps = normalized.steps
+          .map((entry, index) => {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+              return null;
+            }
+            const step = { ...(entry as Record<string, unknown>) };
+            step.id = typeof step.id === 'string' ? step.id : `step-${index + 1}`;
+            step.title = typeof step.title === 'string' ? step.title.trim() : '';
+            step.html =
+              typeof step.html === 'string'
+                ? this.sanitizeOptionalRichText(step.html) || ''
+                : typeof step.text === 'string'
+                  ? this.sanitizeOptionalRichText(step.text) || ''
+                  : '';
+            return step;
+          })
+          .filter(Boolean);
+      }
+
+      for (const key of ['scenarioHtml', 'answerHtml', 'takeawayHtml', 'promptHtml']) {
+        if (typeof normalized[key] === 'string') {
+          normalized[key] = this.sanitizeOptionalRichText(normalized[key] as string) || '';
+        }
+      }
+
       return normalized;
     }
 
@@ -111,6 +160,10 @@ export class LessonsService {
     }
 
     if (typeof content === 'object' && !Array.isArray(content)) {
+      type SanitizedChoice = Record<string, unknown> & {
+        id: string;
+        html: string;
+      };
       const normalized: Record<string, unknown> = { ...content };
       if (typeof normalized.prompt === 'string') {
         normalized.prompt = this.sanitizeOptionalRichText(normalized.prompt) || '';
@@ -121,14 +174,35 @@ export class LessonsService {
 
       const choices = Array.isArray(normalized.choices)
         ? normalized.choices
-            .map((entry) => (typeof entry === 'string'
-              ? this.sanitizeOptionalRichText(entry) || ''
-              : '')
-            .trim?.())
+            .map((entry, index) => {
+              if (typeof entry === 'string') {
+                const html = this.sanitizeOptionalRichText(entry) || '';
+                return html.trim()
+                  ? ({ id: `choice-${index + 1}`, html } satisfies SanitizedChoice)
+                  : null;
+              }
+
+              if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+                return null;
+              }
+
+              const choice = { ...(entry as Record<string, unknown>) };
+              const html =
+                typeof choice.html === 'string'
+                  ? this.sanitizeOptionalRichText(choice.html) || ''
+                  : typeof choice.text === 'string'
+                    ? this.sanitizeOptionalRichText(choice.text) || ''
+                    : '';
+              if (!html.trim()) return null;
+              return {
+                ...choice,
+                id: typeof choice.id === 'string' ? choice.id : `choice-${index + 1}`,
+                html,
+              } satisfies SanitizedChoice;
+            })
+            .filter((entry): entry is SanitizedChoice => Boolean(entry))
         : [];
-      normalized.choices = choices.filter(
-        (entry): entry is string => typeof entry === 'string' && Boolean(entry),
-      );
+      normalized.choices = choices;
 
       return normalized;
     }
@@ -144,6 +218,12 @@ export class LessonsService {
 
     if (blockType === 'question' && typeof normalized.explanation === 'string') {
       normalized.explanation = this.sanitizeOptionalRichText(normalized.explanation) || '';
+    }
+
+    if (blockType === 'question' && Array.isArray(normalized.correctAnswers)) {
+      normalized.correctAnswers = normalized.correctAnswers.filter(
+        (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+      );
     }
 
     return normalized;

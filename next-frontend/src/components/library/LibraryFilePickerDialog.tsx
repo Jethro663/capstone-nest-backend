@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { fileService } from '@/services/file-service';
-import type { LibraryGradeLevel, LibrarySubjectKey, UploadedFile } from '@/types/file';
+import type { LibraryFileKind, LibraryGradeLevel, LibrarySubjectKey, UploadedFile } from '@/types/file';
 
 interface LibraryFilePickerDialogProps {
   open: boolean;
@@ -13,6 +13,9 @@ interface LibraryFilePickerDialogProps {
   onSelect: (file: UploadedFile) => void;
   subjectKey?: LibrarySubjectKey;
   gradeLevel?: LibraryGradeLevel;
+  allowedKinds?: LibraryFileKind[];
+  title?: string;
+  description?: string;
 }
 
 type PickerScope = 'general' | 'private';
@@ -23,6 +26,9 @@ export function LibraryFilePickerDialog({
   onSelect,
   subjectKey,
   gradeLevel,
+  allowedKinds,
+  title = 'Choose from Library',
+  description = 'Attach an existing General Module or a file from My Library instead of uploading a new PDF.',
 }: LibraryFilePickerDialogProps) {
   const [scope, setScope] = useState<PickerScope>('general');
   const [search, setSearch] = useState('');
@@ -47,7 +53,10 @@ export function LibraryFilePickerDialog({
           limit: 20,
         });
         if (!cancelled) {
-          setFiles(response.data);
+          const nextFiles = allowedKinds?.length
+            ? response.data.filter((file) => file.fileKind && allowedKinds.includes(file.fileKind))
+            : response.data;
+          setFiles(nextFiles);
         }
       } catch {
         if (!cancelled) {
@@ -65,15 +74,15 @@ export function LibraryFilePickerDialog({
     return () => {
       cancelled = true;
     };
-  }, [gradeLevel, open, scope, search, subjectKey]);
+  }, [allowedKinds, gradeLevel, open, scope, search, subjectKey]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Choose from Library</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Attach an existing General Module or a file from My Library instead of uploading a new PDF.
+            {description}
           </DialogDescription>
         </DialogHeader>
 

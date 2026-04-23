@@ -5,7 +5,6 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
 } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -34,10 +33,14 @@ import type { ClassItem } from '@/types/class';
 import type { ContentBlock, Lesson } from '@/types/lesson';
 import type { ClassModule, ModuleItem } from '@/types/module';
 import {
-  getStructuredLessonBlockHtml,
-  getStructuredLessonQuestionModel,
+  getLessonCheckpointGate,
   normalizeStructuredLessonBlock,
 } from '@/features/lesson-blocks/structured-content';
+import {
+  LessonBlockStudentRenderer,
+  type LessonCheckpointResults,
+  type LessonCheckpointSelections,
+} from '@/features/lesson-blocks/LessonBlockStudentRenderer';
 import './student-module-detail.css';
 
 const LESSON_COMPLETE_WAIT_SECONDS = 30;
@@ -69,143 +72,6 @@ function getSubmittedAttempts(attempts: AssessmentAttempt[]) {
   return attempts.filter((attempt) => attempt.isSubmitted);
 }
 
-function getBlockTextValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-    const maybeHtml = content.html;
-    if (typeof maybeHtml === 'string') return maybeHtml;
-    const maybePrompt = content.prompt;
-    if (typeof maybePrompt === 'string') return maybePrompt;
-  }
-  return '';
-}
-
-function getBlockUrlValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeUrl = content.url;
-    if (typeof maybeUrl === 'string') return maybeUrl;
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-  }
-  return '';
-}
-
-function ContentBlockRenderer({ block }: { block: ContentBlock }) {
-  switch (block.type) {
-    case 'text':
-      const html = getStructuredLessonBlockHtml(block);
-      return (
-        <div className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]">
-          <RichTextRenderer html={html} />
-        </div>
-      );
-    case 'image': {
-      const src =
-        getBlockUrlValue(block.content) ||
-        (block.metadata as Record<string, string>)?.url;
-      const caption = (block.metadata as Record<string, string>)?.caption;
-      return (
-        <figure>
-          {src ? (
-            <Image
-              src={src}
-              alt={caption || 'Lesson image'}
-              width={1200}
-              height={675}
-              unoptimized
-              className="h-auto w-full rounded-lg"
-            />
-          ) : null}
-          {caption ? (
-            <figcaption className="mt-2 text-center text-sm text-[var(--student-text-muted)]">
-              {caption}
-            </figcaption>
-          ) : null}
-        </figure>
-      );
-    }
-    case 'video': {
-      const url =
-        getBlockUrlValue(block.content) ||
-        (block.metadata as Record<string, string>)?.url;
-      if (!url) return null;
-      const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-      const embedUrl = isYouTube
-        ? url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')
-        : url;
-      return (
-        <div className="aspect-video overflow-hidden rounded-lg">
-          <iframe
-            src={embedUrl}
-            className="h-full w-full"
-            allowFullScreen
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          />
-        </div>
-      );
-    }
-    case 'question': {
-      const model = getStructuredLessonQuestionModel(block);
-      return (
-        <div className="rounded-2xl border border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)] p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--student-accent)]">
-            Quiz Question
-          </p>
-          <RichTextRenderer
-            className="font-medium text-[var(--student-text-strong)]"
-            html={model.prompt || getBlockTextValue(block.content) || '<p>Empty question prompt.</p>'}
-          />
-          {model.choices.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {model.choices.map((choice) => (
-                <div
-                  key={choice}
-                  className="rounded-xl border border-[var(--student-outline)] bg-white/80 px-3 py-2 text-sm text-[var(--student-text-strong)]"
-                >
-                  {choice}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      );
-    }
-    case 'file': {
-      const fileName =
-        (block.metadata as Record<string, string>)?.fileName ||
-        getBlockTextValue(block.content) ||
-        'Attachment';
-      const fileUrl = (block.metadata as Record<string, string>)?.url;
-      return (
-        <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
-          <p className="font-semibold text-[var(--student-text-strong)]">{fileName}</p>
-          {fileUrl ? (
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-block text-sm text-[var(--student-accent)] hover:underline"
-            >
-              Download
-            </a>
-          ) : null}
-        </div>
-      );
-    }
-    case 'divider':
-      return <hr className="my-6 border-[var(--student-outline)]" />;
-    default:
-      return (
-        <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-[var(--student-text-muted)]">
-          Unsupported content type: {block.type}
-        </div>
-      );
-  }
-}
-
 export default function StudentModuleDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -227,6 +93,8 @@ export default function StudentModuleDetailPage() {
   const [completingLesson, setCompletingLesson] = useState(false);
   const [bottomReachedAt, setBottomReachedAt] = useState<number | null>(null);
   const [countdownLeft, setCountdownLeft] = useState(LESSON_COMPLETE_WAIT_SECONDS);
+  const [checkpointSelections, setCheckpointSelections] = useState<LessonCheckpointSelections>({});
+  const [checkpointResults, setCheckpointResults] = useState<LessonCheckpointResults>({});
 
   const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
@@ -277,6 +145,10 @@ export default function StudentModuleDetailPage() {
       }),
     [assessment, selectedAssessmentItem, submittedAttempts.length],
   );
+  const checkpointGate = useMemo(
+    () => getLessonCheckpointGate(lessonBlocks, checkpointResults),
+    [checkpointResults, lessonBlocks],
+  );
 
   const currentMode = selectedLessonId
     ? 'lesson'
@@ -324,6 +196,8 @@ export default function StudentModuleDetailPage() {
       setLessonCompleted(false);
       setBottomReachedAt(null);
       setCountdownLeft(LESSON_COMPLETE_WAIT_SECONDS);
+      setCheckpointSelections({});
+      setCheckpointResults({});
       return;
     }
     if (!selectedLessonItem?.lessonId) {
@@ -350,6 +224,8 @@ export default function StudentModuleDetailPage() {
         setLessonCompleted(Boolean(completionStatus.data?.completed));
         setBottomReachedAt(null);
         setCountdownLeft(LESSON_COMPLETE_WAIT_SECONDS);
+        setCheckpointSelections({});
+        setCheckpointResults({});
       } catch {
         toast.error('Failed to load lesson content.');
       } finally {
@@ -389,7 +265,10 @@ export default function StudentModuleDetailPage() {
   }, [classId, moduleId, router, selectedAssessmentId, selectedAssessmentItem?.assessmentId]);
 
   useEffect(() => {
-    if (currentMode !== 'lesson' || lessonCompleted) return undefined;
+    if (currentMode !== 'lesson' || lessonCompleted || !checkpointGate.ready) {
+      setBottomReachedAt(null);
+      return undefined;
+    }
     const onScroll = () => {
       const viewportBottom = window.scrollY + window.innerHeight;
       const docBottom = document.documentElement.scrollHeight;
@@ -402,10 +281,10 @@ export default function StudentModuleDetailPage() {
     return () => {
       window.removeEventListener('scroll', onScroll);
     };
-  }, [bottomReachedAt, currentMode, lessonCompleted]);
+  }, [bottomReachedAt, checkpointGate.ready, currentMode, lessonCompleted]);
 
   useEffect(() => {
-    if (bottomReachedAt === null || lessonCompleted) {
+    if (bottomReachedAt === null || lessonCompleted || !checkpointGate.ready) {
       setCountdownLeft(LESSON_COMPLETE_WAIT_SECONDS);
       return;
     }
@@ -415,7 +294,7 @@ export default function StudentModuleDetailPage() {
       setCountdownLeft(remaining);
     }, 250);
     return () => window.clearInterval(timer);
-  }, [bottomReachedAt, lessonCompleted]);
+  }, [bottomReachedAt, checkpointGate.ready, lessonCompleted]);
 
   const completeLesson = useCallback(async () => {
     if (!selectedLessonItem?.lessonId || completingLesson || lessonCompleted) return;
@@ -440,6 +319,7 @@ export default function StudentModuleDetailPage() {
     if (
       currentMode === 'lesson' &&
       selectedLessonItem?.lessonId &&
+      checkpointGate.ready &&
       bottomReachedAt !== null &&
       countdownLeft === 0 &&
       !lessonCompleted &&
@@ -449,6 +329,7 @@ export default function StudentModuleDetailPage() {
     }
   }, [
     bottomReachedAt,
+    checkpointGate.ready,
     completeLesson,
     completingLesson,
     countdownLeft,
@@ -495,6 +376,24 @@ export default function StudentModuleDetailPage() {
       URL.revokeObjectURL(url);
     } catch {
       toast.error('Unable to download attachment.');
+    }
+  }, []);
+
+  const handleCheckpointAnswer = useCallback((
+    blockId: string,
+    selectedChoiceIds: string[],
+    isCorrect: boolean,
+  ) => {
+    setCheckpointSelections((current) => ({
+      ...current,
+      [blockId]: selectedChoiceIds,
+    }));
+    setCheckpointResults((current) => ({
+      ...current,
+      [blockId]: isCorrect,
+    }));
+    if (!isCorrect) {
+      setBottomReachedAt(null);
     }
   }, []);
 
@@ -759,7 +658,13 @@ export default function StudentModuleDetailPage() {
                   ) : (
                     <div className="space-y-6">
                       {lessonBlocks.map((block) => (
-                        <ContentBlockRenderer key={block.id} block={block} />
+                        <LessonBlockStudentRenderer
+                          key={block.id}
+                          block={block}
+                          checkpointSelections={checkpointSelections}
+                          checkpointResults={checkpointResults}
+                          onCheckpointAnswer={handleCheckpointAnswer}
+                        />
                       ))}
                     </div>
                   )}
@@ -788,6 +693,11 @@ export default function StudentModuleDetailPage() {
                   <div className="student-module-view__lesson-progress">
                     {lessonCompleted ? (
                       <p>Completed - +{selectedLessonItem?.lessonPoints ?? 0} pts awarded</p>
+                    ) : !checkpointGate.ready ? (
+                      <p>
+                        Answer all checkpoints correctly to unlock the timer{' '}
+                        <strong>{checkpointGate.correct}/{checkpointGate.total}</strong>.
+                      </p>
                     ) : bottomReachedAt === null ? (
                       <p>Scroll to the bottom to start the completion timer.</p>
                     ) : (
@@ -798,7 +708,7 @@ export default function StudentModuleDetailPage() {
                   </div>
                   <Button
                     className="student-button-solid student-module-view__complete-button"
-                    disabled={!lessonCompleted && (bottomReachedAt === null || countdownLeft > 0 || completingLesson)}
+                    disabled={!lessonCompleted && (!checkpointGate.ready || bottomReachedAt === null || countdownLeft > 0 || completingLesson)}
                     onClick={() => void completeLesson()}
                   >
                     {lessonCompleted ? 'Completed' : completingLesson ? 'Completing...' : 'Mark Complete'}

@@ -188,6 +188,14 @@ function normalizeRichValue(input?: string | null) {
   return normalizeRichText(input || '').trim();
 }
 
+function getPlainChoiceText(html: string) {
+  return normalizeRichText(html)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function reorderBlocksLocally(items: ContentBlock[], fromIndex: number, toIndex: number) {
   const next = items.slice();
   const [moved] = next.splice(fromIndex, 1);
@@ -1096,7 +1104,9 @@ function BlockEditor({
   const [html, setHtml] = useState(getStructuredLessonBlockHtml(normalizedBlock));
   const [prompt, setPrompt] = useState(questionModel.prompt);
   const [answerType, setAnswerType] = useState(questionModel.answerType);
-  const [choicesInput, setChoicesInput] = useState(questionModel.choices.join('\n'));
+  const [choicesInput, setChoicesInput] = useState(
+    questionModel.choices.map((choice) => getPlainChoiceText(choice.html)).join('\n'),
+  );
   const [explanation, setExplanation] = useState(questionModel.explanation);
   const [points, setPoints] = useState(questionModel.points ? String(questionModel.points) : '0');
   const [urlValue, setUrlValue] = useState(getBlockUrlValue(normalizedBlock.content));
@@ -1123,7 +1133,7 @@ function BlockEditor({
         content: {
           prompt,
           answerType,
-          choices: answerType === 'short_answer' ? [] : choices,
+          choices,
         },
         metadata: {
           ...(normalizedBlock.metadata ?? {}),
@@ -1190,22 +1200,19 @@ function BlockEditor({
               >
                 <option value="single_select">Single select</option>
                 <option value="multi_select">Multi-select</option>
-                <option value="short_answer">Short answer</option>
               </select>
             </div>
           </div>
-          {answerType !== 'short_answer' ? (
-            <div className="space-y-2">
-              <Label htmlFor={`choices-${block.id}`}>Choices</Label>
-              <textarea
-                id={`choices-${block.id}`}
-                value={choicesInput}
-                onChange={(e) => setChoicesInput(e.target.value)}
-                placeholder="One choice per line"
-                className="teacher-input min-h-[140px] w-full rounded-2xl border border-[var(--teacher-outline)] bg-white px-4 py-3 text-sm text-[var(--teacher-text-strong)]"
-              />
-            </div>
-          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor={`choices-${block.id}`}>Choices</Label>
+            <textarea
+              id={`choices-${block.id}`}
+              value={choicesInput}
+              onChange={(e) => setChoicesInput(e.target.value)}
+              placeholder="One choice per line"
+              className="teacher-input min-h-[140px] w-full rounded-2xl border border-[var(--teacher-outline)] bg-white px-4 py-3 text-sm text-[var(--teacher-text-strong)]"
+            />
+          </div>
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
             <div className="space-y-2">
               <Label htmlFor={`explanation-${block.id}`}>Explanation</Label>
@@ -1287,11 +1294,11 @@ function BlockPreview({ block }: { block: ContentBlock }) {
               html={normalizeRichValue(question.prompt || 'Empty question block')}
             />
           </div>
-          {question.answerType !== 'short_answer' && question.choices.length > 0 ? (
+          {question.choices.length > 0 ? (
             <ul className="space-y-2">
               {question.choices.map((choice, index) => (
                 <li key={`${block.id}-preview-choice-${index}`} className="rounded-xl border border-slate-200/70 bg-white/75 px-3 py-2">
-                  {choice}
+                  <RichTextRenderer html={normalizeRichValue(choice.html)} />
                 </li>
               ))}
             </ul>
