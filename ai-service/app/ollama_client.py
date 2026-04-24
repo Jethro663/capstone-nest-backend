@@ -56,7 +56,7 @@ TASK_PROFILES: dict[TaskName, dict[str, Any]] = {
         "model_kind": "text",
         "temperature": 0.2,
         "num_predict": 2048,
-        "timeout": settings.ollama_timeout_extraction_s,
+        "timeout": settings.ollama_timeout_quiz_generation_s,
     },
     "intervention": {
         "model_kind": "text",

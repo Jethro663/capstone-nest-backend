@@ -24,6 +24,7 @@ describe('LxpService', () => {
       lessons: { findMany: jest.fn() },
       assessments: { findMany: jest.fn() },
     },
+    select: jest.fn(),
     insert: jest.fn(),
     update: jest.fn(),
     transaction: jest.fn(),
@@ -32,6 +33,13 @@ describe('LxpService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
+    mockDb.select.mockReturnValue({
+      from: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          groupBy: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -362,7 +370,8 @@ describe('LxpService', () => {
         lesson: {
           id: 'lesson-1',
           title: 'Fractions Refresher',
-          description: 'Revisit basic fraction operations.',
+          description:
+            '<p>Revisit <strong>basic fraction</strong> operations.</p>',
           order: 2,
         },
         assessment: null,
@@ -379,7 +388,7 @@ describe('LxpService', () => {
         assessment: {
           id: 'assessment-1',
           title: 'Fractions Quiz',
-          description: 'Retry the fractions quiz.',
+          description: '<p>Retry the <strong>fractions</strong> quiz.</p>',
           passingScore: 75,
           dueDate: new Date('2026-02-10T00:00:00.000Z'),
           type: 'quiz',
@@ -855,6 +864,15 @@ describe('LxpService', () => {
     mockDb.query.assessments.findMany.mockResolvedValue([
       { id: 'assessment-1' },
     ]);
+    mockDb.select.mockReturnValue({
+      from: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          groupBy: jest.fn().mockResolvedValue([
+            { assessmentId: 'assessment-1' },
+          ]),
+        }),
+      }),
+    });
     mockDb.query.interventionAssignments.findMany.mockResolvedValue([]);
 
     const txUpdateSet = jest.fn().mockReturnValue({
@@ -921,6 +939,42 @@ describe('LxpService', () => {
       roles: ['teacher'],
     });
     expect(result).toEqual(queueResponse);
+  });
+
+  it('blocks intervention assignment for assessment retries without a failed submitted attempt', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-1',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'active',
+      note: null,
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.assessments.findMany.mockResolvedValue([
+      { id: 'assessment-1' },
+    ]);
+    mockDb.select.mockReturnValue({
+      from: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnValue({
+          groupBy: jest.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
+    await expect(
+      service.assignIntervention(
+        'case-1',
+        { assessmentIds: ['assessment-1'] },
+        { userId: 'teacher-1', roles: ['teacher'] },
+      ),
+    ).rejects.toThrow(
+      'Assessment retry checkpoints require at least one failed submitted attempt from the student before they can be assigned.',
+    );
+
+    expect(mockDb.transaction).not.toHaveBeenCalled();
   });
 
   it('blocks intervention assignment when case is pending approval', async () => {
@@ -1134,7 +1188,7 @@ describe('LxpService', () => {
     expect(txUpdateSet).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'completed',
-        note: 'Teacher assigned checkpoint sequence\nAuto-completed after finishing all LXP checkpoints.',
+        note: 'Teacher assigned checkpoint sequence\nAuto-completed after finishing all Learners Path checkpoints.',
       }),
     );
     expect(mockAuditService.log).toHaveBeenCalledWith(

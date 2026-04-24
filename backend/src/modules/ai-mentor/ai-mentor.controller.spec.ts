@@ -1466,6 +1466,83 @@ describe('AiMentorController', () => {
     });
   });
 
+  describe('deleteTeacherJob()', () => {
+    it('should forward DELETE /teacher/jobs/:jobId and audit the cancellation', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'cancelled' },
+      });
+
+      const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'DELETE',
+        `/teacher/jobs/${JOB_ID}`,
+        TEACHER_USER,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.generation_job.cancelled',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'cancelled' },
+      });
+    });
+
+    it('should block deletion when teacher does not own AI generation job', async () => {
+      mockDb.query.aiGenerationJobs.findFirst.mockResolvedValue({
+        id: JOB_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.deleteTeacherJob(JOB_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this AI generation job.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getIndexClassStatus()', () => {
+    it('should forward GET /index/classes/:classId/status for owned teacher class', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { classId: CLASS_ID, chunksIndexed: 0, needsReindex: true },
+      });
+
+      const result = await controller.getIndexClassStatus(
+        CLASS_ID,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'GET',
+        `/index/classes/${CLASS_ID}/status`,
+        TEACHER_USER,
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { classId: CLASS_ID, chunksIndexed: 0, needsReindex: true },
+      });
+    });
+
+    it('should block index status when teacher does not own class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.getIndexClassStatus(CLASS_ID, TEACHER_USER),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
   describe('reindexClass()', () => {
     it('should forward POST /index/classes/:classId for owned teacher class', async () => {
       mockProxy.forward.mockResolvedValue({ success: true, message: 'queued' });

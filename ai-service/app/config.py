@@ -20,6 +20,14 @@ class Settings(BaseSettings):
         default=240,
         validation_alias=AliasChoices("OLLAMA_TIMEOUT_EXTRACTION_S", "OLLAMA_TIMEOUT"),
     )
+    ollama_timeout_quiz_generation_s: int = Field(
+        default=150,
+        validation_alias=AliasChoices(
+            "OLLAMA_TIMEOUT_QUIZ_GENERATION_S",
+            "OLLAMA_TIMEOUT_QUIZ_S",
+            "OLLAMA_TIMEOUT",
+        ),
+    )
     ollama_keep_alive: str = "15m"
     upload_dir: str = "../backend/uploads"
     max_raw_text: int = 50_000

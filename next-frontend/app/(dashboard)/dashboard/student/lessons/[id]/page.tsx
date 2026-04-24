@@ -144,7 +144,7 @@ export default function StudentLessonViewPage() {
         <section className="lxp-lesson-hero overflow-hidden rounded-[2rem] border border-[var(--student-outline)] bg-[linear-gradient(135deg,var(--student-elevated),white)] p-6 shadow-sm">
           <div className="lxp-lesson-kicker">
             <Sparkles className="h-3.5 w-3.5" />
-            LXP Lesson Mission
+            Learners Path Lesson Mission
           </div>
           <Button
             variant="ghost"

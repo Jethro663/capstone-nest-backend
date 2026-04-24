@@ -1,0 +1,16 @@
+=1 : The term '=1' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the 
+spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:75
++ ... Users\jethr\Desktop\capstone-nest-react-lms\ai-service'; ='1'; ..\.ve ...
++                                                              ~~~~
+    + CategoryInfo          : ObjectNotFound: (=1:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+INFO:     Will watch for changes in these directories: ['C:\\Users\\jethr\\Desktop\\capstone-nest-react-lms\\ai-service']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [35376] using WatchFiles
+INFO:     Started server process [41312]
+INFO:     Waiting for application startup.
+INFO:httpx:HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST http://localhost:11434/api/generate "HTTP/1.1 200 OK"
+INFO:     Application startup complete.

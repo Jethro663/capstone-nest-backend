@@ -21,7 +21,6 @@ import {
   Map,
   RefreshCw,
   Sparkles,
-  Star,
   Target,
   Trophy,
 } from "lucide-react";
@@ -62,9 +61,9 @@ type LxpTabKey =
 
 const TABS: Array<{ value: LxpTabKey; label: string }> = [
   { value: "overview", label: "Overview" },
-  { value: "roadmap", label: "Roadmap" },
-  { value: "assessments", label: "Assessments" },
-  { value: "interventions", label: "Interventions" },
+  { value: "roadmap", label: "Assigned Steps" },
+  { value: "assessments", label: "Replays" },
+  { value: "interventions", label: "Case File" },
   { value: "ja", label: "JA Hub" },
 ];
 
@@ -143,7 +142,7 @@ function checkpointHref(checkpoint: LxpCheckpoint, classId?: string): string {
 function checkpointProvenance(checkpoint: LxpCheckpoint): string {
   return checkpoint.type === "lesson_review"
     ? "LMS lesson source"
-    : "LMS assessment source via JA replay";
+    : "LMS assessment source via JA Hub";
 }
 
 function checkpointSummary(checkpoint: LxpCheckpoint): string {
@@ -267,6 +266,49 @@ function CompactEmptyState({
   );
 }
 
+function PathStageCard({
+  step,
+  title,
+  description,
+  state,
+}: {
+  step: string;
+  title: string;
+  description: string;
+  state: "done" | "active" | "waiting";
+}) {
+  return (
+    <div className="learners-path-stage-card" data-state={state}>
+      <div className="flex items-start justify-between gap-3">
+        <span className="learners-path-stage-card__step">{step}</span>
+        <StudentStatusChip
+          tone={
+            state === "done"
+              ? "success"
+              : state === "active"
+                ? "warning"
+                : "info"
+          }
+        >
+          {state === "done"
+            ? "Done"
+            : state === "active"
+              ? "Do now"
+              : "Waiting"}
+        </StudentStatusChip>
+      </div>
+      <div className="mt-4 space-y-2">
+        <h3 className="text-base font-black text-[var(--student-text-strong)]">
+          {title}
+        </h3>
+        <p className="text-sm leading-6 text-[var(--student-text-muted)]">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function StudentLxpExperience() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<LxpTabKey>(() =>
@@ -306,7 +348,7 @@ export default function StudentLxpExperience() {
         return rows[0]?.classId ?? "";
       });
     } catch {
-      toast.error("Failed to load your LXP classes.");
+      toast.error("Failed to load your Learners Path classes.");
       setEligibleClasses([]);
       setSelectedClassId("");
     } finally {
@@ -331,7 +373,7 @@ export default function StudentLxpExperience() {
       setOverview(overviewRes.data);
       setPlaylist(playlistRes.data);
     } catch {
-      toast.error("Failed to load the LXP module for this class.");
+      toast.error("Failed to load Learners Path for this class.");
       setOverview(null);
       setPlaylist(null);
     } finally {
@@ -392,6 +434,63 @@ export default function StudentLxpExperience() {
     [playlist?.checkpoints],
   );
 
+  const nextCheckpoint = useMemo(
+    () =>
+      (playlist?.checkpoints ?? []).find((checkpoint) => !checkpoint.isCompleted) ??
+      null,
+    [playlist?.checkpoints],
+  );
+
+  const planStages = useMemo(
+    () => [
+      {
+        step: "01",
+        title: "Review the assigned lesson",
+        description:
+          lessonCheckpoints.length > 0
+            ? `${lessonCheckpoints.length} lesson review step${lessonCheckpoints.length === 1 ? "" : "s"} assigned. Start here so the replay makes sense.`
+            : "Your teacher has not assigned a lesson review yet.",
+        state: lessonCheckpoints.length
+          ? lessonCheckpoints.every((checkpoint) => checkpoint.isCompleted)
+            ? ("done" as const)
+            : ("active" as const)
+          : ("waiting" as const),
+      },
+      {
+        step: "02",
+        title: "Replay the assessment in JA Hub",
+        description:
+          assessmentCheckpoints.length > 0
+            ? `${assessmentCheckpoints.length} replay checkpoint${assessmentCheckpoints.length === 1 ? "" : "s"} available. Finish them in JA Hub after the lesson review.`
+            : "Assessment replay opens once a retry checkpoint is assigned.",
+        state: assessmentCheckpoints.length
+          ? assessmentCheckpoints.every((checkpoint) => checkpoint.isCompleted)
+            ? ("done" as const)
+            : lessonCheckpoints.length > 0 &&
+                lessonCheckpoints.every((checkpoint) => checkpoint.isCompleted)
+              ? ("active" as const)
+              : ("waiting" as const)
+          : ("waiting" as const),
+      },
+      {
+        step: "03",
+        title: "Exit the recovery track",
+        description:
+          nextCheckpoint === null
+            ? "All assigned steps are done. Your next grade sync can close this case automatically."
+            : "Keep finishing the assigned checkpoints until your case is ready to close.",
+        state:
+          nextCheckpoint === null
+            ? ("done" as const)
+            : assessmentCheckpoints.length > 0 ||
+                lessonCheckpoints.length > 0
+              ? ("waiting" as const)
+              : ("active" as const),
+      },
+    ],
+    [assessmentCheckpoints, lessonCheckpoints, nextCheckpoint],
+  );
+
   if (
     loadingEligibility ||
     (selectedClassId && loadingExperience && !overview && !playlist)
@@ -403,13 +502,13 @@ export default function StudentLxpExperience() {
     return (
       <StudentPageShell
         className="lxp-shell"
-        badge="LXP Mission Control"
-        title="LXP"
-        description="When a class needs recovery support, this space turns that work into a guided, theme-aware intervention journey."
+        badge="Learners Path"
+        title="Learners Path"
+        description="When a class needs recovery support, this page turns the follow-up work into one guided plan with lessons, replays, and JA support."
       >
         <StudentEmptyState
-          title="No active LXP classes right now"
-          description={`LXP opens when your blended score drops below ${threshold}%. Once a class needs support, your dashboard will surface it here.`}
+          title="No active Learners Path classes right now"
+          description={`Learners Path opens when your blended score drops below ${threshold}%. Once a class needs support, your dashboard will surface it here.`}
           icon={<Sparkles className="h-5 w-5" />}
         />
       </StudentPageShell>
@@ -420,12 +519,12 @@ export default function StudentLxpExperience() {
     return (
       <StudentPageShell
         className="lxp-shell"
-        badge="LXP Mission Control"
-        title="LXP"
-        description="We could not load the guided intervention view for the selected class."
+        badge="Learners Path"
+        title="Learners Path"
+        description="We could not load the guided recovery plan for the selected class."
       >
         <StudentEmptyState
-          title="LXP data is temporarily unavailable"
+          title="Learners Path data is temporarily unavailable"
           description="Try refreshing this page. If the problem persists, the selected class may still be synchronizing its latest performance data."
           icon={<AlertTriangle className="h-5 w-5" />}
         />
@@ -435,7 +534,8 @@ export default function StudentLxpExperience() {
 
   const statusTone = checkpointTone(overview.interventionStatus.code);
   const initialJaMode = parseJaMode(searchParams.get("mode"));
-  const initialJaClassId = searchParams.get("classId") ?? undefined;
+  const initialJaClassId =
+    (searchParams.get("classId") ?? selectedClassId) || undefined;
 
   const handleTabChange = (value: string) => {
     setTab(parseTabValue(value));
@@ -445,9 +545,9 @@ export default function StudentLxpExperience() {
     <Tabs value={tab} onValueChange={handleTabChange}>
       <StudentPageShell
         className="lxp-shell"
-        badge="LXP Mission Control"
-        title="LXP"
-        description={overview.interventionStatus.message}
+        badge="Learners Path"
+        title="Learners Path"
+        description="A guided recovery plan for the selected class. Follow the assigned lesson review, move into JA Hub replays, and track when the case is ready to close."
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <TabsList className="student-tab-list h-auto flex-wrap justify-start">
@@ -489,31 +589,41 @@ export default function StudentLxpExperience() {
         stats={
           <>
             <StudentPageStat
-              label="XP"
-              value={overview.progress.xpTotal}
-              caption="Recovery points earned"
-              icon={Trophy}
+              label="Current Score"
+              value={formatPercent(overview.selectedClass.blendedScore)}
+              caption="Latest blended score for this class"
+              icon={Target}
               accent="bg-[var(--student-accent-soft)] text-[var(--student-accent)]"
             />
             <StudentPageStat
-              label="Stars"
-              value={overview.progress.starsTotal.toFixed(2)}
-              caption="Converted from XP"
-              icon={Star}
+              label="Target"
+              value={`${overview.interventionStatus.thresholdApplied}%`}
+              caption="Score needed to leave recovery"
+              icon={Trophy}
               accent="bg-[var(--student-surface-soft)] text-[var(--student-text-strong)]"
             />
             <StudentPageStat
-              label="Streak"
-              value={`${overview.progress.streakDays} day(s)`}
-              caption="Recent consistent activity"
-              icon={Flame}
+              label="Next Step"
+              value={
+                nextCheckpoint
+                  ? nextCheckpoint.type === "lesson_review"
+                    ? "Lesson review"
+                    : "JA Hub replay"
+                  : "Await sync"
+              }
+              caption={
+                nextCheckpoint
+                  ? nextCheckpoint.label
+                  : "All assigned checkpoints are complete"
+              }
+              icon={Map}
               accent="bg-[var(--student-accent-soft)] text-[var(--student-accent)]"
             />
             <StudentPageStat
-              label="Complete"
+              label="Progress"
               value={`${overview.progress.completionPercent}%`}
               caption={`${overview.progress.checkpointsCompleted}/${overview.progress.totalCheckpoints} checkpoints done`}
-              icon={Target}
+              icon={CheckCircle2}
               accent="bg-[var(--student-surface-soft)] text-[var(--student-text-strong)]"
             />
           </>
@@ -526,8 +636,25 @@ export default function StudentLxpExperience() {
           className="mt-0 space-y-6"
         >
           <StudentSectionCard
-            title={`${overview.selectedClass.subjectName} Recovery Snapshot`}
-            description="A themed overview of your current intervention status, where you are strongest, and what should happen next."
+            title="How this plan works"
+            description="Finish the work in order. The page keeps the current class, next step, and completion progress visible so you do not have to guess what happens next."
+          >
+            <div className="learners-path-stage-grid">
+              {planStages.map((stage) => (
+                <PathStageCard
+                  key={stage.step}
+                  step={stage.step}
+                  title={stage.title}
+                  description={stage.description}
+                  state={stage.state}
+                />
+              ))}
+            </div>
+          </StudentSectionCard>
+
+          <StudentSectionCard
+            title={`${overview.selectedClass.subjectName} plan snapshot`}
+            description="This summary shows why the case opened, what class is selected, and what the teacher expects you to finish next."
             action={
               <StudentStatusChip tone={statusTone}>
                 {overview.interventionStatus.label}
@@ -553,9 +680,8 @@ export default function StudentLxpExperience() {
                         {selectedClass?.class.section?.name ??
                           overview.selectedClass.section?.name ??
                           "Section unavailable"}
-                        {" · "}
-                        Threshold {overview.interventionStatus.thresholdApplied}
-                        %
+                        {" | "}
+                        Threshold {overview.interventionStatus.thresholdApplied}%
                       </p>
                     </div>
                   </div>
@@ -575,7 +701,7 @@ export default function StudentLxpExperience() {
 
                 <div className="mt-6 space-y-2">
                   <div className="flex items-center justify-between text-sm font-semibold text-[var(--student-text-muted)]">
-                    <span>Checkpoint completion</span>
+                    <span>Assigned plan completion</span>
                     <span>{overview.progress.completionPercent}%</span>
                   </div>
                   <Progress
@@ -593,7 +719,7 @@ export default function StudentLxpExperience() {
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="space-y-1">
                         <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-accent)]">
-                          Recommended Next Action
+                          Do this next
                         </p>
                         <h4 className="text-lg font-black text-[var(--student-text-strong)]">
                           {overview.recommendedAction.title}
@@ -628,18 +754,22 @@ export default function StudentLxpExperience() {
                   caption="When this intervention track started"
                 />
                 <MiniInsightCard
-                  icon={<Trophy className="h-4 w-4" />}
-                  label="Trigger Score"
-                  value={formatPercent(
-                    overview.interventionStatus.triggerScore,
-                  )}
-                  caption="The blended score that opened recovery"
+                  icon={<ArrowRight className="h-4 w-4" />}
+                  label="Next Checkpoint"
+                  value={nextCheckpoint?.label ?? "All done"}
+                  caption={
+                    nextCheckpoint
+                      ? nextCheckpoint.type === "lesson_review"
+                        ? "Open the lesson and mark it complete here"
+                        : "Finish this assessment replay in JA Hub"
+                      : "All assigned work is complete for now"
+                  }
                 />
                 <MiniInsightCard
-                  icon={<Flame className="h-4 w-4" />}
+                  icon={<Trophy className="h-4 w-4" />}
                   label="Last Activity"
                   value={timeAgo(overview.progress.lastActivityAt)}
-                  caption="Most recent LXP activity"
+                  caption="Most recent Learners Path activity"
                 />
               </div>
             </div>
@@ -647,8 +777,8 @@ export default function StudentLxpExperience() {
 
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <StudentSectionCard
-              title="Subject Mastery"
-              description="Closest available performance signals across your enrolled classes."
+              title="Class Comparison"
+              description="The closest live performance signals across your enrolled classes, so you can see where this case sits compared with your other subjects."
             >
               <div className="space-y-3">
                 {overview.subjectMastery.map((row) => (
@@ -700,8 +830,8 @@ export default function StudentLxpExperience() {
             </StudentSectionCard>
 
             <StudentSectionCard
-              title="Topics To Level Up"
-              description="Placeholder focus items derived from the closest backend signals we already have."
+              title="Focus Signals"
+              description="The strongest weak areas currently surfaced from your latest grade and checkpoint signals."
             >
               <div className="space-y-3">
                 {overview.weakFocusItems.length === 0 ? (
@@ -740,8 +870,8 @@ export default function StudentLxpExperience() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <StudentSectionCard
-              title="Upcoming Assessments"
-              description="Assessment retry checkpoints surfaced from your current intervention playlist."
+              title="Upcoming Replays"
+              description="Assessment retry checkpoints surfaced from your current Learners Path playlist."
             >
               <div className="space-y-3">
                 {overview.upcomingAssessments.length === 0 ? (
@@ -759,7 +889,7 @@ export default function StudentLxpExperience() {
 
             <StudentSectionCard
               title="Recent Activity"
-              description="The latest intervention events and completed checkpoints tied to this class."
+              description="The latest Learners Path events and completed checkpoints tied to this class."
             >
               <div className="space-y-3">
                 {overview.recentActivity.length === 0 ? (
@@ -800,8 +930,8 @@ export default function StudentLxpExperience() {
           className="mt-0"
         >
           <StudentSectionCard
-            title="Recovery Roadmap"
-            description="A step-by-step view of the lesson reviews and assessment retries assigned to your current intervention case."
+            title="Assigned Steps"
+            description="Finish the steps from top to bottom. Lesson reviews can be marked complete here, while assessment replays must be completed in JA Hub."
             action={
               <Badge className="student-badge">
                 {playlist.progress.checkpointsCompleted}/
@@ -812,8 +942,8 @@ export default function StudentLxpExperience() {
             <div className="space-y-4">
               {playlist.checkpoints.length === 0 ? (
                 <StudentEmptyState
-                  title="No checkpoints assigned yet"
-                  description="Your teacher has not assigned intervention checkpoints for this class yet."
+                  title="No steps assigned yet"
+                  description="Your teacher has not assigned Learners Path checkpoints for this class yet."
                   icon={<Map className="h-5 w-5" />}
                 />
               ) : (
@@ -867,7 +997,7 @@ export default function StudentLxpExperience() {
                           <Link href={checkpointHref(checkpoint, selectedClassId)}>
                             {checkpoint.type === "lesson_review"
                               ? "Open Lesson"
-                              : "Open JA Replay"}
+                              : "Open JA Hub"}
                           </Link>
                         </Button>
                         {checkpoint.type === "lesson_review" ? (
@@ -889,11 +1019,11 @@ export default function StudentLxpExperience() {
                                 : "Mark Complete"}
                           </Button>
                         ) : (
-                          <Badge className="student-badge">
-                            {checkpoint.isCompleted
-                              ? "Completed via JA"
-                              : "Complete in JA replay"}
-                          </Badge>
+                        <Badge className="student-badge">
+                          {checkpoint.isCompleted
+                            ? "Completed via JA"
+                            : "Complete in JA Hub"}
+                        </Badge>
                         )}
                       </div>
                     </div>
@@ -912,12 +1042,12 @@ export default function StudentLxpExperience() {
         >
           <StudentSectionCard
             title="Assessment Retry Queue"
-            description="Assessment checkpoints pulled from your active intervention playlist, with due dates when the backend has them."
+            description="Assessment checkpoints pulled from your active Learners Path playlist, with due dates when the backend has them."
           >
             <div className="space-y-4">
               {assessmentCheckpoints.length === 0 ? (
                 <StudentEmptyState
-                  title="No assessment retries right now"
+                  title="No assessment replays right now"
                   description="Your current recovery plan is focused on lessons, or you have already finished the required retry checkpoints."
                   icon={<ClipboardList className="h-5 w-5" />}
                 />
@@ -964,13 +1094,13 @@ export default function StudentLxpExperience() {
                           className="lxp-action-button lxp-action-button--ghost rounded-2xl"
                         >
                           <Link href={checkpointHref(checkpoint, selectedClassId)}>
-                            Open JA Replay
+                            Open JA Hub
                           </Link>
                         </Button>
                         <Badge className="student-badge">
                           {checkpoint.isCompleted
                             ? "Completed via JA"
-                            : "Complete in JA replay"}
+                            : "Complete in JA Hub"}
                         </Badge>
                       </div>
                     </div>
@@ -989,8 +1119,8 @@ export default function StudentLxpExperience() {
         >
           <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <StudentSectionCard
-              title="Intervention Status"
-              description="This tab keeps the operational details of your current recovery case visible without leaving the LXP page."
+              title="Case Status"
+              description="This tab keeps the operational details of your current recovery case visible without leaving Learners Path."
             >
               <div className="space-y-4">
                 <div className="student-dashboard-task-card rounded-[1.5rem]">
@@ -1040,13 +1170,11 @@ export default function StudentLxpExperience() {
 
                 <div className="lxp-emboss-panel rounded-[1.5rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-5">
                   <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
-                    Why this looks different from the Figma
+                    How to finish this case
                   </p>
                   <p className="mt-3 text-sm leading-6 text-[var(--student-text-muted)]">
-                    Topic-level mastery is not stored in the backend yet, so
-                    this view uses your blended performance and assigned
-                    checkpoints as the closest support signal. That keeps the
-                    page honest to the live data your system already owns.
+                    Start with the assigned lesson review, complete the replay in JA Hub,
+                    and keep checking this page until every checkpoint is marked done.
                   </p>
                 </div>
               </div>
@@ -1096,8 +1224,8 @@ export default function StudentLxpExperience() {
           className="mt-0"
         >
           <StudentSectionCard
-            title="JA Mission Control"
-            description="Practice, Ask, and Review are now integrated inside LXP so recovery flow stays in one place."
+            title="JA Hub"
+            description="Practice, Ask, and Review stay inside Learners Path so you can finish the recovery flow without leaving this workspace."
           >
             <StudentJaWorkspace
               initialMode={initialJaMode}

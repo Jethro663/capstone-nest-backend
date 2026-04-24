@@ -8,6 +8,8 @@ const searchParamsState: Record<string, string | null> = {
   classId: null,
 };
 
+const studentJaWorkspaceProps: Array<Record<string, unknown>> = [];
+
 jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/student/lxp",
   useRouter: () => ({ replace: jest.fn() }),
@@ -19,7 +21,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/components/student/ja/StudentJaWorkspace", () => ({
   __esModule: true,
-  default: () => <div data-testid="student-ja-workspace">JA Workspace</div>,
+  default: (props: Record<string, unknown>) => {
+    studentJaWorkspaceProps.push(props);
+    return <div data-testid="student-ja-workspace">JA Workspace</div>;
+  },
 }));
 
 jest.mock("@/services/lxp-service", () => ({
@@ -125,13 +130,17 @@ const playlistResponse = {
 
 describe("StudentLxpExperience tab navigation", () => {
   const panelForHeading = (heading: string): HTMLElement => {
-    const panel = screen.getByText(heading).closest('[role="tabpanel"]');
+    const panel = screen
+      .getAllByText(heading)
+      .map((node) => node.closest('[role="tabpanel"]'))
+      .find((value): value is HTMLElement => value instanceof HTMLElement);
     expect(panel).not.toBeNull();
-    return panel as HTMLElement;
+    return panel;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    studentJaWorkspaceProps.length = 0;
     searchParamsState.tab = null;
     searchParamsState.mode = null;
     searchParamsState.classId = null;
@@ -143,15 +152,17 @@ describe("StudentLxpExperience tab navigation", () => {
   it("switches to roadmap content when roadmap tab is clicked", async () => {
     render(<StudentLxpExperience />);
 
-    await screen.findByText("Math Recovery Snapshot");
+    await screen.findByText("Math plan snapshot");
 
-    const overviewPanel = panelForHeading("Math Recovery Snapshot");
-    const roadmapPanel = panelForHeading("Recovery Roadmap");
+    const overviewPanel = panelForHeading("Math plan snapshot");
+    const roadmapPanel = panelForHeading("Assigned Steps");
 
     expect(overviewPanel).not.toHaveAttribute("hidden");
     expect(roadmapPanel).toHaveAttribute("hidden");
 
-    const roadmapTab = await screen.findByRole("tab", { name: "Roadmap" });
+    const roadmapTab = await screen.findByRole("tab", {
+      name: "Assigned Steps",
+    });
     fireEvent.mouseDown(roadmapTab, { button: 0 });
 
     await waitFor(() => {
@@ -167,5 +178,22 @@ describe("StudentLxpExperience tab navigation", () => {
     render(<StudentLxpExperience />);
 
     expect(await screen.findByTestId("student-ja-workspace")).toBeInTheDocument();
+  });
+
+  it("passes the currently selected class into JA workspace when no class query is present", async () => {
+    searchParamsState.tab = "ja";
+    searchParamsState.mode = "practice";
+
+    render(<StudentLxpExperience />);
+
+    await screen.findByTestId("student-ja-workspace");
+
+    await waitFor(() => {
+      expect(
+        studentJaWorkspaceProps.some(
+          (props) => props.initialClassId === "class-1",
+        ),
+      ).toBe(true);
+    });
   });
 });

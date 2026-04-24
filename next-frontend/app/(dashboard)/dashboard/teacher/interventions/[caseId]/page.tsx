@@ -154,7 +154,13 @@ export default function TeacherInterventionWorkspacePage() {
       setLoading(true);
       if (classId) {
         const queueRes = await lxpService.getTeacherQueue(classId);
-        setQueueEntry(queueRes.data.queue.find((entry) => entry.id === caseId) ?? null);
+        const queueEntry = queueRes.data.queue.find((entry) => entry.id === caseId);
+        if (queueEntry) {
+          setQueueEntry(queueEntry);
+        } else {
+          const caseRes = await lxpService.getTeacherCase(caseId);
+          setQueueEntry(caseRes.data ?? null);
+        }
       } else {
         const caseRes = await lxpService.getTeacherCase(caseId);
         setQueueEntry(caseRes.data ?? null);
@@ -309,7 +315,7 @@ export default function TeacherInterventionWorkspacePage() {
   }, [job, loadInterventionJobResult]);
 
   const handleGenerate = async () => {
-    const hasCaseContext = Boolean(classId && queueEntry);
+    const hasCaseContext = Boolean(queueEntry);
     if (!hasCaseContext) {
       toast.error('Select a valid intervention case from the queue before generating a plan.');
       return;

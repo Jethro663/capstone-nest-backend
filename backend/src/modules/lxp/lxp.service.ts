@@ -90,6 +90,26 @@ export class LxpService {
     return `${normalizedExisting}\n${normalizedNew}`;
   }
 
+  private toPlainTextSnippet(
+    content: string | null | undefined,
+    maxLength = 140,
+  ): string | null {
+    if (!content) return null;
+
+    const normalized = content
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalized) return null;
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+  }
+
   private getStatusSummary(input: {
     caseStatus?: string | null;
     isAtRisk: boolean;
@@ -240,15 +260,6 @@ export class LxpService {
       limit: 3,
     });
 
-    const latestAssessments = await this.db.query.assessments.findMany({
-      where: and(
-        eq(assessments.classId, classId),
-        eq(assessments.isPublished, true),
-      ),
-      columns: { id: true, title: true, createdAt: true },
-      orderBy: [desc(assessments.createdAt)],
-      limit: 2,
-    });
     const weakAttempts = await this.db
       .select({
         assessmentId: assessmentAttempts.assessmentId,
@@ -304,10 +315,8 @@ export class LxpService {
             limit: 2,
           })
         : [];
-    const prioritizedAssessments =
-      weakAssessments.length > 0 ? weakAssessments : latestAssessments;
 
-    prioritizedAssessments.forEach((assessment) => {
+    weakAssessments.forEach((assessment) => {
       payload.push({
         caseId,
         assignmentType: 'assessment_retry',
@@ -364,8 +373,8 @@ export class LxpService {
       {
         userId: studentId,
         type: 'grade_updated' as const,
-        title: 'LXP unlocked',
-        body: `Your intervention plan in ${cls.subjectName} (${cls.subjectCode}) is now active.`,
+        title: 'Learners Path unlocked',
+        body: `Your Learners Path plan in ${cls.subjectName} (${cls.subjectCode}) is now active.`,
       },
     ];
 
@@ -545,7 +554,24 @@ export class LxpService {
           openedAt: activeCase?.openedAt ?? null,
         };
       })
-      .filter(Boolean);
+      .filter(
+        (
+          entry,
+        ): entry is {
+          classId: string;
+          class: NonNullable<(typeof studentEnrollments)[number]["class"]>;
+          interventionCaseId: string | null;
+          isAtRisk: boolean;
+          blendedScore: number | null;
+          thresholdApplied: number;
+          openedAt: Date | null;
+        } => entry !== null,
+      )
+      .sort((a, b) => {
+        const aTime = a.openedAt ? new Date(a.openedAt).getTime() : 0;
+        const bTime = b.openedAt ? new Date(b.openedAt).getTime() : 0;
+        return bTime - aTime;
+      });
 
     return {
       threshold: INTERVENTION_THRESHOLD,
@@ -575,10 +601,12 @@ export class LxpService {
         columns: { id: true },
       });
       if (pendingCase) {
-        throw new ForbiddenException('LXP access is pending teacher approval.');
+        throw new ForbiddenException(
+          'Learners Path access is pending teacher approval.',
+        );
       }
       throw new ForbiddenException(
-        'LXP is only available for active intervention students.',
+        'Learners Path is only available for active intervention students.',
       );
     }
 
@@ -681,10 +709,12 @@ export class LxpService {
         columns: { id: true },
       });
       if (pendingCase) {
-        throw new ForbiddenException('LXP access is pending teacher approval.');
+        throw new ForbiddenException(
+          'Learners Path access is pending teacher approval.',
+        );
       }
       throw new ForbiddenException(
-        'LXP is only available for active intervention students.',
+        'Learners Path is only available for active intervention students.',
       );
     }
 
@@ -889,7 +919,7 @@ export class LxpService {
       {
         id: `opened-${interventionCase.id}`,
         type: 'intervention_opened',
-        title: 'LXP support unlocked',
+        title: 'Learners Path unlocked',
         description: selectedEnrollment?.class
           ? `Recovery work opened for ${selectedEnrollment.class.subjectName}.`
           : 'Your intervention support track is now active.',
@@ -910,7 +940,7 @@ export class LxpService {
           description:
             item.lesson?.description ??
             item.assessment?.description ??
-            'Completed one guided LXP checkpoint.',
+            'Completed one guided Learners Path checkpoint.',
           occurredAt: item.completedAt,
         })),
     ]
@@ -943,18 +973,18 @@ export class LxpService {
         .slice(0, 3)
         .map((item) => {
           const lessonSummary =
-            item.lesson?.description?.trim() ||
+            this.toPlainTextSnippet(item.lesson?.description) ||
             `Review ${item.lesson?.title ?? item.checkpointLabel} to strengthen this weak area.`;
           const dueDate = item.assessment?.dueDate
             ? new Date(item.assessment.dueDate).toISOString().slice(0, 10)
             : null;
-          const assessmentSummary = item.assessment?.description?.trim()
-            ? item.assessment.description.trim()
-            : `Retry this checkpoint${
-                item.assessment?.passingScore
-                  ? ` and target ${item.assessment.passingScore}%.`
-                  : '.'
-              }`;
+          const assessmentSummary =
+            this.toPlainTextSnippet(item.assessment?.description) ??
+            `Retry this checkpoint${
+              item.assessment?.passingScore
+                ? ` and target ${item.assessment.passingScore}%.`
+                : '.'
+            }`;
           const assessmentSubtitle = dueDate
             ? `${assessmentSummary} Due ${dueDate}.`
             : assessmentSummary;
@@ -992,7 +1022,7 @@ export class LxpService {
       selectedClass: {
         classId,
         subjectName: selectedEnrollment?.class?.subjectName ?? 'Selected class',
-        subjectCode: selectedEnrollment?.class?.subjectCode ?? 'LXP',
+        subjectCode: selectedEnrollment?.class?.subjectCode ?? 'Learners Path',
         section: selectedEnrollment?.class?.section ?? null,
         blendedScore: this.toNumber(selectedSnapshot?.blendedScore),
         thresholdApplied:
@@ -1071,7 +1101,7 @@ export class LxpService {
 
     const autoCompletedNote = this.appendInterventionNote(
       assignment.interventionCase.note,
-      'Auto-completed after finishing all LXP checkpoints.',
+      'Auto-completed after finishing all Learners Path checkpoints.',
     );
     let interventionCompletedByStudent = false;
 
@@ -1168,7 +1198,7 @@ export class LxpService {
             userId: cls.teacherId,
             type: 'grade_updated',
             title: 'Intervention cycle completed',
-            body: `A student has completed all LXP checkpoints in ${cls.subjectCode ?? 'this class'}.`,
+            body: `A student has completed all Learners Path checkpoints in ${cls.subjectCode ?? 'this class'}.`,
           },
         ]);
       }
@@ -1233,7 +1263,7 @@ export class LxpService {
 
     const autoCompletedNote = this.appendInterventionNote(
       assignment.interventionCase.note,
-      'Auto-completed after finishing all LXP checkpoints.',
+      'Auto-completed after finishing all Learners Path checkpoints.',
     );
     let interventionCompletedByStudent = false;
 
@@ -1329,7 +1359,7 @@ export class LxpService {
             userId: cls.teacherId,
             type: 'grade_updated',
             title: 'Intervention cycle completed',
-            body: `A student has completed all LXP checkpoints in ${cls.subjectCode ?? 'this class'}.`,
+            body: `A student has completed all Learners Path checkpoints in ${cls.subjectCode ?? 'this class'}.`,
           },
         ]);
       }
@@ -1578,6 +1608,32 @@ export class LxpService {
           'Some assessments do not belong to this class.',
         );
       }
+
+      const attemptedAssessmentRows = await this.db
+        .select({
+          assessmentId: assessmentAttempts.assessmentId,
+        })
+        .from(assessmentAttempts)
+        .where(
+          and(
+            eq(assessmentAttempts.studentId, interventionCase.studentId),
+            eq(assessmentAttempts.isSubmitted, true),
+            eq(assessmentAttempts.passed, false),
+            inArray(assessmentAttempts.assessmentId, assessmentIds),
+          ),
+        )
+        .groupBy(assessmentAttempts.assessmentId);
+      const attemptedAssessmentIds = new Set(
+        attemptedAssessmentRows.map((row) => row.assessmentId),
+      );
+      const missingAttemptIds = assessmentIds.filter(
+        (assessmentId) => !attemptedAssessmentIds.has(assessmentId),
+      );
+      if (missingAttemptIds.length > 0) {
+        throw new BadRequestException(
+          'Assessment retry checkpoints require at least one failed submitted attempt from the student before they can be assigned.',
+        );
+      }
     }
 
     const existingAssignments =
@@ -1641,7 +1697,7 @@ export class LxpService {
         userId: interventionCase.studentId,
         type: 'grade_updated',
         title: 'New intervention checklist assigned',
-        body: 'Your teacher updated your LXP intervention tasks. Open LXP to continue.',
+        body: 'Your teacher updated your Learners Path tasks. Open Learners Path to continue.',
       },
     ]);
 

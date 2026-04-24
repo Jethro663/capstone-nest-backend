@@ -52,19 +52,19 @@ const MODE_META: Record<
 > = {
   practice: {
     title: "Practice",
-    subtitle: "Adaptive objective missions grounded to your class.",
+    subtitle: "Fresh objective checks grounded to your class lessons.",
     icon: Swords,
-    kicker: "Mission",
+    kicker: "Drill",
   },
   ask: {
     title: "Ask",
-    subtitle: "Class-safe mentor chat for concept clarity.",
+    subtitle: "Class-grounded mentor chat for concept clarity.",
     icon: MessageCircleQuestion,
     kicker: "Coach",
   },
   review: {
-    title: "Review",
-    subtitle: "Replay weak spots from submitted assessments.",
+    title: "Replay",
+    subtitle: "Revisit weak spots from submitted assessments.",
     icon: CircleDot,
     kicker: "Replay",
   },
@@ -73,7 +73,7 @@ const MODE_META: Record<
 const ASK_QUICK_PROMPTS = [
   "Explain this topic in simpler words.",
   "Give me 3 quick practice checks.",
-  "Make a 5-minute review plan for today.",
+  "Make a 5-minute study plan for tonight.",
 ];
 
 function isJaMode(value: string | null | undefined): value is JaMode {
@@ -259,6 +259,11 @@ export default function StudentJaWorkspace({
     };
   }, [hub]);
 
+  const selectedClass = useMemo(
+    () => hub?.classes.find((item) => item.id === selectedClassId) ?? null,
+    [hub?.classes, selectedClassId],
+  );
+
   const loadSession = async (sessionId: string, targetMode: JaMode) => {
     try {
       const res =
@@ -412,13 +417,17 @@ export default function StudentJaWorkspace({
     return (
       <div className="ja-hub-loading">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <p>Warming up Ja...</p>
+        <p>Preparing JA Hub...</p>
       </div>
     );
   }
 
   if (!hub || hub.classes.length === 0) {
-    return <div className="ja-hub-empty">No eligible classes yet for JA.</div>;
+    return (
+      <div className="ja-hub-empty">
+        No Learners Path classes are ready for JA Hub yet.
+      </div>
+    );
   }
 
   const currentModeMeta = MODE_META[mode];
@@ -427,8 +436,8 @@ export default function StudentJaWorkspace({
     <motion.div className={cn("ja-hub-layout", className)} {...motionProps.container}>
       <motion.aside className="ja-mode-panel student-panel" {...motionProps.item}>
         <div className="ja-mode-panel__head">
-          <p className="ja-eyebrow">Ja Mission Control</p>
-          <h2>Study Modes</h2>
+          <p className="ja-eyebrow">JA Hub</p>
+          <h2>Choose your mode</h2>
         </div>
 
         <div className="ja-mode-grid" role="tablist" aria-label="JA study modes">
@@ -465,7 +474,7 @@ export default function StudentJaWorkspace({
             <>
               <p>Saved Practice Sessions</p>
               {hub.practice.sessions.length === 0 ? (
-                <span className="ja-inline-empty">No saved practice sessions yet.</span>
+                <span className="ja-inline-empty">No saved practice runs yet.</span>
               ) : (
                 hub.practice.sessions.map((session) => (
                   <button
@@ -486,7 +495,7 @@ export default function StudentJaWorkspace({
             <>
               <p>Saved Review Sessions</p>
               {(hub.review.sessions?.length ?? 0) === 0 ? (
-                <span className="ja-inline-empty">No saved review sessions yet.</span>
+                <span className="ja-inline-empty">No saved replay sessions yet.</span>
               ) : (
                 hub.review.sessions?.map((session) => (
                   <button
@@ -507,7 +516,7 @@ export default function StudentJaWorkspace({
             <>
               <p>Recent Ask Threads</p>
               {hub.ask.threads.length === 0 ? (
-                <span className="ja-inline-empty">No thread yet. Start a guided question.</span>
+                <span className="ja-inline-empty">No thread yet. Start a class-grounded question.</span>
               ) : (
                 hub.ask.threads.map((thread) => (
                   <button
@@ -540,7 +549,7 @@ export default function StudentJaWorkspace({
             </span>
             <div>
               <p className="ja-eyebrow">{currentModeMeta.kicker}</p>
-              <strong>{currentModeMeta.title} with Ja</strong>
+              <strong>{currentModeMeta.title} in JA Hub</strong>
               <span>{currentModeMeta.subtitle}</span>
             </div>
           </div>
@@ -558,6 +567,22 @@ export default function StudentJaWorkspace({
             </select>
           </label>
         </header>
+
+        <div className="ja-context-banner student-panel">
+          <div>
+            <p className="ja-eyebrow">Current class</p>
+            <h3>{selectedClass ? classLabel(selectedClass) : "Class not selected"}</h3>
+            <p>
+              Use Practice for fresh drills, Ask for guided explanations, and Replay
+              to revisit weak answers from submitted assessments.
+            </p>
+          </div>
+          <div className="ja-context-banner__stats">
+            <span>{hub.review.eligibleAttempts.length} replay-ready attempt(s)</span>
+            <span>{hub.ask.threads.length} ask thread(s)</span>
+            <span>{hub.practice.recommendations.length} practice focus card(s)</span>
+          </div>
+        </div>
 
         <AnimatePresence mode="wait" initial={false}>
           {mode === "ask" ? (
@@ -585,10 +610,10 @@ export default function StudentJaWorkspace({
               <div className="ja-thread-messages" aria-live="polite">
                 {askMessages.length === 0 ? (
                   <div className="ja-thread-empty">
-                    <h3>Ask anything class-grounded</h3>
+                    <h3>Ask a class-grounded question</h3>
                     <p>
-                      Try: summarize this lesson, explain a concept in simpler words,
-                      or give me three practice checks.
+                      Try: summarize the lesson, explain a concept in simpler words,
+                      or build three quick checks before your next replay.
                     </p>
                   </div>
                 ) : (
@@ -601,7 +626,7 @@ export default function StudentJaWorkspace({
                       )}
                     >
                       <header>
-                        <strong>{msg.role === "student" ? "You" : "Ja"}</strong>
+                        <strong>{msg.role === "student" ? "You" : "JA"}</strong>
                         {msg.blocked ? (
                           <StudentStatusChip tone="warning">Guarded</StudentStatusChip>
                         ) : null}
@@ -614,7 +639,7 @@ export default function StudentJaWorkspace({
                 {busy ? (
                   <article className="ja-msg ja is-pending">
                     <header>
-                      <strong>Ja</strong>
+                      <strong>JA</strong>
                     </header>
                     <p>
                       <Loader2 className="h-4 w-4 animate-spin" /> Thinking through your
@@ -630,7 +655,7 @@ export default function StudentJaWorkspace({
                   className="student-input ja-composer-input"
                   value={askInput}
                   onChange={(event) => setAskInput(event.target.value)}
-                  placeholder="Ask Ja anything about your class context..."
+                  placeholder="Ask JA anything about the selected class..."
                 />
                 <Button
                   type="submit"
@@ -656,10 +681,10 @@ export default function StudentJaWorkspace({
                   {mode === "practice" ? (
                     <>
                       <div className="ja-empty-copy">
-                        <h3>Start your next mission</h3>
+                        <h3>Start your next practice run</h3>
                         <p>
-                          Ja will generate 10 objective checks tuned to your current
-                          learning focus.
+                          JA will generate 10 objective checks tuned to your current
+                          learning focus in this class.
                         </p>
                       </div>
                       <Button
@@ -668,7 +693,7 @@ export default function StudentJaWorkspace({
                         className="student-button-solid ja-primary-action"
                       >
                         <Swords className="h-4 w-4" />
-                        Generate Practice
+                        Generate Practice Run
                       </Button>
 
                       <div className="ja-recommendation-list">
@@ -689,7 +714,7 @@ export default function StudentJaWorkspace({
                       <div className="ja-empty-copy">
                         <h3>Pick an assessment to replay</h3>
                         <p>
-                          Review mode generates a focused replay session from a submitted
+                          Replay mode builds a focused retry session from one submitted
                           assessment attempt.
                         </p>
                       </div>
@@ -709,7 +734,7 @@ export default function StudentJaWorkspace({
                             >
                               <strong>{attempt.assessmentTitle}</strong>
                               <span>
-                                Submitted {new Date(attempt.submittedAt).toLocaleDateString()} ·{" "}
+                                Submitted {new Date(attempt.submittedAt).toLocaleDateString()} |{" "}
                                 {attempt.score !== null ? `${attempt.score}%` : "Ungraded"}
                               </span>
                             </button>
@@ -723,7 +748,7 @@ export default function StudentJaWorkspace({
                 <div className="ja-session-active student-panel">
                   <div className="ja-session-head">
                     <div>
-                      <p className="ja-eyebrow">{mode === "practice" ? "Practice" : "Review"}</p>
+                      <p className="ja-eyebrow">{mode === "practice" ? "Practice" : "Replay"}</p>
                       <h3>
                         {answeredCount}/{currentSession.session.questionCount} completed
                       </h3>
@@ -750,7 +775,7 @@ export default function StudentJaWorkspace({
                       >
                         <header>
                           <p className="ja-question-index">
-                            Item {answeredCount + (activeItem.response ? 0 : 1)} ·{" "}
+                            Item {answeredCount + (activeItem.response ? 0 : 1)} |{" "}
                             {activeItem.itemType === "multiple_select"
                               ? "Multiple Select"
                               : "Single Select"}
@@ -848,7 +873,7 @@ export default function StudentJaWorkspace({
       <motion.aside className="ja-progress-panel student-panel" {...motionProps.item}>
         <div className="ja-progress-head">
           <p className="ja-eyebrow">Learning Progress</p>
-          <h2>Growth Snapshot</h2>
+          <h2>This class snapshot</h2>
         </div>
 
         <div className={cn("ja-mastery-ring", xpPulse && "is-pulsing")}>
@@ -899,6 +924,15 @@ export default function StudentJaWorkspace({
               </div>
             ))
           )}
+        </div>
+
+        <div className="ja-helper-list">
+          <p className="ja-eyebrow">Best use</p>
+          <ul>
+            <li>Start with Practice when you need a quick check before class.</li>
+            <li>Use Ask when a lesson explanation is still unclear.</li>
+            <li>Use Replay after an assessment to focus on weak answers only.</li>
+          </ul>
         </div>
       </motion.aside>
 

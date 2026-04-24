@@ -43,6 +43,7 @@ jest.mock('@/services/lxp-service', () => ({
         queue: [],
       },
     }),
+    getTeacherCase: jest.fn(),
     assignIntervention: jest.fn(),
   },
 }));
@@ -187,6 +188,9 @@ describe('TeacherInterventionWorkspacePage', () => {
         queue: [buildQueueEntry()],
       },
     });
+    mockedLxpService.getTeacherCase.mockResolvedValue({
+      data: buildQueueEntry(),
+    } as any);
     mockedLessonService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -358,12 +362,36 @@ describe('TeacherInterventionWorkspacePage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('falls back to direct case lookup when the case is no longer in the selected queue', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [buildQueueEntry('case-2')],
+      },
+    });
+    mockedLxpService.getTeacherCase.mockResolvedValue({
+      data: buildQueueEntry('case-1', 'completed'),
+    } as any);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Reyes,\s*Alex - trigger 54.2%/i),
+      ).toBeInTheDocument();
+    });
+
+    expect(mockedLxpService.getTeacherCase).toHaveBeenCalledWith('case-1');
+  });
+
   it('blocks plan generation when the selected case is missing from teacher queue', async () => {
     mockedLxpService.getTeacherQueue.mockResolvedValue({
       data: {
         queue: [buildQueueEntry('case-2')],
       },
     });
+    mockedLxpService.getTeacherCase.mockResolvedValue({
+      data: null as any,
+    } as any);
 
     render(<TeacherInterventionWorkspacePage />);
 

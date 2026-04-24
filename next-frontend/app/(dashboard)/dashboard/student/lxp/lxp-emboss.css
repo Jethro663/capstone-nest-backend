@@ -196,3 +196,58 @@
 .lxp-shell .student-section-card .text-xs {
   line-height: 1.45;
 }
+
+.lxp-shell .learners-path-stage-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lxp-shell .learners-path-stage-card {
+  border: 1px solid color-mix(in srgb, var(--lxp-accent-primary) 20%, var(--lxp-outline-soft));
+  border-radius: 1.35rem;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.14)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-elevated) 92%, #fff9ec),
+      color-mix(in srgb, var(--student-surface-soft) 90%, #e0f2fe)
+    );
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .learners-path-stage-card[data-state="active"] {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 44%, var(--lxp-outline-strong));
+  box-shadow:
+    0 16px 26px -24px color-mix(in srgb, var(--lxp-accent-primary) 48%, transparent),
+    var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .learners-path-stage-card[data-state="done"] {
+  border-color: color-mix(in srgb, var(--student-success-border) 72%, var(--lxp-outline-soft));
+}
+
+.lxp-shell .learners-path-stage-card__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--student-accent) 74%, #2563eb),
+    color-mix(in srgb, var(--lxp-accent-secondary) 64%, #fb923c)
+  );
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 1080px) {
+  .lxp-shell .learners-path-stage-grid {
+    grid-template-columns: 1fr;
+  }
+}
