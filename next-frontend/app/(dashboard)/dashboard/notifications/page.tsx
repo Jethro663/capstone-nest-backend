@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StudentActionCard, StudentEmptyState, StudentSectionHeader, StudentStatusChip } from '@/components/student/student-primitives';
+import { StudentEmptyState, StudentSectionHeader, StudentStatusChip } from '@/components/student/student-primitives';
 
 type ReadFilter = 'all' | 'unread' | 'read';
 
@@ -125,38 +125,55 @@ export default function NotificationsPage() {
 
   if (isStudent) {
     return (
-      <div className="student-page space-y-5 rounded-3xl p-1">
-        <StudentActionCard className="border-0 bg-[var(--student-accent)] text-[var(--student-accent-contrast)] shadow-sm">
+      <div
+        role="main"
+        aria-label="Student notifications"
+        className="space-y-5 rounded-[1.35rem] bg-[#f4f7fb] p-4 text-[#0f2340] md:p-5"
+      >
+        <section
+          data-testid="student-notifications-hero"
+          className="overflow-hidden rounded-[1.15rem] bg-[#12284a] p-4 text-white shadow-[0_18px_38px_-30px_rgba(15,35,64,0.65)]"
+        >
           <StudentSectionHeader
             title="Notifications"
             subtitle={`${unreadCount} unread update${unreadCount === 1 ? '' : 's'} waiting in your student inbox.`}
-            className="[&_h2]:text-[var(--student-accent-contrast)] [&_p]:text-[var(--student-accent-contrast)]/75"
+            className="[&_h2]:text-white [&_p]:text-[#d9e6ff]"
             action={(
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" variant="secondary" onClick={() => void refreshAll()}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="border border-white/20 bg-white text-[#12284a] hover:bg-[#edf4ff]"
+                  onClick={() => void refreshAll()}
+                >
                   <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => void handleMarkAll()} disabled={unreadCount === 0}>
+                <Button
+                  size="sm"
+                  className="bg-[#e70012] text-white hover:bg-[#c90010] disabled:bg-white/20 disabled:text-white/55"
+                  onClick={() => void handleMarkAll()}
+                  disabled={unreadCount === 0}
+                >
                   <CheckCheck className="mr-2 h-4 w-4" /> Mark All Read
                 </Button>
               </div>
             )}
           />
-        </StudentActionCard>
+        </section>
 
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">Unread</p>
-              <p className="mt-1 text-2xl font-bold text-[var(--student-text-strong)]">{unreadCount}</p>
+            <div className="rounded-2xl border border-[#d8e2ef] bg-white px-4 py-3 shadow-[0_14px_30px_-28px_rgba(15,35,64,0.42)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5f728e]">Unread</p>
+              <p className="mt-1 text-2xl font-bold text-[#e70012]">{unreadCount}</p>
             </div>
-            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">On this page</p>
-              <p className="mt-1 text-2xl font-bold text-[var(--student-text-strong)]">{items.length}</p>
+            <div className="rounded-2xl border border-[#d8e2ef] bg-white px-4 py-3 shadow-[0_14px_30px_-28px_rgba(15,35,64,0.42)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5f728e]">On this page</p>
+              <p className="mt-1 text-2xl font-bold text-[#12284a]">{items.length}</p>
             </div>
-            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">Need review</p>
-              <p className="mt-1 text-2xl font-bold text-[var(--student-text-strong)]">{unreadItemsOnPage}</p>
+            <div className="rounded-2xl border border-[#d8e2ef] bg-white px-4 py-3 shadow-[0_14px_30px_-28px_rgba(15,35,64,0.42)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5f728e]">Need review</p>
+              <p className="mt-1 text-2xl font-bold text-[#e70012]">{unreadItemsOnPage}</p>
             </div>
           </div>
 
@@ -166,8 +183,12 @@ export default function NotificationsPage() {
                 key={value}
                 type="button"
                 size="sm"
-                variant={filter === value ? 'default' : 'outline'}
-                className={filter === value ? 'student-button-solid' : 'student-button-outline'}
+                variant="outline"
+                className={
+                  filter === value
+                    ? 'border-[#e70012] bg-[#e70012] text-white hover:bg-[#c90010]'
+                    : 'border-[#c9d6e8] bg-white text-[#183a63] hover:bg-[#edf4ff]'
+                }
                 onClick={() => setFilter(value)}
               >
                 <Filter className="mr-2 h-4 w-4" />
@@ -177,15 +198,15 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        <div className="rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-surface)] p-3 sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--student-outline)] px-1 pb-3">
+        <div className="rounded-[1.15rem] border border-[#d8e2ef] bg-white p-3 shadow-[0_18px_38px_-34px_rgba(15,35,64,0.45)] sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d8e2ef] px-1 pb-3">
             <div>
-              <p className="text-sm font-semibold text-[var(--student-text-strong)]">Inbox</p>
-              <p className="text-sm student-muted-text">
+              <p className="text-sm font-semibold text-[#12284a]">Inbox</p>
+              <p className="text-sm text-[#5f728e]">
                 Review class alerts, announcement updates, and intervention prompts in one place.
               </p>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] student-muted-text">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#5f728e]">
               {filter === 'all' ? 'Showing all updates' : filter === 'unread' ? 'Showing unread only' : 'Showing read only'}
             </p>
           </div>
@@ -201,23 +222,23 @@ export default function NotificationsPage() {
           ) : (
             <div className="space-y-3 pt-3">
               {items.map((notification) => (
-                <StudentActionCard
+                <article
                   key={notification.id}
-                  className={`border ${notification.isRead ? 'border-[var(--student-outline)] bg-[var(--student-surface-soft)]/70' : 'border-[var(--student-accent-soft-strong)] bg-[var(--student-surface)]'}`}
+                  className={`rounded-[1rem] border p-4 ${notification.isRead ? 'border-[#d8e2ef] bg-[#f8fbff]' : 'border-[#e70012] bg-[#fff8f9]'}`}
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-[var(--student-text-strong)]">{notification.title}</p>
+                        <p className="font-semibold text-[#12284a]">{notification.title}</p>
                         <StudentStatusChip tone={notification.isRead ? 'info' : 'warning'}>
                           {notification.isRead ? 'Read' : 'New'}
                         </StudentStatusChip>
-                        <span className="rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] student-muted-text">
+                        <span className="rounded-full border border-[#c9d6e8] bg-[#edf4ff] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#183a63]">
                           {notification.type.replaceAll('_', ' ')}
                         </span>
                       </div>
-                      <p className="text-sm leading-6 text-[var(--student-text)]">{notification.message}</p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs student-muted-text">
+                      <p className="text-sm leading-6 text-[#314766]">{notification.message}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6c7f99]">
                         <span>{formatNotificationRelativeTime(notification.createdAt)}</span>
                         <span>{formatNotificationTimestamp(notification.createdAt)}</span>
                         {notification.readAt ? <span>Read {formatNotificationTimestamp(notification.readAt)}</span> : null}
@@ -227,14 +248,15 @@ export default function NotificationsPage() {
                       <Button
                         type="button"
                         size="sm"
-                        className="student-button-outline shrink-0"
+                        variant="outline"
+                        className="shrink-0 border-[#e70012] text-[#e70012] hover:bg-[#fff1f3] hover:text-[#c90010]"
                         onClick={() => void handleMarkRead(notification.id)}
                       >
                         Mark Read
                       </Button>
                     )}
                   </div>
-                </StudentActionCard>
+                </article>
               ))}
             </div>
           )}

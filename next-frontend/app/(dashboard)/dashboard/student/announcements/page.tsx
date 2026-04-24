@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Calendar, Hash, Inbox, Megaphone, Pin, User2 } from 'lucide-react';
+import { BookOpen, Calendar, Hash, Inbox, Pin, User2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { normalizeRichText } from '@/lib/rich-text';
@@ -131,12 +131,6 @@ export default function StudentAnnouncementsPage() {
     [announcements, subjectFilter, viewFilter],
   );
 
-  const pinnedCount = announcements.filter((announcement) => announcement.isPinned).length;
-  const activeClassCount = new Set(announcements.map((announcement) => announcement.classId)).size;
-  const latestAnnouncement = announcements[0];
-  const latestAnnouncementDate = latestAnnouncement
-    ? formatAnnouncementDate(latestAnnouncement.createdAt)
-    : 'No posts yet';
   const hasActiveFilters = viewFilter !== 'all' || subjectFilter !== 'all';
 
   if (loading) {
@@ -155,37 +149,6 @@ export default function StudentAnnouncementsPage() {
 
   return (
     <div className="student-announcements-page">
-      <section className="student-announcements-header">
-        <div className="student-announcements-header__copy">
-          <span className="student-announcements-header__icon" aria-hidden="true">
-            <Megaphone className="h-5 w-5" />
-          </span>
-          <div>
-            <h1>Announcements Hub</h1>
-            <p>Read class updates faster with clean structure, side details, and smarter browsing tools.</p>
-          </div>
-        </div>
-
-        <div className="student-announcements-header__stats">
-          <article className="student-announcements-header__stat">
-            <p>Total posts</p>
-            <strong>{announcements.length}</strong>
-          </article>
-          <article className="student-announcements-header__stat">
-            <p>Pinned</p>
-            <strong>{pinnedCount}</strong>
-          </article>
-          <article className="student-announcements-header__stat">
-            <p>Latest</p>
-            <strong>{latestAnnouncementDate}</strong>
-          </article>
-          <article className="student-announcements-header__stat">
-            <p>Active classes</p>
-            <strong>{activeClassCount}</strong>
-          </article>
-        </div>
-      </section>
-
       <section className="student-announcements-body">
         <div className="student-announcements-toolbar">
           <p>
