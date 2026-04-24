@@ -31,7 +31,7 @@ describe('LxpService', () => {
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
     mockDb.select.mockReturnValue({
       from: jest.fn().mockReturnValue({
@@ -51,6 +51,296 @@ describe('LxpService', () => {
     }).compile();
 
     service = module.get<LxpService>(LxpService);
+  });
+
+  it('returns active and completed student paths while keeping eligibleClasses active-only', async () => {
+    mockDb.query.enrollments.findMany.mockResolvedValueOnce([
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+      {
+        classId: 'class-completed',
+        class: {
+          id: 'class-completed',
+          subjectName: 'Science 7',
+          subjectCode: 'SCI-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+      {
+        classId: 'class-pending',
+        class: {
+          id: 'class-pending',
+          subjectName: 'English 7',
+          subjectCode: 'ENG-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+    ]);
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValueOnce([
+      {
+        classId: 'class-active',
+        isAtRisk: true,
+        blendedScore: '62',
+        thresholdApplied: '74',
+      },
+      {
+        classId: 'class-completed',
+        isAtRisk: false,
+        blendedScore: '82',
+        thresholdApplied: '74',
+      },
+    ]);
+    mockDb.query.interventionCases.findMany.mockResolvedValueOnce([
+      {
+        id: 'case-active',
+        classId: 'class-active',
+        status: 'active',
+        openedAt: new Date('2026-02-01T00:00:00.000Z'),
+        closedAt: null,
+      },
+      {
+        id: 'case-completed',
+        classId: 'class-completed',
+        status: 'completed',
+        openedAt: new Date('2026-01-01T00:00:00.000Z'),
+        closedAt: new Date('2026-01-10T00:00:00.000Z'),
+      },
+      {
+        id: 'case-pending',
+        classId: 'class-pending',
+        status: 'pending',
+        openedAt: new Date('2026-03-01T00:00:00.000Z'),
+        closedAt: null,
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValueOnce([
+      {
+        caseId: 'case-active',
+        assignmentType: 'lesson_review',
+        isCompleted: true,
+      },
+      {
+        caseId: 'case-active',
+        assignmentType: 'assessment_retry',
+        isCompleted: false,
+      },
+      {
+        caseId: 'case-completed',
+        assignmentType: 'lesson_review',
+        isCompleted: true,
+      },
+      {
+        caseId: 'case-completed',
+        assignmentType: 'assessment_retry',
+        isCompleted: true,
+      },
+      {
+        caseId: 'case-pending',
+        assignmentType: 'lesson_review',
+        isCompleted: false,
+      },
+    ]);
+
+    const result = await service.getStudentEligibility('student-1');
+
+    expect(result.eligibleClasses).toHaveLength(1);
+    expect(result.eligibleClasses[0]).toMatchObject({
+      classId: 'class-active',
+      interventionCaseId: 'case-active',
+    });
+    expect(result.paths).toEqual([
+      expect.objectContaining({
+        classId: 'class-active',
+        interventionCaseId: 'case-active',
+        status: 'active',
+        counts: {
+          steps: 1,
+          replays: 1,
+          pending: 1,
+          total: 2,
+          completed: 1,
+        },
+        progress: expect.objectContaining({
+          totalCheckpoints: 2,
+          completedCheckpoints: 1,
+          completionPercent: 50,
+        }),
+      }),
+      expect.objectContaining({
+        classId: 'class-completed',
+        interventionCaseId: 'case-completed',
+        status: 'completed',
+        counts: {
+          steps: 1,
+          replays: 1,
+          pending: 0,
+          total: 2,
+          completed: 2,
+        },
+        progress: expect.objectContaining({
+          totalCheckpoints: 2,
+          completedCheckpoints: 2,
+          completionPercent: 100,
+        }),
+      }),
+    ]);
+    expect(result.paths.some((path) => path.classId === 'class-pending')).toBe(
+      false,
+    );
+  });
+
+  it('loads a completed student playlist without creating default assignments', async () => {
+    const ensureDefaultAssignmentsSpy = jest.spyOn(
+      service as any,
+      'ensureDefaultAssignments',
+    );
+    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.interventionCases.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'case-completed',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'completed',
+        triggerScore: '70',
+        thresholdApplied: '74',
+        openedAt: new Date('2026-02-01T00:00:00.000Z'),
+        closedAt: new Date('2026-02-10T00:00:00.000Z'),
+        createdAt: new Date('2026-02-01T00:00:00.000Z'),
+      });
+    mockDb.query.lxpProgress.findFirst.mockResolvedValue({
+      studentId: 'student-1',
+      classId: 'class-1',
+      xpTotal: 50,
+      streakDays: 2,
+      checkpointsCompleted: 2,
+      lastActivityAt: new Date('2026-02-10T00:00:00.000Z'),
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        assignmentType: 'lesson_review',
+        checkpointLabel: 'Review Fractions',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-02-09T00:00:00.000Z'),
+        xpAwarded: 20,
+        lesson: { id: 'lesson-1', title: 'Fractions', description: null, order: 1 },
+        assessment: null,
+      },
+      {
+        id: 'assignment-2',
+        assignmentType: 'assessment_retry',
+        checkpointLabel: 'Replay Quiz',
+        orderIndex: 2,
+        isCompleted: true,
+        completedAt: new Date('2026-02-10T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: {
+          id: 'assessment-1',
+          title: 'Quiz',
+          description: null,
+          passingScore: 75,
+          dueDate: null,
+          type: 'quiz',
+        },
+      },
+    ]);
+
+    const result = await service.getStudentPlaylist('student-1', 'class-1');
+
+    expect(result.interventionCase.status).toBe('completed');
+    expect(result.progress.completionPercent).toBe(100);
+    expect(result.checkpoints).toHaveLength(2);
+    expect(ensureDefaultAssignmentsSpy).not.toHaveBeenCalled();
+  });
+
+  it('loads a completed student overview without creating default assignments', async () => {
+    const ensureDefaultAssignmentsSpy = jest.spyOn(
+      service as any,
+      'ensureDefaultAssignments',
+    );
+    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.interventionCases.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'case-completed',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'completed',
+        triggerScore: '70',
+        thresholdApplied: '74',
+        openedAt: new Date('2026-02-01T00:00:00.000Z'),
+        closedAt: new Date('2026-02-10T00:00:00.000Z'),
+        createdAt: new Date('2026-02-01T00:00:00.000Z'),
+      });
+    mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
+      blendedScore: '82',
+      thresholdApplied: '74',
+      isAtRisk: false,
+      lastComputedAt: new Date('2026-02-10T00:00:00.000Z'),
+    });
+    mockDb.query.lxpProgress.findFirst.mockResolvedValue({
+      studentId: 'student-1',
+      classId: 'class-1',
+      xpTotal: 50,
+      streakDays: 2,
+      checkpointsCompleted: 2,
+      lastActivityAt: new Date('2026-02-10T00:00:00.000Z'),
+    });
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      {
+        classId: 'class-1',
+        class: {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-7',
+          section: { id: 'sec-1', name: 'Rizal', gradeLevel: '7' },
+        },
+      },
+    ]);
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValue([
+      {
+        classId: 'class-1',
+        blendedScore: '82',
+        thresholdApplied: '74',
+        isAtRisk: false,
+        lastComputedAt: new Date('2026-02-10T00:00:00.000Z'),
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        assignmentType: 'lesson_review',
+        checkpointLabel: 'Review Fractions',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-02-09T00:00:00.000Z'),
+        xpAwarded: 20,
+        lesson: {
+          id: 'lesson-1',
+          title: 'Fractions Refresher',
+          description: 'Completed drill.',
+          order: 1,
+        },
+        assessment: null,
+      },
+    ]);
+
+    const result = await service.getStudentOverview('student-1', 'class-1');
+
+    expect(result.interventionStatus.status).toBe('completed');
+    expect(result.progress.completionPercent).toBe(100);
+    expect(result.recommendedAction).toBeNull();
+    expect(ensureDefaultAssignmentsSpy).not.toHaveBeenCalled();
   });
 
   it('batches teacher queue assignments and progress reads', async () => {

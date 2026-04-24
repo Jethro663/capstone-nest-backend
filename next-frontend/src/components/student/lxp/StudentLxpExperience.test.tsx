@@ -1,33 +1,25 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import StudentLxpExperience from "./StudentLxpExperience";
-import { lxpService } from "@/services/lxp-service";
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import StudentLxpExperience from './StudentLxpExperience';
+import { lxpService } from '@/services/lxp-service';
 
+const push = jest.fn();
+const replace = jest.fn();
 const searchParamsState: Record<string, string | null> = {
   tab: null,
   mode: null,
   classId: null,
 };
 
-const studentJaWorkspaceProps: Array<Record<string, unknown>> = [];
-
-jest.mock("next/navigation", () => ({
-  usePathname: () => "/dashboard/student/lxp",
-  useRouter: () => ({ replace: jest.fn() }),
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/dashboard/student/lxp',
+  useRouter: () => ({ push, replace }),
   useSearchParams: () => ({
     get: (key: string) => searchParamsState[key] ?? null,
-    toString: () => "",
+    toString: () => '',
   }),
 }));
 
-jest.mock("@/components/student/ja/StudentJaWorkspace", () => ({
-  __esModule: true,
-  default: (props: Record<string, unknown>) => {
-    studentJaWorkspaceProps.push(props);
-    return <div data-testid="student-ja-workspace">JA Workspace</div>;
-  },
-}));
-
-jest.mock("@/services/lxp-service", () => ({
+jest.mock('@/services/lxp-service', () => ({
   lxpService: {
     getEligibility: jest.fn(),
     getOverview: jest.fn(),
@@ -44,156 +36,150 @@ const eligibilityResponse = {
     threshold: 74,
     eligibleClasses: [
       {
-        classId: "class-1",
+        classId: 'class-active',
         class: {
-          id: "class-1",
-          subjectName: "Math",
-          subjectCode: "MATH",
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
           section: {
-            id: "section-1",
-            name: "Section A",
-            gradeLevel: "10",
+            id: 'section-1',
+            name: 'Section A',
+            gradeLevel: '7',
           },
         },
-        interventionCaseId: "case-1",
+        interventionCaseId: 'case-active',
         isAtRisk: true,
-        blendedScore: 60,
+        blendedScore: 62,
         thresholdApplied: 74,
-        openedAt: "2026-04-20T00:00:00.000Z",
+        openedAt: '2026-04-20T00:00:00.000Z',
+      },
+    ],
+    paths: [
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: {
+            id: 'section-1',
+            name: 'Section A',
+            gradeLevel: '7',
+          },
+        },
+        interventionCaseId: 'case-active',
+        status: 'active',
+        isAtRisk: true,
+        blendedScore: 62,
+        thresholdApplied: 74,
+        openedAt: '2026-04-20T00:00:00.000Z',
+        closedAt: null,
+        counts: {
+          steps: 1,
+          replays: 1,
+          pending: 1,
+          total: 2,
+          completed: 1,
+        },
+        progress: {
+          totalCheckpoints: 2,
+          completedCheckpoints: 1,
+          completionPercent: 50,
+        },
+      },
+      {
+        classId: 'class-completed',
+        class: {
+          id: 'class-completed',
+          subjectName: 'Science 7',
+          subjectCode: 'SCI-7',
+          section: {
+            id: 'section-1',
+            name: 'Section A',
+            gradeLevel: '7',
+          },
+        },
+        interventionCaseId: 'case-completed',
+        status: 'completed',
+        isAtRisk: false,
+        blendedScore: 86,
+        thresholdApplied: 74,
+        openedAt: '2026-04-01T00:00:00.000Z',
+        closedAt: '2026-04-08T00:00:00.000Z',
+        counts: {
+          steps: 1,
+          replays: 1,
+          pending: 0,
+          total: 2,
+          completed: 2,
+        },
+        progress: {
+          totalCheckpoints: 2,
+          completedCheckpoints: 2,
+          completionPercent: 100,
+        },
       },
     ],
   },
 };
 
-const overviewResponse = {
-  data: {
-    selectedClass: {
-      classId: "class-1",
-      subjectName: "Math",
-      subjectCode: "MATH",
-      section: {
-        id: "section-1",
-        name: "Section A",
-        gradeLevel: "10",
-      },
-      blendedScore: 60,
-      thresholdApplied: 74,
-      lastComputedAt: "2026-04-20T00:00:00.000Z",
-    },
-    interventionStatus: {
-      caseId: "case-1",
-      status: "active",
-      code: "needs_attention",
-      label: "Needs attention",
-      message: "Focus needed",
-      openedAt: "2026-04-20T00:00:00.000Z",
-      closedAt: null,
-      triggerScore: 60,
-      thresholdApplied: 74,
-    },
-    progress: {
-      xpTotal: 10,
-      starsTotal: 2,
-      streakDays: 1,
-      checkpointsCompleted: 0,
-      totalCheckpoints: 1,
-      completionPercent: 0,
-      lastActivityAt: null,
-    },
-    subjectMastery: [],
-    recommendedAction: null,
-    upcomingAssessments: [],
-    recentActivity: [],
-    weakFocusItems: [],
-  },
-};
-
-const playlistResponse = {
-  data: {
-    interventionCase: {
-      id: "case-1",
-      status: "active",
-      openedAt: "2026-04-20T00:00:00.000Z",
-      thresholdApplied: 74,
-      triggerScore: 60,
-    },
-    progress: {
-      xpTotal: 10,
-      starsTotal: 2,
-      streakDays: 1,
-      checkpointsCompleted: 0,
-      completionPercent: 0,
-    },
-    checkpoints: [],
-  },
-};
-
-describe("StudentLxpExperience tab navigation", () => {
-  const panelForHeading = (heading: string): HTMLElement => {
-    const panel = screen
-      .getAllByText(heading)
-      .map((node) => node.closest('[role="tabpanel"]'))
-      .find((value): value is HTMLElement => value instanceof HTMLElement);
-    expect(panel).not.toBeNull();
-    return panel;
-  };
-
+describe('StudentLxpExperience path list', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    studentJaWorkspaceProps.length = 0;
     searchParamsState.tab = null;
     searchParamsState.mode = null;
     searchParamsState.classId = null;
     mockedLxpService.getEligibility.mockResolvedValue(eligibilityResponse as never);
-    mockedLxpService.getOverview.mockResolvedValue(overviewResponse as never);
-    mockedLxpService.getPlaylist.mockResolvedValue(playlistResponse as never);
   });
 
-  it("switches to roadmap content when roadmap tab is clicked", async () => {
+  it('renders the courses-style Learners Path list without the old class dropdown or JA tab', async () => {
     render(<StudentLxpExperience />);
 
-    await screen.findByText("Math plan snapshot");
+    expect(
+      await screen.findByPlaceholderText('Search path, section, or subject code'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All Paths' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'In Progress' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Completed' })).toBeInTheDocument();
+    expect(screen.getByText('Mathematics 7')).toBeInTheDocument();
+    expect(screen.getByText('Science 7')).toBeInTheDocument();
+    expect(screen.getAllByText('Steps')).toHaveLength(2);
+    expect(screen.getAllByText('Replays')).toHaveLength(2);
+    expect(screen.getAllByText('Pending')).toHaveLength(2);
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByText('JA Hub')).not.toBeInTheDocument();
+  });
 
-    const overviewPanel = panelForHeading("Math plan snapshot");
-    const roadmapPanel = panelForHeading("Assigned Steps");
+  it('filters completed paths by checkpoint progress', async () => {
+    render(<StudentLxpExperience />);
 
-    expect(overviewPanel).not.toHaveAttribute("hidden");
-    expect(roadmapPanel).toHaveAttribute("hidden");
+    await screen.findByText('Mathematics 7');
+    fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
 
-    const roadmapTab = await screen.findByRole("tab", {
-      name: "Assigned Steps",
-    });
-    fireEvent.mouseDown(roadmapTab, { button: 0 });
+    expect(screen.queryByText('Mathematics 7')).not.toBeInTheDocument();
+    expect(screen.getByText('Science 7')).toBeInTheDocument();
+  });
+
+  it('opens a path detail route from the primary card action', async () => {
+    render(<StudentLxpExperience />);
+
+    await screen.findByText('Mathematics 7');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Path' }));
+
+    expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-active');
+  });
+
+  it('redirects old embedded JA links to the standalone JA page', async () => {
+    searchParamsState.tab = 'ja';
+    searchParamsState.mode = 'ask';
+    searchParamsState.classId = 'class-active';
+
+    render(<StudentLxpExperience />);
 
     await waitFor(() => {
-      expect(roadmapPanel).not.toHaveAttribute("hidden");
-    });
-    expect(overviewPanel).toHaveAttribute("hidden");
-  });
-
-  it("honors initial ja tab query on first render", async () => {
-    searchParamsState.tab = "ja";
-    searchParamsState.mode = "ask";
-
-    render(<StudentLxpExperience />);
-
-    expect(await screen.findByTestId("student-ja-workspace")).toBeInTheDocument();
-  });
-
-  it("passes the currently selected class into JA workspace when no class query is present", async () => {
-    searchParamsState.tab = "ja";
-    searchParamsState.mode = "practice";
-
-    render(<StudentLxpExperience />);
-
-    await screen.findByTestId("student-ja-workspace");
-
-    await waitFor(() => {
-      expect(
-        studentJaWorkspaceProps.some(
-          (props) => props.initialClassId === "class-1",
-        ),
-      ).toBe(true);
+      expect(replace).toHaveBeenCalledWith(
+        '/dashboard/student/ja?mode=ask&classId=class-active',
+      );
     });
   });
 });

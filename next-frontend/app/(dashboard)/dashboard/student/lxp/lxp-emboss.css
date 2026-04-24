@@ -14,6 +14,26 @@
   --student-text-muted: color-mix(in srgb, var(--student-text-strong) 56%, #64748b);
 }
 
+.lxp-top-tabs {
+  margin: 0 auto;
+  max-width: 80rem;
+  padding: 1.5rem 1.5rem 0;
+}
+
+.lxp-shell--after-tabs {
+  padding-top: 1rem !important;
+}
+
+.lxp-top-tabs .lxp-top-tabs__list {
+  width: fit-content;
+  max-width: 100%;
+  justify-content: flex-start;
+}
+
+.lxp-top-tabs .lxp-tab-trigger {
+  min-width: 7.1rem;
+}
+
 .lxp-shell .student-tab-list {
   border-color: var(--lxp-outline-soft);
   background: linear-gradient(
@@ -249,5 +269,26 @@
 @media (max-width: 1080px) {
   .lxp-shell .learners-path-stage-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 768px) {
+  .lxp-top-tabs {
+    padding: 2.5rem 2.5rem 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .lxp-top-tabs {
+    padding: 1rem 1rem 0;
+  }
+
+  .lxp-top-tabs .lxp-top-tabs__list {
+    width: 100%;
+  }
+
+  .lxp-top-tabs .lxp-tab-trigger {
+    flex: 1 1 calc(50% - 0.45rem);
+    min-width: 0;
   }
 }

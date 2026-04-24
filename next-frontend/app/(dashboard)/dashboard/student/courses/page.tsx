@@ -326,11 +326,6 @@ export default function StudentCoursesPage() {
     });
   }, [scopedCourses, searchQuery, tab]);
 
-  const totalPending = useMemo(
-    () => filteredCourses.reduce((sum, course) => sum + course.pendingCount, 0),
-    [filteredCourses],
-  );
-
   const activeCourseIds = useMemo(
     () => new Set(scopedCourses.map((course) => course.id)),
     [scopedCourses],
@@ -460,38 +455,6 @@ export default function StudentCoursesPage() {
 
   return (
     <div className="space-y-5 bg-[#f5f3f8] p-4 md:p-6">
-      <header className="rounded-[1.6rem] border border-[#e1deea] bg-white px-5 py-6 shadow-[0_18px_32px_-28px_rgba(22,32,58,0.5)] sm:px-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-[2.8rem] font-semibold leading-[0.95] tracking-tight text-[#11192f]">
-              My Classes
-            </h1>
-            <p className="mt-3 max-w-2xl text-[1.03rem] text-[#576480]">
-              Your learning space for this term. Open a class, continue your lessons, and watch for upcoming deadlines.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <div className="rounded-2xl border border-[#ece8f2] bg-[#fbfafe] px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#75809b]">Visible classes</p>
-              <p className="text-2xl font-semibold leading-none text-[#11192f]">{filteredCourses.length}</p>
-            </div>
-            <div className="rounded-2xl border border-[#f7ccd9] bg-[#fff1f6] px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#a11a45]">Pending tasks</p>
-              <p className="text-2xl font-semibold leading-none text-[#d81b50]">{totalPending}</p>
-            </div>
-            <Button
-              type="button"
-              className="h-auto min-h-[3.2rem] rounded-2xl bg-[#d81b50] px-4 text-sm font-semibold text-white hover:bg-[#c51647]"
-              onClick={() => void fetchData()}
-            >
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
-
       <section className="rounded-[1.35rem] border border-[#e1deea] bg-white p-3.5 shadow-[0_18px_32px_-30px_rgba(22,32,58,0.5)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">
@@ -571,6 +534,15 @@ export default function StudentCoursesPage() {
                 <LayoutPanelTop className="h-4 w-4" />
               </button>
             </div>
+
+            <Button
+              type="button"
+              className="h-10 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white hover:bg-[#c51647]"
+              onClick={() => void fetchData()}
+            >
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
           </div>
         </div>
       </section>

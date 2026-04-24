@@ -2,19 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, MessageCircle, Sparkles, X } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 export function StudentTutorLauncher() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [expanded, setExpanded] = useState(false);
   const isStudentRoute = pathname.startsWith("/dashboard/student");
-  const isJaPage =
-    pathname.startsWith("/dashboard/student/ja") ||
-    (pathname.startsWith("/dashboard/student/lxp") &&
-      searchParams.get("tab") === "ja");
+  const isJaPage = pathname.startsWith("/dashboard/student/ja");
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -71,7 +67,7 @@ export function StudentTutorLauncher() {
           <button
             type="button"
             className="student-tutor-launcher__open"
-            onClick={() => router.push("/dashboard/student/lxp?tab=ja&mode=ask")}
+            onClick={() => router.push("/dashboard/student/ja?mode=ask")}
           >
             <MessageCircle className="h-4 w-4" />
             Open JA Hub

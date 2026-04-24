@@ -1,36 +1,38 @@
-'use client';
+import { render, screen } from '@testing-library/react';
+import StudentJaPage from './page';
 
-import { render } from '@testing-library/react';
-import { redirect } from 'next/navigation';
-import StudentJaRedirectPage from './page';
+const studentJaWorkspaceProps: Array<Record<string, unknown>> = [];
 
-jest.mock('next/navigation', () => ({
-  redirect: jest.fn(),
+jest.mock('@/components/student/ja/StudentJaWorkspace', () => ({
+  __esModule: true,
+  default: (props: Record<string, unknown>) => {
+    studentJaWorkspaceProps.push(props);
+    return <div data-testid="student-ja-workspace">JA Workspace</div>;
+  },
 }));
 
-const mockedRedirect = redirect as jest.MockedFunction<typeof redirect>;
-
-describe('StudentJaRedirectPage', () => {
+describe('StudentJaPage', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    studentJaWorkspaceProps.length = 0;
   });
 
-  it('redirects ja route traffic into the embedded lxp ja tab', () => {
-    render(<StudentJaRedirectPage />);
+  it('renders the standalone JA workspace', async () => {
+    render(await StudentJaPage({}));
 
-    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard/student/lxp?tab=ja');
+    expect(screen.getByTestId('student-ja-workspace')).toBeInTheDocument();
+    expect(screen.getByText('JA Workspace')).toBeInTheDocument();
   });
 
-  it('preserves mode and class query when redirecting', () => {
+  it('passes mode and class query params into the standalone workspace', async () => {
     render(
-      <StudentJaRedirectPage
-        searchParams={{ mode: 'review', classId: 'class-123' }}
-      />,
+      await StudentJaPage({
+        searchParams: Promise.resolve({ mode: 'review', classId: 'class-123' }),
+      }),
     );
 
-    expect(mockedRedirect).toHaveBeenCalledWith(
-      '/dashboard/student/lxp?tab=ja&mode=review&classId=class-123',
-    );
+    expect(studentJaWorkspaceProps.at(-1)).toMatchObject({
+      initialMode: 'review',
+      initialClassId: 'class-123',
+    });
   });
 });
-

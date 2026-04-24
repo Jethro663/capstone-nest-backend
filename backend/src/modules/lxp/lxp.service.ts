@@ -194,6 +194,65 @@ export class LxpService {
     return created;
   }
 
+  private async getProgressSnapshot(
+    studentId: string,
+    classId: string,
+    conn: any = this.db,
+  ) {
+    const existing = await conn.query.lxpProgress.findFirst({
+      where: and(
+        eq(lxpProgress.studentId, studentId),
+        eq(lxpProgress.classId, classId),
+      ),
+    });
+
+    return (
+      existing ?? {
+        studentId,
+        classId,
+        xpTotal: 0,
+        streakDays: 0,
+        checkpointsCompleted: 0,
+        lastActivityAt: null,
+      }
+    );
+  }
+
+  private async getStudentInterventionCaseByStatus(
+    studentId: string,
+    classId: string,
+    status: 'active' | 'completed' | 'pending',
+  ) {
+    const row = await this.db.query.interventionCases.findFirst({
+      where: and(
+        eq(interventionCases.studentId, studentId),
+        eq(interventionCases.classId, classId),
+        eq(interventionCases.status, status),
+      ),
+      orderBy: [desc(interventionCases.createdAt)],
+    });
+
+    return row?.status === status ? row : null;
+  }
+
+  private async getReadableStudentInterventionCase(
+    studentId: string,
+    classId: string,
+  ) {
+    const activeCase = await this.getStudentInterventionCaseByStatus(
+      studentId,
+      classId,
+      'active',
+    );
+    if (activeCase) return activeCase;
+
+    return this.getStudentInterventionCaseByStatus(
+      studentId,
+      classId,
+      'completed',
+    );
+  }
+
   private async getOrCreateCaseForStudent(
     studentId: string,
     classId: string,
@@ -507,7 +566,7 @@ export class LxpService {
       .filter((id): id is string => !!id);
 
     if (classIds.length === 0) {
-      return { threshold: INTERVENTION_THRESHOLD, eligibleClasses: [] };
+      return { threshold: INTERVENTION_THRESHOLD, eligibleClasses: [], paths: [] };
     }
 
     const snapshots = await this.db.query.performanceSnapshots.findMany({
@@ -523,83 +582,143 @@ export class LxpService {
       },
     });
 
-    const activeCases = await this.db.query.interventionCases.findMany({
+    const pathCases = (
+      await this.db.query.interventionCases.findMany({
       where: and(
         eq(interventionCases.studentId, userId),
         inArray(interventionCases.classId, classIds),
-        eq(interventionCases.status, 'active'),
+        inArray(interventionCases.status, ['active', 'completed']),
       ),
-      columns: { classId: true, id: true, openedAt: true },
+      columns: {
+        classId: true,
+        id: true,
+        status: true,
+        openedAt: true,
+        closedAt: true,
+      },
+    })
+    ).filter((row) => row.status === 'active' || row.status === 'completed');
+
+    const sortedPathCases = [...pathCases].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'active' ? -1 : 1;
+      const aTime = a.openedAt ? new Date(a.openedAt).getTime() : 0;
+      const bTime = b.openedAt ? new Date(b.openedAt).getTime() : 0;
+      return bTime - aTime;
     });
 
-    const snapshotByClass = new Map(snapshots.map((row) => [row.classId, row]));
-    const caseByClass = new Map(activeCases.map((row) => [row.classId, row]));
+    const caseByClass = new Map<string, (typeof sortedPathCases)[number]>();
+    for (const row of sortedPathCases) {
+      if (!caseByClass.has(row.classId)) {
+        caseByClass.set(row.classId, row);
+      }
+    }
 
-    const eligibleClasses = studentEnrollments
+    const selectedCases = Array.from(caseByClass.values());
+    const caseIds = selectedCases.map((row) => row.id);
+    const assignments =
+      caseIds.length > 0
+        ? await this.db.query.interventionAssignments.findMany({
+            where: inArray(interventionAssignments.caseId, caseIds),
+            columns: {
+              caseId: true,
+              assignmentType: true,
+              isCompleted: true,
+            },
+          })
+        : [];
+
+    const assignmentsByCase = new Map<string, typeof assignments>();
+    for (const assignment of assignments) {
+      const current = assignmentsByCase.get(assignment.caseId) ?? [];
+      current.push(assignment);
+      assignmentsByCase.set(assignment.caseId, current);
+    }
+
+    const snapshotByClass = new Map(snapshots.map((row) => [row.classId, row]));
+
+    const paths = selectedCases
       .map((entry) => {
-        if (!entry.classId || !entry.class) return null;
+        const enrollment = studentEnrollments.find(
+          (row) => row.classId === entry.classId,
+        );
+        if (!enrollment?.class) return null;
         const snapshot = snapshotByClass.get(entry.classId);
-        const activeCase = caseByClass.get(entry.classId);
-        const eligible = Boolean(activeCase);
-        if (!eligible) return null;
+        const caseAssignments = assignmentsByCase.get(entry.id) ?? [];
+        const total = caseAssignments.length;
+        const completed = caseAssignments.filter((item) => item.isCompleted).length;
+        const completionPercent =
+          total > 0
+            ? Math.round((completed / total) * 100)
+            : entry.status === 'completed'
+              ? 100
+              : 0;
+        const steps = caseAssignments.filter(
+          (item) => item.assignmentType === 'lesson_review',
+        ).length;
+        const replays = caseAssignments.filter(
+          (item) => item.assignmentType === 'assessment_retry',
+        ).length;
 
         return {
           classId: entry.classId,
-          class: entry.class,
-          interventionCaseId: activeCase?.id ?? null,
+          class: enrollment.class,
+          interventionCaseId: entry.id,
+          status: entry.status,
           isAtRisk: snapshot?.isAtRisk ?? true,
           blendedScore: this.toNumber(snapshot?.blendedScore),
           thresholdApplied:
             this.toNumber(snapshot?.thresholdApplied) ?? INTERVENTION_THRESHOLD,
-          openedAt: activeCase?.openedAt ?? null,
+          openedAt: entry.openedAt ?? null,
+          closedAt: entry.closedAt ?? null,
+          counts: {
+            steps,
+            replays,
+            pending: Math.max(total - completed, 0),
+            total,
+            completed,
+          },
+          progress: {
+            totalCheckpoints: total,
+            completedCheckpoints: completed,
+            completionPercent,
+          },
         };
       })
-      .filter(
-        (
-          entry,
-        ): entry is {
-          classId: string;
-          class: NonNullable<(typeof studentEnrollments)[number]["class"]>;
-          interventionCaseId: string | null;
-          isAtRisk: boolean;
-          blendedScore: number | null;
-          thresholdApplied: number;
-          openedAt: Date | null;
-        } => entry !== null,
-      )
-      .sort((a, b) => {
-        const aTime = a.openedAt ? new Date(a.openedAt).getTime() : 0;
-        const bTime = b.openedAt ? new Date(b.openedAt).getTime() : 0;
-        return bTime - aTime;
-      });
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    const eligibleClasses = paths
+      .filter((entry) => entry.status === 'active')
+      .map((entry) => ({
+        classId: entry.classId,
+        class: entry.class,
+        interventionCaseId: entry.interventionCaseId,
+        isAtRisk: entry.isAtRisk,
+        blendedScore: entry.blendedScore,
+        thresholdApplied: entry.thresholdApplied,
+        openedAt: entry.openedAt,
+      }));
 
     return {
       threshold: INTERVENTION_THRESHOLD,
       eligibleClasses,
+      paths,
     };
   }
 
   async getStudentPlaylist(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 
-    const interventionCase = await this.db.query.interventionCases.findFirst({
-      where: and(
-        eq(interventionCases.studentId, studentId),
-        eq(interventionCases.classId, classId),
-        eq(interventionCases.status, 'active'),
-      ),
-      orderBy: [desc(interventionCases.createdAt)],
-    });
+    const interventionCase = await this.getReadableStudentInterventionCase(
+      studentId,
+      classId,
+    );
 
     if (!interventionCase) {
-      const pendingCase = await this.db.query.interventionCases.findFirst({
-        where: and(
-          eq(interventionCases.studentId, studentId),
-          eq(interventionCases.classId, classId),
-          eq(interventionCases.status, 'pending'),
-        ),
-        columns: { id: true },
-      });
+      const pendingCase = await this.getStudentInterventionCaseByStatus(
+        studentId,
+        classId,
+        'pending',
+      );
       if (pendingCase) {
         throw new ForbiddenException(
           'Learners Path access is pending teacher approval.',
@@ -610,12 +729,17 @@ export class LxpService {
       );
     }
 
-    await this.ensureDefaultAssignments(
-      interventionCase.id,
-      classId,
-      studentId,
-    );
-    const progress = await this.getOrCreateProgress(studentId, classId);
+    const isCompletedCase = interventionCase.status === 'completed';
+    if (!isCompletedCase) {
+      await this.ensureDefaultAssignments(
+        interventionCase.id,
+        classId,
+        studentId,
+      );
+    }
+    const progress = isCompletedCase
+      ? await this.getProgressSnapshot(studentId, classId)
+      : await this.getOrCreateProgress(studentId, classId);
 
     const assignments = await this.db.query.interventionAssignments.findMany({
       where: eq(interventionAssignments.caseId, interventionCase.id),
@@ -645,6 +769,7 @@ export class LxpService {
         id: interventionCase.id,
         status: interventionCase.status,
         openedAt: interventionCase.openedAt,
+        closedAt: interventionCase.closedAt ?? null,
         thresholdApplied:
           this.toNumber(interventionCase.thresholdApplied) ??
           INTERVENTION_THRESHOLD,
@@ -675,14 +800,10 @@ export class LxpService {
   async getStudentOverview(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 
-    const interventionCase = await this.db.query.interventionCases.findFirst({
-      where: and(
-        eq(interventionCases.studentId, studentId),
-        eq(interventionCases.classId, classId),
-        eq(interventionCases.status, 'active'),
-      ),
-      orderBy: [desc(interventionCases.createdAt)],
-    });
+    const interventionCase = await this.getReadableStudentInterventionCase(
+      studentId,
+      classId,
+    );
 
     const selectedSnapshot = await this.db.query.performanceSnapshots.findFirst(
       {
@@ -700,14 +821,11 @@ export class LxpService {
     );
 
     if (!interventionCase) {
-      const pendingCase = await this.db.query.interventionCases.findFirst({
-        where: and(
-          eq(interventionCases.studentId, studentId),
-          eq(interventionCases.classId, classId),
-          eq(interventionCases.status, 'pending'),
-        ),
-        columns: { id: true },
-      });
+      const pendingCase = await this.getStudentInterventionCaseByStatus(
+        studentId,
+        classId,
+        'pending',
+      );
       if (pendingCase) {
         throw new ForbiddenException(
           'Learners Path access is pending teacher approval.',
@@ -718,12 +836,17 @@ export class LxpService {
       );
     }
 
-    await this.ensureDefaultAssignments(
-      interventionCase.id,
-      classId,
-      studentId,
-    );
-    const progress = await this.getOrCreateProgress(studentId, classId);
+    const isCompletedCase = interventionCase.status === 'completed';
+    if (!isCompletedCase) {
+      await this.ensureDefaultAssignments(
+        interventionCase.id,
+        classId,
+        studentId,
+      );
+    }
+    const progress = isCompletedCase
+      ? await this.getProgressSnapshot(studentId, classId)
+      : await this.getOrCreateProgress(studentId, classId);
 
     const [studentEnrollments, assignments] = await Promise.all([
       this.db.query.enrollments.findMany({

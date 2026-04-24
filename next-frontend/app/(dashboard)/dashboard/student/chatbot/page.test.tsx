@@ -15,12 +15,10 @@ describe('StudentChatbotRedirectPage', () => {
     jest.clearAllMocks();
   });
 
-  it('redirects to the LXP JA tab route', () => {
+  it('redirects to the standalone JA ask route', () => {
     render(<StudentChatbotRedirectPage />);
 
     expect(mockedRedirect).toHaveBeenCalledTimes(1);
-    expect(mockedRedirect).toHaveBeenCalledWith(
-      '/dashboard/student/lxp?tab=ja&mode=ask',
-    );
+    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard/student/ja?mode=ask');
   });
 });

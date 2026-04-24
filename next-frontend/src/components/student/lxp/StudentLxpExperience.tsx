@@ -1,1239 +1,487 @@
-"use client";
+'use client';
 
+import Link from 'next/link';
 import {
   useCallback,
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
-} from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  AlertTriangle,
   ArrowRight,
   BookOpen,
   CheckCircle2,
-  ChevronRight,
-  ClipboardList,
-  Clock3,
-  Flame,
-  Map,
-  RefreshCw,
+  ClipboardCheck,
+  RefreshCcw,
+  Search,
+  SlidersHorizontal,
   Sparkles,
   Target,
-  Trophy,
-} from "lucide-react";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import StudentJaWorkspace from "@/components/student/ja/StudentJaWorkspace";
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  StudentPageShell,
-  StudentPageStat,
-  StudentSectionCard,
-} from "@/components/student/StudentPageShell";
-import {
-  StudentEmptyState,
-  StudentStatusChip,
-} from "@/components/student/student-primitives";
-import { lxpService } from "@/services/lxp-service";
-import type {
-  EligibleClass,
-  LxpCheckpoint,
-  LxpOverviewAssessmentItem,
-  LxpOverviewResponse,
-  LxpOverviewSubjectMasteryRow,
-  LxpOverviewWeakFocusItem,
-  PlaylistResponse,
-} from "@/types/lxp";
-import { cn } from "@/utils/cn";
+  resolveStudentCoursePresentation,
+  toStudentHeroStyle,
+} from '@/components/class/student-course-presentation';
+import { lxpService } from '@/services/lxp-service';
+import type { EligibleClass, LxpPathSummary } from '@/types/lxp';
+import { cn } from '@/utils/cn';
 
-type LxpTabKey =
-  | "overview"
-  | "roadmap"
-  | "assessments"
-  | "interventions"
-  | "ja";
+type PrimaryTab = 'all' | 'in_progress' | 'completed';
 
-const TABS: Array<{ value: LxpTabKey; label: string }> = [
-  { value: "overview", label: "Overview" },
-  { value: "roadmap", label: "Assigned Steps" },
-  { value: "assessments", label: "Replays" },
-  { value: "interventions", label: "Case File" },
-  { value: "ja", label: "JA Hub" },
+const PRIMARY_TABS: Array<{ value: PrimaryTab; label: string }> = [
+  { value: 'all', label: 'All Paths' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
 ];
 
-function parseTabValue(value: string | null): LxpTabKey {
-  if (value === "overview") return "overview";
-  if (value === "roadmap") return "roadmap";
-  if (value === "assessments") return "assessments";
-  if (value === "interventions") return "interventions";
-  if (value === "ja") return "ja";
-  return "overview";
+const LEGACY_TAB_MAP: Record<string, string> = {
+  roadmap: 'steps',
+  assessments: 'replays',
+  interventions: 'case',
+  overview: 'overview',
+  steps: 'steps',
+  replays: 'replays',
+  case: 'case',
+};
+
+function clampPercent(value: number | null | undefined) {
+  if (!Number.isFinite(value ?? Number.NaN)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value ?? 0)));
 }
 
-function parseJaMode(value: string | null): "practice" | "ask" | "review" {
-  if (value === "ask") return "ask";
-  if (value === "review") return "review";
-  return "practice";
+function encode(value: string) {
+  return encodeURIComponent(value);
 }
 
-function formatPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "--";
-  return `${Math.round(value)}%`;
+function isCompletedPath(path: LxpPathSummary) {
+  return path.status === 'completed' || clampPercent(path.progress.completionPercent) >= 100;
 }
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "No date set";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "No date set";
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return "--";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "--";
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function timeAgo(value: string | null | undefined): string {
-  if (!value) return "Just now";
-  const timestamp = new Date(value).getTime();
-  if (Number.isNaN(timestamp)) return "Just now";
-  const diffHours = Math.floor((Date.now() - timestamp) / 3_600_000);
-  if (diffHours <= 0) return "Just now";
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.floor(diffHours / 24)}d ago`;
-}
-
-function classLabel(item: EligibleClass): string {
-  return `${item.class.subjectName} (${item.class.subjectCode})`;
-}
-
-function checkpointHref(checkpoint: LxpCheckpoint, classId?: string): string {
-  if (checkpoint.lesson?.id)
-    return `/dashboard/student/lessons/${checkpoint.lesson.id}`;
-  if (checkpoint.assessment?.id && classId) {
-    const params = new URLSearchParams({
-      tab: "ja",
-      mode: "review",
-      classId,
-    });
-    return `/dashboard/student/lxp?${params.toString()}`;
-  }
-  if (checkpoint.assessment?.id) return "/dashboard/student/lxp?tab=ja&mode=review";
-  return "/dashboard/student/lxp?tab=ja";
-}
-
-function checkpointProvenance(checkpoint: LxpCheckpoint): string {
-  return checkpoint.type === "lesson_review"
-    ? "LMS lesson source"
-    : "LMS assessment source via JA Hub";
-}
-
-function checkpointSummary(checkpoint: LxpCheckpoint): string {
-  if (checkpoint.lesson?.description) return checkpoint.lesson.description;
-  if (checkpoint.assessment?.description)
-    return checkpoint.assessment.description;
-  return checkpoint.type === "lesson_review"
-    ? "Review the lesson material connected to this intervention checkpoint."
-    : "Retry the linked assessment checkpoint and recover your standing.";
-}
-
-function checkpointTone(
-  status: LxpOverviewResponse["interventionStatus"]["code"],
-) {
-  if (status === "on_track") return "success" as const;
-  if (status === "improving") return "warning" as const;
-  return "danger" as const;
-}
-
-function masteryTone(status: LxpOverviewSubjectMasteryRow["status"]) {
-  if (status === "on_track") return "success" as const;
-  if (status === "improving") return "warning" as const;
-  return "danger" as const;
-}
-
-function weakFocusLabel(item: LxpOverviewWeakFocusItem): string {
-  return item.source === "performance"
-    ? "Performance signal"
-    : "Checkpoint signal";
-}
-
-function PageSkeleton() {
+function isInteractiveTarget(target: EventTarget | null) {
   return (
-    <div className="space-y-6">
-      <Skeleton className="h-48 rounded-[1.8rem]" />
-      <div className="grid gap-6 md:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <Skeleton key={i} className="h-32 rounded-[1.5rem]" />
-        ))}
-      </div>
-      <Skeleton className="h-16 rounded-[1.4rem]" />
-      <Skeleton className="h-[36rem] rounded-[1.8rem]" />
-    </div>
+    target instanceof Element &&
+    Boolean(target.closest('a, button, input, select, textarea, label, [role="button"]'))
   );
 }
 
-function MiniInsightCard({
-  icon,
-  label,
-  value,
-  caption,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-  caption: string;
-}) {
+function formatSection(path: LxpPathSummary) {
+  const grade = path.class.section?.gradeLevel ?? 'TBA';
+  const section = path.class.section?.name ?? 'Section TBA';
+  return `Grade ${grade} - ${section}`;
+}
+
+function toFallbackPath(entry: EligibleClass): LxpPathSummary {
+  return {
+    classId: entry.classId,
+    class: entry.class,
+    interventionCaseId: entry.interventionCaseId,
+    status: 'active',
+    isAtRisk: entry.isAtRisk,
+    blendedScore: entry.blendedScore,
+    thresholdApplied: entry.thresholdApplied,
+    openedAt: entry.openedAt,
+    closedAt: null,
+    counts: {
+      steps: 0,
+      replays: 0,
+      pending: 0,
+      total: 0,
+      completed: 0,
+    },
+    progress: {
+      totalCheckpoints: 0,
+      completedCheckpoints: 0,
+      completionPercent: 0,
+    },
+  };
+}
+
+function PathStatusChip({ path }: { path: LxpPathSummary }) {
+  const completed = isCompletedPath(path);
+  const label = completed
+    ? 'Completed'
+    : clampPercent(path.progress.completionPercent) > 0
+      ? 'In Progress'
+      : 'Ready';
+
   return (
-    <div className="student-dashboard-mini-card p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="student-dashboard-mini-card__icon flex items-center justify-center rounded-2xl bg-[var(--student-accent-soft)] text-[var(--student-accent)]">
-          {icon}
+    <span
+      className={cn(
+        'inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.09em]',
+        completed
+          ? 'border-[#bde9d3] bg-[#effcf4] text-[#047857]'
+          : 'border-[#fdd5e1] bg-[#fff1f6] text-[#be123c]',
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+interface PathCardProps {
+  path: LxpPathSummary;
+  heroStyle: CSSProperties;
+  buttonTint: string;
+  onOpenPath: (classId: string) => void;
+}
+
+function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
+  const progress = clampPercent(path.progress.completionPercent);
+  const subjectName = path.class.subjectName || 'Learners Path';
+  const sectionLabel = formatSection(path);
+  const completed = isCompletedPath(path);
+  const detailHref = `/dashboard/student/lxp/${encode(path.classId)}`;
+  const stepsHref = `${detailHref}?tab=steps`;
+
+  const openPath = useCallback(() => onOpenPath(path.classId), [onOpenPath, path.classId]);
+
+  const handleBodyClick = (event: MouseEvent<HTMLElement>) => {
+    if (isInteractiveTarget(event.target)) return;
+    openPath();
+  };
+
+  const handleBodyKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (isInteractiveTarget(event.target)) return;
+    event.preventDefault();
+    openPath();
+  };
+
+  return (
+    <article
+      className={cn(
+        'group overflow-hidden rounded-[1.55rem] border border-[#e2dfeb] bg-white shadow-[0_22px_38px_-30px_rgba(17,25,47,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] transition',
+        'hover:-translate-y-1 hover:border-[#d2cddf] hover:shadow-[0_28px_42px_-30px_rgba(17,25,47,0.55)]',
+      )}
+    >
+      <div className="relative min-h-[8.65rem] overflow-hidden px-5 pb-5 pt-4" style={heroStyle}>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.16)_1px,transparent_0)] [background-size:16px_16px]" />
+        <div className="relative flex items-start justify-between gap-3">
+          <PathStatusChip path={path} />
+          <span
+            className="grid h-8 w-8 place-items-center rounded-full border border-white/30 text-white"
+            style={{ background: buttonTint }}
+          >
+            <Target className="h-4 w-4" />
+          </span>
         </div>
-        <div className="text-right">
-          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
-            {label}
-          </p>
-          <p className="mt-2 text-xl font-black text-[var(--student-text-strong)]">
-            {value}
-          </p>
+
+        <div className="relative mt-5 text-white">
+          <h3 className="line-clamp-2 text-[2rem] font-semibold leading-[1.05] tracking-tight">
+            {subjectName}
+          </h3>
+          <p className="mt-2 text-[0.92rem] font-medium text-white/92">{sectionLabel}</p>
+          <p className="mt-0.5 text-sm text-white/80">{path.class.subjectCode}</p>
         </div>
       </div>
-      <p className="mt-3 text-sm text-[var(--student-text-muted)]">{caption}</p>
+
+      <div
+        role="link"
+        tabIndex={0}
+        aria-label={`Open ${subjectName}`}
+        onClick={handleBodyClick}
+        onKeyDown={handleBodyKeyDown}
+        className="space-y-4 px-5 pb-5 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d81b50]/40 focus-visible:ring-inset"
+      >
+        <div className="grid grid-cols-3 gap-2">
+          <PathStat value={path.counts.steps} label="Steps" />
+          <PathStat value={path.counts.replays} label="Replays" />
+          <PathStat value={path.counts.pending} label="Pending" />
+        </div>
+
+        <div className="rounded-2xl border border-[#e9e4ef] bg-[#fbf9fd] px-3 py-2.5">
+          <div className="mb-2 flex items-center justify-between text-xs font-semibold">
+            <span className="inline-flex items-center gap-1.5 text-[#55617d]">
+              <Sparkles className="h-3.5 w-3.5 text-[#d81b50]" />
+              Path progress
+            </span>
+            <span className="text-[#d81b50]">{progress}%</span>
+          </div>
+          <Progress
+            value={progress}
+            className="h-2.5 bg-[#f2d7e1]"
+            indicatorClassName="bg-gradient-to-r from-[#d81b50] to-[#ef476f]"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#f2f0f8] px-2.5 py-1 text-xs font-semibold text-[#4b5875]">
+            <BookOpen className="h-3.5 w-3.5" />
+            {path.counts.total} tasks
+          </div>
+
+          <div className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-xs font-semibold text-[#31518a]">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {completed ? 'Read-only history' : sectionLabel}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href={stepsHref}
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d9d6e7] bg-[#f2f0f9] text-sm font-semibold text-[#2f3f5d] transition hover:bg-[#ebe8f5]"
+          >
+            <ClipboardCheck className="h-4 w-4" />
+            View Steps
+          </Link>
+
+          <button
+            type="button"
+            onClick={openPath}
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white shadow-[0_14px_26px_-20px_rgba(216,27,80,0.95)] transition hover:bg-[#c51647]"
+          >
+            {completed ? 'Review Path' : 'Continue Path'}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PathStat({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="rounded-2xl border border-[#e8e4ef] bg-[#faf9fc] px-2 py-2.5 text-center">
+      <p className="text-2xl font-semibold leading-none text-[#11192f]">{value}</p>
+      <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#727d97]">
+        {label}
+      </p>
     </div>
   );
 }
 
-function AssessmentRow({ item }: { item: LxpOverviewAssessmentItem }) {
+function PathListSkeleton() {
   return (
-    <Link href={item.href} className="student-dashboard-list-card group">
-      <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
-        <ClipboardList className="h-5 w-5" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-black text-[var(--student-text-strong)]">
-          {item.title}
-        </p>
-        <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-          Due {formatDate(item.dueDate)} · Passing {item.passingScore ?? "--"}%
-        </p>
-      </div>
-      <div className="flex items-center gap-3">
-        <Badge className="student-badge">+{item.xpAwarded} XP</Badge>
-        <ChevronRight className="h-4 w-4 text-[var(--student-text-muted)] transition group-hover:text-[var(--student-accent)]" />
-      </div>
-    </Link>
-  );
-}
-
-function CompactEmptyState({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="student-dashboard-empty student-dashboard-empty--compact">
-      <div className="rounded-2xl bg-[var(--student-accent-soft)] p-3 text-[var(--student-accent)]">
-        <Sparkles className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="text-base font-black text-[var(--student-text-strong)]">
-          {title}
-        </p>
-        <p className="mt-2 text-sm text-[var(--student-text-muted)]">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PathStageCard({
-  step,
-  title,
-  description,
-  state,
-}: {
-  step: string;
-  title: string;
-  description: string;
-  state: "done" | "active" | "waiting";
-}) {
-  return (
-    <div className="learners-path-stage-card" data-state={state}>
-      <div className="flex items-start justify-between gap-3">
-        <span className="learners-path-stage-card__step">{step}</span>
-        <StudentStatusChip
-          tone={
-            state === "done"
-              ? "success"
-              : state === "active"
-                ? "warning"
-                : "info"
-          }
-        >
-          {state === "done"
-            ? "Done"
-            : state === "active"
-              ? "Do now"
-              : "Waiting"}
-        </StudentStatusChip>
-      </div>
-      <div className="mt-4 space-y-2">
-        <h3 className="text-base font-black text-[var(--student-text-strong)]">
-          {title}
-        </h3>
-        <p className="text-sm leading-6 text-[var(--student-text-muted)]">
-          {description}
-        </p>
-      </div>
+    <div className="grid gap-4 sm:grid-cols-2">
+      {[0, 1, 2, 3].map((item) => (
+        <Skeleton key={item} className="h-[25rem] rounded-[1.55rem]" />
+      ))}
     </div>
   );
 }
 
 export default function StudentLxpExperience() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState<LxpTabKey>(() =>
-    parseTabValue(searchParams.get("tab")),
-  );
-  const [loadingEligibility, setLoadingEligibility] = useState(true);
-  const [loadingExperience, setLoadingExperience] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [eligibleClasses, setEligibleClasses] = useState<EligibleClass[]>([]);
-  const [threshold, setThreshold] = useState(74);
-  const [selectedClassId, setSelectedClassId] = useState("");
-  const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
-  const [playlist, setPlaylist] = useState<PlaylistResponse | null>(null);
-  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [paths, setPaths] = useState<LxpPathSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<PrimaryTab>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const selectedClass = useMemo(
-    () =>
-      eligibleClasses.find((entry) => entry.classId === selectedClassId) ??
-      null,
-    [eligibleClasses, selectedClassId],
-  );
+  useEffect(() => {
+    const legacyTab = searchParams.get('tab');
+    const classId = searchParams.get('classId');
 
-  const fetchEligibility = useCallback(async (silent = false) => {
-    try {
-      if (silent) {
-        setRefreshing(true);
-      } else {
-        setLoadingEligibility(true);
-      }
-
-      const res = await lxpService.getEligibility();
-      const rows = res.data.eligibleClasses ?? [];
-      setThreshold(res.data.threshold);
-      setEligibleClasses(rows);
-      setSelectedClassId((prev) => {
-        if (prev && rows.some((item) => item.classId === prev)) return prev;
-        return rows[0]?.classId ?? "";
-      });
-    } catch {
-      toast.error("Failed to load your Learners Path classes.");
-      setEligibleClasses([]);
-      setSelectedClassId("");
-    } finally {
-      setLoadingEligibility(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  const fetchExperience = useCallback(async (classId: string) => {
-    if (!classId) {
-      setOverview(null);
-      setPlaylist(null);
+    if (legacyTab === 'ja') {
+      const params = new URLSearchParams();
+      const mode = searchParams.get('mode');
+      if (mode) params.set('mode', mode);
+      if (classId) params.set('classId', classId);
+      router.replace(`/dashboard/student/ja${params.toString() ? `?${params.toString()}` : ''}`);
       return;
     }
 
+    if (classId) {
+      const mappedTab = legacyTab ? LEGACY_TAB_MAP[legacyTab] : undefined;
+      const params = new URLSearchParams();
+      if (mappedTab) params.set('tab', mappedTab);
+      router.replace(
+        `/dashboard/student/lxp/${encode(classId)}${params.toString() ? `?${params.toString()}` : ''}`,
+      );
+    }
+  }, [router, searchParams]);
+
+  const fetchPaths = useCallback(async () => {
     try {
-      setLoadingExperience(true);
-      const [overviewRes, playlistRes] = await Promise.all([
-        lxpService.getOverview(classId),
-        lxpService.getPlaylist(classId),
-      ]);
-      setOverview(overviewRes.data);
-      setPlaylist(playlistRes.data);
-    } catch {
-      toast.error("Failed to load Learners Path for this class.");
-      setOverview(null);
-      setPlaylist(null);
+      setLoading(true);
+      setError(null);
+      const response = await lxpService.getEligibility();
+      const nextPaths =
+        response.data.paths?.length
+          ? response.data.paths
+          : response.data.eligibleClasses.map(toFallbackPath);
+      setPaths(nextPaths);
+    } catch (err) {
+      console.error('Failed to load Learners Paths', err);
+      setError('Learners Paths could not be loaded right now.');
     } finally {
-      setLoadingExperience(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchEligibility();
-  }, [fetchEligibility]);
+    void fetchPaths();
+  }, [fetchPaths]);
 
-  useEffect(() => {
-    if (selectedClassId) {
-      fetchExperience(selectedClassId);
-    }
-  }, [fetchExperience, selectedClassId]);
+  const filteredPaths = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    return paths.filter((path) => {
+      const completed = isCompletedPath(path);
+      if (tab === 'completed' && !completed) return false;
+      if (tab === 'in_progress' && completed) return false;
 
-  const handleRefresh = async () => {
-    await fetchEligibility(true);
-    if (selectedClassId) {
-      await fetchExperience(selectedClassId);
-    }
-  };
+      if (!term) return true;
+      const haystack = [
+        path.class.subjectName,
+        path.class.subjectCode,
+        path.class.section?.name,
+        path.class.section?.gradeLevel,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [paths, searchQuery, tab]);
 
-  const handleCompleteCheckpoint = async (assignmentId: string) => {
-    if (!selectedClassId) return;
+  const totalCompleted = paths.filter(isCompletedPath).length;
+  const totalInProgress = paths.length - totalCompleted;
 
-    try {
-      setCompletingId(assignmentId);
-      const res = await lxpService.completeCheckpoint(
-        selectedClassId,
-        assignmentId,
-      );
-      setPlaylist(res.data);
-      const overviewRes = await lxpService.getOverview(selectedClassId);
-      setOverview(overviewRes.data);
-      toast.success("Checkpoint completed.");
-    } catch {
-      toast.error("Failed to complete the checkpoint.");
-    } finally {
-      setCompletingId(null);
-    }
-  };
-
-  const assessmentCheckpoints = useMemo(
-    () =>
-      (playlist?.checkpoints ?? []).filter(
-        (checkpoint) => checkpoint.type === "assessment_retry",
-      ),
-    [playlist?.checkpoints],
+  const openPath = useCallback(
+    (classId: string) => {
+      router.push(`/dashboard/student/lxp/${encode(classId)}`);
+    },
+    [router],
   );
-
-  const lessonCheckpoints = useMemo(
-    () =>
-      (playlist?.checkpoints ?? []).filter(
-        (checkpoint) => checkpoint.type === "lesson_review",
-      ),
-    [playlist?.checkpoints],
-  );
-
-  const nextCheckpoint = useMemo(
-    () =>
-      (playlist?.checkpoints ?? []).find((checkpoint) => !checkpoint.isCompleted) ??
-      null,
-    [playlist?.checkpoints],
-  );
-
-  const planStages = useMemo(
-    () => [
-      {
-        step: "01",
-        title: "Review the assigned lesson",
-        description:
-          lessonCheckpoints.length > 0
-            ? `${lessonCheckpoints.length} lesson review step${lessonCheckpoints.length === 1 ? "" : "s"} assigned. Start here so the replay makes sense.`
-            : "Your teacher has not assigned a lesson review yet.",
-        state: lessonCheckpoints.length
-          ? lessonCheckpoints.every((checkpoint) => checkpoint.isCompleted)
-            ? ("done" as const)
-            : ("active" as const)
-          : ("waiting" as const),
-      },
-      {
-        step: "02",
-        title: "Replay the assessment in JA Hub",
-        description:
-          assessmentCheckpoints.length > 0
-            ? `${assessmentCheckpoints.length} replay checkpoint${assessmentCheckpoints.length === 1 ? "" : "s"} available. Finish them in JA Hub after the lesson review.`
-            : "Assessment replay opens once a retry checkpoint is assigned.",
-        state: assessmentCheckpoints.length
-          ? assessmentCheckpoints.every((checkpoint) => checkpoint.isCompleted)
-            ? ("done" as const)
-            : lessonCheckpoints.length > 0 &&
-                lessonCheckpoints.every((checkpoint) => checkpoint.isCompleted)
-              ? ("active" as const)
-              : ("waiting" as const)
-          : ("waiting" as const),
-      },
-      {
-        step: "03",
-        title: "Exit the recovery track",
-        description:
-          nextCheckpoint === null
-            ? "All assigned steps are done. Your next grade sync can close this case automatically."
-            : "Keep finishing the assigned checkpoints until your case is ready to close.",
-        state:
-          nextCheckpoint === null
-            ? ("done" as const)
-            : assessmentCheckpoints.length > 0 ||
-                lessonCheckpoints.length > 0
-              ? ("waiting" as const)
-              : ("active" as const),
-      },
-    ],
-    [assessmentCheckpoints, lessonCheckpoints, nextCheckpoint],
-  );
-
-  if (
-    loadingEligibility ||
-    (selectedClassId && loadingExperience && !overview && !playlist)
-  ) {
-    return <PageSkeleton />;
-  }
-
-  if (eligibleClasses.length === 0) {
-    return (
-      <StudentPageShell
-        className="lxp-shell"
-        badge="Learners Path"
-        title="Learners Path"
-        description="When a class needs recovery support, this page turns the follow-up work into one guided plan with lessons, replays, and JA support."
-      >
-        <StudentEmptyState
-          title="No active Learners Path classes right now"
-          description={`Learners Path opens when your blended score drops below ${threshold}%. Once a class needs support, your dashboard will surface it here.`}
-          icon={<Sparkles className="h-5 w-5" />}
-        />
-      </StudentPageShell>
-    );
-  }
-
-  if (!overview || !playlist) {
-    return (
-      <StudentPageShell
-        className="lxp-shell"
-        badge="Learners Path"
-        title="Learners Path"
-        description="We could not load the guided recovery plan for the selected class."
-      >
-        <StudentEmptyState
-          title="Learners Path data is temporarily unavailable"
-          description="Try refreshing this page. If the problem persists, the selected class may still be synchronizing its latest performance data."
-          icon={<AlertTriangle className="h-5 w-5" />}
-        />
-      </StudentPageShell>
-    );
-  }
-
-  const statusTone = checkpointTone(overview.interventionStatus.code);
-  const initialJaMode = parseJaMode(searchParams.get("mode"));
-  const initialJaClassId =
-    (searchParams.get("classId") ?? selectedClassId) || undefined;
-
-  const handleTabChange = (value: string) => {
-    setTab(parseTabValue(value));
-  };
 
   return (
-    <Tabs value={tab} onValueChange={handleTabChange}>
-      <StudentPageShell
-        className="lxp-shell"
-        badge="Learners Path"
-        title="Learners Path"
-        description="A guided recovery plan for the selected class. Follow the assigned lesson review, move into JA Hub replays, and track when the case is ready to close."
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <TabsList className="student-tab-list h-auto flex-wrap justify-start">
-              {TABS.map((entry) => (
-                <TabsTrigger
-                  key={entry.value}
-                  value={entry.value}
-                  className="student-tab lxp-tab-trigger px-4 py-2.5 text-sm font-bold"
-                >
-                  {entry.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <select
-              value={selectedClassId}
-              onChange={(event) => setSelectedClassId(event.target.value)}
-              className="student-input lxp-class-select min-w-[240px] rounded-2xl border border-[var(--student-outline)] bg-[var(--student-elevated)] px-3 py-2 text-sm text-[var(--student-text-strong)]"
-            >
-              {eligibleClasses.map((entry) => (
-                <option key={entry.classId} value={entry.classId}>
-                  {classLabel(entry)}
-                </option>
-              ))}
-            </select>
+    <main className="space-y-5 bg-[#f5f3f8] p-4 md:p-6">
+      <section className="rounded-[1.35rem] border border-[#e1ddec] bg-white p-4 shadow-[0_18px_38px_-34px_rgba(17,25,47,0.45)]">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#d81b50]">
+              Learners Path
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#11192f] md:text-4xl">
+              My Paths
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm font-medium text-[#6d7891]">
+              Continue assigned steps, review replays, and reopen completed support paths.
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <Skeleton className="h-10 w-full rounded-xl lg:w-[21rem]" />
+              <Skeleton className="h-10 w-64 rounded-2xl" />
+              <Skeleton className="h-10 w-28 rounded-xl" />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <label className="relative block min-w-0 lg:w-[21rem]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a859c]" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search path, section, or subject code"
+                  className="h-10 rounded-xl border-[#ded9e9] bg-[#fbf9fd] pl-9 text-sm font-medium"
+                />
+              </label>
+
+              <div className="inline-flex rounded-2xl border border-[#ded9e9] bg-[#f1eef8] p-1">
+                {PRIMARY_TABS.map((entry) => (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    data-active={tab === entry.value}
+                    className={cn(
+                      'rounded-xl px-3 py-2 text-xs font-semibold text-[#5e6880] transition',
+                      tab === entry.value && 'bg-white text-[#11192f] shadow-sm',
+                    )}
+                    onClick={() => setTab(entry.value)}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                className="h-10 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white hover:bg-[#c51647]"
+                onClick={() => void fetchPaths()}
+              >
+                <RefreshCcw className="mr-2 h-4 w-4" />
+                Refresh
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[#59657d]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-3 py-1.5">
+            <Target className="h-3.5 w-3.5" />
+            {paths.length} total paths
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#fff1f6] px-3 py-1.5 text-[#be123c]">
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {totalInProgress} in progress
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#effcf4] px-3 py-1.5 text-[#047857]">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {totalCompleted} completed
+          </span>
+        </div>
+      </section>
+
+      {error ? (
+        <section className="rounded-[1.25rem] border border-[#f5c8d6] bg-[#fff1f6] p-4">
+          <p className="text-sm font-semibold text-[#9f1c44]">{error}</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3 border-[#e9a9be] text-[#9f1c44] hover:bg-[#ffe8ef]"
+            onClick={() => void fetchPaths()}
+          >
+            Try Again
+          </Button>
+        </section>
+      ) : loading ? (
+        <PathListSkeleton />
+      ) : filteredPaths.length === 0 ? (
+        <div className="grid min-h-[18rem] place-items-center rounded-[1.45rem] border border-dashed border-[#d5d1e2] bg-white p-6 text-center">
+          <div>
+            <p className="text-xl font-semibold text-[#1e2944]">No paths match this filter.</p>
+            <p className="mt-1 text-sm text-[#667390]">
+              Try another search term or switch to a different path status.
+            </p>
             <Button
               type="button"
               variant="outline"
-              className="lxp-action-button lxp-action-button--ghost rounded-2xl border-[var(--student-outline)] bg-[var(--student-elevated)] text-[var(--student-text-strong)]"
-              onClick={handleRefresh}
-              disabled={refreshing}
+              className="mt-4 border-[#ddd8e8] bg-[#faf8fd] text-[#3b4865] hover:bg-[#f4f0fa]"
+              onClick={() => {
+                setSearchQuery('');
+                setTab('all');
+              }}
             >
-              <RefreshCw
-                className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")}
-              />
-              Refresh
+              Reset Filters
             </Button>
           </div>
-        }
-        stats={
-          <>
-            <StudentPageStat
-              label="Current Score"
-              value={formatPercent(overview.selectedClass.blendedScore)}
-              caption="Latest blended score for this class"
-              icon={Target}
-              accent="bg-[var(--student-accent-soft)] text-[var(--student-accent)]"
-            />
-            <StudentPageStat
-              label="Target"
-              value={`${overview.interventionStatus.thresholdApplied}%`}
-              caption="Score needed to leave recovery"
-              icon={Trophy}
-              accent="bg-[var(--student-surface-soft)] text-[var(--student-text-strong)]"
-            />
-            <StudentPageStat
-              label="Next Step"
-              value={
-                nextCheckpoint
-                  ? nextCheckpoint.type === "lesson_review"
-                    ? "Lesson review"
-                    : "JA Hub replay"
-                  : "Await sync"
-              }
-              caption={
-                nextCheckpoint
-                  ? nextCheckpoint.label
-                  : "All assigned checkpoints are complete"
-              }
-              icon={Map}
-              accent="bg-[var(--student-accent-soft)] text-[var(--student-accent)]"
-            />
-            <StudentPageStat
-              label="Progress"
-              value={`${overview.progress.completionPercent}%`}
-              caption={`${overview.progress.checkpointsCompleted}/${overview.progress.totalCheckpoints} checkpoints done`}
-              icon={CheckCircle2}
-              accent="bg-[var(--student-surface-soft)] text-[var(--student-text-strong)]"
-            />
-          </>
-        }
-      >
-        <TabsContent
-          value="overview"
-          forceMount
-          hidden={tab !== "overview"}
-          className="mt-0 space-y-6"
-        >
-          <StudentSectionCard
-            title="How this plan works"
-            description="Finish the work in order. The page keeps the current class, next step, and completion progress visible so you do not have to guess what happens next."
-          >
-            <div className="learners-path-stage-grid">
-              {planStages.map((stage) => (
-                <PathStageCard
-                  key={stage.step}
-                  step={stage.step}
-                  title={stage.title}
-                  description={stage.description}
-                  state={stage.state}
-                />
-              ))}
-            </div>
-          </StudentSectionCard>
-
-          <StudentSectionCard
-            title={`${overview.selectedClass.subjectName} plan snapshot`}
-            description="This summary shows why the case opened, what class is selected, and what the teacher expects you to finish next."
-            action={
-              <StudentStatusChip tone={statusTone}>
-                {overview.interventionStatus.label}
-              </StudentStatusChip>
-            }
-          >
-            <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
-              <div className="student-dashboard-progress-card rounded-[1.7rem] p-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="student-dashboard-hero-chip">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      {overview.selectedClass.subjectCode}
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
-                        Selected Class
-                      </p>
-                      <h3 className="mt-2 text-3xl font-black tracking-tight text-[var(--student-text-strong)]">
-                        {overview.selectedClass.subjectName}
-                      </h3>
-                      <p className="mt-2 text-sm text-[var(--student-text-muted)]">
-                        {selectedClass?.class.section?.name ??
-                          overview.selectedClass.section?.name ??
-                          "Section unavailable"}
-                        {" | "}
-                        Threshold {overview.interventionStatus.thresholdApplied}%
-                      </p>
-                    </div>
-                  </div>
-                  <div className="lxp-emboss-panel rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] px-4 py-3 text-right">
-                    <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
-                      Blended Score
-                    </p>
-                    <p className="mt-2 text-2xl font-black text-[var(--student-text-strong)]">
-                      {formatPercent(overview.selectedClass.blendedScore)}
-                    </p>
-                    <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-                      Last sync{" "}
-                      {formatDateTime(overview.selectedClass.lastComputedAt)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-2">
-                  <div className="flex items-center justify-between text-sm font-semibold text-[var(--student-text-muted)]">
-                    <span>Assigned plan completion</span>
-                    <span>{overview.progress.completionPercent}%</span>
-                  </div>
-                  <Progress
-                    value={overview.progress.completionPercent}
-                    className="student-progress-track h-3"
-                    indicatorClassName="student-progress-fill"
-                  />
-                  <p className="text-sm text-[var(--student-text-muted)]">
-                    {overview.interventionStatus.message}
-                  </p>
-                </div>
-
-                {overview.recommendedAction ? (
-                  <div className="mt-6 student-dashboard-task-card rounded-[1.5rem]">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-accent)]">
-                          Do this next
-                        </p>
-                        <h4 className="text-lg font-black text-[var(--student-text-strong)]">
-                          {overview.recommendedAction.title}
-                        </h4>
-                        <p className="text-sm text-[var(--student-text-muted)]">
-                          {overview.recommendedAction.subtitle}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <Badge className="student-badge">
-                          +{overview.recommendedAction.xpAwarded} XP
-                        </Badge>
-                        {overview.recommendedAction.href ? (
-                          <Button asChild className="rounded-2xl">
-                            <Link href={overview.recommendedAction.href}>
-                              Open
-                              <ArrowRight className="ml-2 h-4 w-4" />
-                            </Link>
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4">
-                <MiniInsightCard
-                  icon={<Clock3 className="h-4 w-4" />}
-                  label="Opened"
-                  value={formatDate(overview.interventionStatus.openedAt)}
-                  caption="When this intervention track started"
-                />
-                <MiniInsightCard
-                  icon={<ArrowRight className="h-4 w-4" />}
-                  label="Next Checkpoint"
-                  value={nextCheckpoint?.label ?? "All done"}
-                  caption={
-                    nextCheckpoint
-                      ? nextCheckpoint.type === "lesson_review"
-                        ? "Open the lesson and mark it complete here"
-                        : "Finish this assessment replay in JA Hub"
-                      : "All assigned work is complete for now"
-                  }
-                />
-                <MiniInsightCard
-                  icon={<Trophy className="h-4 w-4" />}
-                  label="Last Activity"
-                  value={timeAgo(overview.progress.lastActivityAt)}
-                  caption="Most recent Learners Path activity"
-                />
-              </div>
-            </div>
-          </StudentSectionCard>
-
-          <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <StudentSectionCard
-              title="Class Comparison"
-              description="The closest live performance signals across your enrolled classes, so you can see where this case sits compared with your other subjects."
-            >
-              <div className="space-y-3">
-                {overview.subjectMastery.map((row) => (
-                  <div
-                    key={row.classId}
-                    className="student-dashboard-list-card"
-                  >
-                    <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
-                      <BookOpen className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-black text-[var(--student-text-strong)]">
-                          {row.subjectName}
-                        </p>
-                        <StudentStatusChip tone={masteryTone(row.status)}>
-                          {row.status === "on_track"
-                            ? "On track"
-                            : row.status === "improving"
-                              ? "Improving"
-                              : "Needs support"}
-                        </StudentStatusChip>
-                      </div>
-                      <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-                        {row.subjectCode} · Threshold {row.thresholdApplied}%
-                      </p>
-                      <div className="mt-3">
-                        <div className="student-dashboard-meter student-dashboard-meter--compact">
-                          <div
-                            className="student-dashboard-meter__fill"
-                            style={{
-                              width: `${Math.max(8, row.masteryPercent ?? 0)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-black text-[var(--student-text-strong)]">
-                        {formatPercent(row.masteryPercent)}
-                      </p>
-                      <p className="text-xs text-[var(--student-text-muted)]">
-                        {row.isSelected ? "Selected" : "Class"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </StudentSectionCard>
-
-            <StudentSectionCard
-              title="Focus Signals"
-              description="The strongest weak areas currently surfaced from your latest grade and checkpoint signals."
-            >
-              <div className="space-y-3">
-                {overview.weakFocusItems.length === 0 ? (
-                  <CompactEmptyState
-                    title="No weak-focus items right now"
-                    description="Once your performance sync finds a subject or checkpoint below the target, it will appear here."
-                  />
-                ) : (
-                  overview.weakFocusItems.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className="student-dashboard-list-card group"
-                    >
-                      <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
-                        <Target className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-black text-[var(--student-text-strong)]">
-                          {item.title}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-                          {item.subtitle}
-                        </p>
-                        <p className="mt-2 text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-accent)]">
-                          {weakFocusLabel(item)}
-                        </p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-[var(--student-text-muted)] transition group-hover:text-[var(--student-accent)]" />
-                    </Link>
-                  ))
-                )}
-              </div>
-            </StudentSectionCard>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <StudentSectionCard
-              title="Upcoming Replays"
-              description="Assessment retry checkpoints surfaced from your current Learners Path playlist."
-            >
-              <div className="space-y-3">
-                {overview.upcomingAssessments.length === 0 ? (
-                  <CompactEmptyState
-                    title="No retry assessments queued"
-                    description="Your current intervention work is focused on lesson review or already completed retries."
-                  />
-                ) : (
-                  overview.upcomingAssessments.map((item) => (
-                    <AssessmentRow key={item.assignmentId} item={item} />
-                  ))
-                )}
-              </div>
-            </StudentSectionCard>
-
-            <StudentSectionCard
-              title="Recent Activity"
-              description="The latest Learners Path events and completed checkpoints tied to this class."
-            >
-              <div className="space-y-3">
-                {overview.recentActivity.length === 0 ? (
-                  <CompactEmptyState
-                    title="No recent activity yet"
-                    description="Your intervention timeline will start filling in as soon as you complete checkpoints."
-                  />
-                ) : (
-                  overview.recentActivity.map((item) => (
-                    <div key={item.id} className="student-dashboard-list-card">
-                      <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
-                        <CheckCircle2 className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-black text-[var(--student-text-strong)]">
-                          {item.title}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-                          {item.description}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-bold text-[var(--student-text-muted)]">
-                          {timeAgo(item.occurredAt)}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </StudentSectionCard>
-          </div>
-        </TabsContent>
-        <TabsContent
-          value="roadmap"
-          forceMount
-          hidden={tab !== "roadmap"}
-          className="mt-0"
-        >
-          <StudentSectionCard
-            title="Assigned Steps"
-            description="Finish the steps from top to bottom. Lesson reviews can be marked complete here, while assessment replays must be completed in JA Hub."
-            action={
-              <Badge className="student-badge">
-                {playlist.progress.checkpointsCompleted}/
-                {playlist.checkpoints.length} completed
-              </Badge>
-            }
-          >
-            <div className="space-y-4">
-              {playlist.checkpoints.length === 0 ? (
-                <StudentEmptyState
-                  title="No steps assigned yet"
-                  description="Your teacher has not assigned Learners Path checkpoints for this class yet."
-                  icon={<Map className="h-5 w-5" />}
-                />
-              ) : (
-                playlist.checkpoints.map((checkpoint, index) => (
-                  <div
-                    key={checkpoint.id}
-                    className="student-panel student-panel-hover lxp-emboss-panel rounded-[1.6rem] border border-[var(--student-outline)] bg-[var(--student-elevated)] p-5"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge className="student-badge">
-                            Step {index + 1}
-                          </Badge>
-                          <StudentStatusChip
-                            tone={
-                              checkpoint.isCompleted ? "success" : "warning"
-                            }
-                          >
-                            {checkpoint.isCompleted
-                              ? "Completed"
-                              : "In progress"}
-                          </StudentStatusChip>
-                        </div>
-                        <h3 className="text-lg font-black text-[var(--student-text-strong)]">
-                          {checkpoint.label}
-                        </h3>
-                        <p className="max-w-3xl text-sm text-[var(--student-text-muted)]">
-                          {checkpointSummary(checkpoint)}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Badge className="student-badge">
-                            {checkpoint.type === "lesson_review"
-                              ? "Lesson Review"
-                              : "Assessment Retry"}
-                          </Badge>
-                          <Badge className="student-badge">
-                            {checkpointProvenance(checkpoint)}
-                          </Badge>
-                          <Badge className="student-badge">
-                            +{checkpoint.xpAwarded} XP
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <Button
-                          asChild
-                          variant="outline"
-                          className="lxp-action-button lxp-action-button--ghost rounded-2xl"
-                        >
-                          <Link href={checkpointHref(checkpoint, selectedClassId)}>
-                            {checkpoint.type === "lesson_review"
-                              ? "Open Lesson"
-                              : "Open JA Hub"}
-                          </Link>
-                        </Button>
-                        {checkpoint.type === "lesson_review" ? (
-                          <Button
-                            type="button"
-                            className="lxp-action-button lxp-action-button--solid rounded-2xl"
-                            onClick={() =>
-                              handleCompleteCheckpoint(checkpoint.id)
-                            }
-                            disabled={
-                              checkpoint.isCompleted ||
-                              completingId === checkpoint.id
-                            }
-                          >
-                            {checkpoint.isCompleted
-                              ? "Completed"
-                              : completingId === checkpoint.id
-                                ? "Saving..."
-                                : "Mark Complete"}
-                          </Button>
-                        ) : (
-                        <Badge className="student-badge">
-                          {checkpoint.isCompleted
-                            ? "Completed via JA"
-                            : "Complete in JA Hub"}
-                        </Badge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </StudentSectionCard>
-        </TabsContent>
-
-        <TabsContent
-          value="assessments"
-          forceMount
-          hidden={tab !== "assessments"}
-          className="mt-0"
-        >
-          <StudentSectionCard
-            title="Assessment Retry Queue"
-            description="Assessment checkpoints pulled from your active Learners Path playlist, with due dates when the backend has them."
-          >
-            <div className="space-y-4">
-              {assessmentCheckpoints.length === 0 ? (
-                <StudentEmptyState
-                  title="No assessment replays right now"
-                  description="Your current recovery plan is focused on lessons, or you have already finished the required retry checkpoints."
-                  icon={<ClipboardList className="h-5 w-5" />}
-                />
-              ) : (
-                assessmentCheckpoints.map((checkpoint) => (
-                  <div
-                    key={checkpoint.id}
-                    className="student-dashboard-task-card rounded-[1.5rem]"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap gap-2">
-                          <Badge className="student-badge">
-                            {checkpoint.assessment?.type ?? "assessment"}
-                          </Badge>
-                          <Badge className="student-badge">
-                            {checkpointProvenance(checkpoint)}
-                          </Badge>
-                          <Badge className="student-badge">
-                            +{checkpoint.xpAwarded} XP
-                          </Badge>
-                        </div>
-                        <h3 className="text-lg font-black text-[var(--student-text-strong)]">
-                          {checkpoint.assessment?.title ?? checkpoint.label}
-                        </h3>
-                        <p className="text-sm text-[var(--student-text-muted)]">
-                          {checkpointSummary(checkpoint)}
-                        </p>
-                        <div className="flex flex-wrap gap-3 text-xs font-semibold text-[var(--student-text-muted)]">
-                          <span className="student-dashboard-task-date">
-                            <Clock3 className="h-3.5 w-3.5" />
-                            {formatDate(checkpoint.assessment?.dueDate ?? null)}
-                          </span>
-                          <span className="student-dashboard-task-date">
-                            Passing{" "}
-                            {checkpoint.assessment?.passingScore ?? "--"}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <Button
-                          asChild
-                          variant="outline"
-                          className="lxp-action-button lxp-action-button--ghost rounded-2xl"
-                        >
-                          <Link href={checkpointHref(checkpoint, selectedClassId)}>
-                            Open JA Hub
-                          </Link>
-                        </Button>
-                        <Badge className="student-badge">
-                          {checkpoint.isCompleted
-                            ? "Completed via JA"
-                            : "Complete in JA Hub"}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </StudentSectionCard>
-        </TabsContent>
-
-        <TabsContent
-          value="interventions"
-          forceMount
-          hidden={tab !== "interventions"}
-          className="mt-0"
-        >
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <StudentSectionCard
-              title="Case Status"
-              description="This tab keeps the operational details of your current recovery case visible without leaving Learners Path."
-            >
-              <div className="space-y-4">
-                <div className="student-dashboard-task-card rounded-[1.5rem]">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-accent)]">
-                        Current Case
-                      </p>
-                      <h3 className="mt-2 text-xl font-black text-[var(--student-text-strong)]">
-                        {overview.interventionStatus.label}
-                      </h3>
-                      <p className="mt-2 text-sm text-[var(--student-text-muted)]">
-                        Trigger score{" "}
-                        {formatPercent(
-                          overview.interventionStatus.triggerScore,
-                        )}{" "}
-                        · Opened{" "}
-                        {formatDateTime(overview.interventionStatus.openedAt)}
-                      </p>
-                    </div>
-                    <StudentStatusChip tone={statusTone}>
-                      {overview.interventionStatus.status}
-                    </StudentStatusChip>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <MiniInsightCard
-                    icon={<Target className="h-4 w-4" />}
-                    label="Threshold"
-                    value={`${overview.interventionStatus.thresholdApplied}%`}
-                    caption="Target to exit intervention"
-                  />
-                  <MiniInsightCard
-                    icon={<BookOpen className="h-4 w-4" />}
-                    label="Lesson Reviews"
-                    value={lessonCheckpoints.length}
-                    caption="Recovery lessons assigned"
-                  />
-                  <MiniInsightCard
-                    icon={<ClipboardList className="h-4 w-4" />}
-                    label="Assessment Retries"
-                    value={assessmentCheckpoints.length}
-                    caption="Assessment retries assigned"
-                  />
-                </div>
-
-                <div className="lxp-emboss-panel rounded-[1.5rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-5">
-                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[var(--student-text-muted)]">
-                    How to finish this case
-                  </p>
-                  <p className="mt-3 text-sm leading-6 text-[var(--student-text-muted)]">
-                    Start with the assigned lesson review, complete the replay in JA Hub,
-                    and keep checking this page until every checkpoint is marked done.
-                  </p>
-                </div>
-              </div>
-            </StudentSectionCard>
-
-            <StudentSectionCard
-              title="Focus Queue"
-              description="The strongest signals that still need attention in this class."
-            >
-              <div className="space-y-3">
-                {overview.weakFocusItems.length === 0 ? (
-                  <CompactEmptyState
-                    title="Nothing queued"
-                    description="You have no weak-focus placeholders for this class right now."
-                  />
-                ) : (
-                  overview.weakFocusItems.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className="student-dashboard-list-card"
-                    >
-                      <div className="student-dashboard-list-card__icon flex items-center justify-center rounded-2xl text-[var(--student-accent)]">
-                        <AlertTriangle className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-black text-[var(--student-text-strong)]">
-                          {item.title}
-                        </p>
-                        <p className="mt-1 text-xs text-[var(--student-text-muted)]">
-                          {item.subtitle}
-                        </p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-[var(--student-text-muted)]" />
-                    </Link>
-                  ))
-                )}
-              </div>
-            </StudentSectionCard>
-          </div>
-        </TabsContent>
-
-        <TabsContent
-          value="ja"
-          forceMount
-          hidden={tab !== "ja"}
-          className="mt-0"
-        >
-          <StudentSectionCard
-            title="JA Hub"
-            description="Practice, Ask, and Review stay inside Learners Path so you can finish the recovery flow without leaving this workspace."
-          >
-            <StudentJaWorkspace
-              initialMode={initialJaMode}
-              initialClassId={initialJaClassId}
-            />
-          </StudentSectionCard>
-        </TabsContent>
-      </StudentPageShell>
-    </Tabs>
+        </div>
+      ) : (
+        <section className="grid gap-4 sm:grid-cols-2">
+          {filteredPaths.map((path, index) => {
+            const choice = resolveStudentCoursePresentation(undefined, undefined, index);
+            return (
+              <PathCard
+                key={`${path.classId}-${path.interventionCaseId ?? 'path'}`}
+                path={path}
+                heroStyle={toStudentHeroStyle(choice)}
+                buttonTint={choice.buttonTint}
+                onOpenPath={openPath}
+              />
+            );
+          })}
+        </section>
+      )}
+    </main>
   );
 }
