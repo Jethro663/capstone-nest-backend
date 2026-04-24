@@ -4,13 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  BookOpenCheck,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
-  ClipboardCheck,
-  GraduationCap,
-  Target,
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -237,10 +233,8 @@ export default function StudentDashboardPage() {
     () => publishedAssessments.slice(0, 4),
     [publishedAssessments],
   );
-  const featuredClasses = useMemo(() => classes.slice(0, 3), [classes]);
   const recentLessons = useMemo(() => lessons.slice(0, 4), [lessons]);
   const todaySchedule = useMemo(() => getScheduleItemsForToday(classes), [classes]);
-  const profileReady = user?.firstName && user?.lastName ? 100 : 70;
   const continueHref = classes[0] ? `/dashboard/student/classes/${classes[0].id}` : '/dashboard/student/courses';
   const assessmentHrefMap = useMemo(
     () =>
@@ -289,17 +283,11 @@ export default function StudentDashboardPage() {
         <div className="student-v2-main">
           <div className="student-v2-column">
             <Skeleton className="h-36 rounded-xl" />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[1, 2, 3, 4].map((id) => (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {[1, 2].map((id) => (
                 <Skeleton key={id} className="h-28 rounded-xl" />
               ))}
             </div>
-            <Skeleton className="h-48 rounded-xl" />
-            <div className="grid gap-4 xl:grid-cols-2">
-              <Skeleton className="h-72 rounded-xl" />
-              <Skeleton className="h-72 rounded-xl" />
-            </div>
-            <Skeleton className="h-64 rounded-xl" />
           </div>
           <div className="student-v2-rail">
             <Skeleton className="h-56 rounded-xl" />
@@ -336,96 +324,7 @@ export default function StudentDashboardPage() {
             </div>
           </section>
 
-          <section className="student-v2-stats">
-            <article className="student-v2-stat-card">
-              <p>Enrolled Classes</p>
-              <strong>{classes.length}</strong>
-              <span>Classes</span>
-              <GraduationCap className="student-v2-stat-card__icon text-[#ef4444]" />
-            </article>
-            <article className="student-v2-stat-card">
-              <p>Ready Lessons</p>
-              <strong>{lessons.length}</strong>
-              <span>Lessons</span>
-              <BookOpenCheck className="student-v2-stat-card__icon text-[#16a34a]" />
-            </article>
-            <article className="student-v2-stat-card">
-              <p>Pending Tasks</p>
-              <strong>{publishedAssessments.length}</strong>
-              <span>Tasks</span>
-              <ClipboardCheck className="student-v2-stat-card__icon text-[#f97316]" />
-            </article>
-            <article className="student-v2-stat-card">
-              <p>Profile Ready</p>
-              <strong>{profileReady}%</strong>
-              <span>Completion</span>
-              <Target className="student-v2-stat-card__icon text-[#3b82f6]" />
-            </article>
-          </section>
-
-          <section className="student-v2-section">
-            <header className="student-v2-section__header">
-              <h2>Today&apos;s Learning Rhythm</h2>
-            </header>
-            {todaySchedule.length > 0 ? (
-              <div className="student-v2-rhythm-grid">
-                {todaySchedule.map((entry) => (
-                  <article key={entry.id} className="student-v2-rhythm-item">
-                    <p className="student-v2-rhythm-item__time">
-                      {formatTime(entry.startTime)} - {formatTime(entry.endTime)}
-                    </p>
-                    <h3>{entry.className}</h3>
-                    <p>{entry.teacherName} - {entry.sectionLabel}</p>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="student-v2-empty">No class schedules for today yet.</p>
-            )}
-          </section>
-
           <section className="student-v2-grid">
-            <article className="student-v2-section">
-              <header className="student-v2-section__header">
-                <h2>Keep Exploring</h2>
-                <Link href="/dashboard/student/courses">View all</Link>
-              </header>
-              <div className="student-v2-list">
-                {featuredClasses.length > 0 ? featuredClasses.map((course) => {
-                  const classLessons = lessons.filter((lesson) => lesson.classId === course.id).length;
-                  const classTasks = publishedAssessments.filter((assessment) => assessment.classId === course.id).length;
-                  const progress = Math.min(
-                    100,
-                    Math.max(
-                      8,
-                      Math.round(((classLessons + Math.max(1, classTasks)) / Math.max(1, lessons.length + publishedAssessments.length)) * 100),
-                    ),
-                  );
-
-                  return (
-                    <article key={course.id} className="student-v2-progress-item">
-                      <div className="student-v2-progress-item__top">
-                        <div>
-                          <h3>{course.subjectName || course.className || course.name}</h3>
-                          <p>{course.subjectGradeLevel || course.section?.gradeLevel || 'Class'} - {course.section?.name || 'Section'}</p>
-                        </div>
-                        <strong>{progress}%</strong>
-                      </div>
-                      <div className="student-v2-progress-track">
-                        <div style={{ width: `${progress}%` }} />
-                      </div>
-                      <div className="student-v2-progress-item__meta">
-                        <span>{classLessons} lessons</span>
-                        <Link href={`/dashboard/student/classes/${course.id}`}>Open</Link>
-                      </div>
-                    </article>
-                  );
-                }) : (
-                  <p className="student-v2-empty">You are not enrolled in classes yet.</p>
-                )}
-              </div>
-            </article>
-
             <article className="student-v2-section">
               <header className="student-v2-section__header">
                 <h2>Pending Tasks</h2>
@@ -450,30 +349,30 @@ export default function StudentDashboardPage() {
                 )}
               </div>
             </article>
-          </section>
 
-          <section className="student-v2-section">
-            <header className="student-v2-section__header">
-              <h2>Recent Lessons</h2>
-            </header>
-            <div className="student-v2-list">
-              {recentLessons.length > 0 ? recentLessons.map((lesson, index) => (
-                <article key={lesson.id} className="student-v2-lesson-item">
-                  <div>
-                    <span>{index + 1}</span>
+            <article className="student-v2-section">
+              <header className="student-v2-section__header">
+                <h2>Recent Lessons</h2>
+              </header>
+              <div className="student-v2-list">
+                {recentLessons.length > 0 ? recentLessons.map((lesson, index) => (
+                  <article key={lesson.id} className="student-v2-lesson-item">
                     <div>
-                      <h3>{lesson.title}</h3>
-                      <p>Lesson {index + 1}</p>
+                      <span>{index + 1}</span>
+                      <div>
+                        <h3>{lesson.title}</h3>
+                        <p>Lesson {index + 1}</p>
+                      </div>
                     </div>
-                  </div>
-                  <Link href={`/dashboard/student/lessons/${lesson.id}`}>
-                    <Button variant="outline" className="student-v2-lesson-item__button">Open</Button>
-                  </Link>
-                </article>
-              )) : (
-                <p className="student-v2-empty">No recent lessons yet.</p>
-              )}
-            </div>
+                    <Link href={`/dashboard/student/lessons/${lesson.id}`}>
+                      <Button variant="outline" className="student-v2-lesson-item__button">Open</Button>
+                    </Link>
+                  </article>
+                )) : (
+                  <p className="student-v2-empty">No recent lessons yet.</p>
+                )}
+              </div>
+            </article>
           </section>
         </div>
 

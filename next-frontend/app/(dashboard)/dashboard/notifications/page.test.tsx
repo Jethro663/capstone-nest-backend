@@ -116,6 +116,29 @@ describe('NotificationsPage', () => {
     expect(screen.getByText('Math update').closest('article')).toHaveClass('border-[#e70012]');
   });
 
+  it('uses the LMS blue theme with red notification accents for teachers', async () => {
+    mockedUseAuth.mockReturnValue({
+      role: 'teacher',
+      user: {
+        id: 'teacher-1',
+        roles: ['teacher'],
+        firstName: 'Ana',
+        lastName: 'Reyes',
+      },
+    } as ReturnType<typeof useAuth>);
+
+    render(<NotificationsPage />);
+
+    const page = await screen.findByRole('main', { name: 'Teacher notifications' });
+    expect(page).toHaveClass('bg-[#f4f7fb]');
+    expect(page).toHaveClass('text-[#0f2340]');
+
+    expect(screen.getByTestId('teacher-notifications-hero')).toHaveClass('bg-[#12284a]');
+    expect(screen.getByTestId('teacher-notifications-hero')).toHaveClass('text-white');
+    expect(screen.getByRole('button', { name: /Mark All Read/i })).toHaveClass('bg-[#e70012]');
+    expect(screen.getByText('Math update').closest('article')).toHaveClass('border-[#e70012]');
+  });
+
   it('filters to read notifications and keeps the existing mark all action', async () => {
     const markAllAsRead = jest.fn().mockResolvedValue(undefined);
     const fetchNotifications = jest.fn().mockResolvedValue(undefined);

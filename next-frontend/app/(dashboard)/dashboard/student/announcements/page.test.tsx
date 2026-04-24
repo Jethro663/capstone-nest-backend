@@ -67,12 +67,14 @@ describe('StudentAnnouncementsPage', () => {
     } as Awaited<ReturnType<typeof announcementService.getByClass>>);
   });
 
-  it('removes the large top header while keeping the announcement list usable', async () => {
+  it('matches the teacher announcements shell while keeping the announcement list usable', async () => {
     const { container } = render(<StudentAnnouncementsPage />);
 
     expect(await screen.findByText('Quiz schedule')).toBeInTheDocument();
-    expect(container.querySelector('.student-announcements-header')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Announcements Hub' })).not.toBeInTheDocument();
+    expect(container.querySelector('.student-announcements-header')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Announcements' })).toBeInTheDocument();
+    expect(screen.getByText('Total posts')).toBeInTheDocument();
+    expect(screen.getByText('Latest')).toBeInTheDocument();
     expect(screen.getByText(/Showing/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'All' })).toBeInTheDocument();
   });

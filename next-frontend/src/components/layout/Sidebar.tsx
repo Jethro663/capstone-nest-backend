@@ -55,11 +55,6 @@ const studentNav: NavItem[] = [
     icon: ClipboardList,
   },
   {
-    label: "Performance",
-    href: "/dashboard/student/performance",
-    icon: BarChart3,
-  },
-  {
     label: "Announcements",
     href: "/dashboard/student/announcements",
     icon: Megaphone,

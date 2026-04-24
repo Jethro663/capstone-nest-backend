@@ -9,7 +9,6 @@ import {
   TeacherEmptyState,
   TeacherPageShell,
   TeacherSectionCard,
-  TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -618,13 +617,69 @@ export default function ExtractionReviewPage() {
 
   if (!extraction) return null;
 
+  const draftQuestionCount = editSections.reduce(
+    (sum, section) => sum + (section.assessmentDraft?.questions?.length || 0),
+    0,
+  );
+
   return (
     <TeacherPageShell
       badge="AI Extraction Review"
       title="Extraction Review"
       description="Module-first review for sections, lesson blocks, and section assessments."
-      actions={<div className="flex flex-wrap items-center gap-2"><Button variant="outline" onClick={() => router.back()}>Back</Button>{dirty && isEditable && !isApplied ? <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button> : null}{isEditable && !isApplied ? <Button onClick={() => setShowApplyDialog(true)} disabled={selectedSections.size === 0}>Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})</Button> : null}{!isApplied ? <Button variant="destructive" size="sm" onClick={handleDelete}>Delete</Button> : <Badge>Applied</Badge>}</div>}
-      stats={<><TeacherStatCard label="Status" value={<Badge variant={STATUS_VARIANT[extraction.extractionStatus]}>{extraction.extractionStatus}</Badge>} caption={extraction.modelUsed ? `Model: ${extraction.modelUsed}` : 'Model pending'} icon={Shield} accent="amber" /><TeacherStatCard label="Sections" value={editSections.length} caption={`${selectedSections.size} selected`} icon={Layers3} accent="sky" /><TeacherStatCard label="Draft Questions" value={editSections.reduce((sum, section) => sum + (section.assessmentDraft?.questions?.length || 0), 0)} caption="Optional section assessments" icon={FileQuestion} accent="rose" /></>}
+      actions={(
+        <div className="flex w-full flex-col gap-3">
+          <div
+            data-testid="extraction-header-summary"
+            className="grid min-w-[min(42rem,80vw)] gap-2 sm:grid-cols-3"
+          >
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+                <Shield className="h-3.5 w-3.5" />
+                Status
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <Badge variant={STATUS_VARIANT[extraction.extractionStatus]}>{extraction.extractionStatus}</Badge>
+                <span className="text-xs text-white/70">
+                  {extraction.modelUsed ? `Model: ${extraction.modelUsed}` : 'Model pending'}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+                <Layers3 className="h-3.5 w-3.5" />
+                Sections
+              </div>
+              <div className="mt-1 flex items-end gap-2">
+                <strong className="text-2xl leading-none">{editSections.length}</strong>
+                <span className="text-xs text-white/70">{selectedSections.size} selected</span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+                <FileQuestion className="h-3.5 w-3.5" />
+                Draft Questions
+              </div>
+              <div className="mt-1 flex items-end gap-2">
+                <strong className="text-2xl leading-none">{draftQuestionCount}</strong>
+                <span className="text-xs text-white/70">Optional assessments</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              className="border-white/20 bg-white text-[#12284a] hover:bg-[#edf4ff] hover:text-[#12284a]"
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {dirty && isEditable && !isApplied ? <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button> : null}
+            {isEditable && !isApplied ? <Button onClick={() => setShowApplyDialog(true)} disabled={selectedSections.size === 0}>Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})</Button> : null}
+            {!isApplied ? <Button variant="destructive" size="sm" onClick={handleDelete}>Delete</Button> : <Badge>Applied</Badge>}
+          </div>
+        </div>
+      )}
     >
       {['pending', 'processing'].includes(extraction.extractionStatus) ? (
         <TeacherSectionCard title="Extraction Progress" description="AI is converting the PDF into sections.">

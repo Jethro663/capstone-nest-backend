@@ -126,6 +126,28 @@ describe('ExtractionReviewPage', () => {
     expect(screen.queryByDisplayValue(/data:image\/png;base64/i)).not.toBeInTheDocument();
   });
 
+  it('keeps extraction status summary inside the header without standalone stat cards', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildExtraction('completed'),
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(await screen.findByText('Extraction Review')).toBeInTheDocument();
+
+    const headerSummary = screen.getByTestId('extraction-header-summary');
+    expect(headerSummary).toHaveTextContent('Status');
+    expect(headerSummary).toHaveTextContent('completed');
+    expect(headerSummary).toHaveTextContent('Sections');
+    expect(headerSummary).toHaveTextContent('1 selected');
+    expect(headerSummary).toHaveTextContent('Draft Questions');
+    expect(headerSummary).toHaveTextContent('1');
+    expect(document.querySelector('.teacher-figma-stat')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('text-[#12284a]');
+  });
+
   it('renders load error state and retries fetching extraction', async () => {
     mockedExtractionService.getById
       .mockRejectedValueOnce({

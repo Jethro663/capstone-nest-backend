@@ -64,7 +64,7 @@ describe('StudentDashboardPage', () => {
     } as ReturnType<typeof useAuth>);
   });
 
-  it('renders the compact student dashboard with context rail data', async () => {
+  it('renders pending tasks and recent lessons first without the old summary panels', async () => {
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -162,7 +162,22 @@ describe('StudentDashboardPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your Learning Hub' })).toBeInTheDocument();
 
-    expect(screen.getByRole('heading', { name: "Today's Learning Rhythm" })).toBeInTheDocument();
+    expect(screen.queryByText('Enrolled Classes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready Lessons')).not.toBeInTheDocument();
+    expect(screen.queryByText('Profile Ready')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Today's Learning Rhythm" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Keep Exploring' })).not.toBeInTheDocument();
+
+    const mainGrid = document.querySelector('.student-v2-grid');
+    expect(mainGrid).toBeInTheDocument();
+
+    const mainSections = Array.from(mainGrid?.children ?? []);
+    expect(mainSections).toHaveLength(2);
+    expect(mainSections[0]).toHaveTextContent('Pending Tasks');
+    expect(mainSections[0]).toHaveTextContent('Algebra Quiz');
+    expect(mainSections[1]).toHaveTextContent('Recent Lessons');
+    expect(mainSections[1]).toHaveTextContent('Linear Equations');
+
     expect(screen.getByRole('heading', { name: 'Day Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Announcements & Events' })).toBeInTheDocument();
@@ -188,8 +203,9 @@ describe('StudentDashboardPage', () => {
       expect(screen.getByRole('heading', { name: 'Your Learning Hub' })).toBeInTheDocument(),
     );
 
-    expect(screen.getByText('No class schedules for today yet.')).toBeInTheDocument();
-    expect(screen.getByText('You are not enrolled in classes yet.')).toBeInTheDocument();
+    expect(screen.queryByText('No class schedules for today yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('You are not enrolled in classes yet.')).not.toBeInTheDocument();
     expect(screen.getByText("You're all caught up right now.")).toBeInTheDocument();
+    expect(screen.getByText('No recent lessons yet.')).toBeInTheDocument();
   });
 });
