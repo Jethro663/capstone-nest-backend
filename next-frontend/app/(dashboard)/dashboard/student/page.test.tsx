@@ -179,8 +179,10 @@ describe('StudentDashboardPage', () => {
     expect(mainSections[1]).toHaveTextContent('Linear Equations');
 
     expect(screen.getByRole('heading', { name: 'Day Schedule' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Announcements & Events' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upcoming Events' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /See All/i })).toBeInTheDocument();
     expect(screen.getAllByText('Mathematics').length).toBeGreaterThan(0);
   });
 

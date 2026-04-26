@@ -38,11 +38,11 @@ export interface CreateClassDto {
   sectionId: string;
   teacherId: string | null;
   schoolYear: string;
-  room?: string;
+  room: string;
   cardPreset?: string;
   cardBannerUrl?: string | null;
   templateId?: string;
-  schedules?: { days: ScheduleDay[]; startTime: string; endTime: string }[];
+  schedules: { days: ScheduleDay[]; startTime: string; endTime: string }[];
 }
 
 export type ClassVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';

@@ -134,6 +134,9 @@ describe('DashboardAdminLibraryPage', () => {
     const uploadButtons = await screen.findAllByRole('button', { name: 'Upload File' });
     const uploadButton = uploadButtons[uploadButtons.length - 1];
     expect(uploadButton).toBeDisabled();
+    expect(
+      screen.getByText('Choose a subject and grade partition first.'),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Subject filter'), { target: { value: 'science' } });
     fireEvent.change(screen.getByLabelText('Grade filter'), { target: { value: '7' } });

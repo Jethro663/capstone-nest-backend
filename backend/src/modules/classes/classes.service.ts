@@ -126,6 +126,25 @@ export class ClassesService {
     return this.databaseService.db;
   }
 
+  private assertRequiredClassSetup(params: {
+    room?: string | null;
+    schedules?: ScheduleSlotDto[];
+    requireSchedules?: boolean;
+  }) {
+    if (params.room !== undefined && !String(params.room ?? '').trim()) {
+      throw new BadRequestException(
+        params.requireSchedules ? 'room is required' : 'room cannot be empty',
+      );
+    }
+
+    if (
+      (params.requireSchedules && !params.schedules?.length) ||
+      (params.schedules !== undefined && params.schedules.length === 0)
+    ) {
+      throw new BadRequestException('At least one schedule slot is required');
+    }
+  }
+
   private normalizeTemplateAssessmentType(type: unknown) {
     const normalized = typeof type === 'string' ? type.trim().toLowerCase() : '';
 
@@ -453,6 +472,11 @@ export class ClassesService {
     actorId?: string,
     actorRoles: string[] = [],
   ) {
+    this.assertRequiredClassSetup({
+      room: createClassDto.room,
+      schedules: createClassDto.schedules,
+      requireSchedules: true,
+    });
     const activeAcademicState =
       await this.academicStateService.getCurrentState();
     const effectiveSchoolYear =
@@ -532,7 +556,7 @@ export class ClassesService {
         sectionId: createClassDto.sectionId,
         teacherId: createClassDto.teacherId,
         schoolYear: effectiveSchoolYear,
-        room: createClassDto.room,
+        room: createClassDto.room.trim(),
         cardPreset: createClassDto.cardPreset ?? 'aurora',
         cardBannerUrl: createClassDto.cardBannerUrl ?? null,
       };
@@ -1069,6 +1093,10 @@ export class ClassesService {
   ) {
     // Verify class exists
     const existing = await this.findById(id);
+    this.assertRequiredClassSetup({
+      room: updateClassDto.room,
+      schedules: updateClassDto.schedules,
+    });
 
     // If updating subject fields, no external lookup required (denormalized fields)
     // We accept subjectName/subjectCode/subjectGradeLevel directly in the DTO.
@@ -1116,6 +1144,9 @@ export class ClassesService {
     // Ensure subjectCode is always stored uppercase (mirrors create() behaviour)
     if (updatePayload.subjectCode) {
       updatePayload.subjectCode = updatePayload.subjectCode.toUpperCase();
+    }
+    if (updatePayload.room !== undefined) {
+      updatePayload.room = updatePayload.room.trim();
     }
 
     await this.db.update(classes).set(updatePayload).where(eq(classes.id, id));

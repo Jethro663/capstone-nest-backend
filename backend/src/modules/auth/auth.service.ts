@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -136,7 +137,7 @@ export class AuthService {
     // 2. Verify old password
     const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Old password is incorrect');
+      throw new BadRequestException('Current password is incorrect');
     }
 
     // 3. Update to new password

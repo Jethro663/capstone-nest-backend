@@ -22,6 +22,10 @@ import {
 } from '@/components/shared/StudentMasterlistTable';
 
 const PAGE_SIZE = 20;
+const GRADE_OPTIONS = ['7', '8', '9', '10'].map((grade) => ({
+  value: grade,
+  label: `Grade ${grade}`,
+}));
 
 function toSortField(value: string | null): MasterlistSortField {
   if (
@@ -65,6 +69,7 @@ export default function AddSectionStudentsPage() {
   const sortBy = toSortField(searchParams.get('sortBy'));
   const sortDirection = toSortDirection(searchParams.get('sortDirection'));
   const assignedSectionId = searchParams.get('assignedSectionId') || '';
+  const gradeLevel = searchParams.get('gradeLevel') || '';
 
   const sectionFilterOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -120,6 +125,7 @@ export default function AddSectionStudentsPage() {
           sortBy,
           sortDirection,
           assignedSectionId: assignedSectionId || undefined,
+          gradeLevel: gradeLevel || undefined,
           prioritizeEligible: true,
           page,
           limit: PAGE_SIZE,
@@ -137,7 +143,7 @@ export default function AddSectionStudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [assignedSectionId, eligibility, page, router, search, sectionId, sortBy, sortDirection]);
+  }, [assignedSectionId, eligibility, gradeLevel, page, router, search, sectionId, sortBy, sortDirection]);
 
   useEffect(() => {
     fetchData();
@@ -251,6 +257,9 @@ export default function AddSectionStudentsPage() {
             onSearchChange={(value) => updateQuery({ search: value || null, page: 1 })}
             eligibility={eligibility}
             onEligibilityChange={(value) => updateQuery({ eligibility: value, page: 1 })}
+            gradeFilter={gradeLevel}
+            onGradeFilterChange={(value) => updateQuery({ gradeLevel: value || null, page: 1 })}
+            gradeOptions={GRADE_OPTIONS}
             sectionFilter={assignedSectionId}
             onSectionFilterChange={(value) => updateQuery({ assignedSectionId: value || null, page: 1 })}
             sectionOptions={sectionFilterOptions}

@@ -102,10 +102,14 @@ export default function AdminClassDetailPage() {
 
   const handleSaveMeta = async () => {
     if (!classItem) return;
+    if (!roomDraft.trim()) {
+      toast.error('Room is required');
+      return;
+    }
     try {
       setSavingMeta(true);
       await classService.update(classItem.id, {
-        room: roomDraft.trim() || undefined,
+        room: roomDraft.trim(),
         schoolYear: schoolYearDraft.trim() || classItem.schoolYear,
       });
       toast.success('Class meta updated');

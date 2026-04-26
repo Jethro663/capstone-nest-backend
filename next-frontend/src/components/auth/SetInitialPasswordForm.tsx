@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2, CheckCircle2, CircleDashed } from 'lucide-react';
 
 import {
+  passwordStrengthChecks,
   setActivationPasswordSchema,
   type SetActivationPasswordFormValues,
 } from '@/schemas/auth';
@@ -15,13 +16,6 @@ import { completeActivationPasswordAction } from '@/lib/auth-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-const strengthChecks = [
-  { label: '>= 8 chars', test: (v: string) => v.length >= 8 },
-  { label: 'Uppercase', test: (v: string) => /[A-Z]/.test(v) },
-  { label: 'Number', test: (v: string) => /[0-9]/.test(v) },
-  { label: 'Special', test: (v: string) => /[^A-Za-z0-9]/.test(v) },
-];
 
 export function SetInitialPasswordForm() {
   const router = useRouter();
@@ -105,7 +99,7 @@ export function SetInitialPasswordForm() {
         />
 
         <div className="flex flex-wrap gap-2 pt-1">
-          {strengthChecks.map(({ label, test }) => {
+          {passwordStrengthChecks.map(({ label, test }) => {
             const passed = test(newPassword ?? '');
             return (
               <span

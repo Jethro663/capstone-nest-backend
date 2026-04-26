@@ -8,19 +8,20 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  Bot,
+  ArrowLeft,
+  Check,
+  ChevronDown,
   CircleDot,
-  Flame,
+  LockKeyhole,
   Loader2,
+  Menu,
   MessageCircleQuestion,
-  Orbit,
   ShieldAlert,
   Sparkles,
   Swords,
-  Target,
-  Trophy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getMotionProps } from "@/components/student/student-motion";
@@ -38,6 +39,18 @@ import type {
 import { cn } from "@/utils/cn";
 
 type AnswerState = Record<string, string[]>;
+type JaEntry = "sidebar" | "class" | "lxp" | "lesson" | "assessment";
+type JaActivityFilter = "all" | JaMode;
+
+interface JaActivityItem {
+  id: string;
+  mode: JaMode;
+  title: string;
+  subtitle: string;
+  classLabel: string;
+  status: string;
+  updatedAt: string;
+}
 
 const MODE_ORDER: JaMode[] = ["practice", "ask", "review"];
 
@@ -95,7 +108,7 @@ function getSessionSubtitle(session: {
   questionCount: number;
 }) {
   const answered = Math.min(session.currentIndex, session.questionCount);
-  return `${session.status.toUpperCase()} · ${answered}/${session.questionCount}`;
+  return `${session.status.toUpperCase()} - ${answered}/${session.questionCount}`;
 }
 
 function clampProgress(value: number) {
@@ -103,16 +116,33 @@ function clampProgress(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
+function getBackLabel(entry?: JaEntry) {
+  if (entry === "class") return "Back to class";
+  if (entry === "lxp") return "Back to Learners Path";
+  if (entry === "lesson") return "Back to lesson";
+  if (entry === "assessment") return "Back to assessment";
+  return "Back";
+}
+
+function getActivityTimestamp(value?: string | null) {
+  const timestamp = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 interface StudentJaWorkspaceProps {
   className?: string;
   initialClassId?: string;
+  initialEntry?: JaEntry;
   initialMode?: JaMode;
+  returnTo?: string;
 }
 
 export default function StudentJaWorkspace({
   className,
   initialClassId,
+  initialEntry,
   initialMode,
+  returnTo,
 }: StudentJaWorkspaceProps) {
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = Boolean(prefersReducedMotion);
@@ -120,13 +150,29 @@ export default function StudentJaWorkspace({
     () => getMotionProps(reduceMotion),
     [reduceMotion],
   );
+  const conditionalSurfaceMotionProps = reduceMotion
+    ? {}
+    : {
+      initial: { opacity: 0, y: 10 },
+      animate: { opacity: 1, y: 0 },
+      transition: { duration: 0.22, ease: "easeOut" as const },
+      };
 
   const [hub, setHub] = useState<JaHubResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<JaMode>(
-    isJaMode(initialMode) ? initialMode : "practice",
+    isJaMode(initialMode) ? initialMode : "ask",
+  );
+  const [showHome, setShowHome] = useState(
+    !isJaMode(initialMode) && (!initialClassId || initialEntry === "sidebar"),
   );
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [classSelectorOpen, setClassSelectorOpen] = useState(
+    !(initialClassId && initialEntry && initialEntry !== "sidebar"),
+  );
+  const [classMenuOpen, setClassMenuOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [activityFilter, setActivityFilter] = useState<JaActivityFilter>("all");
 
   const [practiceSession, setPracticeSession] = useState<JaPracticeSessionResponse | null>(null);
   const [reviewSession, setReviewSession] = useState<JaPracticeSessionResponse | null>(null);
@@ -137,10 +183,8 @@ export default function StudentJaWorkspace({
   const [askMessages, setAskMessages] = useState<JaAskMessage[]>([]);
   const [askInput, setAskInput] = useState("");
   const [showGuardrailModal, setShowGuardrailModal] = useState(false);
-  const [xpPulse, setXpPulse] = useState(false);
-
   const askTailRef = useRef<HTMLDivElement | null>(null);
-  const xpRef = useRef(0);
+  const classMenuRef = useRef<HTMLDivElement | null>(null);
 
   const refreshHub = useCallback(
     async (classId?: string) => {
@@ -171,24 +215,13 @@ export default function StudentJaWorkspace({
   useEffect(() => {
     if (isJaMode(initialMode)) {
       setMode(initialMode);
+      setShowHome(false);
     }
   }, [initialMode]);
 
   useEffect(() => {
-    const currentXp = hub?.progress?.xpTotal ?? 0;
-    if (currentXp > xpRef.current) {
-      setXpPulse(true);
-      const timeout = setTimeout(() => setXpPulse(false), 1200);
-      xpRef.current = currentXp;
-      return () => clearTimeout(timeout);
-    }
-    xpRef.current = currentXp;
-    return undefined;
-  }, [hub?.progress?.xpTotal]);
-
-  useEffect(() => {
-    if (mode !== "ask") return;
-    askTailRef.current?.scrollIntoView({
+    if (mode !== "ask" || !askTailRef.current?.scrollIntoView) return;
+    askTailRef.current.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
       block: "end",
     });
@@ -205,6 +238,17 @@ export default function StudentJaWorkspace({
       }
     })();
   }, [askThreadId, mode]);
+
+  useEffect(() => {
+    if (!classMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!classMenuRef.current?.contains(event.target as Node)) {
+        setClassMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [classMenuOpen]);
 
   useEffect(() => {
     const activeSession = mode === "practice" ? practiceSession : reviewSession;
@@ -243,7 +287,6 @@ export default function StudentJaWorkspace({
       answeredCount === currentSession.session.questionCount,
   );
 
-  const masteryPercent = clampProgress(hub?.mastery?.percent ?? 0);
   const sessionProgressPercent = currentSession
     ? clampProgress(
         (answeredCount / Math.max(currentSession.session.questionCount, 1)) * 100,
@@ -262,6 +305,50 @@ export default function StudentJaWorkspace({
   const selectedClass = useMemo(
     () => hub?.classes.find((item) => item.id === selectedClassId) ?? null,
     [hub?.classes, selectedClassId],
+  );
+  const selectedClassLabel = selectedClass ? classLabel(selectedClass) : "Selected class";
+
+  const activityItems = useMemo<JaActivityItem[]>(() => {
+    if (!hub) return [];
+    const className = selectedClassLabel;
+    const askItems = hub.ask.threads.map((thread) => ({
+      id: thread.id,
+      mode: "ask" as const,
+      title: thread.title || "Ask thread",
+      subtitle: "Ask thread",
+      classLabel: className,
+      status: thread.status.toUpperCase(),
+      updatedAt: thread.lastMessageAt || thread.updatedAt,
+    }));
+    const practiceItems = hub.practice.sessions.map((session) => ({
+      id: session.id,
+      mode: "practice" as const,
+      title: "Practice Mission",
+      subtitle: getSessionSubtitle(session),
+      classLabel: className,
+      status: session.status.toUpperCase(),
+      updatedAt: session.completedAt || session.startedAt,
+    }));
+    const reviewItems = (hub.review.sessions ?? []).map((session) => ({
+      id: session.id,
+      mode: "review" as const,
+      title: "Assessment Replay",
+      subtitle: getSessionSubtitle(session),
+      classLabel: className,
+      status: session.status.toUpperCase(),
+      updatedAt: session.completedAt || session.startedAt,
+    }));
+    return [...askItems, ...practiceItems, ...reviewItems].sort(
+      (left, right) => getActivityTimestamp(right.updatedAt) - getActivityTimestamp(left.updatedAt),
+    );
+  }, [hub, selectedClassLabel]);
+
+  const filteredActivityItems = useMemo(
+    () =>
+      activityFilter === "all"
+        ? activityItems
+        : activityItems.filter((item) => item.mode === activityFilter),
+    [activityFilter, activityItems],
   );
 
   const loadSession = async (sessionId: string, targetMode: JaMode) => {
@@ -291,6 +378,22 @@ export default function StudentJaWorkspace({
     }
   };
 
+  const selectMode = (nextMode: JaMode) => {
+    setMode(nextMode);
+    setShowHome(false);
+    setActivityFilter(nextMode);
+  };
+
+  const selectActivity = (item: JaActivityItem) => {
+    setShowHome(false);
+    setMode(item.mode);
+    if (item.mode === "ask") {
+      setAskThreadId(item.id);
+      return;
+    }
+    void loadSession(item.id, item.mode);
+  };
+
   const startPractice = async () => {
     if (!hub || !selectedClassId) return;
     setBusy(true);
@@ -299,6 +402,7 @@ export default function StudentJaWorkspace({
       const res = await jaService.createSession({ classId: selectedClassId, recommendation });
       setPracticeSession(res.data);
       setMode("practice");
+      setShowHome(false);
       toast.success("Practice mission generated.");
       await refreshHub(selectedClassId);
     } catch (error: unknown) {
@@ -322,6 +426,7 @@ export default function StudentJaWorkspace({
       });
       setReviewSession(res.data);
       setMode("review");
+      setShowHome(false);
       await refreshHub(selectedClassId);
       toast.success("Review session started.");
     } catch {
@@ -430,162 +535,245 @@ export default function StudentJaWorkspace({
     );
   }
 
-  const currentModeMeta = MODE_META[mode];
+  const isContextualEntry = Boolean(initialClassId && initialEntry && initialEntry !== "sidebar");
 
   return (
-    <motion.div className={cn("ja-hub-layout", className)} {...motionProps.container}>
-      <motion.aside className="ja-mode-panel student-panel" {...motionProps.item}>
-        <div className="ja-mode-panel__head">
-          <p className="ja-eyebrow">JA Hub</p>
-          <h2>Choose your mode</h2>
-        </div>
-
-        <div className="ja-mode-grid" role="tablist" aria-label="JA study modes">
-          {MODE_ORDER.map((modeKey) => {
-            const details = MODE_META[modeKey];
-            const Icon = details.icon;
-            const isActive = mode === modeKey;
-            return (
-              <button
-                key={modeKey}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={cn("ja-mode-card", `mode-${modeKey}`, isActive && "active")}
-                onClick={() => setMode(modeKey)}
-              >
-                <span className="ja-mode-card__icon">
-                  <Icon />
-                </span>
-                <span className="ja-mode-card__copy">
-                  <strong>{details.title}</strong>
-                  <span>{details.subtitle}</span>
-                </span>
-                <span className="ja-mode-card__metric">
-                  {modeCount[modeKey]} {details.kicker}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="ja-saved-list" aria-live="polite">
-          {mode === "practice" ? (
-            <>
-              <p>Saved Practice Sessions</p>
-              {hub.practice.sessions.length === 0 ? (
-                <span className="ja-inline-empty">No saved practice runs yet.</span>
-              ) : (
-                hub.practice.sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    type="button"
-                    onClick={() => void loadSession(session.id, "practice")}
-                    className="ja-session-chip"
-                  >
-                    <strong>Practice Mission</strong>
-                    <span>{getSessionSubtitle(session)}</span>
-                  </button>
-                ))
-              )}
-            </>
-          ) : null}
-
-          {mode === "review" ? (
-            <>
-              <p>Saved Review Sessions</p>
-              {(hub.review.sessions?.length ?? 0) === 0 ? (
-                <span className="ja-inline-empty">No saved replay sessions yet.</span>
-              ) : (
-                hub.review.sessions?.map((session) => (
-                  <button
-                    key={session.id}
-                    type="button"
-                    onClick={() => void loadSession(session.id, "review")}
-                    className="ja-session-chip"
-                  >
-                    <strong>Assessment Replay</strong>
-                    <span>{getSessionSubtitle(session)}</span>
-                  </button>
-                ))
-              )}
-            </>
-          ) : null}
-
-          {mode === "ask" ? (
-            <>
-              <p>Recent Ask Threads</p>
-              {hub.ask.threads.length === 0 ? (
-                <span className="ja-inline-empty">No thread yet. Start a class-grounded question.</span>
-              ) : (
-                hub.ask.threads.map((thread) => (
-                  <button
-                    key={thread.id}
-                    type="button"
-                    onClick={() => setAskThreadId(thread.id)}
-                    className={cn(
-                      "ja-session-chip",
-                      askThreadId === thread.id && "is-selected",
-                    )}
-                  >
-                    <strong>{thread.title || "Ask thread"}</strong>
-                    <span>
-                      {thread.status.toUpperCase()} · Updated{" "}
-                      {new Date(thread.updatedAt).toLocaleDateString()}
-                    </span>
-                  </button>
-                ))
-              )}
-            </>
-          ) : null}
-        </div>
-      </motion.aside>
-
-      <motion.section className="ja-center-panel" {...motionProps.item}>
-        <header className="ja-center-head student-panel">
-          <div className="ja-head-title">
-            <span className="ja-head-bot" aria-hidden="true">
-              <Bot />
-            </span>
+    <motion.div
+      className={cn(
+        "ja-hub-layout",
+        mode === "ask" && "ask-mode",
+        !historyOpen && "history-hidden",
+        className,
+      )}
+      {...motionProps.container}
+    >
+      {historyOpen ? (
+        <motion.aside
+          className="ja-mode-panel student-panel"
+          {...conditionalSurfaceMotionProps}
+        >
+          <div className="ja-mode-panel__head">
+            <button
+              type="button"
+              className="ja-history-toggle"
+              aria-label="Hide activity history"
+              aria-expanded={historyOpen}
+              onClick={() => setHistoryOpen(false)}
+            >
+              <Menu className="h-4 w-4" />
+            </button>
             <div>
-              <p className="ja-eyebrow">{currentModeMeta.kicker}</p>
-              <strong>{currentModeMeta.title} in JA Hub</strong>
-              <span>{currentModeMeta.subtitle}</span>
+              <p className="ja-eyebrow">JA Hub</p>
+              <h2>Activity history</h2>
             </div>
           </div>
-          <label className="ja-class-picker" aria-label="Class selector">
-            <span>Class</span>
-            <select
-              value={selectedClassId}
-              onChange={(event) => void refreshHub(event.target.value)}
-            >
-              {hub.classes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {classLabel(item)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </header>
+          <button
+            type="button"
+            className="ja-change-mode"
+            onClick={() => setShowHome(true)}
+          >
+            Change mode
+          </button>
 
-        <div className="ja-context-banner student-panel">
-          <div>
-            <p className="ja-eyebrow">Current class</p>
-            <h3>{selectedClass ? classLabel(selectedClass) : "Class not selected"}</h3>
-            <p>
-              Use Practice for fresh drills, Ask for guided explanations, and Replay
-              to revisit weak answers from submitted assessments.
-            </p>
+          <div className="ja-mode-grid" role="tablist" aria-label="JA study modes">
+            {MODE_ORDER.map((modeKey) => {
+              const details = MODE_META[modeKey];
+              const Icon = details.icon;
+              const isActive = mode === modeKey;
+              return (
+                <button
+                  key={modeKey}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={cn("ja-mode-card", `mode-${modeKey}`, isActive && "active")}
+                  onClick={() => selectMode(modeKey)}
+                >
+                  <span className="ja-mode-card__icon">
+                    <Icon />
+                  </span>
+                  <span className="ja-mode-card__copy">
+                    <strong>{details.title}</strong>
+                    <span>{details.subtitle}</span>
+                  </span>
+                  <span className="ja-mode-card__metric">
+                    {modeCount[modeKey]} {details.kicker}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-          <div className="ja-context-banner__stats">
-            <span>{hub.review.eligibleAttempts.length} replay-ready attempt(s)</span>
-            <span>{hub.ask.threads.length} ask thread(s)</span>
-            <span>{hub.practice.recommendations.length} practice focus card(s)</span>
+
+          <div className="ja-activity-filters" aria-label="Activity filters">
+            {(["all", ...MODE_ORDER] as JaActivityFilter[]).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                data-active={activityFilter === filter}
+                onClick={() => setActivityFilter(filter)}
+              >
+                {filter === "all" ? "All" : MODE_META[filter].title}
+              </button>
+            ))}
+          </div>
+
+          <div className="ja-saved-list ja-activity-list" aria-live="polite">
+            {filteredActivityItems.length === 0 ? (
+              <span className="ja-inline-empty">No saved JA activity for this filter yet.</span>
+            ) : (
+              filteredActivityItems.map((item) => (
+                <button
+                  key={`${item.mode}-${item.id}`}
+                  type="button"
+                  onClick={() => selectActivity(item)}
+                  className={cn(
+                    "ja-session-chip",
+                    item.mode === mode && !showHome && "is-selected",
+                  )}
+                >
+                  <span className={cn("ja-activity-tag", `mode-${item.mode}`)}>
+                    {MODE_META[item.mode].title}
+                  </span>
+                  <strong>{item.title}</strong>
+                  <span>{item.classLabel}</span>
+                  <span>
+                    {item.status} - {new Date(item.updatedAt).toLocaleDateString()}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+        </motion.aside>
+      ) : null}
+
+      <motion.section className="ja-center-panel" {...motionProps.item}>
+        {!historyOpen ? (
+          <button
+            type="button"
+            className="ja-history-reopen"
+            aria-label="Show activity history"
+            aria-expanded={historyOpen}
+            onClick={() => setHistoryOpen(true)}
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+        ) : null}
+        <div className="ja-topbar">
+          <div className="ja-topbar__leading">
+            {classSelectorOpen ? (
+              <div className="ja-class-menu" ref={classMenuRef}>
+                <button
+                  type="button"
+                  className="ja-class-menu__trigger"
+                  aria-label="Class selector"
+                  aria-haspopup="listbox"
+                  aria-expanded={classMenuOpen}
+                  onClick={() => setClassMenuOpen((current) => !current)}
+                >
+                  <span>{selectedClassLabel}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                {classMenuOpen ? (
+                  <div className="ja-class-menu__popover" role="listbox" aria-label="Class options">
+                    {hub.classes.map((item) => {
+                      const isSelected = item.id === selectedClassId;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className="ja-class-menu__option"
+                          onClick={() => {
+                            setClassMenuOpen(false);
+                            void refreshHub(item.id);
+                          }}
+                        >
+                          <span>{classLabel(item)}</span>
+                          {isSelected ? <Check className="h-4 w-4" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <span className="ja-class-label-static">{selectedClassLabel}</span>
+            )}
+          </div>
+          <div className="ja-topbar__actions">
+            {returnTo ? (
+              <Link href={returnTo} className="ja-head-link">
+                <ArrowLeft className="h-4 w-4" />
+                {getBackLabel(initialEntry)}
+              </Link>
+            ) : null}
+            {!classSelectorOpen ? (
+              <>
+                <span className="ja-class-lock">
+                  <LockKeyhole className="h-4 w-4" />
+                  Class locked
+                </span>
+                {isContextualEntry ? (
+                  <button
+                    type="button"
+                    className="ja-head-link"
+                    onClick={() => setClassSelectorOpen(true)}
+                  >
+                    Change class
+                  </button>
+                ) : null}
+              </>
+            ) : null}
           </div>
         </div>
 
         <AnimatePresence mode="wait" initial={false}>
-          {mode === "ask" ? (
+          {showHome ? (
+            <motion.div
+              key="home-stage"
+              className="ja-home-shell student-panel"
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
+              exit={reduceMotion ? {} : { opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <div className="ja-home-copy">
+                <p className="ja-eyebrow">Start with a mode</p>
+                <h2>How do you want JA to help?</h2>
+                <p>
+                  Choose the kind of support first. JA will keep the selected class context
+                  and load the matching workspace.
+                </p>
+              </div>
+              <div className="ja-home-modes">
+                {MODE_ORDER.map((modeKey) => {
+                  const details = MODE_META[modeKey];
+                  const Icon = details.icon;
+                  return (
+                    <button
+                      key={modeKey}
+                      type="button"
+                      onClick={() => selectMode(modeKey)}
+                      className={cn("ja-mode-card", `mode-${modeKey}`)}
+                    >
+                      <span className="ja-mode-card__icon">
+                        <Icon />
+                      </span>
+                      <span className="ja-mode-card__copy">
+                        <strong>{details.title}</strong>
+                        <span>{details.subtitle}</span>
+                      </span>
+                      <span className="ja-mode-card__metric">
+                        {modeCount[modeKey]} {details.kicker}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          ) : mode === "ask" ? (
             <motion.div
               key="ask-stage"
               className="ja-thread-shell student-panel"
@@ -869,72 +1057,6 @@ export default function StudentJaWorkspace({
           )}
         </AnimatePresence>
       </motion.section>
-
-      <motion.aside className="ja-progress-panel student-panel" {...motionProps.item}>
-        <div className="ja-progress-head">
-          <p className="ja-eyebrow">Learning Progress</p>
-          <h2>This class snapshot</h2>
-        </div>
-
-        <div className={cn("ja-mastery-ring", xpPulse && "is-pulsing")}>
-          <div style={{ ["--ja-progress" as string]: `${masteryPercent}` }} />
-          <strong>{masteryPercent}%</strong>
-          <span>{hub.mastery?.label ?? "Mastery"}</span>
-        </div>
-
-        <div className="ja-stats" aria-live="polite">
-          <article>
-            <Target className="h-4 w-4" />
-            <div>
-              <strong>{hub.progress?.xpTotal ?? 0}</strong>
-              <span>Total XP</span>
-            </div>
-          </article>
-          <article>
-            <Flame className="h-4 w-4" />
-            <div>
-              <strong>{hub.progress?.streakDays ?? 0}</strong>
-              <span>Day Streak</span>
-            </div>
-          </article>
-          <article>
-            <Orbit className="h-4 w-4" />
-            <div>
-              <strong>{hub.progress?.sessionsCompleted ?? 0}</strong>
-              <span>Sessions Done</span>
-            </div>
-          </article>
-          <article>
-            <Trophy className="h-4 w-4" />
-            <div>
-              <strong>{hub.badges.filter((badge) => badge.unlocked).length}</strong>
-              <span>Badges Unlocked</span>
-            </div>
-          </article>
-        </div>
-
-        <div className="ja-badges">
-          {hub.badges.length === 0 ? (
-            <span className="ja-inline-empty">No badges yet. Keep practicing.</span>
-          ) : (
-            hub.badges.map((badge) => (
-              <div key={badge.id} className={badge.unlocked ? "badge unlocked" : "badge locked"}>
-                <strong>{badge.label}</strong>
-                <span>Level {badge.level}</span>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="ja-helper-list">
-          <p className="ja-eyebrow">Best use</p>
-          <ul>
-            <li>Start with Practice when you need a quick check before class.</li>
-            <li>Use Ask when a lesson explanation is still unclear.</li>
-            <li>Use Replay after an assessment to focus on weak answers only.</li>
-          </ul>
-        </div>
-      </motion.aside>
 
       {showGuardrailModal ? (
         <div className="ja-guardrail-modal">

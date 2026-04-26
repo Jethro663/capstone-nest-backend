@@ -1320,7 +1320,15 @@ export default function TeacherClassDetailPage() {
 
   const handleCreateAnnouncement = async () => {
     const safeContent = normalizeRichText(announcementContent).trim();
-    if (!announcementTitle.trim() || !safeContent || creatingAnnouncement) return;
+    if (creatingAnnouncement) return;
+    if (!announcementTitle.trim()) {
+      toast.error('Announcement title is required');
+      return;
+    }
+    if (!safeContent) {
+      toast.error('Announcement content is required');
+      return;
+    }
     try {
       setCreatingAnnouncement(true);
       await announcementService.create(classId, {
@@ -1379,7 +1387,15 @@ export default function TeacherClassDetailPage() {
 
   const handleCreateDiscussionThread = async (publishImmediately: boolean) => {
     const safeBody = normalizeRichText(discussionBody).trim();
-    if (!discussionTitle.trim() || !safeBody || creatingDiscussion) return;
+    if (creatingDiscussion) return;
+    if (!discussionTitle.trim()) {
+      toast.error('Discussion title is required');
+      return;
+    }
+    if (!safeBody) {
+      toast.error('Discussion prompt is required');
+      return;
+    }
 
     const commentLimit = Number.parseInt(discussionCommentLimit, 10);
     const parsedLinks = discussionLinksText
@@ -2076,7 +2092,11 @@ export default function TeacherClassDetailPage() {
                     type="button"
                     className="teacher-class-workspace__solid"
                     onClick={() => void handleCreateAnnouncement()}
-                    disabled={creatingAnnouncement}
+                    disabled={
+                      creatingAnnouncement ||
+                      !announcementTitle.trim() ||
+                      !normalizeRichText(announcementContent).trim()
+                    }
                   >
                     Post Announcement
                   </Button>
@@ -2212,7 +2232,11 @@ export default function TeacherClassDetailPage() {
                     type="button"
                     className="teacher-class-workspace__outline"
                     onClick={() => void handleCreateDiscussionThread(false)}
-                    disabled={creatingDiscussion}
+                    disabled={
+                      creatingDiscussion ||
+                      !discussionTitle.trim() ||
+                      !normalizeRichText(discussionBody).trim()
+                    }
                   >
                     Save Draft
                   </Button>
@@ -2220,7 +2244,11 @@ export default function TeacherClassDetailPage() {
                     type="button"
                     className="teacher-class-workspace__solid"
                     onClick={() => void handleCreateDiscussionThread(true)}
-                    disabled={creatingDiscussion}
+                    disabled={
+                      creatingDiscussion ||
+                      !discussionTitle.trim() ||
+                      !normalizeRichText(discussionBody).trim()
+                    }
                   >
                     Publish Thread
                   </Button>

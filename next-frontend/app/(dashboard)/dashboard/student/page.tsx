@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   CalendarClock,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -14,6 +12,8 @@ import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
+import { StudentCalendarCard } from '@/components/student/my-classes/StudentCalendarCard';
+import { StudentUpcomingEventsCard } from '@/components/student/my-classes/StudentUpcomingEventsCard';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentAnnouncementBoardDialog } from '@/components/student/StudentAnnouncementBoardDialog';
@@ -24,8 +24,6 @@ import type { Lesson } from '@/types/lesson';
 import type { SchoolEvent } from '@/types/school-event';
 import {
   buildCalendarDayIndex,
-  buildMonthCells,
-  formatMonthLabel,
   getCurrentSchoolYearReference,
   getMarkerKindsForDay,
   getUpcomingFeedItems,
@@ -35,6 +33,7 @@ import {
 } from '@/utils/calendar-feed';
 import { getStudentAssessmentHref } from '@/utils/student-assessment-routing';
 import { getTeacherName } from '@/utils/helpers';
+import { toDateKey, type StudentEventTag, type StudentUpcomingEvent } from '@/components/student/my-classes/types';
 
 const DAY_TO_INDEX: Record<string, number> = {
   SU: 0,
@@ -55,7 +54,6 @@ const DAY_TO_INDEX: Record<string, number> = {
 };
 
 const MARKER_ORDER = ['announcement', 'school_event', 'holiday_break'] as const;
-const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 function formatShortDate(value?: string) {
   if (!value) return 'No due date';
@@ -118,15 +116,37 @@ function getScheduleItemsForToday(classes: ClassItem[], now = new Date()) {
   return rows.sort((left, right) => left.startMinutes - right.startMinutes).slice(0, 4);
 }
 
-function getEventMarkerKinds(dayItems: CalendarFeedItem[]) {
-  return getMarkerKindsForDay(dayItems).filter((kind) => MARKER_ORDER.includes(kind as (typeof MARKER_ORDER)[number]));
+function toStudentEventTag(item: CalendarFeedItem): StudentEventTag | null {
+  if (item.kind === 'announcement') return 'announcement';
+  if (item.kind === 'school_event') return 'event';
+  if (item.kind === 'holiday_break') return 'holiday';
+  return null;
 }
 
-function getLocalDateKey(value: Date) {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function getDashboardCalendarHref(item: CalendarFeedItem) {
+  if (item.kind === 'announcement' && item.classId) {
+    return `/dashboard/student/classes/${item.classId}?view=announcements`;
+  }
+  return '/dashboard/student/announcements';
+}
+
+function toDashboardCalendarEvent(item: CalendarFeedItem): StudentUpcomingEvent | null {
+  const tag = toStudentEventTag(item);
+  if (!tag) return null;
+
+  const itemDate = new Date(item.startsAt);
+  return {
+    id: item.id,
+    classId: item.classId ?? 'all',
+    title: item.title,
+    subtitle: item.description ?? '',
+    tag,
+    href: getDashboardCalendarHref(item),
+    timestamp: itemDate.getTime(),
+    dateKey: toDateKey(itemDate),
+    dayLabel: String(itemDate.getDate()).padStart(2, '0'),
+    monthLabel: itemDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
+  };
 }
 
 export default function StudentDashboardPage() {
@@ -142,6 +162,7 @@ export default function StudentDashboardPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -266,16 +287,29 @@ export default function StudentDashboardPage() {
     [announcementsByClass, calendarMonth, classes, schoolEvents, selectedSchoolYear],
   );
   const calendarDayIndex = useMemo(() => buildCalendarDayIndex(calendarFeed), [calendarFeed]);
-  const monthCells = useMemo(() => buildMonthCells(calendarMonth), [calendarMonth]);
-  const monthLabel = useMemo(() => formatMonthLabel(calendarMonth), [calendarMonth]);
-  const todayDateKey = useMemo(() => getLocalDateKey(new Date()), []);
-  const upcomingNotices = useMemo(
+  const dashboardCalendarEvents = useMemo(
     () =>
       getUpcomingFeedItems(calendarFeed)
         .filter((item) => MARKER_ORDER.includes(item.kind as (typeof MARKER_ORDER)[number]))
-        .slice(0, 6),
+        .map(toDashboardCalendarEvent)
+        .filter((item): item is StudentUpcomingEvent => Boolean(item)),
     [calendarFeed],
   );
+  const eventTagsByDate = useMemo(() => {
+    const map = new Map<string, StudentEventTag[]>();
+
+    for (const [dateKey, dayItems] of Object.entries(calendarDayIndex)) {
+      const tags = getMarkerKindsForDay(dayItems)
+        .map((kind) => toStudentEventTag(dayItems.find((item) => item.kind === kind) ?? dayItems[0]))
+        .filter((tag): tag is StudentEventTag => Boolean(tag));
+
+      if (tags.length > 0) {
+        map.set(dateKey, Array.from(new Set(tags)));
+      }
+    }
+
+    return map;
+  }, [calendarDayIndex]);
 
   if (loading) {
     return (
@@ -394,73 +428,21 @@ export default function StudentDashboardPage() {
             </div>
           </section>
 
-          <section className="student-v2-rail-card">
-            <header className="student-v2-calendar__head">
-              <h3>Calendar</h3>
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setCalendarMonth((current) => shiftMonth(current, -1))}
-                  aria-label="Previous month"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCalendarMonth((current) => shiftMonth(current, 1))}
-                  aria-label="Next month"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </header>
-            <p className="student-v2-calendar__label">{monthLabel}</p>
-
-            <div className="student-v2-calendar__weekdays">
-              {WEEKDAY_LABELS.map((weekday, index) => (
-                <span key={`${weekday}-${index}`}>{weekday}</span>
-              ))}
-            </div>
-            <div className="student-v2-calendar__grid">
-              {monthCells.map((cell) => {
-                const dayItems = calendarDayIndex[cell.dateKey] || [];
-                const markerKinds = getEventMarkerKinds(dayItems);
-                const isToday = cell.dateKey === todayDateKey;
-                return (
-                  <div key={cell.dateKey} data-in-month={cell.inMonth} data-is-today={isToday} className="student-v2-calendar__cell">
-                    <span>{cell.date.getDate()}</span>
-                    <div className="student-v2-calendar__dots">
-                      {markerKinds.map((kind) => (
-                        <i key={`${cell.dateKey}-${kind}`} data-kind={kind} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="student-v2-upcoming">
-              <h4>Announcements & Events</h4>
-              {upcomingNotices.length > 0 ? (
-                <div className="student-v2-upcoming__list">
-                  {upcomingNotices.map((item) => (
-                    <article key={item.id} className="student-v2-upcoming__item">
-                      <div>
-                        <strong>{new Date(item.startsAt).getDate()}</strong>
-                        <span>{new Date(item.startsAt).toLocaleString('en-US', { month: 'short' }).toUpperCase()}</span>
-                      </div>
-                      <div>
-                        <p>{item.title}</p>
-                        <span>{item.kind.replace('_', ' ')}</span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className="student-v2-empty">No announcements or events this month.</p>
-              )}
-            </div>
-          </section>
+          <div className="space-y-4">
+            <StudentCalendarCard
+              month={calendarMonth}
+              selectedDateKey={selectedDateKey}
+              eventTagsByDate={eventTagsByDate}
+              onSelectDate={setSelectedDateKey}
+              onPrevMonth={() => setCalendarMonth((current) => shiftMonth(current, -1))}
+              onNextMonth={() => setCalendarMonth((current) => shiftMonth(current, 1))}
+            />
+            <StudentUpcomingEventsCard
+              events={dashboardCalendarEvents}
+              selectedDateKey={selectedDateKey}
+              seeAllHref="/dashboard/student/announcements"
+            />
+          </div>
         </aside>
       </div>
       </motion.div>

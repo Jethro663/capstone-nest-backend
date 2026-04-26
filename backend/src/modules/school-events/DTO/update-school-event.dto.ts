@@ -7,7 +7,9 @@ import {
   MaxLength,
   MinLength,
   Validate,
+  ValidateIf,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsValidSchoolYearConstraint } from '../../classes/DTO/validators';
 
@@ -39,8 +41,13 @@ export class UpdateSchoolEventDto {
   description?: string;
 
   @ApiPropertyOptional({ example: 'Main Campus Quadrangle' })
-  @IsOptional()
+  @ValidateIf(
+    (payload: UpdateSchoolEventDto) =>
+      payload.eventType === 'school_event' || payload.location !== undefined,
+  )
   @IsString()
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  @MinLength(1, { message: 'Location is required for school events' })
   @MaxLength(180)
   location?: string;
 

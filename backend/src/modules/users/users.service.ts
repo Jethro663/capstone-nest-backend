@@ -63,6 +63,55 @@ export class UsersService {
   private get db() {
     return this.databaseService.db;
   }
+
+  private getRoleNames(user: { roles?: Array<{ name?: string } | string> }) {
+    return (user.roles ?? [])
+      .map((role) => (typeof role === 'string' ? role : role?.name))
+      .filter((role): role is string => Boolean(role));
+  }
+
+  private assertRequiredStudentProfileFields(
+    dto: UpdateUserDto,
+    existingUser: { roles?: Array<{ name?: string } | string> },
+  ) {
+    const targetRole = dto.role ?? this.getRoleNames(existingUser)[0];
+    if (targetRole !== 'student') return;
+
+    const studentProfileKeys: Array<keyof UpdateUserDto> = [
+      'lrn',
+      'gradeLevel',
+      'dateOfBirth',
+      'dob',
+      'gender',
+      'phone',
+      'familyName',
+      'familyRelationship',
+      'familyContact',
+    ];
+    const isStudentProfileSave =
+      dto.role === 'student' ||
+      studentProfileKeys.some((key) => dto[key] !== undefined);
+
+    if (!isStudentProfileSave) return;
+
+    const requiredFields = [
+      { label: 'Date of birth', value: dto.dateOfBirth ?? dto.dob },
+      { label: 'Gender', value: dto.gender },
+      { label: 'Student contact number', value: dto.phone },
+      { label: 'Guardian name', value: dto.familyName },
+      { label: 'Relationship', value: dto.familyRelationship },
+      { label: 'Guardian contact number', value: dto.familyContact },
+    ];
+    const missing = requiredFields
+      .filter((field) => !String(field.value ?? '').trim())
+      .map((field) => field.label);
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Student profile fields are required: ${missing.join(', ')}`,
+      );
+    }
+  }
   // Search Users
 
   async findAll(filters?: {
@@ -452,6 +501,7 @@ export class UsersService {
         'Direct status updates are not allowed. Use lifecycle endpoints.',
       );
     }
+    this.assertRequiredStudentProfileFields(updateUserDto, existingUser);
 
     const updateData: Partial<typeof users.$inferInsert> = {};
     let shouldSendEmailVerification = false;
@@ -707,10 +757,21 @@ export class UsersService {
 
     const generatedPassword = PasswordGenerator.generate();
     await this.updatePassword(id, generatedPassword);
-    await this.mailService.sendPasswordEmail(
-      existingUser.email,
-      generatedPassword,
-    );
+    let emailDeliveryStatus: 'sent' | 'failed' = 'sent';
+    let emailDeliveryError: string | undefined;
+    try {
+      await this.mailService.sendPasswordEmail(
+        existingUser.email,
+        generatedPassword,
+      );
+    } catch (error) {
+      emailDeliveryStatus = 'failed';
+      emailDeliveryError =
+        error instanceof Error ? error.message : 'Email delivery failed';
+      this.logger.warn(
+        `[USER:PASSWORD_RESET_EMAIL_FAILED] actor=${adminId} target=${id} error=${emailDeliveryError}`,
+      );
+    }
 
     this.logger.log(
       `[USER:PASSWORD_RESET] actor=${adminId} target=${id} status=${existingUser.status}`,
@@ -723,13 +784,19 @@ export class UsersService {
       targetId: id,
       metadata: {
         previousStatus: existingUser.status,
+        emailDeliveryStatus,
       },
     });
 
     return {
-      message: 'Password reset successfully',
+      message:
+        emailDeliveryStatus === 'sent'
+          ? 'Password reset successfully'
+          : 'Password reset successfully, but email delivery failed',
       userId: id,
       generatedPassword,
+      emailDeliveryStatus,
+      ...(emailDeliveryError ? { emailDeliveryError } : {}),
     };
   }
 

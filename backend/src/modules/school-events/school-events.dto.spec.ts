@@ -20,6 +20,7 @@ describe('SchoolEvents DTOs', () => {
         eventType: 'school_event',
         schoolYear: '2026-2027',
         title: 'Foundation Day',
+        location: 'Quadrangle',
         startsAt: '2026-11-10T00:00:00.000Z',
         endsAt: '2026-11-10T23:59:59.999Z',
         allDay: true,
@@ -51,6 +52,30 @@ describe('SchoolEvents DTOs', () => {
 
       expect(errors.length).toBeGreaterThan(0);
     });
+
+    it('requires a location for school events', async () => {
+      const errors = await errorsFor(CreateSchoolEventDto, {
+        eventType: 'school_event',
+        schoolYear: '2026-2027',
+        title: 'Foundation Day',
+        startsAt: '2026-11-10T00:00:00.000Z',
+        endsAt: '2026-11-10T23:59:59.999Z',
+      });
+
+      expect(errors).toContain('Location is required for school events');
+    });
+
+    it('allows holiday and break events without a location', async () => {
+      const errors = await errorsFor(CreateSchoolEventDto, {
+        eventType: 'holiday_break',
+        schoolYear: '2026-2027',
+        title: 'Semestral Break',
+        startsAt: '2026-11-10T00:00:00.000Z',
+        endsAt: '2026-11-10T23:59:59.999Z',
+      });
+
+      expect(errors).toHaveLength(0);
+    });
   });
 
   describe('UpdateSchoolEventDto', () => {
@@ -64,6 +89,15 @@ describe('SchoolEvents DTOs', () => {
         eventType: 'announcement',
       });
       expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects switching to school event without a location', async () => {
+      const errors = await errorsFor(UpdateSchoolEventDto, {
+        eventType: 'school_event',
+        location: '',
+      });
+
+      expect(errors).toContain('Location is required for school events');
     });
   });
 

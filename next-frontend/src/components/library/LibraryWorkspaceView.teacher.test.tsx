@@ -141,4 +141,43 @@ describe('LibraryWorkspaceView teacher mode', () => {
 
     expect(screen.getByRole('button', { name: 'Upload File' })).toBeEnabled();
   });
+
+  it('limits class-specific upload choices to the selected subject and grade', () => {
+    const workspace = createWorkspace({
+      selectedUpload: new File(['pdf'], 'lesson.pdf', { type: 'application/pdf' }),
+      uploadDestination: 'class',
+      uploadSubjectKey: 'math',
+      uploadGradeLevel: '7',
+      classes: [
+        {
+          id: 'math-7',
+          subjectCode: 'MATH-7',
+          subjectName: 'Mathematics',
+          gradeLevel: '7',
+          section: { id: 'section-1', name: 'Section A', gradeLevel: '7' },
+        },
+        {
+          id: 'science-7',
+          subjectCode: 'SCI-7',
+          subjectName: 'Science',
+          gradeLevel: '7',
+          section: { id: 'section-2', name: 'Section B', gradeLevel: '7' },
+        },
+        {
+          id: 'math-8',
+          subjectCode: 'MATH-8',
+          subjectName: 'Mathematics',
+          gradeLevel: '8',
+          section: { id: 'section-3', name: 'Section C', gradeLevel: '8' },
+        },
+      ] as any,
+    });
+
+    render(<LibraryWorkspaceView variant="teacher" workspace={workspace} />);
+
+    const uploadClass = screen.getByLabelText('Upload class');
+    expect(uploadClass).toHaveTextContent('MATH-7 - Mathematics');
+    expect(uploadClass).not.toHaveTextContent('SCI-7 - Science');
+    expect(uploadClass).not.toHaveTextContent('MATH-8 - Mathematics');
+  });
 });

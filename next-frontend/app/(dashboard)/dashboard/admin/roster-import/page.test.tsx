@@ -54,14 +54,56 @@ describe('RosterImportPage', () => {
       success: true,
       data: {
         sectionMatch: {
-          id: 'section-1',
-          name: 'Grade 7 - Rizal',
-          gradeLevel: '7',
+          fileHeader: 'Grade 7 - Rizal',
+          foundSection: {
+            id: 'section-1',
+            name: 'Grade 7 - Rizal',
+            gradeLevel: '7',
+          },
         },
-        registered: [],
-        pending: [],
-        errors: [],
-        summary: { total: 0, registered: 0, pending: 0, errors: 0 },
+        registered: [
+          {
+            rowNumber: 2,
+            email: 'liam@nexora.edu',
+            name: {
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              middleInitial: null,
+            },
+            lrn: '202407000001',
+            userId: 'student-1',
+            alreadyEnrolled: false,
+            status: 'matched_existing_user',
+          },
+        ],
+        pending: [
+          {
+            rowNumber: 3,
+            email: 'mia@nexora.edu',
+            name: {
+              firstName: 'Mia',
+              lastName: 'Villanueva',
+              middleInitial: null,
+            },
+            lrn: '202407000002',
+            reason: 'No existing account matched this row',
+          },
+        ],
+        errors: [
+          {
+            rowNumber: 4,
+            email: 'broken@nexora.edu',
+            issues: ['LRN is required'],
+          },
+        ],
+        summary: {
+          totalDataRows: 3,
+          validRows: 2,
+          registeredCount: 1,
+          alreadyEnrolledCount: 0,
+          pendingCount: 1,
+          errorCount: 1,
+        },
       },
     } as PreviewResponse);
   });
@@ -80,6 +122,54 @@ describe('RosterImportPage', () => {
 
     await waitFor(() =>
       expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file),
+    );
+  });
+
+  it('renders backend preview rows and commits using the backend roster contract', async () => {
+    const { container } = render(<RosterImportPage />);
+
+    fireEvent.change(await screen.findByLabelText('Target Section'), {
+      target: { value: 'section-1' },
+    });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, {
+      target: { files: [new File(['csv-data'], 'roster.csv', { type: 'text/csv' })] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload & Preview' }));
+
+    expect(await screen.findByText('Liam Navarro')).toBeInTheDocument();
+    expect(screen.getByText('Mia Villanueva')).toBeInTheDocument();
+    expect(screen.getByText('LRN is required')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
+
+    await waitFor(() =>
+      expect(mockedRosterImportService.commit).toHaveBeenCalledWith('section-1', {
+        sectionId: 'section-1',
+        enrolledRows: [
+          {
+            userId: 'student-1',
+            name: {
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              middleInitial: null,
+            },
+            lrn: '202407000001',
+            email: 'liam@nexora.edu',
+          },
+        ],
+        pendingRows: [
+          {
+            name: {
+              firstName: 'Mia',
+              lastName: 'Villanueva',
+              middleInitial: null,
+            },
+            lrn: '202407000002',
+            email: 'mia@nexora.edu',
+          },
+        ],
+      }),
     );
   });
 });

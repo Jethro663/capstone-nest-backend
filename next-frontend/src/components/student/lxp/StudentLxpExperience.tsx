@@ -286,6 +286,8 @@ export default function StudentLxpExperience() {
       const mode = searchParams.get('mode');
       if (mode) params.set('mode', mode);
       if (classId) params.set('classId', classId);
+      params.set('entry', 'lxp');
+      params.set('returnTo', '/dashboard/student/lxp');
       router.replace(`/dashboard/student/ja${params.toString() ? `?${params.toString()}` : ''}`);
       return;
     }

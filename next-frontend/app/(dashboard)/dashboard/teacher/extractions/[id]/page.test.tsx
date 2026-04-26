@@ -181,6 +181,25 @@ describe('ExtractionReviewPage', () => {
     );
   });
 
+  it('keeps a Back action visible when extraction loading fails', async () => {
+    mockedExtractionService.getById.mockRejectedValue({
+      response: {
+        data: {
+          message: 'AI service is unavailable. Start the AI service and try again.',
+        },
+      },
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(
+      await screen.findByText('AI service is unavailable. Start the AI service and try again.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(backMock).toHaveBeenCalledTimes(1);
+  });
+
   it('stops polling and surfaces warning after repeated status failures', async () => {
     const outageMessage = 'AI extraction queue is temporarily unavailable. Please retry shortly.';
 

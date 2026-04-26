@@ -597,9 +597,13 @@ export default function TeacherAiDraftQuizPage() {
   const hasRunningJob = Boolean(
     displayJob && !isAiDraftTerminalStatus(displayJob.status),
   );
+  const readinessUnavailable = Boolean(
+    indexStatus?.reason?.includes('AI source readiness is temporarily unavailable'),
+  );
   const canGenerate =
     !submitting &&
     !hasRunningJob &&
+    !readinessUnavailable &&
     hasAnySource &&
     isQuestionCountValid &&
     (useAllSourcesWhenNoneSelected || hasManualSelection);
@@ -1265,6 +1269,8 @@ export default function TeacherAiDraftQuizPage() {
               <p className="teacher-ai-draft__hint">
                 {hasRunningJob
                   ? 'Wait for the current AI generation to finish before starting another draft.'
+                  : readinessUnavailable
+                    ? 'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.'
                   : hasAnySource
                     ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
                     : 'No source lessons or extractions are available for this class yet.'}

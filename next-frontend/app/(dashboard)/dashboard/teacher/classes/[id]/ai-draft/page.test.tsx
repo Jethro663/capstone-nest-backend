@@ -284,6 +284,32 @@ describe('TeacherAiDraftQuizPage', () => {
     expect(screen.getByText('Extraction is still processing.')).toBeInTheDocument();
   });
 
+  it('disables draft generation when AI source readiness is unavailable', async () => {
+    mockedAiService.getClassIndexStatus.mockRejectedValue({
+      response: {
+        data: {
+          message: 'AI service is unavailable. Start the AI service and try again.',
+        },
+      },
+    });
+
+    render(<TeacherAiDraftQuizPage />);
+
+    await screen.findByText('Choose the class sources');
+    await screen.findAllByText(
+      'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /continue to quiz setup/i }));
+
+    const generateButton = screen.getByRole('button', { name: /^generate draft$/i });
+    expect(generateButton).toBeDisabled();
+    expect(
+      screen.getAllByText(
+        'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.',
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('shows the reindexing state and refreshes readiness after reindex completes', async () => {
     const deferred = createDeferred<any>();
     mockedAiService.reindexClass.mockReturnValue(deferred.promise);

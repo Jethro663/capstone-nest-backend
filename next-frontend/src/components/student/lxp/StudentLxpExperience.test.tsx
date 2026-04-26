@@ -178,7 +178,7 @@ describe('StudentLxpExperience path list', () => {
 
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith(
-        '/dashboard/student/ja?mode=ask&classId=class-active',
+        '/dashboard/student/ja?mode=ask&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp',
       );
     });
   });

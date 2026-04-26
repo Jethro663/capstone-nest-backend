@@ -294,7 +294,8 @@
 }
 
 .teacher-class-workspace__modules-grid--compact {
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 20rem));
+  justify-content: flex-start;
 }
 
 .teacher-class-workspace__module-deadline-panel {
@@ -639,6 +640,24 @@
 
 .teacher-class-workspace__modules-grid--compact .teacher-class-workspace__module-card {
   align-items: flex-start;
+  min-height: 0;
+  padding: 0.72rem;
+}
+
+.teacher-class-workspace__modules-grid--compact .teacher-class-workspace__module-card h3 {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.teacher-class-workspace__modules-grid--compact .teacher-class-workspace__module-card p,
+.teacher-class-workspace__modules-grid--compact .teacher-class-workspace__module-card small {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.teacher-class-workspace__modules-grid--compact .teacher-class-workspace__assignment-actions,
+.teacher-class-workspace__modules-grid--compact .teacher-class-workspace__head-actions {
+  gap: 0.42rem;
 }
 
 .teacher-class-workspace__ghost-icon {

@@ -76,6 +76,14 @@ function toFormState(
   };
 }
 
+function sanitizeTeacherPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.startsWith('63')) {
+    return `0${digits.slice(2, 12)}`;
+  }
+  return digits.slice(0, 11);
+}
+
 const baselineCardClass =
   'mx-auto w-full max-w-[860px] rounded-[1.65rem] border border-[#d7deea] bg-white shadow-[0_14px_30px_-24px_rgba(15,23,42,0.38)]';
 const fieldClass =
@@ -160,7 +168,8 @@ export default function TeacherProfilePage() {
   );
 
   const handleFieldChange = (field: keyof TeacherProfileForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    const nextValue = field === 'phone' ? sanitizeTeacherPhoneInput(value) : value;
+    setForm((current) => ({ ...current, [field]: nextValue }));
   };
 
   const handleChooseAvatar = () => {
@@ -338,10 +347,13 @@ export default function TeacherProfilePage() {
               </ProfileField>
               <ProfileField label="Phone" icon={Phone}>
                 <Input
+                  aria-label="Phone"
                   className={fieldClass}
                   value={form.phone}
                   onChange={(event) => handleFieldChange('phone', event.target.value)}
                   placeholder="+63 912 345 6789"
+                  inputMode="tel"
+                  maxLength={11}
                 />
               </ProfileField>
               <ProfileField label="Address" icon={MapPin}>

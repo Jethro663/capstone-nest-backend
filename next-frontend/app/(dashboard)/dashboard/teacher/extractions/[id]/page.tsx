@@ -610,7 +610,18 @@ export default function ExtractionReviewPage() {
   if (loadError) {
     return (
       <TeacherPageShell badge="AI Extraction" title="Extraction Review" description="Review extracted content before apply.">
-        <TeacherEmptyState title="Extraction unavailable" description={loadError} action={<Button onClick={fetchExtraction}>Retry</Button>} />
+        <TeacherEmptyState
+          title="Extraction unavailable"
+          description={loadError}
+          action={(
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" onClick={() => router.back()}>
+                Back
+              </Button>
+              <Button onClick={fetchExtraction}>Retry</Button>
+            </div>
+          )}
+        />
       </TeacherPageShell>
     );
   }

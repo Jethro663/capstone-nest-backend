@@ -10834,6 +10834,24 @@ html[data-theme='dark'] {
   line-height: 1.25;
 }
 
+.rich-text-editor__canvas .ProseMirror h1,
+.rich-text-renderer h1 {
+  font-size: 1.5rem;
+  font-weight: 850;
+}
+
+.rich-text-editor__canvas .ProseMirror h2,
+.rich-text-renderer h2 {
+  font-size: 1.28rem;
+  font-weight: 800;
+}
+
+.rich-text-editor__canvas .ProseMirror h3,
+.rich-text-renderer h3 {
+  font-size: 1.12rem;
+  font-weight: 760;
+}
+
 /* Shared route/auth loading experience */
 .orbit-loader {
   position: relative;

@@ -82,7 +82,10 @@ describe('ReportsController', () => {
         actorId: 'teacher-1',
         action: 'reports.exported',
         targetType: 'report',
-        targetId: 'student-master-list',
+        targetId: '00000000-0000-0000-0000-000000000000',
+        metadata: expect.objectContaining({
+          reportKey: 'student-master-list',
+        }),
       }),
     );
     expect(response.setHeader).toHaveBeenCalledWith(
@@ -126,6 +129,7 @@ describe('ReportsController', () => {
     expect(mockAuditService.log).toHaveBeenCalledWith(
       expect.objectContaining({
         metadata: expect.objectContaining({
+          reportKey: 'system-usage',
           exportFormat: 'csv',
           filters: expect.objectContaining({
             classId: 'class-9',

@@ -67,7 +67,11 @@ export default function ClassRecordPage() {
     const fetchClasses = async () => {
       try {
         const response = await dashboardService.getTeacherClasses();
-        setClasses(response.data || []);
+        const nextClasses = response.data || [];
+        setClasses(nextClasses);
+        if (!preselectedClassId && !selectedClassId && nextClasses[0]?.id) {
+          setSelectedClassId(nextClasses[0].id);
+        }
       } catch {
         setClasses([]);
       } finally {
@@ -76,7 +80,7 @@ export default function ClassRecordPage() {
     };
 
     void fetchClasses();
-  }, []);
+  }, [preselectedClassId, selectedClassId]);
 
   if (loading) {
     return (

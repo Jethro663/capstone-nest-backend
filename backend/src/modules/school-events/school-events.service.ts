@@ -40,6 +40,15 @@ export class SchoolEventsService {
     }
   }
 
+  private assertSchoolEventLocation(
+    eventType: 'school_event' | 'holiday_break',
+    location?: string | null,
+  ) {
+    if (eventType === 'school_event' && !String(location ?? '').trim()) {
+      throw new BadRequestException('Location is required for school events');
+    }
+  }
+
   async findAll(query: QuerySchoolEventsDto) {
     const fromDate = query.from ? this.parseDate(query.from, 'from') : null;
     const toDate = query.to ? this.parseDate(query.to, 'to') : null;
@@ -65,6 +74,7 @@ export class SchoolEventsService {
     const startsAt = this.parseDate(dto.startsAt, 'startsAt');
     const endsAt = this.parseDate(dto.endsAt, 'endsAt');
     this.assertDateRange(startsAt, endsAt);
+    this.assertSchoolEventLocation(dto.eventType, dto.location);
 
     const [created] = await this.db
       .insert(schoolEvents)
@@ -112,6 +122,10 @@ export class SchoolEventsService {
       ? this.parseDate(dto.endsAt, 'endsAt')
       : existing.endsAt;
     this.assertDateRange(startsAt, endsAt);
+    this.assertSchoolEventLocation(
+      dto.eventType ?? existing.eventType,
+      dto.location !== undefined ? dto.location : existing.location,
+    );
 
     const updates: Partial<typeof schoolEvents.$inferInsert> = {
       updatedAt: new Date(),

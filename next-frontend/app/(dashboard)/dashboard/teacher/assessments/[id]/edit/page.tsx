@@ -1296,6 +1296,15 @@ export default function AssessmentEditorPage() {
           <Button
             type="button"
             variant="outline"
+            className="rounded-2xl border-[#ef233c]/35 text-[#b91c1c] hover:bg-[#fff1f2] hover:text-[#9f1239]"
+            onClick={() => setAdvancedOpen(true)}
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Advanced
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
             disabled={rubricDisabled}
             className={`rounded-2xl ${
               panelOpen && rightTab === 'rubric' ? 'border-slate-900 bg-slate-900 text-white' : ''

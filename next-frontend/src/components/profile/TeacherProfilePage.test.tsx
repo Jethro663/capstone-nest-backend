@@ -200,4 +200,23 @@ describe('TeacherProfilePage', () => {
     ).not.toBeInTheDocument();
     expect(mockedTeacherProfileService.update).not.toHaveBeenCalled();
   });
+
+  it('limits teacher phone typing to an 11-digit local mobile number', async () => {
+    mockedTeacherProfileService.getMine.mockResolvedValue({
+      success: true,
+      data: buildTeacherProfile({
+        phone: '',
+        contactNumber: '',
+      }),
+    } as GetMineResponse);
+
+    render(<TeacherProfilePage />);
+
+    const phoneInput = await screen.findByLabelText('Phone');
+    fireEvent.change(phoneInput, {
+      target: { value: '091712345678999' },
+    });
+
+    expect(phoneInput).toHaveValue('09171234567');
+  });
 });

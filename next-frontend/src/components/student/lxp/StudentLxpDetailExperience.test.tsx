@@ -162,7 +162,7 @@ describe('StudentLxpDetailExperience', () => {
     const jaLink = await screen.findByRole('link', { name: 'Open JA Hub' });
     expect(jaLink).toHaveAttribute(
       'href',
-      '/dashboard/student/ja?mode=review&classId=class-active',
+      '/dashboard/student/ja?mode=review&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active%3Ftab%3Dreplays',
     );
   });
 

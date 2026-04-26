@@ -179,7 +179,7 @@ export default function CreateClassPage() {
         sectionId: values.sectionId,
         teacherId: values.teacherId,
         schoolYear: values.schoolYear,
-        room: values.room || undefined,
+        room: values.room.trim(),
         templateId: validatedTemplateId,
         schedules: values.schedules,
       });

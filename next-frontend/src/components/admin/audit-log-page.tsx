@@ -83,6 +83,10 @@ function formatTimestamp(value: string): string {
   return `${year}-${month}-${day} ${hour}:${minute}`;
 }
 
+function formatIsoTimestamp(value: string): string {
+  return value.replace('T', ' ').slice(0, 16);
+}
+
 function rangeParams(range: DateRange): { dateFrom?: string; dateTo?: string } {
   if (range === 'all') return {};
 
@@ -176,6 +180,9 @@ export function AuditLogPage() {
         row.action,
         row.targetLabel,
         row.ipLabel,
+        formatTimestamp(row.createdAt),
+        formatIsoTimestamp(row.createdAt),
+        row.createdAt,
       ]
         .join(' ')
         .toLowerCase();

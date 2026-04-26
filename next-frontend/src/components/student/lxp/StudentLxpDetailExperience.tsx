@@ -125,7 +125,12 @@ function CheckpointCard({
   const lessonHref = checkpoint.lesson?.id
     ? `/dashboard/student/lessons/${encode(checkpoint.lesson.id)}`
     : null;
-  const jaHref = `/dashboard/student/ja?mode=review&classId=${encode(classId)}`;
+  const jaHref = `/dashboard/student/ja?${new URLSearchParams({
+    mode: 'review',
+    classId,
+    entry: 'lxp',
+    returnTo: `/dashboard/student/lxp/${classId}?tab=replays`,
+  }).toString()}`;
 
   return (
     <article

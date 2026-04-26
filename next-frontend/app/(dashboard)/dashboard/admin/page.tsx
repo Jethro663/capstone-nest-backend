@@ -186,6 +186,7 @@ function UserMixChart({
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +233,8 @@ export default function AdminDashboardPage() {
     const isInitialLoad = loading && !stats;
     if (isInitialLoad) {
       setLoading(true);
+    } else if (options?.force) {
+      setRefreshing(true);
     }
 
     setError(null);
@@ -259,6 +262,7 @@ export default function AdminDashboardPage() {
       setError('Dashboard services are temporarily unavailable.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [loading, stats]);
 
@@ -338,9 +342,10 @@ export default function AdminDashboardPage() {
           <Button
             className="rounded-[1rem] border-0 bg-[#364152] px-4 font-bold text-white shadow-none hover:bg-[#465164]"
             onClick={() => void fetchData({ force: true })}
+            disabled={refreshing}
           >
-            <RefreshCcw className="h-4 w-4" />
-            Refresh
+            <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing' : 'Refresh'}
           </Button>
         </div>
       )}

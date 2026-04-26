@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 import {
   Grid2X2,
   LayoutPanelTop,
-  RefreshCcw,
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -267,11 +266,6 @@ export default function TeacherSectionsPage() {
     });
   }, [sections, searchQuery]);
 
-  const totalStudents = useMemo(
-    () => filteredSections.reduce((sum, section) => sum + (section.studentCount ?? 0), 0),
-    [filteredSections],
-  );
-
   const sectionEvents = useMemo<SectionUpcomingEvent[]>(() => {
     const now = Date.now();
 
@@ -453,36 +447,6 @@ export default function TeacherSectionsPage() {
 
   return (
     <div className="space-y-5 bg-[#f5f3f8] p-1">
-      <header className="rounded-[1.6rem] border border-[#e1deea] bg-white px-5 py-6 shadow-[0_18px_32px_-28px_rgba(22,32,58,0.5)] sm:px-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-[2.8rem] font-semibold leading-[0.95] tracking-tight text-[#11192f]">My Classes</h1>
-            <p className="mt-3 max-w-2xl text-[1.03rem] text-[#576480]">
-              Manage your sections, open what needs attention next, and keep track of important class events.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <div className="rounded-2xl border border-[#ece8f2] bg-[#fbfafe] px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#75809b]">Visible sections</p>
-              <p className="text-2xl font-semibold leading-none text-[#11192f]">{filteredSections.length}</p>
-            </div>
-            <div className="rounded-2xl border border-[#f7ccd9] bg-[#fff1f6] px-3 py-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#a11a45]">Total students</p>
-              <p className="text-2xl font-semibold leading-none text-[#d81b50]">{totalStudents}</p>
-            </div>
-            <Button
-              type="button"
-              className="h-auto min-h-[3.2rem] rounded-2xl bg-[#d81b50] px-4 text-sm font-semibold text-white hover:bg-[#c51647]"
-              onClick={() => void fetchData()}
-            >
-              <RefreshCcw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
-
       <section className="rounded-[1.35rem] border border-[#e1deea] bg-white p-3.5 shadow-[0_18px_32px_-30px_rgba(22,32,58,0.5)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">

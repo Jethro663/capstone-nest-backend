@@ -148,6 +148,45 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
     return ['Library', ...folderTrail.map((folder) => folder.name)];
   }, [folderTrail]);
 
+  const filteredUploadClasses = useMemo(() => {
+    if (isAdmin || uploadDestination !== 'class') return classes;
+    return classes.filter((item) => {
+      const subject = LIBRARY_SUBJECTS.find((entry) => entry.key === uploadSubjectKey);
+      const normalizedSubjectCode = String(item.subjectCode ?? '').toLowerCase();
+      const normalizedSubjectName = String(item.subjectName ?? '').toLowerCase();
+      const subjectMatches = !uploadSubjectKey || (
+        normalizedSubjectCode.includes(uploadSubjectKey) ||
+        normalizedSubjectName.includes(uploadSubjectKey) ||
+        (subject ? normalizedSubjectName.includes(subject.label.toLowerCase()) : false)
+      );
+      const itemGrade = String(item.subjectGradeLevel ?? item.section?.gradeLevel ?? '').trim();
+      const gradeMatches = !uploadGradeLevel || itemGrade === uploadGradeLevel;
+      return subjectMatches && gradeMatches;
+    });
+  }, [classes, isAdmin, uploadDestination, uploadGradeLevel, uploadSubjectKey]);
+
+  const selectedUploadClassMatches =
+    uploadDestination !== 'class' ||
+    !uploadClassId ||
+    filteredUploadClasses.some((item) => item.id === uploadClassId);
+
+  const effectiveTeacherUploadDisabled =
+    teacherUploadDisabled || !selectedUploadClassMatches;
+
+  const classSpecificDisabledReason =
+    !isAdmin &&
+    uploadDestination === 'class' &&
+    uploadSubjectKey &&
+    uploadGradeLevel &&
+    filteredUploadClasses.length === 0
+      ? 'No class matches the selected subject and grade.'
+      : !isAdmin &&
+          uploadDestination === 'class' &&
+          uploadClassId &&
+          !selectedUploadClassMatches
+        ? 'Choose a class that matches the selected subject and grade.'
+        : null;
+
   const filterScopeLabel = isAdmin
     ? 'General Modules'
     : isTeacherGeneralMode
@@ -206,6 +245,12 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
               </Button>
             ) : null}
           </div>
+
+          {openUploadDisabledReason && !selectedUpload ? (
+            <p className="nexora-library__upload-warning text-right">
+              {openUploadDisabledReason}
+            </p>
+          ) : null}
 
           <input
             ref={fileInputRef}
@@ -336,8 +381,10 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
           <div className="nexora-library__upload-copy">
             <p className="nexora-library__upload-label">Ready to upload</p>
             <p className="nexora-library__upload-file">{selectedUpload.name}</p>
-            {uploadDisabledReason ? (
-              <p className="nexora-library__upload-warning">{uploadDisabledReason}</p>
+            {uploadDisabledReason || classSpecificDisabledReason ? (
+              <p className="nexora-library__upload-warning">
+                {uploadDisabledReason || classSpecificDisabledReason}
+              </p>
             ) : null}
           </div>
           {isTeacherPrivateMode ? (
@@ -406,7 +453,7 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
                     aria-label="Upload class"
                   >
                     <option value="">Select class</option>
-                    {classes.map((item) => (
+                    {filteredUploadClasses.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.subjectCode} - {item.subjectName}
                       </option>
@@ -421,7 +468,7 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
               type="button"
               className="nexora-library__button nexora-library__button--solid"
               onClick={() => void handleUpload()}
-              disabled={uploading || uploadDisabled || teacherUploadDisabled}
+              disabled={uploading || uploadDisabled || effectiveTeacherUploadDisabled}
             >
               <Upload className="h-4 w-4" />
               {uploading ? 'Uploading...' : 'Upload File'}

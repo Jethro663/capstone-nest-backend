@@ -147,4 +147,19 @@ describe('AdminChatbotPage', () => {
     expect(await screen.findByText(/system-usage-report/i)).toBeInTheDocument();
     expect(await screen.findByText(/last 7 days/i)).toBeInTheDocument();
   });
+
+  it('keeps the offline state intentional and does not load history when AI is unavailable', async () => {
+    mockedAdminChatbotService.getHealth.mockResolvedValueOnce({
+      online: false,
+      model: 'offline',
+    });
+
+    render(<AdminChatbotPage />);
+
+    expect(await screen.findByText('AI Offline')).toBeInTheDocument();
+    expect(
+      screen.getByText('Admin analytics is offline. History and new answers will resume once the AI service is available.'),
+    ).toBeInTheDocument();
+    expect(mockedAdminChatbotService.getHistory).not.toHaveBeenCalled();
+  });
 });

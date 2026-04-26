@@ -57,6 +57,10 @@ function roleDisplayName(roleName: string) {
   return roleName[0].toUpperCase() + roleName.slice(1);
 }
 
+const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
+const PERSON_NAME_ERROR =
+  'Names may only contain letters, spaces, hyphens, and apostrophes.';
+
 export function AdminProfilePage() {
   const { user, setUser } = useAuth();
   const [firstName, setFirstName] = useState('');
@@ -90,6 +94,10 @@ export function AdminProfilePage() {
   const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
       toast.error('First name and last name are required.');
+      return;
+    }
+    if (!PERSON_NAME_REGEX.test(firstName.trim()) || !PERSON_NAME_REGEX.test(lastName.trim())) {
+      toast.error(PERSON_NAME_ERROR);
       return;
     }
 

@@ -11,6 +11,7 @@ import {
 import { Transform } from 'class-transformer';
 
 const PH_MOBILE_REGEX = /^(?:\+63|0)9\d{9}$/;
+const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
 
 export class UpdateUserDto {
   @IsOptional()
@@ -36,6 +37,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @MaxLength(30)
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "First name may only contain letters, spaces, hyphens, and apostrophes",
+  })
   @Transform(({ value }: { value: string }) => value?.trim())
   firstName?: string;
 
@@ -48,6 +53,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @MaxLength(30)
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Last name may only contain letters, spaces, hyphens, and apostrophes",
+  })
   @Transform(({ value }: { value: string }) => value?.trim())
   lastName?: string;
 

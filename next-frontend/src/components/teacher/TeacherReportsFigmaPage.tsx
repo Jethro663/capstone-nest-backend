@@ -77,6 +77,7 @@ export function TeacherReportsFigmaPage() {
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
@@ -185,20 +186,25 @@ export function TeacherReportsFigmaPage() {
     fetchReports();
   }, [fetchReports]);
 
-  const handleExport = () => {
-    const params = new URLSearchParams();
-    if (selectedClassId) params.set('classId', selectedClassId);
-    if (dateFrom) params.set('dateFrom', dateFrom);
-    if (dateTo) params.set('dateTo', dateTo);
-    params.set('export', 'csv');
-
-    const endpointMap: Record<TeacherReportView, string> = {
-      studentMasterList: '/api/reports/student-master-list',
-      studentPerformance: '/api/reports/student-performance',
-      classRecord: '/api/reports/intervention-participation',
-    };
-
-    window.open(`${endpointMap[activeView]}?${params.toString()}`, '_blank', 'noopener,noreferrer');
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const tab = activeView === 'classRecord' ? 'interventionParticipation' : activeView;
+      const blob = await reportService.exportCsv(tab, reportQuery);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${activeView}-report.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success('CSV report downloaded');
+    } catch {
+      toast.error('Unable to export report');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loadingClasses) {
@@ -217,9 +223,14 @@ export function TeacherReportsFigmaPage() {
       title="Reports"
       description="Class and student performance analytics"
       actions={
-        <Button variant="teacher" className="rounded-xl px-4" onClick={handleExport}>
+        <Button
+          variant="teacher"
+          className="rounded-xl px-4"
+          onClick={() => void handleExport()}
+          disabled={exporting}
+        >
           <Download className="h-4 w-4" />
-          Export
+          {exporting ? 'Exporting...' : 'Export'}
         </Button>
       }
       stats={

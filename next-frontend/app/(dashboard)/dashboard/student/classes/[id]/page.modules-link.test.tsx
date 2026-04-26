@@ -152,6 +152,18 @@ describe('StudentClassDetailPage module links', () => {
     );
   });
 
+  it('does not render JA as an embedded class surface', async () => {
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByRole('link', { name: 'Open' })).toBeInTheDocument();
+    expect(screen.queryByText('Study support for this class')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Ask JA/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Practice with JA/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /^JA Hub$/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('supports module card and long-card view switch with persistence', async () => {
     render(<StudentClassDetailPage />);
 

@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Sidebar } from './Sidebar';
 
 const pushMock = jest.fn();
@@ -55,5 +55,23 @@ describe('Sidebar route warmup', () => {
     await waitFor(() => {
       expect(prefetchMock).not.toHaveBeenCalled();
     });
+  });
+
+  it('exposes JA Hub as a first-class student navigation item', () => {
+    usePathnameMock.mockReturnValue('/dashboard/student');
+    useAuthMock.mockReturnValue({
+      role: 'student',
+      user: {
+        firstName: 'Student',
+        lastName: 'User',
+        email: 'student@lms.local',
+      },
+    });
+
+    render(<Sidebar shellRole="student" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /JA Hub/i }));
+
+    expect(pushMock).toHaveBeenCalledWith('/dashboard/student/ja');
   });
 });

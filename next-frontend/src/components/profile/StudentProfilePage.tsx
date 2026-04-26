@@ -49,21 +49,21 @@ type StudentProfileForm = {
 };
 
 const FIELD_LIMITS = {
-  phone: 13,
+  phone: 11,
   address: 180,
   familyName: 80,
-  familyContact: 13,
+  familyContact: 11,
 } as const;
 
 const NAME_LIKE_REGEX = /^[a-zA-Z\s.'-]*$/;
 
 function sanitizePhoneInput(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  const hasPlusPrefix = trimmed.startsWith('+');
-  const body = trimmed.replace(/[^\d]/g, '');
-  const normalized = hasPlusPrefix ? `+${body}` : body;
-  return normalized.slice(0, FIELD_LIMITS.phone);
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('63')) {
+    return `0${digits.slice(2, 12)}`;
+  }
+  return digits.slice(0, FIELD_LIMITS.phone);
 }
 
 function sanitizeNameLikeInput(value: string, maxLength: number) {
@@ -99,11 +99,11 @@ function toFormState(user: ReturnType<typeof mergeUserWithStudentProfile>): Stud
     lrn: String(user?.lrn ?? ''),
     dateOfBirth: toDateInputValue(user?.dateOfBirth ?? user?.dob),
     gender: String(user?.gender ?? ''),
-    phone: String(user?.phone ?? ''),
+    phone: sanitizePhoneInput(String(user?.phone ?? '')),
     address: String(user?.address ?? ''),
     familyName: String(user?.familyName ?? ''),
     familyRelationship: String(user?.familyRelationship ?? ''),
-    familyContact: String(user?.familyContact ?? ''),
+    familyContact: sanitizePhoneInput(String(user?.familyContact ?? '')),
     gradeLevel: String(user?.gradeLevel ?? ''),
     profilePicture: String(user?.profilePicture ?? ''),
   };
@@ -438,7 +438,7 @@ export default function StudentProfilePage() {
                     value={form.phone}
                     onChange={(event) => handleFieldChange('phone', event.target.value)}
                     disabled={isLocked}
-                    placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                    placeholder="09XXXXXXXXX"
                     maxLength={FIELD_LIMITS.phone}
                     inputMode="tel"
                   />
@@ -490,7 +490,7 @@ export default function StudentProfilePage() {
                     value={form.familyContact}
                     onChange={(event) => handleFieldChange('familyContact', event.target.value)}
                     disabled={isLocked}
-                    placeholder="09XXXXXXXXX or +639XXXXXXXXX"
+                    placeholder="09XXXXXXXXX"
                     maxLength={FIELD_LIMITS.familyContact}
                     inputMode="tel"
                   />

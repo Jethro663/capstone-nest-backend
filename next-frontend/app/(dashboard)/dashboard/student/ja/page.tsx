@@ -6,14 +6,19 @@ interface StudentJaPageProps {
     | Promise<{
         mode?: string | string[];
         classId?: string | string[];
+        entry?: string | string[];
+        returnTo?: string | string[];
       }>
     | {
         mode?: string | string[];
         classId?: string | string[];
+        entry?: string | string[];
+        returnTo?: string | string[];
       };
 }
 
 type JaMode = 'practice' | 'ask' | 'review';
+type JaEntry = 'sidebar' | 'class' | 'lxp' | 'lesson' | 'assessment';
 
 function readSingle(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
@@ -26,6 +31,20 @@ function readMode(value: string | string[] | undefined): JaMode | undefined {
   return undefined;
 }
 
+function readEntry(value: string | string[] | undefined): JaEntry | undefined {
+  const entry = readSingle(value);
+  if (
+    entry === 'sidebar' ||
+    entry === 'class' ||
+    entry === 'lxp' ||
+    entry === 'lesson' ||
+    entry === 'assessment'
+  ) {
+    return entry;
+  }
+  return undefined;
+}
+
 export default async function StudentJaPage({
   searchParams,
 }: StudentJaPageProps) {
@@ -35,6 +54,8 @@ export default async function StudentJaPage({
     <StudentJaWorkspace
       initialMode={readMode(resolvedSearchParams?.mode)}
       initialClassId={readSingle(resolvedSearchParams?.classId)}
+      initialEntry={readEntry(resolvedSearchParams?.entry)}
+      returnTo={readSingle(resolvedSearchParams?.returnTo)}
     />
   );
 }

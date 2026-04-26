@@ -320,6 +320,8 @@ describe('ClassesService', () => {
       sectionId: SECTION_ID,
       teacherId: TEACHER_ID,
       schoolYear: SCHOOL_YEAR,
+      room: 'Room 101',
+      schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
     };
 
     const setupHappyPath = () => {
@@ -327,6 +329,7 @@ describe('ClassesService', () => {
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.select.mockReturnValue(makeSelectChain([]));
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
     };
 
@@ -336,7 +339,7 @@ describe('ClassesService', () => {
       const result = await service.create(dto as any);
 
       expect(result).toEqual(makeClass());
-      expect(mockDb.insert).toHaveBeenCalledTimes(1);
+      expect(mockDb.insert).toHaveBeenCalledTimes(2);
     });
 
     it('writes audit metadata when class is created by an admin actor', async () => {
@@ -355,7 +358,7 @@ describe('ClassesService', () => {
           teacherId: TEACHER_ID,
           schoolYear: SCHOOL_YEAR,
           activeQuarter: 'Q1',
-          hasSchedules: false,
+          hasSchedules: true,
           templateId: null,
         },
       });
@@ -429,9 +432,11 @@ describe('ClassesService', () => {
     it('copies template module teacherNotes, visibility, and locking into class modules', async () => {
       setupHappyPath();
       const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
+      const scheduleInsertChain = makeInsertChain([]);
       const moduleInsertChain = makeInsertChain([{ id: 'class-module-1' }]);
       mockDb.insert
         .mockImplementationOnce(() => classInsertChain)
+        .mockImplementationOnce(() => scheduleInsertChain)
         .mockImplementationOnce(() => moduleInsertChain);
 
       mockDb.query.classTemplates.findFirst.mockResolvedValue({
@@ -477,10 +482,12 @@ describe('ClassesService', () => {
     it('publishes template-derived lesson and assessment content on class creation', async () => {
       setupHappyPath();
       const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
+      const scheduleInsertChain = makeInsertChain([]);
       const assessmentInsertChain = makeInsertChain([{ id: 'assessment-1' }]);
       const lessonInsertChain = makeInsertChain([{ id: 'lesson-1' }]);
       mockDb.insert
         .mockImplementationOnce(() => classInsertChain)
+        .mockImplementationOnce(() => scheduleInsertChain)
         .mockImplementationOnce(() => assessmentInsertChain)
         .mockImplementationOnce(() => lessonInsertChain);
 
@@ -535,9 +542,11 @@ describe('ClassesService', () => {
     it('normalizes template assessment type "activity" to class assessment type "assignment"', async () => {
       setupHappyPath();
       const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
+      const scheduleInsertChain = makeInsertChain([]);
       const assessmentInsertChain = makeInsertChain([{ id: 'assessment-1' }]);
       mockDb.insert
         .mockImplementationOnce(() => classInsertChain)
+        .mockImplementationOnce(() => scheduleInsertChain)
         .mockImplementationOnce(() => assessmentInsertChain);
 
       mockDb.query.classTemplates.findFirst.mockResolvedValue({
@@ -607,6 +616,7 @@ describe('ClassesService', () => {
       );
       mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
+      mockDb.select.mockReturnValue(makeSelectChain([]));
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
 
       await expect(service.create(dto as any)).resolves.toBeDefined();
@@ -622,6 +632,19 @@ describe('ClassesService', () => {
       await expect(service.create(dto as any)).rejects.toThrow(
         ConflictException,
       );
+    });
+
+    it('rejects create payloads without room and schedule slots', async () => {
+      await expect(
+        service.create({
+          ...dto,
+          room: '',
+          schedules: [],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockDb.query.sections.findFirst).not.toHaveBeenCalled();
+      expect(mockDb.transaction).not.toHaveBeenCalled();
     });
   });
 
@@ -721,23 +744,21 @@ describe('ClassesService', () => {
       );
     });
 
-    it('does not run collision check or second insert when schedules is absent from the DTO', async () => {
+    it('rejects class creation when schedules are absent from the DTO', async () => {
       const dtoNoSlots = {
         subjectName: 'Science',
         subjectCode: 'SCI-7',
         sectionId: SECTION_ID,
         teacherId: TEACHER_ID,
         schoolYear: SCHOOL_YEAR,
+        room: 'Room 101',
       };
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
-      mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
-      mockDb.query.classes.findMany.mockResolvedValue([]);
-      mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.insert.mockReturnValue(makeInsertChain([{ id: CLASS_ID }]));
 
-      await service.create(dtoNoSlots as any);
+      await expect(service.create(dtoNoSlots as any)).rejects.toThrow(
+        BadRequestException,
+      );
 
-      expect(mockDb.insert).toHaveBeenCalledTimes(1);
+      expect(mockDb.insert).not.toHaveBeenCalled();
       expect(mockDb.select).not.toHaveBeenCalled();
     });
   });
@@ -833,18 +854,30 @@ describe('ClassesService', () => {
       expect(mockDb.insert).toHaveBeenCalledTimes(1); // new slots inserted
     });
 
-    it('clears all schedule slots when dto.schedules is an empty array', async () => {
+    it('rejects empty schedule replacements', async () => {
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass())
         .mockResolvedValueOnce(makeClass());
       mockDb.update.mockReturnValue(makeUpdateChain());
       mockDb.delete.mockReturnValue(makeDeleteChain());
 
-      await service.update(CLASS_ID, { schedules: [] } as any);
+      await expect(
+        service.update(CLASS_ID, { schedules: [] } as any),
+      ).rejects.toThrow(BadRequestException);
 
-      expect(mockDb.delete).toHaveBeenCalledTimes(1); // existing slots deleted
-      expect(mockDb.insert).not.toHaveBeenCalled(); // nothing to insert
-      expect(mockDb.select).not.toHaveBeenCalled(); // no collision check for empty array
+      expect(mockDb.delete).not.toHaveBeenCalled();
+      expect(mockDb.insert).not.toHaveBeenCalled();
+      expect(mockDb.select).not.toHaveBeenCalled();
+    });
+
+    it('rejects empty room updates', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValueOnce(makeClass());
+
+      await expect(
+        service.update(CLASS_ID, { room: '' } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
 
     it('does not touch class_schedules when schedules is not in the update payload', async () => {

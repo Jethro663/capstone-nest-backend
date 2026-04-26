@@ -49,6 +49,7 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
   { label: "My Courses", href: "/dashboard/student/courses", icon: BookOpen },
+  { label: "JA Hub", href: "/dashboard/student/ja", icon: Bot },
   {
     label: "Learners Path",
     href: "/dashboard/student/lxp",

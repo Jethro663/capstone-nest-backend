@@ -35,4 +35,24 @@ describe('StudentJaPage', () => {
       initialClassId: 'class-123',
     });
   });
+
+  it('passes lightweight entry and return params into the workspace', async () => {
+    render(
+      await StudentJaPage({
+        searchParams: Promise.resolve({
+          mode: 'ask',
+          classId: 'class-123',
+          entry: 'class',
+          returnTo: '/dashboard/student/classes/class-123',
+        }),
+      }),
+    );
+
+    expect(studentJaWorkspaceProps.at(-1)).toMatchObject({
+      initialMode: 'ask',
+      initialClassId: 'class-123',
+      initialEntry: 'class',
+      returnTo: '/dashboard/student/classes/class-123',
+    });
+  });
 });

@@ -391,6 +391,7 @@ export class AuthController {
   @ApiOperation({ summary: "Change the authenticated user's password" })
   @ApiBody({ type: ChangePasswordDto })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 400, description: 'Current password is incorrect' })
   async changePassword(
     @CurrentUser() user: any,
     @Body() dto: ChangePasswordDto,

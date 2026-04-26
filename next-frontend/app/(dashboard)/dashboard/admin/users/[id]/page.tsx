@@ -52,6 +52,13 @@ const EMPTY_FORM: UserFormState = {
   familyContact: '',
 };
 
+const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
+const PH_MOBILE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+const PERSON_NAME_ERROR =
+  'Names may only contain letters, spaces, hyphens, and apostrophes.';
+const STUDENT_REQUIRED_ERROR =
+  'Date of birth, gender, student contact number, guardian name, relationship, and guardian contact are required for student accounts.';
+
 function toFormState(user: User): UserFormState {
   const role = getRoleName(user.roles?.[0]) || 'student';
   return {
@@ -85,6 +92,7 @@ export default function AdminUserDetailPage() {
   const [resetting, setResetting] = useState(false);
   const [showResetResult, setShowResetResult] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState('');
+  const [resetEmailWarning, setResetEmailWarning] = useState('');
 
   const role = useMemo(() => form.role, [form.role]);
   const isStudent = role === 'student';
@@ -125,9 +133,18 @@ export default function AdminUserDetailPage() {
       setResetting(true);
       const response = await userService.resetPassword(userId);
       setGeneratedPassword(response.generatedPassword);
+      setResetEmailWarning(
+        response.emailDeliveryStatus === 'failed'
+          ? response.emailDeliveryError || 'Password reset succeeded, but the email could not be delivered.'
+          : '',
+      );
       setShowResetConfirm(false);
       setShowResetResult(true);
-      toast.success('Password reset successfully');
+      if (response.emailDeliveryStatus === 'failed') {
+        toast.error('Password reset, but email delivery failed.');
+      } else {
+        toast.success('Password reset successfully');
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to reset password'));
     } finally {
@@ -150,6 +167,10 @@ export default function AdminUserDetailPage() {
       toast.error('First name, last name, and email are required');
       return;
     }
+    if (!PERSON_NAME_REGEX.test(form.firstName.trim()) || !PERSON_NAME_REGEX.test(form.lastName.trim())) {
+      toast.error(PERSON_NAME_ERROR);
+      return;
+    }
 
     if (isStudent) {
       if (!/^[0-9]{12}$/.test(form.lrn.trim())) {
@@ -158,6 +179,25 @@ export default function AdminUserDetailPage() {
       }
       if (!form.gradeLevel) {
         toast.error('Grade level is required for student accounts');
+        return;
+      }
+      if (
+        !form.dateOfBirth.trim() ||
+        !form.gender.trim() ||
+        !form.phone.trim() ||
+        !form.familyName.trim() ||
+        !form.familyRelationship.trim() ||
+        !form.familyContact.trim()
+      ) {
+        toast.error(STUDENT_REQUIRED_ERROR);
+        return;
+      }
+      if (!PH_MOBILE_REGEX.test(form.phone.trim())) {
+        toast.error('Student contact number must be a valid PH mobile number.');
+        return;
+      }
+      if (!PH_MOBILE_REGEX.test(form.familyContact.trim())) {
+        toast.error('Guardian contact must be a valid PH mobile number.');
         return;
       }
     }
@@ -280,7 +320,7 @@ export default function AdminUserDetailPage() {
         >
           <div className="admin-form-grid admin-form-grid--three">
             <Field label="LRN">
-              <Input value={form.lrn} onChange={(event) => setField('lrn', event.target.value)} placeholder="12-digit LRN" className="admin-input rounded-lg" />
+              <Input value={form.lrn} onChange={(event) => setField('lrn', event.target.value)} placeholder="12-digit LRN" inputMode="numeric" maxLength={12} className="admin-input rounded-lg" />
             </Field>
             <Field label="Grade Level">
               <select value={form.gradeLevel} onChange={(event) => setField('gradeLevel', event.target.value)} className="admin-select w-full rounded-lg text-sm font-semibold">
@@ -305,7 +345,7 @@ export default function AdminUserDetailPage() {
               </select>
             </Field>
             <Field label="Phone">
-              <Input value={form.phone} onChange={(event) => setField('phone', event.target.value)} className="admin-input rounded-lg" />
+              <Input value={form.phone} onChange={(event) => setField('phone', event.target.value)} inputMode="tel" maxLength={13} className="admin-input rounded-lg" />
             </Field>
           </div>
 
@@ -328,7 +368,7 @@ export default function AdminUserDetailPage() {
               </select>
             </Field>
             <Field label="Guardian Contact">
-              <Input value={form.familyContact} onChange={(event) => setField('familyContact', event.target.value)} className="admin-input rounded-lg" />
+              <Input value={form.familyContact} onChange={(event) => setField('familyContact', event.target.value)} inputMode="tel" maxLength={13} className="admin-input rounded-lg" />
             </Field>
           </div>
         </AdminSectionCard>
@@ -365,6 +405,7 @@ export default function AdminUserDetailPage() {
           setShowResetResult(open);
           if (!open) {
             setGeneratedPassword('');
+            setResetEmailWarning('');
           }
         }}
       >
@@ -378,6 +419,11 @@ export default function AdminUserDetailPage() {
           <div className="rounded-lg border border-[var(--admin-outline)] bg-slate-50 p-3">
             <p className="break-all font-mono text-sm">{generatedPassword}</p>
           </div>
+          {resetEmailWarning ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+              {resetEmailWarning}
+            </div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" className="admin-button-outline h-9 rounded-lg px-4 text-sm font-semibold" onClick={handleCopyPassword}>
               <Copy className="mr-2 h-4 w-4" />

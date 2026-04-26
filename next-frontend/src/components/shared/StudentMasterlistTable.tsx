@@ -155,8 +155,22 @@ export function StudentMasterlistTable({
         <Badge className="rounded-full bg-red-600 px-3 py-1 font-semibold text-white hover:bg-red-600">
           {selectedEligibleCount} selected
         </Badge>
-        <Button variant="outline" size="sm" onClick={onSelectAllEligible}>Select Eligible on Page</Button>
-        <Button variant="outline" size="sm" onClick={onClearSelection}>Clear Selection</Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full border-emerald-200 bg-emerald-50 px-3 font-black text-emerald-700 hover:bg-emerald-100"
+          onClick={onSelectAllEligible}
+        >
+          Select Eligible on Page
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full border-slate-200 bg-white px-3 font-black text-slate-600 hover:bg-slate-50"
+          onClick={onClearSelection}
+        >
+          Clear Selection
+        </Button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-[var(--teacher-outline)]">

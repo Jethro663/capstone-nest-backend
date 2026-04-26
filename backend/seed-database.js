@@ -298,6 +298,14 @@ const STUDENTS = [
     gradeLevel: '7',
   },
   {
+    email: 'student73@lms.local',
+    password: DEFAULT_STUDENT_PASSWORD,
+    firstName: 'Nico',
+    lastName: 'Salcedo',
+    gradeLevel: '7',
+    skipEnrollment: true,
+  },
+  {
     email: 'student81@lms.local',
     password: DEFAULT_STUDENT_PASSWORD,
     firstName: 'Noah',
@@ -556,15 +564,40 @@ async function seedDatabase() {
     for (const [index, student] of STUDENTS.entries()) {
       try {
         await client.query(
-          `INSERT INTO student_profiles (user_id, grade_level, lrn)
-           VALUES ($1, $2, $3)
+          `INSERT INTO student_profiles (
+             user_id,
+             grade_level,
+             lrn,
+             date_of_birth,
+             gender,
+             phone,
+             address,
+             family_name,
+             family_relationship,
+             family_contact
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            ON CONFLICT (user_id) DO UPDATE
            SET grade_level = EXCLUDED.grade_level,
-               lrn = EXCLUDED.lrn`,
+               lrn = EXCLUDED.lrn,
+               date_of_birth = EXCLUDED.date_of_birth,
+               gender = EXCLUDED.gender,
+               phone = EXCLUDED.phone,
+               address = EXCLUDED.address,
+               family_name = EXCLUDED.family_name,
+               family_relationship = EXCLUDED.family_relationship,
+               family_contact = EXCLUDED.family_contact`,
           [
             users[student.email],
             student.gradeLevel,
             buildLrn(student.gradeLevel, index + 1),
+            student.dateOfBirth || `${2011 - (Number(student.gradeLevel) - 7)}-06-15`,
+            student.gender || (index % 2 === 0 ? 'Male' : 'Female'),
+            student.phone || `0917${String(index + 1).padStart(7, '0')}`,
+            student.address || `${index + 10} Bonifacio Street, Taguig City`,
+            student.familyName || `${student.lastName} Guardian`,
+            student.familyRelationship || 'Guardian',
+            student.familyContact || `0927${String(index + 1).padStart(7, '0')}`,
           ],
         );
         log(`  - Student profile created (${student.email})`, 'success');
@@ -732,6 +765,10 @@ async function seedDatabase() {
 
     log('Creating student enrollments...');
     for (const student of STUDENTS) {
+      if (student.skipEnrollment) {
+        log(`  - ${student.email} left unassigned for section add demo`, 'info');
+        continue;
+      }
       const sectionId = sectionIdsByGrade[student.gradeLevel];
       const classIds = classesByGradeLevel[student.gradeLevel] || [];
 

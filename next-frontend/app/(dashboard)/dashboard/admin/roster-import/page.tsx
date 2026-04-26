@@ -5,10 +5,9 @@ import { FileUp, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   rosterImportService,
-  type CommitPendingRow,
-  type CommitStudentRow,
   type PendingImportRow,
   type RosterImportPreview,
+  type RosterParsedName,
 } from '@/services/roster-import-service';
 import { sectionService } from '@/services/section-service';
 import type { Section } from '@/types/section';
@@ -22,6 +21,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 function formatFileLabel(file: File | null): string {
   if (!file) return 'Drop your CSV/Excel file here';
   return `${file.name} (${Math.max(file.size / 1_048_576, 0.01).toFixed(2)} MB)`;
+}
+
+function formatRosterName(name: RosterParsedName): string {
+  return [name.firstName, name.middleInitial, name.lastName].filter(Boolean).join(' ');
+}
+
+function pendingRowName(row: PendingImportRow): string {
+  return [row.firstName, row.middleInitial, row.lastName].filter(Boolean).join(' ');
 }
 
 export default function RosterImportPage() {
@@ -85,20 +92,19 @@ export default function RosterImportPage() {
 
     try {
       setCommitting(true);
-      const registered: CommitStudentRow[] = preview.registered.map((row) => ({
-        userId: row.userId,
-        lrn: row.lrn,
-      }));
-      const pendingRows: CommitPendingRow[] = preview.pending.map((row) => ({
-        email: row.email,
-        firstName: row.firstName,
-        lastName: row.lastName,
-        lrn: row.lrn,
-      }));
-
       await rosterImportService.commit(sectionId, {
-        registered,
-        pending: pendingRows,
+        sectionId,
+        enrolledRows: preview.registered.map((row) => ({
+          userId: row.userId,
+          name: row.name,
+          lrn: row.lrn,
+          email: row.email,
+        })),
+        pendingRows: preview.pending.map((row) => ({
+          name: row.name,
+          lrn: row.lrn,
+          email: row.email,
+        })),
       });
       toast.success('Roster import committed.');
       setPreview(null);
@@ -188,18 +194,18 @@ export default function RosterImportPage() {
 
       {preview ? (
         <AdminSectionCard
-          title={`Preview — ${preview.sectionMatch.name} (Grade ${preview.sectionMatch.gradeLevel})`}
+          title={`Preview - ${preview.sectionMatch.foundSection.name} (Grade ${preview.sectionMatch.foundSection.gradeLevel})`}
           description="Review file parsing results before final commit."
           action={(
             <div className="admin-controls">
-              <Badge variant="default">{preview.summary.registered} registered</Badge>
-              <Badge variant="secondary">{preview.summary.pending} pending</Badge>
-              {preview.summary.errors > 0 ? <Badge variant="destructive">{preview.summary.errors} errors</Badge> : null}
+              <Badge variant="default">{preview.summary.registeredCount} registered</Badge>
+              <Badge variant="secondary">{preview.summary.pendingCount} pending</Badge>
+              {preview.summary.errorCount > 0 ? <Badge variant="destructive">{preview.summary.errorCount} errors</Badge> : null}
               <Button
                 size="sm"
                 className="admin-button-solid rounded-xl font-black"
                 onClick={handleCommit}
-                disabled={committing || preview.summary.registered + preview.summary.pending === 0}
+                disabled={committing || preview.summary.registeredCount + preview.summary.pendingCount === 0}
               >
                 {committing ? 'Committing...' : 'Commit Import'}
               </Button>
@@ -222,30 +228,32 @@ export default function RosterImportPage() {
                 {preview.registered.map((row) => (
                   <TableRow key={`registered-${row.rowNumber}`}>
                     <TableCell>{row.rowNumber}</TableCell>
-                    <TableCell>{row.firstName} {row.lastName}</TableCell>
+                    <TableCell>{formatRosterName(row.name)}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.lrn || '-'}</TableCell>
                     <TableCell><Badge variant="default">Registered</Badge></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{row.status}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {row.status || (row.alreadyEnrolled ? 'Already enrolled' : 'Matched existing user')}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {preview.pending.map((row) => (
                   <TableRow key={`pending-${row.rowNumber}`}>
                     <TableCell>{row.rowNumber}</TableCell>
-                    <TableCell>{row.firstName} {row.lastName}</TableCell>
+                    <TableCell>{formatRosterName(row.name)}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.lrn || '-'}</TableCell>
                     <TableCell><Badge variant="secondary">Pending</Badge></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{row.reason}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{row.reason || 'Pending account match'}</TableCell>
                   </TableRow>
                 ))}
                 {preview.errors.map((row) => (
                   <TableRow key={`error-${row.rowNumber}`} className="bg-rose-50/60">
                     <TableCell>{row.rowNumber}</TableCell>
-                    <TableCell colSpan={2}>{row.email || '-'}</TableCell>
+                    <TableCell colSpan={2}>{row.email || row.rawData?.join(' | ') || '-'}</TableCell>
                     <TableCell>-</TableCell>
                     <TableCell><Badge variant="destructive">Error</Badge></TableCell>
-                    <TableCell className="text-xs text-rose-600">{row.error}</TableCell>
+                    <TableCell className="text-xs text-rose-600">{row.issues.join(', ')}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -278,15 +286,15 @@ export default function RosterImportPage() {
                 <TableBody>
                   {pending.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell>{row.firstName} {row.lastName}</TableCell>
-                      <TableCell>{row.email}</TableCell>
+                      <TableCell>{pendingRowName(row)}</TableCell>
+                      <TableCell>{row.email || row.rosterEmail || '-'}</TableCell>
                       <TableCell>{row.lrn || '-'}</TableCell>
                       <TableCell>
-                        <Badge variant={row.status === 'resolved' ? 'default' : 'secondary'}>
-                          {row.status}
+                        <Badge variant={row.resolvedAt || row.status === 'resolved' ? 'default' : 'secondary'}>
+                          {row.status || (row.resolvedAt ? 'resolved' : 'pending')}
                         </Badge>
                       </TableCell>
-                      <TableCell>{new Date(row.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(row.createdAt || row.importedAt || Date.now()).toLocaleDateString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
