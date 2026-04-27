@@ -746,6 +746,44 @@ export default function TeacherClassDetailPage() {
     return assessments.filter((assessment) => deriveAssignmentFilter(assessment) === assignmentFilter);
   }, [assignmentFilter, assessments]);
 
+  const assessmentAttachmentMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        attached: boolean;
+        given: boolean;
+        visible: boolean;
+        moduleVisible: boolean;
+        moduleLocked: boolean;
+        gateOpen: boolean;
+      }
+    >();
+
+    for (const classModule of modules) {
+      for (const section of classModule.sections || []) {
+        for (const item of section.items || []) {
+          if (item.itemType !== 'assessment' || !item.assessmentId) continue;
+          const current = map.get(item.assessmentId);
+          const gateOpen =
+            Boolean(item.isGiven) &&
+            Boolean(item.isVisible) &&
+            Boolean(classModule.isVisible) &&
+            !classModule.isLocked;
+          map.set(item.assessmentId, {
+            attached: true,
+            given: Boolean(current?.given || item.isGiven),
+            visible: Boolean(current?.visible || item.isVisible),
+            moduleVisible: Boolean(current?.moduleVisible || classModule.isVisible),
+            moduleLocked: Boolean(current?.moduleLocked && classModule.isLocked),
+            gateOpen: Boolean(current?.gateOpen || gateOpen),
+          });
+        }
+      }
+    }
+
+    return map;
+  }, [modules]);
+
   const recentAiDraftJobs = useMemo(() => aiDraftJobs.slice(0, 6), [aiDraftJobs]);
   const activeAiDraftJobCount = useMemo(
     () => aiDraftJobs.filter((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus)).length,
@@ -1929,6 +1967,8 @@ export default function TeacherClassDetailPage() {
                 const filter = deriveAssignmentFilter(assessment);
                 const isSelected = selectedAssessmentIds.includes(assessment.id);
                 const isCoreAssessment = Boolean(assessment.isCoreTemplateAsset);
+                const attachmentState = assessmentAttachmentMap.get(assessment.id);
+                const moduleGateOpen = Boolean(attachmentState?.gateOpen);
                 return (
                   <article key={assessment.id} className="teacher-class-workspace__assignment-card" data-selected={isSelected}>
                     <div
@@ -1954,6 +1994,13 @@ export default function TeacherClassDetailPage() {
                               {assessment.isPublished ? 'Published' : 'Draft'}
                             </span>
                             {isCoreAssessment ? <span>Default</span> : null}
+                            <span>
+                              {attachmentState?.attached
+                                ? moduleGateOpen
+                                  ? 'Attached: module-visible'
+                                  : 'Attached: module-gated'
+                                : 'Standalone class assignment'}
+                            </span>
                           </div>
                           <h3>{assessment.title}</h3>
                           <p>
@@ -1964,14 +2011,19 @@ export default function TeacherClassDetailPage() {
                     </div>
                     <div className="teacher-class-workspace__assignment-actions">
                       {isCoreAssessment ? (
-                        <button
-                          type="button"
-                          className="teacher-class-workspace__outline"
-                          onClick={() => void toggleCoreAssessmentRelease(assessment)}
-                          disabled={busyAssessmentId === assessment.id}
-                        >
-                          {assessment.isPublished ? 'Hide Core' : 'Release Core'}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="teacher-class-workspace__outline"
+                            onClick={() => void toggleCoreAssessmentRelease(assessment)}
+                            disabled={busyAssessmentId === assessment.id}
+                          >
+                            {assessment.isPublished ? 'Hide Core' : 'Release Core'}
+                          </button>
+                          <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
+                            Edit
+                          </Link>
+                        </>
                       ) : (
                         <>
                           <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">

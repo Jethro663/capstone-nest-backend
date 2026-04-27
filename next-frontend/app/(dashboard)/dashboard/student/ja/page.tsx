@@ -51,11 +51,13 @@ export default async function StudentJaPage({
   const resolvedSearchParams = await searchParams;
 
   return (
-    <StudentJaWorkspace
-      initialMode={readMode(resolvedSearchParams?.mode)}
-      initialClassId={readSingle(resolvedSearchParams?.classId)}
-      initialEntry={readEntry(resolvedSearchParams?.entry)}
-      returnTo={readSingle(resolvedSearchParams?.returnTo)}
-    />
+    <div className="ja-page-shell">
+      <StudentJaWorkspace
+        initialMode={readMode(resolvedSearchParams?.mode)}
+        initialClassId={readSingle(resolvedSearchParams?.classId)}
+        initialEntry={readEntry(resolvedSearchParams?.entry)}
+        returnTo={readSingle(resolvedSearchParams?.returnTo)}
+      />
+    </div>
   );
 }

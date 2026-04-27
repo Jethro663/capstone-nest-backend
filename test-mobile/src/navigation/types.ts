@@ -3,10 +3,12 @@ export type {
   StudentSupportRouteName,
 } from "./student-route-manifest";
 
+export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "calendar";
+
 export type RootStackParamList = {
   MainTabs: undefined;
   ClassWorkspace: { classId: string };
-  ClassDetail: { classId: string };
+  ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab };
   ModuleDetail: { classId: string; moduleId: string };
   Courses: undefined;
   Lessons: undefined;

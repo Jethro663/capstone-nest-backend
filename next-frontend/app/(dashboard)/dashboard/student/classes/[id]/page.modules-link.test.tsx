@@ -152,6 +152,52 @@ describe('StudentClassDetailPage module links', () => {
     );
   });
 
+  it('renders manual and backend-gated copied template assignments returned by the API', async () => {
+    currentView = 'assignments';
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'manual-assessment-1',
+          classId: 'class-1',
+          title: 'Manual Essay',
+          type: 'assignment',
+          totalPoints: 20,
+          isPublished: true,
+          questions: [],
+        },
+        {
+          id: 'core-assessment-1',
+          classId: 'class-1',
+          title: 'Given Core Quiz',
+          type: 'quiz',
+          totalPoints: 10,
+          isPublished: true,
+          isCoreTemplateAsset: true,
+          questions: [],
+        },
+      ],
+      count: 2,
+      total: 2,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
+    mockedAssessmentService.getStudentAttempts.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+      count: 0,
+    } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('Manual Essay')).toBeInTheDocument();
+    expect(screen.getByText('Given Core Quiz')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Take' })).toHaveLength(2);
+  });
+
   it('does not render JA as an embedded class surface', async () => {
     render(<StudentClassDetailPage />);
 

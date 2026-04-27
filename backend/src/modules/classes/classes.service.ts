@@ -788,7 +788,7 @@ export class ClassesService {
           type: this.normalizeTemplateAssessmentType(templateAssessment.type),
           dueDate,
           totalPoints: templateAssessment.totalPoints ?? 0,
-          isPublished: templateAssetsPublished,
+          isPublished: false,
           randomizeQuestions: Boolean(settings.randomizeQuestions ?? false),
           closeWhenDue:
             settings.closeWhenDue === undefined
@@ -1032,6 +1032,51 @@ export class ClassesService {
             .returning();
           mappedLessonId = fallbackLesson.id;
           lessonIdMap.set(fallbackTemplateLesson.id, fallbackLesson.id);
+
+          const blocks =
+            blocksByTemplateLessonId.get(fallbackTemplateLesson.id) ?? [];
+          if (blocks.length > 0) {
+            await database.insert(lessonContentBlocks).values(
+              blocks.map((block: any, blockIndex: number) => {
+                const payload =
+                  block.payload && typeof block.payload === 'object'
+                    ? (block.payload as Record<string, unknown>)
+                    : {};
+                const rawContent = payload.content ?? '';
+                const rawMetadata = payload.metadata;
+                const nextMetadata =
+                  rawMetadata && typeof rawMetadata === 'object'
+                    ? { ...(rawMetadata as Record<string, unknown>) }
+                    : {};
+                const rawType =
+                  typeof block.blockType === 'string'
+                    ? block.blockType
+                    : 'text';
+                const normalizedType = allowedLessonContentTypes.has(rawType)
+                  ? rawType
+                  : 'text';
+
+                return {
+                  lessonId: fallbackLesson.id,
+                  type: normalizedType,
+                  order: block.order ?? blockIndex + 1,
+                  content:
+                    typeof rawContent === 'string' ||
+                    typeof rawContent === 'number'
+                      ? rawContent
+                      : JSON.parse(JSON.stringify(rawContent ?? '')),
+                  metadata: {
+                    ...nextMetadata,
+                    templateBlockType: rawType,
+                    templateBlockVersion:
+                      typeof block.blockVersion === 'number'
+                        ? block.blockVersion
+                        : 1,
+                  },
+                };
+              }),
+            );
+          }
         }
       }
 

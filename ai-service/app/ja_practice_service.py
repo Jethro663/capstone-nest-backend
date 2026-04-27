@@ -24,6 +24,24 @@ GUARDRAIL_PATTERNS = (
     r"admin password",
     r"system prompt",
 )
+HELPER_PROMPT_PATTERNS = (
+    r"\bhelp me\b",
+    r"\bcan you help\b",
+    r"\bsummar(y|ize)\b",
+    r"\bstudy plan\b",
+    r"\bwhat should i study next\b",
+    r"\breview\b",
+    r"\bvocab(ulary)?\b",
+    r"\bexplain\b",
+    r"\bclarify\b",
+    r"\bgive me a question\b",
+    r"\bquiz me\b",
+    r"\bunclear\b",
+    r"\bkey ideas?\b",
+    r"\bmain ideas?\b",
+    r"\bwhat should i review\b",
+    r"\bsuggest other lessons?\b",
+)
 
 
 async def bootstrap_ja_practice(
@@ -427,6 +445,24 @@ def _is_guardrail_prompt(text: str) -> bool:
     return any(re.search(pattern, normalized) for pattern in GUARDRAIL_PATTERNS)
 
 
+def _is_helper_prompt(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+    return any(re.search(pattern, normalized) for pattern in HELPER_PROMPT_PATTERNS)
+
+
+def _is_low_confidence_context_match(chunks: list[dict[str, Any]]) -> bool:
+    if not chunks:
+        return True
+    top_chunk = chunks[0]
+    distance = float(top_chunk.get("distance") or 99.0)
+    score_breakdown = top_chunk.get("scoreBreakdown") or {}
+    lexical_score = float(score_breakdown.get("lexical") or 0.0)
+    final_score = float(score_breakdown.get("final") or 0.0)
+    return distance > 1.2 and lexical_score < 0.5 and final_score < 3.2
+
+
 def _format_citation(chunk: dict[str, Any]) -> dict[str, Any]:
     metadata = chunk.get("metadataJson") or {}
     label = (
@@ -445,6 +481,114 @@ def _format_citation(chunk: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _stringify_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        preferred_keys = ["text", "question", "prompt", "body", "caption", "title"]
+        ordered_values = [str(content[key]).strip() for key in preferred_keys if content.get(key)]
+        if ordered_values:
+            return "\n".join(ordered_values)
+        return json.dumps(content, ensure_ascii=True)
+    if isinstance(content, list):
+        return "\n".join(_stringify_content(item) for item in content if item)
+    return str(content)
+
+
+def _chunk_fallback_text(text: str, *, max_chars: int = 1800) -> list[str]:
+    normalized = re.sub(r"\s+", " ", (text or "").strip())
+    if not normalized:
+        return []
+    return [
+        normalized[start : start + max_chars].strip()
+        for start in range(0, min(len(normalized), max_chars * 4), max_chars)
+        if normalized[start : start + max_chars].strip()
+    ]
+
+
+async def _fetch_selected_lesson_fallback_chunks(
+    db: AsyncSession,
+    *,
+    class_id: str,
+    lesson_id: str,
+) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        sa_text(
+            """
+            SELECT
+              l.id AS lesson_id,
+              l.title AS lesson_title,
+              b.id AS block_id,
+              b.type AS block_type,
+              b.content AS block_content,
+              b.metadata AS block_metadata
+            FROM lessons l
+            LEFT JOIN lesson_content_blocks b ON b.lesson_id = l.id
+            WHERE l.id = :lessonId
+              AND l.class_id = :classId
+            ORDER BY b."order" ASC, b.created_at ASC
+            """
+        ),
+        {
+            "lessonId": lesson_id,
+            "classId": class_id,
+        },
+    )
+    mappings = [dict(row) for row in rows.mappings()]
+    if not mappings:
+        return []
+
+    lesson_title = str(mappings[0].get("lesson_title") or "").strip() or "Selected lesson"
+    lesson_parts: list[str] = []
+    for row in mappings:
+        block_text = _stringify_content(row.get("block_content")).strip()
+        if block_text:
+            lesson_parts.append(block_text)
+            continue
+        metadata_text = _stringify_content(row.get("block_metadata")).strip()
+        if metadata_text and metadata_text != "{}":
+            lesson_parts.append(metadata_text)
+
+    if not lesson_parts:
+        return []
+
+    fallback_chunks: list[dict[str, Any]] = []
+    for idx, chunk_text in enumerate(_chunk_fallback_text("\n\n".join(lesson_parts))):
+        fallback_chunks.append(
+            {
+                "chunkText": chunk_text,
+                "lessonId": lesson_id,
+                "assessmentId": None,
+                "questionId": None,
+                "sourceType": "lesson_block",
+                "metadataJson": {
+                    "lessonTitle": lesson_title,
+                    "sourceReference": f"lesson:{lesson_id}:fallback:{idx}",
+                },
+                "distance": 0.05,
+                "scoreBreakdown": {"lexical": 1.0, "final": 5.0},
+            }
+        )
+    return fallback_chunks
+
+
+def _question_focus_text(question_content: Any, question_type: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", str(question_content or ""))
+    text = re.sub(r"\s+", " ", text).strip()
+    lower_text = text.lower()
+    if "∩" in text or "&cap;" in lower_text or "intersection" in lower_text:
+        return "the overlapping elements in the set statement"
+    if "∪" in text or "&cup;" in lower_text or "union" in lower_text:
+        return "every unique element in the set statement"
+    if question_type == "multiple_select":
+        return "each option independently before locking multiple answers"
+    if question_type == "true_false":
+        return "the exact claim before choosing true or false"
+    return "the key clue in the question statement"
+
+
 async def generate_ja_ask_response(
     db: AsyncSession,
     *,
@@ -453,6 +597,8 @@ async def generate_ja_ask_response(
     thread_id: str,
     message: str,
     quick_action: str | None,
+    lesson_id: str | None,
+    lesson_title: str | None,
     history: list[dict[str, str]] | None,
     allowed_lesson_ids: list[str] | None,
     allowed_assessment_ids: list[str] | None,
@@ -472,6 +618,9 @@ async def generate_ja_ask_response(
     assessment_ids = [entry for entry in (allowed_assessment_ids or []) if entry]
     if not lesson_ids and not assessment_ids:
         raise HTTPException(400, "No visible class evidence is available for JA Ask")
+    selected_lesson_id = lesson_id if lesson_id in lesson_ids else None
+    selected_lesson_title = (lesson_title or "").strip() or None
+    helper_prompt = _is_helper_prompt(message)
 
     query_seed = message.strip()
     if quick_action:
@@ -482,13 +631,64 @@ async def generate_ja_ask_response(
         query_text=query_seed,
         class_id=class_id,
         top_k=6,
-        lesson_ids=lesson_ids or None,
-        assessment_ids=assessment_ids or None,
+        lesson_ids=([selected_lesson_id] if selected_lesson_id else lesson_ids) or None,
+        assessment_ids=None if selected_lesson_id else assessment_ids or None,
         only_published=True,
         policy_name="student_tutor",
+        reference_lesson_id=selected_lesson_id,
     )
 
-    if len(chunks) < 2:
+    if selected_lesson_id and helper_prompt and len(chunks) < 1:
+        fallback_seed = selected_lesson_title or "current lesson overview"
+        if quick_action:
+            fallback_seed = f"{quick_action}: {fallback_seed}"
+        chunks = await similarity_search(
+            db,
+            query_text=fallback_seed,
+            class_id=class_id,
+            top_k=6,
+            lesson_ids=[selected_lesson_id],
+            assessment_ids=None,
+            only_published=True,
+            policy_name="student_tutor",
+            reference_lesson_id=selected_lesson_id,
+        )
+
+    if selected_lesson_id and helper_prompt and len(chunks) < 1:
+        chunks = await _fetch_selected_lesson_fallback_chunks(
+            db,
+            class_id=class_id,
+            lesson_id=selected_lesson_id,
+        )
+
+    if selected_lesson_id and not helper_prompt and _is_low_confidence_context_match(chunks):
+        lesson_label = selected_lesson_title or "the selected lesson"
+        return {
+            "blocked": True,
+            "reason": "lesson_context_mismatch",
+            "reply": f"That question looks outside {lesson_label}. Ask about this lesson or switch to a different lesson context first.",
+            "citations": [],
+            "insufficientEvidence": False,
+        }
+
+    if len(chunks) < 1:
+        if helper_prompt:
+            if selected_lesson_id:
+                lesson_label = selected_lesson_title or "the selected lesson"
+                return {
+                    "blocked": False,
+                    "reason": None,
+                    "reply": f"I could not find enough readable material for {lesson_label} yet. Try another visible lesson or ask your teacher to publish clearer lesson content first.",
+                    "citations": [],
+                    "insufficientEvidence": True,
+                }
+            return {
+                "blocked": False,
+                "reason": None,
+                "reply": "I can help with summaries, explanations, study plans, and review guidance. Pick one visible lesson context in JA Hub first so I can keep the help grounded to your class material.",
+                "citations": [],
+                "insufficientEvidence": False,
+            }
         return {
             "blocked": False,
             "reason": None,
@@ -513,6 +713,7 @@ async def generate_ja_ask_response(
         "- If evidence is thin, say so.\n"
         "- Keep answer under 180 words.\n\n"
         f"Thread: {thread_id}\n"
+        f"Selected lesson context: {selected_lesson_title or 'none'}\n"
         f"Student message: {message.strip()}\n"
         f"Quick action: {quick_action or 'none'}\n"
         f"Recent conversation:\n{history_context or 'n/a'}\n\n"
@@ -635,23 +836,24 @@ async def generate_ja_review_session_packet(
         if answer_key is None:
             continue
         is_correct = bool(row.get("is_correct"))
+        focus_text = _question_focus_text(row.get("question_content"), qtype)
         helper_intro = (
-            "You missed this before. Spot the clue you overlooked."
+            f"You missed this before. Recheck {focus_text}."
             if not is_correct
-            else "You got this before. Lock in the reasoning pattern."
+            else f"You got this before. Explain why {focus_text} points to your answer."
         )
         explanation = str(row.get("question_explanation") or "").strip()
         selected_items.append(
             {
                 "id": f"r-{len(selected_items) + 1}",
                 "itemType": qtype,
-                "prompt": f"{row['question_content']}\n\nJA Coach: {helper_intro}",
+                "prompt": str(row["question_content"]).strip(),
                 "options": [
                     {"id": opt["id"], "text": opt["text"], "order": opt["order"]}
                     for opt in options
                 ],
                 "answerKey": answer_key,
-                "hint": "Review the teacher item statement and eliminate one weak option first.",
+                "hint": helper_intro,
                 "explanation": explanation or helper_intro,
                 "citations": [
                     {

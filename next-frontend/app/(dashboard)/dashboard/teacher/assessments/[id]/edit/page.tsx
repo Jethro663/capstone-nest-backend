@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   BarChart3,
@@ -212,7 +212,10 @@ function stripTitleFromSerializedDraft(serializedDraft: string) {
 
 export default function AssessmentEditorPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const assessmentId = toParamValue(params.id);
+  const isReadOnlyMode =
+    searchParams.get('mode') === 'view' || searchParams.get('readonly') === '1';
   const initializedDraftRef = useRef(false);
   const lastSavedFingerprintRef = useRef<string | null>(null);
   const lastSavedTitleRef = useRef('');
@@ -298,7 +301,7 @@ export default function AssessmentEditorPage() {
       setQuestions(normalizedQuestions);
       setSelectedQuestionId(normalizedQuestions[0]?.id || null);
       setDeletedQuestionIds([]);
-      setPreviewEnabled(false);
+      setPreviewEnabled(isReadOnlyMode);
 
       setAvailability(data.isPublished ? 'given' : 'draft');
       setShowResultMode(data.feedbackLevel === 'immediate' ? 'immediate' : 'scheduled');
@@ -356,7 +359,7 @@ export default function AssessmentEditorPage() {
     } finally {
       setLoading(false);
     }
-  }, [assessmentId]);
+  }, [assessmentId, isReadOnlyMode]);
 
   useEffect(() => {
     void fetchAssessment();
@@ -510,8 +513,7 @@ export default function AssessmentEditorPage() {
 
   const autoSaveTitle = useCallback(
     async (nextTitle: string) => {
-      if (!assessment || !assessmentId || saving) return;
-      if (assessment.isCoreTemplateAsset) return;
+      if (!assessment || !assessmentId || saving || isReadOnlyMode) return;
       try {
         setSaveState('saving');
         await assessmentService.update(assessment.id, { title: nextTitle });
@@ -541,11 +543,19 @@ export default function AssessmentEditorPage() {
         toast.error('Unable to auto-save assessment title');
       }
     },
-    [assessment, assessmentId, saving],
+    [assessment, assessmentId, isReadOnlyMode, saving],
   );
 
   useEffect(() => {
-    if (!assessment || loading || saving || !initializedDraftRef.current) return;
+    if (
+      !assessment ||
+      loading ||
+      saving ||
+      isReadOnlyMode ||
+      !initializedDraftRef.current
+    ) {
+      return;
+    }
     const nextTitle = title.trim();
     const lastSavedTitle = lastSavedTitleRef.current.trim();
 
@@ -565,7 +575,7 @@ export default function AssessmentEditorPage() {
         titleAutosaveTimerRef.current = null;
       }
     };
-  }, [assessment, autoSaveTitle, loading, saving, title]);
+  }, [assessment, autoSaveTitle, isReadOnlyMode, loading, saving, title]);
 
   useEffect(() => {
     if (assessmentType !== 'file_upload' && rightTab === 'rubric') {
@@ -598,6 +608,7 @@ export default function AssessmentEditorPage() {
   }, [category, slotOverview]);
 
   const handleAddQuestion = (type: QuestionType, afterIndex: number | null = null) => {
+    if (isReadOnlyMode) return;
     if (assessmentType === 'file_upload') {
       toast.info('Switch to Question Assessment mode to add questions.');
       return;
@@ -615,11 +626,13 @@ export default function AssessmentEditorPage() {
   };
 
   const openQuestionTypeDialog = (afterIndex: number | null = null) => {
+    if (isReadOnlyMode) return;
     setInsertAfterQuestionIndex(afterIndex);
     setAddQuestionDialogOpen(true);
   };
 
   const handleQuestionDrop = (targetQuestionId: string) => {
+    if (isReadOnlyMode) return;
     const sourceQuestionId = draggingQuestionId;
     setDraggingQuestionId(null);
     setDropTargetQuestionId(null);
@@ -638,6 +651,7 @@ export default function AssessmentEditorPage() {
   };
 
   const handleDuplicateQuestion = (questionId: string) => {
+    if (isReadOnlyMode) return;
     setQuestions((current) => {
       const sourceIndex = current.findIndex((question) => question.id === questionId);
       if (sourceIndex === -1) return current;
@@ -650,6 +664,7 @@ export default function AssessmentEditorPage() {
   };
 
   const handleDeleteQuestion = (questionId: string) => {
+    if (isReadOnlyMode) return;
     setConfirmation({
       title: 'Delete question?',
       description: 'This question will be removed from the assessment.',
@@ -667,7 +682,7 @@ export default function AssessmentEditorPage() {
   };
 
   const syncQuestions = async () => {
-    if (!assessment) return;
+    if (!assessment || isReadOnlyMode) return;
 
     for (const questionId of deletedQuestionIds) {
       await assessmentService.deleteQuestion(questionId);
@@ -784,20 +799,17 @@ export default function AssessmentEditorPage() {
   };
 
   const handleSave = async () => {
-    if (!assessment || saving) return;
+    if (!assessment || saving || isReadOnlyMode) return;
     if (!title.trim()) {
       toast.error('Assessment title is required');
       return;
     }
-    const isCoreTemplateAssessment = Boolean(assessment.isCoreTemplateAsset);
-
-    if (!isCoreTemplateAssessment && assessmentType !== 'file_upload' && questions.length === 0) {
+    if (assessmentType !== 'file_upload' && questions.length === 0) {
       toast.error('Add at least one question');
       return;
     }
 
     if (
-      !isCoreTemplateAssessment &&
       assessmentType === 'file_upload' &&
       !fileUploadInstructions.trim()
     ) {
@@ -806,7 +818,6 @@ export default function AssessmentEditorPage() {
     }
 
     if (
-      !isCoreTemplateAssessment &&
       assessmentType === 'file_upload' &&
       allowedUploadExtensions.length === 0
     ) {
@@ -839,43 +850,39 @@ export default function AssessmentEditorPage() {
             : null,
       };
 
-      if (isCoreTemplateAssessment) {
-        await assessmentService.update(assessment.id, classRecordPlacementPayload);
-      } else {
-        await assessmentService.update(assessment.id, {
-          title: title.trim(),
-          description: description.trim() || undefined,
-          type: assessmentType,
-          passingScore,
-          maxAttempts,
-          timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : null,
-          dueDate: fromDateInputValue(dueDate),
-          closeWhenDue,
-          randomizeQuestions,
-          timedQuestionsEnabled,
-          questionTimeLimitSeconds:
-            timedQuestionsEnabled && questionTimeLimitSeconds
-              ? Number(questionTimeLimitSeconds)
-              : null,
-          strictMode,
-          feedbackLevel,
-          feedbackDelayHours: feedbackLevel === 'immediate' ? 0 : feedbackDelayHours,
-          ...classRecordPlacementPayload,
-          fileUploadInstructions:
-            assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
-          teacherAttachmentFileId:
-            assessmentType === 'file_upload' ? teacherAttachmentFile?.id ?? null : null,
-          allowedUploadExtensions:
-            assessmentType === 'file_upload' ? allowedUploadExtensions : undefined,
-          allowedUploadMimeTypes:
-            assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
-          maxUploadSizeBytes:
-            assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
-          isPublished: availability === 'given',
-        });
-      }
+      await assessmentService.update(assessment.id, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        type: assessmentType,
+        passingScore,
+        maxAttempts,
+        timeLimitMinutes: timeLimitMinutes ? Number(timeLimitMinutes) : null,
+        dueDate: fromDateInputValue(dueDate),
+        closeWhenDue,
+        randomizeQuestions,
+        timedQuestionsEnabled,
+        questionTimeLimitSeconds:
+          timedQuestionsEnabled && questionTimeLimitSeconds
+            ? Number(questionTimeLimitSeconds)
+            : null,
+        strictMode,
+        feedbackLevel,
+        feedbackDelayHours: feedbackLevel === 'immediate' ? 0 : feedbackDelayHours,
+        ...classRecordPlacementPayload,
+        fileUploadInstructions:
+          assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
+        teacherAttachmentFileId:
+          assessmentType === 'file_upload' ? teacherAttachmentFile?.id ?? null : null,
+        allowedUploadExtensions:
+          assessmentType === 'file_upload' ? allowedUploadExtensions : undefined,
+        allowedUploadMimeTypes:
+          assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
+        maxUploadSizeBytes:
+          assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
+        isPublished: availability === 'given',
+      });
 
-      if (!isCoreTemplateAssessment && assessmentType !== 'file_upload') {
+      if (assessmentType !== 'file_upload') {
         await syncQuestions();
       }
 
@@ -900,7 +907,7 @@ export default function AssessmentEditorPage() {
   };
 
   const handleSaveRubric = async () => {
-    if (!assessment) return;
+    if (!assessment || isReadOnlyMode) return;
     try {
       const normalized = rubricCriteria
         .map((criterion, index) => ({
@@ -1271,13 +1278,14 @@ export default function AssessmentEditorPage() {
             Back to assessments
           </Button>
           <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${saveStateMeta.className}`}>
-            {saveStateMeta.label}
+            {isReadOnlyMode ? 'View only' : saveStateMeta.label}
           </span>
           <Input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             className="h-12 min-w-[260px] flex-1 rounded-2xl border-slate-200 bg-slate-50 px-4 text-xl font-black"
             placeholder="Untitled assessment"
+            disabled={isReadOnlyMode}
           />
         </div>
 
@@ -1289,6 +1297,7 @@ export default function AssessmentEditorPage() {
               panelOpen && rightTab === 'settings' ? 'border-slate-900 bg-slate-900 text-white' : ''
             }`}
             onClick={() => openPanelTab('settings')}
+            disabled={isReadOnlyMode}
           >
             <Settings2 className="mr-2 h-4 w-4" />
             Settings
@@ -1298,6 +1307,7 @@ export default function AssessmentEditorPage() {
             variant="outline"
             className="rounded-2xl border-[#ef233c]/35 text-[#b91c1c] hover:bg-[#fff1f2] hover:text-[#9f1239]"
             onClick={() => setAdvancedOpen(true)}
+            disabled={isReadOnlyMode}
           >
             <Settings2 className="mr-2 h-4 w-4" />
             Advanced
@@ -1333,15 +1343,16 @@ export default function AssessmentEditorPage() {
             variant="outline"
             className="rounded-2xl"
             onClick={() => setPreviewEnabled((current) => !current)}
+            disabled={isReadOnlyMode}
           >
             <Eye className="mr-2 h-4 w-4" />
-            {previewEnabled ? 'Back to edit' : 'Preview'}
+            {isReadOnlyMode ? 'Read-only preview' : previewEnabled ? 'Back to edit' : 'Preview'}
           </Button>
           <Button
             type="button"
             className="rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
             onClick={() => void handleSave()}
-            disabled={saving}
+            disabled={saving || isReadOnlyMode}
           >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {!saving ? <Save className="mr-2 h-4 w-4" /> : null}
@@ -1351,7 +1362,7 @@ export default function AssessmentEditorPage() {
       </header>
 
       <main className="mt-5 space-y-4">
-        {assessmentType === 'file_upload' ? (
+        {assessmentType === 'file_upload' && !isReadOnlyMode ? (
           <article className="assessment-editor__card assessment-editor__file-mode">
             <div className="assessment-editor__file-mode-head">
               <h3>File Upload Assessment</h3>
@@ -1446,7 +1457,7 @@ export default function AssessmentEditorPage() {
               </div>
             ) : null}
           </article>
-        ) : previewEnabled ? (
+        ) : previewEnabled || isReadOnlyMode ? (
           <div className="space-y-4">
             {questions.length === 0 ? (
               <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center text-sm text-slate-500">
@@ -1489,6 +1500,7 @@ export default function AssessmentEditorPage() {
                     key={entry.type}
                     type="button"
                     onClick={() => handleAddQuestion(entry.type)}
+                    disabled={isReadOnlyMode}
                     className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50/70"
                   >
                     <span className="rounded-xl bg-white p-2 text-sky-700 shadow-sm">
@@ -1629,7 +1641,7 @@ export default function AssessmentEditorPage() {
         )}
       </main>
 
-      {assessmentType !== 'file_upload' && questions.length > 0 && !hideFloatingAdd ? (
+      {assessmentType !== 'file_upload' && questions.length > 0 && !hideFloatingAdd && !isReadOnlyMode ? (
         <Button
           type="button"
           onClick={() => openQuestionTypeDialog(null)}

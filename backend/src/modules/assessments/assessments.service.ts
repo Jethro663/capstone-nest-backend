@@ -20,6 +20,7 @@ import {
   classRecordCategories,
   classRecordItems,
   classes,
+  moduleItems,
   users,
   enrollments,
   uploadedFiles,
@@ -723,27 +724,100 @@ export class AssessmentsService {
     }
   }
 
-  private assertCoreTemplatePlacementOnly(
-    updateAssessmentDto: UpdateAssessmentDto,
-  ) {
-    const allowedFields = new Set([
-      'classRecordCategory',
-      'quarter',
-      'classRecordItemId',
-    ]);
-    const disallowedKeys = Object.keys(
-      updateAssessmentDto as Record<string, unknown>,
-    ).filter(
-      (key) =>
-        (updateAssessmentDto as Record<string, unknown>)[key] !== undefined &&
-        !allowedFields.has(key),
-    );
-
-    if (disallowedKeys.length > 0) {
-      throw new ForbiddenException(
-        'Core template assessments are immutable; only class record placement can be updated',
+  private async assertCoreAssessmentReadyForPublish(assessment: {
+    id: string;
+    classId: string;
+    classRecordCategory?: string | null;
+    quarter?: string | null;
+  }) {
+    if (!assessment.classRecordCategory || !assessment.quarter) {
+      throw new BadRequestException(
+        'Core assessments must be assigned to a class record category and quarter before publishing',
       );
     }
+
+    const expectedCategoryName = this.getClassRecordCategoryName(
+      assessment.classRecordCategory,
+    );
+    if (!expectedCategoryName) {
+      throw new BadRequestException(
+        'Core assessments must be assigned to a valid class record category before publishing',
+      );
+    }
+
+    const linkedItem = await this.db.query.classRecordItems.findFirst({
+      where: eq(classRecordItems.assessmentId, assessment.id),
+      with: {
+        classRecord: {
+          columns: {
+            id: true,
+            classId: true,
+            gradingPeriod: true,
+          },
+        },
+        category: {
+          columns: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !linkedItem ||
+      linkedItem.classRecord.classId !== assessment.classId ||
+      linkedItem.classRecord.gradingPeriod !== assessment.quarter ||
+      linkedItem.category.name !== expectedCategoryName
+    ) {
+      throw new BadRequestException(
+        'Core assessments must be placed in a class record slot before publishing',
+      );
+    }
+
+    await this.validateForPublish(assessment.id);
+  }
+
+  private async canStudentAccessAssessment(assessment: {
+    id: string;
+    classId: string;
+    isPublished?: boolean | null;
+    isCoreTemplateAsset?: boolean | null;
+  }) {
+    if (!assessment.isPublished) return false;
+    if (!assessment.isCoreTemplateAsset) return true;
+
+    const attachedItems = await this.db.query.moduleItems.findMany({
+      where: and(
+        eq(moduleItems.assessmentId, assessment.id),
+        eq(moduleItems.itemType, 'assessment'),
+      ),
+      with: {
+        section: {
+          with: {
+            module: {
+              columns: {
+                id: true,
+                classId: true,
+                isVisible: true,
+                isLocked: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return attachedItems.some((item: any) => {
+      const parentModule = item.section?.module;
+      return (
+        Boolean(item.isGiven) &&
+        Boolean(item.isVisible) &&
+        parentModule?.classId === assessment.classId &&
+        Boolean(parentModule.isVisible) &&
+        !parentModule.isLocked
+      );
+    });
   }
 
   private assertTeacherClassOwnership(
@@ -1047,9 +1121,13 @@ export class AssessmentsService {
     });
 
     if (currentUser && this.getUserRole(currentUser) === 'student') {
-      assessmentList = assessmentList.filter(
-        (assessment) => assessment.isPublished,
-      );
+      const visibleAssessments: typeof assessmentList = [];
+      for (const assessment of assessmentList) {
+        if (await this.canStudentAccessAssessment(assessment)) {
+          visibleAssessments.push(assessment);
+        }
+      }
+      assessmentList = visibleAssessments;
     }
 
     if (options?.studentId) {
@@ -1174,9 +1252,9 @@ export class AssessmentsService {
       );
       if (role === 'student') {
         await this.ensureStudentEnrolled(assessment.classId, userId);
-        if (!assessment.isPublished) {
+        if (!(await this.canStudentAccessAssessment(assessment))) {
           throw new ForbiddenException(
-            'Students cannot view unpublished assessments',
+            'Students cannot view unavailable assessments',
           );
         }
       }
@@ -1527,9 +1605,6 @@ export class AssessmentsService {
 
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
-    if (existingAssessment.isCoreTemplateAsset) {
-      this.assertCoreTemplatePlacementOnly(updateAssessmentDto);
-    }
     this.assertTeacherClassOwnership(
       existingAssessment.class?.teacherId,
       currentUser,
@@ -1543,7 +1618,9 @@ export class AssessmentsService {
       !existingAssessment.isCoreTemplateAsset ||
       updateAssessmentDto.classRecordCategory !== undefined ||
       updateAssessmentDto.quarter !== undefined ||
-      updateAssessmentDto.classRecordItemId !== undefined;
+      updateAssessmentDto.classRecordItemId !== undefined ||
+      updateAssessmentDto.title !== undefined ||
+      updateAssessmentDto.rubricCriteria !== undefined;
     const shouldRescheduleDueReminder =
       updateAssessmentDto.dueDate !== undefined ||
       updateAssessmentDto.isPublished !== undefined;
@@ -1570,17 +1647,22 @@ export class AssessmentsService {
 
     // Validate before publishing
     if (updateAssessmentDto.isPublished === true) {
-      await this.validateForPublish(assessmentId);
+      if (existingAssessment.isCoreTemplateAsset) {
+        await this.assertCoreAssessmentReadyForPublish({
+          id: assessmentId,
+          classId: existingAssessment.classId,
+          classRecordCategory:
+            updateAssessmentDto.classRecordCategory ??
+            existingAssessment.classRecordCategory,
+          quarter: updateAssessmentDto.quarter ?? existingAssessment.quarter,
+        });
+      } else {
+        await this.validateForPublish(assessmentId);
+      }
     }
 
     // Build update object with only provided fields
     const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (existingAssessment.isCoreTemplateAsset) {
-      if (updateAssessmentDto.classRecordCategory !== undefined)
-        updateData.classRecordCategory = updateAssessmentDto.classRecordCategory;
-      if (updateAssessmentDto.quarter !== undefined)
-        updateData.quarter = updateAssessmentDto.quarter;
-    } else {
       if (updateAssessmentDto.title !== undefined)
         updateData.title = updateAssessmentDto.title;
       if (updateAssessmentDto.description !== undefined)
@@ -1695,7 +1777,6 @@ export class AssessmentsService {
               : 100;
         }
       }
-    }
 
     const [updated] = await this.db
       .update(assessments)
@@ -1786,52 +1867,7 @@ export class AssessmentsService {
     }
 
     if (dto.isPublished) {
-      if (!assessment.classRecordCategory || !assessment.quarter) {
-        throw new BadRequestException(
-          'Core assessments must be assigned to a class record category and quarter before publishing',
-        );
-      }
-
-      const expectedCategoryName = this.getClassRecordCategoryName(
-        assessment.classRecordCategory,
-      );
-      if (!expectedCategoryName) {
-        throw new BadRequestException(
-          'Core assessments must be assigned to a valid class record category before publishing',
-        );
-      }
-
-      const linkedItem = await this.db.query.classRecordItems.findFirst({
-        where: eq(classRecordItems.assessmentId, assessmentId),
-        with: {
-          classRecord: {
-            columns: {
-              id: true,
-              classId: true,
-              gradingPeriod: true,
-            },
-          },
-          category: {
-            columns: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      });
-
-      if (
-        !linkedItem ||
-        linkedItem.classRecord.classId !== assessment.classId ||
-        linkedItem.classRecord.gradingPeriod !== assessment.quarter ||
-        linkedItem.category.name !== expectedCategoryName
-      ) {
-        throw new BadRequestException(
-          'Core assessments must be placed in a class record slot before publishing',
-        );
-      }
-
-      await this.validateForPublish(assessmentId);
+      await this.assertCoreAssessmentReadyForPublish(assessment);
     }
 
     const [updated] = await this.db
@@ -1924,7 +1960,6 @@ export class AssessmentsService {
     const assessment = await this.getAssessmentById(
       createQuestionDto.assessmentId,
     );
-    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2023,7 +2058,6 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2129,7 +2163,6 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2179,7 +2212,10 @@ export class AssessmentsService {
    */
   async startAttempt(studentId: string, assessmentId: string) {
     // Verify assessment exists and is published
-    const assessment = await this.getAssessmentById(assessmentId);
+    const assessment = await this.getAssessmentById(assessmentId, 'student', {
+      userId: studentId,
+      roles: ['student'],
+    });
 
     if (!assessment.isPublished) {
       throw new ForbiddenException('This assessment is not published yet');

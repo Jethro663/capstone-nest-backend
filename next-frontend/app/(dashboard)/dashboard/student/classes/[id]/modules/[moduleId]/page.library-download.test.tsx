@@ -239,4 +239,68 @@ describe('StudentModuleDetailPage library downloads', () => {
     fireEvent.click(screen.getByRole('button', { name: /4/i }));
     expect(await screen.findByText(/Stay on this lesson/i)).toBeInTheDocument();
   });
+
+  it('renders lesson description content when the module lesson has no block rows', async () => {
+    searchParamsMock.get.mockImplementation((key: string) => (key === 'lessonId' ? 'lesson-1' : null));
+    mockedModuleService.getByClassAndModule.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'module-1',
+        classId: 'class-1',
+        title: 'Module 1',
+        description: 'Desc',
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        sections: [
+          {
+            id: 'section-1',
+            moduleId: 'module-1',
+            title: 'Section A',
+            order: 1,
+            items: [
+              {
+                id: 'item-lesson-1',
+                moduleSectionId: 'section-1',
+                itemType: 'lesson',
+                lessonId: 'lesson-1',
+                order: 1,
+                isVisible: true,
+                isRequired: true,
+                isGiven: true,
+                completed: false,
+                lessonPoints: 0,
+                lesson: {
+                  id: 'lesson-1',
+                  title: 'Aralin 1.1',
+                  isDraft: false,
+                },
+              },
+            ],
+          },
+        ],
+        gradingScaleEntries: [],
+      } as never,
+    });
+    mockedLessonService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'lesson-1',
+        classId: 'class-1',
+        title: 'Aralin 1.1',
+        description: '<p>Panimula</p><p>Mga Karunungang Bayan</p>',
+        order: 1,
+        isDraft: false,
+        contentBlocks: [],
+      },
+    });
+
+    render(<StudentModuleDetailPage />);
+
+    expect(await screen.findByText('Panimula')).toBeInTheDocument();
+    expect(screen.getByText('Mga Karunungang Bayan')).toBeInTheDocument();
+    expect(screen.queryByText('No lesson content available.')).not.toBeInTheDocument();
+  });
 });

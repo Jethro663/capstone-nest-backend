@@ -148,6 +148,11 @@ export class CreateJaAskThreadDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @IsUUID()
+  lessonId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
   title?: string;
@@ -158,6 +163,11 @@ export class SendJaAskMessageDto {
   @IsString()
   @IsNotEmpty()
   message: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  lessonId?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import {
-  ActivityIndicator,
   Animated,
   PanResponder,
   Platform,
@@ -19,92 +18,140 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 import { colors, radii, shadow } from "../../theme/tokens";
 
-type AndroidRefreshFallback = {
+type RefreshControlState = {
   refreshing: boolean;
-  onRefresh: () => void;
+  onRefresh?: () => void;
 };
 
-function resolveAndroidRefreshFallback(refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"]) {
-  if (Platform.OS !== "android" || !refreshControl) {
+function resolveRefreshControlState(refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"]) {
+  if (!refreshControl) {
     return null;
   }
 
   const props = (refreshControl as { props?: { refreshing?: boolean; onRefresh?: () => void } }).props;
-  if (!props || typeof props.onRefresh !== "function") {
+  if (!props) {
     return null;
   }
 
   return {
     refreshing: !!props.refreshing,
-    onRefresh: props.onRefresh,
-  } satisfies AndroidRefreshFallback;
+    onRefresh: typeof props.onRefresh === "function" ? props.onRefresh : undefined,
+  } satisfies RefreshControlState;
 }
 
-function AndroidPullToRefresh({ refreshing, onRefresh }: AndroidRefreshFallback) {
-  const [pullDistance, setPullDistance] = useState(0);
-  const triggerDistance = 64;
-  const maxPullDistance = 120;
+function RefreshActivityOverlay({
+  refreshing,
+  pullDistance = 0,
+  onRefresh,
+}: RefreshControlState & { pullDistance?: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-10)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+  const visible = refreshing || pullDistance > 0;
+  const triggerDistance = 72;
   const armed = pullDistance >= triggerDistance;
 
-  const resetPull = () => setPullDistance(0);
+  useEffect(() => {
+    if (!visible) {
+      opacity.setValue(0);
+      translateY.setValue(-10);
+      rotate.stopAnimation(() => rotate.setValue(0));
+      return;
+    }
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) =>
-          !refreshing && gestureState.dy > 6 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
-        onPanResponderMove: (_, gestureState) => {
-          const nextDistance = Math.max(0, Math.min(maxPullDistance, gestureState.dy));
-          setPullDistance(nextDistance);
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          const releasedDistance = Math.max(0, Math.min(maxPullDistance, gestureState.dy));
-          if (releasedDistance >= triggerDistance && !refreshing) {
-            onRefresh();
-          }
-          resetPull();
-        },
-        onPanResponderTerminate: resetPull,
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
       }),
-    [onRefresh, refreshing],
-  );
+      Animated.timing(translateY, {
+        toValue: refreshing ? 0 : Math.min(20, pullDistance / 5),
+        duration: refreshing ? 180 : 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
 
-  const helperText = refreshing
-    ? "Refreshing..."
-    : armed
-      ? "Release to refresh"
-      : pullDistance > 0
-        ? "Pull a little more"
-        : "Pull down to refresh";
+    if (!refreshing) {
+      rotate.stopAnimation(() => rotate.setValue(0));
+      return;
+    }
+
+    rotate.setValue(0);
+    const spin = Animated.loop(
+      Animated.timing(rotate, {
+        toValue: 1,
+        duration: 900,
+        useNativeDriver: true,
+      }),
+    );
+    spin.start();
+
+    return () => {
+      spin.stop();
+      rotate.stopAnimation(() => rotate.setValue(0));
+    };
+  }, [opacity, pullDistance, refreshing, rotate, translateY, visible]);
+
+  if (!visible) {
+    return null;
+  }
+
+  const rotateInterpolate = rotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
 
   return (
-    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-      <View
-        {...panResponder.panHandlers}
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        top: 12,
+        left: 0,
+        right: 0,
+        alignItems: "center",
+        zIndex: 10,
+      }}
+    >
+      <Animated.View
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          gap: 8,
-          borderRadius: 14,
+          gap: 10,
+          borderRadius: 999,
           borderWidth: 1,
-          borderColor: armed ? colors.amber : colors.border,
-          backgroundColor: colors.white,
+          borderColor: refreshing ? "rgba(255,255,255,0.08)" : colors.border,
+          backgroundColor: refreshing ? "rgba(20,20,20,0.94)" : colors.white,
+          paddingHorizontal: 14,
           paddingVertical: 10,
-          transform: [{ translateY: Math.min(14, pullDistance / 8) }],
+          opacity,
+          transform: [{ translateY }, { scale: 1 }],
         }}
       >
         {refreshing ? (
-          <ActivityIndicator size="small" color={colors.amber} />
+          <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
+            <MaterialCommunityIcons name="sync" size={15} color={colors.amber} />
+          </Animated.View>
         ) : (
           <MaterialCommunityIcons
             name={armed ? "arrow-down-bold-circle" : "arrow-down-circle-outline"}
-            size={16}
+            size={15}
             color={armed ? colors.amber : colors.muted}
           />
         )}
-        <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>{helperText}</Text>
-      </View>
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: "800",
+            color: refreshing ? colors.white : colors.textSecondary,
+            letterSpacing: 0.3,
+          }}
+        >
+          {refreshing ? "Refreshing" : armed ? "Release to refresh" : "Pull down to refresh"}
+        </Text>
+      </Animated.View>
     </View>
   );
 }
@@ -112,27 +159,85 @@ function AndroidPullToRefresh({ refreshing, onRefresh }: AndroidRefreshFallback)
 export function ScreenScroll({
   children,
   refreshControl,
-}: PropsWithChildren<{ refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"] }>) {
-  const androidRefreshFallback = resolveAndroidRefreshFallback(refreshControl);
-  const resolvedRefreshControl = Platform.OS === "android" ? undefined : refreshControl;
+  backgroundColor,
+}: PropsWithChildren<{
+  refreshControl?: React.ComponentProps<typeof ScrollView>["refreshControl"];
+  backgroundColor?: string;
+}>) {
+  const refreshState = resolveRefreshControlState(refreshControl);
+  const isAndroidCustomRefresh = Platform.OS === "android" && !!refreshState?.onRefresh;
+  const resolvedBackground = backgroundColor ?? colors.surface;
+  const [pullDistance, setPullDistance] = useState(0);
+  const scrollOffsetRef = useRef(0);
+
+  const resetPull = () => setPullDistance(0);
+
+  const panResponder = useMemo(() => {
+    if (!isAndroidCustomRefresh || !refreshState?.onRefresh) {
+      return null;
+    }
+
+    const triggerDistance = 72;
+    const maxPullDistance = 118;
+
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        !refreshState.refreshing &&
+        scrollOffsetRef.current <= 0 &&
+        gestureState.dy > 8 &&
+        Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      onPanResponderMove: (_, gestureState) => {
+        const nextDistance = Math.max(0, Math.min(maxPullDistance, gestureState.dy));
+        setPullDistance(nextDistance);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const releasedDistance = Math.max(0, Math.min(maxPullDistance, gestureState.dy));
+        if (releasedDistance >= triggerDistance) {
+          refreshState.onRefresh?.();
+        }
+        resetPull();
+      },
+      onPanResponderTerminate: resetPull,
+      onPanResponderTerminationRequest: () => false,
+    });
+  }, [isAndroidCustomRefresh, refreshState]);
+
+  useEffect(() => {
+    if (refreshState?.refreshing) {
+      return;
+    }
+
+    resetPull();
+  }, [refreshState?.refreshing]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={["left", "right"]}>
-      <ScrollView
-        bounces
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 112 }}
-        refreshControl={resolvedRefreshControl}
-        style={{ flex: 1, backgroundColor: colors.surface }}
-      >
-        {androidRefreshFallback ? (
-          <AndroidPullToRefresh
-            refreshing={androidRefreshFallback.refreshing}
-            onRefresh={androidRefreshFallback.onRefresh}
+    <SafeAreaView style={{ flex: 1, backgroundColor: resolvedBackground }} edges={["left", "right"]}>
+      <View style={{ flex: 1 }} {...(panResponder?.panHandlers ?? {})}>
+        <ScrollView
+          bounces
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 112 }}
+          refreshControl={isAndroidCustomRefresh ? undefined : refreshControl}
+          style={{ flex: 1, backgroundColor: resolvedBackground }}
+          onScroll={
+            isAndroidCustomRefresh
+              ? (event) => {
+                  scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+                }
+              : undefined
+          }
+          scrollEventThrottle={16}
+        >
+          {children}
+        </ScrollView>
+        {refreshState ? (
+          <RefreshActivityOverlay
+            refreshing={refreshState.refreshing}
+            onRefresh={refreshState.onRefresh}
+            pullDistance={pullDistance}
           />
         ) : null}
-        {children}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -358,7 +463,15 @@ export function EmptyState({
 }
 
 export function Refreshable({ refreshing, onRefresh }: { refreshing: boolean; onRefresh: () => void }) {
-  return <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.amber} />;
+  return (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={colors.amber}
+      colors={[colors.amber, colors.orange]}
+      progressBackgroundColor={colors.white}
+    />
+  );
 }
 
 export function AnimatedEntrance({

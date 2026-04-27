@@ -479,7 +479,7 @@ describe('ClassesService', () => {
       );
     });
 
-    it('publishes template-derived lesson and assessment content on class creation', async () => {
+    it('keeps template assessments hidden while copying published template lessons', async () => {
       setupHappyPath();
       const classInsertChain = makeInsertChain([{ id: CLASS_ID }]);
       const scheduleInsertChain = makeInsertChain([]);
@@ -526,7 +526,7 @@ describe('ClassesService', () => {
       expect(assessmentInsertChain.values).toHaveBeenCalledWith(
         expect.objectContaining({
           classId: CLASS_ID,
-          isPublished: true,
+          isPublished: false,
           isCoreTemplateAsset: true,
         }),
       );

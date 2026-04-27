@@ -35,6 +35,7 @@ import {
 } from "../../api/hooks";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as Record<string, unknown>).__DEV__ = false;
 
 jest.mock("react-native", () => {
   const ReactRuntime = require("react") as typeof React;
@@ -51,12 +52,14 @@ jest.mock("react-native", () => {
     View: component("View"),
     Text: component("Text"),
     Pressable: component("Pressable"),
+    KeyboardAvoidingView: component("KeyboardAvoidingView"),
     ScrollView: component("ScrollView"),
     TextInput: component("TextInput"),
     Image: component("Image"),
     RefreshControl: component("RefreshControl"),
     Platform: {
       OS: "ios",
+      select: (options: Record<string, unknown>) => options.ios ?? options.default,
     },
     useWindowDimensions: () => ({ width: 390, height: 844 }),
     Animated: {
@@ -451,6 +454,7 @@ describe("mobile rendered screen flows", () => {
         email: "alex@example.com",
         profilePicture: "",
       },
+      login: jest.fn().mockResolvedValue(undefined),
       logout: jest.fn().mockResolvedValue(undefined),
     } as ReturnType<typeof useAuth>);
 
@@ -908,7 +912,9 @@ describe("mobile rendered screen flows", () => {
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
       useQueriesCall += 1;
-      if (useQueriesCall === 1) {
+      const phase = ((useQueriesCall - 1) % 4) + 1;
+
+      if (phase === 1) {
         return queries.map(() => ({
           data: [
             {
@@ -950,6 +956,46 @@ describe("mobile rendered screen flows", () => {
     mockedUseQueryClient.mockReturnValue({
       invalidateQueries: jest.fn().mockResolvedValue(undefined),
     });
+  });
+
+  it("renders the redesigned login screen and blocks empty submissions", async () => {
+    const { LoginScreen } = require("../LoginScreen");
+    const login = jest.fn().mockResolvedValue(undefined);
+    mockedUseAuth.mockReturnValue({
+      user: null,
+      login,
+      logout: jest.fn().mockResolvedValue(undefined),
+    } as ReturnType<typeof useAuth>);
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LoginScreen, {
+          navigation: {} as never,
+          route: { key: "Login", name: "Login" } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Welcome back"),
+      ),
+    ).toBeTruthy();
+
+    const signInButton = findPressableByText(testRenderer!.root, "Sign in");
+    await act(async () => {
+      await signInButton.props.onPress();
+    });
+
+    expect(login).not.toHaveBeenCalled();
+    expect(
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Email and password are required."),
+      ),
+    ).toBeTruthy();
   });
 
   it("renders LXP screen and routes to tutor from quick launcher", () => {
@@ -1012,7 +1058,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("LXP data is partially unavailable");
   });
 
-  it("renders Dashboard screen shell with student home sections", () => {
+  it("renders Dashboard screen shell with the dark student home sections", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -1032,11 +1078,12 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("Student Home");
+    expect(renderedText).toContain("Your Learning Hub");
     expect(renderedText).toContain("Continue Learning");
-    expect(renderedText).toContain("Today's Schedule");
-    expect(renderedText).toContain("Pending Assessments");
+    expect(renderedText).toContain("Day Schedule");
+    expect(renderedText).toContain("Pending Tasks");
     expect(renderedText).toContain("Recent Lessons");
-    expect(renderedText).toContain("School Events");
+    expect(renderedText).toContain("Student Tools");
     expect(mockedUseLessons).toHaveBeenCalledWith("class-1");
     expect(mockedUseLessonCompletions).toHaveBeenCalledWith("class-1");
     expect(mockedUseAssessments).toHaveBeenCalledWith("class-1");
@@ -1064,7 +1111,7 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("Courses");
   });
 
-  it("routes dashboard shortcut cards to LXP and Performance", () => {
+  it("routes dashboard stat cards and profile nudge to the expected screens", () => {
     const { DashboardScreen } = require("../DashboardScreen");
     const navigate = jest.fn();
 
@@ -1078,18 +1125,23 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const lxpShortcut = findPressableByText(testRenderer!.root, "LXP");
-    const performanceShortcut = findPressableByText(testRenderer!.root, "Performance");
+    const classesShortcut = findPressableByText(testRenderer!.root, "Classes");
+    const performanceShortcut = findPressableByText(testRenderer!.root, "Average");
+    const profileShortcut = findPressableByText(testRenderer!.root, "Complete your learner profile");
 
     act(() => {
-      lxpShortcut.props.onPress();
+      classesShortcut.props.onPress();
     });
     act(() => {
       performanceShortcut.props.onPress();
     });
+    act(() => {
+      profileShortcut.props.onPress();
+    });
 
-    expect(navigate).toHaveBeenCalledWith("LXP");
+    expect(navigate).toHaveBeenCalledWith("Classes");
     expect(navigate).toHaveBeenCalledWith("Performance");
+    expect(navigate).toHaveBeenCalledWith("Profile");
   });
 
   it("renders Courses screen and opens class detail from a course card", () => {
@@ -1139,7 +1191,9 @@ describe("mobile rendered screen flows", () => {
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
       useQueriesCall += 1;
-      if (useQueriesCall === 1) {
+      const phase = ((useQueriesCall - 1) % 4) + 1;
+
+      if (phase === 1) {
         return queries.map(() => ({
           data: [
             {
@@ -1214,7 +1268,9 @@ describe("mobile rendered screen flows", () => {
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
       useQueriesCall += 1;
-      if (useQueriesCall === 1) {
+      const phase = ((useQueriesCall - 1) % 4) + 1;
+
+      if (phase === 1) {
         return queries.map(() => ({
           data: [
             {
@@ -1341,9 +1397,159 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("No courses found");
   });
 
-  it("routes Lessons screen class actions into class detail parity", () => {
+  it("renders Lessons screen as a single-open class accordion and routes channel actions into class detail tabs", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const navigate = jest.fn();
+
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState([
+        {
+          id: "class-1",
+          subjectName: "Mathematics",
+          subjectCode: "MATH-1",
+          schoolYear: "2025-2026",
+          section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+          teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+          schedules: [{ id: "schedule-1", days: ["Mon"], startTime: "08:00", endTime: "09:00" }],
+        },
+        {
+          id: "class-2",
+          subjectName: "English",
+          subjectCode: "ENG-1",
+          schoolYear: "2025-2026",
+          section: { id: "section-2", name: "Section B", gradeLevel: "10" },
+          teacher: { id: "teacher-2", firstName: "Teacher", lastName: "Two" },
+        },
+      ]) as ReturnType<typeof useStudentClasses>,
+    );
+
+    let useQueriesCall = 0;
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
+      useQueriesCall += 1;
+      const phase = ((useQueriesCall - 1) % 4) + 1;
+
+      if (phase === 1) {
+        return [
+          {
+            data: [
+              {
+                id: "module-1",
+                classId: "class-1",
+                title: "Number Sense Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-1",
+                    title: "Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-1",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-1",
+                        lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+          {
+            data: [
+              {
+                id: "module-2",
+                classId: "class-2",
+                title: "Reading Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-2",
+                    title: "Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-2",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-2",
+                        lesson: { id: "lesson-2", title: "Lesson 2", isDraft: false },
+                      },
+                      {
+                        id: "item-lesson-3",
+                        itemType: "lesson",
+                        order: 2,
+                        lessonId: "lesson-3",
+                        lesson: { id: "lesson-3", title: "Lesson 3", isDraft: false },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+        ];
+      }
+      if (phase === 2) {
+        return [
+          {
+            data: [{ lessonId: "lesson-1", completed: false }],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+          {
+            data: [
+              { lessonId: "lesson-2", completed: true },
+              { lessonId: "lesson-3", completed: true },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+        ];
+      }
+      if (phase === 3) {
+        return [
+          {
+            data: [{ id: "announcement-1", title: "Notebook", content: "Bring it tomorrow." }],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+          {
+            data: [],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+        ];
+      }
+
+      return [
+        {
+          data: [{ id: "assessment-1", classId: "class-1", title: "Assessment 1", isPublished: true, dueDate: "2026-04-20T09:00:00.000Z" }],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        },
+        {
+          data: [],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        },
+      ];
+    });
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1355,15 +1561,65 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const continueCard = findPressableByText(testRenderer!.root, "Lesson 1");
+    let renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("My Classes");
+    expect(renderedText).toContain("2 classes");
+    expect(renderedText).toContain("All");
+    expect(renderedText).toContain("In Progress");
+    expect(renderedText).toContain("Completed");
+    expect(renderedText).toContain("Mathematics");
+    expect(renderedText).toContain("English");
+    expect(renderedText).not.toContain("Continue Learning");
+
+    const continueCard = findPressableByText(testRenderer!.root, "Mathematics");
     act(() => {
       continueCard.props.onPress();
     });
 
-    expect(navigate).toHaveBeenCalledWith("ClassDetail", { classId: "class-1" });
+    renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Modules");
+    expect(renderedText).toContain("Assignments");
+    expect(renderedText).toContain("Announcements");
+    expect(renderedText).toContain("Calendar");
+    expect(renderedText).toContain("1 lesson");
+    expect(renderedText).toContain("1 pending");
+    expect(renderedText).toContain("1 new");
+    expect(renderedText).toContain("2 events");
+
+    const announcementsAction = findPressableByText(testRenderer!.root, "Announcements");
+    act(() => {
+      announcementsAction.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", {
+      classId: "class-1",
+      initialTab: "announcements",
+    });
+
+    const englishRow = findPressableByText(testRenderer!.root, "English");
+    act(() => {
+      englishRow.props.onPress();
+    });
+
+    renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("2 lessons");
+    expect(renderedText).not.toContain("1 pending");
+    expect(renderedText).not.toContain("1 new");
   });
 
-  it("excludes locked module lessons from the lessons workspace progress and continue-learning flow", () => {
+  it("excludes locked module lessons from class accordion progress and channel counts", () => {
     const { LessonsScreen } = require("../LessonsScreen");
     const mappers = require("../../data/mappers");
     const originalToSubjectCard = mappers.toSubjectCard.getMockImplementation();
@@ -1427,7 +1683,9 @@ describe("mobile rendered screen flows", () => {
     let useQueriesCall = 0;
     mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
       useQueriesCall += 1;
-      if (useQueriesCall === 1) {
+      const phase = ((useQueriesCall - 1) % 4) + 1;
+
+      if (phase === 1) {
         return queries.map(() => ({
           data: [
             {
@@ -1482,9 +1740,17 @@ describe("mobile rendered screen flows", () => {
           refetch: jest.fn().mockResolvedValue(undefined),
         }));
       }
-      if (useQueriesCall === 2) {
+      if (phase === 2) {
         return queries.map(() => ({
           data: [{ lessonId: "lesson-locked", completed: true }],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+      if (phase === 3) {
+        return queries.map(() => ({
+          data: [],
           error: null,
           isRefetching: false,
           refetch: jest.fn().mockResolvedValue(undefined),
@@ -1509,21 +1775,225 @@ describe("mobile rendered screen flows", () => {
         );
       });
 
-      const renderedText = testRenderer!.root
+      let renderedText = testRenderer!.root
         .findAll((node) => node.type === "Text")
         .map((node) => flattenText(node))
         .join(" ");
 
-      expect(renderedText).toContain("0% learning rhythm");
-      expect(renderedText).toContain("0/1 lessons");
-      expect(renderedText).toContain("Visible Lesson");
-      expect(renderedText).not.toContain("1/2 lessons");
+      expect(renderedText).toContain("My Classes");
+      expect(renderedText).toContain("Mathematics");
+      expect(renderedText).not.toContain("Continue Learning");
+
+      const classRow = findPressableByText(testRenderer!.root, "Mathematics");
+      act(() => {
+        classRow.props.onPress();
+      });
+
+      renderedText = testRenderer!.root
+        .findAll((node) => node.type === "Text")
+        .map((node) => flattenText(node))
+        .join(" ");
+
+      const zeroProgressFill = testRenderer!.root.findAll((node) => {
+        const style = node.props?.style;
+        const styles = Array.isArray(style) ? style : [style];
+        return styles.some(
+          (entry) =>
+            entry &&
+            typeof entry === "object" &&
+            "width" in entry &&
+            "height" in entry &&
+            (entry as { width?: unknown }).width === "0%" &&
+            (entry as { height?: unknown }).height === "100%",
+        );
+      });
+
+      expect(zeroProgressFill.length).toBeGreaterThan(0);
+      expect(renderedText).toContain("1 lesson");
+      expect(renderedText).not.toContain("2 lessons");
       expect(renderedText).not.toContain("Locked Lesson");
     } finally {
       mappers.toSubjectCard.mockImplementation(originalToSubjectCard);
       mappers.toLessonCards.mockImplementation(originalToLessonCards);
       mappers.findContinueLearning.mockImplementation(originalFindContinueLearning);
     }
+  });
+
+  it("filters redesigned Lessons screen by progress bucket and search input", () => {
+    const { LessonsScreen } = require("../LessonsScreen");
+
+    mockedUseStudentClasses.mockReturnValue(
+      createQueryState([
+        {
+          id: "class-1",
+          subjectName: "Mathematics",
+          subjectCode: "MATH-1",
+          schoolYear: "2025-2026",
+          section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+          teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+        },
+        {
+          id: "class-2",
+          subjectName: "English",
+          subjectCode: "ENG-1",
+          schoolYear: "2025-2026",
+          section: { id: "section-2", name: "Section B", gradeLevel: "10" },
+          teacher: { id: "teacher-2", firstName: "Teacher", lastName: "Two" },
+        },
+      ]) as ReturnType<typeof useStudentClasses>,
+    );
+
+    let useQueriesCall = 0;
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
+      useQueriesCall += 1;
+      const phase = ((useQueriesCall - 1) % 4) + 1;
+
+      if (phase === 1) {
+        return [
+          {
+            data: [
+              {
+                id: "module-1",
+                classId: "class-1",
+                title: "Math Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-1",
+                    title: "Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-1",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-1",
+                        lesson: { id: "lesson-1", title: "Lesson 1", isDraft: false },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+          {
+            data: [
+              {
+                id: "module-2",
+                classId: "class-2",
+                title: "English Module",
+                order: 1,
+                isLocked: false,
+                sections: [
+                  {
+                    id: "section-2",
+                    title: "Lessons",
+                    order: 1,
+                    items: [
+                      {
+                        id: "item-lesson-2",
+                        itemType: "lesson",
+                        order: 1,
+                        lessonId: "lesson-2",
+                        lesson: { id: "lesson-2", title: "Lesson 2", isDraft: false },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+        ];
+      }
+      if (phase === 2) {
+        return [
+          {
+            data: [],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+          {
+            data: [{ lessonId: "lesson-2", completed: true }],
+            error: null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          },
+        ];
+      }
+      if (phase === 3) {
+        return [
+          { data: [], error: null, isRefetching: false, refetch: jest.fn().mockResolvedValue(undefined) },
+          { data: [], error: null, isRefetching: false, refetch: jest.fn().mockResolvedValue(undefined) },
+        ];
+      }
+
+      return [
+        {
+          data: [],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        },
+        {
+          data: [],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        },
+      ];
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(LessonsScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "Classes", name: "Classes" } as never,
+        }),
+      );
+    });
+
+    const completedFilter = testRenderer!.root.findAll(
+      (node) => node.type === "Pressable" && flattenText(node) === "Completed",
+    )[0];
+    act(() => {
+      completedFilter.props.onPress();
+    });
+
+    let renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("English");
+    expect(renderedText).not.toContain("Mathematics");
+
+    const searchButton = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open class search",
+    );
+    act(() => {
+      searchButton.props.onPress();
+    });
+
+    const searchField = testRenderer!.root.find((node) => node.type === "TextInput");
+    act(() => {
+      searchField.props.onChangeText("science");
+    });
+
+    renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("No classes found");
   });
 
   it("renders Class detail screen and opens module detail", () => {
@@ -1556,7 +2026,111 @@ describe("mobile rendered screen flows", () => {
     expect(navigate).toHaveBeenCalledWith("ModuleDetail", { classId: "class-1", moduleId: "module-1" });
   });
 
-  it("routes continue lesson toward the latest visible unlocked module lesson", () => {
+  it("refreshes class-detail queries from pull-to-refresh", async () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+    const classRefetch = jest.fn().mockResolvedValue(undefined);
+    const moduleRefetch = jest.fn().mockResolvedValue(undefined);
+    const completionRefetch = jest.fn().mockResolvedValue(undefined);
+    const assessmentRefetch = jest.fn().mockResolvedValue(undefined);
+    const announcementRefetch = jest.fn().mockResolvedValue(undefined);
+    const attemptRefetch = jest.fn().mockResolvedValue(undefined);
+
+    mockedUseClassDetail.mockImplementation(
+      ((classId?: string) =>
+        createQueryState(
+          classId
+            ? {
+                id: classId,
+                subjectName: "Mathematics",
+                subjectCode: "MATH-1",
+                sectionId: "section-1",
+                section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+                teacherId: "teacher-1",
+                teacher: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+                schoolYear: "2025-2026",
+                isActive: true,
+              }
+            : undefined,
+          { refetch: classRefetch },
+        )) as ReturnType<typeof useClassDetail>,
+    );
+    mockedUseClassModules.mockReturnValue(
+      createQueryState(
+        [{ id: "module-1", classId: "class-1", title: "Number Sense Module", order: 1, sections: [] }],
+        { refetch: moduleRefetch },
+      ) as ReturnType<typeof useClassModules>,
+    );
+    mockedUseLessonCompletions.mockReturnValue(
+      createQueryState([], { refetch: completionRefetch }) as ReturnType<typeof useLessonCompletions>,
+    );
+    mockedUseAssessments.mockReturnValue(
+      createQueryState(
+        [{ id: "assessment-1", classId: "class-1", title: "Assessment 1", type: "quiz", isPublished: true }],
+        { refetch: assessmentRefetch },
+      ) as ReturnType<typeof useAssessments>,
+    );
+    mockedUseAnnouncements.mockReturnValue(
+      createQueryState([], { refetch: announcementRefetch }) as ReturnType<typeof useAnnouncements>,
+    );
+    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) =>
+      queries.map(() => ({
+        data: [],
+        error: null,
+        isRefetching: false,
+        refetch: attemptRefetch,
+      })),
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ClassDetail", name: "ClassDetail", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const screenScroll = testRenderer!.root.find((node) => node.type === "ScreenScroll");
+    await act(async () => {
+      await screenScroll.props.refreshControl.props.onRefresh();
+    });
+
+    expect(classRefetch).toHaveBeenCalled();
+    expect(moduleRefetch).toHaveBeenCalled();
+    expect(completionRefetch).toHaveBeenCalled();
+    expect(assessmentRefetch).toHaveBeenCalled();
+    expect(announcementRefetch).toHaveBeenCalled();
+    expect(attemptRefetch).toHaveBeenCalled();
+  });
+
+  it("opens Class detail on the requested initial tab", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1", initialTab: "announcements" },
+          } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Bring your notebook");
+    expect(renderedText).not.toContain("Number Sense Module");
+  });
+
+  it("routes expanded module lesson rows toward the latest visible unlocked module lesson", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
     const navigate = jest.fn();
 
@@ -1664,9 +2238,16 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("0/1 lessons completed");
     expect(renderedText).not.toContain("1/2 lessons completed");
 
-    const continueCard = findPressableByText(testRenderer!.root, "Visible Lesson");
+    const toggleModule = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Toggle Open Module",
+    );
     act(() => {
-      continueCard.props.onPress();
+      toggleModule.props.onPress();
+    });
+
+    const visibleLesson = findPressableByText(testRenderer!.root, "Visible Lesson");
+    act(() => {
+      visibleLesson.props.onPress();
     });
 
     expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-visible", classId: "class-1" });
@@ -1775,7 +2356,14 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const gradesTab = findPressableByText(testRenderer!.root, "grades");
+    const moreTabsButton = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open more class tabs",
+    );
+    act(() => {
+      moreTabsButton.props.onPress();
+    });
+
+    const gradesTab = findPressableByText(testRenderer!.root, "Grades");
     act(() => {
       gradesTab.props.onPress();
     });
@@ -1828,7 +2416,14 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const gradesTab = findPressableByText(testRenderer!.root, "grades");
+    const moreTabsButton = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open more class tabs",
+    );
+    act(() => {
+      moreTabsButton.props.onPress();
+    });
+
+    const gradesTab = findPressableByText(testRenderer!.root, "Grades");
     act(() => {
       gradesTab.props.onPress();
     });
@@ -1890,7 +2485,14 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const gradesTab = findPressableByText(testRenderer!.root, "grades");
+    const moreTabsButton = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Open more class tabs",
+    );
+    act(() => {
+      moreTabsButton.props.onPress();
+    });
+
+    const gradesTab = findPressableByText(testRenderer!.root, "Grades");
     act(() => {
       gradesTab.props.onPress();
     });
@@ -1918,7 +2520,7 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const announcementsTab = findPressableByText(testRenderer!.root, "announcements");
+    const announcementsTab = findPressableByText(testRenderer!.root, "Announcements");
     act(() => {
       announcementsTab.props.onPress();
     });
@@ -1932,7 +2534,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Your teacher has not posted any class announcements yet.");
   });
 
-  it("renders legacy class workspace and routes lesson actions to lesson detail", () => {
+  it("renders legacy class workspace and routes expanded lesson previews to lesson detail", () => {
     const { SubjectLessonsScreen } = require("../SubjectLessonsScreen");
     const navigate = jest.fn();
 
@@ -1946,7 +2548,14 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const lessonAction = findPressableByText(testRenderer!.root, "Continue Lesson");
+    const toggleModule = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && node.props.accessibilityLabel === "Toggle Number Sense Module",
+    );
+    act(() => {
+      toggleModule.props.onPress();
+    });
+
+    const lessonAction = findPressableByText(testRenderer!.root, "Lesson 1");
     act(() => {
       lessonAction.props.onPress();
     });
@@ -2485,15 +3094,15 @@ describe("mobile rendered screen flows", () => {
     expect(mockedUseAssessmentAttempts).toHaveBeenCalledWith("assessment-1");
   });
 
-  it("renders all-day school events without a midnight time label", () => {
+  it("renders all-day school events without a midnight time label", async () => {
     const { DashboardScreen } = require("../DashboardScreen");
     mockedUseSchoolEvents.mockReturnValue(
       createQueryState([
         {
           id: "event-2",
           title: "Foundation Day",
-          startsAt: "2026-04-22T00:00:00.000Z",
-          endsAt: "2026-04-22T23:59:59.000Z",
+          startsAt: "2026-05-22T00:00:00.000Z",
+          endsAt: "2026-05-22T23:59:59.000Z",
           location: "Main Campus",
           schoolYear: "2025-2026",
           eventType: "school_event",
@@ -2512,13 +3121,17 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     const renderedText = testRenderer!.root
       .findAll((node) => node.type === "Text")
       .map((node) => flattenText(node))
       .join(" ");
 
     expect(renderedText).toContain("Foundation Day");
-    expect(renderedText).toContain("Apr 22");
+    expect(renderedText).toContain("May 22");
     expect(renderedText).not.toContain("12:00 AM");
   });
 
@@ -2601,7 +3214,7 @@ describe("mobile rendered screen flows", () => {
     expect(mockedUseSchoolEvents).toHaveBeenCalledWith({ schoolYear: "2025-2026" });
   });
 
-  it("renders the student dashboard tab as Home and keeps Dashboard route navigation", () => {
+  it("renders the student bottom bar in student order and keeps JA prominently elevated", () => {
     const { BottomTabBar } = require("../../components/ui/BottomTabBar");
     const navigate = jest.fn();
 
@@ -2610,15 +3223,21 @@ describe("mobile rendered screen flows", () => {
       testRenderer = TestRenderer.create(
         React.createElement(BottomTabBar, {
           state: {
-            index: 1,
+            index: 2,
             routes: [
               { key: "dashboard-key", name: "Dashboard" },
               { key: "classes-key", name: "Classes" },
+              { key: "ja-key", name: "JA" },
+              { key: "assessments-key", name: "Assessments" },
+              { key: "profile-key", name: "Profile" },
             ],
           },
           descriptors: {
             "dashboard-key": { options: {} },
             "classes-key": { options: {} },
+            "ja-key": { options: {} },
+            "assessments-key": { options: {} },
+            "profile-key": { options: {} },
           },
           navigation: {
             emit: jest.fn().mockReturnValue({ defaultPrevented: false }),
@@ -2638,7 +3257,22 @@ describe("mobile rendered screen flows", () => {
       .map((node) => flattenText(node))
       .join(" ");
 
-    expect(renderedText).toContain("Home");
+    const homeIndex = renderedText.indexOf("Home");
+    const classesIndex = renderedText.indexOf("Classes");
+    const jaIndex = renderedText.indexOf("JA");
+    const assessmentsIndex = renderedText.indexOf("Assessment");
+    const profileIndex = renderedText.indexOf("Profile");
+
+    expect(homeIndex).toBeGreaterThanOrEqual(0);
+    expect(classesIndex).toBeGreaterThan(homeIndex);
+    expect(jaIndex).toBeGreaterThan(classesIndex);
+    expect(assessmentsIndex).toBeGreaterThan(jaIndex);
+    expect(profileIndex).toBeGreaterThan(assessmentsIndex);
+
+    const jaOrb = testRenderer!.root.findAll((node) => node.type === "LinearGradient")[0];
+    expect(jaOrb.props.style.width).toBe(72);
+    expect(jaOrb.props.style.marginTop).toBe(-28);
+
     expect(navigate).toHaveBeenCalledWith("Dashboard");
   });
 
@@ -3267,8 +3901,14 @@ describe("mobile rendered screen flows", () => {
     expect(
       testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Alex Reyes")),
     ).toBeTruthy();
+    expect(
+      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Student Identity")),
+    ).toBeTruthy();
+    expect(
+      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Profile Status")),
+    ).toBeTruthy();
 
-    const saveButton = findPressableByText(testRenderer!.root, "Save Profile");
+    const saveButton = findPressableByText(testRenderer!.root, "Save Profile Changes");
     await act(async () => {
       await saveButton.props.onPress();
     });
@@ -3296,7 +3936,7 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const openTranscript = findPressableByText(testRenderer!.root, "Open Transcript");
+    const openTranscript = findPressableByText(testRenderer!.root, "View Transcript");
     await act(async () => {
       openTranscript.props.onPress();
     });
@@ -3327,7 +3967,7 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const saveButton = findPressableByText(testRenderer!.root, "Save Profile");
+    const saveButton = findPressableByText(testRenderer!.root, "Save Profile Changes");
     await act(async () => {
       await saveButton.props.onPress();
     });
@@ -3414,9 +4054,63 @@ describe("mobile rendered screen flows", () => {
     ).toBeTruthy();
   });
 
-  it("renders Assessments screen and opens assessment details from a card", () => {
+  function mockAssessmentsAccordionQueries(options?: {
+    assessments?: Array<Record<string, unknown>>;
+    attemptsByAssessmentId?: Record<string, unknown[]>;
+    assessmentError?: unknown;
+    attemptsError?: unknown;
+  }) {
+    const assessments =
+      options?.assessments ??
+      [
+        {
+          id: "assessment-1",
+          classId: "class-1",
+          title: "Assessment 1",
+          type: "quiz",
+          totalPoints: 100,
+          isPublished: true,
+          dueDate: "2026-04-20T09:00:00.000Z",
+        },
+      ];
+
+    mockedUseQueries.mockImplementation(({ queries }: { queries: Array<{ queryKey?: unknown[] }> }) => {
+      const firstQueryKey = Array.isArray(queries[0]?.queryKey) ? String(queries[0]?.queryKey?.[0] ?? "") : "";
+
+      if (firstQueryKey === "assessments") {
+        return queries.map(() => ({
+          data: options?.assessmentError ? [] : assessments,
+          error: options?.assessmentError ?? null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+
+      if (firstQueryKey === "assessment-attempts") {
+        return queries.map((_, index) => {
+          const assessmentId = String(assessments[index]?.id ?? "");
+          return {
+            data: options?.attemptsByAssessmentId?.[assessmentId] ?? [],
+            error: options?.attemptsError ?? null,
+            isRefetching: false,
+            refetch: jest.fn().mockResolvedValue(undefined),
+          };
+        });
+      }
+
+      return queries.map(() => ({
+        data: [],
+        error: null,
+        isRefetching: false,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      }));
+    });
+  }
+
+  it("renders Assessments screen as an accordion and routes expanded actions", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
     const navigate = jest.fn();
+    mockAssessmentsAccordionQueries();
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
       testRenderer = TestRenderer.create(
@@ -3429,24 +4123,40 @@ describe("mobile rendered screen flows", () => {
 
     expect(
       testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Assessments"),
+        (node) => node.type === "Text" && flattenText(node).includes("Assessments & Actions"),
       ),
     ).toBeTruthy();
 
-    const assessmentCard = findPressableByText(testRenderer!.root, "Assessment assessment-1");
+    const assessmentCard = findPressableByText(testRenderer!.root, "Assessment 1");
     act(() => {
       assessmentCard.props.onPress();
+    });
+
+    const detailAction = findPressableByText(testRenderer!.root, "Open Assessment");
+    act(() => {
+      detailAction.props.onPress();
     });
 
     expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
       assessmentId: "assessment-1",
       classId: "class-1",
     });
+
+    const classAction = findPressableByText(testRenderer!.root, "Open Class");
+    act(() => {
+      classAction.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("ClassDetail", {
+      classId: "class-1",
+      initialTab: "assignments",
+    });
   });
 
   it("routes from the assessments tab into assessment history", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
     const navigate = jest.fn();
+    mockAssessmentsAccordionQueries();
 
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -3671,33 +4381,17 @@ describe("mobile rendered screen flows", () => {
 
   it("surfaces assessments backend error state in rendered screen flow", () => {
     const { AssessmentsScreen } = require("../AssessmentsScreen");
-    let useQueriesCall = 0;
-    mockedUseQueries.mockImplementation(({ queries }: { queries: unknown[] }) => {
-      useQueriesCall += 1;
-      if (useQueriesCall === 1) {
-        return queries.map(() => ({ data: [{ id: "lesson-1" }], error: null }));
-      }
-      if (useQueriesCall === 2) {
-        return queries.map(() => ({ data: [{ id: "completed-1" }], error: null }));
-      }
-      if (useQueriesCall === 3) {
-        return queries.map(() => ({
-          data: [],
-          error: {
-            isAxiosError: true,
-            message: "Request failed with status code 503",
-            response: {
-              status: 503,
-              data: {
-                message: "Assessments API unavailable",
-              },
-            },
+    mockAssessmentsAccordionQueries({
+      assessmentError: {
+        isAxiosError: true,
+        message: "Request failed with status code 503",
+        response: {
+          status: 503,
+          data: {
+            message: "Assessments API unavailable",
           },
-          isRefetching: false,
-          refetch: jest.fn().mockResolvedValue(undefined),
-        }));
-      }
-      return queries.map(() => ({ data: [], error: null }));
+        },
+      },
     });
 
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -3714,7 +4408,7 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Assessments are unavailable"),
+          flattenText(node).includes("Some assessment data could not load"),
       ),
     ).toBeTruthy();
     expect(
@@ -3752,7 +4446,7 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const completedFilter = findPressableByText(testRenderer!.root, "completed");
+    const completedFilter = findPressableByText(testRenderer!.root, "Completed");
     act(() => {
       completedFilter.props.onPress();
     });
@@ -3761,7 +4455,7 @@ describe("mobile rendered screen flows", () => {
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("No completed assessments right now."),
+          flattenText(node).includes("No completed assessments match this view."),
       ),
     ).toBeTruthy();
   });

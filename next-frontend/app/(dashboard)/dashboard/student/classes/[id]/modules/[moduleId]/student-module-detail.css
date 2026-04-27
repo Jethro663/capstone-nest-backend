@@ -263,6 +263,10 @@
   max-width: none;
 }
 
+.student-module-view__lesson-description {
+  margin-bottom: 18px;
+}
+
 .student-module-view__reader .prose p,
 .student-module-view__reader .prose li,
 .student-module-view__reader .prose div {

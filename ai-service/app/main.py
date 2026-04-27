@@ -1879,6 +1879,8 @@ async def ja_ask_respond(
         thread_id=body.thread_id,
         message=body.message,
         quick_action=body.quick_action,
+        lesson_id=body.lesson_id,
+        lesson_title=body.lesson_title,
         history=[
             {"role": entry.role, "content": entry.content}
             for entry in (body.history or [])

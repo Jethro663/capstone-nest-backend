@@ -1,29 +1,295 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import {
-  Card,
-  EmptyState,
-  GradientHeader,
-  Pill,
-  ProgressBar,
-  Refreshable,
-  ScreenScroll,
-  SectionTitle,
-} from "../components/ui/primitives";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
+import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { useProfile, useProfileAvatarMutation, useProfileUpdateMutation } from "../api/hooks";
-import { peekAppError, toAppError } from "../api/http";
 import { API_BASE_URL } from "../api/config";
-import { useAuth } from "../providers/AuthProvider";
+import { peekAppError, toAppError } from "../api/http";
 import type { MainTabParamList } from "../navigation/types";
-import { buildProfileFullName, computeProfileReadiness } from "./screen-flow";
-import { colors, gradients } from "../theme/tokens";
+import { useAuth } from "../providers/AuthProvider";
+import { buildProfileFullName } from "./screen-flow";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
+type ProfileStatusItem = {
+  label: string;
+  value?: string | null;
+};
+
 const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");
+
+const theme = {
+  pageBg: "#0E0E0E",
+  bg: "#141414",
+  topbar: "#1C1C1C",
+  surface: "#1E1E1E",
+  surface2: "#242424",
+  border: "rgba(255,255,255,0.07)",
+  border2: "rgba(255,255,255,0.12)",
+  text: "#E8E8E8",
+  muted: "#777777",
+  dim: "#444444",
+  red: "#E8294E",
+  redSoft: "rgba(232,41,78,0.12)",
+  redLine: "rgba(232,41,78,0.2)",
+  redText: "#FF8A9B",
+  blue: "#4A8CF7",
+  blueLine: "rgba(74,140,247,0.25)",
+  green: "#22C97A",
+  greenSoft: "rgba(34,201,122,0.12)",
+  greenLine: "rgba(34,201,122,0.2)",
+  purple: "#A78BFA",
+  amber: "#FBBF24",
+  amberSoft: "rgba(251,191,36,0.12)",
+} as const;
+
+function hasValue(value?: string | null) {
+  return typeof value === "string" ? value.trim().length > 0 : false;
+}
+
+function pluralize(count: number, singular: string, plural: string) {
+  return count === 1 ? singular : plural;
+}
+
+function resolveAvatarInitials(fullName: string) {
+  const initials = fullName
+    .split(" ")
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return initials || "ST";
+}
+
+function resolveProfileImageUri(path?: string | null) {
+  if (!path) {
+    return undefined;
+  }
+
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  return `${assetBaseUrl}${path}`;
+}
+
+function formatIdentityValue(value?: string | null, fallback = "--") {
+  return hasValue(value) ? value!.trim() : fallback;
+}
+
+function SectionHeader({
+  title,
+  badge,
+}: {
+  title: string;
+  badge?: string;
+}) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        paddingBottom: 8,
+        paddingHorizontal: 16,
+        paddingTop: 16,
+      }}
+    >
+      <Text
+        style={{
+          color: theme.muted,
+          fontSize: 10,
+          fontWeight: "700",
+          letterSpacing: 0.8,
+          textTransform: "uppercase",
+        }}
+      >
+        {title}
+      </Text>
+      {badge ? (
+        <View
+          style={{
+            backgroundColor: theme.redSoft,
+            borderRadius: 4,
+            paddingHorizontal: 8,
+            paddingVertical: 3,
+          }}
+        >
+          <Text style={{ color: "#FF6B87", fontSize: 10, fontWeight: "600" }}>{badge}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function FieldLabel({ label, required = false }: { label: string; required?: boolean }) {
+  return (
+    <View style={{ alignItems: "center", flexDirection: "row", marginBottom: 5 }}>
+      {required ? (
+        <View
+          style={{
+            backgroundColor: theme.red,
+            borderRadius: 999,
+            height: 5,
+            marginRight: 5,
+            width: 5,
+          }}
+        />
+      ) : null}
+      <Text
+        style={{
+          color: theme.muted,
+          fontSize: 9,
+          fontWeight: "600",
+          letterSpacing: 0.5,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function ReadOnlyField({
+  label,
+  value,
+  required = false,
+  compact = false,
+}: {
+  label: string;
+  value?: string | null;
+  required?: boolean;
+  compact?: boolean;
+}) {
+  const filled = hasValue(value);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FieldLabel label={label} required={required} />
+      <Text
+        numberOfLines={compact ? 1 : undefined}
+        style={{
+          color: filled ? theme.text : theme.dim,
+          fontSize: compact ? 11 : 13,
+          fontStyle: filled ? "normal" : "italic",
+          minHeight: 18,
+        }}
+      >
+        {formatIdentityValue(value)}
+      </Text>
+    </View>
+  );
+}
+
+function EditableField({
+  label,
+  required = false,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  autoCapitalize = "sentences",
+}: {
+  label: string;
+  required?: boolean;
+  value: string;
+  onChangeText: (next: string) => void;
+  placeholder: string;
+  keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+}) {
+  return (
+    <View style={{ flex: 1 }}>
+      <FieldLabel label={label} required={required} />
+      <TextInput
+        autoCapitalize={autoCapitalize}
+        keyboardType={keyboardType}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.dim}
+        selectionColor={theme.red}
+        style={{
+          color: theme.text,
+          fontSize: 13,
+          minHeight: 18,
+          paddingVertical: 0,
+        }}
+        value={value}
+      />
+    </View>
+  );
+}
+
+function FormRow({
+  children,
+  twoColumn = false,
+}: {
+  children: ReactNode;
+  twoColumn?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        borderBottomColor: theme.border,
+        borderBottomWidth: 1,
+        flexDirection: twoColumn ? "row" : "column",
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function QuickLink({
+  icon,
+  iconColor,
+  label,
+  onPress,
+}: {
+  icon: ComponentProps<typeof MaterialCommunityIcons>["name"];
+  iconColor: string;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        alignItems: "center",
+        backgroundColor: theme.surface,
+        borderColor: theme.border,
+        borderRadius: 10,
+        borderWidth: 1,
+        flex: 1,
+        flexDirection: "row",
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+      }}
+    >
+      <MaterialCommunityIcons color={iconColor} name={icon} size={15} />
+      <Text
+        numberOfLines={2}
+        style={{
+          color: "rgba(255,255,255,0.55)",
+          flex: 1,
+          fontSize: 12,
+          fontWeight: "500",
+          marginLeft: 8,
+        }}
+      >
+        {label}
+      </Text>
+      <MaterialCommunityIcons color={theme.dim} name="chevron-right" size={16} />
+    </Pressable>
+  );
+}
 
 export function ProfileScreen(props: Props) {
   const { user, logout } = useAuth();
@@ -36,17 +302,28 @@ export function ProfileScreen(props: Props) {
   const [familyName, setFamilyName] = useState(profile?.familyName || "");
   const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship || "");
   const [familyContact, setFamilyContact] = useState(profile?.familyContact || "");
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth || profile?.dob || user?.dateOfBirth || user?.dob || "");
+  const [gender, setGender] = useState(profile?.gender || user?.gender || "");
   const [error, setError] = useState("");
 
+  const currentFirstName = user?.firstName || "";
+  const currentMiddleName = user?.middleName || "";
+  const currentLastName = user?.lastName || "";
+  const currentEmail = user?.email || "";
+  const currentLrn = profile?.lrn || user?.lrn || "";
+  const currentGradeLevel = profile?.gradeLevel || user?.gradeLevel || "";
+  const currentStatus = user?.status || "ACTIVE";
   const fullName = useMemo(
     () =>
       buildProfileFullName({
-        firstName: user?.firstName,
-        lastName: user?.lastName,
-        email: user?.email,
+        firstName: currentFirstName,
+        lastName: currentLastName,
+        email: currentEmail,
       }),
-    [user?.email, user?.firstName, user?.lastName],
+    [currentEmail, currentFirstName, currentLastName],
   );
+  const avatarUri = resolveProfileImageUri(profile?.profilePicture || user?.profilePicture);
+  const avatarInitials = resolveAvatarInitials(fullName);
 
   useEffect(() => {
     setPhone(profile?.phone || "");
@@ -54,39 +331,73 @@ export function ProfileScreen(props: Props) {
     setFamilyName(profile?.familyName || "");
     setFamilyRelationship(profile?.familyRelationship || "");
     setFamilyContact(profile?.familyContact || "");
-  }, [profile?.address, profile?.familyContact, profile?.familyName, profile?.familyRelationship, profile?.phone]);
+    setDateOfBirth(profile?.dateOfBirth || profile?.dob || user?.dateOfBirth || user?.dob || "");
+    setGender(profile?.gender || user?.gender || "");
+  }, [
+    profile?.address,
+    profile?.dateOfBirth,
+    profile?.dob,
+    profile?.familyContact,
+    profile?.familyName,
+    profile?.familyRelationship,
+    profile?.gender,
+    profile?.phone,
+    user?.dateOfBirth,
+    user?.dob,
+    user?.gender,
+  ]);
 
-  const overallProgress = useMemo(
-    () =>
-      computeProfileReadiness({
-        phone: profile?.phone,
-        address: profile?.address,
-        familyName: profile?.familyName,
-        familyRelationship: profile?.familyRelationship,
-        familyContact: profile?.familyContact,
-        profilePicture: profile?.profilePicture || user?.profilePicture || null,
-      }),
+  const statusItems = useMemo<ProfileStatusItem[]>(
+    () => [
+      { label: "First Name", value: currentFirstName },
+      { label: "Last Name", value: currentLastName },
+      { label: "Grade Level", value: currentGradeLevel },
+      { label: "Date of Birth", value: dateOfBirth },
+      { label: "Gender", value: gender },
+      { label: "Contact Number", value: phone },
+      { label: "Home Address", value: address },
+      { label: "Guardian Name", value: familyName },
+      { label: "Relationship", value: familyRelationship },
+      { label: "Guardian Contact", value: familyContact },
+    ],
     [
-      profile?.address,
-      profile?.familyContact,
-      profile?.familyName,
-      profile?.familyRelationship,
-      profile?.phone,
-      profile?.profilePicture,
-      user?.profilePicture,
+      address,
+      currentFirstName,
+      currentGradeLevel,
+      currentLastName,
+      dateOfBirth,
+      familyContact,
+      familyName,
+      familyRelationship,
+      gender,
+      phone,
     ],
   );
+
+  const requiredCount = statusItems.filter((item) => !hasValue(item.value)).length;
+  const refreshBusy = profileQuery.isRefetching || updateMutation.isPending || avatarMutation.isPending;
+  const completionHeadline =
+    requiredCount === 0
+      ? "All required fields are complete."
+      : `${requiredCount} required ${pluralize(requiredCount, "field still needs", "fields still need")} attention.`;
+  const completionSubcopy =
+    requiredCount === 0
+      ? "Your student record is complete and ready for review."
+      : "Complete and review all required details before saving. This will keep your profile aligned with school records.";
 
   const handleSave = async () => {
     try {
       setError("");
-      await updateMutation.mutateAsync({
+      const payload = {
         phone,
         address,
         familyName,
         familyRelationship,
         familyContact,
-      });
+        ...(hasValue(dateOfBirth) ? { dateOfBirth, dob: dateOfBirth } : {}),
+        ...(hasValue(gender) ? { gender } : {}),
+      };
+      await updateMutation.mutateAsync(payload);
     } catch (rawError) {
       setError(toAppError(rawError).message);
     }
@@ -120,251 +431,656 @@ export function ProfileScreen(props: Props) {
 
   return (
     <ScreenScroll
-      refreshControl={
-        <Refreshable
-          refreshing={profileQuery.isRefetching || updateMutation.isPending || avatarMutation.isPending}
-          onRefresh={() => {
-            void profileQuery.refetch();
-          }}
-        />
-      }
+      backgroundColor={theme.pageBg}
+      refreshControl={<Refreshable onRefresh={() => void profileQuery.refetch()} refreshing={refreshBusy} />}
     >
-      <GradientHeader
-        colors={gradients.profile}
-        title=""
-        rightContent={
-          <Pressable
-            onPress={() => void profileQuery.refetch()}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(255,255,255,0.2)",
-            }}
-          >
-            <MaterialCommunityIcons name="refresh" size={18} color={colors.white} />
-          </Pressable>
-        }
-      >
-        <View style={{ alignItems: "center", marginTop: 8 }}>
-          <View style={{ position: "relative" }}>
-            <Pressable
-              onPress={() => void handleAvatarPick()}
-              style={{
-                width: 92,
-                height: 92,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.2)",
-                borderWidth: 4,
-                borderColor: "rgba(255,255,255,0.3)",
-                overflow: "hidden",
-              }}
-            >
-              {profile?.profilePicture || user?.profilePicture ? (
-                <Image
-                  source={{ uri: `${assetBaseUrl}${profile?.profilePicture || user?.profilePicture}` }}
-                  style={{ width: "100%", height: "100%" }}
-                />
-              ) : (
-                <Text style={{ fontSize: 52 }}>🎓</Text>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => void handleAvatarPick()}
-              style={{
-                position: "absolute",
-                bottom: 2,
-                right: 2,
-                width: 30,
-                height: 30,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.white,
-              }}
-            >
-              <MaterialCommunityIcons name="pencil" size={13} color={colors.purpleDeep} />
-            </Pressable>
-          </View>
+      <View style={{ backgroundColor: theme.pageBg, paddingBottom: 132 }}>
+        <View
+          style={{
+            backgroundColor: theme.topbar,
+            borderBottomColor: theme.border,
+            borderBottomWidth: 1,
+            paddingBottom: 12,
+            paddingHorizontal: 16,
+            paddingTop: 14,
+          }}
+        >
+          <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
+            <View style={{ alignItems: "center", flexDirection: "row" }}>
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: theme.red,
+                  borderRadius: 8,
+                  height: 28,
+                  justifyContent: "center",
+                  width: 28,
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
+              </View>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "600", marginLeft: 9 }}>My Profile</Text>
+            </View>
 
-          <Text style={{ marginTop: 14, fontSize: 24, fontWeight: "900", color: colors.white }}>{fullName}</Text>
-          <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "700", color: "rgba(255,255,255,0.82)" }}>
-            {profile?.gradeLevel || user?.gradeLevel || "Assigned grade"} • {user?.email}
-          </Text>
-          <View
-            style={{
-              marginTop: 12,
-              borderRadius: 999,
-              paddingHorizontal: 16,
-              paddingVertical: 8,
-              backgroundColor: "rgba(255,255,255,0.18)",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <MaterialCommunityIcons name="account-check-outline" size={14} color="#FFD700" />
-            <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>
-              {user?.status || "ACTIVE"} • Student
-            </Text>
+            <View style={{ alignItems: "center", flexDirection: "row" }}>
+              <Pressable
+                onPress={() => props.navigation.navigate("Announcements")}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                  borderRadius: 999,
+                  height: 30,
+                  justifyContent: "center",
+                  width: 30,
+                }}
+              >
+                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="bell-outline" size={15} />
+              </Pressable>
+              <Pressable
+                onPress={() => void profileQuery.refetch()}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                  borderRadius: 999,
+                  height: 30,
+                  justifyContent: "center",
+                  marginLeft: 9,
+                  width: 30,
+                }}
+              >
+                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="cog-outline" size={15} />
+              </Pressable>
+            </View>
           </View>
         </View>
-      </GradientHeader>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
-        <Card style={{ marginBottom: 18 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <SectionTitle title="Overall Profile Readiness" />
-            <Text style={{ fontSize: 18, fontWeight: "900", color: colors.purple }}>{overallProgress}%</Text>
-          </View>
-          <ProgressBar value={overallProgress} color={colors.purpleDeep} trackColor="#EEF2F7" height={12} />
-          <Text style={{ marginTop: 10, fontSize: 12, color: colors.textSecondary }}>
-            Visual completion score is derived from currently available backend profile fields.
-          </Text>
-        </Card>
-
-        <Card style={{ marginBottom: 18 }}>
-          <SectionTitle title="Profile Details" />
-          {profileQuery.error ? (
-            <View style={{ marginBottom: 12, borderRadius: 16, backgroundColor: colors.paleRed, padding: 12 }}>
-              <Text style={{ color: colors.red, fontWeight: "700" }}>{peekAppError(profileQuery.error).message}</Text>
+        <View
+          style={{
+            backgroundColor: theme.bg,
+            borderBottomColor: theme.border,
+            borderBottomWidth: 1,
+            overflow: "hidden",
+            paddingBottom: 16,
+            paddingHorizontal: 16,
+            paddingTop: 20,
+            position: "relative",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "rgba(74,140,247,0.06)",
+              borderRadius: 999,
+              height: 130,
+              position: "absolute",
+              right: -20,
+              top: -20,
+              width: 130,
+            }}
+          />
+          <View style={{ alignItems: "flex-start", flexDirection: "row" }}>
+            <View style={{ marginRight: 14, position: "relative" }}>
+              <Pressable
+                onPress={() => void handleAvatarPick()}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: theme.surface2,
+                  borderColor: "rgba(255,255,255,0.15)",
+                  borderRadius: 999,
+                  borderWidth: 2,
+                  height: 60,
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  width: 60,
+                }}
+              >
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={{ height: "100%", width: "100%" }} />
+                ) : (
+                  <Text style={{ color: "#FFFFFF", fontSize: 22, fontWeight: "700" }}>{avatarInitials}</Text>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => void handleAvatarPick()}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: theme.surface2,
+                  borderColor: theme.border2,
+                  borderRadius: 999,
+                  borderWidth: 1.5,
+                  bottom: -2,
+                  height: 20,
+                  justifyContent: "center",
+                  position: "absolute",
+                  right: -2,
+                  width: 20,
+                }}
+              >
+                <MaterialCommunityIcons color="rgba(255,255,255,0.6)" name="pencil-outline" size={10} />
+              </Pressable>
             </View>
-          ) : null}
-          <View style={{ gap: 12 }}>
-            {[
-              { label: "Phone", value: phone, setter: setPhone, placeholder: "0917..." },
-              { label: "Address", value: address, setter: setAddress, placeholder: "Student address" },
-              { label: "Guardian Name", value: familyName, setter: setFamilyName, placeholder: "Guardian name" },
-              { label: "Relationship", value: familyRelationship, setter: setFamilyRelationship, placeholder: "Father / Mother / Guardian" },
-              { label: "Guardian Contact", value: familyContact, setter: setFamilyContact, placeholder: "Guardian contact" },
-            ].map((field) => (
-              <View key={field.label}>
-                <Text style={{ marginBottom: 6, fontSize: 12, fontWeight: "800", color: colors.text }}>{field.label}</Text>
-                <TextInput
-                  value={field.value}
-                  onChangeText={field.setter}
-                  placeholder={field.placeholder}
-                  placeholderTextColor={colors.muted}
+
+            <View style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+              <Text style={{ color: theme.text, fontSize: 18, fontWeight: "700", marginBottom: 3 }}>{fullName}</Text>
+              <Text style={{ color: theme.muted, fontSize: 11, marginBottom: 8 }}>
+                Student - {currentGradeLevel || "Assigned grade"} - {currentEmail}
+              </Text>
+              <View
+                style={{
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  backgroundColor: theme.greenSoft,
+                  borderColor: theme.greenLine,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  paddingHorizontal: 10,
+                  paddingVertical: 3,
+                }}
+              >
+                <View
                   style={{
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    paddingHorizontal: 14,
-                    paddingVertical: 12,
-                    color: colors.text,
+                    backgroundColor: theme.green,
+                    borderRadius: 999,
+                    height: 5,
+                    marginRight: 5,
+                    width: 5,
                   }}
                 />
+                <Text style={{ color: theme.green, fontSize: 10, fontWeight: "600", letterSpacing: 0.3 }}>
+                  {currentStatus} - Student
+                </Text>
               </View>
-            ))}
-          </View>
-
-          {!!error && (
-            <View style={{ marginTop: 14, borderRadius: 16, backgroundColor: colors.paleRed, padding: 12 }}>
-              <Text style={{ color: colors.red, fontWeight: "700" }}>{error}</Text>
             </View>
-          )}
 
+            <Pressable
+              onPress={() => void handleAvatarPick()}
+              style={{
+                alignItems: "center",
+                backgroundColor: "rgba(255,255,255,0.07)",
+                borderColor: theme.border2,
+                borderRadius: 8,
+                borderWidth: 1,
+                flexDirection: "row",
+                paddingHorizontal: 11,
+                paddingVertical: 6,
+              }}
+            >
+              <MaterialCommunityIcons color="rgba(255,255,255,0.6)" name="image-outline" size={12} />
+              <Text
+                style={{
+                  color: "rgba(255,255,255,0.6)",
+                  fontSize: 11,
+                  marginLeft: 5,
+                }}
+              >
+                Photo
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {profileQuery.error ? (
+          <View
+            style={{
+              alignItems: "flex-start",
+              backgroundColor: "rgba(232,41,78,0.08)",
+              borderColor: theme.redLine,
+              borderRadius: 10,
+              borderWidth: 1,
+              flexDirection: "row",
+              marginHorizontal: 16,
+              marginTop: 12,
+              paddingHorizontal: 13,
+              paddingVertical: 10,
+            }}
+          >
+            <MaterialCommunityIcons color="#FF6B87" name="alert-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
+            <Text style={{ color: theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
+              {peekAppError(profileQuery.error).message}
+            </Text>
+          </View>
+        ) : null}
+
+        <View
+          style={{
+            alignItems: "flex-start",
+            backgroundColor: requiredCount === 0 ? theme.greenSoft : "rgba(232,41,78,0.08)",
+            borderColor: requiredCount === 0 ? theme.greenLine : theme.redLine,
+            borderRadius: 10,
+            borderWidth: 1,
+            flexDirection: "row",
+            marginHorizontal: 16,
+            marginTop: 12,
+            paddingHorizontal: 13,
+            paddingVertical: 10,
+          }}
+        >
+          <MaterialCommunityIcons
+            color={requiredCount === 0 ? theme.green : "#FF6B87"}
+            name={requiredCount === 0 ? "check-circle-outline" : "alert-circle-outline"}
+            size={15}
+            style={{ marginRight: 9, marginTop: 1 }}
+          />
+          <Text style={{ color: requiredCount === 0 ? "rgba(180,255,210,0.92)" : theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
+            <Text style={{ fontWeight: "600" }}>{completionHeadline} </Text>
+            {completionSubcopy}
+          </Text>
+        </View>
+
+        {error ? (
+          <View
+            style={{
+              alignItems: "flex-start",
+              backgroundColor: "rgba(232,41,78,0.08)",
+              borderColor: theme.redLine,
+              borderRadius: 10,
+              borderWidth: 1,
+              flexDirection: "row",
+              marginHorizontal: 16,
+              marginTop: 12,
+              paddingHorizontal: 13,
+              paddingVertical: 10,
+            }}
+          >
+            <MaterialCommunityIcons color="#FF6B87" name="close-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
+            <Text style={{ color: theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>{error}</Text>
+          </View>
+        ) : null}
+
+        <SectionHeader badge={requiredCount === 0 ? "Complete" : `${requiredCount} required`} title="Student Identity" />
+
+        <View
+          style={{
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            borderRadius: 14,
+            borderWidth: 1,
+            marginHorizontal: 16,
+            overflow: "hidden",
+          }}
+        >
+          <FormRow twoColumn>
+            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+              <ReadOnlyField label="First Name" required value={currentFirstName} />
+            </View>
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <ReadOnlyField label="Middle Name" value={currentMiddleName} />
+            </View>
+          </FormRow>
+
+          <FormRow twoColumn>
+            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+              <ReadOnlyField label="Last Name" required value={currentLastName} />
+            </View>
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <ReadOnlyField compact label="Email" value={currentEmail} />
+            </View>
+          </FormRow>
+
+          <FormRow twoColumn>
+            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+              <ReadOnlyField compact label="LRN" value={currentLrn} />
+            </View>
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <ReadOnlyField label="Grade Level" required value={currentGradeLevel} />
+            </View>
+          </FormRow>
+
+          <FormRow twoColumn>
+            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+              <EditableField
+                label="Date of Birth"
+                onChangeText={setDateOfBirth}
+                placeholder="mm/dd/yyyy"
+                required
+                value={dateOfBirth}
+              />
+            </View>
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <EditableField
+                autoCapitalize="words"
+                label="Gender"
+                onChangeText={setGender}
+                placeholder="Select"
+                required
+                value={gender}
+              />
+            </View>
+          </FormRow>
+
+          <View
+            style={{
+              flexDirection: "row",
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+            }}
+          >
+            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+              <EditableField
+                keyboardType="phone-pad"
+                label="Contact Number"
+                onChangeText={setPhone}
+                placeholder="0917..."
+                required
+                value={phone}
+              />
+            </View>
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <EditableField
+                autoCapitalize="words"
+                label="Home Address"
+                onChangeText={setAddress}
+                placeholder="Address..."
+                required
+                value={address}
+              />
+            </View>
+          </View>
+        </View>
+
+        <SectionHeader title="Emergency Contact" />
+
+        <View
+          style={{
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            borderRadius: 14,
+            borderWidth: 1,
+            marginHorizontal: 16,
+            overflow: "hidden",
+          }}
+        >
+          <FormRow>
+            <EditableField
+              autoCapitalize="words"
+              label="Guardian Name"
+              onChangeText={setFamilyName}
+              placeholder="Full name"
+              required
+              value={familyName}
+            />
+          </FormRow>
+
+          <View style={{ flexDirection: "row", paddingHorizontal: 14, paddingVertical: 12 }}>
+            <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
+              <EditableField
+                autoCapitalize="words"
+                label="Relationship"
+                onChangeText={setFamilyRelationship}
+                placeholder="Select"
+                required
+                value={familyRelationship}
+              />
+            </View>
+            <View style={{ flex: 1, paddingLeft: 12 }}>
+              <EditableField
+                keyboardType="phone-pad"
+                label="Guardian Contact"
+                onChangeText={setFamilyContact}
+                placeholder="0917..."
+                required
+                value={familyContact}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
           <Pressable
             onPress={() => void handleSave()}
             style={{
-              marginTop: 16,
-              borderRadius: 18,
-              backgroundColor: colors.text,
               alignItems: "center",
-              paddingVertical: 14,
+              backgroundColor: theme.red,
+              borderRadius: 10,
+              justifyContent: "center",
               opacity: updateMutation.isPending ? 0.7 : 1,
+              paddingVertical: 12,
             }}
           >
-            <Text style={{ color: colors.white, fontWeight: "800" }}>{updateMutation.isPending ? "Saving..." : "Save Profile"}</Text>
+            <View style={{ alignItems: "center", flexDirection: "row" }}>
+              <MaterialCommunityIcons color="#FFFFFF" name="content-save-outline" size={14} />
+              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "600", marginLeft: 7 }}>
+                {updateMutation.isPending ? "Saving Profile Changes..." : "Save Profile Changes"}
+              </Text>
+            </View>
           </Pressable>
-        </Card>
-
-        <View style={{ marginBottom: 26 }}>
-          <SectionTitle title="Quick Actions" right={<Pill label="Live API" backgroundColor={colors.paleGreen} color={colors.green} />} />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 12, paddingRight: 4 }}
-          >
-            {[
-              {
-                icon: "school-outline",
-                label: "Open Transcript",
-                color: colors.blue,
-                onPress: () => props.navigation.navigate("Transcript" as never),
-              },
-              {
-                icon: "clipboard-search-outline",
-                label: "Assessment History",
-                color: colors.green,
-                onPress: () => props.navigation.navigate("AssessmentHistory" as never),
-              },
-              {
-                icon: "camera-outline",
-                label: "Avatar Upload",
-                color: colors.amber,
-                onPress: () => void handleAvatarPick(),
-              },
-            ].map((item) => (
-              <Pressable key={item.label} onPress={item.onPress}>
-                <Card style={{ width: 146, minHeight: 102, alignItems: "center", justifyContent: "center" }}>
-                  <MaterialCommunityIcons name={item.icon as never} size={20} color={item.color} />
-                  <Text
-                    numberOfLines={2}
-                    style={{
-                      marginTop: 8,
-                      minHeight: 30,
-                      fontSize: 12,
-                      lineHeight: 16,
-                      fontWeight: "800",
-                      color: colors.text,
-                      textAlign: "center",
-                    }}
-                  >
-                    {item.label}
-                  </Text>
-                </Card>
-              </Pressable>
-            ))}
-          </ScrollView>
         </View>
 
-        <Card style={{ marginBottom: 18 }}>
-          <SectionTitle title="Profile Status" />
-          {overallProgress === 100 ? (
-            <Pill label="All required details complete" backgroundColor={colors.paleGreen} color={colors.green} />
-          ) : (
-            <EmptyState
-              emoji="⚠️"
-              title="Profile still needs attention"
-              subtitle="Complete your contact and guardian details so school records stay up to date."
-            />
-          )}
-          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-            Your profile information supports official student records and student-side transcript access.
-          </Text>
-        </Card>
+        <SectionHeader title="Profile Status" />
 
-        <Pressable
-          onPress={() => void logout()}
+        <View
           style={{
-            marginBottom: 8,
-            borderRadius: 20,
-            backgroundColor: colors.paleRed,
-            paddingVertical: 14,
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "row",
-            gap: 8,
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            borderRadius: 14,
+            borderWidth: 1,
+            marginHorizontal: 16,
+            overflow: "hidden",
           }}
         >
-          <MaterialCommunityIcons name="logout" size={18} color={colors.red} />
-          <Text style={{ fontSize: 14, fontWeight: "800", color: colors.red }}>Sign Out</Text>
-        </Pressable>
+          <View
+            style={{
+              alignItems: "center",
+              borderBottomColor: theme.border,
+              borderBottomWidth: 1,
+              flexDirection: "row",
+              paddingBottom: 10,
+              paddingHorizontal: 14,
+              paddingTop: 12,
+            }}
+          >
+            <MaterialCommunityIcons color={requiredCount === 0 ? theme.green : theme.amber} name="alert-circle-outline" size={14} />
+            <Text style={{ color: theme.text, flex: 1, fontSize: 12, fontWeight: "600", marginLeft: 8 }}>{completionHeadline}</Text>
+            <View
+              style={{
+                backgroundColor: requiredCount === 0 ? theme.greenSoft : theme.amberSoft,
+                borderRadius: 5,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+              }}
+            >
+              <Text style={{ color: requiredCount === 0 ? theme.green : theme.amber, fontSize: 10, fontWeight: "600" }}>
+                {requiredCount === 0 ? "0 left" : `${requiredCount} left`}
+              </Text>
+            </View>
+          </View>
+
+          {statusItems.map((item, index) => {
+            const complete = hasValue(item.value);
+            return (
+              <View
+                key={item.label}
+                style={{
+                  alignItems: "center",
+                  borderBottomColor: index === statusItems.length - 1 ? "transparent" : theme.border,
+                  borderBottomWidth: index === statusItems.length - 1 ? 0 : 1,
+                  flexDirection: "row",
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                }}
+              >
+                <View
+                  style={{
+                    alignItems: "center",
+                    backgroundColor: complete ? "rgba(34,201,122,0.1)" : "rgba(232,41,78,0.1)",
+                    borderColor: complete ? theme.green : theme.red,
+                    borderRadius: 999,
+                    borderWidth: 1.5,
+                    height: 18,
+                    justifyContent: "center",
+                    width: 18,
+                  }}
+                >
+                  <MaterialCommunityIcons color={complete ? theme.green : theme.red} name={complete ? "check" : "close"} size={11} />
+                </View>
+                <Text
+                  style={{
+                    color: complete ? "rgba(255,255,255,0.55)" : "rgba(255,160,160,0.82)",
+                    flex: 1,
+                    fontSize: 12,
+                    marginLeft: 10,
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={{ flexDirection: "row", marginHorizontal: 16, marginTop: 12 }}>
+          <QuickLink
+            icon="file-document-outline"
+            iconColor={theme.blue}
+            label="View Transcript"
+            onPress={() => props.navigation.navigate("Transcript" as never)}
+          />
+          <View style={{ width: 9 }} />
+          <QuickLink
+            icon="clipboard-check-outline"
+            iconColor={theme.purple}
+            label="Assessment History"
+            onPress={() => props.navigation.navigate("AssessmentHistory" as never)}
+          />
+        </View>
+
+        <SectionHeader title="Security" />
+
+        <View
+          style={{
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            borderRadius: 14,
+            borderWidth: 1,
+            marginHorizontal: 16,
+            overflow: "hidden",
+          }}
+        >
+          {[
+            {
+              label: "Current Password",
+              value: "********",
+            },
+            {
+              label: "New Password",
+              value: "Enter new password",
+            },
+            {
+              label: "Confirm New Password",
+              value: "Repeat new password",
+            },
+          ].map((row, index) => (
+            <View
+              key={row.label}
+              style={{
+                borderBottomColor: index === 2 ? "transparent" : theme.border,
+                borderBottomWidth: index === 2 ? 0 : 1,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: theme.muted,
+                  fontSize: 9,
+                  fontWeight: "600",
+                  letterSpacing: 0.5,
+                  marginBottom: 7,
+                  textTransform: "uppercase",
+                }}
+              >
+                {row.label}
+              </Text>
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  borderColor: theme.border2,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.dim,
+                    fontSize: row.label === "Current Password" ? 10 : 12,
+                    letterSpacing: row.label === "Current Password" ? 3 : 0,
+                  }}
+                >
+                  {row.value}
+                </Text>
+                <MaterialCommunityIcons color={theme.dim} name="eye-outline" size={13} />
+              </View>
+
+              {row.label === "New Password" ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
+                  {["8+ chars", "Uppercase", "Lowercase", "Number", "Special"].map((rule, ruleIndex) => (
+                    <View
+                      key={rule}
+                      style={{
+                        alignItems: "center",
+                        backgroundColor: "rgba(255,255,255,0.04)",
+                        borderColor: theme.border,
+                        borderRadius: 4,
+                        borderWidth: 1,
+                        flexDirection: "row",
+                        marginBottom: 6,
+                        marginRight: ruleIndex === 4 ? 0 : 8,
+                        paddingHorizontal: 7,
+                        paddingVertical: 3,
+                      }}
+                    >
+                      <Text style={{ color: theme.dim, fontSize: 8, marginRight: 4 }}>o</Text>
+                      <Text style={{ color: theme.dim, fontSize: 9 }}>{rule}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
+
+        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+          <View
+            style={{
+              alignItems: "center",
+              borderColor: theme.blueLine,
+              borderRadius: 10,
+              borderWidth: 1,
+              justifyContent: "center",
+              opacity: 0.6,
+              paddingVertical: 12,
+            }}
+          >
+            <Text style={{ color: theme.blue, fontSize: 13, fontWeight: "500" }}>Update Password</Text>
+          </View>
+          <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 8, textAlign: "center" }}>
+            Password changes are not available in the mobile app yet.
+          </Text>
+        </View>
+
+        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
+          <Pressable
+            onPress={() => void logout()}
+            style={{
+              alignItems: "center",
+              backgroundColor: theme.redSoft,
+              borderColor: theme.redLine,
+              borderRadius: 10,
+              borderWidth: 1,
+              flexDirection: "row",
+              justifyContent: "center",
+              paddingVertical: 12,
+            }}
+          >
+            <MaterialCommunityIcons color={theme.red} name="logout" size={16} />
+            <Text style={{ color: theme.red, fontSize: 13, fontWeight: "600", marginLeft: 8 }}>Sign Out</Text>
+          </Pressable>
+        </View>
       </View>
     </ScreenScroll>
   );

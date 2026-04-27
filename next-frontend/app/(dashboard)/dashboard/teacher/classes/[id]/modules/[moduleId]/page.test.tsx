@@ -317,7 +317,7 @@ describe('TeacherModuleDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Release Module' })).toBeInTheDocument();
   });
 
-  it('opens read-only preview for core default assessment content', async () => {
+  it('routes core default assessment content to the read-only editor shell', async () => {
     mockedModuleService.getByClass.mockResolvedValueOnce({
       success: true,
       message: 'ok',
@@ -374,10 +374,74 @@ describe('TeacherModuleDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View Content' }));
 
     await waitFor(() => {
-      expect(mockedAssessmentService.getById).toHaveBeenCalledWith('assessment-existing');
+      expect(pushMock).toHaveBeenCalledWith(
+        '/dashboard/teacher/assessments/assessment-existing/edit?mode=view&classId=class-1&moduleId=module-1',
+      );
     });
-    expect(await screen.findByRole('heading', { name: 'Core Quiz' })).toBeInTheDocument();
-    expect(screen.getByText('Read-only preview of template-managed content.')).toBeInTheDocument();
+    expect(mockedAssessmentService.getById).not.toHaveBeenCalled();
+  });
+
+  it('routes core default lesson content to the teacher read-only reader', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: true,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [
+            {
+              id: 'section-1',
+              moduleId: 'module-1',
+              title: 'Section A',
+              description: '',
+              order: 1,
+              items: [
+                {
+                  id: 'item-1',
+                  moduleSectionId: 'section-1',
+                  itemType: 'lesson',
+                  lessonId: 'lesson-existing',
+                  order: 1,
+                  isVisible: true,
+                  isRequired: true,
+                  isGiven: false,
+                  isCoreTemplateAsset: true,
+                  lesson: {
+                    id: 'lesson-existing',
+                    classId: 'class-1',
+                    title: 'Core Lesson',
+                    order: 1,
+                    isDraft: false,
+                  },
+                },
+              ],
+            },
+          ],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    fireEvent.click(screen.getByRole('button', { name: 'View Content' }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(
+        '/dashboard/teacher/lessons/lesson-existing/view?classId=class-1&moduleId=module-1',
+      );
+    });
+    expect(mockedLessonService.getById).not.toHaveBeenCalled();
   });
 
   it('creates and attaches a new assessment block then opens assessment editor', async () => {

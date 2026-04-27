@@ -5,7 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { AiProxyService } from '../ai-mentor/ai-proxy.service';
@@ -24,6 +24,7 @@ import {
   jaThreadMessages,
   jaThreads,
   jaXpLedger,
+  lessons,
 } from '../../drizzle/schema';
 import {
   CreateJaAskThreadDto,
@@ -62,10 +63,29 @@ type JaGeneratedPacket = {
   items: JaGeneratedItem[];
 };
 
+type JaAskLessonContext = {
+  lessonId: string;
+  title: string;
+  moduleTitle?: string | null;
+  sectionTitle?: string | null;
+};
+
+type JaAccessibleAskSources = {
+  allowedLessonIds: Set<string>;
+  allowedAssessmentIds: Set<string>;
+  lessonContexts: JaAskLessonContext[];
+};
+
 const JA_QUESTION_COUNT = 10;
 const JA_SESSION_XP_BASE = 40;
 const JA_SESSION_XP_PER_CORRECT = 6;
 const JA_ASK_MAX_HISTORY = 8;
+const JA_ASK_GUIDELINES = [
+  'Pick a visible lesson first when you want a summary, study plan, or focused explanation.',
+  'Ask for help with the current class only. JA blocks unrelated subject jumps and exact-answer requests.',
+  'Useful prompts: summarize this lesson, explain the main idea, quiz me, what should I review next?',
+];
+const JA_THREAD_CONTEXT_PREFIX = 'LESSON_CONTEXT::';
 
 @Injectable()
 export class JaService {
@@ -91,6 +111,38 @@ export class JaService {
       return (payload as { data: T }).data;
     }
     return payload as T;
+  }
+
+  private buildAskThreadContextMessage(context: JaAskLessonContext) {
+    return `${JA_THREAD_CONTEXT_PREFIX}${JSON.stringify(context)}`;
+  }
+
+  private parseAskThreadContextMessage(
+    content: string | null | undefined,
+  ): JaAskLessonContext | null {
+    if (!content?.startsWith(JA_THREAD_CONTEXT_PREFIX)) return null;
+    try {
+      const parsed = JSON.parse(
+        content.slice(JA_THREAD_CONTEXT_PREFIX.length),
+      ) as Partial<JaAskLessonContext>;
+      if (
+        !parsed ||
+        typeof parsed.lessonId !== 'string' ||
+        typeof parsed.title !== 'string'
+      ) {
+        return null;
+      }
+      return {
+        lessonId: parsed.lessonId,
+        title: parsed.title,
+        moduleTitle:
+          typeof parsed.moduleTitle === 'string' ? parsed.moduleTitle : null,
+        sectionTitle:
+          typeof parsed.sectionTitle === 'string' ? parsed.sectionTitle : null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private isTutorItemVisible(item: {
@@ -284,7 +336,10 @@ export class JaService {
     return { isCorrect: false, scoreDelta: 0 };
   }
 
-  private async getAllowedSourceIds(studentId: string, classId: string) {
+  private async getAccessibleAskSources(
+    studentId: string,
+    classId: string,
+  ): Promise<JaAccessibleAskSources> {
     const enrollmentRows = await this.db.query.enrollments.findMany({
       where: and(
         eq(enrollments.studentId, studentId),
@@ -307,6 +362,7 @@ export class JaService {
       return {
         allowedLessonIds: new Set<string>(),
         allowedAssessmentIds: new Set<string>(),
+        lessonContexts: [],
       };
     }
 
@@ -315,10 +371,16 @@ export class JaService {
         inArray(classModules.classId, classIds),
         eq(classModules.isVisible, true),
       ),
+      orderBy: [asc(classModules.order), asc(classModules.title)],
       with: {
         sections: {
+          orderBy: [asc(sql`"order"`), asc(sql`"title"`)],
+          columns: {
+            title: true,
+          },
           with: {
             items: {
+              orderBy: [asc(sql`"order"`), asc(sql`"id"`)],
               columns: {
                 itemType: true,
                 isVisible: true,
@@ -332,6 +394,7 @@ export class JaService {
                   columns: {
                     id: true,
                     isDraft: true,
+                    title: true,
                   },
                 },
                 assessment: {
@@ -349,6 +412,7 @@ export class JaService {
 
     const allowedLessonIds = new Set<string>();
     const allowedAssessmentIds = new Set<string>();
+    const lessonContexts = new Map<string, JaAskLessonContext>();
 
     modules.forEach((module) => {
       if (module.isLocked) return;
@@ -363,6 +427,14 @@ export class JaService {
           }
           if (item.itemType === 'lesson' && item.lessonId) {
             allowedLessonIds.add(item.lessonId);
+            if (item.lesson?.title && !lessonContexts.has(item.lessonId)) {
+              lessonContexts.set(item.lessonId, {
+                lessonId: item.lessonId,
+                title: item.lesson.title,
+                moduleTitle: module.title,
+                sectionTitle: section.title,
+              });
+            }
           }
           if (item.itemType === 'assessment' && item.assessmentId) {
             allowedAssessmentIds.add(item.assessmentId);
@@ -371,7 +443,11 @@ export class JaService {
       });
     });
 
-    return { allowedLessonIds, allowedAssessmentIds };
+    return {
+      allowedLessonIds,
+      allowedAssessmentIds,
+      lessonContexts: Array.from(lessonContexts.values()),
+    };
   }
 
   private async assertStudentClassAccess(studentId: string, classId: string) {
@@ -524,7 +600,7 @@ export class JaService {
 
     await this.assertStudentClassAccess(studentId, selectedClassId);
     const { allowedLessonIds, allowedAssessmentIds } =
-      await this.getAllowedSourceIds(studentId, selectedClassId);
+      await this.getAccessibleAskSources(studentId, selectedClassId);
 
     const sanitizedRecommendations = Array.isArray(data.recommendations)
       ? (data.recommendations as Array<Record<string, unknown>>).filter(
@@ -649,10 +725,15 @@ export class JaService {
         mastery: null,
         badges: [],
         practice,
-        ask: { threads: [] },
+        ask: { threads: [], lessonContexts: [], guidelines: JA_ASK_GUIDELINES },
         review: { eligibleAttempts: [] },
       };
     }
+
+    const { lessonContexts } = await this.getAccessibleAskSources(
+      studentId,
+      selectedClassId,
+    );
 
     const [threads, eligibleAttempts, reviewSessions, masteryRows] =
       await Promise.all([
@@ -772,7 +853,11 @@ export class JaService {
       },
       badges,
       practice,
-      ask: { threads },
+      ask: {
+        threads,
+        lessonContexts,
+        guidelines: JA_ASK_GUIDELINES,
+      },
       review: {
         eligibleAttempts,
         sessions: reviewSessions,
@@ -789,8 +874,15 @@ export class JaService {
         ...base,
         threads: [],
         quickActions: [],
+        lessonContexts: [],
+        guidelines: JA_ASK_GUIDELINES,
       };
     }
+
+    const { lessonContexts } = await this.getAccessibleAskSources(
+      studentId,
+      base.selectedClassId,
+    );
 
     const threads = await this.db.query.jaThreads.findMany({
       where: and(
@@ -812,6 +904,8 @@ export class JaService {
     return {
       ...base,
       threads,
+      lessonContexts,
+      guidelines: JA_ASK_GUIDELINES,
       quickActions: [
         'Explain this lesson',
         'Give me a hint',
@@ -824,13 +918,30 @@ export class JaService {
   async createAskThread(user: UserContext, dto: CreateJaAskThreadDto) {
     const studentId = this.resolveUserId(user);
     await this.assertStudentClassAccess(studentId, dto.classId);
+    const { lessonContexts } = await this.getAccessibleAskSources(
+      studentId,
+      dto.classId,
+    );
+    const selectedLessonContext = dto.lessonId
+      ? lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ?? null
+      : null;
+
+    if (dto.lessonId && !selectedLessonContext) {
+      throw new BadRequestException(
+        'Selected lesson is not available for JA Ask.',
+      );
+    }
 
     const [thread] = await this.db
       .insert(jaThreads)
       .values({
         studentId,
         classId: dto.classId,
-        title: dto.title?.trim() || 'JA Ask Thread',
+        title:
+          dto.title?.trim() ||
+          (selectedLessonContext
+            ? `Ask: ${selectedLessonContext.title}`
+            : 'JA Ask Thread'),
         status: 'active',
       })
       .returning({
@@ -841,8 +952,22 @@ export class JaService {
         updatedAt: jaThreads.updatedAt,
       });
 
+    if (selectedLessonContext) {
+      await this.db.insert(jaThreadMessages).values({
+        threadId: thread.id,
+        role: 'system',
+        content: this.buildAskThreadContextMessage(selectedLessonContext),
+      });
+    }
+
     return {
-      thread,
+      thread: {
+        ...thread,
+        contextLessonId: selectedLessonContext?.lessonId ?? null,
+        contextLessonTitle: selectedLessonContext?.title ?? null,
+        contextModuleTitle: selectedLessonContext?.moduleTitle ?? null,
+        contextSectionTitle: selectedLessonContext?.sectionTitle ?? null,
+      },
       messages: [],
     };
   }
@@ -882,9 +1007,25 @@ export class JaService {
       limit: 40,
     });
 
+    const selectedLessonContext =
+      messages.reduce<JaAskLessonContext | null>((current, entry) => {
+        if (current) return current;
+        if (entry.role !== 'system') return current;
+        return this.parseAskThreadContextMessage(entry.content);
+      }, null) ?? null;
+    const visibleMessages = [...messages]
+      .reverse()
+      .filter((entry) => entry.role !== 'system');
+
     return {
-      thread,
-      messages: [...messages].reverse(),
+      thread: {
+        ...thread,
+        contextLessonId: selectedLessonContext?.lessonId ?? null,
+        contextLessonTitle: selectedLessonContext?.title ?? null,
+        contextModuleTitle: selectedLessonContext?.moduleTitle ?? null,
+        contextSectionTitle: selectedLessonContext?.sectionTitle ?? null,
+      },
+      messages: visibleMessages,
     };
   }
   async sendAskMessage(
@@ -910,14 +1051,72 @@ export class JaService {
     }
 
     await this.assertStudentClassAccess(studentId, thread.classId);
-    const { allowedLessonIds, allowedAssessmentIds } =
-      await this.getAllowedSourceIds(studentId, thread.classId);
+    const { allowedLessonIds, allowedAssessmentIds, lessonContexts } =
+      await this.getAccessibleAskSources(studentId, thread.classId);
 
     if (allowedLessonIds.size === 0 && allowedAssessmentIds.size === 0) {
       throw new BadRequestException(
         'You need completed visible class material before using JA Ask.',
       );
     }
+
+    const latestContextMessage = await this.db.query.jaThreadMessages.findFirst({
+      where: and(
+        eq(jaThreadMessages.threadId, threadId),
+        eq(jaThreadMessages.role, 'system'),
+      ),
+      columns: {
+        content: true,
+      },
+      orderBy: [desc(jaThreadMessages.createdAt)],
+    });
+    const persistedLessonContext = this.parseAskThreadContextMessage(
+      latestContextMessage?.content,
+    );
+    const requestedLessonContext = dto.lessonId
+      ? lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ?? null
+      : null;
+
+    if (dto.lessonId && !requestedLessonContext) {
+      throw new BadRequestException(
+        'Selected lesson is not available for JA Ask.',
+      );
+    }
+
+    let selectedLessonContext =
+      requestedLessonContext ??
+      (persistedLessonContext &&
+      allowedLessonIds.has(persistedLessonContext.lessonId)
+        ? persistedLessonContext
+        : null);
+    let threadTitle = thread.title;
+
+    if (
+      requestedLessonContext &&
+      requestedLessonContext.lessonId !== persistedLessonContext?.lessonId
+    ) {
+      threadTitle = `Ask: ${requestedLessonContext.title}`;
+      await this.db.insert(jaThreadMessages).values({
+        threadId,
+        role: 'system',
+        content: this.buildAskThreadContextMessage(requestedLessonContext),
+      });
+      await this.db
+        .update(jaThreads)
+        .set({
+          title: threadTitle,
+          updatedAt: new Date(),
+        })
+        .where(eq(jaThreads.id, threadId));
+      selectedLessonContext = requestedLessonContext;
+    }
+
+    const effectiveAllowedLessonIds = selectedLessonContext
+      ? new Set([selectedLessonContext.lessonId])
+      : allowedLessonIds;
+    const effectiveAllowedAssessmentIds = selectedLessonContext
+      ? new Set<string>()
+      : allowedAssessmentIds;
 
     const [studentMessage] = await this.db
       .insert(jaThreadMessages)
@@ -954,12 +1153,17 @@ export class JaService {
         threadId,
         message: dto.message.trim(),
         quickAction: dto.quickAction ?? null,
-        history: [...history].reverse().map((entry) => ({
-          role: entry.role,
-          content: entry.content,
-        })),
-        allowedLessonIds: Array.from(allowedLessonIds),
-        allowedAssessmentIds: Array.from(allowedAssessmentIds),
+        lessonId: selectedLessonContext?.lessonId ?? null,
+        lessonTitle: selectedLessonContext?.title ?? null,
+        history: [...history]
+          .reverse()
+          .filter((entry) => entry.role !== 'system')
+          .map((entry) => ({
+            role: entry.role,
+            content: entry.content,
+          })),
+        allowedLessonIds: Array.from(effectiveAllowedLessonIds),
+        allowedAssessmentIds: Array.from(effectiveAllowedAssessmentIds),
       },
     );
 
@@ -973,8 +1177,8 @@ export class JaService {
 
     const citations = this.sanitizeCitations(
       data.citations,
-      allowedLessonIds,
-      allowedAssessmentIds,
+      effectiveAllowedLessonIds,
+      effectiveAllowedAssessmentIds,
     );
 
     const [assistantMessage] = await this.db
@@ -1030,7 +1234,11 @@ export class JaService {
       thread: {
         id: thread.id,
         classId: thread.classId,
-        title: thread.title,
+        title: threadTitle,
+        contextLessonId: selectedLessonContext?.lessonId ?? null,
+        contextLessonTitle: selectedLessonContext?.title ?? null,
+        contextModuleTitle: selectedLessonContext?.moduleTitle ?? null,
+        contextSectionTitle: selectedLessonContext?.sectionTitle ?? null,
       },
       message: {
         id: assistantMessage.id,
@@ -1116,7 +1324,7 @@ export class JaService {
     await this.assertStudentClassAccess(studentId, dto.classId);
 
     const { allowedLessonIds, allowedAssessmentIds } =
-      await this.getAllowedSourceIds(studentId, dto.classId);
+      await this.getAccessibleAskSources(studentId, dto.classId);
     if (allowedLessonIds.size === 0 && allowedAssessmentIds.size === 0) {
       throw new BadRequestException(
         'You have not completed enough class material to generate JA practice yet.',
@@ -1235,7 +1443,7 @@ export class JaService {
     }
 
     const { allowedLessonIds, allowedAssessmentIds } =
-      await this.getAllowedSourceIds(studentId, dto.classId);
+      await this.getAccessibleAskSources(studentId, dto.classId);
 
     const payload = await this.aiProxyService.forward(
       'POST',

@@ -653,9 +653,15 @@ export default function StudentModuleDetailPage() {
                   Back to Module
                 </Button>
                 <article className="student-module-view__reader">
-                  {lessonBlocks.length === 0 ? (
+                  {lesson?.description ? (
+                    <RichTextRenderer
+                      html={lesson.description}
+                      className="student-module-view__lesson-description"
+                    />
+                  ) : null}
+                  {lessonBlocks.length === 0 && !lesson?.description ? (
                     <p className="text-sm text-[var(--student-text-muted)]">No lesson content available.</p>
-                  ) : (
+                  ) : lessonBlocks.length > 0 ? (
                     <div className="space-y-6">
                       {lessonBlocks.map((block) => (
                         <LessonBlockStudentRenderer
@@ -667,7 +673,7 @@ export default function StudentModuleDetailPage() {
                         />
                       ))}
                     </div>
-                  )}
+                  ) : null}
                 </article>
 
                 {lessonAttachments.length > 0 ? (

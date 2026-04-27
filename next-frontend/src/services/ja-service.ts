@@ -119,6 +119,7 @@ export const jaService = {
   async createAskThread(params: {
     classId: string;
     title?: string;
+    lessonId?: string;
   }): Promise<Envelope<JaAskThreadResponse>> {
     const { data } = await api.post("/ai/student/ja/ask/threads", params);
     return normalizeEnvelope<JaAskThreadResponse>(data);
@@ -131,7 +132,7 @@ export const jaService = {
 
   async sendAskMessage(
     threadId: string,
-    payload: { message: string; quickAction?: string },
+    payload: { message: string; quickAction?: string; lessonId?: string },
   ): Promise<Envelope<JaAskResponsePayload>> {
     const { data } = await api.post(
       `/ai/student/ja/ask/threads/${threadId}/messages`,

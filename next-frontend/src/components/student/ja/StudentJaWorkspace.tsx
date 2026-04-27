@@ -1,19 +1,22 @@
 "use client";
 
 import {
-  FormEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
+  BookOpen,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleDot,
   LockKeyhole,
   Loader2,
@@ -22,19 +25,24 @@ import {
   ShieldAlert,
   Sparkles,
   Swords,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getMotionProps } from "@/components/student/student-motion";
 import { StudentStatusChip } from "@/components/student/student-primitives";
+import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { jaService } from "@/services/ja-service";
 import type {
   JaAskMessage,
+  JaAskLessonContextSummary,
   JaHubResponse,
   JaMode,
   JaPracticeSessionItem,
   JaPracticeSessionResponse,
+  JaAskThreadSummary,
 } from "@/types/ja";
 import { cn } from "@/utils/cn";
 
@@ -83,10 +91,55 @@ const MODE_META: Record<
   },
 };
 
-const ASK_QUICK_PROMPTS = [
-  "Explain this topic in simpler words.",
-  "Give me 3 quick practice checks.",
-  "Make a 5-minute study plan for tonight.",
+const JA_COACH_SPLIT_PATTERN = /\s*JA Coach:\s*/i;
+const JA_AVATAR_IMAGES = {
+  default: "/images/JA/ja_wave.png",
+  guarded: "/images/JA/ja_sad.png",
+  thinking: "/images/JA/ja_thinking.png",
+} as const;
+const DEFAULT_JA_ASK_GUIDELINES = [
+  "Pick a visible lesson first when you want a summary, explanation, or study plan.",
+  "Ask for concept help, quick reviews, what to study next, or a short lesson recap.",
+  "JA blocks requests that jump to unrelated subjects or ask for direct answer keys.",
+];
+
+interface JaAskPresetAction {
+  id: string;
+  label: string;
+}
+
+const ASK_PRESET_GROUPS: Array<{
+  id: string;
+  label: string;
+  items: JaAskPresetAction[];
+}> = [
+  {
+    id: "ask",
+    label: "Ask",
+    items: [
+      { id: "explain-lesson", label: "Explain the lesson" },
+      { id: "summarize-main-idea", label: "Summarize main idea" },
+      { id: "study-next", label: "What should I study next?" },
+    ],
+  },
+  {
+    id: "question",
+    label: "Question",
+    items: [
+      { id: "give-question", label: "Give me a question" },
+      { id: "quiz-me", label: "Quiz me on this lesson" },
+      { id: "unclear-parts", label: "Unclear parts check" },
+    ],
+  },
+  {
+    id: "review",
+    label: "Review",
+    items: [
+      { id: "key-concepts", label: "Key concepts review" },
+      { id: "study-plan", label: "Make a study plan" },
+      { id: "vocabulary-review", label: "Vocabulary review" },
+    ],
+  },
 ];
 
 function isJaMode(value: string | null | undefined): value is JaMode {
@@ -129,6 +182,58 @@ function getActivityTimestamp(value?: string | null) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function splitCoachPrompt(prompt: string) {
+  const parts = prompt.split(JA_COACH_SPLIT_PATTERN);
+  if (parts.length < 2) {
+    return { prompt: prompt.trim(), coach: "" };
+  }
+  return {
+    prompt: parts[0].trim(),
+    coach: parts.slice(1).join(" JA Coach: ").trim(),
+  };
+}
+
+function JaAssistantAvatar({
+  mood = "default",
+}: {
+  mood?: keyof typeof JA_AVATAR_IMAGES;
+}) {
+  return (
+    <span className="ja-msg-avatar ja-av" aria-hidden="true">
+      <Image
+        src={JA_AVATAR_IMAGES[mood]}
+        alt=""
+        width={40}
+        height={40}
+        className="ja-msg-avatar__image"
+      />
+    </span>
+  );
+}
+
+function buildLessonContextLabel(context: JaAskLessonContextSummary) {
+  return [context.moduleTitle, context.sectionTitle].filter(Boolean).join(" / ");
+}
+
+function resolveThreadLessonContext(
+  thread: {
+    contextLessonId?: string | null;
+    contextLessonTitle?: string | null;
+    contextModuleTitle?: string | null;
+    contextSectionTitle?: string | null;
+  },
+  fallback: JaAskLessonContextSummary | null = null,
+) {
+  return thread.contextLessonId && thread.contextLessonTitle
+    ? {
+        lessonId: thread.contextLessonId,
+        title: thread.contextLessonTitle,
+        moduleTitle: thread.contextModuleTitle ?? null,
+        sectionTitle: thread.contextSectionTitle ?? null,
+      }
+    : fallback;
+}
+
 interface StudentJaWorkspaceProps {
   className?: string;
   initialClassId?: string;
@@ -163,9 +268,7 @@ export default function StudentJaWorkspace({
   const [mode, setMode] = useState<JaMode>(
     isJaMode(initialMode) ? initialMode : "ask",
   );
-  const [showHome, setShowHome] = useState(
-    !isJaMode(initialMode) && (!initialClassId || initialEntry === "sidebar"),
-  );
+  const [showHome, setShowHome] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [classSelectorOpen, setClassSelectorOpen] = useState(
     !(initialClassId && initialEntry && initialEntry !== "sidebar"),
@@ -173,21 +276,100 @@ export default function StudentJaWorkspace({
   const [classMenuOpen, setClassMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [activityFilter, setActivityFilter] = useState<JaActivityFilter>("all");
+  const [activeActivityKey, setActiveActivityKey] = useState("");
 
   const [practiceSession, setPracticeSession] = useState<JaPracticeSessionResponse | null>(null);
   const [reviewSession, setReviewSession] = useState<JaPracticeSessionResponse | null>(null);
+  const [reviewCursor, setReviewCursor] = useState(0);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [busy, setBusy] = useState(false);
 
   const [askThreadId, setAskThreadId] = useState<string>("");
+  const [askThreadClassId, setAskThreadClassId] = useState<string>("");
   const [askMessages, setAskMessages] = useState<JaAskMessage[]>([]);
-  const [askInput, setAskInput] = useState("");
+  const [askError, setAskError] = useState("");
+  const [selectedLessonContext, setSelectedLessonContext] =
+    useState<JaAskLessonContextSummary | null>(null);
+  const [askMenuOpen, setAskMenuOpen] = useState(false);
   const [showGuardrailModal, setShowGuardrailModal] = useState(false);
   const askTailRef = useRef<HTMLDivElement | null>(null);
   const classMenuRef = useRef<HTMLDivElement | null>(null);
+  const askMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const clearAnswersForItems = useCallback((itemIds: string[]) => {
+    if (itemIds.length === 0) return;
+    const itemIdSet = new Set(itemIds);
+    setAnswers((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([itemId]) => !itemIdSet.has(itemId)),
+      ),
+    );
+  }, []);
+
+  const resetReviewStage = useCallback(() => {
+    clearAnswersForItems(reviewSession?.items.map((item) => item.id) ?? []);
+    setReviewSession(null);
+    setReviewCursor(0);
+    setActiveActivityKey("");
+  }, [clearAnswersForItems, reviewSession]);
+
+  const startNewAskChat = useCallback(() => {
+    setAskThreadId("");
+    setAskThreadClassId(selectedClassId);
+    setAskMessages([]);
+    setAskError("");
+    setSelectedLessonContext(null);
+    setAskMenuOpen(false);
+    setShowGuardrailModal(false);
+    setActiveActivityKey("");
+    setMode("ask");
+    setShowHome(false);
+    setActivityFilter("ask");
+  }, [selectedClassId]);
+
+  const syncAskThreadSummary = useCallback(
+    (
+      thread: {
+        id: string;
+        title: string;
+        classId: string;
+        contextLessonId?: string | null;
+        contextLessonTitle?: string | null;
+        contextModuleTitle?: string | null;
+        contextSectionTitle?: string | null;
+      },
+      timestamp: string,
+    ) => {
+      setHub((current) => {
+        if (!current || current.selectedClassId !== thread.classId) return current;
+        const nextSummary: JaAskThreadSummary = {
+          id: thread.id,
+          title: thread.title,
+          status: "active",
+          updatedAt: timestamp,
+          lastMessageAt: timestamp,
+          contextLessonId: thread.contextLessonId ?? null,
+          contextLessonTitle: thread.contextLessonTitle ?? null,
+          contextModuleTitle: thread.contextModuleTitle ?? null,
+          contextSectionTitle: thread.contextSectionTitle ?? null,
+        };
+        return {
+          ...current,
+          ask: {
+            ...current.ask,
+            threads: [
+              nextSummary,
+              ...current.ask.threads.filter((entry) => entry.id !== thread.id),
+            ].slice(0, 12),
+          },
+        };
+      });
+    },
+    [],
+  );
 
   const refreshHub = useCallback(
-    async (classId?: string) => {
+    async (classId?: string, options?: { resetContext?: boolean }) => {
       setLoading(true);
       try {
         const res = await jaService.getHub(classId);
@@ -195,17 +377,32 @@ export default function StudentJaWorkspace({
         const nextClassId =
           res.data.selectedClassId ?? classId ?? res.data.classes[0]?.id ?? "";
         setSelectedClassId(nextClassId);
-        if (!askThreadId && res.data.ask.threads[0]?.id) {
-          setAskThreadId(res.data.ask.threads[0].id);
+        setAskThreadId((current) => {
+          if (options?.resetContext) {
+            return res.data.ask.threads[0]?.id ?? "";
+          }
+          return current || res.data.ask.threads[0]?.id || "";
+        });
+        if (options?.resetContext) {
+          setAskThreadClassId("");
+          setAskMessages([]);
+          setAskError("");
+          setSelectedLessonContext(null);
+          setAskMenuOpen(false);
+          setPracticeSession(null);
+          setReviewSession(null);
+          setAnswers({});
+          setReviewCursor(0);
+          setActiveActivityKey("");
         }
-      } catch {
-        toast.error("Failed to load JA hub.");
+      } catch (error: unknown) {
+        toast.error(getApiErrorMessage(error, "Failed to load JA hub."));
         setHub(null);
       } finally {
         setLoading(false);
       }
     },
-    [askThreadId],
+    [],
   );
 
   useEffect(() => {
@@ -232,12 +429,35 @@ export default function StudentJaWorkspace({
     void (async () => {
       try {
         const res = await jaService.getAskThread(askThreadId);
+        if (selectedClassId && res.data.thread.classId !== selectedClassId) {
+          setAskThreadId("");
+          setAskThreadClassId("");
+          setAskMessages([]);
+          setAskError("");
+          return;
+        }
+        setAskThreadClassId(res.data.thread.classId);
         setAskMessages(res.data.messages);
-      } catch {
-        toast.error("Failed to load JA Ask thread.");
+        setSelectedLessonContext(resolveThreadLessonContext(res.data.thread));
+      } catch (error: unknown) {
+        setAskThreadId("");
+        setAskThreadClassId("");
+        setAskMessages([]);
+        setAskError(getApiErrorMessage(error, "Failed to load JA Ask thread."));
+        toast.error(getApiErrorMessage(error, "Failed to load JA Ask thread."));
       }
     })();
-  }, [askThreadId, mode]);
+  }, [askThreadId, mode, selectedClassId]);
+
+  useEffect(() => {
+    if (!selectedLessonContext || !hub) return;
+    const stillVisible = hub.ask.lessonContexts.some(
+      (entry) => entry.lessonId === selectedLessonContext.lessonId,
+    );
+    if (!stillVisible) {
+      setSelectedLessonContext(null);
+    }
+  }, [hub, selectedLessonContext]);
 
   useEffect(() => {
     if (!classMenuOpen) return;
@@ -249,6 +469,17 @@ export default function StudentJaWorkspace({
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [classMenuOpen]);
+
+  useEffect(() => {
+    if (!askMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!askMenuRef.current?.contains(event.target as Node)) {
+        setAskMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [askMenuOpen]);
 
   useEffect(() => {
     const activeSession = mode === "practice" ? practiceSession : reviewSession;
@@ -268,18 +499,37 @@ export default function StudentJaWorkspace({
   }, [mode, practiceSession, reviewSession]);
 
   const currentSession = mode === "practice" ? practiceSession : reviewSession;
-  const activeItem = useMemo(() => {
+  const activeItemIndex = useMemo(() => {
     if (!currentSession) return null;
-    return (
-      currentSession.items.find((item) => !item.response) ??
-      currentSession.items[currentSession.items.length - 1] ??
-      null
-    );
-  }, [currentSession]);
+    if (currentSession.items.length === 0) return -1;
+    if (mode === "review") {
+      return Math.min(Math.max(reviewCursor, 0), currentSession.items.length - 1);
+    }
+    const nextIndex = currentSession.items.findIndex((item) => !item.response);
+    return nextIndex >= 0 ? nextIndex : currentSession.items.length - 1;
+  }, [currentSession, mode, reviewCursor]);
+
+  const activeItem =
+    currentSession && activeItemIndex !== null && activeItemIndex >= 0
+      ? currentSession.items[activeItemIndex] ?? null
+      : null;
+
+  const activeItemPrompt = useMemo(
+    () => splitCoachPrompt(activeItem?.prompt ?? ""),
+    [activeItem?.prompt],
+  );
+  const activeCoachText = activeItemPrompt.coach || activeItem?.hint || "";
 
   const answeredCount = useMemo(
     () => currentSession?.items.filter((item) => Boolean(item.response)).length ?? 0,
     [currentSession],
+  );
+  const allSessionItemsReady = useMemo(
+    () =>
+      currentSession?.items.every(
+        (item) => Boolean(item.response) || itemReady(item, answers[item.id]),
+      ) ?? false,
+    [answers, currentSession],
   );
   const canComplete = Boolean(
     currentSession &&
@@ -315,7 +565,9 @@ export default function StudentJaWorkspace({
       id: thread.id,
       mode: "ask" as const,
       title: thread.title || "Ask thread",
-      subtitle: "Ask thread",
+      subtitle: thread.contextLessonTitle
+        ? `Lesson: ${thread.contextLessonTitle}`
+        : "Ask thread",
       classLabel: className,
       status: thread.status.toUpperCase(),
       updatedAt: thread.lastMessageAt || thread.updatedAt,
@@ -350,15 +602,23 @@ export default function StudentJaWorkspace({
         : activityItems.filter((item) => item.mode === activityFilter),
     [activityFilter, activityItems],
   );
+  const askLessonContexts = hub?.ask.lessonContexts ?? [];
+  const askGuidelines = hub?.ask.guidelines?.length
+    ? hub.ask.guidelines
+    : DEFAULT_JA_ASK_GUIDELINES;
 
   const loadSession = async (sessionId: string, targetMode: JaMode) => {
     try {
+      setActiveActivityKey(`${targetMode}:${sessionId}`);
       const res =
         targetMode === "practice"
           ? await jaService.getSession(sessionId)
           : await jaService.getReviewSession(sessionId);
       if (targetMode === "practice") setPracticeSession(res.data);
-      if (targetMode === "review") setReviewSession(res.data);
+      if (targetMode === "review") {
+        setReviewSession(res.data);
+        setReviewCursor(0);
+      }
 
       const draft: AnswerState = {};
       res.data.items.forEach((item) => {
@@ -373,12 +633,18 @@ export default function StudentJaWorkspace({
         }
       });
       setAnswers(draft);
-    } catch {
-      toast.error("Failed to load JA session.");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Failed to load JA session."));
     }
   };
 
   const selectMode = (nextMode: JaMode) => {
+    if (nextMode === "review") {
+      resetReviewStage();
+    } else {
+      setActiveActivityKey("");
+    }
+    setAskMenuOpen(false);
     setMode(nextMode);
     setShowHome(false);
     setActivityFilter(nextMode);
@@ -387,11 +653,39 @@ export default function StudentJaWorkspace({
   const selectActivity = (item: JaActivityItem) => {
     setShowHome(false);
     setMode(item.mode);
+    setActivityFilter(item.mode);
+    setActiveActivityKey(`${item.mode}:${item.id}`);
+    setAskMenuOpen(false);
     if (item.mode === "ask") {
       setAskThreadId(item.id);
       return;
     }
     void loadSession(item.id, item.mode);
+  };
+
+  const selectAskLessonContext = (context: JaAskLessonContextSummary) => {
+    setSelectedLessonContext(context);
+    setAskThreadId("");
+    setAskThreadClassId(selectedClassId);
+    setAskMessages([]);
+    setAskError("");
+    setAskMenuOpen(false);
+    setShowGuardrailModal(false);
+    setActiveActivityKey("");
+    setMode("ask");
+    setShowHome(false);
+    setActivityFilter("ask");
+  };
+
+  const clearAskLessonContext = () => {
+    setSelectedLessonContext(null);
+    setAskThreadId("");
+    setAskThreadClassId(selectedClassId);
+    setAskMessages([]);
+    setAskError("");
+    setAskMenuOpen(false);
+    setShowGuardrailModal(false);
+    setActiveActivityKey("");
   };
 
   const startPractice = async () => {
@@ -401,6 +695,7 @@ export default function StudentJaWorkspace({
       const recommendation = hub.practice.recommendations[0];
       const res = await jaService.createSession({ classId: selectedClassId, recommendation });
       setPracticeSession(res.data);
+      setActiveActivityKey(`practice:${res.data.session.id}`);
       setMode("practice");
       setShowHome(false);
       toast.success("Practice mission generated.");
@@ -425,12 +720,14 @@ export default function StudentJaWorkspace({
         questionCount: 10,
       });
       setReviewSession(res.data);
+      setReviewCursor(0);
+      setActiveActivityKey(`review:${res.data.session.id}`);
       setMode("review");
       setShowHome(false);
       await refreshHub(selectedClassId);
       toast.success("Review session started.");
-    } catch {
-      toast.error("Unable to generate review session.");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Unable to generate review session."));
     } finally {
       setBusy(false);
     }
@@ -438,61 +735,125 @@ export default function StudentJaWorkspace({
 
   const submitCurrentAnswer = async () => {
     if (!currentSession || !activeItem) return;
-    const selected = answers[activeItem.id];
-    if (!itemReady(activeItem, selected)) {
-      toast.error("Select an answer first.");
-      return;
-    }
     setBusy(true);
     try {
-      const payload =
-        activeItem.itemType === "multiple_select"
-          ? { selectedOptionIds: selected }
-          : { selectedOptionId: selected?.[0] };
       if (mode === "practice") {
+        const selected = answers[activeItem.id];
+        if (!itemReady(activeItem, selected)) {
+          toast.error("Select an answer first.");
+          return;
+        }
+        const payload =
+          activeItem.itemType === "multiple_select"
+            ? { selectedOptionIds: selected }
+            : { selectedOptionId: selected?.[0] };
         await jaService.submitResponse(currentSession.session.id, {
           itemId: activeItem.id,
           answer: payload,
         });
         await loadSession(currentSession.session.id, "practice");
       } else {
-        await jaService.submitReviewResponse(currentSession.session.id, {
-          itemId: activeItem.id,
-          answer: payload,
-        });
+        const unansweredItems = currentSession.items.filter((item) => !item.response);
+        const incompleteItem = unansweredItems.find(
+          (item) => !itemReady(item, answers[item.id]),
+        );
+        if (incompleteItem) {
+          toast.error("Answer every replay item before submitting.");
+          return;
+        }
+        for (const item of unansweredItems) {
+          const selected = answers[item.id];
+          const payload =
+            item.itemType === "multiple_select"
+              ? { selectedOptionIds: selected }
+              : { selectedOptionId: selected?.[0] };
+          await jaService.submitReviewResponse(currentSession.session.id, {
+            itemId: item.id,
+            answer: payload,
+          });
+        }
         await loadSession(currentSession.session.id, "review");
       }
-    } catch {
-      toast.error("Failed to save answer.");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Failed to save answer."));
     } finally {
       setBusy(false);
     }
   };
 
-  const sendAsk = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!selectedClassId) return;
-    const content = askInput.trim();
-    if (!content) return;
-    setBusy(true);
-    try {
-      let threadId = askThreadId;
-      if (!threadId) {
-        const created = await jaService.createAskThread({ classId: selectedClassId });
-        threadId = created.data.thread.id;
-        setAskThreadId(threadId);
-      }
-      const response = await jaService.sendAskMessage(threadId, { message: content });
+  const sendAskPreset = async (preset: JaAskPresetAction) => {
+    if (!selectedClassId || busy) return;
+    setAskMenuOpen(false);
+
+    const localMessageId = `local-${Date.now()}`;
+    const studentMessage: JaAskMessage = {
+      id: localMessageId,
+      role: "student",
+      content: preset.label,
+      blocked: false,
+      quickAction: preset.label,
+    };
+
+    if (!selectedLessonContext) {
+      const warningMessageId = `warning-${Date.now()}-lesson-context`;
+      setAskError("");
+      setShowGuardrailModal(false);
       setAskMessages((prev) => [
         ...prev,
-        { id: `local-${Date.now()}`, role: "student", content, blocked: false },
+        studentMessage,
+        {
+          id: warningMessageId,
+          role: "assistant",
+          content:
+            "Select a visible lesson first so JA can keep this help grounded to your class material.",
+          blocked: false,
+        },
+      ]);
+      return;
+    }
+
+    setBusy(true);
+    setAskError("");
+    setAskMessages((prev) => [...prev, studentMessage]);
+    try {
+      let threadId = askThreadId;
+      if (!threadId || (askThreadClassId && askThreadClassId !== selectedClassId)) {
+        const created = await jaService.createAskThread({
+          classId: selectedClassId,
+          lessonId: selectedLessonContext?.lessonId,
+        });
+        threadId = created.data.thread.id;
+        setAskThreadId(threadId);
+        setAskThreadClassId(created.data.thread.classId);
+        setSelectedLessonContext(
+          resolveThreadLessonContext(created.data.thread, selectedLessonContext),
+        );
+      }
+      setActiveActivityKey(`ask:${threadId}`);
+      const response = await jaService.sendAskMessage(threadId, {
+        message: preset.label,
+        quickAction: preset.label,
+        lessonId: selectedLessonContext?.lessonId,
+      });
+      setAskMessages((prev) => [
+        ...prev.filter((message) => message.id !== localMessageId),
+        studentMessage,
         response.data.message,
       ]);
-      setAskInput("");
+      setAskError("");
       if (response.data.blocked) setShowGuardrailModal(true);
-      await refreshHub(selectedClassId);
-    } catch {
-      toast.error("JA Ask failed to respond.");
+      setAskThreadId(response.data.thread.id);
+      setAskThreadClassId(response.data.thread.classId);
+      setSelectedLessonContext(resolveThreadLessonContext(response.data.thread));
+      syncAskThreadSummary(
+        response.data.thread,
+        response.data.message.createdAt ?? new Date().toISOString(),
+      );
+    } catch (error: unknown) {
+      setAskMessages((prev) => prev.filter((message) => message.id !== localMessageId));
+      const message = getApiErrorMessage(error, "JA Ask failed to respond.");
+      setAskError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -511,8 +872,8 @@ export default function StudentJaWorkspace({
       }
       await refreshHub(selectedClassId);
       toast.success("Session completed.");
-    } catch {
-      toast.error("Unable to complete session.");
+    } catch (error: unknown) {
+      toast.error(getApiErrorMessage(error, "Unable to complete session."));
     } finally {
       setBusy(false);
     }
@@ -549,7 +910,7 @@ export default function StudentJaWorkspace({
     >
       {historyOpen ? (
         <motion.aside
-          className="ja-mode-panel student-panel"
+          className="ja-mode-panel ja-sidebar"
           {...conditionalSurfaceMotionProps}
         >
           <div className="ja-mode-panel__head">
@@ -567,13 +928,6 @@ export default function StudentJaWorkspace({
               <h2>Activity history</h2>
             </div>
           </div>
-          <button
-            type="button"
-            className="ja-change-mode"
-            onClick={() => setShowHome(true)}
-          >
-            Change mode
-          </button>
 
           <div className="ja-mode-grid" role="tablist" aria-label="JA study modes">
             {MODE_ORDER.map((modeKey) => {
@@ -628,16 +982,24 @@ export default function StudentJaWorkspace({
                   onClick={() => selectActivity(item)}
                   className={cn(
                     "ja-session-chip",
-                    item.mode === mode && !showHome && "is-selected",
+                    activeActivityKey === `${item.mode}:${item.id}` &&
+                      !showHome &&
+                      "is-selected",
                   )}
                 >
-                  <span className={cn("ja-activity-tag", `mode-${item.mode}`)}>
-                    {MODE_META[item.mode].title}
+                  <span className="ja-session-chip__top">
+                    <span className={cn("ja-activity-tag", `mode-${item.mode}`)}>
+                      {MODE_META[item.mode].title}
+                    </span>
+                    <span className="ja-session-chip__stamp">
+                      {new Date(item.updatedAt).toLocaleDateString()}
+                    </span>
                   </span>
                   <strong>{item.title}</strong>
-                  <span>{item.classLabel}</span>
-                  <span>
-                    {item.status} - {new Date(item.updatedAt).toLocaleDateString()}
+                  <span className="ja-session-chip__subtitle">{item.subtitle}</span>
+                  <span className="ja-session-chip__meta">
+                    <span>{item.classLabel}</span>
+                    <span>{item.status}</span>
                   </span>
                 </button>
               ))
@@ -647,7 +1009,7 @@ export default function StudentJaWorkspace({
         </motion.aside>
       ) : null}
 
-      <motion.section className="ja-center-panel" {...motionProps.item}>
+      <motion.section className="ja-center-panel ja-main" {...motionProps.item}>
         {!historyOpen ? (
           <button
             type="button"
@@ -659,7 +1021,7 @@ export default function StudentJaWorkspace({
             <Menu className="h-4 w-4" />
           </button>
         ) : null}
-        <div className="ja-topbar">
+        <div className="ja-topbar ja-main-header">
           <div className="ja-topbar__leading">
             {classSelectorOpen ? (
               <div className="ja-class-menu" ref={classMenuRef}>
@@ -687,7 +1049,7 @@ export default function StudentJaWorkspace({
                           className="ja-class-menu__option"
                           onClick={() => {
                             setClassMenuOpen(false);
-                            void refreshHub(item.id);
+                            void refreshHub(item.id, { resetContext: true });
                           }}
                         >
                           <span>{classLabel(item)}</span>
@@ -703,6 +1065,18 @@ export default function StudentJaWorkspace({
             )}
           </div>
           <div className="ja-topbar__actions">
+            {mode === "ask" ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                className="ja-head-link ja-new-chat-button"
+                onClick={startNewAskChat}
+              >
+                <Sparkles className="h-4 w-4" />
+                New chat
+              </Button>
+            ) : null}
             {returnTo ? (
               <Link href={returnTo} className="ja-head-link">
                 <ArrowLeft className="h-4 w-4" />
@@ -776,84 +1150,187 @@ export default function StudentJaWorkspace({
           ) : mode === "ask" ? (
             <motion.div
               key="ask-stage"
-              className="ja-thread-shell student-panel"
+              className="ja-thread-shell ja-chat-panel"
               initial={reduceMotion ? false : { opacity: 0, y: 10 }}
               animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
               exit={reduceMotion ? {} : { opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <div className="ja-quick-prompts">
-                {ASK_QUICK_PROMPTS.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    className="ja-quick-prompt"
-                    onClick={() => setAskInput(prompt)}
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {prompt}
-                  </button>
-                ))}
-              </div>
               <div className="ja-thread-messages" aria-live="polite">
-                {askMessages.length === 0 ? (
-                  <div className="ja-thread-empty">
-                    <h3>Ask a class-grounded question</h3>
-                    <p>
-                      Try: summarize the lesson, explain a concept in simpler words,
-                      or build three quick checks before your next replay.
-                    </p>
+                <article className="ja-msg-row ja ja-intro-row">
+                  <JaAssistantAvatar />
+                  <div className="ja-bubble ja ja-intro-bubble">
+                    <div className="ja-context-empty">
+                      <div className="ja-context-empty__copy">
+                        <p className="ja-eyebrow">Lesson-grounded chat</p>
+                        <h3>Pick a visible lesson, then ask JA for help.</h3>
+                        <p>
+                          JA stays inside the lesson you select so explanations,
+                          summaries, study plans, and review suggestions stay grounded
+                          to what your class can currently access.
+                        </p>
+                      </div>
+
+                      <div className="ja-context-picker" aria-label="Available lessons">
+                        {askLessonContexts.length > 0 ? (
+                          askLessonContexts.map((context) => {
+                            const isSelected =
+                              selectedLessonContext?.lessonId === context.lessonId;
+                            return (
+                              <button
+                                key={context.lessonId}
+                                type="button"
+                                className={cn(
+                                  "ja-context-chip",
+                                  isSelected && "is-selected",
+                                )}
+                                onClick={() => selectAskLessonContext(context)}
+                              >
+                                <BookOpen className="h-4 w-4" />
+                                <span className="ja-context-chip__copy">
+                                  <strong>{context.title}</strong>
+                                  {buildLessonContextLabel(context) ? (
+                                    <span>{buildLessonContextLabel(context)}</span>
+                                  ) : null}
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="ja-context-empty__notice">
+                            No visible lessons are available for JA Ask yet in this class.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="ja-guidelines">
+                        <p className="ja-guidelines__title">Good prompts for JA</p>
+                        <ul>
+                          <li>Select one visible lesson card first.</li>
+                          <li>
+                            Use the bottom Ask button to choose one of JA&apos;s fixed
+                            lesson actions.
+                          </li>
+                          {askGuidelines.map((guideline) => (
+                            <li key={guideline}>{guideline}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  askMessages.map((msg) => (
-                    <article
-                      key={msg.id}
+                </article>
+
+                {askMessages.map((msg) => (
+                  <article
+                    key={msg.id}
+                    className={cn(
+                      "ja-msg-row",
+                      msg.role === "student" ? "user" : "ja",
+                    )}
+                  >
+                    {msg.role === "student" ? (
+                      <span className="ja-msg-avatar user-av" aria-hidden="true">
+                        ME
+                      </span>
+                    ) : (
+                      <JaAssistantAvatar mood={msg.blocked ? "guarded" : "default"} />
+                    )}
+                    <div
                       className={cn(
-                        "ja-msg",
-                        msg.role === "student" ? "student" : "ja",
+                        "ja-bubble",
+                        msg.role === "student" ? "user" : "ja",
+                        msg.blocked && "notice",
                       )}
                     >
-                      <header>
-                        <strong>{msg.role === "student" ? "You" : "JA"}</strong>
-                        {msg.blocked ? (
-                          <StudentStatusChip tone="warning">Guarded</StudentStatusChip>
-                        ) : null}
-                      </header>
+                      {msg.blocked ? (
+                        <StudentStatusChip tone="warning">Guarded</StudentStatusChip>
+                      ) : null}
                       <p>{msg.content}</p>
-                    </article>
-                  ))
-                )}
+                    </div>
+                  </article>
+                ))}
 
                 {busy ? (
-                  <article className="ja-msg ja is-pending">
-                    <header>
-                      <strong>JA</strong>
-                    </header>
-                    <p>
+                  <article className="ja-msg-row ja is-pending">
+                    <JaAssistantAvatar mood="thinking" />
+                    <div className="ja-bubble ja notice">
                       <Loader2 className="h-4 w-4 animate-spin" /> Thinking through your
                       question...
-                    </p>
+                    </div>
                   </article>
                 ) : null}
                 <div ref={askTailRef} />
               </div>
 
-              <form onSubmit={sendAsk} className="ja-composer">
-                <input
-                  className="student-input ja-composer-input"
-                  value={askInput}
-                  onChange={(event) => setAskInput(event.target.value)}
-                  placeholder="Ask JA anything about the selected class..."
-                />
-                <Button
-                  type="submit"
-                  disabled={busy || !askInput.trim()}
-                  className="student-button-solid ja-send-button"
+              {selectedLessonContext ? (
+                <div className="ja-active-context" aria-live="polite">
+                  <div className="ja-active-context__copy">
+                    <span className="ja-active-context__label">Current lesson</span>
+                    <strong>{selectedLessonContext.title}</strong>
+                    {buildLessonContextLabel(selectedLessonContext) ? (
+                      <span>{buildLessonContextLabel(selectedLessonContext)}</span>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="ja-active-context__clear"
+                    onClick={clearAskLessonContext}
+                  >
+                    <X className="h-4 w-4" />
+                    Change lesson
+                  </button>
+                </div>
+              ) : null}
+
+              {askError ? (
+                <div className="ja-ask-error" role="alert">
+                  {askError}
+                </div>
+              ) : null}
+
+              <div className="ja-composer ja-ask-launcher" ref={askMenuRef}>
+                <div
+                  className={cn(
+                    "ja-ask-menu",
+                    askMenuOpen && "is-open",
+                  )}
+                  role="dialog"
+                  aria-label="Ask JA actions"
+                  aria-hidden={!askMenuOpen}
                 >
-                  <Sparkles className="h-4 w-4" />
-                  Send
+                  {ASK_PRESET_GROUPS.map((group) => (
+                    <section key={group.id} className="ja-ask-menu__group">
+                      <header className="ja-ask-menu__group-head">
+                        <strong>{group.label}</strong>
+                      </header>
+                      <div className="ja-ask-menu__items">
+                        {group.items.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="ja-ask-menu__item"
+                            onClick={() => void sendAskPreset(item)}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  disabled={busy}
+                  className={cn(
+                    "student-button-solid ja-send-button ja-prompt-button",
+                    askMenuOpen && "is-open",
+                  )}
+                  onClick={() => setAskMenuOpen((current) => !current)}
+                >
+                  <MessageCircleQuestion className="h-4 w-4" />
+                  Ask JA about this lesson
                 </Button>
-              </form>
+              </div>
             </motion.div>
           ) : (
             <motion.div
@@ -941,12 +1418,28 @@ export default function StudentJaWorkspace({
                         {answeredCount}/{currentSession.session.questionCount} completed
                       </h3>
                     </div>
-                    <StudentStatusChip
-                      tone={canComplete ? "success" : "info"}
-                      className="ja-status-chip"
-                    >
-                      {canComplete ? "Ready to Complete" : "In Progress"}
-                    </StudentStatusChip>
+                    <div className="ja-session-head__actions">
+                      {mode === "review" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={resetReviewStage}
+                          className="student-button-outline ja-secondary-action"
+                        >
+                          Back to replay menu
+                        </Button>
+                      ) : null}
+                      <StudentStatusChip
+                        tone={canComplete ? "success" : "info"}
+                        className="ja-status-chip"
+                      >
+                        {currentSession.session.status === "completed"
+                          ? "Completed"
+                          : canComplete
+                            ? "Ready to Complete"
+                            : "In Progress"}
+                      </StudentStatusChip>
+                    </div>
                   </div>
 
                   <Progress value={sessionProgressPercent} />
@@ -963,13 +1456,21 @@ export default function StudentJaWorkspace({
                       >
                         <header>
                           <p className="ja-question-index">
-                            Item {answeredCount + (activeItem.response ? 0 : 1)} |{" "}
+                            Item {(activeItemIndex ?? 0) + 1} of {currentSession.items.length} |{" "}
                             {activeItem.itemType === "multiple_select"
                               ? "Multiple Select"
                               : "Single Select"}
                           </p>
-                          <h4>{activeItem.prompt}</h4>
-                          {activeItem.hint ? <p>{activeItem.hint}</p> : null}
+                          <RichTextRenderer
+                            html={activeItemPrompt.prompt}
+                            className="ja-question-prompt"
+                          />
+                          {activeCoachText ? (
+                            <aside className="ja-coach-card">
+                              <span>JA Coach</span>
+                              <p>{activeCoachText}</p>
+                            </aside>
+                          ) : null}
                         </header>
 
                         <div
@@ -1007,7 +1508,10 @@ export default function StudentJaWorkspace({
                                 <span className="ja-option-mark" aria-hidden="true">
                                   {selected ? "[x]" : "[ ]"}
                                 </span>
-                                <span>{option.text}</span>
+                                <RichTextRenderer
+                                  html={option.text}
+                                  className="ja-option-text"
+                                />
                               </button>
                             );
                           })}
@@ -1025,28 +1529,80 @@ export default function StudentJaWorkspace({
                         ) : null}
 
                         <div className="ja-question-actions">
-                          <Button
-                            onClick={() => void submitCurrentAnswer()}
-                            disabled={
-                              busy ||
-                              Boolean(activeItem.response) ||
-                              !itemReady(activeItem, answers[activeItem.id])
-                            }
-                            className="student-button-solid ja-primary-action"
-                          >
-                            Submit Answer
-                          </Button>
+                          {mode === "review" && currentSession.items.length > 1 ? (
+                            <div className="ja-question-nav" aria-label="Replay question navigation">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  setReviewCursor((current) => Math.max(0, current - 1))
+                                }
+                                disabled={busy || (activeItemIndex ?? 0) <= 0}
+                                className="student-button-outline ja-secondary-action"
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                                Previous item
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  setReviewCursor((current) =>
+                                    Math.min(currentSession.items.length - 1, current + 1),
+                                  )
+                                }
+                                disabled={
+                                  busy ||
+                                  (activeItemIndex ?? 0) >= currentSession.items.length - 1
+                                }
+                                className="student-button-outline ja-secondary-action"
+                              >
+                                Next item
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span aria-hidden="true" />
+                          )}
 
-                          {canComplete ? (
-                            <Button
-                              variant="outline"
-                              onClick={() => void completeCurrentSession()}
-                              disabled={busy}
-                              className="student-button-outline ja-secondary-action"
-                            >
-                              Complete Session
-                            </Button>
-                          ) : null}
+                          <div className="ja-question-actions__primary">
+                            {mode === "practice" && !activeItem.response ? (
+                              <Button
+                                onClick={() => void submitCurrentAnswer()}
+                                disabled={
+                                  busy ||
+                                  Boolean(activeItem.response) ||
+                                  !itemReady(activeItem, answers[activeItem.id])
+                                }
+                                className="student-button-solid ja-primary-action"
+                              >
+                                Submit Answer
+                              </Button>
+                            ) : null}
+
+                            {mode === "review" &&
+                            currentSession.session.status === "active" &&
+                            !canComplete ? (
+                              <Button
+                                onClick={() => void submitCurrentAnswer()}
+                                disabled={busy || !allSessionItemsReady}
+                                className="student-button-solid ja-primary-action"
+                              >
+                                Submit Answers
+                              </Button>
+                            ) : null}
+
+                            {canComplete ? (
+                              <Button
+                                variant="outline"
+                                onClick={() => void completeCurrentSession()}
+                                disabled={busy}
+                                className="student-button-outline ja-secondary-action"
+                              >
+                                Complete Session
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                       </motion.article>
                     </AnimatePresence>

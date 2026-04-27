@@ -4,19 +4,7 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
-import {
-  AnimatedEntrance,
-  Card,
-  EmptyState,
-  FloatingIconButton,
-  GradientHeader,
-  Pill,
-  ProgressBar,
-  Refreshable,
-  ScreenScroll,
-  SectionTitle,
-  StatCard,
-} from "../components/ui/primitives";
+import { AnimatedEntrance, Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { peekAppError } from "../api/http";
 import {
   useAssessments,
@@ -32,8 +20,8 @@ import { findContinueLearning, toAssessmentCard, toLessonCards, toSubjectCard } 
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { computeProfileReadiness } from "./screen-flow";
-import { colors, gradients } from "../theme/tokens";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
+import type { ClassItem } from "../types/class";
 import type { Lesson, LessonCompletion } from "../types/lesson";
 import type { SchoolEvent } from "../types/school-event";
 
@@ -50,6 +38,7 @@ type ScheduleEntry = {
   sectionName: string;
   startTime: string;
   endTime: string;
+  room?: string;
 };
 
 type ClassDashboardSnapshot = {
@@ -72,6 +61,68 @@ type PendingAssessmentItem = {
   subject: ReturnType<typeof toSubjectCard>;
   dueTime: number;
   status: ReturnType<typeof toAssessmentCard>["status"];
+};
+
+type AssessmentAttemptSnapshot = {
+  attempts: AssessmentAttempt[];
+  error: unknown;
+  isRefetching: boolean;
+  isResolved: boolean;
+};
+
+type CalendarCell = {
+  key: string;
+  label: string;
+  inMonth: boolean;
+  isToday: boolean;
+  isClassDay: boolean;
+  hasEvent: boolean;
+};
+
+type TimelineItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  tone: "blue" | "amber" | "purple";
+  sortValue: number;
+};
+
+const theme = {
+  bg: "#141414",
+  pageBg: "#0E0E0E",
+  topbar: "#1C1C1C",
+  surface: "#1E1E1E",
+  active: "#252525",
+  border: "rgba(255,255,255,0.07)",
+  text: "#E8E8E8",
+  muted: "#777777",
+  dim: "#444444",
+  subtext: "rgba(255,255,255,0.45)",
+  deepBlue: "#1A2A4A",
+  deepNavy: "#1E1E2E",
+  red: "#E8294E",
+  blue: "#4A8CF7",
+  green: "#22C97A",
+  purple: "#A78BFA",
+  amber: "#FBBF24",
+} as const;
+
+const DAY_TO_INDEX: Record<string, number> = {
+  SU: 0,
+  SUN: 0,
+  M: 1,
+  MON: 1,
+  T: 2,
+  TU: 2,
+  TUE: 2,
+  W: 3,
+  WED: 3,
+  TH: 4,
+  THU: 4,
+  F: 5,
+  FRI: 5,
+  SA: 6,
+  SAT: 6,
 };
 
 function getErrorSignature(error: unknown) {
@@ -101,24 +152,6 @@ function areClassSnapshotsEqual(left: ClassDashboardSnapshot | undefined, right:
   );
 }
 
-const DAY_TO_INDEX: Record<string, number> = {
-  SU: 0,
-  SUN: 0,
-  M: 1,
-  MON: 1,
-  T: 2,
-  TU: 2,
-  TUE: 2,
-  W: 3,
-  WED: 3,
-  TH: 4,
-  THU: 4,
-  F: 5,
-  FRI: 5,
-  SA: 6,
-  SAT: 6,
-};
-
 function formatDueDate(value?: string | null) {
   if (!value) return "No due date";
 
@@ -129,6 +162,21 @@ function formatDueDate(value?: string | null) {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function formatCalendarMonth(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(value);
+}
+
+function formatWeekdayMonthDay(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(value);
 }
 
 function formatEventDate(value?: string | null, allDay?: boolean) {
@@ -167,6 +215,29 @@ function formatClock(value: string) {
   }).format(date);
 }
 
+function formatTimeRange(startTime: string, endTime: string) {
+  return `${formatClock(startTime)}-${formatClock(endTime)}`;
+}
+
+function formatDurationLabel(startTime: string, endTime: string) {
+  const [startHoursText = "0", startMinutesText = "0"] = startTime.split(":");
+  const [endHoursText = "0", endMinutesText = "0"] = endTime.split(":");
+  const startHours = Number.parseInt(startHoursText, 10) || 0;
+  const startMinutes = Number.parseInt(startMinutesText, 10) || 0;
+  const endHours = Number.parseInt(endHoursText, 10) || 0;
+  const endMinutes = Number.parseInt(endMinutesText, 10) || 0;
+
+  const startTotal = startHours * 60 + startMinutes;
+  const endTotal = endHours * 60 + endMinutes;
+  const duration = Math.max(endTotal - startTotal, 0);
+
+  if (!duration) {
+    return "0 min";
+  }
+
+  return `${duration} min`;
+}
+
 function getDayIndexToken(day: string) {
   return DAY_TO_INDEX[day.trim().toUpperCase()];
 }
@@ -195,7 +266,10 @@ function selectDashboardClasses(classes: NonNullable<ReturnType<typeof useStuden
   return scopedClasses.length > 0 ? scopedClasses : candidateClasses;
 }
 
-function buildTodaySchedule(classes: NonNullable<ReturnType<typeof useStudentClasses>["data"]>, now = new Date()): ScheduleEntry[] {
+function buildTodaySchedule(
+  classes: NonNullable<ReturnType<typeof useStudentClasses>["data"]>,
+  now = new Date(),
+): ScheduleEntry[] {
   const todayIndex = now.getDay();
 
   return classes
@@ -211,18 +285,178 @@ function buildTodaySchedule(classes: NonNullable<ReturnType<typeof useStudentCla
           sectionName: classItem.section?.name || "Assigned section",
           startTime: schedule.startTime,
           endTime: schedule.endTime,
+          room: classItem.room,
         })),
     )
     .sort((left, right) => left.startTime.localeCompare(right.startTime))
     .slice(0, 4);
 }
 
-type AssessmentAttemptSnapshot = {
-  attempts: AssessmentAttempt[];
-  error: unknown;
-  isRefetching: boolean;
-  isResolved: boolean;
-};
+function resolveInitials(firstName?: string, lastName?: string, email?: string) {
+  const fromNames = [firstName, lastName]
+    .filter(Boolean)
+    .map((value) => value?.trim()?.[0] ?? "")
+    .join("")
+    .toUpperCase();
+
+  if (fromNames.length >= 2) {
+    return fromNames.slice(0, 2);
+  }
+
+  if (fromNames.length === 1) {
+    return `${fromNames}R`;
+  }
+
+  return (email?.slice(0, 2) || "NR").toUpperCase();
+}
+
+function resolveGreeting(now = new Date()) {
+  const hour = now.getHours();
+  if (hour < 12) return "Good morning!";
+  if (hour < 18) return "Good afternoon!";
+  return "Good evening!";
+}
+
+function buildDashboardCalendar(
+  monthDate: Date,
+  classes: ClassItem[],
+  pendingAssessments: PendingAssessmentItem[],
+  schoolEvents: SchoolEvent[],
+) {
+  const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+  const daysInMonth = monthEnd.getDate();
+  const mondayFirstOffset = (monthStart.getDay() + 6) % 7;
+  const classDays = new Set<number>();
+
+  classes.forEach((classItem) => {
+    (classItem.schedules ?? []).forEach((schedule) => {
+      schedule.days.forEach((day) => {
+        const normalized = getDayIndexToken(day);
+        if (normalized != null) {
+          classDays.add(normalized);
+        }
+      });
+    });
+  });
+
+  const eventDateKeys = new Set<string>();
+  pendingAssessments.forEach(({ assessment }) => {
+    if (!assessment.dueDate) return;
+    const dueDate = new Date(assessment.dueDate);
+    if (!Number.isNaN(dueDate.getTime())) {
+      eventDateKeys.add(dueDate.toDateString());
+    }
+  });
+  schoolEvents.forEach((event) => {
+    const startsAt = new Date(event.startsAt);
+    if (!Number.isNaN(startsAt.getTime())) {
+      eventDateKeys.add(startsAt.toDateString());
+    }
+  });
+
+  const today = new Date();
+  const cells: CalendarCell[] = [];
+
+  for (let index = 0; index < mondayFirstOffset; index += 1) {
+    cells.push({
+      key: `blank-${index}`,
+      label: "",
+      inMonth: false,
+      isToday: false,
+      isClassDay: false,
+      hasEvent: false,
+    });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const cellDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+
+    cells.push({
+      key: cellDate.toISOString(),
+      label: String(day),
+      inMonth: true,
+      isToday:
+        cellDate.getFullYear() === today.getFullYear() &&
+        cellDate.getMonth() === today.getMonth() &&
+        cellDate.getDate() === today.getDate(),
+      isClassDay: classDays.has(cellDate.getDay()),
+      hasEvent: eventDateKeys.has(cellDate.toDateString()),
+    });
+  }
+
+  return cells;
+}
+
+function isScheduleActive(entry: ScheduleEntry, now = new Date()) {
+  const [startHours = "0", startMinutes = "0"] = entry.startTime.split(":");
+  const [endHours = "0", endMinutes = "0"] = entry.endTime.split(":");
+  const start = new Date(now);
+  start.setHours(Number.parseInt(startHours, 10), Number.parseInt(startMinutes, 10), 0, 0);
+  const end = new Date(now);
+  end.setHours(Number.parseInt(endHours, 10), Number.parseInt(endMinutes, 10), 0, 0);
+  return now.getTime() >= start.getTime() && now.getTime() <= end.getTime();
+}
+
+function buildUpcomingTimeline(
+  todaySchedule: ScheduleEntry[],
+  pendingAssessments: PendingAssessmentItem[],
+  schoolEvents: SchoolEvent[],
+  now = new Date(),
+) {
+  const todayKey = formatWeekdayMonthDay(now);
+
+  const timeline: TimelineItem[] = [
+    ...todaySchedule.map((entry) => ({
+      id: entry.id,
+      title: `${entry.subjectName} - Class Session`,
+      subtitle: `${todayKey} · ${formatTimeRange(entry.startTime, entry.endTime)}`,
+      tone: "blue" as const,
+      sortValue: new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        Number.parseInt(entry.startTime.split(":")[0] || "0", 10),
+        Number.parseInt(entry.startTime.split(":")[1] || "0", 10),
+      ).getTime(),
+    })),
+    ...pendingAssessments
+      .filter(({ assessment }) => assessment.dueDate)
+      .map(({ assessment }) => ({
+        id: assessment.id,
+        title: `${assessment.title} Due`,
+        subtitle: new Date(assessment.dueDate || 0).toLocaleString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        tone: "amber" as const,
+        sortValue: new Date(assessment.dueDate || 0).getTime(),
+      })),
+    ...schoolEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      subtitle: event.allDay
+        ? formatEventDate(event.startsAt, true)
+        : new Date(event.startsAt).toLocaleString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          }),
+      tone: "purple" as const,
+      sortValue: new Date(event.startsAt).getTime(),
+    })),
+  ];
+
+  return timeline
+    .filter((item) => Number.isFinite(item.sortValue))
+    .sort((left, right) => left.sortValue - right.sortValue)
+    .slice(0, 4);
+}
 
 function DashboardSchoolEventsBridge({
   schoolYear,
@@ -445,6 +679,90 @@ function DashboardClassDataBridge({
   );
 }
 
+function SectionLabel({
+  title,
+  actionLabel,
+  onPressAction,
+  actionColor = theme.red,
+}: {
+  title: string;
+  actionLabel?: string;
+  onPressAction?: () => void;
+  actionColor?: string;
+}) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 8,
+      }}
+    >
+      <Text
+        style={{
+          color: theme.muted,
+          fontSize: 10,
+          fontWeight: "700",
+          letterSpacing: 0.7,
+          textTransform: "uppercase",
+        }}
+      >
+        {title}
+      </Text>
+      {actionLabel ? (
+        <Pressable onPress={onPressAction}>
+          <Text style={{ color: actionColor, fontSize: 10, fontWeight: "600" }}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function DarkPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      style={{
+        marginHorizontal: 16,
+        backgroundColor: theme.surface,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        overflow: "hidden",
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function DashboardNotice({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <View
+      style={{
+        marginHorizontal: 16,
+        marginTop: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        padding: 14,
+      }}
+    >
+      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>{title}</Text>
+      <Text style={{ marginTop: 5, color: theme.muted, fontSize: 11, lineHeight: 16 }}>{subtitle}</Text>
+    </View>
+  );
+}
+
 export function DashboardScreen({ navigation }: Props) {
   const { user } = useAuth();
   const classesQuery = useStudentClasses(user?.userId || user?.id);
@@ -454,16 +772,19 @@ export function DashboardScreen({ navigation }: Props) {
   const classRefreshersRef = useRef<Record<string, () => Promise<unknown>>>({});
   const [schoolEventsSnapshot, setSchoolEventsSnapshot] = useState<SchoolEventsSnapshot | null>(null);
   const schoolEventsRefresherRef = useRef<(() => Promise<unknown>) | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
   const dashboardClasses = useMemo(
     () => selectDashboardClasses(classesQuery.data ?? []),
     [classesQuery.data],
   );
   const schoolYear = dashboardClasses[0]?.schoolYear ?? null;
 
-  const classIds = useMemo(
-    () => dashboardClasses.map((classItem) => classItem.id),
-    [dashboardClasses],
-  );
+  const classIds = useMemo(() => dashboardClasses.map((classItem) => classItem.id), [dashboardClasses]);
+
   const handleClassDataChange = useCallback((classId: string, snapshot: ClassDashboardSnapshot) => {
     setClassDataMap((current) => {
       const previous = current[classId];
@@ -566,11 +887,13 @@ export function DashboardScreen({ navigation }: Props) {
   const continueLearning = useMemo(() => findContinueLearning(subjects, lessonMap), [lessonMap, subjects]);
   const recentLessons = useMemo(
     () =>
-      subjects.flatMap((subject) =>
-        (lessonMap[subject.id] ?? [])
-          .filter((lesson) => lesson.status !== "locked")
-          .map((lesson) => ({ ...lesson, subject })),
-      ).slice(0, 4),
+      subjects
+        .flatMap((subject) =>
+          (lessonMap[subject.id] ?? [])
+            .filter((lesson) => lesson.status !== "locked")
+            .map((lesson) => ({ ...lesson, subject })),
+        )
+        .slice(0, 3),
     [lessonMap, subjects],
   );
 
@@ -607,33 +930,16 @@ export function DashboardScreen({ navigation }: Props) {
     });
 
     return {
-      items: actionableItems
-        .sort((left, right) => left.dueTime - right.dueTime)
-        .slice(0, 4),
+      items: actionableItems.sort((left, right) => left.dueTime - right.dueTime).slice(0, 4),
       unresolvedCount,
     };
   }, [classDataMap, subjects]);
+
   const pendingAssessments = pendingAssessmentState.items;
   const pendingAssessmentStatusCount = pendingAssessmentState.unresolvedCount;
   const hasPendingAssessmentSync = pendingAssessmentStatusCount > 0;
-
-  const todaySchedule = useMemo(
-    () => buildTodaySchedule(dashboardClasses),
-    [dashboardClasses],
-  );
-
-  const upcomingEvents = useMemo(() => {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    return (schoolEventsSnapshot?.events ?? [])
-      .filter((event) => {
-        const endTime = new Date(event.endsAt).getTime();
-        return Number.isFinite(endTime) ? endTime >= startOfToday.getTime() : true;
-      })
-      .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime())
-      .slice(0, 4);
-  }, [schoolEventsSnapshot?.events]);
+  const todaySchedule = useMemo(() => buildTodaySchedule(dashboardClasses), [dashboardClasses]);
+  const schoolEvents = schoolEventsSnapshot?.events ?? [];
 
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Student";
   const firstName = user?.firstName || fullName;
@@ -668,10 +974,55 @@ export function DashboardScreen({ navigation }: Props) {
     ]);
   };
 
-  const profileCueComplete = profileReadiness >= 100;
+  const initials = resolveInitials(user?.firstName, user?.lastName, user?.email);
+  const heroTaskCount =
+    hasPendingAssessmentSync && pendingAssessments.length === 0
+      ? pendingAssessmentStatusCount
+      : pendingAssessments.length;
+  const heroTaskLabel = heroTaskCount === 1 ? "task needs attention" : "tasks need attention";
+  const dayScheduleLabel =
+    todaySchedule.length === 0
+      ? "No classes today"
+      : todaySchedule.length === 1
+        ? "1 block today"
+        : `${todaySchedule.length} blocks today`;
+  const heroSummaryText =
+    hasPendingAssessmentSync && pendingAssessments.length === 0
+      ? `Checking ${pendingAssessmentStatusCount} assessment status${pendingAssessmentStatusCount === 1 ? "" : "es"}`
+      : `${heroTaskCount} task${heroTaskCount === 1 ? "" : "s"} still need${heroTaskCount === 1 ? "s" : ""} attention`;
+
+  const calendarCells = useMemo(
+    () => buildDashboardCalendar(calendarMonth, dashboardClasses, pendingAssessments, schoolEvents),
+    [calendarMonth, dashboardClasses, pendingAssessments, schoolEvents],
+  );
+  const upcomingTimeline = useMemo(
+    () => buildUpcomingTimeline(todaySchedule, pendingAssessments, schoolEvents),
+    [pendingAssessments, schoolEvents, todaySchedule],
+  );
+
+  const handleContinueLearning = () => {
+    const nextClassId = continueLearning[0]?.subject.id ?? dashboardClasses[0]?.id;
+    if (nextClassId) {
+      navigation.navigate("ClassWorkspace", { classId: nextClassId });
+      return;
+    }
+
+    navigation.navigate("Classes");
+  };
+
+  const handleOpenAnnouncements = () => {
+    navigation.navigate("Announcements");
+  };
+
+  const handleOpenProfile = () => {
+    navigation.navigate("Profile");
+  };
 
   return (
-    <ScreenScroll refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}>
+    <ScreenScroll
+      backgroundColor={theme.bg}
+      refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}
+    >
       {schoolYear ? (
         <DashboardSchoolEventsBridge
           schoolYear={schoolYear}
@@ -688,301 +1039,349 @@ export function DashboardScreen({ navigation }: Props) {
           onRefreshReady={handleClassRefreshReady}
         />
       ))}
-      <GradientHeader
-        colors={gradients.assessments}
-        eyebrow={`Ready for today, ${firstName}?`}
-        title="Student Home"
-        rightContent={<FloatingIconButton icon="refresh" onPress={handleRefresh} />}
-      >
+
+      <View style={{ backgroundColor: theme.bg, paddingBottom: 88 }}>
         <View
           style={{
-            marginTop: 18,
-            borderRadius: 24,
-            backgroundColor: "rgba(255,255,255,0.18)",
-            padding: 16,
+            backgroundColor: theme.topbar,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            paddingBottom: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.border,
           }}
         >
-          <Text style={{ color: colors.white, fontSize: 12, fontWeight: "800" }}>Profile and learning snapshot</Text>
-          <Text style={{ marginTop: 6, color: colors.white, fontSize: 24, fontWeight: "900" }}>
-            {hasPendingAssessmentSync && pendingAssessments.length === 0
-              ? `Checking ${pendingAssessmentStatusCount} assessment status${pendingAssessmentStatusCount === 1 ? "" : "es"}`
-              : `${pendingAssessments.length} task${pendingAssessments.length === 1 ? "" : "s"} still need attention`}
-          </Text>
-          <Text style={{ marginTop: 8, color: "rgba(255,255,255,0.88)", fontSize: 12, lineHeight: 18 }}>
-            {hasPendingAssessmentSync
-              ? "We&apos;re syncing your latest assessment submissions before finalizing what still needs attention."
-              : "Keep your streak moving by finishing the next lesson, checking today&apos;s schedule, and clearing due work."}
-          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 14,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  backgroundColor: theme.red,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
+              </View>
+              <Text style={{ color: theme.text, fontSize: 17, fontWeight: "600" }}>Student Home</Text>
+            </View>
 
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
-            <Pressable
-              onPress={() => {
-                const nextClassId = continueLearning[0]?.subject.id ?? dashboardClasses[0]?.id;
-                if (nextClassId) {
-                  navigation.navigate("ClassWorkspace", { classId: nextClassId });
-                } else {
-                  navigation.navigate("Classes");
-                }
-              }}
-              style={{
-                flex: 1,
-                borderRadius: 18,
-                backgroundColor: colors.white,
-                alignItems: "center",
-                paddingVertical: 13,
-              }}
-            >
-              <Text style={{ color: colors.text, fontSize: 13, fontWeight: "900" }}>Continue Learning</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => navigation.navigate("Courses")}
-              style={{
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.38)",
-                paddingHorizontal: 16,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>My Courses</Text>
-            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Pressable
+                accessibilityLabel="Open announcements"
+                onPress={handleOpenAnnouncements}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 999,
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialCommunityIcons name="bell-outline" size={15} color="rgba(255,255,255,0.5)" />
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Open profile"
+                onPress={handleOpenProfile}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 999,
+                  backgroundColor: theme.red,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{initials}</Text>
+              </Pressable>
+            </View>
           </View>
+
+          <Text style={{ color: theme.subtext, fontSize: 11 }}>
+            Ready for today, <Text style={{ color: theme.text, fontWeight: "600" }}>{firstName}</Text>?
+          </Text>
         </View>
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-          <StatCard icon="book-open-page-variant" iconColor={colors.white} value={dashboardClasses.length} label="Classes" translucent />
-          <StatCard icon="chart-line" iconColor={colors.white} value={`${averageScore}%`} label="Average" translucent />
-          <StatCard icon="account-check" iconColor={colors.white} value={`${profileReadiness}%`} label="Profile" translucent />
-        </View>
-      </GradientHeader>
+        <AnimatedEntrance delay={20}>
+          <View
+            style={{
+              marginTop: 14,
+              marginHorizontal: 16,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: "rgba(74,140,247,0.2)",
+              padding: 16,
+              overflow: "hidden",
+              backgroundColor: theme.surface,
+            }}
+          >
+            <View
+              style={{
+                position: "absolute",
+                top: -30,
+                right: -20,
+                width: 120,
+                height: 120,
+                borderRadius: 999,
+                backgroundColor: "rgba(74,140,247,0.08)",
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                bottom: -40,
+                right: 30,
+                width: 80,
+                height: 80,
+                borderRadius: 999,
+                backgroundColor: "rgba(232,41,78,0.07)",
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: theme.deepBlue,
+                opacity: 0.52,
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: theme.deepNavy,
+                opacity: 0.82,
+              }}
+            />
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 18 }}>
-        {primaryError ? (
-          <Card>
-            <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>Some dashboard data could not load</Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {peekAppError(primaryError).message}
-            </Text>
-          </Card>
-        ) : null}
+            <View style={{ position: "relative" }}>
+              <Text style={{ color: theme.subtext, fontSize: 11, marginBottom: 3 }}>{resolveGreeting()}</Text>
+              <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700", marginBottom: 4 }}>Your Learning Hub</Text>
+              <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginBottom: 14 }}>
+                {heroTaskCount === 0
+                  ? "You are all caught up today"
+                  : `You have ${heroTaskCount} pending ${heroTaskCount === 1 ? "task" : "tasks"} today`}
+              </Text>
 
-        <AnimatedEntrance>
-          <Card>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: "900", color: colors.text }}>
-                  {profileCueComplete ? "Profile is classroom ready" : "Complete your learner profile"}
+              <View
+                style={{
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.08)",
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  paddingHorizontal: 13,
+                  paddingVertical: 11,
+                  marginBottom: 13,
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.muted,
+                    fontSize: 10,
+                    fontWeight: "500",
+                    letterSpacing: 0.4,
+                    marginBottom: 4,
+                  }}
+                >
+                  Profile & Learning Snapshot
                 </Text>
-                <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-                  {profileCueComplete
-                    ? `${fullName} has the key contact and guardian fields filled in.`
-                    : "Add your phone, address, and guardian details so class updates and support outreach stay accurate."}
+                <Text style={{ color: theme.text, fontSize: 18, fontWeight: "700" }}>{heroSummaryText}</Text>
+                <Text style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, lineHeight: 16, marginTop: 3 }}>
+                  {hasPendingAssessmentSync && pendingAssessments.length === 0
+                    ? "We are syncing your latest assessment submissions before finalizing what still needs attention."
+                    : "Keep your streak moving by finishing the next lesson and clearing due work."}
                 </Text>
               </View>
-              <Pill
-                label={profileCueComplete ? "Ready" : `${profileReadiness}%`}
-                backgroundColor={profileCueComplete ? colors.paleGreen : colors.paleAmber}
-                color={profileCueComplete ? colors.green : colors.orange}
-              />
+
+              <View style={{ flexDirection: "row", gap: 9 }}>
+                <Pressable
+                  onPress={handleContinueLearning}
+                  style={{
+                    flex: 1,
+                    borderRadius: 9,
+                    backgroundColor: theme.red,
+                    alignItems: "center",
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600" }}>Continue Learning</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => navigation.navigate("Courses")}
+                  style={{
+                    flex: 1,
+                    borderRadius: 9,
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.1)",
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                    alignItems: "center",
+                    paddingVertical: 10,
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontSize: 12, fontWeight: "500" }}>My Courses</Text>
+                </Pressable>
+              </View>
             </View>
-            <View style={{ marginTop: 14 }}>
-              <ProgressBar
-                value={profileReadiness}
-                color={profileCueComplete ? colors.green : colors.orange}
-                trackColor="#EEF2F7"
-                height={10}
-              />
-            </View>
-          </Card>
+          </View>
         </AnimatedEntrance>
 
         <AnimatedEntrance delay={40}>
-          <View>
-            <SectionTitle
-              title="Student Tools"
-              right={<Pill label="Web parity" backgroundColor={colors.paleBlue} color={colors.blueDeep} />}
-            />
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              {[
-                {
-                  icon: "clipboard-list-outline" as const,
-                  label: "LXP",
-                  detail: "Recovery path and tutor launchers",
-                  color: colors.purpleDeep,
-                  backgroundColor: colors.palePurple,
-                  onPress: () => navigation.navigate("LXP"),
-                },
-                {
-                  icon: "chart-line" as const,
-                  label: "Performance",
-                  detail: "See blended scores and risk flags",
-                  color: colors.green,
-                  backgroundColor: colors.paleGreen,
-                  onPress: () => navigation.navigate("Performance"),
-                },
-              ].map((action) => (
-                <Pressable
-                  key={action.label}
-                  onPress={action.onPress}
-                  style={{ flex: 1 }}
-                >
-                  <Card style={{ minHeight: 132 }}>
-                    <View
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 14,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: action.backgroundColor,
-                      }}
-                    >
-                      <MaterialCommunityIcons name={action.icon} size={22} color={action.color} />
-                    </View>
-                    <Text style={{ marginTop: 14, fontSize: 15, fontWeight: "900", color: colors.text }}>{action.label}</Text>
-                    <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>{action.detail}</Text>
-                  </Card>
-                </Pressable>
-              ))}
-            </View>
+          <View style={{ flexDirection: "row", gap: 9, marginHorizontal: 16, marginTop: 12 }}>
+            {[
+              {
+                label: "Classes",
+                value: dashboardClasses.length,
+                icon: "book-open-page-variant-outline" as const,
+                color: theme.blue,
+                onPress: () => navigation.navigate("Classes"),
+              },
+              {
+                label: "Average",
+                value: `${averageScore}%`,
+                icon: "chart-line" as const,
+                color: theme.green,
+                onPress: () => navigation.navigate("Performance"),
+              },
+              {
+                label: "Profile",
+                value: `${profileReadiness}%`,
+                icon: "account-outline" as const,
+                color: theme.purple,
+                onPress: handleOpenProfile,
+              },
+            ].map((item) => (
+              <Pressable
+                key={item.label}
+                onPress={item.onPress}
+                style={{
+                  flex: 1,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface,
+                  paddingVertical: 12,
+                  paddingHorizontal: 10,
+                  alignItems: "center",
+                }}
+              >
+                <MaterialCommunityIcons name={item.icon} size={16} color={item.color} style={{ opacity: 0.8 }} />
+                <Text style={{ color: theme.text, fontSize: 17, fontWeight: "700", marginTop: 6 }}>{item.value}</Text>
+                <Text style={{ color: theme.muted, fontSize: 10, marginTop: 2 }}>{item.label}</Text>
+              </Pressable>
+            ))}
           </View>
         </AnimatedEntrance>
 
-        <View>
-          <SectionTitle
-            title="Continue Learning"
-            right={
-              <Pill
-                label={`${continueLearning.length || recentLessons.length} live`}
-                backgroundColor={colors.paleIndigo}
-                color={colors.indigo}
-              />
-            }
-          />
-          {continueLearning.length === 0 ? (
-            <Card>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No active lesson cue yet.</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
-                Open your classes tab to start the next lesson and build a continuation card here.
-              </Text>
-            </Card>
-          ) : (
-            <View style={{ gap: 12 }}>
-              {continueLearning.map(({ lesson, subject }, index) => (
-                <AnimatedEntrance key={lesson.id} delay={index * 80}>
-                  <Pressable onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}>
-                    <Card>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <View
-                          style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 16,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: subject.bgColor,
-                          }}
-                        >
-                          <Text style={{ fontSize: 24 }}>{subject.emoji}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 11, fontWeight: "800", color: colors.textSecondary }}>{subject.name}</Text>
-                          <Text style={{ marginTop: 2, fontSize: 15, fontWeight: "900", color: colors.text }}>{lesson.title}</Text>
-                          <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>{lesson.description}</Text>
-                        </View>
-                        <MaterialCommunityIcons name="chevron-right-circle" size={24} color={subject.color} />
-                      </View>
-                    </Card>
-                  </Pressable>
-                </AnimatedEntrance>
-              ))}
-            </View>
-          )}
-        </View>
+        {primaryError ? (
+          <DashboardNotice title="Some dashboard data could not load" subtitle={peekAppError(primaryError).message} />
+        ) : null}
 
-        <View>
-          <SectionTitle
-            title="Today's Schedule"
-            right={
-              <Pill
-                label={todaySchedule.length ? `${todaySchedule.length} blocks` : "No classes"}
-                backgroundColor={colors.paleBlue}
-                color={colors.blueDeep}
-              />
-            }
-          />
-          {todaySchedule.length === 0 ? (
-            <Card>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No scheduled classes today.</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
-                Use the time to finish lessons, review announcements, or update your profile.
-              </Text>
-            </Card>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {todaySchedule.map((entry, index) => (
-                <AnimatedEntrance key={entry.id} delay={index * 70}>
-                  <Pressable onPress={() => navigation.navigate("ClassWorkspace", { classId: entry.classId })}>
-                    <Card>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <View
-                          style={{
-                            width: 42,
-                            height: 42,
-                            borderRadius: 14,
-                            backgroundColor: colors.paleAmber,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <MaterialCommunityIcons name="clock-outline" size={20} color={colors.orange} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{entry.subjectName}</Text>
-                          <Text style={{ marginTop: 2, fontSize: 12, color: colors.textSecondary }}>
-                            {formatClock(entry.startTime)} - {formatClock(entry.endTime)} • {entry.sectionName}
-                          </Text>
-                          <Text style={{ marginTop: 4, fontSize: 11, color: colors.muted }}>{entry.teacherName}</Text>
-                        </View>
-                      </View>
-                    </Card>
-                  </Pressable>
-                </AnimatedEntrance>
-              ))}
-            </View>
-          )}
-        </View>
+        <AnimatedEntrance delay={60}>
+          <SectionLabel title="Day Schedule" actionLabel="See All" onPressAction={() => navigation.navigate("Classes")} />
+        </AnimatedEntrance>
 
-        <View>
-          <SectionTitle
-            title="Pending Assessments"
-            right={
-              <Pill
-                label={hasPendingAssessmentSync && pendingAssessments.length === 0 ? "Syncing" : `${pendingAssessments.length} due`}
-                backgroundColor={colors.paleRed}
-                color={colors.red}
-              />
-            }
+        <AnimatedEntrance delay={80}>
+          <DarkPanel>
+            {todaySchedule.length === 0 ? (
+              <View style={{ paddingHorizontal: 14, paddingVertical: 16 }}>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600" }}>No scheduled classes today</Text>
+                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 3 }}>{dayScheduleLabel}</Text>
+              </View>
+            ) : (
+              todaySchedule.map((entry, index) => {
+                const active = isScheduleActive(entry);
+
+                return (
+                  <Pressable
+                    key={entry.id}
+                    onPress={() => navigation.navigate("ClassWorkspace", { classId: entry.classId })}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      borderBottomWidth: index === todaySchedule.length - 1 ? 0 : 1,
+                      borderBottomColor: theme.border,
+                    }}
+                  >
+                    <View style={{ minWidth: 52, alignItems: "flex-end" }}>
+                      <Text style={{ color: theme.blue, fontSize: 11, fontWeight: "600" }}>{formatClock(entry.startTime)}</Text>
+                      <Text style={{ color: theme.muted, fontSize: 10, marginTop: 1 }}>
+                        {formatDurationLabel(entry.startTime, entry.endTime)}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        width: 1,
+                        height: 32,
+                        backgroundColor: "rgba(74,140,247,0.25)",
+                        flexShrink: 0,
+                      }}
+                    />
+
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600" }}>{entry.subjectName}</Text>
+                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }}>
+                        {[entry.teacherName, entry.room ? `Room ${entry.room}` : null].filter(Boolean).join(" · ")}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        borderRadius: 4,
+                        backgroundColor: "rgba(74,140,247,0.14)",
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <Text style={{ color: "#6AABFF", fontSize: 10, fontWeight: "500" }}>{active ? "Now" : "Today"}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            )}
+          </DarkPanel>
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={100}>
+          <SectionLabel
+            title="Pending Tasks"
+            actionLabel={hasPendingAssessmentSync && pendingAssessments.length === 0 ? "Syncing" : `${pendingAssessments.length} due`}
+            actionColor={theme.amber}
           />
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={120}>
           {pendingAssessments.length === 0 && hasPendingAssessmentSync ? (
-            <Card>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Checking assessment submissions</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
-                We&apos;re verifying {pendingAssessmentStatusCount} assessment status{pendingAssessmentStatusCount === 1 ? "" : "es"} before listing what is still due.
-              </Text>
-            </Card>
+            <DashboardNotice
+              title="Checking assessment submissions"
+              subtitle={`We are verifying ${pendingAssessmentStatusCount} assessment status${pendingAssessmentStatusCount === 1 ? "" : "es"} before listing what is still due.`}
+            />
           ) : pendingAssessments.length === 0 ? (
-            <Card>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No published assessments right now.</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
-                New quizzes and tasks will appear here as teachers publish them.
-              </Text>
-            </Card>
+            <DarkPanel>
+              <View style={{ alignItems: "center", paddingHorizontal: 16, paddingVertical: 18 }}>
+                <Text style={{ fontSize: 22, marginBottom: 6 }}>✓</Text>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600", marginBottom: 3 }}>You are all caught up</Text>
+                <Text style={{ color: theme.muted, fontSize: 11 }}>No published assessments right now.</Text>
+              </View>
+            </DarkPanel>
           ) : (
-            <View style={{ gap: 10 }}>
+            <View style={{ gap: 8 }}>
               {pendingAssessments.map(({ assessment, subject }, index) => (
-                <AnimatedEntrance key={assessment.id} delay={index * 70}>
+                <AnimatedEntrance key={assessment.id} delay={140 + index * 20}>
                   <Pressable
                     onPress={() =>
                       navigation.navigate("AssessmentDetail", {
@@ -990,145 +1389,342 @@ export function DashboardScreen({ navigation }: Props) {
                         classId: assessment.classId,
                       })
                     }
+                    style={{
+                      marginHorizontal: 16,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.surface,
+                      paddingHorizontal: 14,
+                      paddingVertical: 13,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
                   >
-                    <Card>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <View
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 14,
-                            backgroundColor: colors.paleRed,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <MaterialCommunityIcons name="clipboard-text-outline" size={20} color={colors.red} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{assessment.title}</Text>
-                          <Text style={{ marginTop: 2, fontSize: 12, color: colors.textSecondary }}>
-                            {subject?.name || "Assigned class"} • Due {formatDueDate(assessment.dueDate)}
-                          </Text>
-                        </View>
-                        <MaterialCommunityIcons name="chevron-right" size={22} color={colors.muted} />
-                      </View>
-                    </Card>
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 6,
+                        borderWidth: 1.5,
+                        borderColor: assessment.dueDate ? theme.amber : theme.dim,
+                      }}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: "500" }} numberOfLines={1}>
+                        {assessment.title}
+                      </Text>
+                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                        {subject.name} · {(assessment.type || "Task").replace(/_/g, " ")} · {(assessment.totalPoints ?? 100)} pts
+                      </Text>
+                    </View>
+                    <Text style={{ color: theme.amber, fontSize: 10, fontWeight: "600" }}>{formatDueDate(assessment.dueDate)}</Text>
                   </Pressable>
                 </AnimatedEntrance>
               ))}
             </View>
           )}
-        </View>
+        </AnimatedEntrance>
 
-        <View>
-          <SectionTitle
-            title="Recent Lessons"
-            right={
-              <Pill
-                label={`${recentLessons.length} ready`}
-                backgroundColor={colors.paleGreen}
-                color={colors.green}
-              />
-            }
-          />
+        <AnimatedEntrance delay={160}>
+          <SectionLabel title="Recent Lessons" actionLabel="View All" onPressAction={() => navigation.navigate("Classes")} />
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={180}>
           {recentLessons.length === 0 ? (
-            <EmptyState
-              emoji="📚"
+            <DashboardNotice
               title="No lessons available yet"
               subtitle="When your classes publish lesson content, the newest lessons will show up here."
             />
           ) : (
-            <View style={{ gap: 10 }}>
-              {recentLessons.map(({ id, title, description, duration, subject }, index) => (
-                <AnimatedEntrance key={id} delay={index * 70}>
-                  <Pressable onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}>
-                    <Card>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                        <View
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 14,
-                            backgroundColor: subject.bgColor,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Text style={{ fontSize: 22 }}>{subject.emoji}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{title}</Text>
-                          <Text style={{ marginTop: 2, fontSize: 12, color: colors.textSecondary }}>
-                            {subject.name} • {duration}
-                          </Text>
-                          <Text style={{ marginTop: 4, fontSize: 11, color: colors.muted }}>{description}</Text>
-                        </View>
-                      </View>
-                    </Card>
-                  </Pressable>
-                </AnimatedEntrance>
-              ))}
-            </View>
-          )}
-        </View>
+            <View style={{ gap: 8 }}>
+              {recentLessons.map(({ id, title, status, subject, order }, index) => {
+                const completed = status === "completed";
 
-        <View style={{ marginBottom: 8 }}>
-          <SectionTitle
-            title="School Events"
-            right={
-              <Pill
-                label={upcomingEvents.length ? `${upcomingEvents.length} upcoming` : "Stay tuned"}
-                backgroundColor={colors.palePurple}
-                color={colors.purpleDeep}
-              />
-            }
-          />
-          {upcomingEvents.length === 0 ? (
-            <Card>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No school events yet.</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
-                Upcoming notices from the school calendar will appear here when they are scheduled.
-              </Text>
-            </Card>
-          ) : (
-            <View style={{ gap: 10 }}>
-              {upcomingEvents.map((event, index) => (
-                <AnimatedEntrance key={event.id} delay={index * 70}>
-                  <Card>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                return (
+                  <AnimatedEntrance key={id} delay={190 + index * 20}>
+                    <Pressable
+                      onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}
+                      style={{
+                        marginHorizontal: 16,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surface,
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
                       <View
                         style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 14,
-                          backgroundColor: event.eventType === "holiday_break" ? colors.paleGreen : colors.palePurple,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 7,
+                          backgroundColor: "rgba(232,41,78,0.12)",
                           alignItems: "center",
                           justifyContent: "center",
                         }}
                       >
-                        <MaterialCommunityIcons
-                          name={event.eventType === "holiday_break" ? "palm-tree" : "calendar-star"}
-                          size={20}
-                          color={event.eventType === "holiday_break" ? colors.green : colors.purpleDeep}
-                        />
+                        <Text style={{ color: theme.red, fontSize: 12, fontWeight: "700" }}>{order ?? index + 1}</Text>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "900", color: colors.text }}>{event.title}</Text>
-                        <Text style={{ marginTop: 2, fontSize: 12, color: colors.textSecondary }}>
-                          {formatEventDate(event.startsAt, event.allDay)}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ color: theme.text, fontSize: 13, fontWeight: "500" }} numberOfLines={1}>
+                          {title}
                         </Text>
-                        <Text style={{ marginTop: 4, fontSize: 11, color: colors.muted }}>
-                          {event.location || event.description || "School-wide notice"}
+                        <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                          {subject.name} · Lesson {order ?? index + 1} {completed ? "· Done" : ""}
                         </Text>
                       </View>
-                    </View>
-                  </Card>
-                </AnimatedEntrance>
-              ))}
+                      <View
+                        style={{
+                          borderRadius: 6,
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          backgroundColor: completed ? "rgba(34,201,122,0.1)" : "rgba(74,140,247,0.1)",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: completed ? theme.green : theme.blue,
+                            fontSize: 11,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {completed ? "Done" : "Open"}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </AnimatedEntrance>
+                );
+              })}
             </View>
           )}
-        </View>
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={220}>
+          <SectionLabel
+            title={formatCalendarMonth(calendarMonth)}
+            actionLabel=""
+          />
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={240}>
+          <DarkPanel>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingHorizontal: 14,
+                paddingTop: 12,
+                paddingBottom: 8,
+              }}
+            >
+              <Text style={{ color: theme.text, fontSize: 14, fontWeight: "700" }}>{formatCalendarMonth(calendarMonth)}</Text>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <Pressable
+                  onPress={() =>
+                    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
+                  }
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    backgroundColor: "rgba(255,255,255,0.07)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MaterialCommunityIcons name="chevron-left" size={14} color={theme.muted} />
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))
+                  }
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    backgroundColor: "rgba(255,255,255,0.07)",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MaterialCommunityIcons name="chevron-right" size={14} color={theme.muted} />
+                </Pressable>
+              </View>
+            </View>
+
+            <View style={{ paddingHorizontal: 10, paddingBottom: 12 }}>
+              <View style={{ flexDirection: "row", marginBottom: 6 }}>
+                {["M", "T", "W", "T", "F", "S", "S"].map((label, index) => (
+                  <Text
+                    key={`${label}-${index}`}
+                    style={{
+                      flex: 1,
+                      textAlign: "center",
+                      fontSize: 9,
+                      fontWeight: "600",
+                      color: theme.dim,
+                      paddingVertical: 4,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                ))}
+              </View>
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 1 }}>
+                {calendarCells.map((cell) => (
+                  <View
+                    key={cell.key}
+                    style={{
+                      width: "14.2857%",
+                      aspectRatio: 1,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {cell.label ? (
+                      <View
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: cell.isToday ? 16 : 6,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: cell.isToday ? theme.red : "transparent",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: cell.isToday
+                              ? "#FFFFFF"
+                              : cell.isClassDay
+                                ? "rgba(74,140,247,0.8)"
+                                : cell.inMonth
+                                  ? cell.hasEvent
+                                    ? theme.text
+                                    : theme.muted
+                                  : theme.dim,
+                            fontSize: 11,
+                            fontWeight: cell.isToday || cell.isClassDay ? "700" : "500",
+                          }}
+                        >
+                          {cell.label}
+                        </Text>
+                        {cell.hasEvent && !cell.isToday ? (
+                          <View
+                            style={{
+                              position: "absolute",
+                              bottom: 3,
+                              width: 4,
+                              height: 4,
+                              borderRadius: 999,
+                              backgroundColor: theme.amber,
+                            }}
+                          />
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, paddingBottom: 4 }}>
+              <SectionLabel title="Upcoming" actionLabel="See All" />
+            </View>
+
+            {upcomingTimeline.length === 0 ? (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+                <Text style={{ color: theme.text, fontSize: 12, fontWeight: "600" }}>No upcoming items</Text>
+                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 2 }}>Class sessions and due work will appear here.</Text>
+              </View>
+            ) : (
+              upcomingTimeline.map((item, index) => (
+                <View
+                  key={item.id}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 11,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: theme.border,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      backgroundColor:
+                        item.tone === "blue" ? theme.blue : item.tone === "amber" ? theme.amber : theme.purple,
+                    }}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.text, fontSize: 12, fontWeight: "500" }}>{item.title}</Text>
+                    <Text style={{ color: theme.muted, fontSize: 11, marginTop: 1 }}>{item.subtitle}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </DarkPanel>
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={260}>
+          <SectionLabel title="Student Tools" />
+        </AnimatedEntrance>
+
+        <AnimatedEntrance delay={280}>
+          <Pressable
+            onPress={handleOpenProfile}
+            style={{
+              marginHorizontal: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.surface,
+              paddingHorizontal: 14,
+              paddingVertical: 13,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <View
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                backgroundColor: "rgba(167,139,250,0.12)",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MaterialCommunityIcons name="account-outline" size={18} color={theme.purple} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600", marginBottom: 3 }}>
+                {profileReadiness >= 100 ? "Learner profile ready" : "Complete your learner profile"}
+              </Text>
+              <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16 }}>
+                {profileReadiness >= 100
+                  ? `${fullName} has the key learner details filled in.`
+                  : "Add your phone, address, and guardian details so class updates stay accurate."}
+              </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={16} color={theme.dim} />
+          </Pressable>
+        </AnimatedEntrance>
+
+        <View style={{ height: 8 }} />
       </View>
     </ScreenScroll>
   );

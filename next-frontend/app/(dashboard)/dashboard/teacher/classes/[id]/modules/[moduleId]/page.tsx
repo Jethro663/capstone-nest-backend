@@ -662,30 +662,18 @@ export default function TeacherModuleDetailPage() {
   const handleOpenCoreItemPreview = async (item: ModuleItem) => {
     if (!item.isCoreTemplateAsset) return;
 
-    setPreviewItem(item);
-    setPreviewLesson(null);
-    setPreviewAssessment(null);
-    setPreviewError(null);
-    setPreviewLoading(true);
+    if (item.itemType === 'lesson' && item.lessonId) {
+      router.push(
+        `/dashboard/teacher/lessons/${item.lessonId}/view?classId=${classId}&moduleId=${moduleId}`,
+      );
+      return;
+    }
 
-    try {
-      if (item.itemType === 'lesson' && item.lessonId) {
-        const response = await lessonService.getById(item.lessonId);
-        setPreviewLesson(response.data);
-        return;
-      }
-
-      if (item.itemType === 'assessment' && item.assessmentId) {
-        const response = await assessmentService.getById(item.assessmentId);
-        setPreviewAssessment(response.data);
-        return;
-      }
-
-      setPreviewError('No preview is available for this item.');
-    } catch {
-      setPreviewError('Unable to load preview content.');
-    } finally {
-      setPreviewLoading(false);
+    if (item.itemType === 'assessment' && item.assessmentId) {
+      router.push(
+        `/dashboard/teacher/assessments/${item.assessmentId}/edit?mode=view&classId=${classId}&moduleId=${moduleId}`,
+      );
+      return;
     }
   };
 

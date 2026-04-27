@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MainTabParamList } from "../../navigation/types";
-import { colors, gradients, shadow } from "../../theme/tokens";
+import { colors, gradients } from "../../theme/tokens";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 const studentTabOrder: Array<keyof MainTabParamList> = ["Dashboard", "Classes", "JA", "Assessments", "Profile"];
@@ -92,25 +92,20 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         left: 0,
         right: 0,
         bottom: 0,
-        paddingHorizontal: 14,
-        paddingBottom: Math.max(insets.bottom, 12),
+        paddingBottom: Math.max(insets.bottom, 14),
       }}
     >
       <View
-        style={[
-          {
-            minHeight: 74,
-            borderRadius: 28,
-            backgroundColor: colors.white,
-            borderWidth: 1,
-            borderColor: "#F3F4F6",
-            flexDirection: "row",
-            alignItems: "flex-end",
-            paddingHorizontal: 6,
-            paddingTop: 10,
-          },
-          shadow.card,
-        ]}
+        style={{
+          minHeight: 72,
+          backgroundColor: "#1C1C1C",
+          borderTopWidth: 1,
+          borderTopColor: "rgba(255,255,255,0.07)",
+          flexDirection: "row",
+          alignItems: "flex-end",
+          paddingHorizontal: 8,
+          paddingTop: 8,
+        }}
       >
         {orderedRoutes.map((route) => {
           const focused = activeRouteKey === route.key;
@@ -147,25 +142,27 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   style={{ alignItems: "center", width: "100%" }}
                 >
                   <LinearGradient
-                    colors={focused ? gradients.ja : gradients.classes}
+                    colors={focused ? gradients.ja : [darkRed(), "#C81E43"]}
                     style={{
-                      width: 62,
-                      height: 62,
-                      marginTop: -24,
+                      width: 72,
+                      height: 72,
+                      marginTop: -28,
                       borderRadius: 999,
                       alignItems: "center",
                       justifyContent: "center",
+                      borderWidth: 4,
+                      borderColor: "#1C1C1C",
                     }}
                   >
-                    <MaterialCommunityIcons name={config.activeIcon} size={26} color={colors.white} />
+                    <MaterialCommunityIcons name={config.activeIcon} size={30} color={colors.white} />
                   </LinearGradient>
                   <Text
                     style={{
-                      marginTop: 6,
+                      marginTop: 4,
                       marginBottom: 10,
                       fontSize: 10,
                       fontWeight: focused ? "800" : "600",
-                      color: focused ? colors.orange : colors.muted,
+                      color: focused ? darkRed() : "#777777",
                     }}
                   >
                     {config.label}
@@ -183,37 +180,30 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel}
               onPress={onPress}
               onLongPress={onLongPress}
-              style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", paddingBottom: 10 }}
+              style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", paddingBottom: 14, gap: 3 }}
             >
               <MaterialCommunityIcons
                 name={focused ? config.activeIcon : config.inactiveIcon}
-                size={22}
-                color={focused ? colors.amber : colors.muted}
+                size={20}
+                color={focused ? darkRed() : "#555555"}
               />
               <Text
                 style={{
-                  marginTop: 4,
                   fontSize: 10,
                   fontWeight: focused ? "800" : "600",
-                  color: focused ? colors.amber : colors.muted,
+                  color: focused ? darkRed() : "#777777",
                 }}
               >
                 {config.label}
               </Text>
-              <View
-                style={{
-                  marginTop: 6,
-                  width: 30,
-                  height: 3,
-                  borderTopLeftRadius: 999,
-                  borderTopRightRadius: 999,
-                  backgroundColor: focused ? colors.amber : "transparent",
-                }}
-              />
             </Pressable>
           );
         })}
       </View>
     </View>
   );
+}
+
+function darkRed() {
+  return "#E8294E";
 }

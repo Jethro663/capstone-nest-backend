@@ -132,6 +132,7 @@ function buildMockDb() {
       classRecordCategories: { findFirst: jest.fn() },
       classRecordItems: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
+      moduleItems: { findMany: jest.fn() },
       uploadedFiles: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
       enrollments: { findFirst: jest.fn() },
@@ -200,6 +201,11 @@ describe('AssessmentsService', () => {
     db.query.classRecordItems.findMany.mockResolvedValue([]);
     db.query.classRecords.findFirst.mockResolvedValue(null);
     db.query.classRecordCategories.findFirst.mockResolvedValue(null);
+    db.query.moduleItems.findMany.mockResolvedValue([]);
+    db.query.enrollments.findFirst.mockResolvedValue({
+      classId: CLASS_ID,
+      studentId: STUDENT_ID,
+    });
     eventEmitter = { emit: jest.fn() } as any;
     jest.clearAllMocks();
     feedbackService = {
@@ -371,6 +377,22 @@ describe('AssessmentsService', () => {
         }),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('should reject copied template assessment reads until the module gate passes', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isCoreTemplateAsset: true,
+        class: { teacherId: 'teacher-1' },
+      });
+      db.query.moduleItems.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.getAssessmentById(ASSESSMENT_ID, 'student', {
+          userId: STUDENT_ID,
+          roles: ['student'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
   });
 
   describe('getAssessmentsByClass access control', () => {
@@ -389,7 +411,7 @@ describe('AssessmentsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should return only published assessments for student class listing', async () => {
+    it('should keep manual published assessments visible while hiding ungiven copied template assessments', async () => {
       db.query.classes.findFirst.mockResolvedValue({
         id: CLASS_ID,
         teacherId: 'teacher-1',
@@ -403,11 +425,13 @@ describe('AssessmentsService', () => {
           ...MOCK_PUBLISHED_ASSESSMENT,
           id: ASSESSMENT_ID,
           isPublished: true,
+          isCoreTemplateAsset: false,
         },
         {
           ...MOCK_PUBLISHED_ASSESSMENT,
           id: '00000000-0000-0000-0000-000000000099',
-          isPublished: false,
+          isPublished: true,
+          isCoreTemplateAsset: true,
         },
       ]);
       db.query.assessmentAttempts.findMany.mockResolvedValue([]);
@@ -421,6 +445,49 @@ describe('AssessmentsService', () => {
       expect(result.total).toBe(1);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].id).toBe(ASSESSMENT_ID);
+    });
+
+    it('should include copied template assessments only after the module gate passes', async () => {
+      const copiedAssessmentId = '00000000-0000-0000-0000-000000000099';
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+      db.query.assessments.findMany.mockResolvedValue([
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: copiedAssessmentId,
+          isPublished: true,
+          isCoreTemplateAsset: true,
+        },
+      ]);
+      db.query.moduleItems.findMany.mockResolvedValue([
+        {
+          isGiven: true,
+          isVisible: true,
+          section: {
+            module: {
+              classId: CLASS_ID,
+              isVisible: true,
+              isLocked: false,
+            },
+          },
+        },
+      ]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+
+      const result = await service.getAssessmentsByClass(
+        CLASS_ID,
+        { studentId: STUDENT_ID, status: 'all' },
+        { userId: STUDENT_ID, roles: ['student'] },
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.data[0].id).toBe(copiedAssessmentId);
     });
 
     it('should reject teacher class listing when class ownership metadata is missing', async () => {
@@ -460,6 +527,27 @@ describe('AssessmentsService', () => {
       );
 
       expect(result.title).toBe('Updated');
+    });
+
+    it('should allow teachers to edit copied template assessment content', async () => {
+      const copiedDraft = {
+        ...MOCK_ASSESSMENT,
+        isCoreTemplateAsset: true,
+        class: { teacherId: 'teacher-1' },
+      };
+      const updated = { ...copiedDraft, title: 'Updated Core Quiz' };
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(copiedDraft)
+        .mockResolvedValueOnce(updated);
+      mockUpdateReturning(db, [updated]);
+
+      const result = await service.updateAssessment(
+        ASSESSMENT_ID,
+        { title: 'Updated Core Quiz' } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result.title).toBe('Updated Core Quiz');
     });
 
     it('should reject publish when there are no questions', async () => {
@@ -717,6 +805,18 @@ describe('AssessmentsService', () => {
   describe('startAttempt', () => {
     it('should reject if assessment is not published', async () => {
       db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT); // isPublished: false
+
+      await expect(
+        service.startAttempt(STUDENT_ID, ASSESSMENT_ID),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject copied template attempts until the module gate passes', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isCoreTemplateAsset: true,
+      });
+      db.query.moduleItems.findMany.mockResolvedValue([]);
 
       await expect(
         service.startAttempt(STUDENT_ID, ASSESSMENT_ID),
