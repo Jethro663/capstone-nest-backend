@@ -30,9 +30,10 @@ import {
 import { toast } from "sonner";
 import { getMotionProps } from "@/components/student/student-motion";
 import { StudentStatusChip } from "@/components/student/student-primitives";
+import { StudentObjectiveAssessmentSurface } from "@/components/student/assessment/StudentObjectiveAssessmentSurface";
 import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { jaService } from "@/services/ja-service";
 import type {
@@ -281,6 +282,7 @@ export default function StudentJaWorkspace({
   const [practiceSession, setPracticeSession] = useState<JaPracticeSessionResponse | null>(null);
   const [reviewSession, setReviewSession] = useState<JaPracticeSessionResponse | null>(null);
   const [reviewCursor, setReviewCursor] = useState(0);
+  const [reviewSessionTitle, setReviewSessionTitle] = useState("Assessment Replay");
   const [answers, setAnswers] = useState<AnswerState>({});
   const [busy, setBusy] = useState(false);
 
@@ -310,6 +312,7 @@ export default function StudentJaWorkspace({
     clearAnswersForItems(reviewSession?.items.map((item) => item.id) ?? []);
     setReviewSession(null);
     setReviewCursor(0);
+    setReviewSessionTitle("Assessment Replay");
     setActiveActivityKey("");
   }, [clearAnswersForItems, reviewSession]);
 
@@ -524,6 +527,24 @@ export default function StudentJaWorkspace({
     () => currentSession?.items.filter((item) => Boolean(item.response)).length ?? 0,
     [currentSession],
   );
+  const sessionAnsweredById = useMemo(
+    () =>
+      currentSession
+        ? Object.fromEntries(
+            currentSession.items.map((item) => [
+              item.id,
+              Boolean(item.response) || itemReady(item, answers[item.id]),
+            ]),
+          )
+        : {},
+    [answers, currentSession],
+  );
+  const draftAnsweredCount = useMemo(
+    () =>
+      currentSession?.items.filter((item) => Boolean(sessionAnsweredById[item.id]))
+        .length ?? 0,
+    [currentSession, sessionAnsweredById],
+  );
   const allSessionItemsReady = useMemo(
     () =>
       currentSession?.items.every(
@@ -539,7 +560,9 @@ export default function StudentJaWorkspace({
 
   const sessionProgressPercent = currentSession
     ? clampProgress(
-        (answeredCount / Math.max(currentSession.session.questionCount, 1)) * 100,
+        ((mode === "review" ? draftAnsweredCount : answeredCount) /
+          Math.max(currentSession.session.questionCount, 1)) *
+          100,
       )
     : 0;
 
@@ -601,6 +624,12 @@ export default function StudentJaWorkspace({
         ? activityItems
         : activityItems.filter((item) => item.mode === activityFilter),
     [activityFilter, activityItems],
+  );
+  const activeActivity = useMemo(
+    () =>
+      activityItems.find((item) => `${item.mode}:${item.id}` === activeActivityKey) ??
+      null,
+    [activityItems, activeActivityKey],
   );
   const askLessonContexts = hub?.ask.lessonContexts ?? [];
   const askGuidelines = hub?.ask.guidelines?.length
@@ -714,6 +743,10 @@ export default function StudentJaWorkspace({
     if (!selectedClassId) return;
     setBusy(true);
     try {
+      const attemptSummary = hub?.review.eligibleAttempts.find(
+        (attempt) => attempt.attemptId === attemptId,
+      );
+      setReviewSessionTitle(attemptSummary?.assessmentTitle || "Assessment Replay");
       const res = await jaService.createReviewSession({
         classId: selectedClassId,
         attemptId,
@@ -1411,40 +1444,164 @@ export default function StudentJaWorkspace({
                 </div>
               ) : (
                 <div className="ja-session-active student-panel">
-                  <div className="ja-session-head">
-                    <div>
-                      <p className="ja-eyebrow">{mode === "practice" ? "Practice" : "Replay"}</p>
-                      <h3>
-                        {answeredCount}/{currentSession.session.questionCount} completed
-                      </h3>
-                    </div>
-                    <div className="ja-session-head__actions">
-                      {mode === "review" ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={resetReviewStage}
-                          className="student-button-outline ja-secondary-action"
-                        >
-                          Back to replay menu
-                        </Button>
-                      ) : null}
-                      <StudentStatusChip
-                        tone={canComplete ? "success" : "info"}
-                        className="ja-status-chip"
-                      >
-                        {currentSession.session.status === "completed"
-                          ? "Completed"
-                          : canComplete
-                            ? "Ready to Complete"
-                            : "In Progress"}
-                      </StudentStatusChip>
-                    </div>
-                  </div>
+                  {mode === "review" && activeItem ? (
+                    <>
+                      <div className="ja-session-head">
+                        <div>
+                          <p className="ja-eyebrow">Replay</p>
+                          <h3>{reviewSessionTitle || activeActivity?.title || "Assessment Replay"}</h3>
+                        </div>
+                        <div className="ja-session-head__actions">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={resetReviewStage}
+                            className="student-button-outline ja-secondary-action"
+                          >
+                            Back to replay menu
+                          </Button>
+                        </div>
+                      </div>
 
-                  <Progress value={sessionProgressPercent} />
-
-                  {activeItem ? (
+                      <StudentObjectiveAssessmentSurface
+                        title={reviewSessionTitle || activeActivity?.title || "Assessment Replay"}
+                        questionLabel={`Question ${(activeItemIndex ?? 0) + 1} of ${currentSession.items.length}`}
+                        progressValue={sessionProgressPercent}
+                        statusChips={
+                          <>
+                            <StudentStatusChip tone="info">
+                              {draftAnsweredCount}/{currentSession.items.length} answered
+                            </StudentStatusChip>
+                            <StudentStatusChip
+                              tone={canComplete ? "success" : "info"}
+                              className="ja-status-chip"
+                            >
+                              {currentSession.session.status === "completed"
+                                ? "Completed"
+                                : canComplete
+                                  ? "Ready to Complete"
+                                  : "In Progress"}
+                            </StudentStatusChip>
+                          </>
+                        }
+                        question={{
+                          id: activeItem.id,
+                          type:
+                            activeItem.itemType === "multiple_select"
+                              ? "multiple_select"
+                              : "multiple_choice",
+                          promptHtml: activeItemPrompt.prompt,
+                          options: (activeItem.options ?? []).map((option) => ({
+                            id: option.id,
+                            text: option.text,
+                          })),
+                        }}
+                        currentIdx={activeItemIndex ?? 0}
+                        questionIds={currentSession.items.map((item) => item.id)}
+                        answeredById={sessionAnsweredById}
+                        navigationLocked={false}
+                        value={
+                          activeItem.itemType === "multiple_select"
+                            ? answers[activeItem.id] ?? []
+                            : answers[activeItem.id]?.[0] ?? ""
+                        }
+                        onChange={(val) => {
+                          setAnswers((prev) => ({
+                            ...prev,
+                            [activeItem.id]: Array.isArray(val)
+                              ? val
+                              : val
+                                ? [val]
+                                : [],
+                          }));
+                        }}
+                        onNavigate={(index) => setReviewCursor(index)}
+                        optionTextMode="rich"
+                        metaBadges={
+                          <>
+                            <Badge variant="outline" className="capitalize">
+                              {activeItem.itemType === "multiple_select"
+                                ? "multiple select"
+                                : "multiple choice"}
+                            </Badge>
+                            <Badge variant="secondary">Replay</Badge>
+                          </>
+                        }
+                        promptSupplement={
+                          activeCoachText ? (
+                            <aside className="ja-coach-card">
+                              <span>JA Coach</span>
+                              <p>{activeCoachText}</p>
+                            </aside>
+                          ) : null
+                        }
+                        feedback={
+                          activeItem.response ? (
+                            <div
+                              className={cn(
+                                "ja-feedback",
+                                activeItem.response.isCorrect
+                                  ? "is-correct"
+                                  : "is-incorrect",
+                              )}
+                            >
+                              {activeItem.response.feedback}
+                            </div>
+                          ) : null
+                        }
+                        footerLeft={
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              setReviewCursor((current) => Math.max(0, current - 1))
+                            }
+                            disabled={busy || (activeItemIndex ?? 0) <= 0}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                        }
+                        footerRight={
+                          (activeItemIndex ?? 0) < currentSession.items.length - 1 ? (
+                            <Button
+                              type="button"
+                              className="student-button-solid"
+                              onClick={() =>
+                                setReviewCursor((current) =>
+                                  Math.min(currentSession.items.length - 1, current + 1),
+                                )
+                              }
+                              disabled={
+                                busy ||
+                                (activeItemIndex ?? 0) >= currentSession.items.length - 1
+                              }
+                            >
+                              Next
+                            </Button>
+                          ) : canComplete ? (
+                            <Button
+                              type="button"
+                              className="student-button-solid"
+                              onClick={() => void completeCurrentSession()}
+                              disabled={busy}
+                            >
+                              Complete Session
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              className="student-button-solid"
+                              onClick={() => void submitCurrentAnswer()}
+                              disabled={busy || !allSessionItemsReady}
+                            >
+                              Submit Answers
+                            </Button>
+                          )
+                        }
+                      />
+                    </>
+                  ) : activeItem ? (
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.article
                         key={activeItem.id}

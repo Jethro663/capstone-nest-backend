@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentLessonViewPage from './page';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
@@ -9,10 +9,13 @@ const push = jest.fn();
 const replace = jest.fn();
 
 jest.mock('next/navigation', () => ({
-  useParams: () => ({ id: 'lesson-structured' }),
+  useParams: () => ({ id: 'lesson-1' }),
   useRouter: () => ({ back, push, replace }),
   useSearchParams: () => ({
-    get: () => null,
+    get: (key: string) => {
+      if (key === 'returnTo') return '/dashboard/student/lxp/class-1';
+      return null;
+    },
   }),
 }));
 
@@ -44,69 +47,23 @@ jest.mock('@/services/module-service', () => ({
   },
 }));
 
-jest.mock('next/image', () => ({
-  __esModule: true,
-  // eslint-disable-next-line @next/next/no-img-element
-  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} alt={props.alt ?? ''} />,
-}));
-
 const mockedLessonService = lessonService as jest.Mocked<typeof lessonService>;
 const mockedClassService = classService as jest.Mocked<typeof classService>;
 const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
 
-describe('StudentLessonViewPage structured lesson reader', () => {
+describe('StudentLessonViewPage LXP returnTo routing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLessonService.getById.mockResolvedValue({
       success: true,
       message: 'ok',
       data: {
-        id: 'lesson-structured',
+        id: 'lesson-1',
         classId: 'class-1',
-        title: 'Fractions and ratios',
-        description: 'A lesson with semantic sections.',
+        title: 'Intro',
         order: 1,
         isDraft: false,
-        contentBlocks: [
-          {
-            id: 'text-1',
-            lessonId: 'lesson-structured',
-            type: 'text',
-            order: 1,
-            content: {
-              heading: 'Learning objectives',
-              html: '<ul><li>Describe a ratio in your own words.</li></ul>',
-            },
-            metadata: { variant: 'objectives' },
-          },
-          {
-            id: 'text-2',
-            lessonId: 'lesson-structured',
-            type: 'text',
-            order: 2,
-            content: {
-              heading: 'Key points',
-              html: '<p>Ratios compare two quantities.</p>',
-            },
-            metadata: { variant: 'key_points' },
-          },
-          {
-            id: 'question-1',
-            lessonId: 'lesson-structured',
-            type: 'question',
-            order: 3,
-            content: {
-              prompt: 'Which pair shows a ratio?',
-              choices: ['2:3', '5 + 1'],
-              answerType: 'single_select',
-            },
-            metadata: {
-              correctAnswers: ['2:3'],
-              explanation: 'A ratio compares two quantities.',
-              points: 2,
-            },
-          },
-        ],
+        contentBlocks: [],
       },
     } as Awaited<ReturnType<typeof lessonService.getById>>);
     mockedLessonService.getCompletionStatus.mockResolvedValue({
@@ -120,7 +77,7 @@ describe('StudentLessonViewPage structured lesson reader', () => {
         id: 'class-1',
         subjectName: 'Mathematics',
         subjectGradeLevel: '7',
-        section: { id: 'section-1', name: 'Newton', gradeLevel: '7' },
+        section: { id: 'section-1', name: 'Section A', gradeLevel: '7' },
         teacher: { id: 'teacher-1', firstName: 'Maria', lastName: 'Santos' },
       } as never,
     });
@@ -150,16 +107,16 @@ describe('StudentLessonViewPage structured lesson reader', () => {
                   id: 'item-lesson-1',
                   moduleSectionId: 'section-1',
                   itemType: 'lesson',
-                  lessonId: 'lesson-structured',
+                  lessonId: 'lesson-1',
                   order: 1,
                   isVisible: true,
                   isRequired: true,
                   isGiven: true,
                   lessonPoints: 10,
                   lesson: {
-                    id: 'lesson-structured',
+                    id: 'lesson-1',
                     classId: 'class-1',
-                    title: 'Fractions and ratios',
+                    title: 'Intro',
                     order: 1,
                     isDraft: false,
                   },
@@ -173,19 +130,17 @@ describe('StudentLessonViewPage structured lesson reader', () => {
     });
   });
 
-  it('renders the shared module-style lesson structure with semantic lesson content', async () => {
+  it('sends both back controls to the provided LXP return path', async () => {
     render(<StudentLessonViewPage />);
 
-    await waitFor(() => {
-      expect(screen.getAllByText('Learning objectives').length).toBeGreaterThan(0);
-    });
+    const topBack = await screen.findByRole('link', { name: 'Back' });
+    expect(topBack).toHaveAttribute('href', '/dashboard/student/lxp/class-1');
+    expect(screen.getByRole('button', { name: 'Back to Path' })).toBeInTheDocument();
 
-    expect(screen.getByRole('link', { name: /back/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /back to module/i })).toBeInTheDocument();
-    expect(screen.getByText('Grade 7 - Newton - Maria Santos')).toBeInTheDocument();
-    expect(screen.getAllByText('Key points').length).toBeGreaterThan(0);
-    expect(screen.getByText('Which pair shows a ratio?')).toBeInTheDocument();
-    expect(screen.getByText('2:3')).toBeInTheDocument();
-    expect(screen.getByText('5 + 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Path' }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-1');
+    });
   });
 });

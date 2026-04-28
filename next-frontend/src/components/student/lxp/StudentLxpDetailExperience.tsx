@@ -1,7 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -47,6 +54,13 @@ function resolveClassId(value: string | string[] | undefined) {
   return value ?? '';
 }
 
+function buildLessonHref(classId: string, lessonId?: string | null) {
+  if (!lessonId) return null;
+  return `/dashboard/student/lessons/${encode(lessonId)}?${new URLSearchParams({
+    returnTo: `/dashboard/student/lxp/${classId}`,
+  }).toString()}`;
+}
+
 function clampPercent(value: number | null | undefined) {
   if (!Number.isFinite(value ?? Number.NaN)) return 0;
   return Math.max(0, Math.min(100, Math.round(value ?? 0)));
@@ -70,16 +84,6 @@ function formatPercent(value: number | null | undefined) {
 
 function getCheckpointTitle(checkpoint: LxpCheckpoint) {
   return checkpoint.label || checkpoint.lesson?.title || checkpoint.assessment?.title;
-}
-
-function getCheckpointDescription(checkpoint: LxpCheckpoint) {
-  return (
-    checkpoint.lesson?.description ||
-    checkpoint.assessment?.description ||
-    (checkpoint.type === 'lesson_review'
-      ? 'Review this lesson before moving to the next assigned step.'
-      : 'Use JA review mode to retry and understand this assessment.')
-  );
 }
 
 function getTab(value: string | null): DetailTab {
@@ -120,30 +124,54 @@ function CheckpointCard({
   completing: boolean;
   onComplete: (checkpointId: string) => void;
 }) {
+  const router = useRouter();
   const title = getCheckpointTitle(checkpoint);
   const isReplay = checkpoint.type === 'assessment_retry';
-  const lessonHref = checkpoint.lesson?.id
-    ? `/dashboard/student/lessons/${encode(checkpoint.lesson.id)}`
-    : null;
+  const lessonHref = buildLessonHref(classId, checkpoint.lesson?.id);
   const jaHref = `/dashboard/student/ja?${new URLSearchParams({
     mode: 'review',
     classId,
     entry: 'lxp',
     returnTo: `/dashboard/student/lxp/${classId}?tab=replays`,
   }).toString()}`;
+  const primaryHref = isReplay ? jaHref : lessonHref;
+
+  const isNestedInteractiveTarget = (target: EventTarget | null, currentTarget: HTMLElement) => {
+    if (!(target instanceof Element)) return false;
+    const interactiveAncestor = target.closest('button, a, [role="button"]');
+    return Boolean(interactiveAncestor && interactiveAncestor !== currentTarget);
+  };
+
+  const handleCardClick = (event: ReactMouseEvent<HTMLElement>) => {
+    if (!primaryHref || isNestedInteractiveTarget(event.target, event.currentTarget)) return;
+    router.push(primaryHref);
+  };
+
+  const handleCardKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (!primaryHref || (event.key !== 'Enter' && event.key !== ' ')) return;
+    if (isNestedInteractiveTarget(event.target, event.currentTarget)) return;
+    event.preventDefault();
+    router.push(primaryHref);
+  };
 
   return (
     <article
-      className="student-class-module-card"
+      className={cn(
+        'student-class-module-card',
+        primaryHref ? 'student-class-module-card--interactive' : null,
+      )}
       data-tone={CHECKPOINT_TONE[index % CHECKPOINT_TONE.length]}
       data-view="wide"
+      role={primaryHref ? 'link' : undefined}
+      tabIndex={primaryHref ? 0 : undefined}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
     >
       <div className="student-class-module-card__body-link">
         <header>
           <span className="student-class-module-card__index">{index + 1}</span>
           <div>
             <h3>{title}</h3>
-            <p>{getCheckpointDescription(checkpoint)}</p>
           </div>
         </header>
 

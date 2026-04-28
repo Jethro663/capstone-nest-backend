@@ -23,6 +23,10 @@ import { assessmentService } from '@/services/assessment-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+import {
+  LESSON_COMPLETE_WAIT_SECONDS,
+  StudentLessonReaderPanel,
+} from '@/components/student/lesson/StudentLessonReaderPanel';
 import { getTeacherName } from '@/utils/helpers';
 import {
   getStudentAssessmentAvailability,
@@ -37,13 +41,10 @@ import {
   normalizeStructuredLessonBlock,
 } from '@/features/lesson-blocks/structured-content';
 import {
-  LessonBlockStudentRenderer,
   type LessonCheckpointResults,
   type LessonCheckpointSelections,
 } from '@/features/lesson-blocks/LessonBlockStudentRenderer';
 import './student-module-detail.css';
-
-const LESSON_COMPLETE_WAIT_SECONDS = 30;
 
 function toParamValue(value: string | string[] | undefined) {
   if (Array.isArray(value)) return value[0] || '';
@@ -635,94 +636,29 @@ export default function StudentModuleDetailPage() {
         ) : null}
 
         {currentMode === 'lesson' && !module.isLocked ? (
-          <div className="student-module-view__lesson">
-            {lessonLoading ? (
-              <>
-                <Skeleton className="h-44 rounded-2xl" />
-                <Skeleton className="h-44 rounded-2xl" />
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={openOverview}
-                  className="student-module-view__back-inline w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
-                >
-                  <ArrowLeft className="mr-1 h-4 w-4" />
-                  Back to Module
-                </Button>
-                <article className="student-module-view__reader">
-                  {lesson?.description ? (
-                    <RichTextRenderer
-                      html={lesson.description}
-                      className="student-module-view__lesson-description"
-                    />
-                  ) : null}
-                  {lessonBlocks.length === 0 && !lesson?.description ? (
-                    <p className="text-sm text-[var(--student-text-muted)]">No lesson content available.</p>
-                  ) : lessonBlocks.length > 0 ? (
-                    <div className="space-y-6">
-                      {lessonBlocks.map((block) => (
-                        <LessonBlockStudentRenderer
-                          key={block.id}
-                          block={block}
-                          checkpointSelections={checkpointSelections}
-                          checkpointResults={checkpointResults}
-                          onCheckpointAnswer={handleCheckpointAnswer}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </article>
-
-                {lessonAttachments.length > 0 ? (
-                  <article className="student-module-view__attachments">
-                    <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Attachments</h2>
-                    {lessonAttachments.map((item) => (
-                      <div key={item.id} className="student-module-view__attachment-row">
-                        <div>
-                          <p className="font-medium text-[var(--student-text-strong)]">
-                            {item.file?.originalName || 'Attachment'}
-                          </p>
-                          <p className="text-xs text-[var(--student-text-muted)]">{item.file?.mimeType || 'File'}</p>
-                        </div>
-                        <button type="button" onClick={() => void handleDownloadAttachment(item)}>
-                          Download
-                        </button>
-                      </div>
-                    ))}
-                  </article>
-                ) : null}
-
-                <footer className="student-module-view__lesson-footer">
-                  <div className="student-module-view__lesson-progress">
-                    {lessonCompleted ? (
-                      <p>Completed - +{selectedLessonItem?.lessonPoints ?? 0} pts awarded</p>
-                    ) : !checkpointGate.ready ? (
-                      <p>
-                        Answer all checkpoints correctly to unlock the timer{' '}
-                        <strong>{checkpointGate.correct}/{checkpointGate.total}</strong>.
-                      </p>
-                    ) : bottomReachedAt === null ? (
-                      <p>Scroll to the bottom to start the completion timer.</p>
-                    ) : (
-                      <p>
-                        Stay on this lesson for <strong>{countdownLeft}s</strong> to mark as complete.
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    className="student-button-solid student-module-view__complete-button"
-                    disabled={!lessonCompleted && (!checkpointGate.ready || bottomReachedAt === null || countdownLeft > 0 || completingLesson)}
-                    onClick={() => void completeLesson()}
-                  >
-                    {lessonCompleted ? 'Completed' : completingLesson ? 'Completing...' : 'Mark Complete'}
-                  </Button>
-                </footer>
-              </>
-            )}
-          </div>
+          <StudentLessonReaderPanel
+            classItem={classItem}
+            module={module}
+            lesson={lesson}
+            lessonBlocks={lessonBlocks}
+            lessonLoading={lessonLoading}
+            lessonCompleted={lessonCompleted}
+            completingLesson={completingLesson}
+            bottomReachedAt={bottomReachedAt}
+            countdownLeft={countdownLeft}
+            checkpointGate={checkpointGate}
+            checkpointSelections={checkpointSelections}
+            checkpointResults={checkpointResults}
+            lessonAttachments={lessonAttachments}
+            lessonPoints={selectedLessonItem?.lessonPoints ?? 0}
+            backHref={`/dashboard/student/classes/${classId}?view=modules`}
+            backLabel="Back"
+            inlineBackLabel="Back to Module"
+            onInlineBack={openOverview}
+            onCompleteLesson={completeLesson}
+            onCheckpointAnswer={handleCheckpointAnswer}
+            onDownloadAttachment={handleDownloadAttachment}
+          />
         ) : null}
 
         {currentMode === 'assessment' && !module.isLocked ? (

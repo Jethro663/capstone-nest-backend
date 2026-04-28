@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentLxpDetailExperience from './StudentLxpDetailExperience';
 import { lxpService } from '@/services/lxp-service';
 
@@ -103,7 +103,8 @@ const activePlaylistResponse = {
         lesson: {
           id: 'lesson-1',
           title: 'Fractions',
-          description: 'Review the assigned fractions lesson.',
+          description:
+            '<p><strong>Review</strong> the assigned fractions lesson.</p><p>Focus on equivalent fractions and visual models.</p>',
           order: 1,
         },
         assessment: null,
@@ -121,7 +122,7 @@ const activePlaylistResponse = {
           id: 'assessment-1',
           title: 'Fractions Quiz',
           type: 'quiz',
-          description: 'Retry the fractions quiz.',
+          description: '<p><strong>Retry</strong> the fractions quiz.</p>',
           passingScore: 75,
           dueDate: '2026-04-30T00:00:00.000Z',
         },
@@ -164,6 +165,45 @@ describe('StudentLxpDetailExperience', () => {
       'href',
       '/dashboard/student/ja?mode=review&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active%3Ftab%3Dreplays',
     );
+  });
+
+  it('opens the lesson when the step card itself is clicked', async () => {
+    render(<StudentLxpDetailExperience />);
+
+    const lessonCard = (await screen.findByText('Review Fractions')).closest('article');
+    expect(lessonCard).not.toBeNull();
+
+    fireEvent.click(lessonCard!);
+
+    expect(push).toHaveBeenCalledWith(
+      '/dashboard/student/lessons/lesson-1?returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active',
+    );
+  });
+
+  it('opens JA review when the replay card itself is clicked', async () => {
+    searchParamsState.tab = 'replays';
+
+    render(<StudentLxpDetailExperience />);
+
+    const replayCard = (await screen.findByText('Replay Fractions Quiz')).closest('article');
+    expect(replayCard).not.toBeNull();
+
+    fireEvent.click(replayCard!);
+
+    expect(push).toHaveBeenCalledWith(
+      '/dashboard/student/ja?mode=review&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active%3Ftab%3Dreplays',
+    );
+  });
+
+  it('shows only checkpoint titles in the card and hides lesson body content', async () => {
+    render(<StudentLxpDetailExperience />);
+
+    const lessonCard = (await screen.findByText('Review Fractions')).closest('article');
+    expect(lessonCard).not.toBeNull();
+    expect(lessonCard).toHaveTextContent('Review Fractions');
+    expect(lessonCard).not.toHaveTextContent('Review the assigned fractions lesson.');
+    expect(lessonCard).not.toHaveTextContent('Focus on equivalent fractions and visual models.');
+    expect(lessonCard).not.toHaveTextContent('Retry the fractions quiz.');
   });
 
   it('keeps completed paths read-only even if historical checkpoints are incomplete', async () => {

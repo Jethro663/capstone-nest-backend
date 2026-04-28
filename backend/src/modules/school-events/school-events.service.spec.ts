@@ -76,6 +76,7 @@ describe('SchoolEventsService', () => {
         eventType: 'school_event',
         schoolYear: '2026-2027',
         title: ' Foundation Day ',
+        location: ' Quadrangle ',
         startsAt: '2026-11-10T00:00:00.000Z',
         endsAt: '2026-11-10T23:59:59.999Z',
         allDay: true,
@@ -100,12 +101,28 @@ describe('SchoolEventsService', () => {
           eventType: 'school_event',
           schoolYear: '2026-2027',
           title: 'Invalid Date Range',
+          location: 'Quadrangle',
           startsAt: '2026-11-11T00:00:00.000Z',
           endsAt: '2026-11-10T23:59:59.999Z',
         },
         'admin-1',
       ),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects school events without a location', async () => {
+    await expect(
+      service.create(
+        {
+          eventType: 'school_event',
+          schoolYear: '2026-2027',
+          title: 'Foundation Day',
+          startsAt: '2026-11-10T00:00:00.000Z',
+          endsAt: '2026-11-10T23:59:59.999Z',
+        },
+        'admin-1',
+      ),
+    ).rejects.toThrow('Location is required for school events');
   });
 
   it('returns filtered school events', async () => {

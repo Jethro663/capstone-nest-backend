@@ -37,6 +37,7 @@ jest.mock('@/services/ja-service', () => ({
     getSession: jest.fn(),
     getReviewSession: jest.fn(),
     createAskThread: jest.fn(),
+    createReviewSession: jest.fn(),
     sendAskMessage: jest.fn(),
     submitReviewResponse: jest.fn(),
   },
@@ -277,6 +278,63 @@ describe('StudentJaWorkspace refactored shell', () => {
         blocked: false,
       },
     } as never);
+    mockedJaService.createReviewSession.mockResolvedValue({
+      data: {
+        session: {
+          id: 'review-1',
+          classId: 'class-1',
+          mode: 'review',
+          status: 'completed',
+          currentIndex: 2,
+          questionCount: 2,
+          strikeCount: 0,
+          rewardState: 'awarded',
+          groundingStatus: 'grounded',
+          startedAt: '2026-04-24T09:00:00.000Z',
+          completedAt: '2026-04-24T09:30:00.000Z',
+        },
+        items: [
+          {
+            id: 'item-1',
+            orderIndex: 0,
+            itemType: 'multiple_choice',
+            prompt: '<p>If A = {1, 2} and B = {2, 3}, what is A âˆ© B?</p>\n\nJA Coach: You missed this before. Watch the overlap.',
+            options: [
+              { id: 'a', text: '<p>{1}</p>', order: 0 },
+              { id: 'b', text: '<p>{2}</p>', order: 1 },
+            ],
+            hint: 'Review the shared elements before choosing.',
+            response: {
+              id: 'response-1',
+              studentAnswer: { selectedOptionId: 'b' },
+              isCorrect: true,
+              scoreDelta: 1,
+              feedback: 'Correct.',
+              answeredAt: '2026-04-24T09:05:00.000Z',
+            },
+          },
+          {
+            id: 'item-2',
+            orderIndex: 1,
+            itemType: 'multiple_choice',
+            prompt: '<p>Which number is even?</p>',
+            options: [
+              { id: 'c', text: '<p>3</p>', order: 0 },
+              { id: 'd', text: '<p>4</p>', order: 1 },
+            ],
+            hint: 'Look for a number divisible by 2.',
+            response: {
+              id: 'response-2',
+              studentAnswer: { selectedOptionId: 'd' },
+              isCorrect: true,
+              scoreDelta: 1,
+              feedback: 'Correct.',
+              answeredAt: '2026-04-24T09:10:00.000Z',
+            },
+          },
+        ],
+      },
+    } as never);
     mockedJaService.submitReviewResponse.mockResolvedValue(undefined as never);
   });
 
@@ -403,14 +461,14 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(await screen.findByText('If A = {1, 2} and B = {2, 3}, what is A ∩ B?')).toBeInTheDocument();
     expect(screen.queryByText(/<p>/)).not.toBeInTheDocument();
     expect(screen.getByText('You missed this before. Watch the overlap.')).toBeInTheDocument();
-    expect(screen.getByText(/Item 1 of 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/Question 1 of 2/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Submit Answer/i })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Next item/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
     expect(await screen.findByText('Which number is even?')).toBeInTheDocument();
-    expect(screen.getByText(/Item 2 of 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/Question 2 of 2/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Previous item/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Previous$/i }));
     expect(await screen.findByText('If A = {1, 2} and B = {2, 3}, what is A ∩ B?')).toBeInTheDocument();
   });
 
@@ -418,7 +476,7 @@ describe('StudentJaWorkspace refactored shell', () => {
     render(<StudentJaWorkspace initialMode="review" initialClassId="class-1" />);
 
     fireEvent.click(await screen.findByText('Assessment Replay'));
-    expect(await screen.findByText(/Item 1 of 2/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Practice Fresh objective checks/i }));
     expect(await screen.findByText('Start your next practice run')).toBeInTheDocument();
@@ -431,14 +489,14 @@ describe('StudentJaWorkspace refactored shell', () => {
     render(<StudentJaWorkspace initialMode="review" initialClassId="class-1" />);
 
     fireEvent.click(await screen.findByText('Assessment Replay'));
-    expect(await screen.findByText(/Item 1 of 2/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Back to replay menu/i }));
     expect(await screen.findByText('Pick an assessment to replay')).toBeInTheDocument();
   });
 
   it('enables replay submission only after every replay item has a draft answer', async () => {
-    mockedJaService.getReviewSession.mockResolvedValueOnce({
+    mockedJaService.createReviewSession.mockResolvedValueOnce({
       data: {
         session: {
           id: 'review-1',
@@ -481,75 +539,25 @@ describe('StudentJaWorkspace refactored shell', () => {
         ],
       },
     } as never);
-    mockedJaService.getReviewSession.mockResolvedValueOnce({
-      data: {
-        session: {
-          id: 'review-1',
-          classId: 'class-1',
-          mode: 'review',
-          status: 'active',
-          currentIndex: 2,
-          questionCount: 2,
-          strikeCount: 0,
-          rewardState: 'pending',
-          groundingStatus: 'grounded',
-          startedAt: '2026-04-24T09:00:00.000Z',
-          completedAt: null,
-        },
-        items: [
-          {
-            id: 'item-1',
-            orderIndex: 0,
-            itemType: 'multiple_choice',
-            prompt: '<p>First replay item?</p>',
-            options: [
-              { id: 'a', text: '<p>A</p>', order: 0 },
-              { id: 'b', text: '<p>B</p>', order: 1 },
-            ],
-            hint: 'Pick one.',
-            response: {
-              id: 'response-1',
-              studentAnswer: { selectedOptionId: 'a' },
-              isCorrect: true,
-              scoreDelta: 1,
-              feedback: 'Correct.',
-              answeredAt: '2026-04-24T09:05:00.000Z',
-            },
-          },
-          {
-            id: 'item-2',
-            orderIndex: 1,
-            itemType: 'multiple_choice',
-            prompt: '<p>Second replay item?</p>',
-            options: [
-              { id: 'c', text: '<p>C</p>', order: 0 },
-              { id: 'd', text: '<p>D</p>', order: 1 },
-            ],
-            hint: 'Pick another.',
-            response: {
-              id: 'response-2',
-              studentAnswer: { selectedOptionId: 'd' },
-              isCorrect: true,
-              scoreDelta: 1,
-              feedback: 'Correct.',
-              answeredAt: '2026-04-24T09:08:00.000Z',
-            },
-          },
-        ],
-      },
-    } as never);
 
     render(<StudentJaWorkspace initialMode="review" initialClassId="class-1" />);
 
-    fireEvent.click(await screen.findByText('Assessment Replay'));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /Fractions Quiz.*Submitted.*62%/i,
+      }),
+    );
+    expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Submit Answers/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'A' }));
+    expect(screen.queryByRole('button', { name: /Submit Answers/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
     const submitButton = await screen.findByRole('button', { name: /Submit Answers/i });
     expect(submitButton).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'A' }));
-    expect(screen.getByRole('button', { name: /Submit Answers/i })).toBeDisabled();
-
-    fireEvent.click(screen.getByRole('button', { name: /Next item/i }));
-    fireEvent.click(await screen.findByRole('button', { name: 'D' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'D' }));
     expect(screen.getByRole('button', { name: /Submit Answers/i })).toBeEnabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Submit Answers/i }));
