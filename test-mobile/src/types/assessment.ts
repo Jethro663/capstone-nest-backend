@@ -4,7 +4,8 @@ export type AssessmentType =
   | "assignment"
   | "written_work"
   | "performance_task"
-  | "quarterly_assessment";
+  | "quarterly_assessment"
+  | "file_upload";
 
 export type QuestionType =
   | "multiple_choice"
@@ -12,7 +13,8 @@ export type QuestionType =
   | "true_false"
   | "short_answer"
   | "fill_blank"
-  | "dropdown";
+  | "dropdown"
+  | "essay";
 
 export interface QuestionOption {
   id: string;
@@ -44,6 +46,14 @@ export interface Assessment {
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
+  strictMode?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+  fileUploadInstructions?: string | null;
+  allowedUploadMimeTypes?: string[] | null;
+  allowedUploadExtensions?: string[] | null;
+  maxUploadSizeBytes?: number | null;
+  teacherAttachmentFileId?: string | null;
   dueDate?: string;
   isPublished: boolean;
   questions?: AssessmentQuestion[];
@@ -62,6 +72,23 @@ export interface AssessmentAttempt {
   startedAt?: string;
   submittedAt?: string;
   createdAt?: string;
+  updatedAt?: string;
+  expiresAt?: string | null;
+  lastQuestionIndex?: number;
+  violationCount?: number;
+  draftResponses?: SubmitAssessmentDto["responses"];
+  submittedFileId?: string | null;
+  submittedFileOriginalName?: string | null;
+  submittedFileMimeType?: string | null;
+  submittedFileSizeBytes?: number | null;
+  submittedFile?: {
+    id: string;
+    originalName?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+    inlineUrl?: string | null;
+    downloadUrl?: string | null;
+  } | null;
   isReturned?: boolean;
   returnedAt?: string;
   teacherFeedback?: string;
@@ -76,6 +103,29 @@ export interface SubmitAssessmentDto {
     selectedOptionIds?: string[];
   }[];
   timeSpentSeconds: number;
+}
+
+export interface OngoingAttemptResult {
+  attempt: AssessmentAttempt;
+  timeLimitMinutes: number | null;
+  expiresAt?: string | null;
+  strictMode?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+}
+
+export interface UpdateAttemptProgressDto {
+  currentQuestionIndex?: number;
+  responses?: SubmitAssessmentDto["responses"];
+  registerViolation?: boolean;
+}
+
+export interface UploadedAssessmentFile {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  filePath?: string;
 }
 
 export interface AttemptResult {

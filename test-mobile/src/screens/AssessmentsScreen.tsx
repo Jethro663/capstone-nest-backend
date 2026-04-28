@@ -72,6 +72,7 @@ const assessmentTypeBadge: Record<AssessmentType, string> = {
   written_work: "WW",
   performance_task: "PT",
   quarterly_assessment: "QA",
+  file_upload: "FU",
 };
 
 const statusPriority: Record<AssessmentRecord["status"], number> = {

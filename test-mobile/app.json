@@ -3,7 +3,7 @@
     "name": "Nexora LMS Prototype",
     "slug": "nexora-lms-test-mobile",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "scheme": "nexora-lms-test-mobile",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
@@ -13,8 +13,11 @@
       "buildNumber": "1"
     },
     "android": {
+      "package": "com.nexora.lms.mobile",
       "versionCode": 1
     },
-    "plugins": []
+    "plugins": [
+      "expo-document-picker"
+    ]
   }
 }

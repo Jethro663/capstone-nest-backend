@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  CircleHelp,
+  ClipboardCheck,
+  Loader2,
+  Trash2,
+  Wand2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { aiService } from '@/services/ai-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -10,7 +17,14 @@ import { lessonService } from '@/services/lesson-service';
 import { lxpService } from '@/services/lxp-service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +47,184 @@ function studentName(entry: TeacherInterventionQueueItem['student']): string {
 const JOB_STATUS_FAILURE_THRESHOLD = 3;
 
 type SuggestedAssignmentPayload = InterventionStructuredOutput['suggestedAssignmentPayload'];
+type WorkspaceTab = 'plan' | 'generating' | 'assign';
+type HelpManualScreen = 'plan' | 'generating' | 'assign' | 'progress';
+
+const helpManualPages: Array<{
+  title: string;
+  description: string;
+  screen: HelpManualScreen;
+  steps: string[];
+}> = [
+  {
+    title: 'Start in Plan Creator',
+    description:
+      'Use this first page to tell the system what kind of help the student needs before you generate or build a path.',
+    screen: 'plan',
+    steps: [
+      'Write a short teacher note if you want the plan to follow a specific concern.',
+      'Check the class AI policy if the student should only use class materials or stricter AI rules.',
+      'Use the manual selector when you already know a lesson or assessment that should be included.',
+      'Press Generate plan when you are ready for the system to draft the intervention path.',
+    ],
+  },
+  {
+    title: 'Watch the Generating tab',
+    description:
+      'This page shows whether the AI plan is still working, finished, or needs you to retry loading the result.',
+    screen: 'generating',
+    steps: [
+      'The progress bar and percent tell you how far the system has gone.',
+      'Read the status message before leaving the page; it explains what is happening now.',
+      'If the result is complete but not shown, use Retry loading result.',
+      'When a result is available, use Review generated plan to move to the final check.',
+    ],
+  },
+  {
+    title: 'Clean Out & Assign',
+    description:
+      'This is the teacher review page. Do not assign until the lessons, assessments, XP, and summary all make sense.',
+    screen: 'assign',
+    steps: [
+      'Review weak concepts so you know why the student is receiving the path.',
+      'Remove a lesson or assessment if it does not fit the student.',
+      'Adjust XP only when the activity should count more or less.',
+      'Use Assign suggested path, or Replace current path, only after checking the whole page.',
+    ],
+  },
+  {
+    title: 'Understand replacement protection',
+    description:
+      'The system protects students from losing work. A new plan can replace an old path only when progress has not started.',
+    screen: 'progress',
+    steps: [
+      'If a student already has an unstarted path, the system warns you before generating another plan.',
+      'Generating a plan does not replace the student path immediately.',
+      'Replacement happens only when you assign the new plan.',
+      'If the student has already started progress, the assign button is blocked so their progress is not reset.',
+    ],
+  },
+];
+
+function HelpManualScreenshot({ screen }: { screen: HelpManualScreen }) {
+  return (
+    <div
+      className={`teacher-intervention-workspace__manual-shot is-${screen}`}
+      aria-label={`${screen} workflow example screenshot`}
+    >
+      <div className="teacher-intervention-workspace__manual-window">
+        <span />
+        <span />
+        <span />
+      </div>
+
+      {screen === 'plan' ? (
+        <>
+          <div className="teacher-intervention-workspace__manual-tabs" aria-hidden="true">
+            <b>1 Plan Creator</b>
+            <span>2 Generating</span>
+            <span>3 Clean Out</span>
+          </div>
+          <div className="teacher-intervention-workspace__manual-grid-shot">
+            <div className="teacher-intervention-workspace__manual-panel-shot">
+              <small>Teacher note</small>
+              <div className="teacher-intervention-workspace__manual-textarea-shot" />
+              <span className="teacher-intervention-workspace__manual-button-shot">Generate plan</span>
+              <em className="teacher-intervention-workspace__manual-pin is-generate">Generate plan</em>
+            </div>
+            <div className="teacher-intervention-workspace__manual-panel-shot">
+              <small>Class AI policy</small>
+              <div className="teacher-intervention-workspace__manual-toggle-shot" />
+              <div className="teacher-intervention-workspace__manual-toggle-shot" />
+              <small>Manual selector</small>
+              <div className="teacher-intervention-workspace__manual-select-shot">
+                <span>Select lesson...</span>
+                <b>Add</b>
+              </div>
+              <em className="teacher-intervention-workspace__manual-pin is-add">Add selected item</em>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {screen === 'generating' ? (
+        <>
+          <div className="teacher-intervention-workspace__manual-heading-shot">
+            <b>Generating</b>
+            <span>completed</span>
+          </div>
+          <div className="teacher-intervention-workspace__manual-progress-shot">
+            <i style={{ width: '72%' }} />
+          </div>
+          <div className="teacher-intervention-workspace__manual-status-shot">
+            <strong>72%</strong>
+            <span>Building lesson and assessment recommendations...</span>
+          </div>
+          <span className="teacher-intervention-workspace__manual-action-shot">
+            Retry loading result
+          </span>
+          <span className="teacher-intervention-workspace__manual-action-shot is-primary">
+            Review generated plan
+          </span>
+          <em className="teacher-intervention-workspace__manual-pin is-progress">Progress and status</em>
+          <em className="teacher-intervention-workspace__manual-pin is-retry">Retry button</em>
+        </>
+      ) : null}
+
+      {screen === 'assign' ? (
+        <>
+          <div className="teacher-intervention-workspace__manual-heading-shot">
+            <b>Clean Out & Assign</b>
+            <span className="teacher-intervention-workspace__manual-button-shot">Assign suggested path</span>
+          </div>
+          <div className="teacher-intervention-workspace__manual-review-shot">
+            <section>
+              <small>Weak concepts</small>
+              <span>Fractions</span>
+              <span>Word problems</span>
+            </section>
+            <section>
+              <small>Recommended lessons</small>
+              <div>
+                <b>Lesson title</b>
+                <i>XP 20</i>
+                <mark>Remove</mark>
+              </div>
+            </section>
+            <section>
+              <small>Teacher-facing summary</small>
+              <p />
+              <p />
+            </section>
+          </div>
+          <em className="teacher-intervention-workspace__manual-pin is-assign">Assign or replace</em>
+          <em className="teacher-intervention-workspace__manual-pin is-remove">Remove item</em>
+        </>
+      ) : null}
+
+      {screen === 'progress' ? (
+        <>
+          <div className="teacher-intervention-workspace__manual-notice-shot">
+            This case already has assigned checkpoints.
+          </div>
+          <div className="teacher-intervention-workspace__manual-dialog-shot">
+            <b>Generate a new intervention plan?</b>
+            <p />
+            <div>
+              <span className="teacher-intervention-workspace__manual-button-shot">Keep current path</span>
+              <span className="teacher-intervention-workspace__manual-button-shot">Generate new AI plan</span>
+            </div>
+          </div>
+          <div className="teacher-intervention-workspace__manual-blocked-shot">
+            Progress already started
+          </div>
+          <em className="teacher-intervention-workspace__manual-pin is-warning">Warning first</em>
+          <em className="teacher-intervention-workspace__manual-pin is-blocked">Blocked when started</em>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 function normalizeSuggestedAssignmentPayload(
   payload: unknown,
@@ -141,6 +333,10 @@ export default function TeacherInterventionWorkspacePage() {
   const [loadingManualSources, setLoadingManualSources] = useState(false);
   const [selectedManualLessonId, setSelectedManualLessonId] = useState('');
   const [selectedManualAssessmentId, setSelectedManualAssessmentId] = useState('');
+  const [replacePlanWarningOpen, setReplacePlanWarningOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('plan');
   const statusFailuresRef = useRef(0);
   const activeClassId = classId || queueEntry?.classId || '';
   const interventionsRoute = useMemo(() => {
@@ -191,6 +387,7 @@ export default function TeacherInterventionWorkspacePage() {
       setAssessmentXp(
         Object.fromEntries(structured.recommendedAssessments.map((assessment) => [assessment.assessmentId, 30])),
       );
+      setActiveTab('assign');
       return true;
     } catch (error) {
       const message = getApiErrorMessage(
@@ -314,7 +511,15 @@ export default function TeacherInterventionWorkspacePage() {
     return () => window.clearInterval(interval);
   }, [job, loadInterventionJobResult]);
 
-  const handleGenerate = async () => {
+  const hasCaseContext = Boolean(queueEntry && queueEntry.aiPlanEligible !== false);
+  const existingCheckpointCount = queueEntry?.totalCheckpoints ?? 0;
+  const completedCheckpointCount = queueEntry?.completedCheckpoints ?? 0;
+  const hasExistingInterventionPath = existingCheckpointCount > 0;
+  const hasStartedCheckpointProgress = completedCheckpointCount > 0;
+  const hasUnstartedExistingInterventionPath =
+    hasExistingInterventionPath && !hasStartedCheckpointProgress;
+
+  const runGenerate = async () => {
     const hasCaseContext = Boolean(queueEntry);
     if (!hasCaseContext) {
       toast.error('Select a valid intervention case from the queue before generating a plan.');
@@ -329,6 +534,7 @@ export default function TeacherInterventionWorkspacePage() {
         note: note.trim() || undefined,
       });
       setJob(res.data);
+      setActiveTab('generating');
       toast.success('AI intervention planning started.');
       if (['completed', 'approved'].includes(res.data.status)) {
         await loadInterventionJobResult(res.data.jobId);
@@ -338,6 +544,18 @@ export default function TeacherInterventionWorkspacePage() {
     } finally {
       setCreatingJob(false);
     }
+  };
+
+  const handleGenerate = async () => {
+    if (!hasCaseContext) {
+      toast.error('Select a valid intervention case from the queue before generating a plan.');
+      return;
+    }
+    if (hasUnstartedExistingInterventionPath) {
+      setReplacePlanWarningOpen(true);
+      return;
+    }
+    await runGenerate();
   };
 
   const handleRetryResultLoad = async () => {
@@ -353,9 +571,51 @@ export default function TeacherInterventionWorkspacePage() {
     () => result?.recommendedAssessments ?? [],
     [result],
   );
-  const hasCaseContext = Boolean(queueEntry && queueEntry.aiPlanEligible !== false);
   const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
   const isCaseActive = queueEntry?.status === 'active';
+  const assignDisabled =
+    assigning ||
+    !hasCaseContext ||
+    !hasAssignableItems ||
+    !isCaseActive ||
+    hasStartedCheckpointProgress;
+  const assignButtonLabel = assigning
+    ? 'Assigning...'
+    : hasStartedCheckpointProgress
+      ? 'Progress already started'
+      : hasUnstartedExistingInterventionPath
+        ? 'Replace current path'
+        : 'Assign suggested path';
+  const workspaceTabs: Array<{
+    key: WorkspaceTab;
+    label: string;
+    hint: string;
+    icon: typeof Wand2;
+  }> = [
+    {
+      key: 'plan',
+      label: 'Plan Creator',
+      hint: 'Set teacher guidance and pick manual fallbacks.',
+      icon: Wand2,
+    },
+    {
+      key: 'generating',
+      label: 'Generating',
+      hint: 'Watch the AI job state and recover result loading.',
+      icon: Loader2,
+    },
+    {
+      key: 'assign',
+      label: 'Clean Out & Assign',
+      hint: 'Trim weak concepts, resources, and summary before assignment.',
+      icon: ClipboardCheck,
+    },
+  ];
+  const caseStatusLabel = queueEntry
+    ? queueEntry.aiPlanEligible === false
+      ? `${studentName(queueEntry.student)} is no longer at-risk, so AI planning is disabled for this case.`
+      : `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%`
+    : 'Select a case from the intervention queue first.';
 
   const handleRemoveLesson = (lessonId: string) => {
     setResult((current) => current
@@ -463,6 +723,10 @@ export default function TeacherInterventionWorkspacePage() {
       toast.error('Activate this intervention case first before assigning a plan.');
       return;
     }
+    if (hasStartedCheckpointProgress) {
+      toast.error('Progress has already started. Resolve this case or create a new intervention cycle instead.');
+      return;
+    }
     const safeResult = result ?? createManualStructuredOutput(caseId);
     const safePayload = normalizeSuggestedAssignmentPayload(
       safeResult.suggestedAssignmentPayload,
@@ -501,56 +765,130 @@ export default function TeacherInterventionWorkspacePage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-40" />
-        <Skeleton className="h-56 rounded-xl" />
-        <Skeleton className="h-72 rounded-xl" />
+      <div className="teacher-intervention-workspace space-y-4">
+        <Skeleton className="h-10 w-40 rounded-md" />
+        <Skeleton className="h-24 rounded-md" />
+        <Skeleton className="h-96 rounded-md" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" onClick={() => router.push(interventionsRoute)}>
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Back to interventions
-      </Button>
+    <div className="teacher-intervention-workspace">
+      <header className="teacher-intervention-workspace__header">
+        <Button
+          variant="ghost"
+          className="teacher-intervention-workspace__back"
+          onClick={() => router.push(interventionsRoute)}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to interventions
+        </Button>
+        <button
+          type="button"
+          className="teacher-intervention-workspace__help"
+          onClick={() => {
+            setHelpPage(0);
+            setHelpOpen(true);
+          }}
+          aria-label="Module help"
+        >
+          <CircleHelp className="h-4 w-4" />
+        </button>
+      </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5" />
-            AI Intervention Workspace
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            {queueEntry
-              ? queueEntry.aiPlanEligible === false
-                ? `${studentName(queueEntry.student)} is no longer at-risk, so AI planning is disabled for this case.`
-                : `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%`
-              : 'Select a case from the intervention queue first.'}
-          </p>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-2">
-          <div className="space-y-4">
-            <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-              Use this page to generate, inspect, trim, and assign an intervention path without losing visibility into the AI job state.
+      <section className="teacher-intervention-workspace__intro">
+        <div>
+          <p className="teacher-intervention-workspace__eyebrow">AI-assisted intervention workflow</p>
+          <h1>Intervention Plan Workspace</h1>
+          <p>{caseStatusLabel}</p>
+        </div>
+        <dl className="teacher-intervention-workspace__summary" aria-label="Intervention case summary">
+          <div>
+            <dt>Status</dt>
+            <dd>{queueEntry?.status ?? '--'}</dd>
+          </div>
+          <div>
+            <dt>Checkpoints</dt>
+            <dd>{completedCheckpointCount}/{existingCheckpointCount}</dd>
+          </div>
+          <div>
+            <dt>Progress</dt>
+            <dd>{queueEntry?.completionPercent ?? 0}%</dd>
+          </div>
+        </dl>
+      </section>
+
+      <nav className="teacher-intervention-workspace__tabs" aria-label="Intervention plan steps">
+        {workspaceTabs.map((tab, index) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              className={isActive ? 'is-active' : undefined}
+              onClick={() => setActiveTab(tab.key)}
+              aria-current={isActive ? 'step' : undefined}
+            >
+              <span className="teacher-intervention-workspace__tab-index">{index + 1}</span>
+              <Icon className={tab.key === 'generating' && creatingJob ? 'animate-spin' : undefined} />
+              <span>
+                <strong>{tab.label}</strong>
+                <small>{tab.hint}</small>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {hasUnstartedExistingInterventionPath ? (
+        <div className="teacher-intervention-workspace__notice is-warning">
+          This case already has {existingCheckpointCount} assigned checkpoint{existingCheckpointCount === 1 ? '' : 's'}.
+          A new AI plan can replace the current unstarted path only after you confirm and assign it.
+        </div>
+      ) : null}
+      {hasStartedCheckpointProgress ? (
+        <div className="teacher-intervention-workspace__notice is-warning">
+          This student has already started this intervention path. You can generate guidance for review,
+          but replacing the assigned path is blocked to preserve progress.
+        </div>
+      ) : null}
+
+      {activeTab === 'plan' ? (
+        <section className="teacher-intervention-workspace__panel">
+          <div className="teacher-intervention-workspace__section-head">
+            <div>
+              <p>Step 1</p>
+              <h2>Plan Creator</h2>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Teacher note</label>
+            <Button onClick={handleGenerate} disabled={creatingJob || !hasCaseContext}>
+              {creatingJob ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+              {job ? 'Regenerate plan' : 'Generate plan'}
+            </Button>
+          </div>
+
+          <div className="teacher-intervention-workspace__creator-grid">
+            <div className="teacher-intervention-workspace__field-group is-wide">
+              <label>Teacher note</label>
               <Textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
-                rows={6}
+                rows={7}
                 placeholder="Add specific weak areas, pacing guidance, or constraints for the intervention plan"
               />
             </div>
-            <div className="space-y-2 rounded-lg border p-3">
-              <p className="text-sm font-medium">Class AI policy</p>
+
+            <div className="teacher-intervention-workspace__field-group">
+              <div className="teacher-intervention-workspace__subhead">
+                <h3>Class AI policy</h3>
+                {policySaving ? <span>Saving...</span> : null}
+              </div>
               {policyLoading ? (
-                <p className="text-xs text-muted-foreground">Loading class policy...</p>
+                <p className="teacher-intervention-workspace__empty">Loading class policy...</p>
               ) : classPolicy ? (
-                <div className="grid gap-3">
-                  <label className="flex items-center justify-between rounded-md border p-2 text-xs">
+                <div className="teacher-intervention-workspace__policy-grid">
+                  <label className="teacher-intervention-workspace__toggle-row">
                     <span>Enable AI mentor explanations</span>
                     <input
                       type="checkbox"
@@ -563,7 +901,7 @@ export default function TeacherInterventionWorkspacePage() {
                       }
                     />
                   </label>
-                  <label className="flex items-center justify-between rounded-md border p-2 text-xs">
+                  <label className="teacher-intervention-workspace__toggle-row">
                     <span>Strict grounding mode</span>
                     <input
                       type="checkbox"
@@ -576,10 +914,8 @@ export default function TeacherInterventionWorkspacePage() {
                       }
                     />
                   </label>
-                  <div className="grid gap-1">
-                    <label className="text-xs font-medium uppercase text-muted-foreground">
-                      Follow-up turn cap
-                    </label>
+                  <label className="teacher-intervention-workspace__mini-field">
+                    <span>Follow-up turn cap</span>
                     <Input
                       type="number"
                       min={0}
@@ -602,11 +938,9 @@ export default function TeacherInterventionWorkspacePage() {
                         })
                       }
                     />
-                  </div>
-                  <div className="grid gap-1">
-                    <label className="text-xs font-medium uppercase text-muted-foreground">
-                      Source scope
-                    </label>
+                  </label>
+                  <label className="teacher-intervention-workspace__mini-field">
+                    <span>Source scope</span>
                     <select
                       value={classPolicy.sourceScope}
                       disabled={policySaving}
@@ -615,245 +949,345 @@ export default function TeacherInterventionWorkspacePage() {
                           sourceScope: event.target.value as ClassAiPolicy['sourceScope'],
                         })
                       }
-                      className="teacher-select w-full text-sm"
+                      className="teacher-select text-sm"
                     >
                       <option value="class_materials">Class materials</option>
                       <option value="recommended_only">Recommended content only</option>
                     </select>
-                  </div>
+                  </label>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Select a class to load policy controls.
-                </p>
+                <p className="teacher-intervention-workspace__empty">Select a class to load policy controls.</p>
               )}
-            </div>
-
-            <div className="space-y-2 rounded-lg border p-3">
-              <p className="text-sm font-medium">Manual selector</p>
-              <p className="text-xs text-muted-foreground">
-                Add class-scoped lessons and assessments when AI suggestions are insufficient.
-              </p>
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase text-muted-foreground">Lessons</label>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedManualLessonId}
-                      onChange={(event) => setSelectedManualLessonId(event.target.value)}
-                      className="teacher-select w-full text-sm"
-                      disabled={loadingManualSources || manualLessons.length === 0}
-                    >
-                      <option value="">Select lesson...</option>
-                      {manualLessons.map((lesson) => (
-                        <option key={lesson.id} value={lesson.id}>
-                          {lesson.title}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAddManualLesson}
-                      disabled={!selectedManualLessonId}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-medium uppercase text-muted-foreground">Assessments</label>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedManualAssessmentId}
-                      onChange={(event) => setSelectedManualAssessmentId(event.target.value)}
-                      className="teacher-select w-full text-sm"
-                      disabled={loadingManualSources || manualAssessments.length === 0}
-                    >
-                      <option value="">Select assessment...</option>
-                      {manualAssessments.map((assessment) => (
-                        <option key={assessment.id} value={assessment.id}>
-                          {assessment.title}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAddManualAssessment}
-                      disabled={!selectedManualAssessmentId}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleGenerate} disabled={creatingJob || !hasCaseContext}>
-                {creatingJob ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {job ? 'Regenerate plan' : 'Generate plan'}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleAssign}
-                disabled={assigning || !hasCaseContext || !hasAssignableItems || !isCaseActive}
-              >
-                {assigning ? 'Assigning...' : 'Assign suggested path'}
-              </Button>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Generation progress</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Progress value={job?.progressPercent ?? 0} />
-                <div className="flex items-center justify-between text-sm">
-                  <span>{job?.statusMessage || 'Start planning to generate an AI intervention path.'}</span>
-                  <Badge variant={job?.status === 'failed' ? 'destructive' : 'secondary'}>
-                    {job?.status || 'idle'}
-                  </Badge>
-                </div>
-                {job?.errorMessage && <p className="text-sm text-destructive">{job.errorMessage}</p>}
-                {statusWarning && (
-                  <p className="text-sm text-yellow-700">{statusWarning}</p>
-                )}
-                {job && ['completed', 'approved'].includes(job.status) && !result && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRetryResultLoad}
-                    disabled={loadingResult}
+          <div className="teacher-intervention-workspace__manual">
+            <div className="teacher-intervention-workspace__subhead">
+              <div>
+                <h3>Manual selector</h3>
+                <p>Add class-scoped lessons and assessments when AI suggestions are insufficient.</p>
+              </div>
+              {loadingManualSources ? <span>Loading options...</span> : null}
+            </div>
+            <div className="teacher-intervention-workspace__manual-grid">
+              <label>
+                <span>Lessons</span>
+                <div>
+                  <select
+                    value={selectedManualLessonId}
+                    onChange={(event) => setSelectedManualLessonId(event.target.value)}
+                    className="teacher-select text-sm"
+                    disabled={loadingManualSources || manualLessons.length === 0}
                   >
-                    {loadingResult ? 'Retrying result...' : 'Retry loading result'}
+                    <option value="">Select lesson...</option>
+                    {manualLessons.map((lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        {lesson.title}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddManualLesson}
+                    disabled={!selectedManualLessonId}
+                  >
+                    Add
                   </Button>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </label>
+              <label>
+                <span>Assessments</span>
+                <div>
+                  <select
+                    value={selectedManualAssessmentId}
+                    onChange={(event) => setSelectedManualAssessmentId(event.target.value)}
+                    className="teacher-select text-sm"
+                    disabled={loadingManualSources || manualAssessments.length === 0}
+                  >
+                    <option value="">Select assessment...</option>
+                    {manualAssessments.map((assessment) => (
+                      <option key={assessment.id} value={assessment.id}>
+                        {assessment.title}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAddManualAssessment}
+                    disabled={!selectedManualAssessmentId}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </label>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Weak concepts</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
+      {activeTab === 'generating' ? (
+        <section className="teacher-intervention-workspace__panel">
+          <div className="teacher-intervention-workspace__section-head">
+            <div>
+              <p>Step 2</p>
+              <h2>Generating</h2>
+            </div>
+            <Badge variant={job?.status === 'failed' ? 'destructive' : 'secondary'}>
+              {job?.status || 'idle'}
+            </Badge>
+          </div>
+
+          <div className="teacher-intervention-workspace__generation">
+            <Progress value={job?.progressPercent ?? 0} />
+            <div>
+              <strong>{job?.progressPercent ?? 0}%</strong>
+              <span>{job?.statusMessage || 'Start planning to generate an AI intervention path.'}</span>
+            </div>
+            {job?.errorMessage ? <p className="is-error">{job.errorMessage}</p> : null}
+            {statusWarning ? <p className="is-warning">{statusWarning}</p> : null}
+            {job && ['completed', 'approved'].includes(job.status) && !result ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetryResultLoad}
+                disabled={loadingResult}
+              >
+                {loadingResult ? 'Retrying result...' : 'Retry loading result'}
+              </Button>
+            ) : null}
+            {result ? (
+              <Button type="button" onClick={() => setActiveTab('assign')}>
+                Review generated plan
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === 'assign' ? (
+        <section className="teacher-intervention-workspace__panel">
+          <div className="teacher-intervention-workspace__section-head">
+            <div>
+              <p>Step 3</p>
+              <h2>Clean Out & Assign</h2>
+            </div>
+            <Button
+              variant="outline"
+              onClick={handleAssign}
+              disabled={assignDisabled}
+            >
+              {assignButtonLabel}
+            </Button>
+          </div>
+
+          <div className="teacher-intervention-workspace__assign-grid">
+            <section className="teacher-intervention-workspace__assign-block">
+              <h3>Weak concepts</h3>
+              <div className="teacher-intervention-workspace__chips">
                 {result?.weakConcepts?.length ? result.weakConcepts.map((concept) => (
                   <Badge key={concept} variant="secondary">{concept}</Badge>
                 )) : (
-                  <p className="text-sm text-muted-foreground">No concepts generated yet.</p>
+                  <p className="teacher-intervention-workspace__empty">No concepts generated yet.</p>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
+              </div>
+            </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recommended lessons</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {visibleLessons.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No lessons selected yet.</p>
-            ) : visibleLessons.map((lesson) => (
-              <div key={lesson.lessonId} className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
+            <section className="teacher-intervention-workspace__assign-block">
+              <h3>Recommended lessons</h3>
+              {visibleLessons.length === 0 ? (
+                <p className="teacher-intervention-workspace__empty">No lessons selected yet.</p>
+              ) : visibleLessons.map((lesson) => (
+                <div key={lesson.lessonId} className="teacher-intervention-workspace__resource-row">
                   <div>
-                    <p className="font-medium">{lesson.title}</p>
-                    <p className="text-sm text-muted-foreground">{lesson.reason}</p>
+                    <strong>{lesson.title}</strong>
+                    <span>{lesson.reason}</span>
                   </div>
+                  <label>
+                    <span>XP</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={lessonXp[lesson.lessonId] ?? 20}
+                      onChange={(event) => setLessonXp((current) => ({
+                        ...current,
+                        [lesson.lessonId]: Number(event.target.value) || 0,
+                      }))}
+                    />
+                  </label>
                   <Button variant="ghost" size="icon" onClick={() => handleRemoveLesson(lesson.lessonId)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">XP award</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={lessonXp[lesson.lessonId] ?? 20}
-                    onChange={(event) => setLessonXp((current) => ({
-                      ...current,
-                      [lesson.lessonId]: Number(event.target.value) || 0,
-                    }))}
-                  />
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              ))}
+            </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Recommended assessments</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {visibleAssessments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No assessments selected yet.</p>
-            ) : visibleAssessments.map((assessment) => (
-              <div key={assessment.assessmentId} className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
+            <section className="teacher-intervention-workspace__assign-block">
+              <h3>Recommended assessments</h3>
+              {visibleAssessments.length === 0 ? (
+                <p className="teacher-intervention-workspace__empty">No assessments selected yet.</p>
+              ) : visibleAssessments.map((assessment) => (
+                <div key={assessment.assessmentId} className="teacher-intervention-workspace__resource-row">
                   <div>
-                    <p className="font-medium">{assessment.title}</p>
-                    <p className="text-sm text-muted-foreground">{assessment.reason}</p>
+                    <strong>{assessment.title}</strong>
+                    <span>{assessment.reason}</span>
                   </div>
+                  <label>
+                    <span>XP</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={assessmentXp[assessment.assessmentId] ?? 30}
+                      onChange={(event) => setAssessmentXp((current) => ({
+                        ...current,
+                        [assessment.assessmentId]: Number(event.target.value) || 0,
+                      }))}
+                    />
+                  </label>
                   <Button variant="ghost" size="icon" onClick={() => handleRemoveAssessment(assessment.assessmentId)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">XP award</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={assessmentXp[assessment.assessmentId] ?? 30}
-                    onChange={(event) => setAssessmentXp((current) => ({
-                      ...current,
-                      [assessment.assessmentId]: Number(event.target.value) || 0,
-                    }))}
-                  />
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+              ))}
+            </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Teacher-facing summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {result?.aiSummary ? (
-            <>
-              <p className="text-sm">{result.aiSummary.summary}</p>
-              <div>
-                <p className="text-sm font-medium">Teacher actions</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                  {result.aiSummary.teacherActions.map((action) => (
-                    <li key={action}>{action}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Student focus</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {result.aiSummary.studentFocus.map((focus) => (
-                    <Badge key={focus} variant="outline">{focus}</Badge>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Generate an intervention plan to review the AI summary and assignable path.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            <section className="teacher-intervention-workspace__assign-block is-summary">
+              <h3>Teacher-facing summary</h3>
+              {result?.aiSummary ? (
+                <>
+                  <p>{result.aiSummary.summary}</p>
+                  <div>
+                    <strong>Teacher actions</strong>
+                    <ul>
+                      {result.aiSummary.teacherActions.map((action) => (
+                        <li key={action}>{action}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>Student focus</strong>
+                    <div className="teacher-intervention-workspace__chips">
+                      {result.aiSummary.studentFocus.map((focus) => (
+                        <Badge key={focus} variant="outline">{focus}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="teacher-intervention-workspace__empty">
+                  Generate an intervention plan or add manual selections to review the assignable path.
+                </p>
+              )}
+            </section>
+          </div>
+        </section>
+      ) : null}
+      <Dialog open={replacePlanWarningOpen} onOpenChange={setReplacePlanWarningOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate a new intervention plan?</DialogTitle>
+            <DialogDescription>
+              This student already has an assigned intervention path. Generating a new AI plan will not change
+              the student path yet, but assigning the new plan will replace the current unstarted checkpoints.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReplacePlanWarningOpen(false)}
+            >
+              Keep current path
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setReplacePlanWarningOpen(false);
+                void runGenerate();
+              }}
+            >
+              Generate new AI plan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) setHelpPage(0);
+        }}
+      >
+        <DialogContent className="teacher-intervention-workspace__manual-dialog">
+          <DialogHeader>
+            <DialogTitle>Teacher guide: Intervention Plan Workspace</DialogTitle>
+            <DialogDescription>
+              Read this one page at a time. Each example shows the part of the system being explained.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
+            <span>Page {helpPage + 1} of {helpManualPages.length}</span>
+            <div>
+              {helpManualPages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <HelpManualScreenshot screen={helpManualPages[helpPage].screen} />
+            <section className="teacher-intervention-workspace__manual-copy">
+              <p className="teacher-intervention-workspace__manual-kicker">Teacher instruction manual</p>
+              <h3>{helpManualPages[helpPage].title}</h3>
+              <p>{helpManualPages[helpPage].description}</p>
+              <ol>
+                {helpManualPages[helpPage].steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+              <p className="teacher-intervention-workspace__manual-reminder">
+                Simple rule: move from left to right, review before assigning, and stop if the page says progress already started.
+              </p>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <div className="teacher-intervention-workspace__manual-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                disabled={helpPage === 0}
+              >
+                Previous page
+              </Button>
+              {helpPage < helpManualPages.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setHelpPage((current) => Math.min(current + 1, helpManualPages.length - 1))
+                  }
+                >
+                  Next page
+                </Button>
+              ) : (
+                <Button type="button" onClick={() => setHelpOpen(false)}>
+                  Close guide
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

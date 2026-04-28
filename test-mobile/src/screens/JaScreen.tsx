@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { peekAppError, toAppError } from "../api/http";
 import { useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
 import { jaApi } from "../api/services/ja";
@@ -9,6 +10,7 @@ import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitiv
 import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSessionItem, JaPracticeSessionResponse } from "../types/ja";
 import type { LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
+import { resolveJaAvatar, resolveJaStateFromMessage } from "../utils/jaAssets";
 
 type Props = {
   navigation: {
@@ -145,6 +147,7 @@ export function JaScreen({ navigation, route }: Props) {
   const [askThreadId, setAskThreadId] = useState<string | undefined>();
   const [askThreadClassId, setAskThreadClassId] = useState<string | undefined>();
   const [askMessages, setAskMessages] = useState<JaAskMessage[]>([]);
+  const [askDraft, setAskDraft] = useState("");
   const [selectedLesson, setSelectedLesson] = useState<JaAskLessonContextSummary | null>(null);
   const [askError, setAskError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -228,6 +231,7 @@ export function JaScreen({ navigation, route }: Props) {
     setAskThreadId(undefined);
     setAskThreadClassId(undefined);
     setAskMessages([]);
+    setAskDraft("");
     setSelectedLesson(null);
     setAskError("");
     setPracticeSession(null);
@@ -261,29 +265,60 @@ export function JaScreen({ navigation, route }: Props) {
     setAskThreadId(undefined);
     setAskThreadClassId(resolvedClassId);
     setAskMessages([]);
+    setAskDraft("");
     setSelectedLesson(null);
     setAskError("");
     setClassPickerOpen(false);
     setPanel("ask");
   };
 
-  const sendAskAction = async (label: string) => {
+  const openAskThread = async (threadId: string) => {
+    if (busy) return;
+    setBusy(true);
+    setAskError("");
+    setPanel("ask");
+    try {
+      const response = await jaApi.getAskThread(threadId);
+      setAskThreadId(response.thread.id);
+      setAskThreadClassId(response.thread.classId);
+      setAskMessages(response.messages);
+      if (response.thread.contextLessonId) {
+        const lessonContext = jaHubQuery.data?.ask.lessonContexts.find((context) => context.lessonId === response.thread.contextLessonId);
+        setSelectedLesson(
+          lessonContext ?? {
+            lessonId: response.thread.contextLessonId,
+            title: response.thread.contextLessonTitle || "Selected lesson",
+            moduleTitle: response.thread.contextModuleTitle,
+            sectionTitle: response.thread.contextSectionTitle,
+          },
+        );
+      }
+    } catch (error) {
+      setAskError(toAppError(error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendAskAction = async (label: string, quickAction = label) => {
     if (!resolvedClassId || busy) return;
     if (!selectedLesson) {
       setAskError("Select a visible lesson first so JA can keep the answer grounded.");
       return;
     }
+    if (!label.trim()) return;
 
     setBusy(true);
     setAskError("");
     const studentMessage: JaAskMessage = {
       id: `local-${Date.now()}`,
       role: "student",
-      content: label,
+      content: label.trim(),
       blocked: false,
-      quickAction: label,
+      quickAction,
       createdAt: new Date().toISOString(),
     };
+    setAskDraft("");
     setAskMessages((current) => [...current, studentMessage]);
     try {
       let threadId = askThreadId;
@@ -297,8 +332,8 @@ export function JaScreen({ navigation, route }: Props) {
         setAskThreadClassId(created.thread.classId);
       }
       const response = await jaApi.sendAskMessage(threadId, {
-        message: label,
-        quickAction: label,
+        message: label.trim(),
+        quickAction,
         lessonId: selectedLesson.lessonId,
       });
       setAskThreadId(response.thread.id);
@@ -578,7 +613,12 @@ export function JaScreen({ navigation, route }: Props) {
             selectedLesson={selectedLesson}
             onSelectLesson={setSelectedLesson}
             messages={askMessages}
+            threads={jaHubQuery.data?.ask.threads ?? []}
+            activeThreadId={askThreadId}
+            draft={askDraft}
+            onDraftChange={setAskDraft}
             onSendAction={sendAskAction}
+            onOpenThread={(threadId) => void openAskThread(threadId)}
             busy={busy}
             error={askError}
           />
@@ -683,7 +723,12 @@ function AskPanel({
   selectedLesson,
   onSelectLesson,
   messages,
+  threads,
+  activeThreadId,
+  draft,
+  onDraftChange,
   onSendAction,
+  onOpenThread,
   busy,
   error,
 }: {
@@ -691,73 +736,170 @@ function AskPanel({
   selectedLesson: JaAskLessonContextSummary | null;
   onSelectLesson: (context: JaAskLessonContextSummary) => void;
   messages: JaAskMessage[];
-  onSendAction: (label: string) => Promise<void>;
+  threads: Array<{ id: string; title: string; contextLessonTitle?: string | null; lastMessageAt?: string | null; updatedAt: string }>;
+  activeThreadId?: string;
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onSendAction: (label: string, quickAction?: string) => Promise<void>;
+  onOpenThread: (threadId: string) => void;
   busy: boolean;
   error: string;
 }) {
+  const insets = useSafeAreaInsets();
+  const lastAssistantMessage = [...messages].reverse().find((message) => message.role !== "student");
+  const visualState = busy ? "thinking" : resolveJaStateFromMessage(lastAssistantMessage);
+  const avatar = resolveJaAvatar(visualState);
+  const avatarSource = process.env.NODE_ENV === "test" ? undefined : avatar.getSource();
+
   return (
-    <View style={{ gap: 12 }}>
-      <DarkPanel>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: dark.blueSoft, alignItems: "center", justifyContent: "center" }}>
-            <MaterialCommunityIcons name="auto-fix" size={18} color={dark.blue} />
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <View style={{ gap: 12 }}>
+        <DarkPanel style={{ padding: 0, overflow: "hidden" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: dark.border }}>
+            <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: dark.blueSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {avatarSource ? (
+                <Image source={avatarSource} style={{ width: 50, height: 50 }} resizeMode="contain" />
+              ) : (
+                <MaterialCommunityIcons name="auto-fix" size={20} color={dark.blue} />
+              )}
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ color: dark.blue, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Ask</Text>
+              <Text style={{ marginTop: 3, color: dark.text, fontSize: 16, fontWeight: "900" }}>Lesson-grounded chat</Text>
+              <Text numberOfLines={2} style={{ marginTop: 4, color: dark.muted, fontSize: 11, lineHeight: 16 }}>
+                {selectedLesson ? `Using ${selectedLesson.title}` : "Pick a visible lesson before asking."}
+              </Text>
+            </View>
+            <View style={{ borderRadius: 999, backgroundColor: busy ? dark.amberSoft : dark.greenSoft, paddingHorizontal: 9, paddingVertical: 5 }}>
+              <Text style={{ color: busy ? dark.amber : dark.green, fontSize: 10, fontWeight: "900" }}>
+                {busy ? "Thinking" : "Ready"}
+              </Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: dark.blue, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>Lesson-Grounded Chat</Text>
-            <Text style={{ marginTop: 4, color: dark.text, fontSize: 15, fontWeight: "800" }}>Pick a visible lesson, then ask JA for help.</Text>
-            <Text style={{ marginTop: 6, color: dark.muted, fontSize: 11, lineHeight: 17 }}>
-              JA stays inside the selected lesson so summaries, explanations, and study plans stay grounded.
-            </Text>
+
+          {threads.length ? (
+            <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: dark.border }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 14 }}>
+                {threads.map((thread) => {
+                  const active = thread.id === activeThreadId;
+                  return (
+                    <Pressable
+                      key={thread.id}
+                      onPress={() => onOpenThread(thread.id)}
+                      disabled={busy}
+                      style={{
+                        width: 178,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: active ? dark.blue : dark.border2,
+                        backgroundColor: active ? dark.blueSoft : "rgba(255,255,255,0.035)",
+                        paddingHorizontal: 11,
+                        paddingVertical: 10,
+                      }}
+                    >
+                      <Text numberOfLines={1} style={{ color: dark.text, fontSize: 12, fontWeight: "900" }}>
+                        {thread.title || "Ask thread"}
+                      </Text>
+                      <Text numberOfLines={1} style={{ marginTop: 3, color: active ? dark.blue : dark.muted, fontSize: 10, fontWeight: "700" }}>
+                        {thread.contextLessonTitle || "Lesson chat"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: dark.border }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 14 }}>
+              {lessonContexts.length ? lessonContexts.map((context) => {
+                const selected = selectedLesson?.lessonId === context.lessonId;
+                return (
+                  <Pressable
+                    key={context.lessonId}
+                    onPress={() => onSelectLesson(context)}
+                    disabled={busy}
+                    style={{ width: 190, borderRadius: 14, borderWidth: 1, borderColor: selected ? dark.blue : dark.border2, backgroundColor: selected ? dark.blueSoft : "rgba(255,255,255,0.03)", padding: 11 }}
+                  >
+                    <Text numberOfLines={1} style={{ color: dark.text, fontSize: 12, fontWeight: "900" }}>{context.title}</Text>
+                    <Text numberOfLines={1} style={{ marginTop: 3, color: dark.muted, fontSize: 10 }}>{[context.moduleTitle, context.sectionTitle].filter(Boolean).join(" / ") || "Visible lesson"}</Text>
+                  </Pressable>
+                );
+              }) : (
+                <Text style={{ borderRadius: 10, borderWidth: 1, borderStyle: "dashed", borderColor: dark.border2, color: dark.muted, fontSize: 11, padding: 11 }}>
+                  No visible lessons are available for JA Ask yet in this class.
+                </Text>
+              )}
+            </ScrollView>
           </View>
-        </View>
-        <View style={{ marginTop: 12, gap: 8 }}>
-          {lessonContexts.length ? lessonContexts.map((context) => {
-            const selected = selectedLesson?.lessonId === context.lessonId;
-            return (
-              <Pressable
-                key={context.lessonId}
-                onPress={() => onSelectLesson(context)}
-                style={{ borderRadius: 10, borderWidth: 1, borderColor: selected ? dark.blue : dark.border2, backgroundColor: selected ? dark.blueSoft : "rgba(255,255,255,0.03)", padding: 11 }}
-              >
-                <Text style={{ color: dark.text, fontSize: 12, fontWeight: "800" }}>{context.title}</Text>
-                <Text style={{ marginTop: 3, color: dark.muted, fontSize: 10 }}>{[context.moduleTitle, context.sectionTitle].filter(Boolean).join(" / ") || "Visible lesson"}</Text>
-              </Pressable>
-            );
-          }) : (
-            <Text style={{ borderRadius: 10, borderWidth: 1, borderStyle: "dashed", borderColor: dark.border2, color: dark.muted, fontSize: 11, padding: 11 }}>
-              No visible lessons are available for JA Ask yet in this class.
-            </Text>
-          )}
-        </View>
-      </DarkPanel>
-      <DarkPanel>
-        <SectionLabel title="Good prompts for JA" />
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {ASK_ACTIONS.map((label) => (
-            <Pressable key={label} onPress={() => void onSendAction(label)} disabled={busy} style={{ borderRadius: 999, borderWidth: 1, borderColor: dark.border2, backgroundColor: dark.surface2, paddingHorizontal: 12, paddingVertical: 8 }}>
-              <Text style={{ color: dark.text, fontSize: 11, fontWeight: "700" }}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </DarkPanel>
-      {messages.length ? (
-        <DarkPanel>
-          <SectionLabel title="Chat" />
-          <View style={{ gap: 9 }}>
-            {messages.map((message) => (
+
+          <View style={{ minHeight: 180, paddingHorizontal: 14, paddingVertical: 14, gap: 10 }}>
+            {messages.length ? messages.map((message) => (
               <View
                 key={message.id}
-                style={{ alignSelf: message.role === "student" ? "flex-end" : "flex-start", maxWidth: "88%", borderRadius: 14, borderWidth: message.role === "student" ? 0 : 1, borderColor: message.blocked ? dark.amber : dark.border2, backgroundColor: message.role === "student" ? dark.blue : dark.surface2, paddingHorizontal: 12, paddingVertical: 10 }}
+                style={{
+                  alignSelf: message.role === "student" ? "flex-end" : "flex-start",
+                  maxWidth: "88%",
+                  borderTopLeftRadius: message.role === "student" ? 16 : 5,
+                  borderTopRightRadius: message.role === "student" ? 5 : 16,
+                  borderBottomLeftRadius: 16,
+                  borderBottomRightRadius: 16,
+                  borderWidth: message.role === "student" ? 0 : 1,
+                  borderColor: message.blocked ? dark.amber : dark.border2,
+                  backgroundColor: message.role === "student" ? dark.blue : dark.surface2,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                }}
               >
                 <Text style={{ color: message.role === "student" ? "#fff" : dark.text, fontSize: 12, lineHeight: 18 }}>{message.content}</Text>
               </View>
-            ))}
+            )) : (
+              <View style={{ flex: 1, minHeight: 132, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
+                {avatarSource ? <Image source={avatarSource} style={{ width: 74, height: 74 }} resizeMode="contain" /> : null}
+                <Text style={{ marginTop: 10, color: dark.text, fontSize: 15, fontWeight: "900", textAlign: "center" }}>Start with a lesson question</Text>
+                <Text style={{ marginTop: 5, color: dark.muted, fontSize: 11, lineHeight: 17, textAlign: "center" }}>
+                  JA answers through the backend using your selected lesson as context.
+                </Text>
+              </View>
+            )}
+            {busy ? (
+              <View style={{ alignSelf: "flex-start", borderRadius: 16, borderTopLeftRadius: 5, backgroundColor: dark.surface2, borderWidth: 1, borderColor: dark.border2, paddingHorizontal: 12, paddingVertical: 10 }}>
+                <Text style={{ color: dark.muted, fontSize: 12, fontWeight: "800" }}>JA is thinking...</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={{ paddingHorizontal: 14, paddingBottom: Math.max(18, insets.bottom + 14), gap: 8 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {ASK_ACTIONS.map((label) => (
+                <Pressable key={label} onPress={() => void onSendAction(label, label)} disabled={busy} style={{ borderRadius: 999, borderWidth: 1, borderColor: dark.border2, backgroundColor: dark.surface2, paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ color: dark.text, fontSize: 11, fontWeight: "800" }}>{label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 9, borderRadius: 18, borderWidth: 1, borderColor: dark.border2, backgroundColor: "#151515", paddingHorizontal: 10, paddingVertical: 9 }}>
+              <TextInput
+                value={draft}
+                onChangeText={onDraftChange}
+                placeholder={selectedLesson ? "Message JA..." : "Select a lesson first"}
+                placeholderTextColor={dark.dim}
+                multiline
+                editable={!busy && Boolean(selectedLesson)}
+                style={{ flex: 1, maxHeight: 110, minHeight: 35, color: dark.text, fontSize: 13, lineHeight: 18, padding: 0, textAlignVertical: "center" }}
+              />
+              <Pressable
+                disabled={busy || !draft.trim() || !selectedLesson}
+                onPress={() => void onSendAction(draft, "free_text")}
+                style={{ width: 38, height: 38, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: busy || !draft.trim() || !selectedLesson ? dark.active : dark.blue }}
+              >
+                <MaterialCommunityIcons name={busy ? "stop" : "send"} size={17} color="#fff" />
+              </Pressable>
+            </View>
+            {error ? <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "800" }}>{error}</Text> : null}
           </View>
         </DarkPanel>
-      ) : null}
-      {busy ? <Text style={{ color: dark.muted, fontSize: 11 }}>JA is thinking...</Text> : null}
-      {error ? <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "800" }}>{error}</Text> : null}
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

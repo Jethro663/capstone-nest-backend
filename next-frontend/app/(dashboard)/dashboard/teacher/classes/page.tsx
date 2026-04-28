@@ -1,13 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { AlertCircle, CircleHelp, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { announcementService } from '@/services/announcement-service';
 import { assessmentService } from '@/services/assessment-service';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
@@ -53,6 +61,309 @@ const EMPTY_METRICS: ClassCardMetrics = {
   pendingCount: 0,
   progressPercent: 0,
 };
+
+const classesGuideDialogStyle = {
+  '--intervention-border': '#dbe2ec',
+  '--intervention-border-soft': '#edf1f6',
+  '--intervention-muted': '#637083',
+  '--intervention-strong': '#111827',
+  '--intervention-red': '#a32d2d',
+  '--intervention-red-soft': '#fcebeb',
+} as CSSProperties;
+
+type ClassesGuideScreen = 'header' | 'filters' | 'cards' | 'calendar';
+type GuidePinProps = {
+  children: string;
+  lineSide: 'left' | 'right';
+  lineWidth: string;
+  style: CSSProperties;
+};
+
+const classesGuidePages: Array<{
+  title: string;
+  description: string;
+  screen: ClassesGuideScreen;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'default' | 'caution';
+  }>;
+}> = [
+  {
+    title: 'Start with the header',
+    description:
+      'Use the top summary to check whether your class list is loaded and whether work still needs attention.',
+    screen: 'header',
+    steps: [
+      {
+        action: 'Check',
+        body: 'Read Active Classes to confirm how many classes match the current view.',
+      },
+      {
+        action: 'Review',
+        body: 'Use Pending Work to see if lessons or assessments still need publishing or follow-up.',
+      },
+      {
+        action: 'Refresh',
+        body: 'Click Refresh after creating content elsewhere or when the list looks out of date.',
+      },
+    ],
+  },
+  {
+    title: 'Find the right class',
+    description:
+      'Search and status filters narrow the class list before you open a class workspace.',
+    screen: 'filters',
+    steps: [
+      {
+        action: 'Search',
+        body: 'Type a subject, code, grade, or section name to reduce the class cards shown below.',
+      },
+      {
+        action: 'Filter',
+        body: 'Choose Active, All, Archived, or Hidden depending on which class set you need.',
+      },
+      {
+        action: 'Reset',
+        body: 'If the list becomes empty, clear the search or switch back to Active.',
+        tone: 'caution',
+      },
+    ],
+  },
+  {
+    title: 'Open class work',
+    description:
+      'Each class card is the main entry point for managing lessons, modules, assessments, students, and announcements.',
+    screen: 'cards',
+    steps: [
+      {
+        action: 'Open',
+        body: 'Click the class card or Open Class to enter the full class workspace.',
+      },
+      {
+        action: 'View',
+        body: 'Click View Lessons when you need to jump directly into the module list.',
+      },
+      {
+        action: 'Compare',
+        body: 'Use the small progress and pending counts to decide which class needs attention first.',
+      },
+    ],
+  },
+  {
+    title: 'Use the calendar rail',
+    description:
+      'The right rail helps you spot due dates and announcements without opening every class.',
+    screen: 'calendar',
+    steps: [
+      {
+        action: 'Choose',
+        body: 'Click a date on the calendar to focus the upcoming events list.',
+      },
+      {
+        action: 'Open',
+        body: 'Select an event to go straight to the related class assignment or announcement area.',
+      },
+      {
+        action: 'Plan',
+        body: 'Use the month controls when you need to check work beyond the current week.',
+      },
+    ],
+  },
+];
+
+function GuidePin({ children, lineSide, lineWidth, style }: GuidePinProps) {
+  return (
+    <em
+      className="pointer-events-none absolute z-10 inline-flex items-center gap-1.5 rounded-full border border-[#7f1d1d] bg-white px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#7f1d1d] shadow-[0_0.5rem_1rem_rgba(127,29,29,0.1)]"
+      style={style}
+    >
+      <span className="h-[0.42rem] w-[0.42rem] rounded-full bg-[#a32d2d]" />
+      <span>{children}</span>
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
+        style={
+          lineSide === 'right'
+            ? { left: 'calc(100% - 0.05rem)', width: lineWidth }
+            : { right: 'calc(100% - 0.05rem)', width: lineWidth }
+        }
+      />
+    </em>
+  );
+}
+
+function ClassesGuideScreenshot({ screen }: { screen: ClassesGuideScreen }) {
+  return (
+    <div
+      className={`teacher-intervention-workspace__manual-shot teacher-classes-page__manual-shot is-${screen} relative grid min-h-[25rem] content-start gap-3 overflow-hidden rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner`}
+      aria-label={`${screen} classes example screenshot`}
+    >
+      <div className="teacher-intervention-workspace__manual-window absolute inset-x-0 top-0 flex h-8 items-center gap-1 border-b border-[#edf1f6] bg-white px-3">
+        <span className="h-2 w-2 rounded-full bg-[#f87171]" />
+        <span className="h-2 w-2 rounded-full bg-[#fbbf24]" />
+        <span className="h-2 w-2 rounded-full bg-[#34d399]" />
+      </div>
+
+      {screen === 'header' ? (
+        <>
+          <div className="teacher-classes-page__manual-header-shot grid gap-3 rounded-xl border border-[#edf1f6] bg-white p-4 shadow-sm">
+            <div className="min-w-0">
+              <small className="block text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#637083]">
+                Teacher Workspace
+              </small>
+              <strong className="mt-1 block text-xl font-black leading-tight text-[#111827]">My Classes</strong>
+              <p className="mt-2 h-2 w-2/3 rounded-full bg-[#e7edf5]" />
+            </div>
+            <div className="teacher-classes-page__manual-header-tools grid grid-cols-3 gap-2">
+              <span className="grid min-w-0 gap-1 rounded-lg border border-[#edf1f6] bg-[#f8fafc] p-3">
+                <small className="text-[0.56rem] font-black uppercase tracking-[0.05em] text-[#637083]">
+                  Active Classes
+                </small>
+                <b className="text-lg font-black text-[#111827]">6</b>
+              </span>
+              <span className="is-pending grid min-w-0 gap-1 rounded-lg border border-[#fbd3dd] bg-[#fff2f5] p-3">
+                <small className="text-[0.56rem] font-black uppercase tracking-[0.05em] text-[#8d2643]">
+                  Pending Work
+                </small>
+                <b className="text-lg font-black text-[#8d2643]">3</b>
+              </span>
+              <span className="is-refresh grid min-w-0 place-items-center rounded-lg border border-[#a32d2d] bg-[#a32d2d] p-3 text-[0.72rem] font-black uppercase text-white">
+                Refresh
+              </span>
+            </div>
+          </div>
+          <GuidePin lineSide="right" lineWidth="6rem" style={{ left: '1rem', top: '5.25rem' }}>
+            Header summary
+          </GuidePin>
+          <GuidePin lineSide="left" lineWidth="5.5rem" style={{ right: '1rem', top: '10.5rem' }}>
+            Refresh button
+          </GuidePin>
+        </>
+      ) : null}
+
+      {screen === 'filters' ? (
+        <>
+          <div className="teacher-classes-page__manual-filter-shot grid gap-3 rounded-xl border border-[#edf1f6] bg-white p-4 shadow-sm">
+            <div className="teacher-classes-page__manual-search-shot rounded-lg border border-[#d7deec] bg-[#f7f9fd] px-3 py-2 text-sm font-semibold text-[#64748b]">
+              Search class, code, or section
+            </div>
+            <div className="teacher-classes-page__manual-filter-pills flex flex-wrap gap-2">
+              <span className="rounded-full border border-[#d8deeb] bg-white px-3 py-1 text-xs font-black uppercase text-[#425473]">
+                Filter
+              </span>
+              <b className="rounded-full border border-[#a32d2d] bg-[#a32d2d] px-3 py-1 text-xs font-black text-white">
+                Active
+              </b>
+              <span className="rounded-full border border-[#d8deeb] bg-white px-3 py-1 text-xs font-black text-[#425473]">
+                All
+              </span>
+              <span className="rounded-full border border-[#d8deeb] bg-white px-3 py-1 text-xs font-black text-[#425473]">
+                Archived
+              </span>
+              <span className="rounded-full border border-[#d8deeb] bg-white px-3 py-1 text-xs font-black text-[#425473]">
+                Hidden
+              </span>
+            </div>
+          </div>
+          <div className="teacher-classes-page__manual-card-grid grid grid-cols-3 gap-2">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <span
+                key={index}
+                className="min-h-32 rounded-xl border border-[#edf1f6] bg-[linear-gradient(#f43f5e_0_2.5rem,transparent_2.5rem),linear-gradient(#e7edf5_0.5rem,transparent_0.5rem),linear-gradient(#e7edf5_0.5rem,transparent_0.5rem),#ffffff] bg-[length:100%_100%,68%_1rem,82%_1rem] bg-[position:0_0,0.7rem_3.35rem,0.7rem_4.85rem] bg-no-repeat shadow-sm"
+              />
+            ))}
+          </div>
+          <GuidePin lineSide="right" lineWidth="4.6rem" style={{ left: '1rem', top: '5.3rem' }}>
+            Search box
+          </GuidePin>
+          <GuidePin lineSide="left" lineWidth="5.2rem" style={{ right: '1rem', top: '8.6rem' }}>
+            Status filter
+          </GuidePin>
+        </>
+      ) : null}
+
+      {screen === 'cards' ? (
+        <>
+          <div className="teacher-classes-page__manual-class-card overflow-hidden rounded-xl border border-[#dbe2ec] bg-white shadow-sm">
+            <div className="teacher-classes-page__manual-class-banner grid gap-1 bg-[linear-gradient(145deg,#f43f5e,#be123c)] p-4 text-white">
+              <small className="text-[0.58rem] font-black uppercase tracking-[0.08em]">MATH-07A</small>
+              <strong className="text-xl font-black leading-tight">Mathematics</strong>
+              <span className="text-xs font-bold text-white/90">Section A</span>
+            </div>
+            <div className="teacher-classes-page__manual-card-stats grid grid-cols-3 border-b border-[#edf1f6]">
+              <span className="grid gap-1 border-r border-[#edf1f6] p-3">
+                <small className="text-[0.56rem] font-black uppercase text-[#637083]">Lessons</small>
+                <b className="text-base font-black text-[#111827]">12</b>
+              </span>
+              <span className="grid gap-1 border-r border-[#edf1f6] p-3">
+                <small className="text-[0.56rem] font-black uppercase text-[#637083]">Assessments</small>
+                <b className="text-base font-black text-[#111827]">4</b>
+              </span>
+              <span className="grid gap-1 p-3">
+                <small className="text-[0.56rem] font-black uppercase text-[#637083]">Pending</small>
+                <b className="text-base font-black text-[#111827]">2</b>
+              </span>
+            </div>
+            <div className="teacher-classes-page__manual-card-actions flex justify-end gap-2 p-3">
+              <span className="rounded-lg border border-[#d5deef] bg-[#f5f8ff] px-3 py-2 text-xs font-black text-[#2f466f]">
+                View Lessons
+              </span>
+              <span className="rounded-lg border border-[#a32d2d] bg-[#a32d2d] px-3 py-2 text-xs font-black text-white">
+                Open Class
+              </span>
+            </div>
+          </div>
+          <GuidePin lineSide="right" lineWidth="4.5rem" style={{ left: '1rem', top: '6.8rem' }}>
+            Class card
+          </GuidePin>
+          <GuidePin lineSide="left" lineWidth="5.2rem" style={{ right: '1rem', bottom: '3rem' }}>
+            Class actions
+          </GuidePin>
+        </>
+      ) : null}
+
+      {screen === 'calendar' ? (
+        <>
+          <div className="teacher-classes-page__manual-calendar-shot rounded-xl border border-[#edf1f6] bg-white p-4 shadow-sm">
+            <div className="teacher-classes-page__manual-calendar-head flex justify-between text-sm font-black text-[#111827] [&_b]:hidden">
+              <span>April 2026</span>
+              <span>Prev / Next</span>
+            </div>
+            <div className="teacher-classes-page__manual-calendar-grid mt-3 grid grid-cols-7 gap-1">
+              {Array.from({ length: 21 }).map((_, index) => (
+                <span
+                  key={index}
+                  className={`grid min-h-8 place-items-center rounded-lg border text-xs font-black ${
+                    index === 10
+                      ? 'border-[#a32d2d] bg-[#a32d2d] text-white'
+                      : 'border-[#e2e8f0] bg-white text-[#64748b]'
+                  }`}
+                >
+                  {index + 8}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="teacher-classes-page__manual-events-shot grid gap-2 rounded-xl border border-[#edf1f6] bg-white p-4 shadow-sm">
+            <strong className="text-sm font-black text-[#111827]">Upcoming Events</strong>
+            <span className="rounded-lg border border-[#e3e8f4] bg-[#f8f9fd] px-3 py-2 text-xs font-black text-[#40516f]">
+              APR 25 Quiz 1
+            </span>
+            <span className="rounded-lg border border-[#e3e8f4] bg-[#f8f9fd] px-3 py-2 text-xs font-black text-[#40516f]">
+              APR 28 Class update
+            </span>
+          </div>
+          <GuidePin lineSide="right" lineWidth="4.1rem" style={{ left: '1rem', top: '6.1rem' }}>
+            Calendar
+          </GuidePin>
+          <GuidePin lineSide="left" lineWidth="6.5rem" style={{ right: '1rem', bottom: '5rem' }}>
+            Upcoming events
+          </GuidePin>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 function parseDate(value?: string | null) {
   if (!value) return null;
@@ -133,6 +444,8 @@ export default function TeacherClassesPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<ClassVisibilityStatus>('active');
   const [searchQuery, setSearchQuery] = useState('');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -395,6 +708,17 @@ export default function TeacherClassesPage() {
               <p className="font-medium">Pending Work</p>
               <p className="text-lg font-semibold leading-tight">{totalPending}</p>
             </div>
+            <button
+              type="button"
+              className="grid min-h-[3.2rem] w-[3.2rem] place-items-center rounded-2xl border border-[#fbd3dd] bg-white text-[#be123c] shadow-[0_18px_30px_-24px_rgba(190,18,60,0.7)] transition hover:border-[#f43f5e] hover:bg-[#fff1f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f43f5e]/45"
+              onClick={() => {
+                setHelpPage(0);
+                setHelpOpen(true);
+              }}
+              aria-label="Module help"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
             <Button
               type="button"
               className="h-auto min-h-[3.2rem] rounded-2xl bg-[#f43f5e] px-4 text-sm font-semibold text-white shadow-[0_18px_30px_-22px_rgba(244,63,94,0.8)] hover:bg-[#e11d48]"
@@ -513,6 +837,101 @@ export default function TeacherClassesPage() {
           </aside>
         </section>
       )}
+
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) setHelpPage(0);
+        }}
+      >
+        <DialogContent className="teacher-intervention-workspace__manual-dialog" style={classesGuideDialogStyle}>
+          <DialogHeader>
+            <DialogTitle>Teacher guide: My Classes</DialogTitle>
+            <DialogDescription>
+              Read this one page at a time. Each example points to the part of My Classes being explained.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
+            <span>Page {helpPage + 1} of {classesGuidePages.length}</span>
+            <div>
+              {classesGuidePages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <ClassesGuideScreenshot screen={classesGuidePages[helpPage].screen} />
+            <section className="teacher-intervention-workspace__manual-copy">
+              <p className="teacher-intervention-workspace__manual-kicker">Teacher instruction manual</p>
+              <h3>{classesGuidePages[helpPage].title}</h3>
+              <p>{classesGuidePages[helpPage].description}</p>
+              <div className="route-guide-steps grid gap-3">
+                {classesGuidePages[helpPage].steps.map((step, index) => (
+                  <div
+                    key={`${step.action}-${step.body}`}
+                    className={`route-guide-step grid grid-cols-[1.9rem_minmax(0,1fr)] items-start gap-3 rounded-lg border border-[#edf1f6] border-l-[3px] bg-white p-3 shadow-sm ${
+                      step.tone === 'caution'
+                        ? 'border-l-[#b7791f] bg-[#fffaf0]'
+                        : 'border-l-[#a32d2d]'
+                    }`}
+                  >
+                    <span
+                      className={`route-guide-step__index inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white ${
+                        step.tone === 'caution' ? 'bg-[#b7791f]' : 'bg-[#a32d2d]'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <div>
+                      <strong className="block text-sm font-black text-[#111827]">{step.action}</strong>
+                      <p className="mt-1 text-sm leading-relaxed text-[#637083]">{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="teacher-intervention-workspace__manual-reminder">
+                Simple rule: find the right class first, open the class workspace, then use the calendar rail for due-date checks.
+              </p>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <div className="teacher-intervention-workspace__manual-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                disabled={helpPage === 0}
+              >
+                Previous page
+              </Button>
+              {helpPage < classesGuidePages.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setHelpPage((current) => Math.min(current + 1, classesGuidePages.length - 1))
+                  }
+                >
+                  Next page
+                </Button>
+              ) : (
+                <Button type="button" onClick={() => setHelpOpen(false)}>
+                  Close guide
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

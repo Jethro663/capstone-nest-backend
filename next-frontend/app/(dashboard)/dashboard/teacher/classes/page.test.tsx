@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import TeacherClassesPage from './page';
 import { announcementService } from '@/services/announcement-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -133,5 +133,39 @@ describe('TeacherClassesPage', () => {
     expect(
       screen.queryByText('Student Workspace'),
     ).not.toBeInTheDocument();
+  });
+
+  it('opens the helper guide from the question mark button', async () => {
+    render(<TeacherClassesPage />);
+
+    await screen.findByRole('heading', { name: 'My Classes' });
+
+    fireEvent.click(screen.getByRole('button', { name: /module help/i }));
+
+    expect(await screen.findByText('Teacher guide: My Classes')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Start with the header')).toBeInTheDocument();
+    expect(screen.getByText('Refresh button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 2 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Find the right class')).toBeInTheDocument();
+    expect(screen.getByText('Search box')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 3 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Open class work')).toBeInTheDocument();
+    expect(screen.getByText('Class card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 4 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Use the calendar rail')).toBeInTheDocument();
+    expect(screen.getByText('Calendar')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Teacher guide: My Classes')).not.toBeInTheDocument();
+    });
   });
 });

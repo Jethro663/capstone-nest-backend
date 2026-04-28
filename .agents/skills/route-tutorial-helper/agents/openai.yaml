@@ -1,0 +1,4 @@
+interface:
+  display_name: "Route Tutorial Helper"
+  short_description: "Add guided route help modals with annotated visuals"
+  default_prompt: "Use $route-tutorial-helper to add a question-mark tutorial guide to this page route."

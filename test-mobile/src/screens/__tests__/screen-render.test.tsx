@@ -60,6 +60,9 @@ jest.mock("react-native", () => {
     TextInput: component("TextInput"),
     Image: component("Image"),
     RefreshControl: component("RefreshControl"),
+    Alert: { alert: jest.fn() },
+    AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
+    BackHandler: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
     Platform: {
       OS: "ios",
       select: (options: Record<string, unknown>) => options.ios ?? options.default,
@@ -84,6 +87,27 @@ jest.mock("@expo/vector-icons", () => {
 
 jest.mock("expo-image-picker", () => ({
   launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  MediaTypeOptions: { Images: "Images" },
+}));
+
+jest.mock("expo-document-picker", () => ({
+  getDocumentAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+}));
+
+jest.mock("expo-screen-capture", () => ({
+  preventScreenCaptureAsync: jest.fn().mockResolvedValue(undefined),
+  allowScreenCaptureAsync: jest.fn().mockResolvedValue(undefined),
+  addScreenshotListener: jest.fn(() => ({ remove: jest.fn() })),
+}));
+
+jest.mock("expo-file-system/legacy", () => ({
+  cacheDirectory: "file:///cache/",
+  EncodingType: { Base64: "base64" },
+  readAsStringAsync: jest.fn().mockResolvedValue(""),
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("expo-secure-store", () => ({
@@ -1373,7 +1397,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Generate Practice Run");
   });
 
-  it("keeps JA Ask fixed-action only and requires lesson context before sending", async () => {
+  it("renders JA Ask with a chat composer and requires lesson context before sending", async () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1390,7 +1414,8 @@ describe("mobile rendered screen flows", () => {
         (node) => node.type === "Text" && flattenText(node).includes("Pick a visible lesson"),
       ),
     ).toBeTruthy();
-    expect(testRenderer!.root.findAll((node) => node.type === "TextInput")).toHaveLength(0);
+    const composer = testRenderer!.root.find((node) => node.type === "TextInput");
+    expect(composer.props.placeholder).toBe("Select a lesson first");
 
     const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
     await act(async () => {
@@ -1408,6 +1433,9 @@ describe("mobile rendered screen flows", () => {
     const lessonChip = findPressableByText(testRenderer!.root, "Fractions Lesson");
     await act(async () => {
       lessonChip.props.onPress();
+    });
+    await act(async () => {
+      composer.props.onChangeText("Can you explain this like I am reviewing?");
     });
     await act(async () => {
       await explainAction.props.onPress();

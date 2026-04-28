@@ -2,76 +2,27 @@ import { useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, Text, View } from "react-native";
-import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { Image, Pressable, Text, View } from "react-native";
+import { EmptyState, ProgressBar, Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { peekAppError, toAppError } from "../api/http";
 import { useLessonCompleteMutation, useLessonCompletionStatus, useLessonDetail } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 import type { ContentBlock } from "../types/lesson";
+import { extractLessonBlockText, resolveLessonBlockMeta } from "../utils/lessonBlocks";
 
 type Props = NativeStackScreenProps<RootStackParamList, "LessonDetail">;
 
-function extractBlockText(block: ContentBlock) {
-  if (typeof block.content === "string") {
-    return stripRichText(block.content);
-  }
-
-  if (block.content && typeof block.content === "object") {
-    const textValue = "text" in block.content ? block.content.text : undefined;
-    const urlValue = "url" in block.content ? block.content.url : undefined;
-    const htmlValue = "html" in block.content ? block.content.html : undefined;
-    if (typeof textValue === "string" && textValue.trim()) return stripRichText(textValue);
-    if (typeof htmlValue === "string" && htmlValue.trim()) return stripRichText(htmlValue);
-    if (typeof urlValue === "string" && urlValue.trim()) return urlValue.trim();
-  }
-
-  if (block.metadata && typeof block.metadata === "object") {
-    const caption = "caption" in block.metadata ? block.metadata.caption : undefined;
-    if (typeof caption === "string" && caption.trim()) return stripRichText(caption);
-  }
-
-  return "";
-}
-
-function blockLabel(type: ContentBlock["type"]) {
-  switch (type) {
-    case "text":
-      return "Reading";
-    case "image":
-      return "Image";
-    case "video":
-      return "Video";
-    case "question":
-      return "Checkpoint";
-    case "file":
-      return "Attachment";
-    case "divider":
-      return "Divider";
-    default:
-      return "Content";
-  }
-}
-
-function blockIcon(type: ContentBlock["type"]) {
-  switch (type) {
-    case "image":
-      return "image-outline";
-    case "video":
-      return "play-circle-outline";
-    case "question":
-      return "help-circle-outline";
-    case "file":
-      return "file-document-outline";
-    case "divider":
-      return "minus";
-    default:
-      return "book-open-variant";
-  }
-}
-
 function isNotFoundError(error: unknown) {
   return peekAppError(error).status === 404;
+}
+
+function extractBlockUrl(block: ContentBlock) {
+  if (block.content && typeof block.content === "object") {
+    const url = (block.content as Record<string, unknown>).url;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+  return "";
 }
 
 function DarkPanel({ children, style }: PropsWithChildren<{ style?: object }>) {
@@ -116,6 +67,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
   const { lessonId, classId } = route.params;
   const [completedOverride, setCompletedOverride] = useState<boolean | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [understoodBlocks, setUnderstoodBlocks] = useState<Record<string, boolean>>({});
   const lessonQuery = useLessonDetail(lessonId);
   const completionStatusQuery = useLessonCompletionStatus(lessonId);
   const completeMutation = useLessonCompleteMutation(classId);
@@ -132,6 +84,8 @@ export function LessonDetailScreen({ route, navigation }: Props) {
   const description = stripRichText(lesson?.description);
   const headerDescription =
     description.length > 180 ? `${description.slice(0, 180).trimEnd()}...` : description;
+  const understoodCount = blocks.filter((block) => understoodBlocks[block.id]).length;
+  const readingProgress = blocks.length ? Math.round((understoodCount / blocks.length) * 100) : 0;
 
   const handleRefresh = () => {
     setActionError(null);
@@ -244,6 +198,14 @@ export function LessonDetailScreen({ route, navigation }: Props) {
             <ToneTag label={`Order ${lesson.order}`} tone="purple" />
             <ToneTag label={isCompleted ? "Completed" : "In progress"} tone={isCompleted ? "green" : "amber"} />
           </View>
+          {blocks.length ? (
+            <View style={{ marginTop: 14 }}>
+              <ProgressBar value={readingProgress} color={theme.green} trackColor="rgba(255,255,255,0.08)" />
+              <Text style={{ marginTop: 6, color: theme.muted, fontSize: 10, fontWeight: "700" }}>
+                {understoodCount}/{blocks.length} blocks checked
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -293,35 +255,74 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           </Text>
         </DarkPanel>
       ) : (
-        blocks.map((block, index) => (
-          <DarkPanel key={block.id} style={{ marginTop: index === 0 ? 14 : 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
+        blocks.map((block, index) => {
+          const meta = resolveLessonBlockMeta(block.type);
+          const text = extractLessonBlockText(block);
+          const url = extractBlockUrl(block);
+          const understood = Boolean(understoodBlocks[block.id]);
+          const toneColor = meta.tone === "amber" ? theme.amber : meta.tone === "green" ? theme.green : meta.tone === "purple" ? theme.purple : theme.blue;
+          const toneBg = meta.tone === "amber" ? theme.amberSoft : meta.tone === "green" ? theme.greenSoft : meta.tone === "purple" ? theme.purpleSoft : theme.blueSoft;
+          return (
+          <DarkPanel key={block.id} style={{ marginTop: index === 0 ? 14 : 8, borderColor: understood ? "rgba(34,201,122,0.32)" : theme.border }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <View
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 36,
+                  height: 36,
                   borderRadius: 8,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: block.type === "question" ? theme.amberSoft : theme.blueSoft,
+                  backgroundColor: toneBg,
                 }}
               >
                 <MaterialCommunityIcons
-                  name={blockIcon(block.type)}
-                  size={15}
-                  color={block.type === "question" ? theme.amber : theme.blue}
+                  name={meta.icon}
+                  size={17}
+                  color={toneColor}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 12, fontWeight: "600", color: theme.text }}>{blockLabel(block.type)}</Text>
-                <Text style={{ marginTop: 1, fontSize: 10, color: theme.muted }}>Block {index + 1}</Text>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text }}>{meta.label}</Text>
+                <Text style={{ marginTop: 1, fontSize: 10, color: theme.muted }}>Block {index + 1} of {blocks.length}</Text>
               </View>
+              {understood ? <ToneTag label="Understood" tone="green" /> : null}
             </View>
+            {block.type === "image" && url ? (
+              <Image
+                source={{ uri: url }}
+                resizeMode="cover"
+                style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 10, backgroundColor: theme.active }}
+              />
+            ) : null}
             <Text style={{ fontSize: 13, lineHeight: 21, color: "#BDBDBD" }}>
-              {extractBlockText(block) || "This content block does not contain text that can be rendered in mobile yet."}
+              {text || (url ? "Open this resource from the linked material above." : "This content block does not contain text that can be rendered in mobile yet.")}
             </Text>
+            {meta.interactive ? (
+              <Pressable
+                onPress={() => setUnderstoodBlocks((current) => ({ ...current, [block.id]: !current[block.id] }))}
+                style={{
+                  marginTop: 12,
+                  alignSelf: "flex-start",
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: understood ? "rgba(34,201,122,0.42)" : theme.border,
+                  backgroundColor: understood ? theme.greenSoft : "rgba(255,255,255,0.04)",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 7,
+                }}
+              >
+                <MaterialCommunityIcons name={understood ? "check-circle" : "check-circle-outline"} size={15} color={understood ? theme.green : theme.muted} />
+                <Text style={{ color: understood ? theme.green : theme.text, fontSize: 11, fontWeight: "800" }}>
+                  {understood ? "Got it" : "I understand"}
+                </Text>
+              </Pressable>
+            ) : null}
           </DarkPanel>
-        ))
+          );
+        })
       )}
 
       <View

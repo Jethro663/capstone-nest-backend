@@ -63,6 +63,7 @@ const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
   'jpg',
   'jpeg',
   'webp',
+  'zip',
 ];
 const DEFAULT_FILE_UPLOAD_MIME_TYPES = [
   'application/pdf',
@@ -81,6 +82,8 @@ const DEFAULT_FILE_UPLOAD_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',
+  'application/zip',
+  'application/x-zip-compressed',
 ];
 
 type RubricCriterion = {

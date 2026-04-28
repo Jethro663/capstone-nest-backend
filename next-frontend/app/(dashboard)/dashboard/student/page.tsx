@@ -31,7 +31,7 @@ import {
   shiftMonth,
   type CalendarFeedItem,
 } from '@/utils/calendar-feed';
-import { getStudentAssessmentHref } from '@/utils/student-assessment-routing';
+import { getStudentAssessmentHref, getSubmittedAttempts } from '@/utils/student-assessment-routing';
 import { getTeacherName } from '@/utils/helpers';
 import { toDateKey, type StudentEventTag, type StudentUpcomingEvent } from '@/components/student/my-classes/types';
 
@@ -211,11 +211,9 @@ export default function StudentDashboardPage() {
         data: [] as SchoolEvent[],
       }));
 
-      const pendingFileUploadAssessments = nextAssessments
-        .filter((assessment) => assessment.isPublished && assessment.type === 'file_upload')
-        .slice(0, 4);
+      const publishedAssessments = nextAssessments.filter((assessment) => assessment.isPublished);
       const attemptEntries = await Promise.all(
-        pendingFileUploadAssessments.map(async (assessment) => {
+        publishedAssessments.map(async (assessment) => {
           try {
             const attemptsRes = await assessmentService.getStudentAttempts(assessment.id);
             return [assessment.id, attemptsRes.data || []] as const;
@@ -251,8 +249,15 @@ export default function StudentDashboardPage() {
     [assessments],
   );
   const pendingAssessments = useMemo(
-    () => publishedAssessments.slice(0, 4),
-    [publishedAssessments],
+    () =>
+      publishedAssessments
+        .filter((assessment) => {
+          const maxAttempts = assessment.maxAttempts ?? 1;
+          const submittedAttempts = getSubmittedAttempts(assessmentAttempts[assessment.id] || []);
+          return submittedAttempts.length < maxAttempts;
+        })
+        .slice(0, 4),
+    [assessmentAttempts, publishedAssessments],
   );
   const recentLessons = useMemo(() => lessons.slice(0, 4), [lessons]);
   const todaySchedule = useMemo(() => getScheduleItemsForToday(classes), [classes]);

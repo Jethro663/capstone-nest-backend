@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, type ElementType } from 'react';
 import {
-  BarChart3,
   ClipboardList,
   Download,
   Filter,
@@ -37,9 +36,9 @@ import {
 } from '@/components/ui/table';
 import {
   TeacherEmptyState,
+  TeacherHeaderMetric,
   TeacherPageShell,
   TeacherSectionCard,
-  TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
 import { cn } from '@/utils/cn';
 import { toast } from 'sonner';
@@ -222,6 +221,42 @@ export function TeacherReportsFigmaPage() {
       badge="Teacher Reports"
       title="Reports"
       description="Class and student performance analytics"
+      headerStats={
+        <>
+          <TeacherHeaderMetric
+            label="Avg Class Grade"
+            value={average ? `${average.average.toFixed(1)}%` : '--'}
+            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Select a class'}
+            accent="teal"
+          />
+          <TeacherHeaderMetric
+            label="Passing Rate"
+            value={
+              average && average.count > 0
+                ? `${(((average.count - average.interventionCount) / average.count) * 100).toFixed(0)}%`
+                : '--'
+            }
+            caption="Learners above intervention threshold"
+            accent="sky"
+          />
+          <TeacherHeaderMetric
+            label="Highest Grade"
+            value={
+              interventions.length > 0
+                ? Math.max(...interventions.map((row) => Number(row.finalPercentage))).toFixed(1)
+                : '--'
+            }
+            caption="Highest finalized grade"
+            accent="amber"
+          />
+          <TeacherHeaderMetric
+            label="At Risk Students"
+            value={average?.interventionCount ?? 0}
+            caption="Students flagged for intervention"
+            accent="rose"
+          />
+        </>
+      }
       actions={
         <Button
           variant="teacher"
@@ -232,42 +267,6 @@ export function TeacherReportsFigmaPage() {
           <Download className="h-4 w-4" />
           {exporting ? 'Exporting...' : 'Export'}
         </Button>
-      }
-      stats={
-        <>
-          <TeacherStatCard
-            label="Avg Class Grade"
-            value={average ? `${average.average.toFixed(1)}%` : '--'}
-            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Select a class'}
-            icon={BarChart3}
-            accent="teal"
-          />
-          <TeacherStatCard
-            label="Passing Rate"
-            value={average && average.count > 0 ? `${(((average.count - average.interventionCount) / average.count) * 100).toFixed(0)}%` : '--'}
-            caption="Learners above intervention threshold"
-            icon={TrendingUp}
-            accent="sky"
-          />
-          <TeacherStatCard
-            label="Highest Grade"
-            value={
-              interventions.length > 0
-                ? Math.max(...interventions.map((row) => Number(row.finalPercentage))).toFixed(1)
-                : '--'
-            }
-            caption="Highest finalized grade"
-            icon={ListChecks}
-            accent="amber"
-          />
-          <TeacherStatCard
-            label="At Risk Students"
-            value={average?.interventionCount ?? 0}
-            caption="Students flagged for intervention"
-            icon={ClipboardList}
-            accent="rose"
-          />
-        </>
       }
     >
       <TeacherSectionCard title="Filters" className="teacher-figma-stagger">

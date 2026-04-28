@@ -5,7 +5,10 @@ import type {
   Assessment,
   AssessmentAttempt,
   AttemptResult,
+  OngoingAttemptResult,
   SubmitAssessmentDto,
+  UpdateAttemptProgressDto,
+  UploadedAssessmentFile,
 } from "../../types/assessment";
 import type {
   AssessmentHistoryQuery,
@@ -15,15 +18,6 @@ import type {
 export type AssessmentAttemptList = AssessmentAttempt[];
 export type AssessmentAttemptDetail = AttemptResult;
 export type AssessmentHistoryList = AssessmentHistoryResponse;
-
-type OngoingAttemptResult = {
-  attempt: AssessmentAttempt;
-  timeLimitMinutes: number | null;
-  expiresAt?: string | null;
-  strictMode?: boolean;
-  timedQuestionsEnabled?: boolean;
-  questionTimeLimitSeconds?: number | null;
-};
 
 export const assessmentsApi = {
   async getByClass(classId: string) {
@@ -60,6 +54,41 @@ export const assessmentsApi = {
 
   async submit(payload: SubmitAssessmentDto) {
     const response = await apiClient.post<ApiEnvelope<unknown>>("/assessments/submit", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async updateAttemptProgress(attemptId: string, payload: UpdateAttemptProgressDto) {
+    const response = await apiClient.patch<ApiEnvelope<AssessmentAttempt>>(
+      `/assessments/attempts/${attemptId}/progress`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async uploadSubmissionFile(
+    assessmentId: string,
+    file: { uri: string; name: string; type?: string | null },
+  ) {
+    const formData = new FormData();
+    formData.append("file", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type || "application/octet-stream",
+    } as unknown as Blob);
+
+    const response = await apiClient.post<ApiEnvelope<UploadedAssessmentFile>>(
+      `/assessments/${assessmentId}/submission-file`,
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async unsubmitFileUploadAssessment(assessmentId: string) {
+    const response = await apiClient.post<ApiEnvelope<AssessmentAttempt>>(
+      `/assessments/${assessmentId}/unsubmit-file-upload`,
+      {},
+    );
     return unwrapEnvelope(response.data);
   },
 
