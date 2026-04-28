@@ -458,7 +458,7 @@ async def continue_student_tutor_session(
     attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     state, history = await _load_tutor_state(db, user.id, session_id)
-    prepared_images = normalize_attachment_images(attachments)
+    prepared_images = await normalize_attachment_images(attachments)
     context_bundle = await _build_context_bundle(
         db,
         class_id=state["classId"],
@@ -564,7 +564,7 @@ async def submit_student_tutor_answers(
     questions = state.get("questions") or []
     if not questions:
         raise HTTPException(400, "This tutor session has no active practice questions")
-    prepared_images = normalize_attachment_images(attachments)
+    prepared_images = await normalize_attachment_images(attachments)
     context_bundle = await _build_context_bundle(
         db,
         class_id=state["classId"],

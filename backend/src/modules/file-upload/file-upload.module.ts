@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { DatabaseModule } from '../../database/database.module';
 import { FileUploadController } from './file-upload.controller';
+import { InternalUploadsController } from './internal-uploads.controller';
 import { FileUploadService } from './file-upload.service';
 import { AuditModule } from '../audit/audit.module';
 import { LibraryIndexingService } from './library-indexing.service';
@@ -15,7 +16,7 @@ import { LibraryIndexingProcessor } from './processors/library-indexing.processo
       name: 'library-indexing',
     }),
   ],
-  controllers: [FileUploadController],
+  controllers: [FileUploadController, InternalUploadsController],
   providers: [
     FileUploadService,
     LibraryIndexingService,

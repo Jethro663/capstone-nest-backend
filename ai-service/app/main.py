@@ -24,6 +24,7 @@ from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .database import AsyncSessionLocal, get_db
 from . import ollama_client
@@ -1493,22 +1494,33 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     except Exception as err:
         database_status = {"ok": False, "message": str(err)}
 
-    ollama_status = await ollama_client.is_available()
+    runtime_status = await ollama_client.is_available()
     ai_degraded_allowed = settings.ai_degraded_allowed
     ready = database_status["ok"] and (
-        ollama_status["available"] or ai_degraded_allowed
+        runtime_status["available"] or ai_degraded_allowed
     )
     AI_READY.set(1 if ready else 0)
-    OLLAMA_AVAILABLE.set(1 if ollama_status["available"] else 0)
+    OLLAMA_AVAILABLE.set(1 if runtime_status["ollamaAvailable"] else 0)
 
     return {
         "ready": ready,
-        "degradedMode": bool(ai_degraded_allowed and not ollama_status["available"]),
+        "degradedMode": bool(ai_degraded_allowed and not runtime_status["available"]),
         "dependencies": {
             "database": database_status,
+            "runtime": {
+                "ok": runtime_status["available"],
+                "provider": runtime_status["provider"],
+                "mode": runtime_status["runtimeMode"],
+                "models": runtime_status["models"],
+            },
             "ollama": {
-                "ok": ollama_status["available"],
-                "models": ollama_status["models"],
+                "ok": runtime_status["ollamaAvailable"],
+                "models": runtime_status["ollamaModels"],
+            },
+            "cloud": {
+                "ok": runtime_status["cloudAvailable"],
+                "provider": runtime_status["cloudProvider"],
+                "models": runtime_status["cloudModels"],
             },
         },
         "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
@@ -1569,7 +1581,7 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ):
     chat_session_id = body.session_id or str(uuid.uuid4())
-    attachments = normalize_attachment_images(
+    attachments = await normalize_attachment_images(
         [item.model_dump(by_alias=True) for item in (body.attachments or [])]
     )
 
@@ -1597,6 +1609,7 @@ async def chat(
     user_message: dict[str, object] = {"role": "user", "content": body.message}
     if attachments:
         user_message["images"] = [item["base64Data"] for item in attachments]
+        user_message["_attachments"] = attachments
     ollama_messages.append(user_message)
 
     health = await ollama_client.is_available()
@@ -2038,21 +2051,25 @@ async def student_tutor_answers(
 async def health():
     status = await ollama_client.is_available()
     available_models = status["models"]
-    OLLAMA_AVAILABLE.set(1 if status["available"] else 0)
+    OLLAMA_AVAILABLE.set(1 if status["ollamaAvailable"] else 0)
     return {
         "success": True,
         "message": "AI health status",
         "data": {
-            "ollamaAvailable": status["available"],
+            "runtimeAvailable": status["available"],
+            "runtimeProvider": status["provider"],
+            "runtimeMode": status["runtimeMode"],
+            "ollamaAvailable": status["ollamaAvailable"],
             "configuredModel": ollama_client.get_text_model_name(),
             "configuredTextModel": ollama_client.get_text_model_name(),
             "configuredVisionModel": ollama_client.get_vision_model_name(),
             "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
-            "embeddingModelAvailable": ollama_client.is_model_available(
-                ollama_client.get_embedding_model_name(),
-                available_models,
-            ),
+            "embeddingModelAvailable": bool(status["available"]),
             "availableModels": available_models,
+            "ollamaModels": status["ollamaModels"],
+            "cloudAvailable": status["cloudAvailable"],
+            "cloudProvider": status["cloudProvider"],
+            "cloudModels": status["cloudModels"],
         },
     }
 
@@ -2774,8 +2791,8 @@ async def extract_module(
     if not is_admin and str(file["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only extract your own files")
 
-    file_path = resolve_uploaded_file_path(str(file["file_path"]))
-    if not os.path.exists(file_path):
+    file_path = await materialize_backend_upload(str(file["file_path"]))
+    if not file_path or not os.path.exists(file_path):
         raise HTTPException(404, "Physical file not found on server")
 
     # Create extraction record
@@ -3926,42 +3943,4 @@ async def teacher_generate_quiz_draft(
         },
     }
 
-
-def resolve_uploaded_file_path(raw_path: str) -> str:
-    """Resolve backend-stored upload paths against ai-service UPLOAD_DIR robustly."""
-    normalized = (raw_path or "").strip()
-    upload_root = os.path.abspath(settings.upload_dir)
-
-    candidates: list[str] = []
-    if os.path.isabs(normalized):
-        candidates.append(normalized)
-
-    # Backend can store paths like "./uploads/pdfs/file.pdf" or "uploads/pdfs/file.pdf"
-    normalized_slash = normalized.replace("\\", "/").lstrip("./")
-    if normalized_slash.startswith("uploads/"):
-        normalized_slash = normalized_slash[len("uploads/") :]
-
-    candidates.extend(
-        [
-            os.path.abspath(normalized),
-            os.path.join(upload_root, normalized_slash),
-            os.path.join(upload_root, os.path.basename(normalized)),
-        ]
-    )
-
-    seen: set[str] = set()
-    deduped_candidates: list[str] = []
-    for candidate in candidates:
-        abs_candidate = os.path.abspath(candidate)
-        if abs_candidate in seen:
-            continue
-        seen.add(abs_candidate)
-        deduped_candidates.append(abs_candidate)
-
-    for candidate in deduped_candidates:
-        if os.path.exists(candidate):
-            return candidate
-
-    # Return the most likely candidate for error messaging.
-    return deduped_candidates[0] if deduped_candidates else normalized
 

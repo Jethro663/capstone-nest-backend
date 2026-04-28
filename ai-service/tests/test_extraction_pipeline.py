@@ -243,7 +243,10 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch("app.extraction_pipeline._update_extraction", new=AsyncMock()),
-            patch("app.extraction_pipeline.resolve_uploaded_file_path", return_value="uploads/test.pdf"),
+            patch(
+                "app.extraction_pipeline.materialize_backend_upload",
+                new=AsyncMock(return_value="uploads/test.pdf"),
+            ),
             patch("app.extraction_pipeline.os.path.exists", return_value=True),
             patch("app.extraction_pipeline.fitz.open", return_value=doc),
             patch(

@@ -89,7 +89,20 @@ def _get_profile(task: TaskName) -> dict[str, Any]:
     return TASK_PROFILES[task]
 
 
+def _runtime_mode() -> str:
+    return settings.ai_runtime_mode.strip().lower() or "auto"
+
+
+def _cloud_model_name(task: TaskName, images: list[OllamaImage] | None = None) -> str:
+    profile = _get_profile(task)
+    if images or profile["model_kind"] == "vision":
+        return cloud_fallback.get_vision_model()
+    return cloud_fallback.get_text_model()
+
+
 def _resolve_model_name(task: TaskName, images: list[OllamaImage] | None = None) -> str:
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return _cloud_model_name(task, images)
     profile = _get_profile(task)
     if images or profile["model_kind"] == "vision":
         return settings.ollama_vision_model
@@ -128,16 +141,46 @@ def _build_request_options(
 
 
 async def is_available() -> dict[str, Any]:
+    cloud_status = cloud_fallback.get_status()
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{settings.ollama_base_url}/api/tags")
-            if resp.status_code != 200:
-                return {"available": False, "models": []}
-            body = resp.json()
-            models = [m["name"] for m in body.get("models", [])]
-            return {"available": True, "models": models}
+            if resp.status_code == 200:
+                body = resp.json()
+                ollama_models = [m["name"] for m in body.get("models", [])]
+                ollama_available = True
+            else:
+                ollama_models = []
+                ollama_available = False
     except Exception:
-        return {"available": False, "models": []}
+        ollama_models = []
+        ollama_available = False
+
+    mode = _runtime_mode()
+    if mode == "cloud":
+        provider = cloud_status["provider"] if cloud_status["available"] else "none"
+        models = cloud_status["models"] if cloud_status["available"] else []
+        available = bool(cloud_status["available"])
+    elif mode == "auto" and not ollama_available and cloud_status["available"]:
+        provider = cloud_status["provider"]
+        models = cloud_status["models"]
+        available = True
+    else:
+        provider = "ollama" if ollama_available else "none"
+        models = ollama_models if ollama_available else []
+        available = bool(ollama_available)
+
+    return {
+        "available": available,
+        "models": models,
+        "provider": provider,
+        "runtimeMode": mode,
+        "ollamaAvailable": ollama_available,
+        "ollamaModels": ollama_models,
+        "cloudAvailable": bool(cloud_status["available"]),
+        "cloudModels": cloud_status["models"],
+        "cloudProvider": cloud_status["provider"],
+    }
 
 
 async def generate(
@@ -151,7 +194,6 @@ async def generate(
     num_predict: int | None = None,
     keep_alive: str | None = None,
 ) -> str:
-    model = _resolve_model_name(task, images)
     options = _build_request_options(
         task,
         temperature=temperature,
@@ -160,6 +202,19 @@ async def generate(
     keep_alive_value = keep_alive if keep_alive is not None else settings.ollama_keep_alive
     timeout = _resolve_timeout(task)
     encoded_images = _resolve_image_payload(images)
+
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return await cloud_fallback.generate_text(
+            prompt=prompt,
+            system=system,
+            response_format=response_format,
+            temperature=options.get("temperature", 0.0),
+            timeout=min(timeout, 60),
+            model=_cloud_model_name(task, images),
+            images=images,
+        )
+
+    model = _resolve_model_name(task, images)
 
     if encoded_images:
         payload: dict[str, Any] = {
@@ -234,6 +289,15 @@ async def chat(
     response_format: dict[str, Any] | str | None = None,
     keep_alive: str | None = None,
 ) -> str:
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return await cloud_fallback.chat(
+            messages=messages,
+            response_format=response_format,
+            temperature=float(_build_request_options(task).get("temperature", 0.0)),
+            timeout=min(_resolve_timeout(task), 60),
+            model=_cloud_model_name(task),
+        )
+
     model = _resolve_model_name(task)
     keep_alive_value = keep_alive if keep_alive is not None else settings.ollama_keep_alive
     payload = {
@@ -278,6 +342,9 @@ async def chat(
 async def embed(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
+
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return await cloud_fallback.embed_texts(texts)
 
     async with httpx.AsyncClient(timeout=settings.ollama_timeout_chat_s) as client:
         results: list[list[float]] = []
@@ -373,14 +440,20 @@ def get_task_model_name(task: TaskName, *, images: list[OllamaImage] | None = No
 
 
 def get_text_model_name() -> str:
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return cloud_fallback.get_text_model()
     return settings.ollama_text_model
 
 
 def get_vision_model_name() -> str:
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return cloud_fallback.get_vision_model()
     return settings.ollama_vision_model
 
 
 def get_embedding_model_name() -> str:
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return cloud_fallback.get_embedding_model()
     return settings.ollama_embed_model
 
 
@@ -396,6 +469,9 @@ def is_model_available(model_name: str, available_models: list[str]) -> bool:
 
 
 async def preload_model(task: TaskName) -> None:
+    if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
+        return
+
     model = _resolve_model_name(task)
     payload = {
         "model": model,

@@ -11,8 +11,9 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .backend_uploads import materialize_backend_upload
 from .config import settings
-from .media_utils import normalize_attachment_images, resolve_backend_upload_path
+from .media_utils import normalize_attachment_images
 from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser
 
@@ -333,8 +334,10 @@ Citations:
 {json.dumps(citations, ensure_ascii=False)}
 """
 
-    prepared_images = normalize_attachment_images(attachments)
-    question_image_path = resolve_backend_upload_path(row["question_image_url"] or "")
+    prepared_images = await normalize_attachment_images(attachments)
+    question_image_path = await materialize_backend_upload(
+        row["question_image_url"] or ""
+    )
     if question_image_path:
         prepared_images.append(
             {

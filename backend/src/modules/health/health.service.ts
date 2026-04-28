@@ -93,17 +93,23 @@ export class HealthService {
       }
 
       const payload = (await response.json()) as {
-        data?: { ollamaAvailable?: boolean };
+        data?: {
+          runtimeAvailable?: boolean;
+          runtimeProvider?: string;
+          ollamaAvailable?: boolean;
+        };
       };
-      const ollamaAvailable = payload?.data?.ollamaAvailable !== false;
+      const runtimeAvailable =
+        payload?.data?.runtimeAvailable ??
+        payload?.data?.ollamaAvailable !== false;
 
-      if (!ollamaAvailable) {
+      if (!runtimeAvailable) {
         return {
           ok: allowDegradedAi,
           degraded: true,
           message: allowDegradedAi
-            ? 'AI service reachable but running in degraded mode without Ollama'
-            : 'AI service reachable but Ollama is unavailable',
+            ? 'AI service reachable but running without an available AI runtime'
+            : 'AI service reachable but no AI runtime is available',
         };
       }
 

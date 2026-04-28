@@ -11,10 +11,16 @@ function createRequest(url: string, refreshToken?: string) {
 }
 
 describe('proxy', () => {
-  it('redirects the root route to login when no session cookie exists', () => {
+  it('allows the root route through when no session cookie exists', () => {
     const response = proxy(createRequest('http://localhost:3001/'));
 
-    expect(response.headers.get('location')).toBe('http://localhost:3001/login');
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('allows the root route through when a refresh cookie exists', () => {
+    const response = proxy(createRequest('http://localhost:3001/', 'refresh-token'));
+
+    expect(response.headers.get('location')).toBeNull();
   });
 
   it('allows login when a refresh cookie exists (stale cookie safe)', () => {

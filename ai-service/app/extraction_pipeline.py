@@ -20,6 +20,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .content_sanitizer import (
     ContentClassification,
@@ -65,41 +66,6 @@ EXTRACTION_OUTPUT_FORMAT: dict[str, Any] = {
     },
     "required": ["title", "description", "sections"],
 }
-
-
-def resolve_uploaded_file_path(raw_path: str) -> str:
-    normalized = (raw_path or "").strip()
-    upload_root = os.path.abspath(settings.upload_dir)
-
-    candidates: list[str] = []
-    if os.path.isabs(normalized):
-        candidates.append(normalized)
-
-    normalized_slash = normalized.replace("\\", "/").lstrip("./")
-    if normalized_slash.startswith("uploads/"):
-        normalized_slash = normalized_slash[len("uploads/") :]
-
-    candidates.extend(
-        [
-            os.path.abspath(normalized),
-            os.path.join(upload_root, normalized_slash),
-            os.path.join(upload_root, os.path.basename(normalized)),
-        ]
-    )
-
-    deduped_candidates: list[str] = []
-    seen: set[str] = set()
-    for candidate in candidates:
-        absolute = os.path.abspath(candidate)
-        if absolute in seen:
-            continue
-        seen.add(absolute)
-        deduped_candidates.append(absolute)
-
-    for candidate in deduped_candidates:
-        if os.path.exists(candidate):
-            return candidate
-    return deduped_candidates[0] if deduped_candidates else normalized
 
 
 EXTRACTION_SYSTEM_PROMPT = (
@@ -1594,9 +1560,9 @@ async def run_extraction(
         if not file_row:
             raise FileNotFoundError(f"File {file_id} not found in database")
 
-        file_path = resolve_uploaded_file_path(str(file_row["file_path"]))
+        file_path = await materialize_backend_upload(str(file_row["file_path"]))
         original_name = str(file_row["original_name"])
-        if not os.path.exists(file_path):
+        if not file_path or not os.path.exists(file_path):
             raise FileNotFoundError(f"Physical file not found: {file_path}")
 
         await _update_extraction(db, extraction_id, {"progress_percent": 10})
