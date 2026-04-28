@@ -19,6 +19,7 @@ const ASSESSMENT_ID = '00000000-0000-0000-0000-000000000010';
 const QUESTION_ID = '00000000-0000-0000-0000-000000000020';
 const OPTION_ID_A = '00000000-0000-0000-0000-000000000030';
 const OPTION_ID_B = '00000000-0000-0000-0000-000000000031';
+const FILL_BLANK_OPTION_ID = '00000000-0000-0000-0000-000000000032';
 const STUDENT_ID = '00000000-0000-0000-0000-000000000040';
 const ATTEMPT_ID = '00000000-0000-0000-0000-000000000050';
 
@@ -70,6 +71,20 @@ const MOCK_PUBLISHED_ASSESSMENT = {
   questions: [MOCK_QUESTION],
 };
 
+const MOCK_FILL_BLANK_QUESTION = {
+  ...MOCK_QUESTION,
+  type: 'fill_blank',
+  content: 'Type the fruit name.',
+  options: [
+    { id: FILL_BLANK_OPTION_ID, text: 'apple', isCorrect: true, order: 1 },
+  ],
+};
+
+const MOCK_FILL_BLANK_ASSESSMENT = {
+  ...MOCK_PUBLISHED_ASSESSMENT,
+  questions: [MOCK_FILL_BLANK_QUESTION],
+};
+
 const MOCK_FILE_UPLOAD_ASSESSMENT = {
   ...MOCK_PUBLISHED_ASSESSMENT,
   type: 'file_upload',
@@ -117,6 +132,7 @@ function buildMockDb() {
       classRecordCategories: { findFirst: jest.fn() },
       classRecordItems: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
+      moduleItems: { findMany: jest.fn() },
       uploadedFiles: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
       enrollments: { findFirst: jest.fn() },
@@ -185,6 +201,11 @@ describe('AssessmentsService', () => {
     db.query.classRecordItems.findMany.mockResolvedValue([]);
     db.query.classRecords.findFirst.mockResolvedValue(null);
     db.query.classRecordCategories.findFirst.mockResolvedValue(null);
+    db.query.moduleItems.findMany.mockResolvedValue([]);
+    db.query.enrollments.findFirst.mockResolvedValue({
+      classId: CLASS_ID,
+      studentId: STUDENT_ID,
+    });
     eventEmitter = { emit: jest.fn() } as any;
     jest.clearAllMocks();
     feedbackService = {
@@ -356,6 +377,50 @@ describe('AssessmentsService', () => {
         }),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('should reject copied template assessment reads until the module gate passes', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isCoreTemplateAsset: true,
+        class: { teacherId: 'teacher-1' },
+      });
+      db.query.moduleItems.findMany.mockResolvedValue([
+        {
+          isGiven: false,
+          isVisible: true,
+          section: {
+            module: {
+              classId: CLASS_ID,
+              isVisible: true,
+              isLocked: false,
+            },
+          },
+        },
+      ]);
+
+      await expect(
+        service.getAssessmentById(ASSESSMENT_ID, 'student', {
+          userId: STUDENT_ID,
+          roles: ['student'],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow standalone copied template assessment reads for students when published', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isCoreTemplateAsset: true,
+        class: { teacherId: 'teacher-1' },
+      });
+      db.query.moduleItems.findMany.mockResolvedValue([]);
+
+      const result = await service.getAssessmentById(ASSESSMENT_ID, 'student', {
+        userId: STUDENT_ID,
+        roles: ['student'],
+      });
+
+      expect(result.id).toBe(ASSESSMENT_ID);
+    });
   });
 
   describe('getAssessmentsByClass access control', () => {
@@ -374,7 +439,7 @@ describe('AssessmentsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should return only published assessments for student class listing', async () => {
+    it('should keep manual published assessments visible while hiding ungiven copied template assessments', async () => {
       db.query.classes.findFirst.mockResolvedValue({
         id: CLASS_ID,
         teacherId: 'teacher-1',
@@ -388,11 +453,26 @@ describe('AssessmentsService', () => {
           ...MOCK_PUBLISHED_ASSESSMENT,
           id: ASSESSMENT_ID,
           isPublished: true,
+          isCoreTemplateAsset: false,
         },
         {
           ...MOCK_PUBLISHED_ASSESSMENT,
           id: '00000000-0000-0000-0000-000000000099',
-          isPublished: false,
+          isPublished: true,
+          isCoreTemplateAsset: true,
+        },
+      ]);
+      db.query.moduleItems.findMany.mockResolvedValue([
+        {
+          isGiven: false,
+          isVisible: true,
+          section: {
+            module: {
+              classId: CLASS_ID,
+              isVisible: true,
+              isLocked: false,
+            },
+          },
         },
       ]);
       db.query.assessmentAttempts.findMany.mockResolvedValue([]);
@@ -406,6 +486,81 @@ describe('AssessmentsService', () => {
       expect(result.total).toBe(1);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].id).toBe(ASSESSMENT_ID);
+    });
+
+    it('should include standalone published copied template assessments without module attachments', async () => {
+      const copiedAssessmentId = '00000000-0000-0000-0000-000000000099';
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+      db.query.assessments.findMany.mockResolvedValue([
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: copiedAssessmentId,
+          isPublished: true,
+          isCoreTemplateAsset: true,
+        },
+      ]);
+      db.query.moduleItems.findMany.mockResolvedValue([]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+
+      const result = await service.getAssessmentsByClass(
+        CLASS_ID,
+        { studentId: STUDENT_ID, status: 'all' },
+        { userId: STUDENT_ID, roles: ['student'] },
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].id).toBe(copiedAssessmentId);
+    });
+
+    it('should include copied template assessments only after the module gate passes', async () => {
+      const copiedAssessmentId = '00000000-0000-0000-0000-000000000099';
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+      db.query.assessments.findMany.mockResolvedValue([
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: copiedAssessmentId,
+          isPublished: true,
+          isCoreTemplateAsset: true,
+        },
+      ]);
+      db.query.moduleItems.findMany.mockResolvedValue([
+        {
+          isGiven: true,
+          isVisible: true,
+          section: {
+            module: {
+              classId: CLASS_ID,
+              isVisible: true,
+              isLocked: false,
+            },
+          },
+        },
+      ]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+
+      const result = await service.getAssessmentsByClass(
+        CLASS_ID,
+        { studentId: STUDENT_ID, status: 'all' },
+        { userId: STUDENT_ID, roles: ['student'] },
+      );
+
+      expect(result.total).toBe(1);
+      expect(result.data[0].id).toBe(copiedAssessmentId);
     });
 
     it('should reject teacher class listing when class ownership metadata is missing', async () => {
@@ -445,6 +600,27 @@ describe('AssessmentsService', () => {
       );
 
       expect(result.title).toBe('Updated');
+    });
+
+    it('should allow teachers to edit copied template assessment content', async () => {
+      const copiedDraft = {
+        ...MOCK_ASSESSMENT,
+        isCoreTemplateAsset: true,
+        class: { teacherId: 'teacher-1' },
+      };
+      const updated = { ...copiedDraft, title: 'Updated Core Quiz' };
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(copiedDraft)
+        .mockResolvedValueOnce(updated);
+      mockUpdateReturning(db, [updated]);
+
+      const result = await service.updateAssessment(
+        ASSESSMENT_ID,
+        { title: 'Updated Core Quiz' } as any,
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result.title).toBe('Updated Core Quiz');
     });
 
     it('should reject publish when there are no questions', async () => {
@@ -577,6 +753,84 @@ describe('AssessmentsService', () => {
   // startAttempt — multi-attempt logic
   // ═══════════════════════════════════════════════════════════════════════════
 
+  describe('releaseCoreAssessment', () => {
+    it('returns the published assessment even when notification enqueue fails', async () => {
+      const linkedItem = {
+        id: 'item-1',
+        assessmentId: ASSESSMENT_ID,
+        itemOrder: 1,
+        title: 'Activity 1.1',
+        maxScore: '5',
+        category: {
+          id: 'cat-1',
+          name: 'Written Works',
+        },
+        classRecord: {
+          id: 'record-1',
+          classId: CLASS_ID,
+          gradingPeriod: 'Q1',
+        },
+        scores: [],
+      };
+      const coreDraft = {
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isPublished: false,
+        isCoreTemplateAsset: true,
+        title: 'Activity 1.1',
+        classRecordCategory: 'written_work',
+        quarter: 'Q1',
+        class: { teacherId: 'teacher-1' },
+      };
+      const publishedCore = {
+        ...coreDraft,
+        isPublished: true,
+      };
+
+      db.query.assessments.findFirst
+        .mockResolvedValueOnce(coreDraft)
+        .mockResolvedValueOnce(coreDraft)
+        .mockResolvedValueOnce(publishedCore);
+      db.query.classRecordItems.findFirst.mockResolvedValue(linkedItem);
+      db.query.classRecordItems.findMany.mockResolvedValue([linkedItem]);
+      mockUpdateReturning(db, [
+        {
+          ...publishedCore,
+          class: undefined,
+        },
+      ]);
+      assessmentNotificationDispatch.enqueueAssessmentAssigned.mockRejectedValueOnce(
+        new Error('queue unavailable'),
+      );
+
+      const result = await service.releaseCoreAssessment(
+        ASSESSMENT_ID,
+        { isPublished: true },
+        { userId: 'teacher-1', roles: ['teacher'] },
+      );
+
+      expect(result.isPublished).toBe(true);
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'assessment.core_release_updated',
+          targetId: ASSESSMENT_ID,
+        }),
+      );
+      expect(
+        assessmentNotificationDispatch.enqueueAssessmentAssigned,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: ASSESSMENT_ID,
+          classId: CLASS_ID,
+          title: 'Activity 1.1',
+          isPublished: true,
+        }),
+      );
+      expect(
+        assessmentNotificationDispatch.rescheduleAssessmentDueReminder,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
   describe('class record placement', () => {
     it('links a manually selected class record slot to the assessment', async () => {
       const updatedAssessment = {
@@ -702,6 +956,30 @@ describe('AssessmentsService', () => {
   describe('startAttempt', () => {
     it('should reject if assessment is not published', async () => {
       db.query.assessments.findFirst.mockResolvedValue(MOCK_ASSESSMENT); // isPublished: false
+
+      await expect(
+        service.startAttempt(STUDENT_ID, ASSESSMENT_ID),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should reject copied template attempts until the module gate passes', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_PUBLISHED_ASSESSMENT,
+        isCoreTemplateAsset: true,
+      });
+      db.query.moduleItems.findMany.mockResolvedValue([
+        {
+          isGiven: false,
+          isVisible: true,
+          section: {
+            module: {
+              classId: CLASS_ID,
+              isVisible: true,
+              isLocked: false,
+            },
+          },
+        },
+      ]);
 
       await expect(
         service.startAttempt(STUDENT_ID, ASSESSMENT_ID),
@@ -1100,6 +1378,126 @@ describe('AssessmentsService', () => {
         assessmentId: ASSESSMENT_ID,
         responses: [{ questionId: QUESTION_ID, selectedOptionId: OPTION_ID_B }],
         timeSpentSeconds: 30,
+      });
+
+      expect(result.score).toBe(0);
+      expect(result.passed).toBe(false);
+    });
+
+    it('should auto-grade fill_blank answers using smart case-insensitive matching by default', async () => {
+      db.query.assessments.findFirst.mockResolvedValue(
+        MOCK_FILL_BLANK_ASSESSMENT,
+      );
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
+      mockInsert(db, [
+        {
+          id: 'resp-fill-blank-1',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          studentAnswer: 'ApPle',
+          isCorrect: true,
+          pointsEarned: 5,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 100,
+          passed: true,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [{ questionId: QUESTION_ID, studentAnswer: 'ApPle' }],
+        timeSpentSeconds: 90,
+      });
+
+      expect(result.score).toBe(100);
+      expect(result.passed).toBe(true);
+    });
+
+    it('should auto-grade fill_blank answers using experimental smart cleaning when enabled', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_FILL_BLANK_ASSESSMENT,
+        questions: [
+          {
+            ...MOCK_FILL_BLANK_QUESTION,
+            conceptTags: ['fill_blank:experimental_smart_match'],
+          },
+        ],
+      });
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
+      mockInsert(db, [
+        {
+          id: 'resp-fill-blank-2',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          studentAnswer: '----AppL--e',
+          isCorrect: true,
+          pointsEarned: 5,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 100,
+          passed: true,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [{ questionId: QUESTION_ID, studentAnswer: '----AppL--e' }],
+        timeSpentSeconds: 90,
+      });
+
+      expect(result.score).toBe(100);
+      expect(result.passed).toBe(true);
+    });
+
+    it('should honor disabled smart case matching for fill_blank when configured as case-sensitive', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_FILL_BLANK_ASSESSMENT,
+        questions: [
+          {
+            ...MOCK_FILL_BLANK_QUESTION,
+            conceptTags: ['fill_blank:smart_case_sensitive'],
+          },
+        ],
+      });
+      db.query.assessmentAttempts.findFirst.mockResolvedValue(MOCK_ATTEMPT);
+
+      mockUpdateReturning(db, [{ ...MOCK_ATTEMPT, isSubmitted: true }]);
+      mockInsert(db, [
+        {
+          id: 'resp-fill-blank-3',
+          attemptId: ATTEMPT_ID,
+          questionId: QUESTION_ID,
+          studentAnswer: 'ApPle',
+          isCorrect: false,
+          pointsEarned: 0,
+        },
+      ]);
+      mockUpdateReturning(db, [
+        {
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          score: 0,
+          passed: false,
+        },
+      ]);
+
+      const result = await service.submitAssessment(STUDENT_ID, {
+        assessmentId: ASSESSMENT_ID,
+        responses: [{ questionId: QUESTION_ID, studentAnswer: 'ApPle' }],
+        timeSpentSeconds: 90,
       });
 
       expect(result.score).toBe(0);

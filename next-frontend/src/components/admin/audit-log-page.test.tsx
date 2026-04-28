@@ -65,6 +65,14 @@ describe('AuditLogPage', () => {
     await waitFor(() =>
       expect(screen.getByText('No audit entries found')).toBeInTheDocument(),
     );
+
+    fireEvent.change(screen.getByPlaceholderText('Search logs...'), {
+      target: { value: '2026-03-27 09:00' },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('Jamie Cruz (student)')).toBeInTheDocument(),
+    );
   });
 
   it('fetches the next audit page and resets to page 1 when filters change', async () => {

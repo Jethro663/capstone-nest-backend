@@ -1,0 +1,108 @@
+schemaVersion: "1.0"
+engineVersion: "1.0"
+exportedAt: "2026-04-19T00:00:00.000Z"
+
+template:
+  id: "11111111-1111-1111-1111-111111111111"
+  name: "Quarter 1 Algebra Template"
+  subjectCode: "MATH-7"
+  subjectGradeLevel: "7"
+  status: "draft"
+  notes: "Canonical lesson engine sample manifest"
+
+modules:
+  - id: "22222222-2222-2222-2222-222222222221"
+    title: "Module 1: Integers"
+    description: "<p>Start with integer foundations.</p>"
+    order: 1
+    sections:
+      - id: "33333333-3333-3333-3333-333333333331"
+        title: "Warm-up"
+        description: "<p>Introduce signed numbers.</p>"
+        order: 1
+        items:
+          - id: "44444444-4444-4444-4444-444444444441"
+            itemType: "lesson"
+            order: 1
+            lessonId: "55555555-5555-5555-5555-555555555551"
+            isRequired: true
+          - id: "44444444-4444-4444-4444-444444444442"
+            itemType: "assessment"
+            order: 2
+            assessmentId: "66666666-6666-6666-6666-666666666661"
+            isRequired: true
+
+lessons:
+  - id: "55555555-5555-5555-5555-555555555551"
+    title: "Integers Basics"
+    summary: "<p>Understand positive and negative numbers.</p>"
+    order: 1
+    blocks:
+      - id: "77777777-7777-7777-7777-777777777771"
+        blockType: "text"
+        blockVersion: 1
+        order: 1
+        payload:
+          content: "<p>Integers are whole numbers and their opposites.</p>"
+          metadata: {}
+      - id: "77777777-7777-7777-7777-777777777772"
+        blockType: "question"
+        blockVersion: 1
+        order: 2
+        payload:
+          content: "<p>Give one real-world example of a negative integer.</p>"
+          metadata:
+            promptType: "reflection"
+
+assessments:
+  - id: "66666666-6666-6666-6666-666666666661"
+    title: "Quiz 1"
+    description: "<p>Check understanding.</p>"
+    type: "quiz"
+    dueDateOffsetDays: 3
+    settings:
+      randomizeQuestions: false
+      closeWhenDue: true
+      maxAttempts: 1
+    totalPoints: 10
+    order: 1
+    questions:
+      - id: "88888888-8888-8888-8888-888888888881"
+        type: "multiple_choice"
+        content: "<p>What is -2 + 5?</p>"
+        points: 1
+        order: 1
+        isRequired: true
+        options:
+          - id: "99999999-9999-9999-9999-999999999991"
+            text: "3"
+            isCorrect: true
+            order: 1
+          - id: "99999999-9999-9999-9999-999999999992"
+            text: "7"
+            isCorrect: false
+            order: 2
+
+announcements:
+  - id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"
+    title: "Welcome"
+    content: "<p>Complete Module 1 this week.</p>"
+    isPinned: true
+    order: 1
+
+chunks:
+  - id: "chunk.lesson.55555555-5555-5555-5555-555555555551.77777777-7777-7777-7777-777777777771"
+    sourceType: "lesson_block"
+    sourceId: "77777777-7777-7777-7777-777777777771"
+    chunkOrder: 1
+    content: "Integers Basics\nIntegers are whole numbers and their opposites."
+    metadata:
+      lessonId: "55555555-5555-5555-5555-555555555551"
+      blockType: "text"
+  - id: "chunk.assessment.66666666-6666-6666-6666-666666666661.88888888-8888-8888-8888-888888888881"
+    sourceType: "assessment_question"
+    sourceId: "88888888-8888-8888-8888-888888888881"
+    chunkOrder: 2
+    content: "Quiz 1\nWhat is -2 + 5?"
+    metadata:
+      assessmentId: "66666666-6666-6666-6666-666666666661"

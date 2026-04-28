@@ -1,5 +1,4 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { useTeacherClassRecord } from './use-teacher-class-record';
 import { classRecordService } from '@/services/class-record-service';
@@ -24,20 +23,44 @@ jest.mock('@/lib/class-record-template-export', () => ({
   exportClassRecordTemplateWorkbook: jest.fn(),
 }));
 
-jest.mock('xlsx', () => {
-  const actual = jest.requireActual('xlsx');
+jest.mock('exceljs', () => {
+  class Worksheet {
+    columns = [];
+    addRow = jest.fn();
+    mergeCells = jest.fn();
+    getRow = jest.fn(() => ({}));
+  }
+
+  class Workbook {
+    worksheet = new Worksheet();
+    xlsx = {
+      writeBuffer: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    };
+    addWorksheet = jest.fn(() => this.worksheet);
+  }
+
   return {
-    ...actual,
-    writeFile: jest.fn(),
+    __esModule: true,
+    default: { Workbook },
   };
 });
 
 describe('useTeacherClassRecord export fallback', () => {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    URL.createObjectURL = jest.fn(() => 'blob:class-record');
+    URL.revokeObjectURL = jest.fn();
   });
 
-  it('falls back to SheetJS exporter when template export fails', async () => {
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectUrl;
+    URL.revokeObjectURL = originalRevokeObjectUrl;
+  });
+
+  it('falls back to ExcelJS exporter when template export fails', async () => {
     (classRecordService.getByClass as jest.Mock).mockResolvedValue({
       data: [
         {
@@ -103,7 +126,6 @@ describe('useTeacherClassRecord export fallback', () => {
       new Error('template failed'),
     );
 
-    const aoaSpy = jest.spyOn(XLSX.utils, 'aoa_to_sheet');
     const { result } = renderHook(() => useTeacherClassRecord('class-1'));
 
     await waitFor(() => expect(result.current.selectedRecord).not.toBeNull());
@@ -114,8 +136,7 @@ describe('useTeacherClassRecord export fallback', () => {
     });
 
     expect(exportClassRecordTemplateWorkbook).toHaveBeenCalledTimes(1);
-    expect(aoaSpy).toHaveBeenCalledTimes(1);
-    expect(XLSX.writeFile).toHaveBeenCalledTimes(1);
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledWith('Workbook export downloaded');
   });
 });

@@ -84,7 +84,7 @@ function getWorkbookSheetName(header: SpreadsheetData['header']) {
       .join(' ');
   }
 
-  return 'WORKBOOK';
+  return 'CLASS RECORD';
 }
 
 function getWorkbookTitle(header: SpreadsheetData['header']) {
@@ -145,7 +145,7 @@ function getGenderGroups(students: SpreadsheetStudentRow[]) {
 export function TeacherClassRecordWorkbook({
   state,
   className,
-  emptyMessage = 'No class record yet. Generate a quarter to start building the workbook.',
+  emptyMessage = 'No class record yet. Generate a quarter to start building the class record.',
 }: TeacherClassRecordWorkbookProps) {
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const {
@@ -274,7 +274,7 @@ export function TeacherClassRecordWorkbook({
           <CardContent className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
             <ClipboardList className="h-8 w-8 text-primary/70" />
             <div className="space-y-1">
-              <p className="font-medium text-foreground">Workbook not created yet</p>
+              <p className="font-medium text-foreground">Class record not created yet</p>
               <p className="text-sm">{emptyMessage}</p>
             </div>
           </CardContent>
@@ -296,7 +296,7 @@ export function TeacherClassRecordWorkbook({
                     <div className="space-y-2">
                       <Badge className="border-white/12 bg-white/6 text-white backdrop-blur">
                         <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                        {workbookMeta.sheetName || spreadsheet.header.templateLabel || 'Workbook View'}
+                        {workbookMeta.sheetName || spreadsheet.header.templateLabel || 'Class Record View'}
                       </Badge>
                       <div>
                         <p className="text-xs uppercase tracking-[0.35em] text-white/70">
@@ -306,7 +306,7 @@ export function TeacherClassRecordWorkbook({
                           {spreadsheet.header.subject || 'Untitled Subject'}
                         </h2>
                         <p className="mt-1 max-w-2xl text-sm text-white/80">
-                          Workbook-aligned class record with exact sheet grouping, live scoring,
+                          Class record with exact sheet grouping, live scoring,
                           and cleaner day-to-day interaction.
                         </p>
                       </div>
@@ -395,7 +395,7 @@ export function TeacherClassRecordWorkbook({
                       className="gap-2 rounded-full"
                     >
                       <Download className="h-4 w-4" />
-                      Export Workbook
+                      Export Class Record
                     </Button>
                   </div>
                 </div>
@@ -1031,7 +1031,7 @@ export function TeacherClassRecordWorkbook({
       <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalize quarter workbook</DialogTitle>
+            <DialogTitle>Finalize quarter class record</DialogTitle>
             <DialogDescription>
               Finalizing saves the computed grades for this quarter and prevents
               further editing until you reopen it.

@@ -6,6 +6,12 @@ const DASHBOARD_ROLE_PREFIXES: Record<DashboardRole, string> = {
   admin: '/dashboard/admin',
 };
 
+const DASHBOARD_ROLE_DEFAULT_ROUTES: Record<DashboardRole, string> = {
+  student: '/dashboard/student',
+  teacher: '/dashboard/teacher/classes',
+  admin: '/dashboard/admin',
+};
+
 function hasRolePrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
@@ -32,7 +38,7 @@ export function getDefaultDashboardRouteForRole(
     return '/dashboard';
   }
 
-  return DASHBOARD_ROLE_PREFIXES[normalizedRole];
+  return DASHBOARD_ROLE_DEFAULT_ROUTES[normalizedRole];
 }
 
 export function getDashboardScopedRoleFromPath(pathname: string): DashboardRole | null {

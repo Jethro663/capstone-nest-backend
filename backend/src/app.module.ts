@@ -40,6 +40,7 @@ import { SchoolEventsModule } from './modules/school-events/school-events.module
 import { JaModule } from './modules/ja/ja.module';
 import { ClassTemplatesModule } from './modules/class-templates/class-templates.module';
 import { DiscussionBoardModule } from './modules/discussion-board/discussion-board.module';
+import { AcademicStateModule } from './modules/academic-state/academic-state.module';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
@@ -99,6 +100,7 @@ import ollamaConfig from './config/ollama.config';
     JaModule,
     ClassTemplatesModule,
     DiscussionBoardModule,
+    AcademicStateModule,
   ],
   providers: [
     {

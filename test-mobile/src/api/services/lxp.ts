@@ -1,11 +1,12 @@
 import { apiClient } from "../client";
 import { normalizeArray, normalizeObject, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type { EligibilityResponse, EligibleClass, LxpCheckpoint, PlaylistResponse } from "../../types/lxp";
+import type { EligibilityResponse, EligibleClass, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary, PlaylistResponse } from "../../types/lxp";
 
 const emptyEligibility = (): EligibilityResponse => ({
   threshold: 0,
   eligibleClasses: [],
+  paths: [],
 });
 
 const emptyPlaylist = (): PlaylistResponse => ({
@@ -18,6 +19,7 @@ const emptyPlaylist = (): PlaylistResponse => ({
   },
   progress: {
     xpTotal: 0,
+    starsTotal: 0,
     streakDays: 0,
     checkpointsCompleted: 0,
     completionPercent: 0,
@@ -32,6 +34,7 @@ export const lxpApi = {
     return {
       ...payload,
       eligibleClasses: normalizeArray<EligibleClass>(payload.eligibleClasses),
+      paths: normalizeArray<LxpPathSummary>(payload.paths),
     };
   },
 
@@ -58,5 +61,10 @@ export const lxpApi = {
       progress: normalizeObject(payload.progress, emptyPlaylist().progress),
       checkpoints: normalizeArray<LxpCheckpoint>(payload.checkpoints),
     };
+  },
+
+  async getOverview(classId: string) {
+    const response = await apiClient.get<ApiEnvelope<LxpOverviewResponse>>(`/lxp/me/overview/${classId}`);
+    return unwrapEnvelope(response.data);
   },
 };

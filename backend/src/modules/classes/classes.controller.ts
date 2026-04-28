@@ -14,6 +14,7 @@ import {
   Res,
   UploadedFile,
   UseInterceptors,
+  Logger,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -36,6 +37,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { parsePositiveIntQuery } from '../../common/utils/parse-positive-int-query.util';
 import { Public } from '../auth/decorators/public.decorator';
+import { AiProxyService } from '../ai-mentor/ai-proxy.service';
 
 const CLASS_BANNER_UPLOAD_DEST = './uploads/class-banners';
 
@@ -68,7 +70,12 @@ const bannerMulterOptions = {
 @Controller('classes')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ClassesController {
-  constructor(private classesService: ClassesService) {}
+  private readonly logger = new Logger(ClassesController.name);
+
+  constructor(
+    private readonly classesService: ClassesService,
+    private readonly aiProxy: AiProxyService,
+  ) {}
 
   /**
    * Backward-compatible classes listing endpoint.
@@ -347,6 +354,27 @@ export class ClassesController {
       user?.userId,
       user?.roles ?? [],
     );
+
+    if (createClassDto.templateId && newClass?.id) {
+      void this.aiProxy
+        .forward(
+          'POST',
+          `/index/classes/${newClass.id}`,
+          {
+            id: user?.userId,
+            email: user?.email ?? '',
+            roles: user?.roles ?? [],
+          },
+          undefined,
+        )
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `Automatic class indexing failed for ${newClass.id}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        });
+    }
 
     return {
       success: true,

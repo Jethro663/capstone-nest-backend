@@ -1,70 +1,87 @@
 import { api } from '@/lib/api-client';
 
+export interface RosterParsedName {
+  lastName: string;
+  firstName: string;
+  middleInitial: string | null;
+}
+
 export interface RosterImportPreview {
-  sectionMatch: { id: string; name: string; gradeLevel: string };
+  sectionMatch: {
+    fileHeader: string;
+    foundSection: { id: string; name: string; gradeLevel: string };
+  };
   registered: RosterRegisteredRow[];
   pending: RosterPendingRow[];
   errors: RosterErrorRow[];
   summary: {
-    total: number;
-    registered: number;
-    pending: number;
-    errors: number;
+    totalDataRows: number;
+    validRows: number;
+    registeredCount: number;
+    alreadyEnrolledCount: number;
+    pendingCount: number;
+    errorCount: number;
   };
 }
 
 export interface RosterRegisteredRow {
   rowNumber: number;
   email: string;
-  firstName: string;
-  lastName: string;
-  lrn?: string;
+  name: RosterParsedName;
+  lrn: string;
   userId: string;
-  status: string;
+  alreadyEnrolled: boolean;
+  status?: string;
 }
 
 export interface RosterPendingRow {
   rowNumber: number;
   email: string;
-  firstName: string;
-  lastName: string;
-  lrn?: string;
-  reason: string;
+  name: RosterParsedName;
+  lrn: string;
+  reason?: string;
 }
 
 export interface RosterErrorRow {
   rowNumber: number;
+  rawData?: string[];
   email?: string;
-  error: string;
+  issues: string[];
 }
 
 export interface CommitStudentRow {
   userId: string;
-  lrn?: string;
+  name: RosterParsedName;
+  lrn: string;
+  email: string;
 }
 
 export interface CommitPendingRow {
+  name: RosterParsedName;
+  lrn: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  lrn?: string;
 }
 
 export interface RosterImportCommitDto {
-  registered: CommitStudentRow[];
-  pending: CommitPendingRow[];
+  sectionId: string;
+  enrolledRows: CommitStudentRow[];
+  pendingRows: CommitPendingRow[];
 }
 
 export interface PendingImportRow {
   id: string;
   sectionId: string;
-  email: string;
+  email?: string;
+  rosterEmail?: string;
   firstName: string;
   lastName: string;
+  middleInitial?: string | null;
   lrn?: string;
   resolvedUserId?: string;
-  status: string;
-  createdAt: string;
+  resolvedAt?: string | null;
+  status?: string;
+  createdAt?: string;
+  importedAt?: string;
 }
 
 export const rosterImportService = {

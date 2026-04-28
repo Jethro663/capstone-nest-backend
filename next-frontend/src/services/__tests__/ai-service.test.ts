@@ -5,6 +5,7 @@ jest.mock('@/lib/api-client', () => ({
   api: {
     post: jest.fn(),
     get: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -50,7 +51,7 @@ describe('aiService', () => {
         degraded: true,
         data: {
           jobId: 'job-9',
-          status: 'invalid-status',
+          status: 'cancelled',
           progressPercent: '42.5',
           errorMessage: 'connect ECONNREFUSED',
         },
@@ -63,9 +64,70 @@ describe('aiService', () => {
     expect(result.data).toMatchObject({
       jobId: 'job-9',
       jobType: 'unknown',
-      status: 'processing',
+      status: 'cancelled',
       progressPercent: 42.5,
       errorMessage: 'connect ECONNREFUSED',
+    });
+  });
+
+  it('fetches class index readiness', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          classId: 'class-1',
+          chunksIndexed: 0,
+          lessonChunks: 0,
+          extractionChunks: 0,
+          questionChunks: 0,
+          isStale: true,
+          needsReindex: true,
+          readyLessons: [],
+          lessonBlockers: [],
+          readyExtractions: [],
+          extractionBlockers: [],
+          sourceSummary: {
+            lessons: { total: 1, ready: 0, blocked: 1 },
+            extractions: { total: 0, ready: 0, blocked: 0 },
+            questions: {
+              assessments: 0,
+              assessmentsWithQuestions: 0,
+              questionCount: 0,
+              needsIndex: 0,
+            },
+          },
+        },
+      },
+    });
+
+    const result = await aiService.getClassIndexStatus('class-1');
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/ai/index/classes/class-1/status');
+    expect(result.data.needsReindex).toBe(true);
+    expect(result.data.sourceSummary.lessons.blocked).toBe(1);
+  });
+
+  it('normalizes cancelled delete-job responses', async () => {
+    mockedApi.delete.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          jobId: 'job-delete',
+          jobType: 'quiz_generation',
+          status: 'cancelled',
+          progressPercent: 100,
+          statusMessage: 'Draft removed',
+        },
+      },
+    });
+
+    const result = await aiService.deleteTeacherJob('job-delete');
+
+    expect(mockedApi.delete).toHaveBeenCalledWith('/ai/teacher/jobs/job-delete');
+    expect(result.data).toMatchObject({
+      jobId: 'job-delete',
+      status: 'cancelled',
+      progressPercent: 100,
     });
   });
 

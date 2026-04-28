@@ -21,7 +21,7 @@ describe('isDashboardRolePathAllowed', () => {
 describe('getDefaultDashboardRouteForRole', () => {
   it('maps known roles to their scoped dashboard route', () => {
     expect(getDefaultDashboardRouteForRole('admin')).toBe('/dashboard/admin');
-    expect(getDefaultDashboardRouteForRole('teacher')).toBe('/dashboard/teacher');
+    expect(getDefaultDashboardRouteForRole('teacher')).toBe('/dashboard/teacher/classes');
     expect(getDefaultDashboardRouteForRole('student')).toBe('/dashboard/student');
   });
 
@@ -34,7 +34,7 @@ describe('getDefaultDashboardRouteForRole', () => {
 describe('resolvePostLoginDestination', () => {
   it('routes known roles directly to their scoped dashboard home', () => {
     expect(resolvePostLoginDestination('admin')).toBe('/dashboard/admin');
-    expect(resolvePostLoginDestination('teacher')).toBe('/dashboard/teacher');
+    expect(resolvePostLoginDestination('teacher')).toBe('/dashboard/teacher/classes');
   });
 
   it('preserves shared dashboard routes after login', () => {

@@ -10,6 +10,7 @@ import { winstonLogger } from './common/logger/winston.config';
 import { WinstonLoggerService } from './common/logger/winston-logger.service';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import express from 'express';
 
 function parseOriginList(value?: string): string[] {
   if (!value) return [];
@@ -53,7 +54,7 @@ function buildAllowedOrigins(isProd: boolean): string[] {
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
 
   // Register Winston as the global logger
   app.useLogger(new WinstonLoggerService(winstonLogger));
@@ -83,6 +84,9 @@ async function bootstrap() {
   // Helmet — strict in production; disable CSP in development so Swagger UI
   // can load its inline scripts and CDN assets without being blocked.
   app.use(isProd ? helmet() : helmet({ contentSecurityPolicy: false }));
+  const requestBodyLimit = process.env.REQUEST_BODY_LIMIT ?? '10mb';
+  app.use(express.json({ limit: requestBodyLimit }));
+  app.use(express.urlencoded({ extended: true, limit: requestBodyLimit }));
 
   // Global validation pipe
   app.useGlobalPipes(

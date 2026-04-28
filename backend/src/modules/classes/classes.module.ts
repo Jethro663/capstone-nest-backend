@@ -6,9 +6,18 @@ import {
 import { ClassesService } from './classes.service';
 import { DatabaseModule } from '../../database/database.module';
 import { AuditModule } from '../audit/audit.module';
+import { ClassRecordModule } from '../class-record/class-record.module';
+import { AcademicStateModule } from '../academic-state/academic-state.module';
+import { AiMentorModule } from '../ai-mentor/ai-mentor.module';
 
 @Module({
-  imports: [DatabaseModule, AuditModule],
+  imports: [
+    DatabaseModule,
+    AuditModule,
+    ClassRecordModule,
+    AcademicStateModule,
+    AiMentorModule,
+  ],
   controllers: [ClassesController, ClassesPublicController],
   providers: [ClassesService],
   exports: [ClassesService],

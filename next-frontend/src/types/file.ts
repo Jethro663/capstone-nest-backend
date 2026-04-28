@@ -7,6 +7,7 @@ export interface UploadedFile {
   subjectKey?: LibrarySubjectKey | null;
   gradeLevel?: LibraryGradeLevel | null;
   teacherVisible?: boolean;
+  aiEnabled?: boolean;
   indexStatus?: LibraryIndexStatus;
   indexError?: string | null;
   indexedAt?: string | null;
@@ -50,7 +51,7 @@ export type LibraryIndexStatus =
   | 'processing'
   | 'completed'
   | 'failed';
-export type LibraryFileKind = 'pdf' | 'txt' | 'pptx';
+export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'image';
 
 export const LIBRARY_SUBJECTS: Array<{ key: LibrarySubjectKey; label: string }> = [
   { key: 'math', label: 'Math' },
@@ -97,6 +98,7 @@ export interface FileLibraryQuery {
   subjectKey?: LibrarySubjectKey;
   gradeLevel?: LibraryGradeLevel;
   teacherVisible?: boolean;
+  aiEnabled?: boolean;
   indexStatus?: LibraryIndexStatus;
   search?: string;
   page?: number;

@@ -1,6 +1,8 @@
 import { render, waitFor } from '@testing-library/react';
 import StudentLessonViewPage from './page';
+import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
+import { moduleService } from '@/services/module-service';
 
 const back = jest.fn();
 const push = jest.fn();
@@ -33,11 +35,28 @@ jest.mock('@/services/lesson-service', () => ({
   },
 }));
 
+jest.mock('@/services/class-service', () => ({
+  classService: {
+    getById: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/module-service', () => ({
+  moduleService: {
+    getByClass: jest.fn(),
+    downloadAttachedFile: jest.fn(),
+  },
+}));
+
 const mockedLessonService = lessonService as jest.Mocked<typeof lessonService>;
+const mockedClassService = classService as jest.Mocked<typeof classService>;
+const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
 
 describe('StudentLessonViewPage module-route redirect', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedClassService.getById.mockReset();
+    mockedModuleService.getByClass.mockReset();
     mockedLessonService.getById.mockResolvedValue({
       success: true,
       message: 'ok',

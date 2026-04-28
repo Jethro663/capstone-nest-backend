@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { AlertTriangle, RefreshCw, ShieldAlert, TrendingUp, Users } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { performanceService } from '@/services/performance-service';
@@ -18,10 +18,11 @@ import {
 } from '@/components/ui/table';
 import {
   TeacherEmptyState,
+  TeacherHeaderMetric,
   TeacherPageShell,
   TeacherSectionCard,
-  TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
+import { cn } from '@/utils/cn';
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
 import type {
@@ -33,6 +34,8 @@ import type {
   PerformanceAnalysisStructuredOutput,
   PerformanceStudentRow,
 } from '@/types/performance';
+
+type PerformanceWorkspaceView = 'performance' | 'data';
 
 function toPercent(value: number | null): string {
   if (value === null) return '--';
@@ -99,6 +102,7 @@ export default function TeacherPerformancePage() {
   const [loadingData, setLoadingData] = useState(false);
   const [recomputing, setRecomputing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<PerformanceWorkspaceView>('performance');
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
@@ -272,6 +276,38 @@ export default function TeacherPerformancePage() {
           ? `Student performance monitoring with at-risk threshold ${threshold}%.`
           : 'Student performance monitoring'
       }
+      headerStats={
+        <>
+          <TeacherHeaderMetric
+            label="Total Students"
+            value={summary?.totalStudents ?? 0}
+            caption={`${summary?.studentsWithData ?? 0} with data snapshots`}
+            accent="sky"
+          />
+          <TeacherHeaderMetric
+            label="Passing"
+            value={
+              summary && summary.totalStudents > 0
+                ? summary.totalStudents - summary.atRiskCount
+                : 0
+            }
+            caption="Students currently above risk threshold"
+            accent="teal"
+          />
+          <TeacherHeaderMetric
+            label="At Risk"
+            value={summary?.atRiskCount ?? 0}
+            caption={`${(summary?.atRiskRate ?? 0).toFixed(1)}% of selected class`}
+            accent="rose"
+          />
+          <TeacherHeaderMetric
+            label="Class Average"
+            value={toPercent(summary?.averages.blended ?? null)}
+            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} blended average` : 'No class selected'}
+            accent="amber"
+          />
+        </>
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -297,42 +333,6 @@ export default function TeacherPerformancePage() {
           </Button>
         </div>
       }
-      stats={
-        <>
-          <TeacherStatCard
-            label="Total Students"
-            value={summary?.totalStudents ?? 0}
-            caption={`${summary?.studentsWithData ?? 0} with data snapshots`}
-            icon={Users}
-            accent="sky"
-          />
-          <TeacherStatCard
-            label="Passing"
-            value={
-              summary && summary.totalStudents > 0
-                ? summary.totalStudents - summary.atRiskCount
-                : 0
-            }
-            caption="Students currently above risk threshold"
-            icon={TrendingUp}
-            accent="teal"
-          />
-          <TeacherStatCard
-            label="At Risk"
-            value={summary?.atRiskCount ?? 0}
-            caption={`${(summary?.atRiskRate ?? 0).toFixed(1)}% of selected class`}
-            icon={ShieldAlert}
-            accent="rose"
-          />
-          <TeacherStatCard
-            label="Class Average"
-            value={toPercent(summary?.averages.blended ?? null)}
-            caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} blended average` : 'No class selected'}
-            icon={AlertTriangle}
-            accent="amber"
-          />
-        </>
-      }
     >
       {!selectedClassId ? (
         <TeacherSectionCard
@@ -356,257 +356,292 @@ export default function TeacherPerformancePage() {
 
       {selectedClassId && !loadingData ? (
         <>
-          <div className="grid gap-4 xl:grid-cols-[1.7fr_1fr] teacher-figma-stagger">
-            <TeacherSectionCard
-              title="At-Risk Students"
-              description="Latest blended score flags for intervention prioritization."
-            >
-              {(atRisk?.students.length ?? 0) === 0 ? (
-                <TeacherEmptyState
-                  title="No at-risk students found"
-                  description="This class is currently stable based on latest computed scores."
-                />
-              ) : (
-                <div className="teacher-table-shell">
-                  <Table>
-                    <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                      <TableRow className="border-white/10 hover:bg-transparent">
-                        <TableHead>Student</TableHead>
-                        <TableHead>Assessment</TableHead>
-                        <TableHead>Class Record</TableHead>
-                        <TableHead>Blended</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">AI</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="[&_tr:last-child]:border-0">
-                      {(atRisk?.students ?? []).map((student) => (
-                        <TableRow key={student.studentId} className="teacher-table-row border-white/10">
-                          <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                            {formatStudentName(student)}
-                          </TableCell>
-                          <TableCell className="text-[var(--teacher-text-strong)]">
-                            {toPercent(student.assessmentAverage)}
-                          </TableCell>
-                          <TableCell className="text-[var(--teacher-text-strong)]">
-                            {toPercent(student.classRecordAverage)}
-                          </TableCell>
-                          <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                            {toPercent(student.blendedScore)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className="teacher-badge-danger border-0">At Risk</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="teacherOutline"
-                              className="rounded-lg"
-                              disabled={analyzing}
-                              onClick={() => handleAnalyze(student.studentId)}
-                            >
-                              Analyze
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+          <div
+            className="teacher-interventions-view-switcher teacher-figma-stagger w-fit"
+            aria-label="Performance workspace view"
+          >
+            <button
+              type="button"
+              className={cn(
+                'teacher-interventions-view-switcher__tab',
+                workspaceView === 'performance'
+                  ? 'is-active text-white'
+                  : 'text-[var(--teacher-text-muted)]',
               )}
-            </TeacherSectionCard>
+              onClick={() => setWorkspaceView('performance')}
+            >
+              Performance
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'teacher-interventions-view-switcher__tab',
+                workspaceView === 'data'
+                  ? 'is-active text-white'
+                  : 'text-[var(--teacher-text-muted)]',
+              )}
+              onClick={() => setWorkspaceView('data')}
+            >
+              Data
+            </button>
+          </div>
 
-            <div className="space-y-4">
-              <TeacherSectionCard title="Class Snapshot">
-                <div className="space-y-3 text-sm">
-                  <div className="teacher-figma-kv">
-                    <span>Threshold</span>
-                    <strong>{threshold !== null ? `${threshold}%` : '--'}</strong>
-                  </div>
-                  <div className="teacher-figma-kv">
-                    <span>Students With Data</span>
-                    <strong>{summary?.studentsWithData ?? 0}</strong>
-                  </div>
-                  <div className="teacher-figma-kv">
-                    <span>Average Assessment</span>
-                    <strong>{toPercent(summary?.averages.assessment ?? null)}</strong>
-                  </div>
-                  <div className="teacher-figma-kv">
-                    <span>Average Class Record</span>
-                    <strong>{toPercent(summary?.averages.classRecord ?? null)}</strong>
-                  </div>
-                </div>
-              </TeacherSectionCard>
-
-              <TeacherSectionCard title="Risk Readiness">
-                {(summary?.atRiskCount ?? 0) > 0 ? (
-                  <div className="teacher-soft-panel rounded-[12px] border border-[#fecaca] px-3 py-3 text-sm text-[var(--teacher-text-strong)]">
-                    <p className="font-semibold text-[#b91c1c]">
-                      Intervention-ready list generated
-                    </p>
-                    <p className="mt-1 text-[var(--teacher-text-muted)]">
-                      This class has learners ready for immediate intervention planning.
-                    </p>
-                  </div>
-                ) : (
+          {workspaceView === 'performance' ? (
+            <>
+              <TeacherSectionCard
+                title="At-Risk Students"
+                description="Latest blended score flags for intervention prioritization."
+                className="teacher-figma-stagger"
+              >
+                {(atRisk?.students.length ?? 0) === 0 ? (
                   <TeacherEmptyState
-                    title="No intervention-ready learners"
-                    description="No learners currently require intervention at this threshold."
+                    title="No at-risk students found"
+                    description="This class is currently stable based on latest computed scores."
                   />
+                ) : (
+                  <div className="teacher-table-shell">
+                    <Table>
+                      <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                        <TableRow className="border-white/10 hover:bg-transparent">
+                          <TableHead>Student</TableHead>
+                          <TableHead>Assessment</TableHead>
+                          <TableHead>Class Record</TableHead>
+                          <TableHead>Blended</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">AI</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {(atRisk?.students ?? []).map((student) => (
+                          <TableRow key={student.studentId} className="teacher-table-row border-white/10">
+                            <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                              {formatStudentName(student)}
+                            </TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">
+                              {toPercent(student.assessmentAverage)}
+                            </TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">
+                              {toPercent(student.classRecordAverage)}
+                            </TableCell>
+                            <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                              {toPercent(student.blendedScore)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className="teacher-badge-danger border-0">At Risk</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="teacherOutline"
+                                className="rounded-lg"
+                                disabled={analyzing}
+                                onClick={() => handleAnalyze(student.studentId)}
+                              >
+                                Analyze
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </TeacherSectionCard>
 
               <TeacherSectionCard
-                title="Score Diagnostics"
-                description="Lowest-performing assessments and concept hotspots."
+                title="AI Learning Gap Analysis"
+                description="Class or student-level AI diagnostics powered by mistakes and lesson evidence."
+                className="teacher-figma-stagger"
               >
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <p className="font-semibold text-[var(--teacher-text-strong)]">Lowest Assessments</p>
-                    {(diagnostics?.lowestAssessments.length ?? 0) === 0 ? (
-                      <p className="text-[var(--teacher-text-muted)]">No assessment diagnostics yet.</p>
-                    ) : (
-                      <div className="mt-2 space-y-2">
-                        {diagnostics?.lowestAssessments.slice(0, 3).map((assessment) => (
-                          <div key={assessment.assessmentId} className="teacher-figma-kv">
-                            <span>{assessment.title}</span>
-                            <strong>
-                              {assessment.averageScore !== null
-                                ? `${assessment.averageScore.toFixed(1)}%`
-                                : '--'}
-                            </strong>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-[var(--teacher-text-strong)]">Top Concept Hotspots</p>
-                    {(diagnostics?.conceptHotspots.length ?? 0) === 0 ? (
-                      <p className="text-[var(--teacher-text-muted)]">No concept hotspots yet.</p>
-                    ) : (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {diagnostics?.conceptHotspots.slice(0, 4).map((concept) => (
-                          <Badge key={concept.concept} variant="outline">
-                            {concept.concept}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="teacher"
+                    className="rounded-lg"
+                    disabled={!selectedClassId || analyzing}
+                    onClick={() => handleAnalyze()}
+                  >
+                    {analyzing ? 'Analyzing...' : 'Analyze Whole Class'}
+                  </Button>
+                  {analysisTargetStudentId ? (
+                    <Badge variant="secondary">Student scope</Badge>
+                  ) : (
+                    <Badge variant="secondary">Class scope</Badge>
+                  )}
+                  {analysisJob ? (
+                    <Badge variant="outline">
+                      {analysisJob.status} ({analysisJob.progressPercent}%)
+                    </Badge>
+                  ) : null}
                 </div>
-              </TeacherSectionCard>
-            </div>
-          </div>
 
-          <TeacherSectionCard
-            title="Recent Performance Logs"
-            description="Risk state transitions from latest performance recomputations."
-            className="teacher-figma-stagger"
-          >
-            {(logs?.logs.length ?? 0) === 0 ? (
-              <TeacherEmptyState
-                title="No risk transitions recorded"
-                description="Risk transition logs will appear once state changes are detected."
-              />
-            ) : (
-              <div className="teacher-table-shell">
-                <Table>
-                  <TableHeader className="teacher-table-head [&_tr]:border-white/15">
-                    <TableRow className="border-white/10 hover:bg-transparent">
-                      <TableHead>When</TableHead>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Transition</TableHead>
-                      <TableHead>Blended</TableHead>
-                      <TableHead>Trigger</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="[&_tr:last-child]:border-0">
-                    {(logs?.logs ?? []).map((entry) => (
-                      <TableRow key={entry.id} className="teacher-table-row border-white/10">
-                        <TableCell className="text-[var(--teacher-text-strong)]">
-                          {formatDateTime(entry.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">
-                          {formatLogStudent(entry)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge className={entry.previousIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
-                              {entry.previousIsAtRisk ? 'At Risk' : 'Stable'}
-                            </Badge>
-                            <span className="text-xs uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">to</span>
-                            <Badge className={entry.currentIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
-                              {entry.currentIsAtRisk ? 'At Risk' : 'Stable'}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">{toPercent(entry.blendedScore)}</TableCell>
-                        <TableCell className="text-[var(--teacher-text-strong)]">{formatTriggerSource(entry.triggerSource)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </TeacherSectionCard>
-
-          <TeacherSectionCard
-            title="AI Learning Gap Analysis"
-            description="Class or student-level AI diagnostics powered by mistakes and lesson evidence."
-            className="teacher-figma-stagger"
-          >
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <Button
-                variant="teacher"
-                className="rounded-lg"
-                disabled={!selectedClassId || analyzing}
-                onClick={() => handleAnalyze()}
-              >
-                {analyzing ? 'Analyzing...' : 'Analyze Whole Class'}
-              </Button>
-              {analysisTargetStudentId ? (
-                <Badge variant="secondary">Student scope</Badge>
-              ) : (
-                <Badge variant="secondary">Class scope</Badge>
-              )}
-              {analysisJob ? (
-                <Badge variant="outline">
-                  {analysisJob.status} ({analysisJob.progressPercent}%)
-                </Badge>
-              ) : null}
-            </div>
-
-            {!analysisResult ? (
-              <TeacherEmptyState
-                title="No AI analysis yet"
-                description="Run an AI analysis to identify learning gaps and evidence-backed interventions."
-              />
-            ) : (
-              <div className="space-y-4">
-                <div className="teacher-soft-panel rounded-[12px] border border-white/15 px-3 py-3 text-sm">
-                  <p className="font-semibold text-[var(--teacher-text-strong)]">
-                    {analysisResult.recommendedIntervention.status === 'insufficient_evidence'
-                      ? 'Insufficient evidence'
-                      : 'Actionable analysis ready'}
-                  </p>
-                  <p className="text-[var(--teacher-text-muted)]">
-                    {analysisResult.teacherActions[0] ?? 'No teacher action provided.'}
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  {analysisResult.learningGaps.slice(0, 6).map((gap) => (
-                    <div key={gap.concept} className="teacher-figma-kv">
-                      <span>{gap.concept}</span>
-                      <strong>
-                        {gap.masteryScore}% mastery · {gap.wrongCount} misses
-                      </strong>
+                {!analysisResult ? (
+                  <TeacherEmptyState
+                    title="No AI analysis yet"
+                    description="Run an AI analysis to identify learning gaps and evidence-backed interventions."
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <div className="teacher-soft-panel rounded-[12px] border border-white/15 px-3 py-3 text-sm">
+                      <p className="font-semibold text-[var(--teacher-text-strong)]">
+                        {analysisResult.recommendedIntervention.status === 'insufficient_evidence'
+                          ? 'Insufficient evidence'
+                          : 'Actionable analysis ready'}
+                      </p>
+                      <p className="text-[var(--teacher-text-muted)]">
+                        {analysisResult.teacherActions[0] ?? 'No teacher action provided.'}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <div className="grid gap-2">
+                      {analysisResult.learningGaps.slice(0, 6).map((gap) => (
+                        <div key={gap.concept} className="teacher-figma-kv">
+                          <span>{gap.concept}</span>
+                          <strong>
+                            {gap.masteryScore}% mastery · {gap.wrongCount} misses
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </TeacherSectionCard>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-4 xl:grid-cols-3 teacher-figma-stagger">
+                <TeacherSectionCard title="Class Snapshot">
+                  <div className="space-y-3 text-sm">
+                    <div className="teacher-figma-kv">
+                      <span>Threshold</span>
+                      <strong>{threshold !== null ? `${threshold}%` : '--'}</strong>
+                    </div>
+                    <div className="teacher-figma-kv">
+                      <span>Students With Data</span>
+                      <strong>{summary?.studentsWithData ?? 0}</strong>
+                    </div>
+                    <div className="teacher-figma-kv">
+                      <span>Average Assessment</span>
+                      <strong>{toPercent(summary?.averages.assessment ?? null)}</strong>
+                    </div>
+                    <div className="teacher-figma-kv">
+                      <span>Average Class Record</span>
+                      <strong>{toPercent(summary?.averages.classRecord ?? null)}</strong>
+                    </div>
+                  </div>
+                </TeacherSectionCard>
+
+                <TeacherSectionCard title="Risk Readiness">
+                  {(summary?.atRiskCount ?? 0) > 0 ? (
+                    <div className="teacher-soft-panel rounded-[12px] border border-[#fecaca] px-3 py-3 text-sm text-[var(--teacher-text-strong)]">
+                      <p className="font-semibold text-[#b91c1c]">
+                        Intervention-ready list generated
+                      </p>
+                      <p className="mt-1 text-[var(--teacher-text-muted)]">
+                        This class has learners ready for immediate intervention planning.
+                      </p>
+                    </div>
+                  ) : (
+                    <TeacherEmptyState
+                      title="No intervention-ready learners"
+                      description="No learners currently require intervention at this threshold."
+                    />
+                  )}
+                </TeacherSectionCard>
+
+                <TeacherSectionCard
+                  title="Score Diagnostics"
+                  description="Lowest-performing assessments and concept hotspots."
+                >
+                  <div className="space-y-3 text-sm">
+                    <div>
+                      <p className="font-semibold text-[var(--teacher-text-strong)]">Lowest Assessments</p>
+                      {(diagnostics?.lowestAssessments.length ?? 0) === 0 ? (
+                        <p className="text-[var(--teacher-text-muted)]">No assessment diagnostics yet.</p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {diagnostics?.lowestAssessments.slice(0, 3).map((assessment) => (
+                            <div key={assessment.assessmentId} className="teacher-figma-kv">
+                              <span>{assessment.title}</span>
+                              <strong>
+                                {assessment.averageScore !== null
+                                  ? `${assessment.averageScore.toFixed(1)}%`
+                                  : '--'}
+                              </strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-[var(--teacher-text-strong)]">Top Concept Hotspots</p>
+                      {(diagnostics?.conceptHotspots.length ?? 0) === 0 ? (
+                        <p className="text-[var(--teacher-text-muted)]">No concept hotspots yet.</p>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {diagnostics?.conceptHotspots.slice(0, 4).map((concept) => (
+                            <Badge key={concept.concept} variant="outline">
+                              {concept.concept}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </TeacherSectionCard>
               </div>
-            )}
-          </TeacherSectionCard>
+
+              <TeacherSectionCard
+                title="Recent Performance Logs"
+                description="Risk state transitions from latest performance recomputations."
+                className="teacher-figma-stagger"
+              >
+                {(logs?.logs.length ?? 0) === 0 ? (
+                  <TeacherEmptyState
+                    title="No risk transitions recorded"
+                    description="Risk transition logs will appear once state changes are detected."
+                  />
+                ) : (
+                  <div className="teacher-table-shell">
+                    <Table>
+                      <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                        <TableRow className="border-white/10 hover:bg-transparent">
+                          <TableHead>When</TableHead>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Transition</TableHead>
+                          <TableHead>Blended</TableHead>
+                          <TableHead>Trigger</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="[&_tr:last-child]:border-0">
+                        {(logs?.logs ?? []).map((entry) => (
+                          <TableRow key={entry.id} className="teacher-table-row border-white/10">
+                            <TableCell className="text-[var(--teacher-text-strong)]">
+                              {formatDateTime(entry.createdAt)}
+                            </TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">
+                              {formatLogStudent(entry)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={entry.previousIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
+                                  {entry.previousIsAtRisk ? 'At Risk' : 'Stable'}
+                                </Badge>
+                                <span className="text-xs uppercase tracking-[0.12em] text-[var(--teacher-text-muted)]">to</span>
+                                <Badge className={entry.currentIsAtRisk ? 'teacher-badge-danger border-0' : 'teacher-badge-success border-0'}>
+                                  {entry.currentIsAtRisk ? 'At Risk' : 'Stable'}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">{toPercent(entry.blendedScore)}</TableCell>
+                            <TableCell className="text-[var(--teacher-text-strong)]">{formatTriggerSource(entry.triggerSource)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TeacherSectionCard>
+            </>
+          )}
         </>
       ) : null}
     </TeacherPageShell>

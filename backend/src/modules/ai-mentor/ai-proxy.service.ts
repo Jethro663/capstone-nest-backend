@@ -11,6 +11,7 @@ export class AiProxyService {
   private readonly logger = new Logger(AiProxyService.name);
   private readonly baseUrl: string;
   private readonly chatTimeoutMs: number;
+  private readonly quizTimeoutMs: number;
   private readonly extractionTimeoutMs: number;
   private readonly sharedSecret: string;
 
@@ -19,6 +20,10 @@ export class AiProxyService {
       this.config.get<string>('AI_SERVICE_URL') || 'http://localhost:8000';
     this.chatTimeoutMs = parseInt(
       this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '70000',
+      10,
+    );
+    this.quizTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_QUIZ_MS') || '180000',
       10,
     );
     this.extractionTimeoutMs = parseInt(
@@ -38,6 +43,9 @@ export class AiProxyService {
       path.startsWith('/student/ja/')
     ) {
       return this.chatTimeoutMs;
+    }
+    if (path.startsWith('/teacher/quizzes/')) {
+      return this.quizTimeoutMs;
     }
     return this.extractionTimeoutMs;
   }
@@ -102,10 +110,32 @@ export class AiProxyService {
       return payload;
     } catch (err) {
       clearTimeout(timer);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
+      const message = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `AI service request failed: ${err instanceof Error ? err.message : String(err)}`,
+        `AI service request failed: ${message}`,
       );
-      throw err;
+
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new HttpException(
+          {
+            message:
+              'AI service request timed out. Try again shortly or restart the AI service.',
+          },
+          504,
+        );
+      }
+
+      throw new HttpException(
+        {
+          message:
+            'AI service is unavailable. Start the AI service and try again.',
+        },
+        503,
+      );
     }
   }
 }

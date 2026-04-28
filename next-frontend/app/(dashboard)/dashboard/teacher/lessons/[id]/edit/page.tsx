@@ -1,15 +1,20 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpenText,
   CircleHelp,
-  FileStack,
+  GripVertical,
   History,
   ImageIcon,
   Minus,
+  MoreHorizontal,
   Paperclip,
   PencilLine,
   Plus,
@@ -27,30 +32,79 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
-import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+import { normalizeRichText } from '@/lib/rich-text';
 import { toast } from 'sonner';
-import {
-  TeacherPageShell,
-  TeacherSectionCard,
-  TeacherStatCard,
-} from '@/components/teacher/TeacherPageShell';
-import { plainTextToRichHtml } from '@/lib/rich-text';
+import { TeacherSectionCard } from '@/components/teacher/TeacherPageShell';
+import { classService } from '@/services/class-service';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
 import type { LessonVersion } from '@/types/lesson';
+import type { ClassItem } from '@/types/class';
+import {
+  createStructuredLessonBlockContent,
+  normalizeStructuredLessonBlock,
+  type StructuredLessonTextVariant,
+} from '@/features/lesson-blocks/structured-content';
+import {
+  LessonBlockTeacherEditor,
+  LessonBlockTeacherPreview,
+} from '@/features/lesson-blocks/LessonBlockTeacherEditor';
 
-const BLOCK_TYPES = [
+type LessonBlockPaletteItem = {
+  type: CreateContentBlockDto['type'];
+  variant?: StructuredLessonTextVariant;
+  label: string;
+  hint: string;
+  icon: typeof PencilLine;
+};
+
+const BLOCK_TYPES: ReadonlyArray<LessonBlockPaletteItem> = [
   {
     type: 'text',
-    label: 'Text',
+    variant: 'body',
+    label: 'Body paragraph',
     hint: 'Use this for explanations, instructions, or summaries.',
+    icon: PencilLine,
+  },
+  {
+    type: 'text',
+    variant: 'objectives',
+    label: 'Learning objectives',
+    hint: 'Highlight what learners should reach by the end of the lesson.',
+    icon: Sparkles,
+  },
+  {
+    type: 'text',
+    variant: 'key_points',
+    label: 'Key points',
+    hint: 'Emphasize the ideas students need to remember.',
+    icon: BookOpenText,
+  },
+  {
+    type: 'text',
+    variant: 'example',
+    label: 'Worked example',
+    hint: 'Add a concrete example that makes the concept easier to understand.',
     icon: PencilLine,
   },
   {
     type: 'image',
     label: 'Image',
-    hint: 'Paste an image URL for diagrams or visual examples.',
+    hint: 'Upload or select a secure image from Nexora Library.',
     icon: ImageIcon,
   },
   {
@@ -61,14 +115,28 @@ const BLOCK_TYPES = [
   },
   {
     type: 'question',
-    label: 'Question',
+    label: 'Checkpoint',
     hint: 'Add a reflection prompt or quick learner checkpoint.',
     icon: CircleHelp,
   },
   {
+    type: 'text',
+    variant: 'recap',
+    label: 'Recap',
+    hint: 'Close the lesson with a short summary of the core idea.',
+    icon: Rocket,
+  },
+  {
+    type: 'text',
+    variant: 'reflection',
+    label: 'Reflection',
+    hint: 'Ask learners to connect the lesson to what they already know.',
+    icon: Sparkles,
+  },
+  {
     type: 'file',
     label: 'File',
-    hint: 'Link to a worksheet, PDF, or external supporting file.',
+    hint: 'Upload or select a worksheet, PDF, text file, or deck.',
     icon: Paperclip,
   },
   {
@@ -77,58 +145,28 @@ const BLOCK_TYPES = [
     hint: 'Break the lesson into clearer parts without extra text.',
     icon: Minus,
   },
-] as const satisfies Array<{
-  type: CreateContentBlockDto['type'];
-  label: string;
-  hint: string;
-  icon: typeof PencilLine;
-}>;
-
-function getDefaultBlockContent(type: CreateContentBlockDto['type']): string {
-  switch (type) {
-    case 'text':
-      return 'Start writing the core explanation for this lesson section.';
-    case 'image':
-      return 'https://';
-    case 'video':
-      return 'https://';
-    case 'question':
-      return 'Add a short checkpoint question for learners.';
-    case 'file':
-      return 'https://';
-    case 'divider':
-      return 'Section break';
-    default:
-      return 'New content block';
-  }
-}
-
-function getBlockTextValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-    return JSON.stringify(content, null, 2);
-  }
-  return '';
-}
-
-function getBlockUrlValue(content: ContentBlock['content']): string {
-  if (typeof content === 'string') return content;
-  if (content && typeof content === 'object') {
-    const maybeUrl = content.url;
-    if (typeof maybeUrl === 'string') return maybeUrl;
-    const maybeText = content.text;
-    if (typeof maybeText === 'string') return maybeText;
-  }
-  return '';
-}
+] as const;
 
 function normalizeRichValue(input?: string | null) {
-  const text = (input || '').trim();
-  if (!text) return '';
-  if (/<[a-z][\s\S]*>/i.test(text)) return text;
-  return plainTextToRichHtml(text);
+  return normalizeRichText(input || '').trim();
+}
+
+function reorderBlocksLocally(items: ContentBlock[], fromIndex: number, toIndex: number) {
+  const next = items.slice();
+  const [moved] = next.splice(fromIndex, 1);
+  if (!moved) return items;
+  next.splice(toIndex, 0, moved);
+  return next.map((block, index) => ({ ...block, order: index + 1 }));
+}
+
+function isNestedInteractiveTarget(
+  event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLElement>,
+) {
+  if (!(event.target instanceof Element)) return false;
+  const interactive = event.target.closest(
+    'button, a, input, textarea, select, [contenteditable="true"], [role="button"]',
+  );
+  return Boolean(interactive && interactive !== event.currentTarget);
 }
 
 export default function LessonEditorPage() {
@@ -138,19 +176,33 @@ export default function LessonEditorPage() {
   const lessonId = params.id as string;
 
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reorderingBlocks, setReorderingBlocks] = useState(false);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addBlockDialogOpen, setAddBlockDialogOpen] = useState(false);
+  const [insertAfterIndex, setInsertAfterIndex] = useState<number | null>(null);
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
+  const [dropTargetBlockId, setDropTargetBlockId] = useState<string | null>(null);
+  const [hideFloatingAdd, setHideFloatingAdd] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
   const [versions, setVersions] = useState<LessonVersion[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string>('');
   const [creatingVersion, setCreatingVersion] = useState(false);
   const [restoringVersion, setRestoringVersion] = useState(false);
+  const [snapshotDropdownOpen, setSnapshotDropdownOpen] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
+  const detailsSaveInFlightRef = useRef(false);
+  const lastSavedDetailsRef = useRef<{ title: string; description: string }>({
+    title: '',
+    description: '',
+  });
+  const [detailsDirty, setDetailsDirty] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -160,9 +212,25 @@ export default function LessonEditorPage() {
         lessonService.getVersions(lessonId),
       ]);
       setLesson(res.data);
+      if (res.data.classId) {
+        const classResponse = await classService.getById(res.data.classId).catch(() => null);
+        setClassItem(classResponse?.data ?? null);
+      } else {
+        setClassItem(null);
+      }
       setTitle(res.data.title);
-      setDescription(normalizeRichValue(res.data.description));
-      setBlocks((res.data.contentBlocks || []).sort((a, b) => a.order - b.order));
+      const normalizedDescription = normalizeRichValue(res.data.description);
+      setDescription(normalizedDescription);
+      lastSavedDetailsRef.current = {
+        title: res.data.title,
+        description: normalizedDescription,
+      };
+      setDetailsDirty(false);
+      setBlocks(
+        (res.data.contentBlocks || [])
+          .sort((a, b) => a.order - b.order)
+          .map((block) => normalizeStructuredLessonBlock(block)),
+      );
       setVersions(versionsRes.data || []);
       setSelectedVersionId((versionsRes.data || [])[0]?.id ?? '');
     } catch {
@@ -186,41 +254,182 @@ export default function LessonEditorPage() {
     fetchData();
   }, [fetchData]);
 
-  const handleSaveDetails = async () => {
+  const persistLessonDetails = useCallback(async (
+    options?: { notify?: boolean },
+  ) => {
+    const normalizedTitle = title.trim();
+    const normalizedDescription = normalizeRichValue(description);
+
+    if (!normalizedTitle) {
+      if (options?.notify) {
+        toast.error('Lesson title is required');
+      }
+      return;
+    }
+
+    if (
+      normalizedTitle === lastSavedDetailsRef.current.title &&
+      normalizedDescription === lastSavedDetailsRef.current.description
+    ) {
+      setDetailsDirty(false);
+      return;
+    }
+
+    if (detailsSaveInFlightRef.current) {
+      return;
+    }
+
     try {
+      detailsSaveInFlightRef.current = true;
       setSaving(true);
-      await lessonService.update(lessonId, { title, description });
+      await lessonService.update(lessonId, {
+        title: normalizedTitle,
+        description: normalizedDescription,
+      });
+      setLesson((prev) => (
+        prev
+          ? {
+              ...prev,
+              title: normalizedTitle,
+              description: normalizedDescription,
+            }
+          : prev
+      ));
+      lastSavedDetailsRef.current = {
+        title: normalizedTitle,
+        description: normalizedDescription,
+      };
+      setDetailsDirty(false);
       await refreshVersions();
-      toast.success('Lesson details saved');
+      if (options?.notify) {
+        toast.success('Lesson details saved');
+      }
     } catch {
-      toast.error('Failed to save lesson details');
+      if (options?.notify) {
+        toast.error('Failed to save lesson details');
+      } else {
+        toast.error('Autosave failed. Use Save Changes to retry.');
+      }
     } finally {
+      detailsSaveInFlightRef.current = false;
       setSaving(false);
     }
+  }, [description, lessonId, refreshVersions, title]);
+
+  const handleSaveDetails = async () => {
+    await persistLessonDetails({ notify: true });
   };
 
-  const handlePublish = async () => {
+  useEffect(() => {
+    if (loading) return;
+
+    const normalizedTitle = title.trim();
+    const normalizedDescription = normalizeRichValue(description);
+    const hasChanges =
+      normalizedTitle !== lastSavedDetailsRef.current.title ||
+      normalizedDescription !== lastSavedDetailsRef.current.description;
+    setDetailsDirty(hasChanges);
+
+    if (!hasChanges) return;
+
+    const timer = window.setTimeout(() => {
+      void persistLessonDetails({ notify: false });
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [description, loading, persistLessonDetails, title]);
+
+  useEffect(() => {
+    const observerTarget = bottomSentinelRef.current;
+    if (!observerTarget) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setHideFloatingAdd(Boolean(entries[0]?.isIntersecting));
+      },
+      { root: null, threshold: 0.12 },
+    );
+    observer.observe(observerTarget);
+    return () => observer.disconnect();
+  }, [blocks.length]);
+
+  const persistBlockOrder = useCallback(async (
+    nextBlocks: ContentBlock[],
+    options?: { silent?: boolean },
+  ) => {
+    setReorderingBlocks(true);
     try {
-      await lessonService.publish(lessonId);
-      setLesson((prev) => (prev ? { ...prev, isDraft: false } : prev));
+      await lessonService.reorderBlocks(lessonId, {
+        blocks: nextBlocks.map((block, index) => ({
+          id: block.id,
+          order: index + 1,
+        })),
+      });
       await refreshVersions();
-      toast.success('Lesson published');
+      if (!options?.silent) {
+        toast.success('Block order updated');
+      }
     } catch {
-      toast.error('Failed to publish lesson');
+      toast.error('Failed to save block order');
+      await fetchData();
+    } finally {
+      setReorderingBlocks(false);
+    }
+  }, [fetchData, lessonId, refreshVersions]);
+
+  const handlePublishToggle = async () => {
+    if (!lesson) return;
+    try {
+      if (lesson.isDraft) {
+        await lessonService.publish(lessonId);
+        setLesson((prev) => (prev ? { ...prev, isDraft: false } : prev));
+        toast.success('Lesson published');
+      } else {
+        await lessonService.update(lessonId, { isDraft: true });
+        setLesson((prev) => (prev ? { ...prev, isDraft: true } : prev));
+        toast.success('Lesson moved back to draft');
+      }
+      await refreshVersions();
+    } catch {
+      toast.error('Failed to update lesson status');
     }
   };
 
-  const handleAddBlock = async (type: CreateContentBlockDto['type']) => {
+  const handleOpenAddDialog = (afterIndex: number | null = null) => {
+    setInsertAfterIndex(afterIndex);
+    setAddBlockDialogOpen(true);
+  };
+
+  const handleAddBlock = async (
+    type: CreateContentBlockDto['type'],
+    options?: { variant?: StructuredLessonTextVariant },
+  ) => {
     try {
       const dto: CreateContentBlockDto = {
         type,
         order: blocks.length + 1,
-        content: getDefaultBlockContent(type),
+        content: createStructuredLessonBlockContent(type, options?.variant),
+        metadata:
+          type === 'text' && options?.variant
+            ? { variant: options.variant }
+            : type === 'question'
+              ? { correctAnswers: [], explanation: '', points: 0 }
+              : undefined,
       };
       const res = await lessonService.createBlock(lessonId, dto);
-      setBlocks((prev) => [...prev, res.data]);
+      const createdBlock = normalizeStructuredLessonBlock(res.data);
+      const appended = [...blocks, createdBlock];
+      const shouldInsertAfter = insertAfterIndex !== null && insertAfterIndex < blocks.length;
+      const nextBlocks = shouldInsertAfter
+        ? reorderBlocksLocally(appended, appended.length - 1, insertAfterIndex + 1)
+        : appended;
+      setBlocks(nextBlocks);
       await refreshVersions();
-      setShowAddMenu(false);
+      setAddBlockDialogOpen(false);
+      setInsertAfterIndex(null);
+      if (shouldInsertAfter) {
+        await persistBlockOrder(nextBlocks, { silent: true });
+      }
       if (type !== 'divider') setEditingBlockId(res.data.id);
       toast.success('Block added');
     } catch {
@@ -228,11 +437,30 @@ export default function LessonEditorPage() {
     }
   };
 
-  const handleUpdateBlock = async (blockId: string, content: string) => {
+  const handleDropReorder = async (targetBlockId: string) => {
+    const sourceBlockId = draggingBlockId;
+    setDraggingBlockId(null);
+    setDropTargetBlockId(null);
+
+    if (!sourceBlockId || sourceBlockId === targetBlockId) return;
+
+    const fromIndex = blocks.findIndex((block) => block.id === sourceBlockId);
+    const toIndex = blocks.findIndex((block) => block.id === targetBlockId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+    const nextBlocks = reorderBlocksLocally(blocks, fromIndex, toIndex);
+    setBlocks(nextBlocks);
+    await persistBlockOrder(nextBlocks, { silent: true });
+  };
+
+  const handleUpdateBlock = async (
+    blockId: string,
+    patch: { content: ContentBlock['content']; metadata?: ContentBlock['metadata'] },
+  ) => {
     try {
-      await lessonService.updateBlock(blockId, { content });
+      await lessonService.updateBlock(blockId, patch);
       setBlocks((prev) => prev.map((block) => (
-        block.id === blockId ? { ...block, content } : block
+        block.id === blockId ? normalizeStructuredLessonBlock({ ...block, ...patch }) : block
       )));
       setEditingBlockId(null);
       await refreshVersions();
@@ -313,81 +541,101 @@ export default function LessonEditorPage() {
 
   if (!lesson) return <p className="text-muted-foreground">Lesson not found.</p>;
 
+  const latestSnapshotLabel = versions[0]
+    ? `v${versions[0].versionNumber} - ${versions[0].type.toUpperCase()}`
+    : 'No snapshots yet';
+
   return (
     <>
-      <TeacherPageShell
-        className={role === 'admin' ? 'theme-admin-bridge max-w-5xl mx-auto' : 'max-w-5xl mx-auto'}
-        badge="Lesson Studio"
-        title="Edit Lesson"
-        description="Refine lesson details and build the content flow one block at a time from a cleaner editor."
-        actions={(
-          <>
-            <Button variant="outline" size="sm" onClick={() => router.back()} className="teacher-button-outline rounded-xl font-black">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCreateManualSnapshot}
-              disabled={creatingVersion}
-              className="teacher-button-outline rounded-xl font-black"
-            >
-              <History className="h-4 w-4" />
-              {creatingVersion ? 'Saving Snapshot...' : 'Save Snapshot'}
-            </Button>
-            <Button
-              variant={lesson.isDraft ? 'teacher' : 'secondary'}
-              onClick={handlePublish}
-              disabled={!lesson.isDraft}
-              className={lesson.isDraft ? 'rounded-xl font-black' : 'rounded-xl font-black border-emerald-200 bg-emerald-50 text-emerald-700'}
-            >
-              <Rocket className="h-4 w-4" />
-              {lesson.isDraft ? 'Publish Lesson' : 'Published'}
-            </Button>
-          </>
-        )}
-        stats={(
-          <>
-            <TeacherStatCard label="Lesson Title" value={lesson.title} caption="Current lesson identity" icon={BookOpenText} accent="sky" />
-            <TeacherStatCard label="Content Blocks" value={blocks.length} caption="Editable lesson sections" icon={FileStack} accent="teal" />
-            <TeacherStatCard label="Status" value={lesson.isDraft ? 'Draft' : 'Published'} caption={lesson.isDraft ? 'Ready for review and publishing' : 'Visible to learners'} icon={Sparkles} accent="amber" />
-          </>
-        )}
-      >
-        <TeacherSectionCard
-          title="Lesson Version Management"
-          description="Use snapshots to rollback lesson details and block content safely."
-        >
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-            <div className="space-y-2">
-              <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Available Snapshots</Label>
-              <select
-                value={selectedVersionId}
-                onChange={(event) => setSelectedVersionId(event.target.value)}
-                className="teacher-input h-12 w-full rounded-2xl"
+      <div className={role === 'admin' ? 'theme-admin-bridge mx-auto max-w-5xl space-y-5 pb-8' : 'mx-auto max-w-5xl space-y-5 pb-8'}>
+        <header className="sticky top-3 z-30 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_20px_48px_-34px_rgba(15,23,42,0.28)] backdrop-blur">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.back()}
+                className="teacher-button-outline rounded-xl font-black"
               >
-                {versions.length === 0 ? (
-                  <option value="">No snapshots yet</option>
-                ) : (
-                  versions.map((version) => (
-                    <option key={version.id} value={version.id}>
-                      v{version.versionNumber} • {version.type.toUpperCase()} • {new Date(version.createdAt).toLocaleString()}
-                    </option>
-                  ))
-                )}
-              </select>
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-[var(--teacher-text-strong)]">
+                  {title || lesson.title}
+                </p>
+                <p className="truncate text-xs text-[var(--teacher-text-muted)]">
+                  {lesson.isDraft ? 'Draft' : 'Published'} - {blocks.length} block{blocks.length === 1 ? '' : 's'} - {latestSnapshotLabel}
+                </p>
+              </div>
             </div>
-            <Button
-              onClick={handleRestoreVersion}
-              disabled={!selectedVersionId || restoringVersion || versions.length === 0}
-              className="teacher-button-solid rounded-xl font-black"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {restoringVersion ? 'Restoring...' : 'Restore Snapshot'}
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCreateManualSnapshot}
+                disabled={creatingVersion}
+                className="teacher-button-outline rounded-xl font-black"
+              >
+                <History className="h-4 w-4" />
+                {creatingVersion ? 'Saving...' : 'Save Snapshot'}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handlePublishToggle}
+                className={lesson.isDraft
+                  ? 'teacher-button-solid rounded-xl font-black'
+                  : 'rounded-xl border border-amber-300 bg-amber-50 font-black text-amber-800 hover:bg-amber-100'}
+              >
+                <Rocket className="h-4 w-4" />
+                {lesson.isDraft ? 'Publish' : 'Unpublish'}
+              </Button>
+
+              <DropdownMenu open={snapshotDropdownOpen} onOpenChange={setSnapshotDropdownOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[320px] rounded-2xl border-slate-200 bg-white p-3">
+                  <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
+                    <div>
+                      <p className="text-sm font-black text-[var(--teacher-text-strong)]">Restore snapshot</p>
+                      <p className="text-xs text-[var(--teacher-text-muted)]">Pick a saved version to roll back this lesson.</p>
+                    </div>
+                    <select
+                      value={selectedVersionId}
+                      onChange={(event) => setSelectedVersionId(event.target.value)}
+                      className="teacher-input h-10 w-full rounded-xl"
+                    >
+                      {versions.length === 0 ? (
+                        <option value="">No snapshots yet</option>
+                      ) : (
+                        versions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            v{version.versionNumber} - {version.type.toUpperCase()} - {new Date(version.createdAt).toLocaleString()}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <Button
+                      onClick={() => {
+                        setSnapshotDropdownOpen(false);
+                        void handleRestoreVersion();
+                      }}
+                      disabled={!selectedVersionId || restoringVersion || versions.length === 0}
+                      className="teacher-button-solid w-full rounded-xl font-black"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      {restoringVersion ? 'Restoring...' : 'Restore Snapshot'}
+                    </Button>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
-        </TeacherSectionCard>
+        </header>
 
         <TeacherSectionCard
           title="Lesson Details"
@@ -407,7 +655,14 @@ export default function LessonEditorPage() {
                 placeholder="Write lesson context, goals, and what students should expect in this lesson."
               />
             </div>
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                {saving
+                  ? 'Saving lesson details...'
+                  : detailsDirty
+                    ? 'Unsaved changes. Autosaving in 5 seconds.'
+                    : 'All detail changes saved.'}
+              </p>
               <Button onClick={handleSaveDetails} disabled={saving} className="teacher-button-solid rounded-xl font-black">
                 <PencilLine className="h-4 w-4" />
                 {saving ? 'Saving...' : 'Save Changes'}
@@ -418,197 +673,240 @@ export default function LessonEditorPage() {
 
         <TeacherSectionCard
           title={`Content Blocks (${blocks.length})`}
-          description="Add the next section from the quick builder, then polish one block at a time."
+          description={blocks.length === 0
+            ? 'Quick start: choose your first block.'
+            : 'Drag blocks to reorder. Add blocks between sections as you review the flow.'}
           action={(
-            <div className="relative">
-              <Button size="sm" onClick={() => setShowAddMenu((prev) => !prev)} className="teacher-button-solid rounded-xl font-black">
-                <Plus className="h-4 w-4" />
-                Add Block
-              </Button>
-              {showAddMenu ? (
-                <div className="absolute right-0 top-full z-10 mt-2 grid min-w-[320px] gap-2 rounded-3xl border border-white/35 bg-white/95 p-3 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.3)] backdrop-blur">
+            <Button size="sm" onClick={() => handleOpenAddDialog(null)} className="teacher-button-solid rounded-xl font-black">
+              <Plus className="h-4 w-4" />
+              Add Block
+            </Button>
+          )}
+        >
+          <div className="space-y-4">
+            {reorderingBlocks ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
+                Saving block order...
+              </div>
+            ) : null}
+
+            {blocks.length === 0 ? (
+              <div className="space-y-3">
+                <div className="rounded-[1.5rem] border border-dashed border-[var(--teacher-outline)] bg-white/55 px-6 py-8 text-center text-sm text-[var(--teacher-text-muted)]">
+                  No content blocks yet. Start quickly by choosing one below.
+                </div>
+                <div className="grid gap-3 lg:grid-cols-3">
                   {BLOCK_TYPES.map((blockType) => {
                     const Icon = blockType.icon;
                     return (
                       <button
-                        key={blockType.type}
-                        onClick={() => handleAddBlock(blockType.type)}
-                        className="flex w-full items-start gap-3 rounded-2xl border border-slate-200/70 px-3 py-3 text-left transition hover:border-[var(--teacher-accent)]/35 hover:bg-emerald-50/60"
+                        key={`${blockType.type}-${blockType.variant ?? 'default'}-quick-start`}
+                        type="button"
+                        onClick={() => handleAddBlock(blockType.type, { variant: blockType.variant })}
+                        className="rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:bg-white"
                       >
-                        <span className="mt-0.5 rounded-xl bg-[var(--teacher-surface-soft)] p-2 text-[var(--teacher-accent-strong)]">
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className="space-y-1">
-                          <span className="block text-sm font-black text-slate-800">{blockType.label}</span>
-                          <span className="block text-xs leading-5 text-slate-500">{blockType.hint}</span>
-                        </span>
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 rounded-xl bg-white p-2 text-[var(--teacher-accent-strong)] shadow-sm">
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-black text-[var(--teacher-text-strong)]">{blockType.label}</p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--teacher-text-muted)]">{blockType.hint}</p>
+                          </div>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
-              ) : null}
-            </div>
-          )}
-        >
-          <div className="space-y-4">
-            <div className="grid gap-3 lg:grid-cols-3">
-              {BLOCK_TYPES.map((blockType) => {
-                const Icon = blockType.icon;
-                return (
-                  <button
-                    key={blockType.type}
-                    type="button"
-                    onClick={() => handleAddBlock(blockType.type)}
-                    className="rounded-[1.4rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[var(--teacher-accent)]/35 hover:bg-white"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span className="mt-0.5 rounded-xl bg-white p-2 text-[var(--teacher-accent-strong)] shadow-sm">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div>
-                        <p className="text-sm font-black text-[var(--teacher-text-strong)]">{blockType.label}</p>
-                        <p className="mt-1 text-xs leading-5 text-[var(--teacher-text-muted)]">{blockType.hint}</p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {blocks.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-dashed border-[var(--teacher-outline)] bg-white/55 px-6 py-12 text-center text-sm text-[var(--teacher-text-muted)]">
-                No content blocks yet. Start with a text block, then add media or checkpoints as needed.
               </div>
             ) : (
               <div className="space-y-3">
-                {blocks.map((block, index) => (
-                  <Card
-                    key={block.id}
-                    className="overflow-hidden rounded-[1.45rem] border-white/35 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.84))] shadow-[0_24px_48px_-34px_rgba(15,23,42,0.26)]"
-                  >
-                    <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="flex flex-1 items-start gap-4">
-                        <div className="flex min-w-[62px] flex-col items-center gap-2 rounded-2xl border border-white/60 bg-white/75 px-3 py-3 text-xs font-black text-[var(--teacher-text-muted)] shadow-sm">
-                          <span className="text-sm">##</span>
-                          <span>#{index + 1}</span>
-                        </div>
-                        <div className="flex-1 space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50/80 text-emerald-700">
-                              {block.type}
-                            </Badge>
-                            <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
-                              {editingBlockId === block.id ? 'Currently editing this block' : 'Ready to review'}
-                            </span>
+                {blocks.map((block, index) => {
+                  const isLastBlock = index === blocks.length - 1;
+                  const isEditing = editingBlockId === block.id;
+                  const canClickToEdit = block.type !== 'divider' && !isEditing;
+                  return (
+                  <div key={block.id} className="group space-y-2">
+                    <Card
+                      draggable={!isEditing}
+                      role={canClickToEdit ? 'button' : undefined}
+                      tabIndex={canClickToEdit ? 0 : undefined}
+                      aria-label={canClickToEdit ? `Edit ${block.type} block ${index + 1}` : undefined}
+                      onClick={(event) => {
+                        if (!canClickToEdit || isNestedInteractiveTarget(event)) return;
+                        setEditingBlockId(block.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (!canClickToEdit || isNestedInteractiveTarget(event)) return;
+                        if (event.key !== 'Enter' && event.key !== ' ') return;
+                        event.preventDefault();
+                        setEditingBlockId(block.id);
+                      }}
+                      onDragStart={(event) => {
+                        if (isEditing) {
+                          event.preventDefault();
+                          return;
+                        }
+                        setDraggingBlockId(block.id);
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', block.id);
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        if (draggingBlockId && draggingBlockId !== block.id) {
+                          setDropTargetBlockId(block.id);
+                        }
+                      }}
+                      onDrop={() => {
+                        void handleDropReorder(block.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingBlockId(null);
+                        setDropTargetBlockId(null);
+                      }}
+                      className={`overflow-hidden rounded-[1.45rem] border bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.84))] shadow-[0_24px_48px_-34px_rgba(15,23,42,0.26)] ${
+                        dropTargetBlockId === block.id ? 'border-emerald-300' : 'border-white/35'
+                      } ${canClickToEdit ? 'cursor-pointer transition hover:border-emerald-200 hover:shadow-[0_28px_54px_-36px_rgba(15,23,42,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 focus-visible:ring-offset-2' : ''}`}
+                    >
+                      <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex flex-1 items-start gap-4">
+                          <button
+                            type="button"
+                            className="flex min-w-[62px] cursor-grab flex-col items-center gap-2 rounded-2xl border border-white/60 bg-white/75 px-3 py-3 text-xs font-black text-[var(--teacher-text-muted)] shadow-sm"
+                            aria-label={`Drag to reorder block ${index + 1}`}
+                          >
+                            <GripVertical className="h-4 w-4" />
+                            <span>#{index + 1}</span>
+                          </button>
+                          <div className="flex-1 space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50/80 text-emerald-700">
+                                {block.type}
+                              </Badge>
+                              <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                                {isEditing ? 'Currently editing this block' : block.type === 'divider' ? 'Section divider' : 'Click block to edit'}
+                              </span>
+                            </div>
+                            {isEditing ? (
+                              <LessonBlockTeacherEditor
+                                block={block}
+                                classId={lesson.classId}
+                                classItem={classItem}
+                                onSave={(patch) => handleUpdateBlock(block.id, patch)}
+                                onCancel={() => setEditingBlockId(null)}
+                              />
+                            ) : (
+                              <LessonBlockTeacherPreview block={block} />
+                            )}
                           </div>
-                          {editingBlockId === block.id ? (
-                            <BlockEditor
-                              block={block}
-                              onSave={(content) => handleUpdateBlock(block.id, content)}
-                              onCancel={() => setEditingBlockId(null)}
-                            />
-                          ) : (
-                            <BlockPreview block={block} />
-                          )}
                         </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {block.type !== 'divider' ? (
-                          <Button variant="outline" size="sm" className="teacher-button-solid rounded-xl font-black" onClick={() => setEditingBlockId(block.id)}>
-                            <PencilLine className="mr-1 h-3.5 w-3.5" />
-                            Edit Block
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/75 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteBlock(block.id)}>
+                            <Trash2 className="mr-1 h-3.5 w-3.5" />
+                            Delete
                           </Button>
-                        ) : null}
-                        <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/75 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDeleteBlock(block.id)}>
-                          <Trash2 className="mr-1 h-3.5 w-3.5" />
-                          Delete
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <div className="flex justify-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Add block after block ${index + 1}`}
+                        onClick={() => handleOpenAddDialog(index)}
+                        className={`teacher-button-outline h-10 min-w-14 rounded-full border-[var(--teacher-accent)]/35 bg-white/95 px-4 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.42)] transition hover:scale-[1.03] hover:border-[var(--teacher-accent)]/65 hover:bg-emerald-50 ${
+                          isLastBlock
+                            ? ''
+                            : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'
+                        }`}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span className="ml-1 text-[11px] font-semibold leading-none tracking-[0.04em]">Add block</span>
+                      </Button>
+                    </div>
+                  </div>
+                );
+                })}
+                <div ref={bottomSentinelRef} className="h-2" />
               </div>
             )}
           </div>
         </TeacherSectionCard>
-      </TeacherPageShell>
+
+        {blocks.length > 0 && !hideFloatingAdd ? (
+          <Button
+            type="button"
+            onClick={() => handleOpenAddDialog(null)}
+            aria-label="Quick add content block"
+            className="fixed bottom-5 right-5 z-30 h-10 w-10 rounded-full p-0 shadow-[0_20px_36px_-20px_rgba(15,23,42,0.45)]"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        ) : null}
+      </div>
+
+      <Dialog
+        open={addBlockDialogOpen}
+        onOpenChange={(open) => {
+          setAddBlockDialogOpen(open);
+          if (!open) {
+            setInsertAfterIndex(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl rounded-3xl border-slate-200 p-0">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5">
+            <DialogTitle className="text-xl font-black text-slate-900">Add Content Block</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Pick the next block type to continue your lesson flow.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[62vh] overflow-y-auto px-6 py-5">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {BLOCK_TYPES.map((blockType) => {
+                const Icon = blockType.icon;
+                return (
+                  <button
+                    key={`${blockType.type}-${blockType.variant ?? 'default'}-dialog`}
+                    type="button"
+                    onClick={() => {
+                      void handleAddBlock(blockType.type, { variant: blockType.variant });
+                    }}
+                    className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-4 text-left transition hover:border-[var(--teacher-accent)]/35 hover:bg-emerald-50/60"
+                  >
+                    <span className="mt-0.5 rounded-xl bg-white p-2 text-[var(--teacher-accent-strong)] shadow-sm">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-black text-slate-800">{blockType.label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">{blockType.hint}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-100 px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl font-black"
+              onClick={() => {
+                setAddBlockDialogOpen(false);
+                setInsertAfterIndex(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </>
   );
 }
 
-function BlockEditor({
-  block,
-  onSave,
-  onCancel,
-}: {
-  block: ContentBlock;
-  onSave: (content: string) => void;
-  onCancel: () => void;
-}) {
-  const [value, setValue] = useState(
-    block.type === 'text' || block.type === 'question'
-      ? getBlockTextValue(block.content)
-      : getBlockUrlValue(block.content),
-  );
 
-  return (
-    <div className="space-y-3">
-      {block.type === 'text' || block.type === 'question' ? (
-        <RichTextEditor
-          value={value}
-          onChange={setValue}
-          minHeight={200}
-          placeholder={block.type === 'question' ? 'Write your prompt...' : 'Write lesson content...'}
-        />
-      ) : (
-        <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Enter ${block.type} URL...`} className="teacher-input h-12 rounded-2xl" />
-      )}
-      <div className="flex gap-2">
-        <Button size="sm" onClick={() => onSave(value)} className="teacher-button-solid rounded-xl font-black">Save</Button>
-        <Button size="sm" variant="outline" onClick={onCancel} className="teacher-button-outline rounded-xl font-black">Cancel</Button>
-      </div>
-    </div>
-  );
-}
-
-function BlockPreview({ block }: { block: ContentBlock }) {
-  const baseClass = 'rounded-2xl border border-white/60 bg-white/70 px-4 py-4 text-sm text-slate-700';
-
-  switch (block.type) {
-    case 'text':
-      return (
-        <div className={baseClass}>
-          {getBlockTextValue(block.content).trim() ? (
-            <RichTextRenderer html={normalizeRichValue(getBlockTextValue(block.content))} />
-          ) : (
-            'Empty text block'
-          )}
-        </div>
-      );
-    case 'image':
-      return <p className={baseClass}>Image URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
-    case 'video':
-      return <p className={baseClass}>Video URL: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
-    case 'question':
-      return (
-        <div className={baseClass}>
-          {getBlockTextValue(block.content).trim() ? (
-            <RichTextRenderer html={normalizeRichValue(getBlockTextValue(block.content))} />
-          ) : (
-            'Empty question block'
-          )}
-        </div>
-      );
-    case 'file':
-      return <p className={baseClass}>File link: {getBlockUrlValue(block.content) || 'No URL yet'}</p>;
-    case 'divider':
-      return (
-        <div className="rounded-2xl border border-dashed border-[var(--teacher-outline)] bg-white/60 px-4 py-4">
-          <hr className="border-[var(--teacher-outline)]" />
-        </div>
-      );
-    default:
-      return <p className={baseClass}>Unknown block type</p>;
-  }
-}

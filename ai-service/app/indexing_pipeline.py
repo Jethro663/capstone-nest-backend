@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,40 @@ from . import ollama_client
 from .embedding_provider import embed_texts, embedding_to_vector_literal
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_json_payload(value: Any, *, fallback: Any) -> Any:
+    if value is None:
+        return fallback
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return fallback
+    return value
+
+
+def _coerce_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _to_iso_datetime(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.astimezone(timezone.utc).isoformat()
 
 
 @dataclass
@@ -436,6 +471,381 @@ async def _fetch_question_rows(db: AsyncSession, class_id: str) -> list[dict[str
     return [dict(row) for row in rows.mappings()]
 
 
+async def _fetch_lesson_status_rows(db: AsyncSession, class_id: str) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        sa_text(
+            """
+            SELECT
+              l.id AS lesson_id,
+              l.title AS lesson_title,
+              l."order" AS lesson_order,
+              l.is_draft,
+              GREATEST(
+                COALESCE(l.updated_at, l.created_at),
+                COALESCE(MAX(COALESCE(b.updated_at, b.created_at)), COALESCE(l.updated_at, l.created_at))
+              ) AS source_updated_at,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'id', b.id,
+                    'type', b.type,
+                    'content', b.content
+                  )
+                  ORDER BY b."order"
+                ) FILTER (WHERE b.id IS NOT NULL),
+                '[]'::json
+              ) AS blocks_json
+            FROM lessons l
+            LEFT JOIN lesson_content_blocks b ON b.lesson_id = l.id
+            WHERE l.class_id = :classId
+            GROUP BY l.id, l.title, l."order", l.is_draft, l.updated_at, l.created_at
+            ORDER BY l."order" ASC
+            """
+        ),
+        {"classId": class_id},
+    )
+    return [dict(row) for row in rows.mappings()]
+
+
+async def _fetch_extraction_status_rows(db: AsyncSession, class_id: str) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        sa_text(
+            """
+            SELECT
+              e.id,
+              e.file_id,
+              e.class_id,
+              e.teacher_id,
+              e.extraction_status,
+              e.structured_content,
+              e.error_message,
+              e.is_applied,
+              COALESCE(e.updated_at, e.created_at) AS source_updated_at,
+              f.original_name
+            FROM extracted_modules e
+            LEFT JOIN uploaded_files f ON f.id = e.file_id
+            WHERE e.class_id = :classId
+            ORDER BY e.created_at DESC
+            """
+        ),
+        {"classId": class_id},
+    )
+    return [dict(row) for row in rows.mappings()]
+
+
+async def _fetch_assessment_status_rows(db: AsyncSession, class_id: str) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        sa_text(
+            """
+            SELECT
+              a.id AS assessment_id,
+              a.title AS assessment_title,
+              COUNT(q.id) AS question_count,
+              GREATEST(
+                COALESCE(a.updated_at, a.created_at),
+                COALESCE(MAX(COALESCE(q.updated_at, q.created_at)), COALESCE(a.updated_at, a.created_at))
+              ) AS source_updated_at
+            FROM assessments a
+            LEFT JOIN assessment_questions q ON q.assessment_id = a.id
+            WHERE a.class_id = :classId
+            GROUP BY a.id, a.title, a.updated_at, a.created_at
+            ORDER BY a.created_at DESC
+            """
+        ),
+        {"classId": class_id},
+    )
+    return [dict(row) for row in rows.mappings()]
+
+
+async def _fetch_chunk_status_rows(db: AsyncSession, class_id: str) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        sa_text(
+            """
+            SELECT
+              source_type,
+              lesson_id,
+              extraction_id,
+              assessment_id,
+              COUNT(*) AS chunk_count,
+              MAX(COALESCE(updated_at, created_at)) AS last_indexed_at
+            FROM content_chunks
+            WHERE class_id = :classId
+            GROUP BY source_type, lesson_id, extraction_id, assessment_id
+            """
+        ),
+        {"classId": class_id},
+    )
+    return [dict(row) for row in rows.mappings()]
+
+
+def build_class_index_status(
+    class_id: str,
+    *,
+    lesson_rows: list[dict[str, Any]],
+    extraction_rows: list[dict[str, Any]],
+    assessment_rows: list[dict[str, Any]],
+    chunk_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    lesson_chunk_counts: dict[str, int] = {}
+    extraction_chunk_counts: dict[str, int] = {}
+    assessment_chunk_counts: dict[str, int] = {}
+    lesson_chunks = 0
+    extraction_chunks = 0
+    question_chunks = 0
+    chunks_indexed = 0
+    last_indexed_at: datetime | None = None
+
+    for row in chunk_rows:
+        source_type = str(row.get("source_type") or "")
+        chunk_count = int(row.get("chunk_count") or 0)
+        chunks_indexed += chunk_count
+        indexed_at = _coerce_datetime(row.get("last_indexed_at"))
+        if indexed_at and (last_indexed_at is None or indexed_at > last_indexed_at):
+            last_indexed_at = indexed_at
+
+        if source_type == "lesson_block" and row.get("lesson_id"):
+            lesson_id = str(row["lesson_id"])
+            lesson_chunk_counts[lesson_id] = lesson_chunk_counts.get(lesson_id, 0) + chunk_count
+            lesson_chunks += chunk_count
+        elif source_type == "extracted_module" and row.get("extraction_id"):
+            extraction_id = str(row["extraction_id"])
+            extraction_chunk_counts[extraction_id] = extraction_chunk_counts.get(extraction_id, 0) + chunk_count
+            extraction_chunks += chunk_count
+        elif source_type == "assessment_question" and row.get("assessment_id"):
+            assessment_id = str(row["assessment_id"])
+            assessment_chunk_counts[assessment_id] = assessment_chunk_counts.get(assessment_id, 0) + chunk_count
+            question_chunks += chunk_count
+
+    latest_source_update_at: datetime | None = None
+    ready_lessons: list[dict[str, Any]] = []
+    lesson_blockers: list[dict[str, Any]] = []
+    ready_extractions: list[dict[str, Any]] = []
+    extraction_blockers: list[dict[str, Any]] = []
+    assessments_with_questions = 0
+    assessments_needing_index = 0
+    total_assessment_questions = 0
+    ready_sources_missing_index = 0
+
+    for row in lesson_rows:
+        lesson_id = str(row["lesson_id"])
+        source_updated_at = _coerce_datetime(row.get("source_updated_at"))
+        if source_updated_at and (
+            latest_source_update_at is None or source_updated_at > latest_source_update_at
+        ):
+            latest_source_update_at = source_updated_at
+        blocks = _normalize_json_payload(row.get("blocks_json"), fallback=[])
+        if not isinstance(blocks, list):
+            blocks = []
+        readable_block_count = sum(
+            1 for block in blocks if _stringify_content((block or {}).get("content")).strip()
+        )
+        chunk_count = lesson_chunk_counts.get(lesson_id, 0)
+
+        if bool(row.get("is_draft")):
+            lesson_blockers.append(
+                {
+                    "lessonId": lesson_id,
+                    "title": row.get("lesson_title") or "Untitled lesson",
+                    "reason": "Lesson is still in draft status.",
+                    "updatedAt": _to_iso_datetime(source_updated_at),
+                }
+            )
+            continue
+        if not blocks:
+            lesson_blockers.append(
+                {
+                    "lessonId": lesson_id,
+                    "title": row.get("lesson_title") or "Untitled lesson",
+                    "reason": "Lesson has no content blocks yet.",
+                    "updatedAt": _to_iso_datetime(source_updated_at),
+                }
+            )
+            continue
+        if readable_block_count == 0:
+            lesson_blockers.append(
+                {
+                    "lessonId": lesson_id,
+                    "title": row.get("lesson_title") or "Untitled lesson",
+                    "reason": "Lesson has no readable source content yet.",
+                    "updatedAt": _to_iso_datetime(source_updated_at),
+                }
+            )
+            continue
+
+        if chunk_count == 0:
+            ready_sources_missing_index += 1
+        ready_lessons.append(
+            {
+                "lessonId": lesson_id,
+                "title": row.get("lesson_title") or "Untitled lesson",
+                "chunkCount": chunk_count,
+                "status": "indexed" if chunk_count > 0 else "ready_to_index",
+                "updatedAt": _to_iso_datetime(source_updated_at),
+            }
+        )
+
+    for row in extraction_rows:
+        extraction_id = str(row["id"])
+        source_updated_at = _coerce_datetime(row.get("source_updated_at"))
+        if source_updated_at and (
+            latest_source_update_at is None or source_updated_at > latest_source_update_at
+        ):
+            latest_source_update_at = source_updated_at
+        status = str(row.get("extraction_status") or "")
+        structured_content = _normalize_json_payload(row.get("structured_content"), fallback=None)
+        normalized_row = dict(row)
+        normalized_row["structured_content"] = structured_content
+        usable_chunks = (
+            build_extraction_chunks([normalized_row])
+            if status in {"completed", "applied"} and structured_content
+            else []
+        )
+        chunk_count = extraction_chunk_counts.get(extraction_id, 0)
+        title = (
+            (structured_content or {}).get("title")
+            if isinstance(structured_content, dict)
+            else None
+        ) or row.get("original_name") or extraction_id
+
+        if status in {"pending", "processing"}:
+            extraction_blockers.append(
+                {
+                    "extractionId": extraction_id,
+                    "title": title,
+                    "status": status,
+                    "reason": "Extraction is still processing.",
+                    "updatedAt": _to_iso_datetime(source_updated_at),
+                }
+            )
+            continue
+        if status == "failed":
+            extraction_blockers.append(
+                {
+                    "extractionId": extraction_id,
+                    "title": title,
+                    "status": status,
+                    "reason": str(row.get("error_message") or "Extraction failed before usable content was produced."),
+                    "updatedAt": _to_iso_datetime(source_updated_at),
+                }
+            )
+            continue
+        if not structured_content or not usable_chunks:
+            extraction_blockers.append(
+                {
+                    "extractionId": extraction_id,
+                    "title": title,
+                    "status": status or "completed",
+                    "reason": "Extraction completed without usable structured content.",
+                    "updatedAt": _to_iso_datetime(source_updated_at),
+                }
+            )
+            continue
+
+        if chunk_count == 0:
+            ready_sources_missing_index += 1
+        ready_extractions.append(
+            {
+                "extractionId": extraction_id,
+                "title": title,
+                "status": "indexed" if chunk_count > 0 else "ready_to_index",
+                "chunkCount": chunk_count,
+                "updatedAt": _to_iso_datetime(source_updated_at),
+            }
+        )
+
+    for row in assessment_rows:
+        source_updated_at = _coerce_datetime(row.get("source_updated_at"))
+        if source_updated_at and (
+            latest_source_update_at is None or source_updated_at > latest_source_update_at
+        ):
+            latest_source_update_at = source_updated_at
+        question_count = int(row.get("question_count") or 0)
+        total_assessment_questions += question_count
+        if question_count <= 0:
+            continue
+        assessments_with_questions += 1
+        assessment_id = str(row["assessment_id"])
+        if assessment_chunk_counts.get(assessment_id, 0) == 0:
+            assessments_needing_index += 1
+
+    has_ready_sources = bool(ready_lessons or ready_extractions or assessments_with_questions)
+    is_stale = False
+    if has_ready_sources and latest_source_update_at is not None:
+        is_stale = last_indexed_at is None or latest_source_update_at > last_indexed_at
+
+    needs_reindex = bool(
+        is_stale
+        or ready_sources_missing_index > 0
+        or assessments_needing_index > 0
+        or (chunks_indexed == 0 and has_ready_sources)
+    )
+
+    reason: str | None = None
+    if not has_ready_sources:
+        if lesson_rows or extraction_rows or assessment_rows:
+            reason = (
+                "No usable class sources are ready yet. Publish lesson text, finish a completed "
+                "extraction, or add assessment questions before generating."
+            )
+        else:
+            reason = "This class has no source materials yet. Add lesson content before generating."
+    elif chunks_indexed == 0:
+        reason = "No indexed class source content found. Reindex the class sources before generating."
+    elif is_stale:
+        reason = "Class sources changed after the last index. Reindex the class sources to include the latest content."
+    elif ready_sources_missing_index > 0 or assessments_needing_index > 0:
+        reason = "Some ready class sources are not indexed yet. Reindex the class sources before generating."
+
+    return {
+        "classId": class_id,
+        "chunksIndexed": chunks_indexed,
+        "lessonChunks": lesson_chunks,
+        "extractionChunks": extraction_chunks,
+        "questionChunks": question_chunks,
+        "lastIndexedAt": _to_iso_datetime(last_indexed_at),
+        "latestSourceUpdateAt": _to_iso_datetime(latest_source_update_at),
+        "isStale": is_stale,
+        "needsReindex": needs_reindex,
+        "reason": reason,
+        "readyLessons": ready_lessons,
+        "lessonBlockers": lesson_blockers,
+        "readyExtractions": ready_extractions,
+        "extractionBlockers": extraction_blockers,
+        "sourceSummary": {
+            "lessons": {
+                "total": len(lesson_rows),
+                "ready": len(ready_lessons),
+                "blocked": len(lesson_blockers),
+            },
+            "extractions": {
+                "total": len(extraction_rows),
+                "ready": len(ready_extractions),
+                "blocked": len(extraction_blockers),
+            },
+            "questions": {
+                "assessments": len(assessment_rows),
+                "assessmentsWithQuestions": assessments_with_questions,
+                "questionCount": total_assessment_questions,
+                "needsIndex": assessments_needing_index,
+            },
+        },
+    }
+
+
+async def get_class_index_status(db: AsyncSession, class_id: str) -> dict[str, Any]:
+    lesson_rows = await _fetch_lesson_status_rows(db, class_id)
+    extraction_rows = await _fetch_extraction_status_rows(db, class_id)
+    assessment_rows = await _fetch_assessment_status_rows(db, class_id)
+    chunk_rows = await _fetch_chunk_status_rows(db, class_id)
+    return build_class_index_status(
+        class_id,
+        lesson_rows=lesson_rows,
+        extraction_rows=extraction_rows,
+        assessment_rows=assessment_rows,
+        chunk_rows=chunk_rows,
+    )
+
+
 async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, Any]:
     lesson_rows = await _fetch_lesson_rows(db, class_id)
     extraction_rows = await _fetch_extraction_rows(db, class_id)
@@ -459,7 +869,14 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
     await db.commit()
 
     if not chunks:
-        return {"classId": class_id, "chunksIndexed": 0}
+        return {
+            "classId": class_id,
+            "chunksIndexed": 0,
+            "lessonChunks": 0,
+            "extractionChunks": 0,
+            "questionChunks": 0,
+            "lastIndexedAt": None,
+        }
 
     lesson_chunk_count = len(build_lesson_chunks(lesson_rows))
     extraction_chunk_count = len(build_extraction_chunks(extraction_rows))
@@ -557,4 +974,5 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
         "lessonChunks": lesson_chunk_count,
         "extractionChunks": extraction_chunk_count,
         "questionChunks": question_chunk_count,
+        "lastIndexedAt": _to_iso_datetime(datetime.now(timezone.utc)),
     }

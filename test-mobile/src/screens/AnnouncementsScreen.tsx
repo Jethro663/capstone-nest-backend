@@ -1,18 +1,42 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Text, View } from "react-native";
-import { AnimatedEntrance, Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
+import { Pressable, Text, View } from "react-native";
+import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { queryKeys, useStudentClasses } from "../api/hooks";
 import { announcementsApi } from "../api/services/announcements";
 import { toAnnouncementPreview, toSubjectCard } from "../data/mappers";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
-import { colors, gradients } from "../theme/tokens";
+import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Announcements">;
+type FilterMode = "all" | "pinned";
+
+function CountPill({ label, value, color = theme.red }: { label: string; value: string | number; color?: string }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: theme.muted }}>
+        {label}
+      </Text>
+      <Text style={{ marginTop: 4, fontSize: 18, fontWeight: "800", color }}>{value}</Text>
+    </View>
+  );
+}
 
 export function AnnouncementsScreen(_: Props) {
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const { user } = useAuth();
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const classIds = classesQuery.data?.map((item) => item.id) ?? [];
@@ -37,10 +61,13 @@ export function AnnouncementsScreen(_: Props) {
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   }, [announcementQueries, classesQuery.data]);
 
+  const pinnedCount = announcements.filter((entry) => entry.isPinned).length;
+  const filteredAnnouncements = filterMode === "pinned" ? announcements.filter((entry) => entry.isPinned) : announcements;
   const refreshing = classesQuery.isRefetching || announcementQueries.some((query) => query.isRefetching);
 
   return (
     <ScreenScroll
+      backgroundColor={theme.bg}
       refreshControl={
         <Refreshable
           refreshing={refreshing}
@@ -50,42 +77,168 @@ export function AnnouncementsScreen(_: Props) {
         />
       }
     >
-      <GradientHeader colors={gradients.announcements} eyebrow="Class updates" title="Announcements" />
+      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.red,
+              }}
+            >
+              <MaterialCommunityIcons name="bullhorn-outline" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.6, textTransform: "uppercase", color: theme.muted }}>
+                Class updates
+              </Text>
+              <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "800", color: theme.text }}>Announcements</Text>
+            </View>
+          </View>
+          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+            Read teacher posts from all enrolled classes in one compact feed.
+          </Text>
+        </View>
+      </View>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
-        <SectionTitle
-          title="Latest posts"
-          right={<Pill label={`${announcements.length} updates`} backgroundColor={colors.paleGreen} color={colors.green} />}
-        />
+      <View style={{ marginHorizontal: 16, marginTop: 14, flexDirection: "row", gap: 8 }}>
+        <CountPill label="Posts" value={announcements.length} />
+        <CountPill label="Pinned" value={pinnedCount} color={theme.amber} />
+        <CountPill label="Classes" value={classIds.length} color={theme.blue} />
+      </View>
 
-        {announcements.length === 0 ? (
-          <EmptyState emoji="📢" title="No announcements yet" subtitle="Your class updates will appear here." />
-        ) : (
-          <View style={{ gap: 12 }}>
-            {announcements.map((announcement, index) => (
-              <AnimatedEntrance key={announcement.id} delay={index * 70}>
-                <Card>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 22 }}>{announcement.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>{announcement.title}</Text>
-                      <Text style={{ marginTop: 2, fontSize: 11, color: colors.textSecondary }}>
-                        {announcement.subject} • {announcement.createdAt}
-                      </Text>
-                    </View>
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.7, textTransform: "uppercase", color: theme.muted }}>
+          Latest posts
+        </Text>
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {(["all", "pinned"] as const).map((mode) => {
+            const active = filterMode === mode;
+            return (
+              <Pressable
+                key={mode}
+                onPress={() => setFilterMode(mode)}
+                style={{
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? "rgba(232,41,78,0.55)" : theme.border,
+                  backgroundColor: active ? theme.redSoft : theme.surface,
+                  paddingHorizontal: 11,
+                  paddingVertical: 7,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: active ? theme.red : theme.muted }}>
+                  {mode === "all" ? "All" : "Pinned"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {filteredAnnouncements.length === 0 ? (
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginTop: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.surface,
+            paddingHorizontal: 18,
+            paddingVertical: 26,
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme.redSoft,
+            }}
+          >
+            <MaterialCommunityIcons name="inbox-outline" size={22} color={theme.red} />
+          </View>
+          <Text style={{ marginTop: 12, fontSize: 14, fontWeight: "800", color: theme.text }}>
+            {announcements.length === 0 ? "No announcements yet" : "No pinned announcements"}
+          </Text>
+          <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, lineHeight: 18, color: "#999999" }}>
+            {announcements.length === 0
+              ? "Your class updates will appear here."
+              : "Switch back to All to see every class update."}
+          </Text>
+        </View>
+      ) : (
+        <View style={{ marginTop: 6 }}>
+          {filteredAnnouncements.map((announcement, index) => (
+            <View
+              key={`${announcement.classId}-${announcement.id}`}
+              style={{
+                marginHorizontal: 16,
+                marginTop: index === 0 ? 6 : 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.surface,
+                paddingHorizontal: 14,
+                paddingVertical: 13,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: announcement.isPinned ? theme.amberSoft : theme.redSoft,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name={announcement.isPinned ? "pin-outline" : "bullhorn-outline"}
+                    size={15}
+                    color={announcement.isPinned ? theme.amber : theme.red}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: "700", color: theme.text }}>
+                      {announcement.title}
+                    </Text>
                     {announcement.isPinned ? (
-                      <Pill label="Pinned" backgroundColor={colors.paleAmber} color={colors.orange} />
+                      <View style={{ borderRadius: 4, backgroundColor: theme.amberSoft, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: "600", color: theme.amber }}>Pinned</Text>
+                      </View>
                     ) : null}
                   </View>
-                  <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 19, color: colors.textSecondary }}>
-                    {announcement.content}
+                  <Text style={{ marginTop: 2, fontSize: 11, color: theme.muted }}>
+                    {announcement.subject} - {announcement.createdAt}
                   </Text>
-                </Card>
-              </AnimatedEntrance>
-            ))}
-          </View>
-        )}
-      </View>
+                </View>
+              </View>
+              <Text style={{ marginTop: 9, fontSize: 12, lineHeight: 19, color: "#BDBDBD" }}>
+                {stripRichText(announcement.content)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </ScreenScroll>
   );
 }

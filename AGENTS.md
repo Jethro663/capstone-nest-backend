@@ -25,6 +25,13 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 - Add a second subsystem slice only when the prompt explicitly crosses boundaries or the selected workflow skill requires it.
 - Keep appendix refs unloaded unless exact detail is needed.
 
+## Sub-Agent Delegation
+- Consider sub-agents only when the task contains 2+ independent subtasks that can run in parallel without shared ownership.
+- Before spawning sub-agents, ask the user for permission unless the prompt already explicitly authorizes delegation, parallel agents, workers, explorers, or sub-agents.
+- Keep the immediate blocking task local. Delegate only sidecar work or independent parallel slices that do not block the next local step.
+- When delegating code work, assign explicit ownership by file, module, or responsibility and avoid overlapping write scopes.
+- Do not ask about sub-agents for small, sequential, tightly coupled, or single-slice tasks where coordination cost would outweigh the gain.
+
 ## Primary Slices
 - `backend/AGENTS.md`
 - `next-frontend/AGENTS.md`

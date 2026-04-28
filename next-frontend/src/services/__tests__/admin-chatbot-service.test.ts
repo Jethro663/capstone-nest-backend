@@ -19,10 +19,6 @@ jest.mock('axios', () => {
   };
 });
 
-jest.mock('@/lib/api-origin', () => ({
-  getFrontendApiOrigin: () => 'http://127.0.0.1:3000',
-}));
-
 jest.mock('@/lib/session-refresh', () => ({
   refreshSessionAccessToken: jest.fn(),
 }));
@@ -109,7 +105,7 @@ describe('adminChatbotService', () => {
     expect(mockedRefreshSessionAccessToken).toHaveBeenCalledTimes(1);
     expect(mockedSetAccessToken).toHaveBeenCalledWith('fresh-admin-token');
     expect(directAxiosPostMock).toHaveBeenCalledWith(
-      'http://127.0.0.1:3000/api/ai/admin/chat',
+      '/api/ai/admin/chat',
       {
         message: 'Show me usage trends for this week.',
         sessionId: null,

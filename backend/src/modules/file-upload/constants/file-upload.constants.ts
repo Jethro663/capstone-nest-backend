@@ -3,7 +3,18 @@ export const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'text/plain',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
 ] as const;
 export const UPLOAD_DEST = './uploads/library';
 
-export const LIBRARY_FILE_EXTENSIONS = ['.pdf', '.txt', '.pptx'] as const;
+export const LIBRARY_FILE_EXTENSIONS = [
+  '.pdf',
+  '.txt',
+  '.pptx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+] as const;

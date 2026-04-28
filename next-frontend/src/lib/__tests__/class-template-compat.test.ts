@@ -27,6 +27,42 @@ describe('class template compatibility', () => {
     ).toBe(true);
   });
 
+  it('treats template as compatible when subject name matches even if subject codes differ', () => {
+    expect(
+      isTemplateCompatibleWithClass(
+        {
+          status: 'published',
+          name: 'Mathematics Core Template',
+          subjectCode: 'MATH-7',
+          subjectGradeLevel: '7',
+        },
+        {
+          subjectName: 'Mathematics',
+          subjectCode: 'ALGEBRA-7',
+          subjectGradeLevel: '7',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects template when subject name does not match', () => {
+    expect(
+      isTemplateCompatibleWithClass(
+        {
+          status: 'published',
+          name: 'Science Core Template',
+          subjectCode: 'SCI-7',
+          subjectGradeLevel: '7',
+        },
+        {
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-7',
+          subjectGradeLevel: '7',
+        },
+      ),
+    ).toBe(false);
+  });
+
   it('builds subject code candidates from subject name hints and explicit input', () => {
     expect(getSubjectCodeCandidates('Mathematics', '')).toEqual(
       expect.arrayContaining(['MATH', 'MATHEMATICS']),

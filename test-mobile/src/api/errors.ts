@@ -15,12 +15,16 @@ export function presentGlobalError(payload: ErrorPresentationPayload) {
   globalPresenter?.(payload);
 }
 
+type NormalizeApiErrorOptions = {
+  present?: boolean;
+};
+
 function toFieldErrors(message: unknown): FieldErrorMap | undefined {
   if (!message || typeof message !== "object") return undefined;
   return message as FieldErrorMap;
 }
 
-export function normalizeApiError(error: unknown): AppError {
+export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOptions): AppError {
   if (!axios.isAxiosError(error)) {
     return {
       title: "Unexpected Error",
@@ -72,7 +76,7 @@ export function normalizeApiError(error: unknown): AppError {
     shouldShowModal: error.code === "ERR_NETWORK" || (status !== undefined && status >= 500) || status === 404,
   };
 
-  if (appError.shouldShowModal) {
+  if (options?.present !== false && appError.shouldShowModal) {
     presentGlobalError({
       title: appError.title,
       message: appError.message,

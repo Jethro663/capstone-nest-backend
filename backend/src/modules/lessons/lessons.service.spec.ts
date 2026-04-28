@@ -66,6 +66,7 @@ function buildMockDb() {
   const db: any = {
     query: {
       lessons: { findFirst: jest.fn(), findMany: jest.fn() },
+      lessonVersions: { findFirst: jest.fn(), findMany: jest.fn() },
       lessonContentBlocks: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
       lessonCompletions: { findFirst: jest.fn(), findMany: jest.fn() },
@@ -464,6 +465,55 @@ describe('LessonsService', () => {
         service.addContentBlock(blockDto, TEACHER_ID, [RoleName.Teacher]),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('preserves structured content and metadata for semantic lesson blocks', async () => {
+      const structuredDto = {
+        lessonId: LESSON_ID,
+        type: 'text' as const,
+        order: 2,
+        content: {
+          heading: 'Learning objectives',
+          html: '<ul><li>Explain photosynthesis.</li></ul>',
+        },
+        metadata: {
+          variant: 'objectives',
+        },
+      };
+
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+
+      const snapshotReturning = jest.fn().mockResolvedValue([]);
+      const snapshotValues = jest
+        .fn()
+        .mockReturnValue({ returning: snapshotReturning });
+      const blockReturning = jest.fn().mockResolvedValue([
+        {
+          ...MOCK_BLOCK,
+          order: 2,
+          content: structuredDto.content,
+          metadata: structuredDto.metadata,
+        },
+      ]);
+      const blockValues = jest
+        .fn()
+        .mockReturnValue({ returning: blockReturning });
+
+      db.insert
+        .mockReturnValueOnce({ values: snapshotValues })
+        .mockReturnValueOnce({ values: blockValues });
+
+      await service.addContentBlock(structuredDto, TEACHER_ID, [
+        RoleName.Teacher,
+      ]);
+
+      expect(blockValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: structuredDto.content,
+          metadata: structuredDto.metadata,
+        }),
+      );
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -518,6 +568,138 @@ describe('LessonsService', () => {
           RoleName.Teacher,
         ]),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('updates structured content and metadata payloads without flattening them', async () => {
+      const structuredBlock = {
+        ...MOCK_BLOCK,
+        content: {
+          heading: 'Key points',
+          html: '<ul><li>Energy moves through food chains.</li></ul>',
+        },
+        metadata: {
+          variant: 'key_points',
+        },
+      };
+
+      db.query.lessonContentBlocks.findFirst
+        .mockResolvedValueOnce(structuredBlock)
+        .mockResolvedValue(structuredBlock);
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+      mockUpdate(db);
+
+      await service.updateContentBlock(
+        BLOCK_ID,
+        {
+          content: {
+            heading: 'Recap',
+            html: '<p>Summarize the energy transfer process.</p>',
+          },
+          metadata: {
+            variant: 'recap',
+          },
+        },
+        TEACHER_ID,
+        [RoleName.Teacher],
+      );
+
+      const setFn = db.update.mock.results[0]?.value?.set;
+      expect(setFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: {
+            heading: 'Recap',
+            html: '<p>Summarize the energy transfer process.</p>',
+          },
+          metadata: {
+            variant: 'recap',
+          },
+        }),
+      );
+    });
+  });
+
+  describe('restoreLessonVersion', () => {
+    it('restores structured lesson block snapshots with content and metadata intact', async () => {
+      const snapshot = {
+        title: 'Restored Lesson',
+        description: 'Restored structured lesson',
+        contentBlocks: [
+          {
+            type: 'text' as const,
+            order: 1,
+            content: {
+              heading: 'Learning objectives',
+              html: '<ul><li>Define kinetic energy.</li></ul>',
+            },
+            metadata: {
+              variant: 'objectives',
+            },
+          },
+          {
+            type: 'question' as const,
+            order: 2,
+            content: {
+              prompt: 'Which object has the greatest kinetic energy?',
+              choices: ['A', 'B'],
+              answerType: 'single_select',
+            },
+            metadata: {
+              correctAnswers: ['A'],
+              explanation: 'The faster object has more kinetic energy.',
+              points: 5,
+            },
+          },
+        ],
+      };
+
+      db.query.lessons.findFirst
+        .mockResolvedValueOnce(MOCK_LESSON)
+        .mockResolvedValue({
+          ...MOCK_LESSON,
+          title: snapshot.title,
+          description: snapshot.description,
+          contentBlocks: snapshot.contentBlocks,
+        });
+      db.query.classes.findFirst.mockResolvedValue(MOCK_CLASS);
+      db.query.lessonVersions.findFirst.mockResolvedValue({
+        id: 'version-1',
+        lessonId: LESSON_ID,
+        versionNumber: 3,
+        snapshot,
+      });
+
+      const snapshotReturning = jest.fn().mockResolvedValue([]);
+      const snapshotValues = jest
+        .fn()
+        .mockReturnValue({ returning: snapshotReturning });
+      const restoredBlocksValues = jest.fn().mockResolvedValue(undefined);
+      db.insert
+        .mockReturnValueOnce({ values: snapshotValues })
+        .mockReturnValueOnce({ values: restoredBlocksValues });
+      mockUpdate(db);
+      mockDelete(db);
+
+      const result = await service.restoreLessonVersion(
+        LESSON_ID,
+        'version-1',
+        TEACHER_ID,
+        [RoleName.Teacher],
+      );
+
+      expect(restoredBlocksValues).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            content: snapshot.contentBlocks[0].content,
+            metadata: snapshot.contentBlocks[0].metadata,
+          }),
+          expect.objectContaining({
+            content: snapshot.contentBlocks[1].content,
+            metadata: snapshot.contentBlocks[1].metadata,
+          }),
+        ]),
+      );
+      expect(result.contentBlocks).toEqual(snapshot.contentBlocks);
     });
   });
 

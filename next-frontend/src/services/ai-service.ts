@@ -1,6 +1,7 @@
 import { api } from '@/lib/api-client';
 import type {
   AiGenerationStatus,
+  AiClassIndexStatus,
   AiGenerationJob,
   AiGenerationJobResult,
   GenerateQuizDraftDto,
@@ -57,6 +58,7 @@ const AI_JOB_RESULT_STATUSES: AiGenerationStatus[] = [
   'processing',
   'completed',
   'approved',
+  'cancelled',
   'rejected',
   'failed',
 ];
@@ -266,6 +268,11 @@ export const aiService = {
     return normalizeJobEnvelope(data);
   },
 
+  async deleteTeacherJob(jobId: string): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.delete(`/ai/teacher/jobs/${jobId}`);
+    return normalizeJobEnvelope(data);
+  },
+
   async getQuizDraftJobResult(
     jobId: string,
   ): Promise<Envelope<AiGenerationJobResult<QuizDraftStructuredOutput>>> {
@@ -305,6 +312,13 @@ export const aiService = {
       timeout: AI_JOB_TIMEOUT_MS,
     });
     return normalizeEnvelope<IndexingSummary>(data);
+  },
+
+  async getClassIndexStatus(
+    classId: string,
+  ): Promise<Envelope<AiClassIndexStatus>> {
+    const { data } = await api.get(`/ai/index/classes/${classId}/status`);
+    return normalizeEnvelope<AiClassIndexStatus>(data);
   },
 
   async getStudentTutorBootstrap(classId?: string): Promise<Envelope<StudentTutorBootstrapResponse>> {

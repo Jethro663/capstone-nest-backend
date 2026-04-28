@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, isNotNull, max, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, max, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   assessmentAttempts,
@@ -21,6 +21,7 @@ import {
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 import {
   AttachModuleItemDto,
   CreateModuleDto,
@@ -46,6 +47,11 @@ export class ContentModulesService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private sanitizeOptionalRichText(value: string | null | undefined) {
+    if (value === undefined || value === null) return value;
+    return sanitizeRichTextHtml(value);
   }
 
   private hasRole(userRoles: string[], role: RoleName) {
@@ -259,6 +265,19 @@ export class ContentModulesService {
     }
 
     return item;
+  }
+
+  private findModuleItemById(
+    module: { sections: Array<{ items: Array<{ id: string }> }> },
+    itemId: string,
+  ) {
+    for (const section of module.sections) {
+      const matched = section.items.find((item) => item.id === itemId);
+      if (matched) {
+        return matched;
+      }
+    }
+    return null;
   }
 
   private ensureSingleTargetForType(dto: AttachModuleItemDto) {
@@ -604,6 +623,79 @@ export class ContentModulesService {
     return module;
   }
 
+  async getAttachedFileForDownload(
+    itemId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    const item = await this.getModuleContextFromItem(itemId);
+    const classId = item.section.module.classId;
+    const moduleId = item.section.module.id;
+
+    await this.assertClassReadAccess(classId, userId, userRoles);
+
+    if (item.itemType !== ModuleItemType.File || !item.fileId) {
+      throw new BadRequestException(
+        'This module item does not have a downloadable file attachment',
+      );
+    }
+
+    if (this.hasRole(userRoles, RoleName.Student)) {
+      const module = await this.getModuleByClass(
+        classId,
+        moduleId,
+        userId,
+        userRoles,
+      );
+      const accessibleItem = this.findModuleItemById(module, itemId);
+      if (!accessibleItem) {
+        throw new ForbiddenException(
+          'You do not have access to this module attachment',
+        );
+      }
+    }
+
+    const file = await this.db.query.uploadedFiles.findFirst({
+      where: and(
+        eq(uploadedFiles.id, item.fileId),
+        isNull(uploadedFiles.deletedAt),
+      ),
+      columns: {
+        id: true,
+        classId: true,
+        scope: true,
+        originalName: true,
+        mimeType: true,
+        filePath: true,
+      },
+    });
+
+    if (!file) {
+      throw new NotFoundException(`File with ID "${item.fileId}" not found`);
+    }
+
+    if (file.classId && file.classId !== classId) {
+      throw new ForbiddenException(
+        'Attached file does not belong to this class context',
+      );
+    }
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'module.item_file_downloaded',
+      targetType: 'module_item',
+      targetId: itemId,
+      metadata: {
+        moduleId,
+        classId,
+        fileId: file.id,
+        scope: file.scope,
+      },
+    });
+
+    return file;
+  }
+
   async createModule(
     dto: CreateModuleDto,
     userId: string,
@@ -622,7 +714,7 @@ export class ContentModulesService {
       .values({
         classId: dto.classId,
         title: dto.title.trim(),
-        description: dto.description,
+        description: this.sanitizeOptionalRichText(dto.description),
         order: dto.order ?? nextOrder,
       })
       .returning();
@@ -662,12 +754,12 @@ export class ContentModulesService {
       .set({
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.description !== undefined
-          ? { description: dto.description }
+          ? { description: this.sanitizeOptionalRichText(dto.description) }
           : {}),
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
         ...(dto.isLocked !== undefined ? { isLocked: dto.isLocked } : {}),
         ...(dto.teacherNotes !== undefined
-          ? { teacherNotes: dto.teacherNotes }
+          ? { teacherNotes: this.sanitizeOptionalRichText(dto.teacherNotes) }
           : {}),
         ...(dto.themeKind !== undefined ? { themeKind: dto.themeKind } : {}),
         ...(dto.gradientId !== undefined ? { gradientId: dto.gradientId } : {}),
@@ -793,7 +885,7 @@ export class ContentModulesService {
       .values({
         moduleId,
         title: dto.title.trim(),
-        description: dto.description,
+        description: this.sanitizeOptionalRichText(dto.description),
         order: dto.order ?? nextOrder,
       })
       .returning();
@@ -833,7 +925,7 @@ export class ContentModulesService {
       .set({
         ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
         ...(dto.description !== undefined
-          ? { description: dto.description }
+          ? { description: this.sanitizeOptionalRichText(dto.description) }
           : {}),
         updatedAt: new Date(),
       })

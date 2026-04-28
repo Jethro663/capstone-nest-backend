@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/utils/cn';
-import { sanitizeRichTextHtml } from '@/lib/rich-text';
+import { normalizeRichText } from '@/lib/rich-text';
 
 interface RichTextRendererProps {
   html: string;
@@ -9,7 +9,7 @@ interface RichTextRendererProps {
 }
 
 export function RichTextRenderer({ html, className }: RichTextRendererProps) {
-  const safeHtml = sanitizeRichTextHtml(html);
+  const safeHtml = normalizeRichText(html);
 
   return (
     <div
@@ -18,4 +18,3 @@ export function RichTextRenderer({ html, className }: RichTextRendererProps) {
     />
   );
 }
-

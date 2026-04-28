@@ -93,7 +93,7 @@ function targetForScene(scene: DemoSceneId): string {
     case 'teacher_plan':
       return 'Generate and review an AI remediation plan.';
     case 'lxp_session':
-      return 'Take the LXP remediation assessment.';
+      return 'Take the Learners Path remediation assessment.';
     default:
       return 'Review the final summary and reset to replay.';
   }
@@ -352,7 +352,7 @@ export default function DemoPage() {
       return (
         <div className="demo-stage">
           <p className="demo-kicker">Nexora Guided Demo</p>
-          <h2>LMS + LXP + AI Guided Journey</h2>
+          <h2>LMS + Learners Path + AI Guided Journey</h2>
           <p>
             This public walkthrough simulates the student learning path, branching exam outcomes, teacher-side AI
             planning, and remediation loop while keeping official records untouched.
@@ -548,7 +548,7 @@ export default function DemoPage() {
           </p>
           <p>
             {highBranch
-              ? 'You passed this checkpoint. LXP remediation is not required, but the chatbot remains available for questions on covered modules.'
+              ? 'You passed this checkpoint. Learners Path remediation is not required, but the chatbot remains available for questions on covered modules.'
               : 'You are below the threshold. Continue to teacher simulation to generate an AI remediation plan.'}
           </p>
           <Image
@@ -577,7 +577,7 @@ export default function DemoPage() {
           <h2>Generate AI Remediation Plan</h2>
           <p>
             Review low-performing areas, inspect generated questions, edit if needed, then apply to return to student
-            LXP.
+            Learners Path.
           </p>
           <div className="demo-teacher-metrics">
             <Badge variant="secondary">Quarter Exam: {state.quarterExamScore ?? 0}%</Badge>
@@ -651,7 +651,7 @@ export default function DemoPage() {
                 </ul>
               </div>
               <div className="demo-plan-block">
-                <h3>LXP Questions</h3>
+                <h3>Learners Path Questions</h3>
                 <ul>
                   {planDraft.lxpQuestions.map((question, index) => (
                     <li key={question.id}>
@@ -686,7 +686,7 @@ export default function DemoPage() {
                   dispatch({ type: 'apply_ai_plan', plan: planDraft });
                 }}
               >
-                Apply Plan and Start LXP
+                Apply Plan and Start Learners Path
               </Button>
             </div>
           ) : null}
@@ -698,7 +698,7 @@ export default function DemoPage() {
       return (
         <DemoAssessmentStage
           key={`lxp-${state.aiPlan.source}-${state.aiPlan.lxpQuestions.length}`}
-          title="LXP Remediation Session"
+          title="Learners Path Remediation Session"
           subtitle="Answer AI-selected remediation items. Passing score is 75%."
           questions={state.aiPlan.lxpQuestions}
           scene={state.scene}
@@ -715,7 +715,7 @@ export default function DemoPage() {
       return (
         <div className="demo-stage">
           <h2>Demo Completed: High Performance Path</h2>
-          <p>You passed the exam branch. LXP was not required, and chatbot support remains available for module Q&A.</p>
+          <p>You passed the exam branch. Learners Path was not required, and chatbot support remains available for module Q&A.</p>
           <Image src="/images/JA/ja_cheer.png" alt="JA celebrate" width={220} height={220} />
           <div className="demo-finish-actions">
             <Button className="demo-button demo-button-primary" onClick={handleReset}>
@@ -729,8 +729,8 @@ export default function DemoPage() {
     if (state.scene === 'completed_pass') {
       return (
         <div className="demo-stage">
-          <h2>Demo Completed: LXP Recovery Success</h2>
-          <p>You improved through the teacher-guided AI remediation path and passed the LXP checkpoint.</p>
+          <h2>Demo Completed: Learners Path Recovery Success</h2>
+          <p>You improved through the teacher-guided AI remediation path and passed the Learners Path checkpoint.</p>
           <Image src="/images/JA/ja_cheer.png" alt="JA celebrate" width={220} height={220} />
           <div className="demo-finish-actions">
             <Button className="demo-button demo-button-primary" onClick={handleReset}>
@@ -759,7 +759,7 @@ export default function DemoPage() {
     <main className="demo-shell">
       <header className="demo-header">
         <div>
-          <h1>Nexora LXP + AI Guided Demo</h1>
+          <h1>Nexora Learners Path + AI Guided Demo</h1>
           <p className="demo-muted">Public simulation only. No official academic records are modified.</p>
         </div>
         <div className="demo-header-actions">
@@ -833,7 +833,7 @@ export default function DemoPage() {
           ) : null}
           {state.lxpScore !== null ? (
             <article className="demo-card">
-              <p className="demo-kicker">LXP Score</p>
+              <p className="demo-kicker">Learners Path Score</p>
               <p className="demo-score">{state.lxpScore}%</p>
               <p className="demo-muted">{state.lxpScore >= 75 ? 'Pass' : 'Needs more practice'}</p>
               {state.lxpScore >= 75 ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : null}

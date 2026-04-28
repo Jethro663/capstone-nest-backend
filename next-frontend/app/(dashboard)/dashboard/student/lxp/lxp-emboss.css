@@ -1,0 +1,294 @@
+.lxp-shell {
+  --lxp-surface-top: color-mix(in srgb, var(--student-surface) 84%, #fff6de);
+  --lxp-surface-bottom: color-mix(in srgb, var(--student-surface-soft) 86%, #dbeafe);
+  --lxp-outline-soft: color-mix(in srgb, var(--student-outline) 78%, #ffffff);
+  --lxp-outline-strong: color-mix(in srgb, var(--student-outline-strong) 76%, #fbbf24);
+  --lxp-accent-primary: color-mix(in srgb, var(--student-accent) 76%, #2563eb);
+  --lxp-accent-secondary: color-mix(in srgb, var(--student-accent) 42%, #fb923c);
+  --lxp-shadow-outer:
+    0 20px 34px -28px rgba(15, 23, 42, 0.48),
+    0 12px 24px -24px rgba(15, 23, 42, 0.45);
+  --lxp-shadow-emboss:
+    inset 1px 1px 0 color-mix(in srgb, #ffffff 82%, transparent),
+    inset -1px -1px 0 color-mix(in srgb, #0f172a 14%, transparent);
+  --student-text-muted: color-mix(in srgb, var(--student-text-strong) 56%, #64748b);
+}
+
+.lxp-top-tabs {
+  margin: 0 auto;
+  max-width: 80rem;
+  padding: 1.5rem 1.5rem 0;
+}
+
+.lxp-shell--after-tabs {
+  padding-top: 1rem !important;
+}
+
+.lxp-top-tabs .lxp-top-tabs__list {
+  width: fit-content;
+  max-width: 100%;
+  justify-content: flex-start;
+}
+
+.lxp-top-tabs .lxp-tab-trigger {
+  min-width: 7.1rem;
+}
+
+.lxp-shell .student-tab-list {
+  border-color: var(--lxp-outline-soft);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-surface-soft) 74%, #fff8e6),
+    color-mix(in srgb, var(--student-elevated) 86%, #e0f2fe)
+  );
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .student-tab {
+  border: 1px solid transparent;
+  color: var(--student-text-muted);
+}
+
+.lxp-shell .student-tab:hover {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 36%, var(--lxp-outline-strong));
+  background: linear-gradient(
+    170deg,
+    color-mix(in srgb, var(--student-elevated) 90%, #ffffff),
+    color-mix(in srgb, var(--student-surface-soft) 88%, #eff6ff)
+  );
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .student-tab[data-state='active'] {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 56%, var(--lxp-outline-strong));
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--student-accent) 72%, #2563eb),
+    color-mix(in srgb, var(--lxp-accent-secondary) 64%, #fb923c)
+  );
+  color: #ffffff;
+  box-shadow:
+    0 18px 24px -20px color-mix(in srgb, var(--lxp-accent-primary) 74%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+}
+
+.lxp-shell .student-tab:focus-visible,
+.lxp-shell a.student-dashboard-list-card:focus-visible,
+.lxp-shell .lxp-action-button:focus-visible,
+.lxp-shell .lxp-class-select:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, #ffffff 68%, transparent),
+    0 0 0 5px color-mix(in srgb, var(--lxp-accent-primary) 42%, #f59e0b);
+}
+
+.lxp-shell .student-section-card,
+.lxp-shell .student-dashboard-progress-card,
+.lxp-shell .student-dashboard-mini-card,
+.lxp-shell .student-dashboard-task-card,
+.lxp-shell .student-dashboard-list-card,
+.lxp-shell .student-dashboard-empty,
+.lxp-shell .lxp-emboss-panel {
+  border: 1px solid var(--lxp-outline-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0.12)),
+    linear-gradient(180deg, var(--lxp-surface-top) 0%, var(--lxp-surface-bottom) 100%);
+  box-shadow: var(--lxp-shadow-outer), var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .student-section-card__header {
+  border-bottom-color: var(--lxp-outline-soft);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-elevated) 86%, #fff9e9),
+    color-mix(in srgb, var(--student-surface-soft) 86%, #e0f2fe)
+  );
+}
+
+.lxp-shell .student-dashboard-mini-card__icon,
+.lxp-shell .student-dashboard-list-card__icon {
+  border: 1px solid color-mix(in srgb, var(--lxp-accent-primary) 24%, var(--lxp-outline-soft));
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--student-accent-soft) 72%, #fff6e5),
+    color-mix(in srgb, var(--student-elevated) 92%, #ffffff)
+  );
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .student-dashboard-meter {
+  background: color-mix(in srgb, var(--student-outline) 64%, #dbeafe);
+}
+
+.lxp-shell .student-dashboard-meter__fill {
+  background: linear-gradient(90deg, #2563eb 0%, #f59e0b 100%);
+  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.28);
+}
+
+.lxp-shell .student-badge {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 42%, var(--lxp-outline-soft));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-accent-soft) 72%, #fff6e5),
+    color-mix(in srgb, var(--student-elevated) 88%, #ffffff)
+  );
+  color: color-mix(in srgb, var(--student-text-strong) 88%, #1d4ed8);
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell a.student-dashboard-list-card,
+.lxp-shell .student-panel-hover,
+.lxp-shell .lxp-action-button,
+.lxp-shell .lxp-class-select {
+  transition:
+    transform var(--student-motion-fast) ease,
+    border-color var(--student-motion-fast) ease,
+    box-shadow var(--student-motion-fast) ease,
+    background-color var(--student-motion-fast) ease,
+    filter var(--student-motion-fast) ease;
+}
+
+.lxp-shell a.student-dashboard-list-card:hover,
+.lxp-shell .student-panel-hover:hover,
+.lxp-shell .lxp-class-select:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 46%, var(--lxp-outline-strong));
+  box-shadow:
+    0 16px 24px -24px color-mix(in srgb, var(--lxp-accent-primary) 62%, transparent),
+    var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .lxp-class-select {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 32%, var(--lxp-outline-soft));
+  font-weight: 600;
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .lxp-action-button {
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.lxp-shell .lxp-action-button--ghost {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 32%, var(--lxp-outline-soft));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--student-elevated) 92%, #ffffff),
+    color-mix(in srgb, var(--student-surface-soft) 88%, #eef2ff)
+  );
+  color: color-mix(in srgb, var(--student-text-strong) 90%, #1e40af);
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .lxp-action-button--ghost:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 56%, var(--lxp-outline-strong));
+  box-shadow:
+    0 16px 24px -22px color-mix(in srgb, var(--lxp-accent-primary) 65%, transparent),
+    var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .lxp-action-button--solid {
+  border: none;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--student-accent) 76%, #2563eb),
+    color-mix(in srgb, var(--lxp-accent-secondary) 68%, #fb923c)
+  );
+  color: #ffffff;
+  box-shadow:
+    0 18px 26px -22px color-mix(in srgb, var(--lxp-accent-primary) 76%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+}
+
+.lxp-shell .lxp-action-button--solid:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: saturate(1.06);
+  box-shadow:
+    0 20px 30px -22px color-mix(in srgb, var(--lxp-accent-primary) 78%, transparent),
+    inset 1px 1px 0 color-mix(in srgb, #ffffff 30%, transparent);
+}
+
+.lxp-shell .student-section-card .text-sm {
+  line-height: 1.55;
+}
+
+.lxp-shell .student-section-card .text-xs {
+  line-height: 1.45;
+}
+
+.lxp-shell .learners-path-stage-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lxp-shell .learners-path-stage-card {
+  border: 1px solid color-mix(in srgb, var(--lxp-accent-primary) 20%, var(--lxp-outline-soft));
+  border-radius: 1.35rem;
+  padding: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.14)),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-elevated) 92%, #fff9ec),
+      color-mix(in srgb, var(--student-surface-soft) 90%, #e0f2fe)
+    );
+  box-shadow: var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .learners-path-stage-card[data-state="active"] {
+  border-color: color-mix(in srgb, var(--lxp-accent-primary) 44%, var(--lxp-outline-strong));
+  box-shadow:
+    0 16px 26px -24px color-mix(in srgb, var(--lxp-accent-primary) 48%, transparent),
+    var(--lxp-shadow-emboss);
+}
+
+.lxp-shell .learners-path-stage-card[data-state="done"] {
+  border-color: color-mix(in srgb, var(--student-success-border) 72%, var(--lxp-outline-soft));
+}
+
+.lxp-shell .learners-path-stage-card__step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--student-accent) 74%, #2563eb),
+    color-mix(in srgb, var(--lxp-accent-secondary) 64%, #fb923c)
+  );
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 1080px) {
+  .lxp-shell .learners-path-stage-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 768px) {
+  .lxp-top-tabs {
+    padding: 2.5rem 2.5rem 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .lxp-top-tabs {
+    padding: 1rem 1rem 0;
+  }
+
+  .lxp-top-tabs .lxp-top-tabs__list {
+    width: 100%;
+  }
+
+  .lxp-top-tabs .lxp-tab-trigger {
+    flex: 1 1 calc(50% - 0.45rem);
+    min-width: 0;
+  }
+}

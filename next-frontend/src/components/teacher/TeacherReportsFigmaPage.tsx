@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState, type ElementType } from 'react';
 import {
-  BarChart3,
   ClipboardList,
   Download,
   Filter,
@@ -37,9 +36,9 @@ import {
 } from '@/components/ui/table';
 import {
   TeacherEmptyState,
+  TeacherHeaderMetric,
   TeacherPageShell,
   TeacherSectionCard,
-  TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
 import { cn } from '@/utils/cn';
 import { toast } from 'sonner';
@@ -77,6 +76,7 @@ export function TeacherReportsFigmaPage() {
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
@@ -185,20 +185,25 @@ export function TeacherReportsFigmaPage() {
     fetchReports();
   }, [fetchReports]);
 
-  const handleExport = () => {
-    const params = new URLSearchParams();
-    if (selectedClassId) params.set('classId', selectedClassId);
-    if (dateFrom) params.set('dateFrom', dateFrom);
-    if (dateTo) params.set('dateTo', dateTo);
-    params.set('export', 'csv');
-
-    const endpointMap: Record<TeacherReportView, string> = {
-      studentMasterList: '/api/reports/student-master-list',
-      studentPerformance: '/api/reports/student-performance',
-      classRecord: '/api/reports/intervention-participation',
-    };
-
-    window.open(`${endpointMap[activeView]}?${params.toString()}`, '_blank', 'noopener,noreferrer');
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const tab = activeView === 'classRecord' ? 'interventionParticipation' : activeView;
+      const blob = await reportService.exportCsv(tab, reportQuery);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${activeView}-report.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success('CSV report downloaded');
+    } catch {
+      toast.error('Unable to export report');
+    } finally {
+      setExporting(false);
+    }
   };
 
   if (loadingClasses) {
@@ -216,29 +221,25 @@ export function TeacherReportsFigmaPage() {
       badge="Teacher Reports"
       title="Reports"
       description="Class and student performance analytics"
-      actions={
-        <Button variant="teacher" className="rounded-xl px-4" onClick={handleExport}>
-          <Download className="h-4 w-4" />
-          Export
-        </Button>
-      }
-      stats={
+      headerStats={
         <>
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Avg Class Grade"
             value={average ? `${average.average.toFixed(1)}%` : '--'}
             caption={selectedClass?.subjectCode ? `${selectedClass.subjectCode} snapshot` : 'Select a class'}
-            icon={BarChart3}
             accent="teal"
           />
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Passing Rate"
-            value={average && average.count > 0 ? `${(((average.count - average.interventionCount) / average.count) * 100).toFixed(0)}%` : '--'}
+            value={
+              average && average.count > 0
+                ? `${(((average.count - average.interventionCount) / average.count) * 100).toFixed(0)}%`
+                : '--'
+            }
             caption="Learners above intervention threshold"
-            icon={TrendingUp}
             accent="sky"
           />
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Highest Grade"
             value={
               interventions.length > 0
@@ -246,17 +247,26 @@ export function TeacherReportsFigmaPage() {
                 : '--'
             }
             caption="Highest finalized grade"
-            icon={ListChecks}
             accent="amber"
           />
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="At Risk Students"
             value={average?.interventionCount ?? 0}
             caption="Students flagged for intervention"
-            icon={ClipboardList}
             accent="rose"
           />
         </>
+      }
+      actions={
+        <Button
+          variant="teacher"
+          className="rounded-xl px-4"
+          onClick={() => void handleExport()}
+          disabled={exporting}
+        >
+          <Download className="h-4 w-4" />
+          {exporting ? 'Exporting...' : 'Export'}
+        </Button>
       }
     >
       <TeacherSectionCard title="Filters" className="teacher-figma-stagger">

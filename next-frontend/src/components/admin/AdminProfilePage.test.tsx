@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AdminProfilePage } from './AdminProfilePage';
 import { changePassword, updateProfile } from '@/lib/auth-service';
+import { toast } from 'sonner';
 
 const setUserMock = jest.fn();
 
@@ -33,6 +34,7 @@ jest.mock('@/lib/auth-service', () => ({
 
 const mockedUpdateProfile = updateProfile as jest.MockedFunction<typeof updateProfile>;
 const mockedChangePassword = changePassword as jest.MockedFunction<typeof changePassword>;
+const mockedToast = toast as jest.Mocked<typeof toast>;
 type UpdateProfileResponse = Awaited<ReturnType<typeof updateProfile>>;
 type ChangePasswordResponse = Awaited<ReturnType<typeof changePassword>>;
 
@@ -85,5 +87,20 @@ describe('AdminProfilePage', () => {
         confirmPassword: 'newPass123',
       }),
     );
+  });
+
+  it('blocks numbers and special characters in profile names before saving', async () => {
+    render(<AdminProfilePage />);
+
+    fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Alex9' } });
+    fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Rivera!' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() =>
+      expect(mockedToast.error).toHaveBeenCalledWith(
+        'Names may only contain letters, spaces, hyphens, and apostrophes.',
+      ),
+    );
+    expect(mockedUpdateProfile).not.toHaveBeenCalled();
   });
 });

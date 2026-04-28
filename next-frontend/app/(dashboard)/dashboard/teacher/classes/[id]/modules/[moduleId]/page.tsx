@@ -26,12 +26,15 @@ import { moduleService } from '@/services/module-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { fileService } from '@/services/file-service';
+import { LibraryFilePickerDialog } from '@/components/library/LibraryFilePickerDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { normalizeRichText } from '@/lib/rich-text';
 import { ActionTooltip } from '@/components/shared/ActionTooltip';
 import { cn } from '@/utils/cn';
 import type { Assessment } from '@/types/assessment';
@@ -40,8 +43,9 @@ import type { Lesson } from '@/types/lesson';
 import type { ClassModule, ModuleItem, ModuleItemType } from '@/types/module';
 import './module-workspace.css';
 
-type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes' | 'grading';
+type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes';
 type AssessmentAttachMode = 'create-new' | 'attach-existing';
+type FileAttachSource = 'upload' | 'library';
 
 type AttachState = {
   open: boolean;
@@ -58,43 +62,25 @@ type DraggingItem = {
   itemId: string;
 } | null;
 
-type GradingRow = {
-  id: string;
-  letter: string;
-  label: string;
-  minScore: string;
-  maxScore: string;
-  description: string;
-};
-
 const TAB_ITEMS: Array<{ key: ModuleTab; label: string; icon: typeof Layers3 }> = [
   { key: 'sections', label: 'Sections', icon: Layers3 },
   { key: 'visibility', label: 'Visibility', icon: Eye },
   { key: 'locking', label: 'Locking', icon: Lock },
   { key: 'notes', label: 'Notes', icon: NotebookPen },
-  { key: 'grading', label: 'Grading Scale', icon: ClipboardList },
 ];
-
-const DEFAULT_GRADING_ROWS: Array<Omit<GradingRow, 'id'>> = [
-  { letter: 'A', label: 'Outstanding', minScore: '90', maxScore: '100', description: 'Exceptional performance' },
-  { letter: 'B+', label: 'Very Satisfactory', minScore: '85', maxScore: '89', description: 'Above average performance' },
-  { letter: 'B', label: 'Satisfactory', minScore: '80', maxScore: '84', description: 'Meets expected standards' },
-  { letter: 'C', label: 'Fairly Satisfactory', minScore: '75', maxScore: '79', description: 'Partially meets standards' },
-  { letter: 'F', label: 'Did Not Meet Expectation', minScore: '0', maxScore: '74', description: 'Below passing threshold' },
-];
-
-function createRowId() {
-  return `row-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 function toParamValue(input: string | string[] | undefined) {
   if (Array.isArray(input)) return input[0] || '';
   return input || '';
 }
 
-function toSafeNumber(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : NaN;
+
+function getPlainTextLength(html: string) {
+  return normalizeRichText(html)
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .trim()
+    .length;
 }
 
 function normalizeModule(raw: ClassModule) {
@@ -127,6 +113,27 @@ function formatScheduleSummary(classItem: ClassItem) {
   if (!schedule) return 'Schedule unavailable';
   const day = schedule.days?.[0] || 'Day';
   return `${day} ${schedule.startTime}-${schedule.endTime}`;
+}
+
+function normalizeLibrarySubjectKey(
+  subjectCode?: string | null,
+  subjectName?: string | null,
+) {
+  const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+  if (raw.includes('science') || raw.includes('sci')) return 'science' as const;
+  if (raw.includes('math')) return 'math' as const;
+  if (raw.includes('english') || raw.includes('eng')) return 'english' as const;
+  if (raw.includes('filipino') || raw.includes('fil')) return 'filipino' as const;
+  if (raw.includes('araling') || raw.includes('panlipunan') || /\bap\b/.test(raw)) return 'ap' as const;
+  if (raw.includes('tle')) return 'tle' as const;
+  if (raw.includes('mapeh')) return 'mapeh' as const;
+  if (raw.includes('esp') || raw.includes('values') || raw.includes('pagpapakatao')) return 'esp' as const;
+  return undefined;
+}
+
+function normalizeLibraryGradeLevel(value?: string | null) {
+  const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+  return match?.[1] as '7' | '8' | '9' | '10' | undefined;
 }
 
 function iconForItemType(itemType: ModuleItemType) {
@@ -183,22 +190,6 @@ function getItemEditorHref(item: ModuleItem, classId: string, moduleId: string) 
   return null;
 }
 
-function buildGradingRows(module: ClassModule | null) {
-  if (!module || module.gradingScaleEntries.length === 0) {
-    return DEFAULT_GRADING_ROWS.map((entry) => ({ ...entry, id: createRowId() }));
-  }
-
-  return [...module.gradingScaleEntries]
-    .sort((a, b) => a.order - b.order)
-    .map((entry) => ({
-      id: entry.id || createRowId(),
-      letter: entry.letter || '',
-      label: entry.label || '',
-      minScore: String(entry.minScore ?? ''),
-      maxScore: String(entry.maxScore ?? ''),
-      description: entry.description || '',
-    }));
-}
 
 export default function TeacherModuleDetailPage() {
   const params = useParams();
@@ -217,10 +208,10 @@ export default function TeacherModuleDetailPage() {
   const [sectionTitle, setSectionTitle] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
-  const [savingScale, setSavingScale] = useState(false);
-  const [gradingRows, setGradingRows] = useState<GradingRow[]>([]);
   const [updatingModule, setUpdatingModule] = useState(false);
   const [attachingItem, setAttachingItem] = useState(false);
+  const [attachSource, setAttachSource] = useState<FileAttachSource>('upload');
+  const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
   const [attachState, setAttachState] = useState<AttachState>({
     open: false,
     sectionId: '',
@@ -238,6 +229,11 @@ export default function TeacherModuleDetailPage() {
   const [draggingItem, setDraggingItem] = useState<DraggingItem>(null);
   const [pendingItemIds, setPendingItemIds] = useState<Record<string, boolean>>({});
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
+  const [previewItem, setPreviewItem] = useState<ModuleItem | null>(null);
+  const [previewLesson, setPreviewLesson] = useState<Lesson | null>(null);
+  const [previewAssessment, setPreviewAssessment] = useState<Assessment | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!classId || !moduleId) return;
@@ -264,7 +260,6 @@ export default function TeacherModuleDetailPage() {
       setLessons(lessonResponse.data || []);
       setAssessments(assessmentResponse.data || []);
       setNotesDraft(currentModule?.teacherNotes || '');
-      setGradingRows(buildGradingRows(currentModule));
       setExpandedSections((current) => {
         if (!currentModule) return {};
         const next: Record<string, boolean> = {};
@@ -325,12 +320,14 @@ export default function TeacherModuleDetailPage() {
       : attachState.itemType === 'assessment'
         ? 'Create a new empty assessment or attach an existing one.'
         : attachState.itemType === 'file'
-          ? 'Upload a PDF and attach it as a downloadable module block.'
+          ? 'Upload a new PDF or attach an existing library file as a downloadable module block.'
           : 'Choose the block type you want to add to this section.';
 
   const canSubmitAttach =
     attachState.itemType === 'file'
-      ? Boolean(attachState.file)
+      ? attachSource === 'library'
+        ? Boolean(attachState.itemId)
+        : Boolean(attachState.file)
       : attachState.itemType === 'lesson'
         ? true
       : attachState.itemType === 'assessment'
@@ -662,6 +659,24 @@ export default function TeacherModuleDetailPage() {
     }
   };
 
+  const handleOpenCoreItemPreview = async (item: ModuleItem) => {
+    if (!item.isCoreTemplateAsset) return;
+
+    if (item.itemType === 'lesson' && item.lessonId) {
+      router.push(
+        `/dashboard/teacher/lessons/${item.lessonId}/view?classId=${classId}&moduleId=${moduleId}`,
+      );
+      return;
+    }
+
+    if (item.itemType === 'assessment' && item.assessmentId) {
+      router.push(
+        `/dashboard/teacher/assessments/${item.assessmentId}/edit?mode=view&classId=${classId}&moduleId=${moduleId}`,
+      );
+      return;
+    }
+  };
+
   const confirmDetachItem = (itemId: string) => {
     setConfirmation({
       title: 'Remove item from module?',
@@ -757,20 +772,33 @@ export default function TeacherModuleDetailPage() {
           };
         }
       } else {
-        if (!attachState.file) {
-          toast.error('Upload a PDF file first');
-          setAttachingItem(false);
-          return;
+        if (attachSource === 'library') {
+          if (!attachState.itemId) {
+            toast.error('Choose a library file first');
+            setAttachingItem(false);
+            return;
+          }
+          payload = {
+            itemType: 'file',
+            fileId: attachState.itemId,
+            metadata: { fileSubtype: 'library' },
+          };
+        } else {
+          if (!attachState.file) {
+            toast.error('Upload a PDF file first');
+            setAttachingItem(false);
+            return;
+          }
+          const uploaded = await fileService.upload(attachState.file, {
+            classId,
+            scope: 'private',
+          });
+          payload = {
+            itemType: 'file',
+            fileId: uploaded.data.id,
+            metadata: { fileSubtype: 'pdf' },
+          };
         }
-        const uploaded = await fileService.upload(attachState.file, {
-          classId,
-          scope: 'private',
-        });
-        payload = {
-          itemType: 'file',
-          fileId: uploaded.data.id,
-          metadata: { fileSubtype: 'pdf' },
-        };
       }
       await moduleService.attachItem(attachState.sectionId, payload);
       setAttachState({
@@ -782,6 +810,8 @@ export default function TeacherModuleDetailPage() {
         lessonPoints: '0',
         file: null,
       });
+      setAttachSource('upload');
+      setLibraryPickerOpen(false);
       await fetchData();
       if (attachState.itemType === 'lesson' && payload.itemType === 'lesson') {
         toast.success('Lesson block created');
@@ -815,68 +845,14 @@ export default function TeacherModuleDetailPage() {
     if (!module || savingNotes) return;
     try {
       setSavingNotes(true);
-      await moduleService.update(module.id, { teacherNotes: notesDraft.trim() || '' });
-      setModule((current) => (current ? { ...current, teacherNotes: notesDraft.trim() || '' } : current));
+      const safeNotes = normalizeRichText(notesDraft).trim() || '';
+      await moduleService.update(module.id, { teacherNotes: safeNotes });
+      setModule((current) => (current ? { ...current, teacherNotes: safeNotes } : current));
       toast.success('Notes saved');
     } catch {
       toast.error('Unable to save notes');
     } finally {
       setSavingNotes(false);
-    }
-  };
-
-  const handleSaveScale = async () => {
-    if (!module || savingScale) return;
-
-    const sanitizedRows = gradingRows
-      .map((row, index) => ({
-        ...row,
-        order: index + 1,
-        letter: row.letter.trim(),
-        label: row.label.trim(),
-        description: row.description.trim(),
-        minValue: toSafeNumber(row.minScore),
-        maxValue: toSafeNumber(row.maxScore),
-      }))
-      .filter((row) => row.letter || row.label || row.minScore || row.maxScore || row.description);
-
-    if (sanitizedRows.length === 0) {
-      toast.error('Add at least one grading row');
-      return;
-    }
-
-    const hasInvalidRow = sanitizedRows.some(
-      (row) =>
-        !row.letter ||
-        !row.label ||
-        Number.isNaN(row.minValue) ||
-        Number.isNaN(row.maxValue) ||
-        row.minValue > row.maxValue,
-    );
-
-    if (hasInvalidRow) {
-      toast.error('Check grading rows: letter, label, and valid min/max ranges are required');
-      return;
-    }
-
-    try {
-      setSavingScale(true);
-      await moduleService.replaceGradingScale(module.id, {
-        entries: sanitizedRows.map((row) => ({
-          letter: row.letter,
-          label: row.label,
-          minScore: row.minValue,
-          maxScore: row.maxValue,
-          description: row.description,
-          order: row.order,
-        })),
-      });
-      await fetchData();
-      toast.success('Grading scale saved');
-    } catch {
-      toast.error('Unable to save grading scale');
-    } finally {
-      setSavingScale(false);
     }
   };
 
@@ -905,7 +881,7 @@ export default function TeacherModuleDetailPage() {
           <span className="teacher-module-detail__pill">M{module.order}</span>
           <div className="teacher-module-detail__hero-copy">
             <h1>{module.title}</h1>
-            <p>{module.description || 'No module description yet.'}</p>
+            {module.description ? <RichTextRenderer html={module.description} /> : <p>No module description yet.</p>}
             <div className="teacher-module-detail__hero-meta">
               {isCoreModule ? (
                 <span data-tone="warn">
@@ -1177,21 +1153,35 @@ export default function TeacherModuleDetailPage() {
                                     <button
                                       type="button"
                                       className="teacher-module-detail__outline"
-                                      onClick={() => void handleReleaseCoreItem(section.id, item.id, { isVisible: !item.isVisible })}
+                                      onClick={() => void handleOpenCoreItemPreview(item)}
                                       disabled={pending}
-                                      aria-label={item.isVisible ? 'Hide Item' : 'Release Item'}
+                                      aria-label="View Content"
                                     >
-                                      {item.isVisible ? 'Hide Item' : 'Release Item'}
+                                      View Content
                                     </button>
-                                    {item.itemType === 'assessment' ? (
-                                      <button
-                                        type="button"
-                                        className="teacher-module-detail__outline"
-                                        onClick={() => void handleReleaseCoreItem(section.id, item.id, { isGiven: !item.isGiven })}
+                                    <label className="teacher-module-detail__control-toggle">
+                                      <input
+                                        type="checkbox"
+                                        checked={!item.isVisible}
                                         disabled={pending}
-                                      >
-                                        {item.isGiven ? 'Ungive Assessment' : 'Give Assessment'}
-                                      </button>
+                                        onChange={(event) =>
+                                          void handleReleaseCoreItem(section.id, item.id, { isVisible: !event.target.checked })
+                                        }
+                                      />
+                                      Hide
+                                    </label>
+                                    {item.itemType === 'assessment' ? (
+                                      <label className="teacher-module-detail__control-toggle">
+                                        <input
+                                          type="checkbox"
+                                          checked={item.isGiven}
+                                          disabled={pending}
+                                          onChange={(event) =>
+                                            void handleReleaseCoreItem(section.id, item.id, { isGiven: event.target.checked })
+                                          }
+                                        />
+                                        Give
+                                      </label>
                                     ) : null}
                                   </>
                                 ) : (
@@ -1480,14 +1470,14 @@ export default function TeacherModuleDetailPage() {
               Private notes visible only to you. Use this for reminders and pacing notes.
             </p>
             <article className="teacher-module-detail__notes-card">
-              <Textarea
+              <RichTextEditor
                 value={notesDraft}
-                onChange={(event) => setNotesDraft(event.target.value)}
-                rows={8}
+                onChange={setNotesDraft}
                 placeholder="Add your private notes for this module..."
+                minHeight={240}
               />
               <div className="teacher-module-detail__notes-foot">
-                <span>{notesDraft.trim().length} characters</span>
+                <span>{getPlainTextLength(notesDraft)} characters</span>
                 <Button
                   type="button"
                   className="teacher-module-detail__primary"
@@ -1503,136 +1493,96 @@ export default function TeacherModuleDetailPage() {
           </div>
         ) : null}
 
-        {activeTab === 'grading' ? (
-          <div className="teacher-module-detail__stack" data-animate="fade">
-            <div className="teacher-module-detail__grading-head">
-              <div>
-                <h2>Grading Scale</h2>
-                <p className="teacher-module-detail__lead">
-                  Define grade thresholds and labels for this module.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="teacher-module-detail__outline"
-                data-priority="secondary"
-                onClick={() =>
-                  setGradingRows((current) => [
-                    ...current,
-                    { id: createRowId(), letter: '', label: '', minScore: '', maxScore: '', description: '' },
-                  ])
-                }
-              >
-                <Plus className="h-4 w-4" />
-                Add Row
-              </button>
-            </div>
-
-            <div className="teacher-module-detail__grading-table-wrap">
-              <table className="teacher-module-detail__grading-table">
-                <thead>
-                  <tr>
-                    <th>Letter</th>
-                    <th>Label</th>
-                    <th>Min Score</th>
-                    <th>Max Score</th>
-                    <th>Description</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {gradingRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <span className="teacher-module-detail__grade-pill">{row.letter || '--'}</span>
-                      </td>
-                      <td>
-                        <input
-                          value={row.label}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, label: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="Label"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={row.minScore}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, minScore: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="0"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={row.maxScore}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, maxScore: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="100"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          value={row.description}
-                          onChange={(event) =>
-                            setGradingRows((current) =>
-                              current.map((entry) =>
-                                entry.id === row.id ? { ...entry, description: event.target.value } : entry,
-                              ),
-                            )
-                          }
-                          placeholder="Description"
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                          onClick={() =>
-                            setGradingRows((current) =>
-                              current.length > 1 ? current.filter((entry) => entry.id !== row.id) : current,
-                            )
-                          }
-                          aria-label="Remove grade row"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="teacher-module-detail__save-row">
-              <Button
-                type="button"
-                className="teacher-module-detail__primary"
-                data-priority="primary"
-                onClick={() => void handleSaveScale()}
-                disabled={savingScale}
-              >
-                <Save className="h-4 w-4" />
-                {savingScale ? 'Saving...' : 'Save Scale'}
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </section>
+
+      <Dialog
+        open={Boolean(previewItem)}
+        onOpenChange={(open) => {
+          if (open) return;
+          setPreviewItem(null);
+          setPreviewLesson(null);
+          setPreviewAssessment(null);
+          setPreviewError(null);
+          setPreviewLoading(false);
+        }}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {previewLesson?.title || previewAssessment?.title || (previewItem ? titleForItem(previewItem) : 'Content Preview')}
+            </DialogTitle>
+            <DialogDescription>
+              Read-only preview of template-managed content.
+            </DialogDescription>
+          </DialogHeader>
+          {previewLoading ? <p className="text-sm text-slate-500">Loading preview...</p> : null}
+          {!previewLoading && previewError ? (
+            <p className="text-sm text-rose-600">{previewError}</p>
+          ) : null}
+          {!previewLoading && !previewError && previewLesson ? (
+            <div className="space-y-4">
+              {previewLesson.description ? (
+                <RichTextRenderer html={previewLesson.description} />
+              ) : (
+                <p className="text-sm text-slate-500">No lesson description.</p>
+              )}
+              <div className="space-y-3">
+                {(previewLesson.contentBlocks ?? [])
+                  .slice()
+                  .sort((left, right) => left.order - right.order)
+                  .map((block) => (
+                    <article key={block.id} className="rounded-xl border border-slate-200 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Block {block.order} · {block.type}
+                      </p>
+                      {typeof block.content === 'string' ? (
+                        <RichTextRenderer html={block.content || '<p></p>'} />
+                      ) : (
+                        <pre className="overflow-x-auto rounded-lg bg-slate-100 p-3 text-xs text-slate-700">
+                          {JSON.stringify(block.content ?? {}, null, 2)}
+                        </pre>
+                      )}
+                    </article>
+                  ))}
+                {(previewLesson.contentBlocks ?? []).length === 0 ? (
+                  <p className="text-sm text-slate-500">No lesson blocks available.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {!previewLoading && !previewError && previewAssessment ? (
+            <div className="space-y-4">
+              {previewAssessment.description ? (
+                <RichTextRenderer html={previewAssessment.description} />
+              ) : (
+                <p className="text-sm text-slate-500">No assessment description.</p>
+              )}
+              <div className="space-y-3">
+                {(previewAssessment.questions ?? []).map((question, index) => (
+                  <article key={question.id} className="rounded-xl border border-slate-200 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Question {index + 1} · {question.type}
+                    </p>
+                    <RichTextRenderer html={question.content || '<p></p>'} />
+                    {(question.options ?? []).length > 0 ? (
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                        {(question.options ?? []).map((option) => (
+                          <li key={option.id}>
+                            {option.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </article>
+                ))}
+                {(previewAssessment.questions ?? []).length === 0 ? (
+                  <p className="text-sm text-slate-500">No questions available.</p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={attachState.open}
@@ -1710,24 +1660,79 @@ export default function TeacherModuleDetailPage() {
 
             {attachState.itemType === 'file' ? (
               <div className="teacher-module-detail__attach-field">
-                <label htmlFor="attach-file">PDF File</label>
-                <Input
-                  id="attach-file"
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(event) =>
-                    setAttachState((current) => ({
-                      ...current,
-                      file: event.target.files?.[0] || null,
-                    }))
-                  }
-                />
-                {attachState.file ? (
-                  <p className="teacher-module-detail__attach-note">
-                    Selected file: <strong>{attachState.file.name}</strong>
-                  </p>
+                <div className="teacher-module-detail__attach-type-grid">
+                  <button
+                    type="button"
+                    className="teacher-module-detail__attach-type"
+                    data-active={attachSource === 'upload'}
+                    onClick={() => {
+                      setAttachSource('upload');
+                      setAttachState((current) => ({ ...current, itemId: '', file: null }));
+                    }}
+                  >
+                    <div>
+                      <strong>Upload New PDF</strong>
+                      <p>Upload a fresh PDF file for this module block.</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="teacher-module-detail__attach-type"
+                    data-active={attachSource === 'library'}
+                    onClick={() => {
+                      setAttachSource('library');
+                      setAttachState((current) => ({ ...current, file: null }));
+                      setLibraryPickerOpen(true);
+                    }}
+                  >
+                    <div>
+                      <strong>Choose from Library</strong>
+                      <p>Attach an existing General Module or My Library file.</p>
+                    </div>
+                  </button>
+                </div>
+
+                {attachSource === 'upload' ? (
+                  <>
+                    <label htmlFor="attach-file">PDF File</label>
+                    <Input
+                      id="attach-file"
+                      type="file"
+                      accept="application/pdf"
+                      onChange={(event) =>
+                        setAttachState((current) => ({
+                          ...current,
+                          file: event.target.files?.[0] || null,
+                          itemId: '',
+                        }))
+                      }
+                    />
+                    {attachState.file ? (
+                      <p className="teacher-module-detail__attach-note">
+                        Selected file: <strong>{attachState.file.name}</strong>
+                      </p>
+                    ) : (
+                      <p className="teacher-module-detail__attach-note">Upload a PDF to continue.</p>
+                    )}
+                  </>
                 ) : (
-                  <p className="teacher-module-detail__attach-note">Upload a PDF to continue.</p>
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-fit"
+                      onClick={() => setLibraryPickerOpen(true)}
+                    >
+                      Choose from Library
+                    </Button>
+                    {attachState.itemId ? (
+                      <p className="teacher-module-detail__attach-note">
+                        Library file selected. Add block to attach it to this section.
+                      </p>
+                    ) : (
+                      <p className="teacher-module-detail__attach-note">Choose a library file to continue.</p>
+                    )}
+                  </>
                 )}
               </div>
             ) : attachState.itemType ? (
@@ -1871,6 +1876,21 @@ export default function TeacherModuleDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <LibraryFilePickerDialog
+        open={libraryPickerOpen}
+        onOpenChange={setLibraryPickerOpen}
+        subjectKey={normalizeLibrarySubjectKey(classItem.subjectCode, classItem.subjectName)}
+        gradeLevel={normalizeLibraryGradeLevel(classItem.subjectGradeLevel ?? classItem.section?.gradeLevel)}
+        onSelect={(file) =>
+          setAttachState((current) => ({
+            ...current,
+            itemType: 'file',
+            itemId: file.id,
+            file: null,
+          }))
+        }
+      />
 
       <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
     </div>

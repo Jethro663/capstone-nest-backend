@@ -11,3 +11,4 @@ export * from './school-events.schema';
 export * from './ja.schema';
 export * from './class-templates.schema';
 export * from './discussion-board.schema';
+export * from './academic-state.schema';

@@ -17,9 +17,36 @@ export interface EligibleClass {
   openedAt: string | null;
 }
 
+export type LxpPathStatus = 'active' | 'completed';
+
+export interface LxpPathSummary {
+  classId: string;
+  class: EligibleClass['class'];
+  interventionCaseId: string | null;
+  status: LxpPathStatus;
+  isAtRisk: boolean;
+  blendedScore: number | null;
+  thresholdApplied: number;
+  openedAt: string | null;
+  closedAt: string | null;
+  counts: {
+    steps: number;
+    replays: number;
+    pending: number;
+    total: number;
+    completed: number;
+  };
+  progress: {
+    totalCheckpoints: number;
+    completedCheckpoints: number;
+    completionPercent: number;
+  };
+}
+
 export interface EligibilityResponse {
   threshold: number;
   eligibleClasses: EligibleClass[];
+  paths?: LxpPathSummary[];
 }
 
 export interface LxpCheckpoint {
@@ -46,6 +73,7 @@ export interface PlaylistResponse {
     id: string;
     status: string;
     openedAt: string;
+    closedAt?: string | null;
     thresholdApplied: number;
     triggerScore: number | null;
   };

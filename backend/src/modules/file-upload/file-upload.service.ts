@@ -42,6 +42,7 @@ interface SaveFileRecordDto {
   classId?: string;
   folderId?: string;
   scope?: FileScopeDto;
+  aiEnabled?: boolean;
   originalName: string;
   storedName: string;
   mimeType: string;
@@ -51,7 +52,7 @@ interface SaveFileRecordDto {
   gradeLevel?: GradeLevelDto;
   teacherVisible?: boolean;
   contentHash?: string;
-  fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx';
+  fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx' | 'image';
 }
 
 interface CreateFolderDto {
@@ -103,22 +104,95 @@ export class FileUploadService {
   }
 
   private async ensureClassOwnedByUser(classId: string, user: RequestUser) {
-    if (this.isAdmin(user)) return;
-
     const classRow = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
-      columns: { id: true, teacherId: true },
+      columns: {
+        id: true,
+        teacherId: true,
+        subjectCode: true,
+        subjectName: true,
+        subjectGradeLevel: true,
+      },
     });
 
     if (!classRow) {
       throw new NotFoundException(`Class with ID "${classId}" not found`);
     }
 
-    if (classRow.teacherId !== user.id) {
+    if (!this.isAdmin(user) && classRow.teacherId !== user.id) {
       throw new ForbiddenException(
         'You can only attach files to classes that you teach',
       );
     }
+
+    return classRow;
+  }
+
+  private normalizeSubjectKey(
+    subjectCode?: string | null,
+    subjectName?: string | null,
+  ): LibrarySubjectKeyDto | undefined {
+    const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+    if (raw.includes('science') || raw.includes('sci')) {
+      return LibrarySubjectKeyDto.Science;
+    }
+    if (raw.includes('math')) {
+      return LibrarySubjectKeyDto.Math;
+    }
+    if (raw.includes('english') || raw.includes('eng')) {
+      return LibrarySubjectKeyDto.English;
+    }
+    if (raw.includes('filipino') || raw.includes('fil')) {
+      return LibrarySubjectKeyDto.Filipino;
+    }
+    if (
+      raw.includes('araling') ||
+      raw.includes('panlipunan') ||
+      /\bap\b/.test(raw)
+    ) {
+      return LibrarySubjectKeyDto.AralingPanlipunan;
+    }
+    if (raw.includes('tle')) {
+      return LibrarySubjectKeyDto.Tle;
+    }
+    if (raw.includes('mapeh')) {
+      return LibrarySubjectKeyDto.Mapeh;
+    }
+    if (
+      raw.includes('esp') ||
+      raw.includes('values') ||
+      raw.includes('pagpapakatao')
+    ) {
+      return LibrarySubjectKeyDto.Esp;
+    }
+    return undefined;
+  }
+
+  private normalizeGradeLevel(value?: string | null): GradeLevelDto | undefined {
+    const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+    if (!match) {
+      return undefined;
+    }
+
+    if (match[1] === '7') return GradeLevelDto.Grade7;
+    if (match[1] === '8') return GradeLevelDto.Grade8;
+    if (match[1] === '9') return GradeLevelDto.Grade9;
+    if (match[1] === '10') return GradeLevelDto.Grade10;
+    return undefined;
+  }
+
+  private derivePartitionFromClass(classRow: {
+    subjectCode?: string | null;
+    subjectName?: string | null;
+    subjectGradeLevel?: string | null;
+  }) {
+    return {
+      subjectKey: this.normalizeSubjectKey(
+        classRow.subjectCode,
+        classRow.subjectName,
+      ),
+      gradeLevel: this.normalizeGradeLevel(classRow.subjectGradeLevel),
+    };
   }
 
   private async ensureFolderAccessible(id: string, user: RequestUser) {
@@ -163,18 +237,27 @@ export class FileUploadService {
     }
   }
 
-  private ensureGeneralPartition(input: {
+  private ensureAiReadyPartition(input: {
     scope?: FileScopeDto | 'private' | 'general' | null;
+    aiEnabled?: boolean | null;
     subjectKey?: LibrarySubjectKeyDto | string | null;
     gradeLevel?: GradeLevelDto | string | null;
   }) {
-    if (input.scope !== FileScopeDto.General) return;
+    if (input.scope !== FileScopeDto.General && input.aiEnabled !== true) {
+      return;
+    }
 
     if (!input.subjectKey || !input.gradeLevel) {
       throw new BadRequestException(
-        'General module uploads must specify subjectKey and gradeLevel.',
+        'AI-ready library files must specify subjectKey and gradeLevel.',
       );
     }
+  }
+
+  private isIndexableFileKind(
+    fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx' | 'image' | null,
+  ) {
+    return !fileKind || fileKind === 'pdf' || fileKind === 'txt' || fileKind === 'pptx';
   }
 
   private async logFileAction(
@@ -287,17 +370,57 @@ export class FileUploadService {
       email: '',
       roles: ['teacher'],
     };
+    const fileKind = dto.fileKind ?? LibraryFileKindDto.Pdf;
+    const aiEnabled = this.isIndexableFileKind(fileKind)
+      ? dto.aiEnabled ?? true
+      : false;
+    const scope = dto.scope ?? FileScopeDto.Private;
+    let classContext: Awaited<
+      ReturnType<typeof this.ensureClassOwnedByUser>
+    > | null = null;
 
-    this.ensureCanWriteScope(dto.scope, actingUser);
-    this.ensureGeneralPartition({
-      scope: dto.scope ?? FileScopeDto.Private,
-      subjectKey: dto.subjectKey,
-      gradeLevel: dto.gradeLevel,
-    });
+    this.ensureCanWriteScope(scope, actingUser);
 
     if (dto.classId) {
-      await this.ensureClassOwnedByUser(dto.classId, actingUser);
+      classContext = await this.ensureClassOwnedByUser(dto.classId, actingUser);
     }
+
+    const derivedPartition = classContext
+      ? this.derivePartitionFromClass(classContext)
+      : { subjectKey: undefined, gradeLevel: undefined };
+    const resolvedSubjectKey =
+      dto.subjectKey ?? derivedPartition.subjectKey ?? null;
+    const resolvedGradeLevel =
+      dto.gradeLevel ?? derivedPartition.gradeLevel ?? null;
+
+    if (
+      dto.classId &&
+      dto.subjectKey &&
+      derivedPartition.subjectKey &&
+      dto.subjectKey !== derivedPartition.subjectKey
+    ) {
+      throw new BadRequestException(
+        'Class-specific uploads must use subjectKey that matches the class subject.',
+      );
+    }
+
+    if (
+      dto.classId &&
+      dto.gradeLevel &&
+      derivedPartition.gradeLevel &&
+      dto.gradeLevel !== derivedPartition.gradeLevel
+    ) {
+      throw new BadRequestException(
+        'Class-specific uploads must use gradeLevel that matches the class grade.',
+      );
+    }
+
+    this.ensureAiReadyPartition({
+      scope,
+      aiEnabled,
+      subjectKey: resolvedSubjectKey,
+      gradeLevel: resolvedGradeLevel,
+    });
 
     if (dto.folderId) {
       const folder = await this.ensureFolderWritable(dto.folderId, actingUser);
@@ -314,22 +437,22 @@ export class FileUploadService {
         teacherId: dto.teacherId,
         classId: dto.classId ?? null,
         folderId: dto.folderId ?? null,
-        scope: dto.scope ?? FileScopeDto.Private,
+        scope,
+        aiEnabled,
         originalName: dto.originalName,
         storedName: dto.storedName,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
         filePath: dto.filePath,
-        subjectKey: dto.subjectKey ?? null,
-        gradeLevel: dto.gradeLevel ?? null,
+        subjectKey: resolvedSubjectKey,
+        gradeLevel: resolvedGradeLevel,
         teacherVisible: dto.teacherVisible ?? true,
-        indexStatus:
-          (dto.scope ?? FileScopeDto.Private) === FileScopeDto.General
-            ? LibraryIndexStatusDto.Pending
-            : LibraryIndexStatusDto.NotIndexed,
+        indexStatus: aiEnabled
+          ? LibraryIndexStatusDto.Pending
+          : LibraryIndexStatusDto.NotIndexed,
         indexError: null,
         contentHash: dto.contentHash ?? null,
-        fileKind: dto.fileKind ?? LibraryFileKindDto.Pdf,
+        fileKind,
       })
       .returning();
 
@@ -343,7 +466,7 @@ export class FileUploadService {
       sizeBytes: record.sizeBytes,
     });
 
-    if (record.scope === FileScopeDto.General) {
+    if (record.aiEnabled) {
       await this.libraryIndexingService?.queueFileIndex(record.id, {
         actorId: actingUser.id,
         reason: 'upload',
@@ -548,13 +671,17 @@ export class FileUploadService {
       dto.subjectKey === undefined ? record.subjectKey : dto.subjectKey;
     const nextGradeLevel =
       dto.gradeLevel === undefined ? record.gradeLevel : dto.gradeLevel;
+    const nextAiEnabled =
+      dto.aiEnabled === undefined ? record.aiEnabled : dto.aiEnabled;
+    const aiEnabledChanged = nextAiEnabled !== record.aiEnabled;
     const normalizedNextScope = nextScope as FileScopeDto;
     const normalizedSubjectKey = nextSubjectKey as LibrarySubjectKeyDto | null;
     const normalizedGradeLevel = nextGradeLevel as GradeLevelDto | null;
 
     this.ensureCanWriteScope(normalizedNextScope, user);
-    this.ensureGeneralPartition({
+    this.ensureAiReadyPartition({
       scope: normalizedNextScope,
+      aiEnabled: nextAiEnabled,
       subjectKey: normalizedSubjectKey,
       gradeLevel: normalizedGradeLevel,
     });
@@ -582,14 +709,16 @@ export class FileUploadService {
         classId:
           dto.classId === undefined ? record.classId : (dto.classId ?? null),
         scope: normalizedNextScope,
-        subjectKey:
-          normalizedNextScope === FileScopeDto.General
-            ? normalizedSubjectKey
-            : null,
-        gradeLevel:
-          normalizedNextScope === FileScopeDto.General
-            ? normalizedGradeLevel
-            : null,
+        aiEnabled: nextAiEnabled,
+        subjectKey: normalizedSubjectKey,
+        gradeLevel: normalizedGradeLevel,
+        indexStatus: aiEnabledChanged
+          ? nextAiEnabled
+            ? LibraryIndexStatusDto.Pending
+            : LibraryIndexStatusDto.NotIndexed
+          : record.indexStatus,
+        indexError: aiEnabledChanged ? null : record.indexError,
+        indexedAt: aiEnabledChanged ? null : record.indexedAt,
         teacherVisible:
           dto.teacherVisible === undefined
             ? record.teacherVisible
@@ -600,7 +729,7 @@ export class FileUploadService {
     const partitionChanged =
       record.subjectKey !== nextSubjectKey ||
       record.gradeLevel !== nextGradeLevel;
-    if (normalizedNextScope === FileScopeDto.General && partitionChanged) {
+    if (partitionChanged && nextAiEnabled) {
       await this.db
         .update(contentChunks)
         .set({
@@ -611,6 +740,24 @@ export class FileUploadService {
         .where(eq(contentChunks.libraryFileId, id));
     }
 
+    if (aiEnabledChanged && nextAiEnabled) {
+      await this.libraryIndexingService?.queueFileIndex(id, {
+        actorId: user.id,
+        reason: 'metadata_update',
+      });
+      await this.logFileAction(user.id, 'file.index_queued', id, {
+        reason: 'metadata_update',
+        subjectKey: normalizedSubjectKey,
+        gradeLevel: normalizedGradeLevel,
+      });
+    }
+
+    if (record.aiEnabled && aiEnabledChanged && !nextAiEnabled) {
+      await this.db
+        .delete(contentChunks)
+        .where(eq(contentChunks.libraryFileId, id));
+    }
+
     await this.logFileAction(user.id, 'file.updated', id, {
       previousScope: record.scope,
       nextScope,
@@ -618,6 +765,8 @@ export class FileUploadService {
       nextSubjectKey,
       previousGradeLevel: record.gradeLevel,
       nextGradeLevel,
+      previousAiEnabled: record.aiEnabled,
+      nextAiEnabled,
       teacherVisible:
         dto.teacherVisible === undefined
           ? record.teacherVisible
@@ -666,13 +815,15 @@ export class FileUploadService {
 
   async retryIndex(id: string, user: RequestUser) {
     const record = await this.ensureFileWritable(id, user);
-    if (record.scope !== FileScopeDto.General) {
-      throw new BadRequestException(
-        'Only general module files can be indexed.',
-      );
+    if (!this.isIndexableFileKind(record.fileKind as LibraryFileKindDto | null)) {
+      throw new BadRequestException('Image files cannot be indexed for AI search.');
     }
-    this.ensureGeneralPartition({
+    if (!record.aiEnabled) {
+      throw new BadRequestException('Only AI-enabled files can be indexed.');
+    }
+    this.ensureAiReadyPartition({
       scope: record.scope as FileScopeDto,
+      aiEnabled: record.aiEnabled as boolean,
       subjectKey: record.subjectKey as LibrarySubjectKeyDto | null,
       gradeLevel: record.gradeLevel as GradeLevelDto | null,
     });

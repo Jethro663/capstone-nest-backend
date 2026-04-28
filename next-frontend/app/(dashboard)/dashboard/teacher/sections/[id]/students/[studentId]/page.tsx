@@ -3,13 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  ArrowLeft,
-  BookOpenText,
-  ClipboardCheck,
-  IdCard,
-  UserRound,
-} from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { sectionService, type TeacherSectionStudentProfile } from '@/services/section-service';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -76,11 +70,6 @@ export default function TeacherSectionStudentProfilePage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-36 rounded-2xl" />
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-28 rounded-2xl" />
-          ))}
-        </div>
         <Skeleton className="h-52 rounded-2xl" />
         <div className="grid gap-4 lg:grid-cols-2">
           <Skeleton className="h-56 rounded-2xl" />
@@ -130,30 +119,7 @@ export default function TeacherSectionStudentProfilePage() {
         </div>
       </section>
 
-      <section className="teacher-student-profile__stats teacher-student-profile__reveal teacher-student-profile__reveal--delay-1">
-        <article>
-          <BookOpenText className="h-5 w-5" />
-          <strong>{profileData.sectionInfo.gradeLevel || '--'}</strong>
-          <span>Grade Level</span>
-        </article>
-        <article>
-          <IdCard className="h-5 w-5" />
-          <strong>{profile?.lrn || '--'}</strong>
-          <span>LRN</span>
-        </article>
-        <article>
-          <ClipboardCheck className="h-5 w-5" />
-          <strong>{profileData.sectionInfo.schoolYear || '--'}</strong>
-          <span>School Year</span>
-        </article>
-        <article>
-          <UserRound className="h-5 w-5" />
-          <strong>{profileData.section?.roomNumber || '--'}</strong>
-          <span>Room</span>
-        </article>
-      </section>
-
-      <section className="teacher-student-profile__panel teacher-student-profile__reveal teacher-student-profile__reveal--delay-2">
+      <section className="teacher-student-profile__panel teacher-student-profile__reveal teacher-student-profile__reveal--delay-1">
         <header>
           <h2>Student Information</h2>
         </header>
@@ -188,6 +154,22 @@ export default function TeacherSectionStudentProfilePage() {
               <p>{profileData.student.email || '--'}</p>
             </article>
             <article>
+              <small>Grade Level</small>
+              <p>{profileData.sectionInfo.gradeLevel || '--'}</p>
+            </article>
+            <article>
+              <small>LRN</small>
+              <p>{profile?.lrn || '--'}</p>
+            </article>
+            <article>
+              <small>School Year</small>
+              <p>{profileData.sectionInfo.schoolYear || '--'}</p>
+            </article>
+            <article>
+              <small>Room</small>
+              <p>{profileData.section?.roomNumber || '--'}</p>
+            </article>
+            <article>
               <small>Date of Birth</small>
               <p>{formatDate(profile?.dateOfBirth)}</p>
             </article>
@@ -207,7 +189,7 @@ export default function TeacherSectionStudentProfilePage() {
         </div>
       </section>
 
-      <div className="teacher-student-profile__panel-grid teacher-student-profile__reveal teacher-student-profile__reveal--delay-3">
+      <div className="teacher-student-profile__panel-grid teacher-student-profile__reveal teacher-student-profile__reveal--delay-2">
         <section className="teacher-student-profile__panel">
           <header>
             <h2>Section and Adviser</h2>

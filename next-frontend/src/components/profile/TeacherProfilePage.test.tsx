@@ -101,6 +101,37 @@ describe('TeacherProfilePage', () => {
     };
   });
 
+  it('uses profile and security tabs, defaulting to profile details', async () => {
+    mockedTeacherProfileService.getMine.mockResolvedValue({
+      success: true,
+      data: buildTeacherProfile(),
+    } as GetMineResponse);
+
+    render(<TeacherProfilePage />);
+
+    const profileTab = await screen.findByRole('tab', { name: /profile/i });
+    const securityTab = screen.getByRole('tab', { name: /security/i });
+
+    expect(profileTab).toHaveAttribute('data-state', 'active');
+    expect(securityTab).toHaveAttribute('data-state', 'inactive');
+    expect(
+      screen.getByRole('button', { name: /save profile/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Profile Security Card')).not.toBeInTheDocument();
+
+    fireEvent.mouseDown(securityTab, { button: 0 });
+    fireEvent.click(securityTab);
+
+    await waitFor(() => {
+      expect(securityTab).toHaveAttribute('data-state', 'active');
+    });
+
+    expect(
+      screen.queryByRole('button', { name: /save profile/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Profile Security Card')).toBeInTheDocument();
+  });
+
   it('saves valid teacher details and refreshes auth state', async () => {
     mockedTeacherProfileService.getMine
       .mockResolvedValueOnce({
@@ -199,5 +230,24 @@ describe('TeacherProfilePage', () => {
       screen.queryByText(/confirm teacher details/i),
     ).not.toBeInTheDocument();
     expect(mockedTeacherProfileService.update).not.toHaveBeenCalled();
+  });
+
+  it('limits teacher phone typing to an 11-digit local mobile number', async () => {
+    mockedTeacherProfileService.getMine.mockResolvedValue({
+      success: true,
+      data: buildTeacherProfile({
+        phone: '',
+        contactNumber: '',
+      }),
+    } as GetMineResponse);
+
+    render(<TeacherProfilePage />);
+
+    const phoneInput = await screen.findByLabelText('Phone');
+    fireEvent.change(phoneInput, {
+      target: { value: '091712345678999' },
+    });
+
+    expect(phoneInput).toHaveValue('09171234567');
   });
 });

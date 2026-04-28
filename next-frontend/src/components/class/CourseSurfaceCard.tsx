@@ -27,6 +27,7 @@ export interface CourseSurfaceCardProps {
   heroControl?: ReactNode;
   heroWatermark?: ReactNode;
   stats: Array<{ value: string | number; label: string }>;
+  showProgress?: boolean;
   progressPercent: number;
   progressColor: string;
   progressLabel?: string;
@@ -50,6 +51,7 @@ export function CourseSurfaceCard({
   heroControl,
   heroWatermark,
   stats,
+  showProgress = true,
   progressPercent,
   progressColor,
   progressLabel = 'Completion',
@@ -108,20 +110,22 @@ export function CourseSurfaceCard({
           ))}
         </div>
 
-        <div className="teacher-home-card__progress">
-          <div className="teacher-home-card__progress-head">
-            <span>{progressLabel}</span>
-            <strong>{Math.max(0, Math.min(100, progressPercent))}%</strong>
+        {showProgress ? (
+          <div className="teacher-home-card__progress">
+            <div className="teacher-home-card__progress-head">
+              <span>{progressLabel}</span>
+              <strong>{Math.max(0, Math.min(100, progressPercent))}%</strong>
+            </div>
+            <div className="teacher-home-card__progress-track">
+              <div
+                style={{
+                  width: `${Math.max(0, Math.min(100, progressPercent))}%`,
+                  background: progressColor,
+                }}
+              />
+            </div>
           </div>
-          <div className="teacher-home-card__progress-track">
-            <div
-              style={{
-                width: `${Math.max(0, Math.min(100, progressPercent))}%`,
-                background: progressColor,
-              }}
-            />
-          </div>
-        </div>
+        ) : null}
 
         <div className="teacher-home-card__actions">
           {actions.map((action) => {

@@ -222,6 +222,7 @@ export default function AdminCalendarPage() {
     if (!selectedSchoolYear) return null;
     if (!form.title.trim()) return null;
     if (!form.startsAt || !form.endsAt) return null;
+    if (form.eventType === 'school_event' && !form.location.trim()) return null;
 
     const startsAt = form.allDay ? toIsoDateRange(form.startsAt, false) : toIsoDateTime(form.startsAt);
     const endsAt = form.allDay ? toIsoDateRange(form.endsAt, true) : toIsoDateTime(form.endsAt);
@@ -241,6 +242,10 @@ export default function AdminCalendarPage() {
   };
 
   const submitForm = async () => {
+    if (form.eventType === 'school_event' && !form.location.trim()) {
+      toast.error('Location is required for school events.');
+      return;
+    }
     const payload = getPayload();
     if (!payload) {
       toast.error('Please complete the form and ensure the end date is not earlier than the start date.');
@@ -377,6 +382,7 @@ export default function AdminCalendarPage() {
                 value={form.location}
                 onChange={(event) => setField('location', event.target.value)}
                 placeholder="Main Campus Quadrangle"
+                required={form.eventType === 'school_event'}
               />
             </div>
             <div className={styles.fieldCheckbox}>

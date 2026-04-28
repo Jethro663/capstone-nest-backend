@@ -4,47 +4,287 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import {
   AnimatedEntrance,
-  Card,
-  EmptyState,
-  FloatingIconButton,
-  GradientHeader,
-  Pill,
-  ProgressBar,
   Refreshable,
   ScreenScroll,
-  SearchField,
-  SectionTitle,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
-import { queryKeys, usePerformanceSummary, useStudentClasses } from "../api/hooks";
+import { peekAppError } from "../api/http";
+import { queryKeys, useStudentClasses } from "../api/hooks";
 import { announcementsApi } from "../api/services/announcements";
+import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
-import { findContinueLearning, toAnnouncementPreview, toLessonCards, toSubjectCard } from "../data/mappers";
+import { modulesApi } from "../api/services/modules";
 import { useAuth } from "../providers/AuthProvider";
-import type { MainTabParamList, RootStackParamList } from "../navigation/types";
-import { colors, gradients, shadow } from "../theme/tokens";
+import type {
+  ClassDetailInitialTab,
+  MainTabParamList,
+  RootStackParamList,
+} from "../navigation/types";
+import type { Assessment } from "../types/assessment";
+import type { Announcement } from "../types/announcement";
+import type { ClassItem } from "../types/class";
+import type { LessonCompletion } from "../types/lesson";
+import type { ClassModule, ModuleItem } from "../types/module";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Classes">,
   NativeStackScreenProps<RootStackParamList>
 >;
 
+type ClassFilterKey = "allClasses" | "inProgress" | "completed" | "hidden";
+type ChannelKey = "modules" | "assignments" | "announcements" | "calendar";
+
+type ModuleLessonItem = ModuleItem & {
+  lessonId?: string;
+  lesson?: { title?: string; isDraft?: boolean | null } | null;
+};
+
+type DerivedClassItem = {
+  id: string;
+  subjectName: string;
+  subjectCode: string;
+  sectionName: string;
+  teacherName: string;
+  badgeText: string;
+  avatarColor: string;
+  progress: number;
+  completedLessons: number;
+  totalLessons: number;
+  assessmentsCount: number;
+  announcementsCount: number;
+  calendarCount: number;
+  status: "inProgress" | "completed";
+};
+
+const darkTheme = {
+  bg: "#141414",
+  topbar: "#1C1C1C",
+  surface: "#1E1E1E",
+  active: "#252525",
+  channel: "#191919",
+  border: "rgba(255,255,255,0.07)",
+  text: "#E8E8E8",
+  muted: "#777777",
+  subtext: "rgba(255,255,255,0.45)",
+  dim: "#444444",
+  red: "#E8294E",
+  blue: "#4A8CF7",
+  green: "#22C97A",
+  purple: "#A78BFA",
+  amber: "#FBBF24",
+} as const;
+
+const avatarColors = ["#1D4ED8", "#15803D", "#6D28D9"] as const;
+
+const filterTabs: Array<{ key: ClassFilterKey; label: string }> = [
+  { key: "allClasses", label: "All Classes" },
+  { key: "inProgress", label: "In Progress" },
+  { key: "completed", label: "Completed" },
+  { key: "hidden", label: "Hidden" },
+];
+
+const channelConfig: Record<
+  ChannelKey,
+  {
+    label: string;
+    icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+    background: string;
+    color: string;
+  }
+> = {
+  modules: {
+    label: "Modules",
+    icon: "book-open-page-variant-outline",
+    background: "rgba(74,140,247,0.14)",
+    color: "#6AABFF",
+  },
+  assignments: {
+    label: "Assignments",
+    icon: "file-document-outline",
+    background: "rgba(251,191,36,0.14)",
+    color: darkTheme.amber,
+  },
+  announcements: {
+    label: "Announcements",
+    icon: "bell-outline",
+    background: "rgba(232,41,78,0.14)",
+    color: "#FF6B87",
+  },
+  calendar: {
+    label: "Calendar",
+    icon: "calendar-blank-outline",
+    background: "rgba(34,201,122,0.14)",
+    color: "#4EDD9C",
+  },
+};
+
+function getVisibleLessons(modules: ClassModule[]) {
+  return modules.flatMap((moduleEntry) => {
+    if (moduleEntry.isLocked) return [];
+
+    const sections = Array.isArray(moduleEntry.sections) ? moduleEntry.sections : [];
+
+    return sections
+      .slice()
+      .sort((left, right) => left.order - right.order)
+      .flatMap((section) =>
+        section.items
+          .map((item) => item as ModuleLessonItem)
+          .slice()
+          .sort((left, right) => left.order - right.order)
+          .flatMap((item) => {
+            if (item.itemType !== "lesson" || !item.lessonId || item.lesson?.isDraft) {
+              return [];
+            }
+
+            return [{ id: item.lessonId }];
+          }),
+      );
+  });
+}
+
+function resolveSubjectName(classItem: ClassItem) {
+  return classItem.subjectName || classItem.className || classItem.name || "Class";
+}
+
+function resolveSubjectCode(classItem: ClassItem) {
+  return classItem.subjectCode || "CLASS";
+}
+
+function resolveSectionName(classItem: ClassItem) {
+  return classItem.section?.name || classItem.className || classItem.name || "Section";
+}
+
+function resolveTeacherName(classItem: ClassItem) {
+  return (
+    [classItem.teacher?.firstName, classItem.teacher?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || "Teacher not assigned"
+  );
+}
+
+function resolveBadgeText(classItem: ClassItem, index: number) {
+  const subjectCode = resolveSubjectCode(classItem)
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  if (subjectCode.length >= 2) {
+    return subjectCode.slice(0, 2);
+  }
+
+  const subjectName = resolveSubjectName(classItem)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  if (subjectName.length >= 2) {
+    return subjectName.slice(0, 2);
+  }
+
+  return `C${index + 1}`;
+}
+
+function resolveUserInitials(firstName?: string, lastName?: string, email?: string) {
+  const fromNames = [firstName, lastName]
+    .filter(Boolean)
+    .map((value) => value?.trim()?.[0] ?? "")
+    .join("")
+    .toUpperCase();
+  if (fromNames.length >= 2) {
+    return fromNames.slice(0, 2);
+  }
+
+  if (fromNames.length === 1) {
+    return `${fromNames}N`;
+  }
+
+  return (email?.slice(0, 2) || "NR").toUpperCase();
+}
+
+function formatLessonCount(count: number) {
+  return `${count} ${count === 1 ? "lesson" : "lessons"}`;
+}
+
+function formatEventCount(count: number) {
+  return `${count} ${count === 1 ? "event" : "events"}`;
+}
+
+function buildSubtitle(item: DerivedClassItem) {
+  return `${item.subjectCode} · ${item.sectionName} · ${item.teacherName}`;
+}
+
+function buildChannelBadge(item: DerivedClassItem, key: ChannelKey) {
+  switch (key) {
+    case "modules":
+      return formatLessonCount(item.totalLessons);
+    case "assignments":
+      return `${item.assessmentsCount} pending`;
+    case "announcements":
+      return `${item.announcementsCount} new`;
+    case "calendar":
+      return formatEventCount(item.calendarCount);
+  }
+}
+
+function navigateToChannel(navigation: Props["navigation"], classId: string, channel: ChannelKey) {
+  if (channel === "modules") {
+    navigation.navigate("ClassDetail", { classId });
+    return;
+  }
+
+  const initialTabMap: Record<Exclude<ChannelKey, "modules">, ClassDetailInitialTab> = {
+    assignments: "assignments",
+    announcements: "announcements",
+    calendar: "calendar",
+  };
+
+  navigation.navigate("ClassDetail", {
+    classId,
+    initialTab: initialTabMap[channel],
+  });
+}
+
+function DarkNotice({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <View
+      style={{
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: darkTheme.border,
+        backgroundColor: darkTheme.surface,
+        padding: 16,
+      }}
+    >
+      <Text style={{ color: darkTheme.text, fontSize: 14, fontWeight: "800" }}>{title}</Text>
+      <Text style={{ marginTop: 6, color: darkTheme.muted, fontSize: 12, lineHeight: 18 }}>
+        {subtitle}
+      </Text>
+    </View>
+  );
+}
+
 export function LessonsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ClassFilterKey>("allClasses");
+  const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
+
   const classesQuery = useStudentClasses(user?.userId || user?.id);
-  const performanceQuery = usePerformanceSummary();
+  const classIds = useMemo(
+    () => classesQuery.data?.map((classItem) => classItem.id) ?? [],
+    [classesQuery.data],
+  );
 
-  const classIds = useMemo(() => classesQuery.data?.map((classItem) => classItem.id) ?? [], [classesQuery.data]);
-
-  const lessonQueries = useQueries({
+  const moduleQueries = useQueries({
     queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessons(classId),
-      queryFn: () => lessonsApi.getByClass(classId),
+      queryKey: queryKeys.classModules(classId),
+      queryFn: () => modulesApi.getByClass(classId),
       enabled: classIds.length > 0,
     })),
   });
@@ -58,300 +298,478 @@ export function LessonsScreen({ navigation }: Props) {
   });
 
   const announcementQueries = useQueries({
-    queries: classIds.slice(0, 3).map((classId) => ({
+    queries: classIds.map((classId) => ({
       queryKey: queryKeys.announcements(classId),
       queryFn: () => announcementsApi.getByClass(classId),
       enabled: classIds.length > 0,
     })),
   });
 
-  const subjectCards = useMemo(() => {
-    if (!classesQuery.data) return [];
+  const assessmentQueries = useQueries({
+    queries: classIds.map((classId) => ({
+      queryKey: queryKeys.assessments(classId),
+      queryFn: () => assessmentsApi.getByClass(classId),
+      enabled: classIds.length > 0,
+    })),
+  });
 
-    return classesQuery.data.map((classItem, index) =>
-      toSubjectCard(
-        classItem,
-        lessonQueries[index]?.data ?? [],
-        completionQueries[index]?.data ?? [],
-        performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
-      ),
-    );
-  }, [classesQuery.data, completionQueries, lessonQueries, performanceQuery.data?.classes]);
+  const derivedClasses = useMemo<DerivedClassItem[]>(() => {
+    return (classesQuery.data ?? []).map((classItem, index) => {
+      const visibleLessons = getVisibleLessons(moduleQueries[index]?.data ?? []);
+      const visibleLessonIds = new Set(visibleLessons.map((lesson) => lesson.id));
+      const completions = ((completionQueries[index]?.data ?? []) as LessonCompletion[]).filter((entry) =>
+        visibleLessonIds.has(entry.lessonId),
+      );
+      const completedLessons = completions.filter((entry) => entry.completed).length;
+      const totalLessons = visibleLessons.length;
+      const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+      const assessments = ((assessmentQueries[index]?.data ?? []) as Assessment[]).filter(
+        (assessment) => assessment.isPublished !== false,
+      );
+      const announcements = (announcementQueries[index]?.data ?? []) as Announcement[];
+      const calendarCount =
+        (classItem.schedules?.length ?? 0) +
+        assessments.filter((assessment) => Boolean(assessment.dueDate)).length;
 
-  const lessonMap = useMemo(
-    () =>
-      Object.fromEntries(
-        subjectCards.map((subject, index) => [
-          subject.id,
-          toLessonCards(lessonQueries[index]?.data ?? [], completionQueries[index]?.data ?? [], subject),
-        ]),
-      ),
-    [completionQueries, lessonQueries, subjectCards],
-  );
+      return {
+        id: classItem.id,
+        subjectName: resolveSubjectName(classItem),
+        subjectCode: resolveSubjectCode(classItem),
+        sectionName: resolveSectionName(classItem),
+        teacherName: resolveTeacherName(classItem),
+        badgeText: resolveBadgeText(classItem, index),
+        avatarColor: avatarColors[index % avatarColors.length],
+        progress,
+        completedLessons,
+        totalLessons,
+        assessmentsCount: assessments.length,
+        announcementsCount: announcements.length,
+        calendarCount,
+        status: totalLessons > 0 && progress >= 100 ? "completed" : "inProgress",
+      };
+    });
+  }, [
+    announcementQueries,
+    assessmentQueries,
+    classesQuery.data,
+    completionQueries,
+    moduleQueries,
+  ]);
 
-  const announcements = useMemo(
-    () =>
-      announcementQueries.flatMap((query, index) => {
-        const subject = subjectCards[index];
-        if (!subject || !query.data) return [];
-        return query.data.map((announcement) => toAnnouncementPreview(announcement, subject));
-      }),
-    [announcementQueries, subjectCards],
-  );
+  const filteredClasses = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
 
-  const continueLearning = useMemo(() => findContinueLearning(subjectCards, lessonMap), [lessonMap, subjectCards]);
-  const filteredSubjects = subjectCards.filter((subject) =>
-    `${subject.name} ${subject.subjectCode || ""}`.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-  );
+    return derivedClasses.filter((classItem) => {
+      const matchesFilter =
+        activeFilter === "allClasses"
+          ? true
+          : activeFilter === "hidden"
+            ? false
+            : classItem.status === activeFilter;
 
-  const overallProgress =
-    subjectCards.length > 0
-      ? Math.round(subjectCards.reduce((total, subject) => total + subject.progress, 0) / subjectCards.length)
-      : 0;
+      const matchesSearch =
+        normalizedQuery.length === 0
+          ? true
+          : [
+              classItem.subjectName,
+              classItem.subjectCode,
+              classItem.sectionName,
+              classItem.teacherName,
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(normalizedQuery);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [activeFilter, derivedClasses, searchQuery]);
 
   const refreshing =
     classesQuery.isRefetching ||
-    performanceQuery.isRefetching ||
-    lessonQueries.some((query) => query.isRefetching) ||
+    moduleQueries.some((query) => query.isRefetching) ||
     completionQueries.some((query) => query.isRefetching) ||
-    announcementQueries.some((query) => query.isRefetching);
+    announcementQueries.some((query) => query.isRefetching) ||
+    assessmentQueries.some((query) => query.isRefetching);
+
   const primaryError =
     classesQuery.error ||
-    performanceQuery.error ||
-    lessonQueries.find((query) => query.error)?.error ||
+    moduleQueries.find((query) => query.error)?.error ||
     completionQueries.find((query) => query.error)?.error ||
-    announcementQueries.find((query) => query.error)?.error;
+    announcementQueries.find((query) => query.error)?.error ||
+    assessmentQueries.find((query) => query.error)?.error;
 
   const handleRefresh = () => {
     void Promise.all([
       classesQuery.refetch(),
-      performanceQuery.refetch(),
       ...classIds.flatMap((classId) => [
-        queryClient.invalidateQueries({ queryKey: queryKeys.lessons(classId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.lessonCompletions(classId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.announcements(classId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.assessments(classId) }),
       ]),
     ]);
   };
 
+  const userInitials = resolveUserInitials(user?.firstName, user?.lastName, user?.email);
+
   return (
-    <ScreenScroll refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}>
-      <GradientHeader
-        colors={gradients.classes}
-        eyebrow={`Welcome back, ${user?.firstName || "Student"} 👋`}
-        title="My Classes"
-        rightContent={<FloatingIconButton icon="refresh" onPress={handleRefresh} />}
-      >
-        <View style={{ marginTop: 16, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.18)", padding: 16 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View>
-              <Text style={{ color: colors.white, fontSize: 12, fontWeight: "700" }}>Daily progress target</Text>
-              <Text style={{ marginTop: 3, color: colors.white, fontSize: 22, fontWeight: "900" }}>
-                {overallProgress}% learning rhythm
-              </Text>
+    <ScreenScroll
+      backgroundColor={darkTheme.bg}
+      refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}
+    >
+      <View style={{ backgroundColor: darkTheme.bg }}>
+        <View
+          style={{
+            backgroundColor: darkTheme.topbar,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: darkTheme.border,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: darkTheme.red,
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
+              </View>
+              <Text style={{ color: darkTheme.text, fontSize: 17, fontWeight: "600" }}>My Classes</Text>
             </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Pressable
+                accessibilityLabel="Open class search"
+                onPress={() => setSearchOpen((current) => !current)}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                }}
+              >
+                <MaterialCommunityIcons name="magnify" size={15} color="rgba(255,255,255,0.5)" />
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Refresh class data"
+                onPress={handleRefresh}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                }}
+              >
+                <MaterialCommunityIcons name="bell-outline" size={15} color="rgba(255,255,255,0.5)" />
+              </Pressable>
+
+              <View
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 999,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: darkTheme.red,
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{userInitials}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={{ color: darkTheme.subtext, fontSize: 11, paddingBottom: 10 }}>
+            Welcome back, <Text style={{ color: darkTheme.text, fontWeight: "600" }}>{user?.firstName || "Student"}</Text>
+          </Text>
+
+          {searchOpen || searchQuery ? (
             <View
               style={{
-                width: 58,
-                height: 58,
-                borderRadius: 999,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "rgba(255,255,255,0.22)",
+                gap: 10,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: darkTheme.border,
+                backgroundColor: darkTheme.bg,
+                marginBottom: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
               }}
             >
-              <MaterialCommunityIcons name="rocket-launch" size={28} color={colors.white} />
+              <MaterialCommunityIcons name="magnify" size={16} color={darkTheme.muted} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search classes"
+                placeholderTextColor={darkTheme.muted}
+                style={{ flex: 1, color: darkTheme.text, fontSize: 13, padding: 0 }}
+              />
             </View>
+          ) : null}
+
+          <View style={{ flexDirection: "row" }}>
+            {filterTabs.map((tab) => {
+              const focused = activeFilter === tab.key;
+
+              return (
+                <Pressable
+                  key={tab.key}
+                  onPress={() => setActiveFilter(tab.key)}
+                  style={{
+                    paddingHorizontal: 13,
+                    paddingVertical: 8,
+                    borderBottomWidth: 2,
+                    borderBottomColor: focused ? darkTheme.red : "transparent",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: focused ? darkTheme.red : darkTheme.muted,
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-          <View style={{ marginTop: 12 }}>
-            <ProgressBar value={overallProgress} color={colors.white} trackColor="rgba(255,255,255,0.26)" height={10} />
-          </View>
-          <Text style={{ marginTop: 8, color: "rgba(255,255,255,0.86)", fontSize: 12 }}>
-            Continue lessons, review new announcements, and finish the next due assessment from one place.
-          </Text>
         </View>
 
-        <SearchField value={searchQuery} onChangeText={setSearchQuery} placeholder="Search classes or subjects..." />
-      </GradientHeader>
+        <View style={{ paddingBottom: 76 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingTop: 14,
+              paddingBottom: 6,
+            }}
+          >
+            <Text
+              style={{
+                color: darkTheme.muted,
+                fontSize: 10,
+                fontWeight: "600",
+                letterSpacing: 0.7,
+                textTransform: "uppercase",
+              }}
+            >
+              Courses & Channels
+            </Text>
+            <Text style={{ color: darkTheme.red, fontSize: 10, fontWeight: "600" }}>
+              {filteredClasses.length} {filteredClasses.length === 1 ? "class" : "classes"}
+            </Text>
+          </View>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 22 }}>
-        {classesQuery.isLoading ? (
-          <EmptyState emoji="⏳" title="Loading workspace" subtitle="Pulling your classes and student data now." />
-        ) : (
-          <>
+          <View style={{ gap: 0 }}>
             {primaryError ? (
-              <Card>
-                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Some class data could not load</Text>
-                <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-                  {toAppError(primaryError).message}
-                </Text>
-              </Card>
+              <View style={{ paddingHorizontal: 16, paddingBottom: 14 }}>
+                <DarkNotice title="Some class data could not load" subtitle={peekAppError(primaryError).message} />
+              </View>
             ) : null}
-            <View>
-              <SectionTitle
-                title="Continue Learning 🎯"
-                right={<Pill label={`${continueLearning.length} live`} backgroundColor={colors.paleAmber} color={colors.amber} />}
-              />
-              {continueLearning.length === 0 ? (
-                <Card>
-                  <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>No active lesson yet.</Text>
-                  <Text style={{ marginTop: 4, color: colors.textSecondary, fontSize: 12 }}>
-                    Open one of your classes below to start the next recommended lesson.
-                  </Text>
-                </Card>
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {continueLearning.map(({ lesson, subject }, index) => (
-                    <AnimatedEntrance key={lesson.id} delay={index * 80}>
+
+            {classesQuery.isLoading && derivedClasses.length === 0 ? (
+              <View style={{ paddingHorizontal: 16 }}>
+                <DarkNotice title="Loading classes" subtitle="Pulling your enrolled classes now." />
+              </View>
+            ) : filteredClasses.length === 0 ? (
+              <View style={{ paddingHorizontal: 16 }}>
+                <DarkNotice
+                  title="No classes found"
+                  subtitle="Try another search term or switch the current filter."
+                />
+              </View>
+            ) : (
+              filteredClasses.map((classItem, index) => {
+                const expanded = expandedClassId === classItem.id;
+                const badgeCount =
+                  classItem.progress >= 100 && classItem.completedLessons > 0
+                    ? classItem.completedLessons
+                    : null;
+
+                return (
+                  <AnimatedEntrance key={classItem.id} delay={index * 50}>
+                    <View>
                       <Pressable
-                        onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}
-                        style={[
-                          {
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 14,
-                            borderRadius: 24,
-                            backgroundColor: colors.white,
-                            padding: 16,
-                          },
-                          shadow.card,
-                        ]}
+                        onPress={() =>
+                          setExpandedClassId((current) => (current === classItem.id ? null : classItem.id))
+                        }
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 12,
+                          paddingHorizontal: 16,
+                          paddingVertical: 11,
+                          borderBottomWidth: 1,
+                          borderBottomColor: darkTheme.border,
+                          backgroundColor: expanded ? darkTheme.surface : darkTheme.bg,
+                        }}
                       >
-                        <View
-                          style={{
-                            width: 56,
-                            height: 56,
-                            borderRadius: 18,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: subject.bgColor,
-                          }}
-                        >
-                          <Text style={{ fontSize: 28 }}>{subject.emoji}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary }}>{subject.name}</Text>
-                          <Text style={{ marginTop: 2, fontSize: 14, fontWeight: "900", color: colors.text }}>{lesson.title}</Text>
-                          <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>{lesson.description}</Text>
-                        </View>
                         <View
                           style={{
                             width: 40,
                             height: 40,
-                            borderRadius: 999,
+                            borderRadius: 10,
                             alignItems: "center",
                             justifyContent: "center",
-                            backgroundColor: subject.color,
+                            backgroundColor: classItem.avatarColor,
                           }}
                         >
-                          <MaterialCommunityIcons name="play" size={18} color={colors.white} />
+                          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
+                            {classItem.badgeText}
+                          </Text>
                         </View>
-                      </Pressable>
-                    </AnimatedEntrance>
-                  ))}
-                </View>
-              )}
-            </View>
 
-            <View>
-              <SectionTitle
-                title="Announcements 📢"
-                right={<Pill label={`${announcements.length} updates`} backgroundColor={colors.paleBlue} color={colors.blueDeep} />}
-              />
-              {announcements.length === 0 ? (
-                <Card>
-                  <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-                    No recent class announcements were returned by the backend.
-                  </Text>
-                </Card>
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {announcements.slice(0, 3).map((announcement, index) => (
-                    <AnimatedEntrance key={announcement.id} delay={index * 90}>
-                      <Card>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                          <Text style={{ fontSize: 24 }}>{announcement.emoji}</Text>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>{announcement.title}</Text>
-                            <Text style={{ marginTop: 2, fontSize: 11, color: colors.textSecondary }}>
-                              {announcement.subject} • {announcement.createdAt}
-                            </Text>
-                          </View>
-                          {announcement.isPinned ? (
-                            <Pill label="Pinned" backgroundColor={colors.paleAmber} color={colors.orange} />
-                          ) : null}
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: darkTheme.text, fontSize: 14, fontWeight: "500" }}
+                          >
+                            {classItem.subjectName}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={{ marginTop: 2, color: darkTheme.muted, fontSize: 11 }}
+                          >
+                            {buildSubtitle(classItem)}
+                          </Text>
                         </View>
-                        <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-                          {announcement.content}
-                        </Text>
-                      </Card>
-                    </AnimatedEntrance>
-                  ))}
-                </View>
-              )}
-            </View>
 
-            <View>
-              <SectionTitle
-                title="My Classes 📚"
-                right={<Pill label={`${subjectCards.length} classes`} backgroundColor={colors.paleIndigo} color={colors.indigo} />}
-              />
-              {filteredSubjects.length === 0 ? (
-                <EmptyState emoji="🔎" title="No matches found" subtitle="Try a different class or subject keyword." />
-              ) : (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12 }}>
-                  {filteredSubjects.map((subject, index) => (
-                    <AnimatedEntrance key={subject.id} delay={index * 70} style={{ width: "48%" }}>
-                      <Pressable onPress={() => navigation.navigate("ClassWorkspace", { classId: subject.id })}>
-                        <Card style={{ minHeight: 190 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           <View
                             style={{
-                              position: "absolute",
-                              top: -16,
-                              right: -16,
-                              width: 72,
-                              height: 72,
-                              borderRadius: 999,
-                              backgroundColor: `${subject.color}24`,
-                            }}
-                          />
-                          <View
-                            style={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: 16,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              backgroundColor: subject.bgColor,
+                              width: 38,
+                              height: 3,
+                              borderRadius: 2,
+                              overflow: "hidden",
+                              backgroundColor: "rgba(255,255,255,0.1)",
                             }}
                           >
-                            <Text style={{ fontSize: 28 }}>{subject.emoji}</Text>
+                            <View
+                              style={{
+                                width: `${Math.max(0, Math.min(100, classItem.progress))}%`,
+                                height: "100%",
+                                borderRadius: 2,
+                                backgroundColor: darkTheme.green,
+                              }}
+                            />
                           </View>
-                          <Text style={{ marginTop: 14, fontSize: 14, fontWeight: "900", color: colors.text }}>
-                            {subject.name}
-                          </Text>
-                          <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>
-                            {subject.subjectCode} • {subject.section}
-                          </Text>
-                          <Text style={{ marginTop: 4, fontSize: 11, color: colors.textSecondary }}>{subject.teacherName}</Text>
-                          <View style={{ marginTop: 12 }}>
-                            <ProgressBar value={subject.progress} color={subject.color} trackColor="#EEF2F7" height={7} />
-                          </View>
-                          <View style={{ marginTop: 10, flexDirection: "row", justifyContent: "space-between" }}>
-                            <Text style={{ fontSize: 11, fontWeight: "800", color: subject.color }}>{subject.progress}%</Text>
-                            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary }}>
-                              {subject.completedLessons}/{subject.totalLessons} lessons
-                            </Text>
-                          </View>
-                        </Card>
+
+                          {badgeCount ? (
+                            <View
+                              style={{
+                                width: 18,
+                                height: 18,
+                                borderRadius: 999,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: darkTheme.purple,
+                              }}
+                            >
+                              <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "700" }}>
+                                {badgeCount}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <MaterialCommunityIcons
+                            name={expanded ? "chevron-down" : "chevron-right"}
+                            size={14}
+                            color={darkTheme.dim}
+                          />
+                          <MaterialCommunityIcons
+                            name="dots-horizontal"
+                            size={16}
+                            color={darkTheme.muted}
+                          />
+                        </View>
                       </Pressable>
-                    </AnimatedEntrance>
-                  ))}
-                </View>
-              )}
-            </View>
-          </>
-        )}
+
+                      {expanded ? (
+                        <View
+                          style={{
+                            backgroundColor: darkTheme.channel,
+                            borderBottomWidth: 1,
+                            borderBottomColor: darkTheme.border,
+                          }}
+                        >
+                          {(["modules", "assignments", "announcements", "calendar"] as ChannelKey[]).map((channel, channelIndex, channels) => {
+                            const config = channelConfig[channel];
+                            const badge = buildChannelBadge(classItem, channel);
+
+                            return (
+                              <Pressable
+                                key={channel}
+                                onPress={() => navigateToChannel(navigation, classItem.id, channel)}
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  paddingTop: 10,
+                                  paddingBottom: 10,
+                                  paddingLeft: 58,
+                                  paddingRight: 16,
+                                  borderBottomWidth: channelIndex === channels.length - 1 ? 0 : 1,
+                                  borderBottomColor: "rgba(255,255,255,0.04)",
+                                }}
+                              >
+                                <MaterialCommunityIcons name={config.icon} size={15} color="#AAAAAA" style={{ opacity: 0.55 }} />
+                                <Text
+                                  style={{
+                                    flex: 1,
+                                    color: "#999999",
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  {config.label}
+                                </Text>
+                                <View
+                                  style={{
+                                    borderRadius: 4,
+                                    backgroundColor: config.background,
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 2,
+                                  }}
+                                >
+                                  <Text style={{ color: config.color, fontSize: 10, fontWeight: "500" }}>
+                                    {badge}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  </AnimatedEntrance>
+                );
+              })
+            )}
+          </View>
+        </View>
       </View>
     </ScreenScroll>
   );

@@ -49,12 +49,11 @@ interface NavItem {
 const studentNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
   { label: "My Courses", href: "/dashboard/student/courses", icon: BookOpen },
-  { label: "LXP", href: "/dashboard/student/lxp", icon: ClipboardList },
-  { label: "JA", href: "/dashboard/student/ja", icon: Bot },
+  { label: "JA Hub", href: "/dashboard/student/ja", icon: Bot },
   {
-    label: "Performance",
-    href: "/dashboard/student/performance",
-    icon: BarChart3,
+    label: "Learners Path",
+    href: "/dashboard/student/lxp",
+    icon: ClipboardList,
   },
   {
     label: "Announcements",
@@ -66,13 +65,14 @@ const studentNav: NavItem[] = [
 
 const teacherNav: NavItem[] = [
   { label: "My Classes", href: "/dashboard/teacher/classes", icon: BookOpen },
+  
+  { label: "My Sections", href: "/dashboard/teacher/sections", icon: Users },
+  { label: "Calendar", href: "/dashboard/teacher/calendar", icon: Activity },
   {
     label: "Nexora Library",
     href: "/dashboard/teacher/library",
     icon: FolderOpen,
   },
-  { label: "My Sections", href: "/dashboard/teacher/sections", icon: Users },
-  { label: "Calendar", href: "/dashboard/teacher/calendar", icon: Activity },
   {
     label: "Class Record",
     href: "/dashboard/teacher/class-record",
@@ -132,6 +132,11 @@ const adminNav: NavItem[] = [
   },
   { label: "AI Chatbot", href: "/dashboard/admin/chatbot", icon: Bot },
   { label: "Audit Trail", href: "/dashboard/admin/audit", icon: History },
+  {
+    label: "System Settings",
+    href: "/dashboard/admin/system-settings",
+    icon: Settings,
+  },
   { label: "Profile", href: "/dashboard/admin/profile", icon: CircleUserRound },
 ];
 

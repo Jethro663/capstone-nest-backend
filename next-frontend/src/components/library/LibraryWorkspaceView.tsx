@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useRef, type KeyboardEvent } from 'react';
-import { motion } from 'framer-motion';
 import {
   ArrowRight,
   Download,
@@ -72,7 +71,10 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
     classFilter,
     subjectFilter,
     gradeFilter,
+    uploadDestination,
     uploadClassId,
+    uploadSubjectKey,
+    uploadGradeLevel,
     page,
     total,
     totalPages,
@@ -88,7 +90,10 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
     setClassFilter,
     setSubjectFilter,
     setGradeFilter,
+    setUploadDestination,
     setUploadClassId,
+    setUploadSubjectKey,
+    setUploadGradeLevel,
     setPage,
     setFolderTrail,
     setCreateFolderOpen,
@@ -104,6 +109,7 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
     handleCreateFolder,
     handleRenameSubmit,
     handleVisibilityToggle,
+    handleAiEnabledToggle,
     handleRetryIndex,
     handleMoveSubmit,
     openMoveDialog,
@@ -111,10 +117,87 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
   } = workspace;
 
   const uploadDisabled = isAdmin && (!subjectFilter || !gradeFilter);
+  const isTeacherGeneralMode = !isAdmin && mode === 'general';
+  const isTeacherPrivateMode = !isAdmin && mode === 'private';
+  const teacherUploadDisabled =
+    !isAdmin &&
+    (!uploadSubjectKey ||
+      !uploadGradeLevel ||
+      (uploadDestination === 'class' && !uploadClassId));
+  const canOpenUploadDialog = isAdmin || isTeacherPrivateMode;
+  const openUploadDisabledReason = isAdmin
+    ? !subjectFilter || !gradeFilter
+      ? 'Choose a subject and grade partition first.'
+      : null
+    : isTeacherGeneralMode
+      ? 'General Modules are read-only for teachers.'
+      : null;
+  const uploadDisabledReason = isAdmin
+    ? !subjectFilter || !gradeFilter
+      ? 'Choose a subject and grade partition first.'
+      : null
+    : isTeacherGeneralMode
+      ? 'General Modules are read-only for teachers.'
+      : !uploadSubjectKey || !uploadGradeLevel
+        ? 'Choose a destination subject and grade first.'
+        : uploadDestination === 'class' && !uploadClassId
+          ? 'Choose a class for class-specific files.'
+          : null;
 
   const breadcrumb = useMemo(() => {
     return ['Library', ...folderTrail.map((folder) => folder.name)];
   }, [folderTrail]);
+
+  const filteredUploadClasses = useMemo(() => {
+    if (isAdmin || uploadDestination !== 'class') return classes;
+    return classes.filter((item) => {
+      const subject = LIBRARY_SUBJECTS.find((entry) => entry.key === uploadSubjectKey);
+      const normalizedSubjectCode = String(item.subjectCode ?? '').toLowerCase();
+      const normalizedSubjectName = String(item.subjectName ?? '').toLowerCase();
+      const subjectMatches = !uploadSubjectKey || (
+        normalizedSubjectCode.includes(uploadSubjectKey) ||
+        normalizedSubjectName.includes(uploadSubjectKey) ||
+        (subject ? normalizedSubjectName.includes(subject.label.toLowerCase()) : false)
+      );
+      const itemGrade = String(item.subjectGradeLevel ?? item.section?.gradeLevel ?? '').trim();
+      const gradeMatches = !uploadGradeLevel || itemGrade === uploadGradeLevel;
+      return subjectMatches && gradeMatches;
+    });
+  }, [classes, isAdmin, uploadDestination, uploadGradeLevel, uploadSubjectKey]);
+
+  const selectedUploadClassMatches =
+    uploadDestination !== 'class' ||
+    !uploadClassId ||
+    filteredUploadClasses.some((item) => item.id === uploadClassId);
+
+  const effectiveTeacherUploadDisabled =
+    teacherUploadDisabled || !selectedUploadClassMatches;
+
+  const classSpecificDisabledReason =
+    !isAdmin &&
+    uploadDestination === 'class' &&
+    uploadSubjectKey &&
+    uploadGradeLevel &&
+    filteredUploadClasses.length === 0
+      ? 'No class matches the selected subject and grade.'
+      : !isAdmin &&
+          uploadDestination === 'class' &&
+          uploadClassId &&
+          !selectedUploadClassMatches
+        ? 'Choose a class that matches the selected subject and grade.'
+        : null;
+
+  const filterScopeLabel = isAdmin
+    ? 'General Modules'
+    : isTeacherGeneralMode
+      ? 'General Modules'
+      : 'My Library';
+
+  const workspaceSummary = isAdmin
+    ? 'Admin-managed subject partitions for AI-ready shared content.'
+    : isTeacherGeneralMode
+      ? 'Read-only institutional resources you can preview, download, and attach to modules.'
+      : 'Your private teaching workspace for personal and class-specific resources.';
 
   return (
     <div className={cn('nexora-library', isAdmin ? 'nexora-library--admin' : 'nexora-library--teacher')}>
@@ -124,34 +207,51 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
             <FolderOpen className="h-5 w-5" />
           </div>
           <div>
+            <p className="nexora-library__eyebrow">{filterScopeLabel}</p>
             <h1 className="nexora-library__title">Nexora Library</h1>
-            <p className="nexora-library__subtitle">
-              {isAdmin ? 'Manage teaching resources and shared modules' : 'Manage teaching resources and classroom modules'}
-            </p>
+            <p className="nexora-library__subtitle">{workspaceSummary}</p>
           </div>
         </div>
 
-        <div className="nexora-library__actions">
-          <Button
-            type="button"
-            variant="outline"
-            className="nexora-library__button nexora-library__button--ghost"
-            onClick={() => setCreateFolderOpen(true)}
-            disabled={isAdmin}
-          >
-            <Plus className="h-4 w-4" />
-            New Folder
-          </Button>
-          <Button
-            type="button"
-            className="nexora-library__button nexora-library__button--solid"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadDisabled}
-            title={uploadDisabled ? 'Choose a subject and grade first' : undefined}
-          >
-            <Upload className="h-4 w-4" />
-            Upload File
-          </Button>
+        <div className="nexora-library__header-side">
+          <div className="nexora-library__scope-card">
+            <span>{files.length} files</span>
+            <span>{totalPages} pages</span>
+            <span>{mode === 'general' || isAdmin ? 'Shared access' : 'Teacher-owned'}</span>
+          </div>
+
+          <div className="nexora-library__actions">
+            {isTeacherPrivateMode ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="nexora-library__button nexora-library__button--ghost"
+                onClick={() => setCreateFolderOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                New Folder
+              </Button>
+            ) : null}
+            {canOpenUploadDialog ? (
+              <Button
+                type="button"
+                className="nexora-library__button nexora-library__button--solid"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={Boolean(openUploadDisabledReason)}
+                title={openUploadDisabledReason ?? undefined}
+              >
+                <Upload className="h-4 w-4" />
+                Upload File
+              </Button>
+            ) : null}
+          </div>
+
+          {openUploadDisabledReason && !selectedUpload ? (
+            <p className="nexora-library__upload-warning text-right">
+              {openUploadDisabledReason}
+            </p>
+          ) : null}
+
           <input
             ref={fileInputRef}
             data-testid="library-upload-input"
@@ -202,7 +302,7 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
           />
         </div>
 
-        {isAdmin ? (
+        {isAdmin || isTeacherGeneralMode ? (
           <>
             <select
               value={subjectFilter}
@@ -232,53 +332,143 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
             </select>
           </>
         ) : (
-          <select
-            value={classFilter}
-            onChange={(event) => setClassFilter(event.target.value)}
-            className="nexora-library__select"
-            aria-label="Class filter"
-          >
-            <option value="">All Classes</option>
-            {classes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.subjectCode} - {item.subjectName}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              value={subjectFilter}
+              onChange={(event) => setSubjectFilter(event.target.value as LibrarySubjectKey | '')}
+              className="nexora-library__select"
+              aria-label="Subject filter"
+            >
+              <option value="">All Subjects</option>
+              {LIBRARY_SUBJECTS.map((subject) => (
+                <option key={subject.key} value={subject.key}>
+                  {subject.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={gradeFilter}
+              onChange={(event) => setGradeFilter(event.target.value as LibraryGradeLevel | '')}
+              className="nexora-library__select"
+              aria-label="Grade filter"
+            >
+              <option value="">All Grades</option>
+              {LIBRARY_GRADES.map((grade) => (
+                <option key={grade} value={grade}>
+                  Grade {grade}
+                </option>
+              ))}
+            </select>
+            <select
+              value={classFilter}
+              onChange={(event) => setClassFilter(event.target.value)}
+              className="nexora-library__select"
+              aria-label="Class filter"
+            >
+              <option value="">All Classes</option>
+              {classes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.subjectCode} - {item.subjectName}
+                </option>
+              ))}
+            </select>
+          </>
         )}
-
-        {!isAdmin ? (
-          <select
-            value={uploadClassId}
-            onChange={(event) => setUploadClassId(event.target.value)}
-            className="nexora-library__select"
-            aria-label="Upload class"
-          >
-            <option value="">Attach upload to class (optional)</option>
-            {classes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.subjectCode} - {item.subjectName}
-              </option>
-            ))}
-          </select>
-        ) : null}
       </section>
 
       {selectedUpload ? (
         <section className="nexora-library__upload-strip" aria-live="polite">
-          <div>
+          <div className="nexora-library__upload-copy">
             <p className="nexora-library__upload-label">Ready to upload</p>
             <p className="nexora-library__upload-file">{selectedUpload.name}</p>
-            {uploadDisabled ? (
-              <p className="text-xs text-amber-700">Select a subject and grade partition before uploading.</p>
+            {uploadDisabledReason || classSpecificDisabledReason ? (
+              <p className="nexora-library__upload-warning">
+                {uploadDisabledReason || classSpecificDisabledReason}
+              </p>
             ) : null}
           </div>
+          {isTeacherPrivateMode ? (
+            <div className="nexora-library__upload-metadata">
+              <div className="nexora-library__segmented" role="group" aria-label="Upload destination">
+                <button
+                  type="button"
+                  className={cn('nexora-library__segment', uploadDestination === 'personal' && 'is-active')}
+                  onClick={() => {
+                    setUploadDestination('personal');
+                    setUploadClassId('');
+                  }}
+                >
+                  Personal
+                </button>
+                <button
+                  type="button"
+                  className={cn('nexora-library__segment', uploadDestination === 'class' && 'is-active')}
+                  onClick={() => setUploadDestination('class')}
+                >
+                  Class-specific
+                </button>
+              </div>
+
+              <label className="nexora-library__field">
+                <span>Upload Subject</span>
+                <select
+                  value={uploadSubjectKey}
+                  onChange={(event) => setUploadSubjectKey(event.target.value as LibrarySubjectKey | '')}
+                  className="nexora-library__select"
+                  aria-label="Upload subject"
+                >
+                  <option value="">Select subject</option>
+                  {LIBRARY_SUBJECTS.map((subject) => (
+                    <option key={subject.key} value={subject.key}>
+                      {subject.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="nexora-library__field">
+                <span>Upload Grade</span>
+                <select
+                  value={uploadGradeLevel}
+                  onChange={(event) => setUploadGradeLevel(event.target.value as LibraryGradeLevel | '')}
+                  className="nexora-library__select"
+                  aria-label="Upload grade"
+                >
+                  <option value="">Select grade</option>
+                  {LIBRARY_GRADES.map((grade) => (
+                    <option key={grade} value={grade}>
+                      Grade {grade}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {uploadDestination === 'class' ? (
+                <label className="nexora-library__field">
+                  <span>Upload class</span>
+                  <select
+                    value={uploadClassId}
+                    onChange={(event) => setUploadClassId(event.target.value)}
+                    className="nexora-library__select"
+                    aria-label="Upload class"
+                  >
+                    <option value="">Select class</option>
+                    {filteredUploadClasses.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.subjectCode} - {item.subjectName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          ) : null}
           <div className="nexora-library__upload-actions">
             <Button
               type="button"
               className="nexora-library__button nexora-library__button--solid"
               onClick={() => void handleUpload()}
-              disabled={uploading || uploadDisabled}
+              disabled={uploading || uploadDisabled || effectiveTeacherUploadDisabled}
             >
               <Upload className="h-4 w-4" />
               {uploading ? 'Uploading...' : 'Upload File'}
@@ -298,42 +488,41 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
         </section>
       ) : null}
 
-      <section className="nexora-library__breadcrumb" aria-label="Library breadcrumb">
-        {breadcrumb.map((segment, index) => (
-          <span key={`${segment}-${index}`} className="nexora-library__crumb-item">
-            {index > 0 ? <ArrowRight className="h-3 w-3" /> : null}
-            {index === 0 ? (
-              <button type="button" onClick={() => setFolderTrail([])}>
-                {segment}
-              </button>
-            ) : (
-              <button type="button" onClick={() => setFolderTrail(folderTrail.slice(0, index))}>
-                {segment}
-              </button>
-            )}
-          </span>
-        ))}
-      </section>
+      {isTeacherPrivateMode ? (
+        <section className="nexora-library__breadcrumb" aria-label="Library breadcrumb">
+          {breadcrumb.map((segment, index) => (
+            <span key={`${segment}-${index}`} className="nexora-library__crumb-item">
+              {index > 0 ? <ArrowRight className="h-3 w-3" /> : null}
+              {index === 0 ? (
+                <button type="button" onClick={() => setFolderTrail([])}>
+                  {segment}
+                </button>
+              ) : (
+                <button type="button" onClick={() => setFolderTrail(folderTrail.slice(0, index))}>
+                  {segment}
+                </button>
+              )}
+            </span>
+          ))}
+        </section>
+      ) : null}
 
-      {!isAdmin ? (
+      {isTeacherPrivateMode ? (
       <section className="nexora-library__folder-grid" aria-label="Library folders">
         {loading ? (
           <div className="nexora-library__panel">Loading library contents...</div>
         ) : folders.length === 0 ? (
           <div className="nexora-library__panel nexora-library__panel--muted">No folders in this view yet.</div>
         ) : (
-          folders.map((folder, index) => {
+          folders.map((folder) => {
             const folderCount =
               typeof (folder as { fileCount?: number }).fileCount === 'number'
                 ? (folder as { fileCount?: number }).fileCount
                 : null;
 
             return (
-              <motion.article
+              <article
                 key={folder.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18, delay: index * 0.02 }}
                 className="nexora-library__folder-card"
                 role="button"
                 tabIndex={0}
@@ -373,7 +562,7 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-              </motion.article>
+              </article>
             );
           })
         )}
@@ -386,7 +575,9 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
           <span>
             {isAdmin
               ? `${subjectFilter ? getSubjectLabel(subjectFilter) : 'All subjects'} - ${gradeFilter ? `Grade ${gradeFilter}` : 'All grades'}`
-              : currentFolder?.name ?? getModeLabel(mode)}
+              : isTeacherGeneralMode
+                ? `${subjectFilter ? getSubjectLabel(subjectFilter) : 'All subjects'} - ${gradeFilter ? `Grade ${gradeFilter}` : 'All grades'}`
+                : currentFolder?.name ?? getModeLabel(mode)}
           </span>
         </header>
 
@@ -411,7 +602,7 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
                     <p className="nexora-library__file-meta">
                       {isAdmin
                         ? `${formatFileSize(file.sizeBytes)} - ${getSubjectLabel(file.subjectKey)} - Grade ${file.gradeLevel ?? '?'} - ${new Date(file.uploadedAt).toLocaleDateString()}`
-                        : `${formatFileSize(file.sizeBytes)} - ${file.class?.subjectName ?? getSubjectLabel(file.subjectKey)} - ${new Date(file.uploadedAt).toLocaleDateString()}`}
+                        : `${formatFileSize(file.sizeBytes)} - ${file.class?.subjectName ?? getSubjectLabel(file.subjectKey)} - Grade ${file.gradeLevel ?? '?'} - ${new Date(file.uploadedAt).toLocaleDateString()}`}
                     </p>
                   </div>
                 </div>
@@ -419,10 +610,28 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
                   <span className={cn('nexora-library__status', file.scope === 'general' && 'is-published')}>
                     {file.scope === 'general' ? 'Published' : 'Private'}
                   </span>
+                  {file.subjectKey ? (
+                    <span className="nexora-library__status">{getSubjectLabel(file.subjectKey)}</span>
+                  ) : null}
+                  {file.gradeLevel ? (
+                    <span className="nexora-library__status">Grade {file.gradeLevel}</span>
+                  ) : null}
                   {isAdmin ? (
                     <span className={cn('nexora-library__status', file.indexStatus === 'completed' && 'is-published')}>
                       {getIndexStatusLabel(file.indexStatus)}
                     </span>
+                  ) : null}
+
+                  {isTeacherPrivateMode ? (
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input
+                        type="checkbox"
+                        aria-label="Use in AI"
+                        checked={file.aiEnabled ?? true}
+                        onChange={() => void handleAiEnabledToggle(file)}
+                      />
+                      Use in AI
+                    </label>
                   ) : null}
 
                   {isAdmin ? (
@@ -474,26 +683,30 @@ export function LibraryWorkspaceView({ variant, workspace }: LibraryWorkspaceVie
                   >
                     <Download className="h-4 w-4" />
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="nexora-library__icon-button"
-                    onClick={() =>
-                      setRenameState({ type: 'file', id: file.id, value: file.originalName })
-                    }
-                    aria-label={`Rename ${file.originalName}`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="nexora-library__icon-button nexora-library__icon-button--danger"
-                    onClick={() => handleDeleteFile(file)}
-                    aria-label={`Delete ${file.originalName}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {!isTeacherGeneralMode ? (
+                    <>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="nexora-library__icon-button"
+                        onClick={() =>
+                          setRenameState({ type: 'file', id: file.id, value: file.originalName })
+                        }
+                        aria-label={`Rename ${file.originalName}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="nexora-library__icon-button nexora-library__icon-button--danger"
+                        onClick={() => handleDeleteFile(file)}
+                        aria-label={`Delete ${file.originalName}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : null}
                 </div>
               </article>
             ))}

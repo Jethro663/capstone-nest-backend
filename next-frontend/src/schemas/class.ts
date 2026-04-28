@@ -13,8 +13,8 @@ export const createClassSchema = z.object({
   sectionId: z.string().min(1, 'Section is required'),
   teacherId: z.string().min(1, 'Teacher is required'),
   schoolYear: z.string().regex(/^\d{4}-\d{4}$/, 'Format: YYYY-YYYY'),
-  room: z.string().optional(),
-  schedules: z.array(scheduleSlotSchema).optional(),
+  room: z.string().trim().min(1, 'Room is required'),
+  schedules: z.array(scheduleSlotSchema).min(1, 'At least one schedule slot is required'),
 });
 export type CreateClassFormValues = z.infer<typeof createClassSchema>;
 

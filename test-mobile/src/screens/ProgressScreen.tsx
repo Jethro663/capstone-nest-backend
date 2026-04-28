@@ -13,7 +13,7 @@ import {
   SimpleBarChart,
   StatCard,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
+import { peekAppError } from "../api/http";
 import { queryKeys, useLxpPlaylist, usePerformanceSummary, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
@@ -121,7 +121,7 @@ export function ProgressScreen(_: Props) {
           <Card>
             <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Progress data is partially unavailable</Text>
             <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-              {toAppError(primaryError).message}
+              {peekAppError(primaryError).message}
             </Text>
           </Card>
         ) : null}

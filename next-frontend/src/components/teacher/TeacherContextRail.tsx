@@ -4,6 +4,8 @@ import { useMemo } from 'react';
 import { CalendarDays, Megaphone } from 'lucide-react';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
+import { normalizeRichText } from '@/lib/rich-text';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 
 interface TeacherContextRailProps {
   announcements: Announcement[];
@@ -118,7 +120,7 @@ export function TeacherContextRail({
             announcements.slice(0, 5).map((announcement) => (
               <article key={announcement.id} className="teacher-context-list__item">
                 <p className="teacher-context-list__title">{announcement.title}</p>
-                <p>{announcement.content}</p>
+                <RichTextRenderer html={normalizeRichText(announcement.content)} />
               </article>
             ))
           )}

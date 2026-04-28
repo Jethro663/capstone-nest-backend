@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { BellRing, Megaphone, Pin, School2 } from 'lucide-react';
 import { announcementService } from '@/services/announcement-service';
 import { classService } from '@/services/class-service';
@@ -16,11 +17,33 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { toast } from 'sonner';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
+import { normalizeRichText, sanitizeRichTextHtml } from '@/lib/rich-text';
+
+const RichTextEditor = dynamic(
+  () =>
+    import('@/components/shared/rich-text/RichTextEditor').then(
+      (mod) => mod.RichTextEditor,
+    ),
+  {
+    loading: () => <Skeleton className="h-16 w-full rounded-xl" />,
+  },
+);
+
+const RichTextRenderer = dynamic(
+  () =>
+    import('@/components/shared/rich-text/RichTextRenderer').then(
+      (mod) => mod.RichTextRenderer,
+    ),
+  {
+    loading: () => <Skeleton className="h-16 w-full rounded-xl" />,
+  },
+);
+
+
 
 export default function AdminAnnouncementsPage() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -67,9 +90,11 @@ export default function AdminAnnouncementsPage() {
   );
 
   const handleCreate = async () => {
-    if (!selectedClassId || !title.trim() || !content.trim()) return;
+    const safeTitle = title.trim();
+    const safeContent = sanitizeRichTextHtml(content).trim();
+    if (!selectedClassId || !safeTitle || !safeContent) return;
     try {
-      await announcementService.create(selectedClassId, { title, content });
+      await announcementService.create(selectedClassId, { title: safeTitle, content: safeContent });
       toast.success('Announcement created');
       setShowCreate(false);
       setTitle('');
@@ -158,7 +183,10 @@ export default function AdminAnnouncementsPage() {
                     </div>
                     <div className="space-y-2">
                       <p className="text-xl font-black text-[var(--admin-text-strong)]">{ann.title}</p>
-                      <p className="max-w-3xl text-sm leading-6 text-[var(--admin-text-muted)]">{ann.content}</p>
+                      <RichTextRenderer
+                        html={normalizeRichText(ann.content)}
+                        className="max-w-3xl text-sm leading-6 text-[var(--admin-text-muted)]"
+                      />
                     </div>
                   </div>
                   <Button variant="outline" size="sm" className="rounded-xl border-rose-200 bg-white/70 font-black text-rose-600 hover:bg-rose-50" onClick={() => handleDelete(ann)}>
@@ -176,11 +204,20 @@ export default function AdminAnnouncementsPage() {
           <DialogHeader><DialogTitle>Create Announcement</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} className="admin-input" /></div>
-            <div><Label>Content</Label><Textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="admin-input" /></div>
+            <div>
+              <Label>Content</Label>
+              <RichTextEditor value={content} onChange={setContent} placeholder="Write announcement content..." minHeight={180} />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" className="admin-button-outline rounded-xl font-black" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button className="admin-button-solid rounded-xl font-black" onClick={handleCreate} disabled={!title.trim() || !content.trim()}>Create</Button>
+            <Button
+              className="admin-button-solid rounded-xl font-black"
+              onClick={handleCreate}
+              disabled={!title.trim() || !sanitizeRichTextHtml(content).trim()}
+            >
+              Create
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

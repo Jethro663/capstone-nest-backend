@@ -16,7 +16,7 @@ import {
 const PPTX_MIME =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-export type LibraryFileKind = 'pdf' | 'txt' | 'pptx';
+export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'image';
 
 export function getLibraryFileKind(file: Express.Multer.File): LibraryFileKind {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -24,9 +24,15 @@ export function getLibraryFileKind(file: Express.Multer.File): LibraryFileKind {
   if (file.mimetype === 'application/pdf' && ext === '.pdf') return 'pdf';
   if (file.mimetype === 'text/plain' && ext === '.txt') return 'txt';
   if (file.mimetype === PPTX_MIME && ext === '.pptx') return 'pptx';
+  if (
+    ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype) &&
+    ['.jpg', '.jpeg', '.png', '.webp'].includes(ext)
+  ) {
+    return 'image';
+  }
 
   throw new UnsupportedMediaTypeException(
-    'Only PDF, TXT, and PPTX library files are supported. Legacy PPT requires a configured converter and is not enabled.',
+    'Only PDF, TXT, PPTX, JPG, PNG, and WEBP library files are supported. Legacy PPT requires a configured converter and is not enabled.',
   );
 }
 
@@ -35,7 +41,7 @@ export class LibraryFileValidationPipe implements PipeTransform {
   async transform(file: Express.Multer.File) {
     if (!file) {
       throw new UnsupportedMediaTypeException(
-        'A PDF, TXT, or PPTX file is required.',
+        'A PDF, TXT, PPTX, JPG, PNG, or WEBP file is required.',
       );
     }
 
@@ -73,7 +79,7 @@ export class LibraryFileValidationPipe implements PipeTransform {
       )
     ) {
       throw new UnsupportedMediaTypeException(
-        'Only .pdf, .txt, and .pptx files are supported.',
+        'Only .pdf, .txt, .pptx, .jpg, .jpeg, .png, and .webp files are supported.',
       );
     }
 
@@ -83,7 +89,7 @@ export class LibraryFileValidationPipe implements PipeTransform {
       )
     ) {
       throw new UnsupportedMediaTypeException(
-        'Unsupported file type. Upload PDF, TXT, or PPTX files only.',
+        'Unsupported file type. Upload PDF, TXT, PPTX, JPG, PNG, or WEBP files only.',
       );
     }
   }
@@ -113,6 +119,20 @@ export class LibraryFileValidationPipe implements PipeTransform {
       header[1] === 0x50 &&
       header[2] === 0x44 &&
       header[3] === 0x46;
+    const isJpeg =
+      header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+    const isPng =
+      header[0] === 0x89 &&
+      header[1] === 0x50 &&
+      header[2] === 0x4e &&
+      header[3] === 0x47 &&
+      header[4] === 0x0d &&
+      header[5] === 0x0a &&
+      header[6] === 0x1a &&
+      header[7] === 0x0a;
+    const riffHeader = header.subarray(0, 4).toString('ascii');
+    const webpHeader = await this.readBytes(file, 8, 4);
+    const isWebp = riffHeader === 'RIFF' && webpHeader.toString('ascii') === 'WEBP';
     const isZip = header[0] === 0x50 && header[1] === 0x4b;
     const looksBinary = header.includes(0x00);
 
@@ -136,6 +156,26 @@ export class LibraryFileValidationPipe implements PipeTransform {
         'The uploaded TXT file appears to contain binary data.',
       );
     }
+
+    if (kind === 'image' && !isJpeg && !isPng && !isWebp) {
+      await this.cleanup(absolutePath);
+      throw new UnsupportedMediaTypeException(
+        'The uploaded image failed file signature validation.',
+      );
+    }
+  }
+
+  private async readBytes(
+    file: Express.Multer.File,
+    position: number,
+    length: number,
+  ) {
+    const absolutePath = path.resolve(file.path);
+    const fd = fs.openSync(absolutePath, 'r');
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, position);
+    fs.closeSync(fd);
+    return buffer;
   }
 
   private async cleanup(filePath: string) {

@@ -519,6 +519,7 @@ export class AiMentorController {
         processing: 60,
         completed: 100,
         approved: 100,
+        cancelled: 100,
         rejected: 100,
         failed: 100,
       }[status] ?? 0
@@ -2329,6 +2330,45 @@ export class AiMentorController {
         },
       };
     }
+  }
+
+  @Delete('teacher/jobs/:jobId')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Cancel or remove a teacher AI generation job' })
+  async deleteTeacherJob(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'DELETE',
+      `/teacher/jobs/${jobId}`,
+      user,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.generation_job.cancelled',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return result;
+  }
+
+  @Get('index/classes/:classId/status')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({
+    summary: 'Read class source indexing readiness for AI generation',
+  })
+  async getIndexClassStatus(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherClassAccess(classId, user);
+    return this.proxy.forward(
+      'GET',
+      `/index/classes/${classId}/status`,
+      user,
+    );
   }
 
   @Post('index/classes/:classId')

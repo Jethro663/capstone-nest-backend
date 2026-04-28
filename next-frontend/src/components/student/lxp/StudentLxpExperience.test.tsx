@@ -1,0 +1,185 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import StudentLxpExperience from './StudentLxpExperience';
+import { lxpService } from '@/services/lxp-service';
+
+const push = jest.fn();
+const replace = jest.fn();
+const searchParamsState: Record<string, string | null> = {
+  tab: null,
+  mode: null,
+  classId: null,
+};
+
+jest.mock('next/navigation', () => ({
+  usePathname: () => '/dashboard/student/lxp',
+  useRouter: () => ({ push, replace }),
+  useSearchParams: () => ({
+    get: (key: string) => searchParamsState[key] ?? null,
+    toString: () => '',
+  }),
+}));
+
+jest.mock('@/services/lxp-service', () => ({
+  lxpService: {
+    getEligibility: jest.fn(),
+    getOverview: jest.fn(),
+    getPlaylist: jest.fn(),
+    completeCheckpoint: jest.fn(),
+    submitEvaluation: jest.fn(),
+  },
+}));
+
+const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
+
+const eligibilityResponse = {
+  data: {
+    threshold: 74,
+    eligibleClasses: [
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: {
+            id: 'section-1',
+            name: 'Section A',
+            gradeLevel: '7',
+          },
+        },
+        interventionCaseId: 'case-active',
+        isAtRisk: true,
+        blendedScore: 62,
+        thresholdApplied: 74,
+        openedAt: '2026-04-20T00:00:00.000Z',
+      },
+    ],
+    paths: [
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: {
+            id: 'section-1',
+            name: 'Section A',
+            gradeLevel: '7',
+          },
+        },
+        interventionCaseId: 'case-active',
+        status: 'active',
+        isAtRisk: true,
+        blendedScore: 62,
+        thresholdApplied: 74,
+        openedAt: '2026-04-20T00:00:00.000Z',
+        closedAt: null,
+        counts: {
+          steps: 1,
+          replays: 1,
+          pending: 1,
+          total: 2,
+          completed: 1,
+        },
+        progress: {
+          totalCheckpoints: 2,
+          completedCheckpoints: 1,
+          completionPercent: 50,
+        },
+      },
+      {
+        classId: 'class-completed',
+        class: {
+          id: 'class-completed',
+          subjectName: 'Science 7',
+          subjectCode: 'SCI-7',
+          section: {
+            id: 'section-1',
+            name: 'Section A',
+            gradeLevel: '7',
+          },
+        },
+        interventionCaseId: 'case-completed',
+        status: 'completed',
+        isAtRisk: false,
+        blendedScore: 86,
+        thresholdApplied: 74,
+        openedAt: '2026-04-01T00:00:00.000Z',
+        closedAt: '2026-04-08T00:00:00.000Z',
+        counts: {
+          steps: 1,
+          replays: 1,
+          pending: 0,
+          total: 2,
+          completed: 2,
+        },
+        progress: {
+          totalCheckpoints: 2,
+          completedCheckpoints: 2,
+          completionPercent: 100,
+        },
+      },
+    ],
+  },
+};
+
+describe('StudentLxpExperience path list', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    searchParamsState.tab = null;
+    searchParamsState.mode = null;
+    searchParamsState.classId = null;
+    mockedLxpService.getEligibility.mockResolvedValue(eligibilityResponse as never);
+  });
+
+  it('renders the courses-style Learners Path list without the old class dropdown or JA tab', async () => {
+    render(<StudentLxpExperience />);
+
+    expect(
+      await screen.findByPlaceholderText('Search path, section, or subject code'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All Paths' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'In Progress' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Completed' })).toBeInTheDocument();
+    expect(screen.getByText('Mathematics 7')).toBeInTheDocument();
+    expect(screen.getByText('Science 7')).toBeInTheDocument();
+    expect(screen.getAllByText('Steps')).toHaveLength(2);
+    expect(screen.getAllByText('Replays')).toHaveLength(2);
+    expect(screen.getAllByText('Pending')).toHaveLength(2);
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.queryByText('JA Hub')).not.toBeInTheDocument();
+  });
+
+  it('filters completed paths by checkpoint progress', async () => {
+    render(<StudentLxpExperience />);
+
+    await screen.findByText('Mathematics 7');
+    fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+
+    expect(screen.queryByText('Mathematics 7')).not.toBeInTheDocument();
+    expect(screen.getByText('Science 7')).toBeInTheDocument();
+  });
+
+  it('opens a path detail route from the primary card action', async () => {
+    render(<StudentLxpExperience />);
+
+    await screen.findByText('Mathematics 7');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Path' }));
+
+    expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-active');
+  });
+
+  it('redirects old embedded JA links to the standalone JA page', async () => {
+    searchParamsState.tab = 'ja';
+    searchParamsState.mode = 'ask';
+    searchParamsState.classId = 'class-active';
+
+    render(<StudentLxpExperience />);
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith(
+        '/dashboard/student/ja?mode=ask&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp',
+      );
+    });
+  });
+});

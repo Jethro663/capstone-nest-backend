@@ -5,10 +5,21 @@ import type {
   InterventionParticipationRow,
   PaginatedReportResponse,
   ReportQuery,
+  ReportTab,
   StudentMasterListRow,
   StudentPerformanceReportRow,
   SystemUsageReport,
 } from '@/types/report';
+
+const reportEndpointByTab: Record<ReportTab, string> = {
+  classRecord: '/reports/intervention-participation',
+  studentMasterList: '/reports/student-master-list',
+  classEnrollment: '/reports/class-enrollment',
+  studentPerformance: '/reports/student-performance',
+  interventionParticipation: '/reports/intervention-participation',
+  assessmentSummary: '/reports/assessment-summary',
+  systemUsage: '/reports/system-usage',
+};
 
 export const reportService = {
   async getStudentMasterList(
@@ -60,6 +71,14 @@ export const reportService = {
     query?: ReportQuery,
   ): Promise<PaginatedReportResponse<SystemUsageReport>> {
     const { data } = await api.get('/reports/system-usage', { params: query });
+    return data;
+  },
+
+  async exportCsv(tab: ReportTab, query?: ReportQuery): Promise<Blob> {
+    const { data } = await api.get(reportEndpointByTab[tab], {
+      params: { ...query, export: 'csv' },
+      responseType: 'blob',
+    });
     return data;
   },
 };

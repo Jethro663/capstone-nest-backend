@@ -115,6 +115,10 @@ export interface JaAskThreadSummary {
   status: "active" | "archived";
   updatedAt: string;
   lastMessageAt?: string | null;
+  contextLessonId?: string | null;
+  contextLessonTitle?: string | null;
+  contextModuleTitle?: string | null;
+  contextSectionTitle?: string | null;
 }
 
 export interface JaAskMessage {
@@ -127,12 +131,23 @@ export interface JaAskMessage {
   createdAt?: string;
 }
 
+export interface JaAskLessonContextSummary {
+  lessonId: string;
+  title: string;
+  moduleTitle?: string | null;
+  sectionTitle?: string | null;
+}
+
 export interface JaAskThreadResponse {
   thread: {
     id: string;
     classId: string;
     title: string;
     status?: string;
+    contextLessonId?: string | null;
+    contextLessonTitle?: string | null;
+    contextModuleTitle?: string | null;
+    contextSectionTitle?: string | null;
   };
   messages: JaAskMessage[];
 }
@@ -142,6 +157,10 @@ export interface JaAskResponsePayload {
     id: string;
     classId: string;
     title: string;
+    contextLessonId?: string | null;
+    contextLessonTitle?: string | null;
+    contextModuleTitle?: string | null;
+    contextSectionTitle?: string | null;
   };
   message: JaAskMessage;
   blocked: boolean;
@@ -176,6 +195,8 @@ export interface JaHubResponse {
   practice: JaPracticeBootstrapResponse;
   ask: {
     threads: JaAskThreadSummary[];
+    lessonContexts: JaAskLessonContextSummary[];
+    guidelines: string[];
   };
   review: {
     eligibleAttempts: JaReviewAttemptSummary[];

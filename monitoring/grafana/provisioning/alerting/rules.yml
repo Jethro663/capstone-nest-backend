@@ -1,0 +1,217 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: nexora-platform-availability
+    folder: Nexora
+    interval: 1m
+    rules:
+      - uid: backend-down
+        title: Backend Down
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: up{job="backend"} == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+      - uid: ai-service-down
+        title: AI Service Down
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: up{job="ai-service"} == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+      - uid: frontend-down
+        title: Frontend Down
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: probe_success{job="frontend"} == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+      - uid: postgres-down
+        title: Postgres Down
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: probe_success{job="postgres"} == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+      - uid: redis-down
+        title: Redis Down
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: probe_success{job="redis"} == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+      - uid: ollama-unavailable
+        title: Ollama Unavailable
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: probe_success{job="ollama"} == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+      - uid: ai-ready-degraded
+        title: AI Readiness Degraded
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: nexora_ai_ready == 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+  - orgId: 1
+    name: nexora-platform-pressure
+    folder: Nexora
+    interval: 1m
+    rules:
+      - uid: host-memory-pressure
+        title: Host Memory Pressure
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+      - uid: host-disk-pressure
+        title: Host Disk Pressure
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|squashfs"})) > 0.90
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+      - uid: backend-5xx-rate
+        title: Backend 5xx Rate High
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: sum(rate(http_server_requests_total{job="backend",status=~"5.."}[5m])) > 0.05
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+      - uid: ai-service-error-rate
+        title: AI Service Error Rate High
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: sum(rate(nexora_ai_http_requests_total{status=~"5.."}[5m])) > 0
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+      - uid: container-lifecycle-churn
+        title: Container Lifecycle Churn High
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              refId: A
+              expr: sum(changes(container_start_time_seconds[15m])) > 3
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 10m
+        noDataState: NoData
+        execErrState: Alerting

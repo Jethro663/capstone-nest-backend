@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { DiscussionBoardService } from './discussion-board.service';
 import { DatabaseService } from '../../database/database.service';
@@ -33,8 +37,14 @@ describe('DiscussionBoardService', () => {
       providers: [
         DiscussionBoardService,
         { provide: DatabaseService, useValue: { db: mockDb } },
-        { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
-        { provide: getQueueToken('discussion-board'), useValue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) } },
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
+          provide: getQueueToken('discussion-board'),
+          useValue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
+        },
       ],
     }).compile();
 
@@ -70,8 +80,12 @@ describe('DiscussionBoardService', () => {
         classTeacherId: 'teacher-1',
       },
     });
-    jest.spyOn(service as any, 'resolveCommentImageAttachments').mockResolvedValue([]);
-    jest.spyOn(service as any, 'sanitizeCommentHtml').mockReturnValue('<p>First</p>');
+    jest
+      .spyOn(service as any, 'resolveCommentImageAttachments')
+      .mockResolvedValue([]);
+    jest
+      .spyOn(service as any, 'sanitizeCommentHtml')
+      .mockReturnValue('<p>First</p>');
 
     mockDb.select.mockReturnValue({
       from: jest.fn().mockReturnValue({
@@ -80,13 +94,9 @@ describe('DiscussionBoardService', () => {
     });
 
     await expect(
-      service.createComment(
-        'class-1',
-        'thread-1',
-        'student-1',
-        ['student'],
-        { bodyHtml: '<p>Second</p>' },
-      ),
+      service.createComment('class-1', 'thread-1', 'student-1', ['student'], {
+        bodyHtml: '<p>Second</p>',
+      }),
     ).rejects.toThrow(BadRequestException);
   });
 
@@ -128,7 +138,9 @@ describe('DiscussionBoardService', () => {
       id: 'class-1',
       teacherId: 'teacher-1',
     });
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.discussionThreads.findFirst.mockResolvedValue({
       id: 'thread-1',
       classId: 'class-1',

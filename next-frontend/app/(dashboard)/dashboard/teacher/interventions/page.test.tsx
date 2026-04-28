@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import TeacherInterventionsPage from "./page";
 import { classService } from "@/services/class-service";
 import { lxpService } from "@/services/lxp-service";
@@ -48,7 +48,7 @@ describe("TeacherInterventionsPage", () => {
           section: { name: "Rizal" },
         },
       ],
-    } as any);
+    } as Awaited<ReturnType<typeof classService.getByTeacher>>);
     mockedLxpService.getTeacherQueue.mockResolvedValue({
       data: {
         classId: "class-1",
@@ -86,7 +86,7 @@ describe("TeacherInterventionsPage", () => {
           },
         ],
       },
-    } as any);
+    } as Awaited<ReturnType<typeof lxpService.getTeacherQueue>>);
     mockedLxpService.getClassReport.mockResolvedValue({
       data: {
         classId: "class-1",
@@ -102,7 +102,7 @@ describe("TeacherInterventionsPage", () => {
         rows: [],
         leaderboard: [],
       },
-    } as any);
+    } as Awaited<ReturnType<typeof lxpService.getClassReport>>);
     mockedLxpService.getTeacherCaseDetail.mockResolvedValue({
       data: {
         id: "case-1",
@@ -176,7 +176,7 @@ describe("TeacherInterventionsPage", () => {
             "/dashboard/teacher/performance?classId=class-1&studentId=student-1",
         },
       },
-    } as any);
+    } as Awaited<ReturnType<typeof lxpService.getTeacherCaseDetail>>);
   });
 
   it("hides AI Plan action when queue entry is not AI-eligible", async () => {
@@ -191,6 +191,52 @@ describe("TeacherInterventionsPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders the priority intervention queue as a compact table", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("columnheader", { name: "Trigger" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Blended Score" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "XP" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Checkpoints" })).toBeInTheDocument();
+    expect(screen.queryByText("XP Leaderboard")).not.toBeInTheDocument();
+    expect(screen.queryByText("Intervention Outcomes")).not.toBeInTheDocument();
+  });
+
+  it("combines the intervention metrics into the page header", async () => {
+    const { container } = render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    const summary = screen.getByLabelText("Intervention summary");
+    expect(within(summary).getByText("Active")).toBeInTheDocument();
+    expect(within(summary).getByText("Completed")).toBeInTheDocument();
+    expect(within(summary).getByText("Average Delta")).toBeInTheDocument();
+    expect(within(summary).getByText("Top XP")).toBeInTheDocument();
+    expect(container.querySelector(".teacher-figma-stat")).not.toBeInTheDocument();
+    expect(screen.queryByText("Queue Snapshot")).not.toBeInTheDocument();
+    expect(screen.queryByText("Insight of the Week")).not.toBeInTheDocument();
+  });
+
+  it("switches from the main queue to leaderboard and outcomes", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Leaderboard & Outcomes" }));
+
+    expect(screen.getByText("XP Leaderboard")).toBeInTheDocument();
+    expect(screen.getByText("Intervention Outcomes")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Trigger" })).not.toBeInTheDocument();
+  });
+
   it("opens student detail side panel from queue action", async () => {
     render(<TeacherInterventionsPage />);
 
@@ -198,12 +244,48 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
-    screen.getByRole("button", { name: "View" }).click();
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
 
     expect(
       await screen.findByText("Intervention Student Detail"),
     ).toBeInTheDocument();
     expect(screen.getByText("Review: Fractions")).toBeInTheDocument();
     expect(mockedLxpService.getTeacherCaseDetail).toHaveBeenCalledWith("case-1");
+  });
+
+  it("opens the helper guide from the question mark button", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /module help/i }));
+
+    expect(await screen.findByText("Teacher guide: Interventions Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Start with the class filter")).toBeInTheDocument();
+    expect(screen.getByText("Class filter")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("Page 2 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Work through the intervention queue")).toBeInTheDocument();
+    expect(screen.getByText("AI Plan button")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("Page 3 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Use leaderboard and outcomes carefully")).toBeInTheDocument();
+    expect(screen.getByText("Leaderboard switch")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("Page 4 of 4")).toBeInTheDocument();
+    expect(screen.getByText("Open detail before making a final decision")).toBeInTheDocument();
+    expect(screen.getByText("Performance link")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close guide" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Teacher guide: Interventions Dashboard")).not.toBeInTheDocument();
+    });
   });
 });

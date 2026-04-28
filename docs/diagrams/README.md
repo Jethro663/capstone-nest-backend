@@ -6,6 +6,7 @@ This folder contains Mermaid diagrams based on the implemented NestJS backend.
 - `erd-core-domain.mmd`: core-domain ERD using current Drizzle schema relations.
 - `use-case-current-backend.puml`: UML use-case source with actor/use-case shapes.
 - `erd-core-domain.puml`: ERD source in PlantUML crow's-foot notation.
+- `system-architecture-core.puml`: compact, print-friendly architecture diagram (AI layer and end-to-end summary removed).
 
 ## Source of Truth
 

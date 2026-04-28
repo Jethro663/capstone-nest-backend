@@ -218,6 +218,7 @@ export default function ClassForm({
   };
 
   const handleSubmit = async () => {
+    const schedules = normalizedSchedules();
     if (!form.subjectName || !form.subjectCode.trim()) {
       toast.error('Subject name and code are required');
       return;
@@ -230,10 +231,15 @@ export default function ClassForm({
       toast.error('Section and teacher are required');
       return;
     }
+    if (!form.room.trim() || schedules.length === 0) {
+      toast.error('Room and at least one schedule slot are required');
+      return;
+    }
 
     await onSubmit({
       ...form,
-      schedules: normalizedSchedules(),
+      room: form.room.trim(),
+      schedules,
     });
   };
 

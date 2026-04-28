@@ -126,6 +126,7 @@ export function ClassRecordReportsPage({
   const [loadingReports, setLoadingReports] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [studentMasterList, setStudentMasterList] = useState<StudentMasterListRow[]>([]);
   const [classEnrollment, setClassEnrollment] = useState<ClassEnrollmentRow[]>([]);
   const [studentPerformance, setStudentPerformance] = useState<StudentPerformanceReportRow[]>([]);
@@ -266,24 +267,24 @@ export function ClassRecordReportsPage({
     fetchReports();
   }, [fetchReports]);
 
-  const handleExport = () => {
-    const params = new URLSearchParams();
-    if (selectedClassId) params.set('classId', selectedClassId);
-    if (dateFrom) params.set('dateFrom', dateFrom);
-    if (dateTo) params.set('dateTo', dateTo);
-    params.set('export', 'csv');
-
-    const endpointMap: Record<ReportTab, string> = {
-      classRecord: '/api/reports/intervention-participation',
-      studentMasterList: '/api/reports/student-master-list',
-      classEnrollment: '/api/reports/class-enrollment',
-      studentPerformance: '/api/reports/student-performance',
-      interventionParticipation: '/api/reports/intervention-participation',
-      assessmentSummary: '/api/reports/assessment-summary',
-      systemUsage: '/api/reports/system-usage',
-    };
-
-    window.open(`${endpointMap[activeTab]}?${params.toString()}`, '_blank', 'noopener,noreferrer');
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const blob = await reportService.exportCsv(activeTab, reportQuery);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${activeTab}-report.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success('CSV report downloaded');
+    } catch {
+      toast.error('Unable to export report');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const totalUsageActions = (systemUsage?.topActions ?? []).reduce(
@@ -305,11 +306,12 @@ export function ClassRecordReportsPage({
   const shellActions = (
     <Button
       variant={isAdmin ? 'outline' : 'teacher'}
-      onClick={handleExport}
+      onClick={() => void handleExport()}
+      disabled={exporting}
       className={isAdmin ? 'admin-button-outline rounded-xl px-4 font-black' : 'rounded-2xl px-5'}
     >
       <Download className="h-4 w-4" />
-      Export {reportTabs.find((tab) => tab.value === activeTab)?.label ?? 'Report'}
+      {exporting ? 'Exporting...' : `Export ${reportTabs.find((tab) => tab.value === activeTab)?.label ?? 'Report'}`}
     </Button>
   );
 

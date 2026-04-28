@@ -118,9 +118,10 @@ describe('TeacherStudentProfilePage', () => {
     render(<TeacherStudentProfilePage />);
 
     await screen.findByRole('heading', { name: 'Jamie Cruz' });
-    expect(screen.getByRole('heading', { name: 'Student Information' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Academic Standing' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Assessment History' })).toBeInTheDocument();
+    expect(screen.getByText('Section')).toBeInTheDocument();
+    expect(screen.getByText('Current Grade')).toBeInTheDocument();
+    expect(screen.getByText('Overall Grade')).toBeInTheDocument();
     expect(screen.getAllByText('90.5%').length).toBeGreaterThan(0);
     expect(screen.getByText('Algebra Quiz 1')).toBeInTheDocument();
     expect(screen.getByText('Group Project')).toBeInTheDocument();

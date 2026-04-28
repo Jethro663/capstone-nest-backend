@@ -5,9 +5,11 @@ import {
   Validate,
   IsIn,
   IsArray,
+  ArrayMinSize,
   ValidateNested,
+  MinLength,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsValidSchoolYearConstraint } from './validators';
 import { GRADE_LEVELS } from '../../../common/utils/grade-level.util';
 import { ScheduleSlotDto } from './schedule-slot.dto';
@@ -39,20 +41,16 @@ export class CreateClassDto {
   @Validate(IsValidSchoolYearConstraint)
   schoolYear: string;
 
-  /**
-   * Optional array of time-slots.
-   * Each slot: { days: ['M','W','F'], startTime: '10:00', endTime: '11:00' }
-   * A class can have multiple slots (e.g. lecture + lab).
-   */
-  @IsOptional()
   @IsArray({ message: 'schedules must be an array of schedule slots' })
+  @ArrayMinSize(1, { message: 'At least one schedule slot is required' })
   @ValidateNested({ each: true })
   @Type(() => ScheduleSlotDto)
-  schedules?: ScheduleSlotDto[];
+  schedules: ScheduleSlotDto[];
 
-  @IsOptional()
   @IsString({ message: 'room must be a string' })
-  room?: string;
+  @Transform(({ value }: { value?: string }) => value?.trim())
+  @MinLength(1, { message: 'room is required' })
+  room: string;
 
   @IsOptional()
   @IsString({ message: 'cardPreset must be a string' })

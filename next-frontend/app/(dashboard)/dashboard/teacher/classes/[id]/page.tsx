@@ -52,14 +52,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
-import { plainTextToRichHtml, sanitizeRichTextHtml } from '@/lib/rich-text';
+import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
+import {
+  hasCoreAssessmentPlacementForPublish,
+  resolveAssessmentForPublishValidation,
+} from '@/lib/core-assessment-publish';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 import type { ClassRecord } from '@/types/class-record';
 import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
 import type { Extraction } from '@/types/extraction';
+import type { LibraryGradeLevel, LibrarySubjectKey } from '@/types/file';
 import type { ClassModule } from '@/types/module';
 import './workspace.css';
 
@@ -125,6 +130,17 @@ interface CalendarEventItem {
   subtitle: string;
   date: Date;
   kind: CalendarKind;
+}
+
+interface ModuleDeadlineCardItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  dayLabel: string;
+  monthLabel: string;
+  kind: CalendarKind;
+  href: string;
+  isUrgent: boolean;
 }
 
 const CLASS_TABS: Array<{ key: WorkspaceTab; label: string; icon: typeof BookOpen }> = [
@@ -208,6 +224,28 @@ function formatRelativeTime(value?: string | null) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function normalizeLibrarySubjectKey(
+  subjectCode?: string | null,
+  subjectName?: string | null,
+): LibrarySubjectKey | undefined {
+  const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
+  if (raw.includes('science') || raw.includes('sci')) return 'science';
+  if (raw.includes('math')) return 'math';
+  if (raw.includes('english') || raw.includes('eng')) return 'english';
+  if (raw.includes('filipino') || raw.includes('fil')) return 'filipino';
+  if (raw.includes('araling') || raw.includes('panlipunan') || /\bap\b/.test(raw)) return 'ap';
+  if (raw.includes('tle')) return 'tle';
+  if (raw.includes('mapeh')) return 'mapeh';
+  if (raw.includes('esp') || raw.includes('values') || raw.includes('pagpapakatao')) return 'esp';
+  return undefined;
+}
+
+function normalizeLibraryGradeLevel(value?: string | null): LibraryGradeLevel | undefined {
+  const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+  if (!match) return undefined;
+  return match[1] as LibraryGradeLevel;
+}
+
 function formatEventBadgeDate(date: Date) {
   return {
     day: String(date.getDate()),
@@ -255,6 +293,12 @@ function assignmentTagLabel(filter: AssignmentFilter) {
   if (filter === 'quarterly') return 'Quarterly Assessment';
   if (filter === 'discussion') return 'Discussion';
   return 'Assessment';
+}
+
+function calendarKindLabel(kind: CalendarKind) {
+  if (kind === 'assessment') return 'Assessment';
+  if (kind === 'holiday') return 'Holiday';
+  return 'Class Event';
 }
 
 function inferCalendarKindFromAnnouncement(announcement: Announcement): CalendarKind {
@@ -313,13 +357,6 @@ function normalizeModulePresentation(module: ClassModule): ModulePresentationDra
     imagePositionY: clamp(module.imagePositionY, 0, 100, 50),
     imageScale: clamp(module.imageScale, 100, 220, 120),
   };
-}
-
-function announcementContentToHtml(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) return '';
-  if (/<[a-z][\s\S]*>/i.test(trimmed)) return trimmed;
-  return plainTextToRichHtml(trimmed);
 }
 
 export default function TeacherClassDetailPage() {
@@ -516,7 +553,7 @@ export default function TeacherClassDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [classId, isClassIdValid]);
+  }, [activeTab, classId, isClassIdValid]);
 
   useEffect(() => {
     void fetchData();
@@ -539,7 +576,7 @@ export default function TeacherClassDetailPage() {
       setSelectedDiscussionThread(null);
       toast.error(getApiErrorMessage(error, 'Failed to load discussion threads'));
     }
-  }, [activeTab, classId, isClassIdValid]);
+  }, [classId, isClassIdValid]);
 
   useEffect(() => {
     if (activeTab !== 'discussion') return;
@@ -713,6 +750,44 @@ export default function TeacherClassDetailPage() {
     return assessments.filter((assessment) => deriveAssignmentFilter(assessment) === assignmentFilter);
   }, [assignmentFilter, assessments]);
 
+  const assessmentAttachmentMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        attached: boolean;
+        given: boolean;
+        visible: boolean;
+        moduleVisible: boolean;
+        moduleLocked: boolean;
+        gateOpen: boolean;
+      }
+    >();
+
+    for (const classModule of modules) {
+      for (const section of classModule.sections || []) {
+        for (const item of section.items || []) {
+          if (item.itemType !== 'assessment' || !item.assessmentId) continue;
+          const current = map.get(item.assessmentId);
+          const gateOpen =
+            Boolean(item.isGiven) &&
+            Boolean(item.isVisible) &&
+            Boolean(classModule.isVisible) &&
+            !classModule.isLocked;
+          map.set(item.assessmentId, {
+            attached: true,
+            given: Boolean(current?.given || item.isGiven),
+            visible: Boolean(current?.visible || item.isVisible),
+            moduleVisible: Boolean(current?.moduleVisible || classModule.isVisible),
+            moduleLocked: Boolean(current?.moduleLocked && classModule.isLocked),
+            gateOpen: Boolean(current?.gateOpen || gateOpen),
+          });
+        }
+      }
+    }
+
+    return map;
+  }, [modules]);
+
   const recentAiDraftJobs = useMemo(() => aiDraftJobs.slice(0, 6), [aiDraftJobs]);
   const activeAiDraftJobCount = useMemo(
     () => aiDraftJobs.filter((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus)).length,
@@ -727,13 +802,21 @@ export default function TeacherClassDetailPage() {
   const calendarItems = useMemo<CalendarEventItem[]>(() => {
     const fromAssessments = assessments
       .filter((assessment) => Boolean(assessment.dueDate))
-      .map((assessment) => ({
-        id: `assessment-${assessment.id}`,
-        title: assessment.title,
-        subtitle: classItem?.subjectName || 'Assessment',
-        date: new Date(assessment.dueDate as string),
-        kind: 'assessment' as CalendarKind,
-      }))
+      .map((assessment) => {
+        const dueDate = new Date(assessment.dueDate as string);
+        const hasTime = dueDate.getHours() !== 0 || dueDate.getMinutes() !== 0;
+        const dueLabel = hasTime
+          ? dueDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+          : 'All Day';
+
+        return {
+          id: `assessment-${assessment.id}`,
+          title: assessment.title,
+          subtitle: `${classItem?.subjectName || 'Assessment'} | Due ${dueLabel}`,
+          date: dueDate,
+          kind: 'assessment' as CalendarKind,
+        };
+      })
       .filter((item) => !Number.isNaN(item.date.getTime()));
 
     const fromAnnouncements = announcements
@@ -830,6 +913,30 @@ export default function TeacherClassDetailPage() {
     return calendarEventMap.get(selectedCalendarDateKey) || [];
   }, [calendarEventMap, selectedCalendarDateKey]);
 
+  const moduleDeadlineCards = useMemo<ModuleDeadlineCardItem[]>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const now = Date.now();
+    const urgentWindowMs = 1000 * 60 * 60 * 72;
+
+    const upcomingOnly = calendarItems.filter((event) => event.date.getTime() >= today.getTime());
+    const source = (upcomingOnly.length > 0 ? upcomingOnly : calendarItems).slice(0, 8);
+
+    return source.map((event) => ({
+      id: event.id,
+      title: event.title,
+      subtitle: event.subtitle,
+      dayLabel: String(event.date.getDate()).padStart(2, '0'),
+      monthLabel: event.date.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+      kind: event.kind,
+      href:
+        event.kind === 'assessment'
+          ? `/dashboard/teacher/classes/${classId}?view=assignments`
+          : `/dashboard/teacher/classes/${classId}?view=calendar`,
+      isUrgent: event.date.getTime() <= now + urgentWindowMs,
+    }));
+  }, [calendarItems, classId]);
+
   const moduleTone = (index: number) => {
     const tones = ['blue', 'green', 'violet', 'orange', 'rose', 'slate'] as const;
     return tones[index % tones.length];
@@ -858,7 +965,9 @@ export default function TeacherClassDetailPage() {
       await moduleService.create({
         classId,
         title,
-        description: newModuleDescription.trim() || undefined,
+        description: normalizeRichText(newModuleDescription).trim() || undefined,
+        isVisible: false,
+        isLocked: true,
       });
       toast.success('Module created');
       setShowAddModuleModal(false);
@@ -1146,12 +1255,50 @@ export default function TeacherClassDetailPage() {
 
     try {
       setBusyAssessmentId(assessment.id);
+      const nextIsPublished = !assessment.isPublished;
+      const isCoreTemplateAssessment = Boolean(assessment.isCoreTemplateAsset);
+      let validatedAssessment = assessment;
+
+      if (nextIsPublished && isCoreTemplateAssessment) {
+        if (!hasCoreAssessmentPlacementForPublish(assessment)) {
+          try {
+            const detailedAssessment = await assessmentService.getById(assessment.id);
+            validatedAssessment = resolveAssessmentForPublishValidation(
+              assessment,
+              detailedAssessment.data,
+            );
+          } catch (error) {
+            toast.error(
+              getApiErrorMessage(error, 'Failed to validate class record placement'),
+            );
+            return;
+          }
+        }
+      }
+
+      if (
+        nextIsPublished &&
+        isCoreTemplateAssessment &&
+        !hasCoreAssessmentPlacementForPublish(validatedAssessment)
+      ) {
+        toast.warning(
+          'Core assessments must be tagged in a class record category, quarter, and slot before publishing.',
+        );
+        return;
+      }
+
       const response = await assessmentService.releaseCore(assessment.id, {
-        isPublished: !assessment.isPublished,
+        isPublished: nextIsPublished,
       });
       setAssessments((current) =>
         current.map((entry) =>
-          entry.id === assessment.id ? response.data : entry,
+          entry.id === assessment.id
+            ? {
+                ...entry,
+                ...validatedAssessment,
+                ...response.data,
+              }
+            : entry,
         ),
       );
       toast.success(
@@ -1205,9 +1352,26 @@ export default function TeacherClassDetailPage() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || uploadingExtraction) return;
+    const subjectKey = normalizeLibrarySubjectKey(
+      classItem?.subjectCode,
+      classItem?.subjectName,
+    );
+    const gradeLevel = normalizeLibraryGradeLevel(
+      classItem?.subjectGradeLevel ?? classItem?.section?.gradeLevel,
+    );
+    if (!subjectKey || !gradeLevel) {
+      toast.error('Unable to resolve class subject and grade for extraction upload.');
+      return;
+    }
     try {
       setUploadingExtraction(true);
-      const uploadRes = await fileService.upload(file, { classId, scope: 'private' });
+      const uploadRes = await fileService.upload(file, {
+        classId,
+        scope: 'private',
+        subjectKey,
+        gradeLevel,
+        aiEnabled: true,
+      });
       await extractionService.extractModule({ fileId: uploadRes.data.id });
       toast.success('Extraction started');
       await fetchData();
@@ -1219,8 +1383,16 @@ export default function TeacherClassDetailPage() {
   };
 
   const handleCreateAnnouncement = async () => {
-    const safeContent = sanitizeRichTextHtml(announcementContent).trim();
-    if (!announcementTitle.trim() || !safeContent || creatingAnnouncement) return;
+    const safeContent = normalizeRichText(announcementContent).trim();
+    if (creatingAnnouncement) return;
+    if (!announcementTitle.trim()) {
+      toast.error('Announcement title is required');
+      return;
+    }
+    if (!safeContent) {
+      toast.error('Announcement content is required');
+      return;
+    }
     try {
       setCreatingAnnouncement(true);
       await announcementService.create(classId, {
@@ -1278,8 +1450,16 @@ export default function TeacherClassDetailPage() {
   };
 
   const handleCreateDiscussionThread = async (publishImmediately: boolean) => {
-    const safeBody = sanitizeRichTextHtml(discussionBody).trim();
-    if (!discussionTitle.trim() || !safeBody || creatingDiscussion) return;
+    const safeBody = normalizeRichText(discussionBody).trim();
+    if (creatingDiscussion) return;
+    if (!discussionTitle.trim()) {
+      toast.error('Discussion title is required');
+      return;
+    }
+    if (!safeBody) {
+      toast.error('Discussion prompt is required');
+      return;
+    }
 
     const commentLimit = Number.parseInt(discussionCommentLimit, 10);
     const parsedLinks = discussionLinksText
@@ -1593,7 +1773,7 @@ export default function TeacherClassDetailPage() {
                               Core Module
                             </span>
                           ) : null}
-                          <p>{module.description || 'Add a short module description.'}</p>
+                          {module.description ? <RichTextRenderer html={module.description} /> : <p>Add a short module description.</p>}
                         </div>
                       </header>
                       <div className="teacher-class-workspace__module-stats">
@@ -1650,6 +1830,49 @@ export default function TeacherClassDetailPage() {
                 <div className="teacher-class-workspace__empty">No modules yet.</div>
               ) : null}
             </div>
+
+            <article className="teacher-class-workspace__module-deadline-panel">
+              <div className="teacher-class-workspace__module-deadline-head">
+                <div>
+                  <h3>Upcoming Deadlines</h3>
+                  <p>Stay on top of quizzes, events, and announcements for this class.</p>
+                </div>
+                <Link href={`/dashboard/teacher/classes/${classId}?view=calendar`} className="teacher-class-workspace__outline">
+                  Open Calendar
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              {moduleDeadlineCards.length === 0 ? (
+                <div className="teacher-class-workspace__module-deadline-empty">
+                  No upcoming deadlines yet.
+                </div>
+              ) : (
+                <div className="teacher-class-workspace__module-deadline-row">
+                  {moduleDeadlineCards.map((deadline) => (
+                    <Link
+                      key={deadline.id}
+                      href={deadline.href}
+                      className="teacher-class-workspace__module-deadline-card"
+                      data-kind={deadline.kind}
+                    >
+                      <div className="teacher-class-workspace__module-deadline-date">
+                        <strong>{deadline.dayLabel}</strong>
+                        <span>{deadline.monthLabel}</span>
+                      </div>
+                      <div className="teacher-class-workspace__module-deadline-copy">
+                        <h4>{deadline.title}</h4>
+                        <p>{deadline.subtitle}</p>
+                        <span data-urgent={deadline.isUrgent}>
+                          {deadline.isUrgent ? 'Due Soon' : calendarKindLabel(deadline.kind)}
+                        </span>
+                      </div>
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </article>
           </div>
         ) : null}
 
@@ -1770,6 +1993,8 @@ export default function TeacherClassDetailPage() {
                 const filter = deriveAssignmentFilter(assessment);
                 const isSelected = selectedAssessmentIds.includes(assessment.id);
                 const isCoreAssessment = Boolean(assessment.isCoreTemplateAsset);
+                const attachmentState = assessmentAttachmentMap.get(assessment.id);
+                const moduleGateOpen = Boolean(attachmentState?.gateOpen);
                 return (
                   <article key={assessment.id} className="teacher-class-workspace__assignment-card" data-selected={isSelected}>
                     <div
@@ -1795,6 +2020,13 @@ export default function TeacherClassDetailPage() {
                               {assessment.isPublished ? 'Published' : 'Draft'}
                             </span>
                             {isCoreAssessment ? <span>Default</span> : null}
+                            <span>
+                              {attachmentState?.attached
+                                ? moduleGateOpen
+                                  ? 'Attached: module-visible'
+                                  : 'Attached: module-gated'
+                                : 'Standalone class assignment'}
+                            </span>
                           </div>
                           <h3>{assessment.title}</h3>
                           <p>
@@ -1805,14 +2037,19 @@ export default function TeacherClassDetailPage() {
                     </div>
                     <div className="teacher-class-workspace__assignment-actions">
                       {isCoreAssessment ? (
-                        <button
-                          type="button"
-                          className="teacher-class-workspace__outline"
-                          onClick={() => void toggleCoreAssessmentRelease(assessment)}
-                          disabled={busyAssessmentId === assessment.id}
-                        >
-                          {assessment.isPublished ? 'Hide Core' : 'Release Core'}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="teacher-class-workspace__outline"
+                            onClick={() => void toggleCoreAssessmentRelease(assessment)}
+                            disabled={busyAssessmentId === assessment.id}
+                          >
+                            {assessment.isPublished ? 'Hide Core' : 'Release Core'}
+                          </button>
+                          <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
+                            Edit
+                          </Link>
+                        </>
                       ) : (
                         <>
                           <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
@@ -1933,7 +2170,11 @@ export default function TeacherClassDetailPage() {
                     type="button"
                     className="teacher-class-workspace__solid"
                     onClick={() => void handleCreateAnnouncement()}
-                    disabled={creatingAnnouncement}
+                    disabled={
+                      creatingAnnouncement ||
+                      !announcementTitle.trim() ||
+                      !normalizeRichText(announcementContent).trim()
+                    }
                   >
                     Post Announcement
                   </Button>
@@ -1964,7 +2205,7 @@ export default function TeacherClassDetailPage() {
                     {announcement.isPinned ? <span className="teacher-class-workspace__pin">Pinned</span> : null}
                     <h3>{announcement.title}</h3>
                     <RichTextRenderer
-                      html={announcementContentToHtml(announcement.content)}
+                      html={normalizeRichText(announcement.content)}
                       className="teacher-class-workspace__announcement-rich"
                     />
                     <small>{formatDateYmd(announcement.createdAt)}</small>
@@ -2069,7 +2310,11 @@ export default function TeacherClassDetailPage() {
                     type="button"
                     className="teacher-class-workspace__outline"
                     onClick={() => void handleCreateDiscussionThread(false)}
-                    disabled={creatingDiscussion}
+                    disabled={
+                      creatingDiscussion ||
+                      !discussionTitle.trim() ||
+                      !normalizeRichText(discussionBody).trim()
+                    }
                   >
                     Save Draft
                   </Button>
@@ -2077,7 +2322,11 @@ export default function TeacherClassDetailPage() {
                     type="button"
                     className="teacher-class-workspace__solid"
                     onClick={() => void handleCreateDiscussionThread(true)}
-                    disabled={creatingDiscussion}
+                    disabled={
+                      creatingDiscussion ||
+                      !discussionTitle.trim() ||
+                      !normalizeRichText(discussionBody).trim()
+                    }
                   >
                     Publish Thread
                   </Button>
@@ -2515,13 +2764,11 @@ export default function TeacherClassDetailPage() {
             </div>
             <div>
               <label htmlFor="new-module-description">Description</label>
-              <textarea
-                id="new-module-description"
-                className="teacher-module-modal__textarea"
+              <RichTextEditor
                 value={newModuleDescription}
-                onChange={(event) => setNewModuleDescription(event.target.value)}
+                onChange={setNewModuleDescription}
                 placeholder="What should students learn in this module?"
-                rows={4}
+                minHeight={120}
               />
             </div>
             <button

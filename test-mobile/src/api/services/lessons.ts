@@ -3,6 +3,12 @@ import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type { Lesson, LessonCompletion } from "../../types/lesson";
 
+export type LessonDetail = Lesson;
+export type LessonCompletionStatus = {
+  completed: boolean;
+  completedAt?: string;
+};
+
 export const lessonsApi = {
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}`);

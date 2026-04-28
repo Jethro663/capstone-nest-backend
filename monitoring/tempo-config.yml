@@ -13,8 +13,12 @@ storage:
   trace:
     backend: local
     local:
-      path: /tmp/tempo
+      path: /tmp/tempo/traces
 
 metrics_generator:
   storage:
-    path: /tmp/tempo/metrics
+    path: /tmp/tempo/generator
+
+compactor:
+  compaction:
+    block_retention: 24h

@@ -1,22 +1,33 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, BookOpen, ClipboardList, FileText, Plus, Save, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  ClipboardList,
+  Download,
+  FileCheck2,
+  FileText,
+  FileUp,
+  GripVertical,
+  LayoutGrid,
+  Plus,
+  Rows3,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { normalizeRichText } from '@/lib/rich-text';
 import {
   buildIndexKey,
-  buildLessonItemKey,
   clearTemplateEditorDraft,
+  createTemplateAssessmentDraft,
   loadTemplateWorkspace,
   readTemplateEditorDraft,
   resolveAndSaveTemplateContent,
-  updateTemplateItemByIndex,
-  updateTemplateModuleByIndex,
-  updateTemplateSectionByIndex,
   writeTemplateEditorDraft,
 } from '@/lib/class-template-editor';
 import { classTemplateService } from '@/services/class-template-service';
@@ -24,15 +35,117 @@ import type {
   ClassTemplate,
   ClassTemplateAnnouncement,
   ClassTemplateAssessment,
+  EngineImportValidationResult,
   ClassTemplateModule,
-  ClassTemplateModuleItem,
   ClassTemplateModuleSection,
-  ClassTemplateQuestion,
 } from '@/types/class-template';
 import '../../../teacher/classes/[id]/workspace.css';
 import '../../../teacher/classes/[id]/modules/[moduleId]/module-workspace.css';
 
-type WorkspaceTab = 'modules' | 'assessments' | 'announcements';
+type WorkspaceTab = 'modules' | 'assessments' | 'announcements' | 'template';
+
+function normalizeRichTemplateField(value: string | undefined) {
+  return normalizeRichText(value || '');
+}
+
+function normalizeTemplateSections(
+  sections: ClassTemplateModuleSection[] | undefined,
+): ClassTemplateModuleSection[] {
+  return (sections ?? []).map((section) => ({
+    ...section,
+    description: normalizeRichTemplateField(section.description),
+  }));
+}
+
+function normalizeTemplateModules(modules: ClassTemplateModule[]) {
+  return modules.map((module) => {
+    const sections = normalizeTemplateSections(module.sections);
+    const description = normalizeRichTemplateField(module.description);
+    const mappedSections = sections.map((section) => {
+      const items = (section.items ?? []).map((item) => {
+        if (item.itemType !== 'lesson') return item;
+        const metadata = item.metadata;
+        if (!metadata || typeof metadata !== 'object') return item;
+        const lessonSummary = normalizeRichTemplateField(
+          (metadata as { lessonSummary?: string }).lessonSummary,
+        );
+        return {
+          ...item,
+          metadata: {
+            ...metadata,
+            lessonSummary,
+          },
+        };
+      });
+
+      if (!items.length) return { ...section, description: section.description };
+
+      return {
+        ...section,
+        items,
+      };
+    });
+
+    return {
+      ...module,
+      description,
+      isVisible: module.isVisible ?? false,
+      isLocked: module.isLocked ?? true,
+      sections: mappedSections,
+    };
+  });
+}
+
+function normalizeTemplateAnnouncements(announcements: ClassTemplateAnnouncement[]) {
+  return announcements.map((announcement) => ({
+    ...announcement,
+    content: normalizeRichTemplateField(announcement.content),
+  }));
+}
+
+function normalizeTemplateAssessments(assessments: ClassTemplateAssessment[]) {
+  return assessments.map((assessment) => ({
+    ...assessment,
+    description: normalizeRichTemplateField(assessment.description),
+  }));
+}
+
+function normalizeTemplatePayload(
+  modules: ClassTemplateModule[],
+  assessments: ClassTemplateAssessment[],
+  announcements: ClassTemplateAnnouncement[],
+) {
+  return {
+    modules: normalizeTemplateModules(modules),
+    assessments: normalizeTemplateAssessments(assessments),
+    announcements: normalizeTemplateAnnouncements(announcements),
+  };
+}
+
+function summarizeRichText(value: string | undefined) {
+  if (!value) return '';
+  return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function reindexTemplateAssessments(assessments: ClassTemplateAssessment[]) {
+  return assessments.map((assessment, index) => ({
+    ...assessment,
+    order: index + 1,
+  }));
+}
+
+function formatTemplateAssessmentType(type: string | undefined) {
+  switch (type) {
+    case 'file_upload':
+      return 'File Upload';
+    case 'exam':
+      return 'Exam';
+    case 'activity':
+      return 'Activity';
+    default:
+      return 'Quiz';
+  }
+}
 
 export default function ClassTemplateEditorPage() {
   const params = useParams<{ id: string }>();
@@ -47,7 +160,16 @@ export default function ClassTemplateEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [exportingEngine, setExportingEngine] = useState(false);
+  const [validatingEngine, setValidatingEngine] = useState(false);
+  const [importingEngine, setImportingEngine] = useState(false);
+  const [engineManifest, setEngineManifest] = useState('');
+  const [engineValidation, setEngineValidation] =
+    useState<EngineImportValidationResult | null>(null);
+  const manifestFileRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');
+  const [selectedModuleIndexes, setSelectedModuleIndexes] = useState<number[]>([]);
+  const [moduleView, setModuleView] = useState<'cards' | 'compact'>('cards');
 
   const savePayload = useMemo(
     () => ({ modules, assessments, announcements }),
@@ -66,12 +188,12 @@ export default function ClassTemplateEditorPage() {
 
         const cached = readTemplateEditorDraft(templateId);
         if (cached) {
-          setModules(cached.modules);
+          setModules(normalizeTemplateModules(cached.modules));
           setAssessments(cached.assessments);
           setAnnouncements(cached.announcements);
           toast.info('Recovered local draft');
         } else {
-          setModules(workspace.state.modules);
+          setModules(normalizeTemplateModules(workspace.state.modules));
           setAssessments(workspace.state.assessments);
           setAnnouncements(workspace.state.announcements);
         }
@@ -95,6 +217,10 @@ export default function ClassTemplateEditorPage() {
     return () => window.clearTimeout(handle);
   }, [templateId, savePayload, loading]);
 
+  useEffect(() => {
+    setSelectedModuleIndexes((current) => current.filter((index) => index < modules.length));
+  }, [modules.length]);
+
   const saveNow = async (options?: { rethrow?: boolean }) => {
     try {
       setSaving(true);
@@ -102,12 +228,9 @@ export default function ClassTemplateEditorPage() {
         const updated = await classTemplateService.update(templateId, { name: name.trim() });
         setTemplate(updated.data);
       }
-      const saved = await resolveAndSaveTemplateContent(templateId, {
-        modules,
-        assessments,
-        announcements,
-      });
-      setModules(saved.modules);
+      const normalizedPayload = normalizeTemplatePayload(modules, assessments, announcements);
+      const saved = await resolveAndSaveTemplateContent(templateId, normalizedPayload);
+      setModules(normalizeTemplateModules(saved.modules));
       setAssessments(saved.assessments);
       setAnnouncements(saved.announcements);
       clearTemplateEditorDraft(templateId);
@@ -122,17 +245,126 @@ export default function ClassTemplateEditorPage() {
     }
   };
 
-  const publishNow = async () => {
+  const updateTemplatePublication = async (nextStatus: 'published' | 'draft') => {
     try {
       setPublishing(true);
       await saveNow({ rethrow: true });
-      await classTemplateService.publish(templateId, 'published');
-      setTemplate((current) => (current ? { ...current, status: 'published' } : current));
-      toast.success('Template published');
+      await classTemplateService.publish(templateId, nextStatus);
+      setTemplate((current) => (current ? { ...current, status: nextStatus } : current));
+      toast.success(
+        nextStatus === 'published'
+          ? 'Template published and core content released'
+          : 'Template unpublished and core content set to draft',
+      );
     } catch {
-      toast.error('Failed to publish template');
+      toast.error(
+        nextStatus === 'published'
+          ? 'Failed to publish template'
+          : 'Failed to unpublish template',
+      );
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const publishNow = async () => updateTemplatePublication('published');
+  const unpublishNow = async () => updateTemplatePublication('draft');
+
+  const handleExportEngine = async () => {
+    try {
+      setExportingEngine(true);
+      const response = await classTemplateService.exportEngine(templateId);
+      const payload = response.data;
+      setEngineManifest(payload.yaml);
+      setEngineValidation(null);
+
+      const blob = new Blob([payload.yaml], {
+        type: 'application/x-yaml;charset=utf-8',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = payload.fileName;
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Template export generated');
+    } catch (error) {
+      const details =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message;
+      toast.error(details ? `Failed to export template manifest: ${details}` : 'Failed to export template manifest');
+    } finally {
+      setExportingEngine(false);
+    }
+  };
+
+  const handleValidateEngine = async () => {
+    const manifest = engineManifest.trim();
+    if (!manifest) {
+      toast.error('Paste or load a template manifest first');
+      return;
+    }
+
+    try {
+      setValidatingEngine(true);
+      const response = await classTemplateService.validateEngineImport(manifest);
+      setEngineValidation(response.data);
+      if (response.data.valid) {
+        toast.success('Template manifest is valid');
+      } else {
+        toast.error('Template manifest has validation errors');
+      }
+    } catch {
+      toast.error('Failed to validate template manifest');
+    } finally {
+      setValidatingEngine(false);
+    }
+  };
+
+  const handleImportEngine = async () => {
+    const manifest = engineManifest.trim();
+    if (!manifest) {
+      toast.error('Paste or load a template manifest first');
+      return;
+    }
+
+    if (engineValidation && !engineValidation.valid) {
+      toast.error('Fix validation errors before import');
+      return;
+    }
+
+    try {
+      setImportingEngine(true);
+      const response = await classTemplateService.importEngine(manifest);
+      const workspace = await loadTemplateWorkspace(response.data.template.id);
+      setTemplate(workspace.template);
+      setName(workspace.template?.name ?? '');
+      setModules(workspace.state.modules);
+      setAssessments(workspace.state.assessments);
+      setAnnouncements(workspace.state.announcements);
+      clearTemplateEditorDraft(response.data.template.id);
+      toast.success('Template manifest imported');
+    } catch {
+      toast.error('Failed to import template manifest');
+    } finally {
+      setImportingEngine(false);
+    }
+  };
+
+  const handleManifestFileLoad = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setEngineManifest(text);
+      setEngineValidation(null);
+      toast.success('Manifest loaded');
+    } catch {
+      toast.error('Unable to read manifest file');
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -143,142 +375,42 @@ export default function ClassTemplateEditorPage() {
         title: 'New Module',
         description: '',
         order: current.length + 1,
+        isVisible: false,
+        isLocked: true,
         sections: [],
       },
     ]);
-  };
-
-  const updateModule = (index: number, patch: Partial<ClassTemplateModule>) => {
-    setModules((current) =>
-      updateTemplateModuleByIndex(current, index, (moduleEntry) => ({
-        ...moduleEntry,
-        ...patch,
-      })),
-    );
+    setSelectedModuleIndexes([]);
   };
 
   const removeModule = (index: number) => {
     setModules((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  };
-
-  const addSection = (moduleIndex: number) => {
-    setModules((current) =>
-      updateTemplateModuleByIndex(current, moduleIndex, (moduleEntry) => {
-        const sections = moduleEntry.sections ?? [];
-        return {
-          ...moduleEntry,
-          sections: [
-            ...sections,
-            {
-              title: 'New Section',
-              description: '',
-              order: sections.length + 1,
-              items: [],
-            },
-          ],
-        };
-      }),
+    setSelectedModuleIndexes((current) =>
+      current.filter((itemIndex) => itemIndex !== index).map((itemIndex) => (itemIndex > index ? itemIndex - 1 : itemIndex)),
     );
   };
 
-  const updateSection = (moduleIndex: number, sectionIndex: number, patch: Partial<ClassTemplateModuleSection>) => {
-    setModules((current) =>
-      updateTemplateSectionByIndex(
-        current,
-        moduleIndex,
-        sectionIndex,
-        (sectionEntry) => ({
-          ...sectionEntry,
-          ...patch,
-        }),
-      ),
-    );
+  const toggleModuleSelection = (index: number) => {
+    setSelectedModuleIndexes((current) => {
+      if (current.includes(index)) {
+        return current.filter((itemIndex) => itemIndex !== index);
+      }
+      return [...current, index].sort((left, right) => left - right);
+    });
   };
 
-  const removeSection = (moduleIndex: number, sectionIndex: number) => {
-    setModules((current) =>
-      updateTemplateModuleByIndex(current, moduleIndex, (moduleEntry) => ({
-        ...moduleEntry,
-        sections: (moduleEntry.sections ?? []).filter((_, idx) => idx !== sectionIndex),
-      })),
-    );
+  const toggleAllModules = () => {
+    if (selectedModuleIndexes.length === modules.length) {
+      setSelectedModuleIndexes([]);
+      return;
+    }
+    setSelectedModuleIndexes(modules.map((_, index) => index));
   };
 
-  const addModuleBlock = (
-    moduleIndex: number,
-    sectionIndex: number,
-    blockType: 'lesson' | 'assessment' | 'file',
-  ) => {
-    setModules((current) =>
-      updateTemplateSectionByIndex(current, moduleIndex, sectionIndex, (sectionEntry) => {
-        const items = sectionEntry.items ?? [];
-
-        let nextItem: ClassTemplateModuleItem;
-        if (blockType === 'assessment') {
-          nextItem = {
-            itemType: 'assessment',
-            order: items.length + 1,
-            isRequired: false,
-            metadata: { linkedAssessmentKey: '' },
-          };
-        } else if (blockType === 'lesson') {
-          nextItem = {
-            itemType: 'lesson',
-            order: items.length + 1,
-            isRequired: false,
-            points: 0,
-            metadata: {
-              lessonTitle: 'New Lesson Block',
-              lessonSummary: '',
-            },
-          };
-        } else {
-          nextItem = {
-            itemType: 'file',
-            order: items.length + 1,
-            isRequired: false,
-            metadata: {
-              fileTitle: 'PDF Resource',
-              fileUrl: '',
-            },
-          };
-        }
-
-        return {
-          ...sectionEntry,
-          items: [...items, nextItem],
-        };
-      }),
-    );
-  };
-
-  const updateAssessmentBlock = (
-    moduleIndex: number,
-    sectionIndex: number,
-    itemIndex: number,
-    patch: Partial<ClassTemplateModuleItem>,
-  ) => {
-    setModules((current) =>
-      updateTemplateItemByIndex(
-        current,
-        moduleIndex,
-        sectionIndex,
-        itemIndex,
-        (itemEntry) => ({
-          ...itemEntry,
-          ...patch,
-        }),
-      ),
-    );
-  };
-
-  const removeAssessmentBlock = (moduleIndex: number, sectionIndex: number, itemIndex: number) => {
-    setModules((current) =>
-      updateTemplateSectionByIndex(current, moduleIndex, sectionIndex, (sectionEntry) => ({
-        ...sectionEntry,
-        items: (sectionEntry.items ?? []).filter((_, idx) => idx !== itemIndex),
-      })),
-    );
+  const removeSelectedModules = () => {
+    if (!selectedModuleIndexes.length) return;
+    setModules((current) => current.filter((_, index) => !selectedModuleIndexes.includes(index)));
+    setSelectedModuleIndexes([]);
   };
 
   const summarizeModule = (module: ClassTemplateModule) => {
@@ -299,87 +431,32 @@ export default function ClassTemplateEditorPage() {
   };
 
   const addAssessment = () => {
-    setAssessments((current) => [
-      ...current,
-      {
-        title: 'New Assessment',
-        description: '',
-        type: 'quiz',
-        totalPoints: 10,
-        order: current.length + 1,
-        questions: [],
-      },
+    const nextAssessments = reindexTemplateAssessments([
+      ...assessments,
+      createTemplateAssessmentDraft(assessments.length + 1),
     ]);
-  };
 
-  const updateAssessment = (index: number, patch: Partial<ClassTemplateAssessment>) => {
-    setAssessments((current) => {
-      const next = current.slice();
-      next[index] = { ...next[index], ...patch };
-      return next;
+    writeTemplateEditorDraft(templateId, {
+      modules,
+      assessments: nextAssessments,
+      announcements,
     });
+    setAssessments(nextAssessments);
+    router.push(
+      `/dashboard/admin/class-templates/${templateId}/assessments/${buildIndexKey(nextAssessments.length - 1)}/edit`,
+    );
   };
 
   const removeAssessment = (index: number) => {
-    setAssessments((current) => current.filter((_, itemIndex) => itemIndex !== index));
-  };
-
-  const addQuestion = (assessmentIndex: number) => {
     setAssessments((current) => {
-      const next = current.slice();
-      const assessment = next[assessmentIndex];
-      if (!assessment) return current;
-      const questions = assessment.questions ?? [];
-      const newQuestion: ClassTemplateQuestion = {
-        type: 'multiple_choice',
-        content: 'New question',
-        points: 1,
-        order: questions.length + 1,
-        options: [
-          { text: 'Option A', order: 1 },
-          { text: 'Option B', order: 2 },
-        ],
-      };
-
-      next[assessmentIndex] = {
-        ...assessment,
-        questions: [...questions, newQuestion],
-      };
-      return next;
-    });
-  };
-
-  const updateQuestion = (
-    assessmentIndex: number,
-    questionIndex: number,
-    patch: Partial<ClassTemplateQuestion>,
-  ) => {
-    setAssessments((current) => {
-      const next = current.slice();
-      const assessment = next[assessmentIndex];
-      if (!assessment) return current;
-      const questions = (assessment.questions ?? []).slice();
-      if (!questions[questionIndex]) return current;
-      questions[questionIndex] = { ...questions[questionIndex], ...patch };
-
-      next[assessmentIndex] = {
-        ...assessment,
-        questions,
-      };
-      return next;
-    });
-  };
-
-  const removeQuestion = (assessmentIndex: number, questionIndex: number) => {
-    setAssessments((current) => {
-      const next = current.slice();
-      const assessment = next[assessmentIndex];
-      if (!assessment) return current;
-
-      next[assessmentIndex] = {
-        ...assessment,
-        questions: (assessment.questions ?? []).filter((_, idx) => idx !== questionIndex),
-      };
+      const next = reindexTemplateAssessments(
+        current.filter((_, itemIndex) => itemIndex !== index),
+      );
+      writeTemplateEditorDraft(templateId, {
+        modules,
+        assessments: next,
+        announcements,
+      });
       return next;
     });
   };
@@ -391,17 +468,12 @@ export default function ClassTemplateEditorPage() {
     ]);
   };
 
-  const openLessonStudio = (moduleIndex: number, sectionIndex: number, itemIndex: number) => {
-    const itemKey = buildLessonItemKey(moduleIndex, sectionIndex, itemIndex);
-    router.push(`/dashboard/admin/class-templates/${templateId}/lessons/${itemKey}/edit`);
-  };
-
   const openAssessmentStudio = (assessmentIndex: number) => {
     router.push(`/dashboard/admin/class-templates/${templateId}/assessments/${buildIndexKey(assessmentIndex)}/edit`);
   };
 
-  const openNewAssessmentStudio = () => {
-    router.push(`/dashboard/admin/class-templates/${templateId}/assessments/new/edit`);
+  const openModuleWorkspace = (moduleIndex: number) => {
+    router.push(`/dashboard/admin/class-templates/${templateId}/modules/${buildIndexKey(moduleIndex)}`);
   };
 
   const openAnnouncementStudio = (announcementIndex: number) => {
@@ -427,22 +499,64 @@ export default function ClassTemplateEditorPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Templates
         </button>
-        <div className="teacher-class-workspace__hero-row">
-          <div className="teacher-class-workspace__hero-icon">
-            <BookOpen className="h-6 w-6" />
+        <div className="teacher-class-workspace__hero-row admin-template-editor__hero-row">
+          <div className="admin-template-editor__hero-main">
+            <div className="teacher-class-workspace__hero-icon">
+              <BookOpen className="h-6 w-6" />
+            </div>
+            <div className="teacher-class-workspace__hero-copy">
+              <h1>{name || template?.name || 'Template Workspace'}</h1>
+              <p>
+                Shape this template with the same workspace rhythm teachers use in live classes:
+                modules first, then assessments, then announcements.
+              </p>
+              <div className="teacher-class-workspace__hero-meta">
+                <span>{template?.subjectCode} / Grade {template?.subjectGradeLevel}</span>
+                <span>{modules.length} modules</span>
+                <span>{assessments.length} assessments</span>
+                <span>{announcements.length} announcements</span>
+                <span>Status: {template?.status || 'draft'}</span>
+              </div>
+            </div>
           </div>
-          <div className="teacher-class-workspace__hero-copy">
-            <h1>{name || template?.name || 'Template Workspace'}</h1>
-            <p>
-              Shape this template with the same workspace rhythm teachers use in live classes:
-              modules first, then assessments, then announcements.
-            </p>
-            <div className="teacher-class-workspace__hero-meta">
-              <span>{template?.subjectCode} / Grade {template?.subjectGradeLevel}</span>
-              <span>{modules.length} modules</span>
-              <span>{assessments.length} assessments</span>
-              <span>{announcements.length} announcements</span>
-              <span>Status: {template?.status || 'draft'}</span>
+
+          <div className="admin-template-editor__hero-tools">
+            <Input
+              data-testid="template-workspace-name-input"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="admin-template-editor__hero-name-input"
+            />
+            <div className="admin-template-editor__hero-actions">
+              <Button
+                data-testid="save-draft-button"
+                onClick={() => void saveNow()}
+                disabled={saving}
+                className="teacher-class-workspace__outline admin-template-editor__hero-outline"
+                variant="outline"
+              >
+                {saving ? 'Saving...' : 'Save Draft'}
+              </Button>
+              {template?.status === 'published' ? (
+                <Button
+                  data-testid="unpublish-template-button"
+                  onClick={() => void unpublishNow()}
+                  disabled={publishing}
+                  className="teacher-class-workspace__outline admin-template-editor__hero-outline"
+                  variant="outline"
+                >
+                  {publishing ? 'Updating...' : 'Unpublish'}
+                </Button>
+              ) : (
+                <Button
+                  data-testid="publish-template-button"
+                  onClick={() => void publishNow()}
+                  disabled={publishing}
+                  className="teacher-class-workspace__solid"
+                >
+                  {publishing ? 'Publishing...' : 'Publish'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -453,6 +567,7 @@ export default function ClassTemplateEditorPage() {
           { key: 'modules', label: 'Modules', icon: BookOpen },
           { key: 'assessments', label: 'Assessments', icon: ClipboardList },
           { key: 'announcements', label: 'Announcements', icon: FileText },
+          { key: 'template', label: 'Template', icon: FileCheck2 },
         ] as const).map((entry) => {
           const Icon = entry.icon;
           return (
@@ -471,465 +586,351 @@ export default function ClassTemplateEditorPage() {
         })}
       </nav>
 
-      <section className="teacher-class-workspace__body">
-        <div className="teacher-class-workspace__panel">
-          <div className="teacher-class-workspace__panel-head">
-            <div>
-              <h2 className="teacher-class-workspace__section-title">Template Setup</h2>
-              <p>Rename the template, save your draft locally and remotely, then publish when the default content is ready.</p>
-            </div>
-            <div className="teacher-class-workspace__head-actions">
-              <Input
-                data-testid="template-workspace-name-input"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="h-11 min-w-[18rem] max-w-xl bg-white font-black"
+      <section className="teacher-class-workspace__body pt-4">
+        {tab === 'template' ? (
+          <div className="teacher-class-workspace__panel">
+            <div className="space-y-3 rounded-2xl border border-[var(--admin-outline)] bg-white p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="admin-button-outline h-9 rounded-lg px-3 text-xs font-bold"
+                  onClick={() => void handleExportEngine()}
+                  disabled={exportingEngine}
+                >
+                  <Download className="h-4 w-4" />
+                  {exportingEngine ? 'Exporting...' : 'Export Template YAML'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="admin-button-outline h-9 rounded-lg px-3 text-xs font-bold"
+                  onClick={() => manifestFileRef.current?.click()}
+                >
+                  <FileUp className="h-4 w-4" />
+                  Load YAML File
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="admin-button-outline h-9 rounded-lg px-3 text-xs font-bold"
+                  onClick={() => void handleValidateEngine()}
+                  disabled={validatingEngine}
+                >
+                  <FileCheck2 className="h-4 w-4" />
+                  {validatingEngine ? 'Validating...' : 'Validate Import'}
+                </Button>
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__solid h-9 rounded-lg px-3 text-xs"
+                  onClick={() => void handleImportEngine()}
+                  disabled={importingEngine}
+                >
+                  {importingEngine ? 'Importing...' : 'Import Template'}
+                </Button>
+              </div>
+              <input
+                ref={manifestFileRef}
+                type="file"
+                accept=".yaml,.yml,text/yaml,text/x-yaml"
+                className="hidden"
+                onChange={(event) => void handleManifestFileLoad(event)}
               />
-              <Button
-                data-testid="save-draft-button"
-                onClick={() => void saveNow()}
-                disabled={saving}
-                className="teacher-class-workspace__outline"
-                variant="outline"
-              >
-                <Save className="h-4 w-4" />
-                {saving ? 'Saving...' : 'Save Draft'}
-              </Button>
-              <Button
-                data-testid="publish-template-button"
-                onClick={() => void publishNow()}
-                disabled={publishing}
-                className="teacher-class-workspace__solid"
-              >
-                {publishing ? 'Publishing...' : 'Publish'}
-              </Button>
+              <textarea
+                value={engineManifest}
+                onChange={(event) => setEngineManifest(event.target.value)}
+                placeholder="Paste template YAML manifest here..."
+                className="min-h-[180px] w-full rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] p-3 text-xs leading-6 text-[var(--admin-text-strong)] outline-none transition focus:border-[#6e7cc8]"
+              />
+              {engineValidation ? (
+                <div className="space-y-1 text-xs">
+                  <p className="font-bold text-[var(--admin-text-strong)]">
+                    Validation: {engineValidation.valid ? 'Valid' : 'Invalid'}
+                  </p>
+                  <p className="text-[var(--admin-text-muted)]">
+                    Modules {engineValidation.summary.modules} • Lessons {engineValidation.summary.lessons} • Assessments{' '}
+                    {engineValidation.summary.assessments} • Chunks {engineValidation.summary.chunks}
+                  </p>
+                  {engineValidation.errors.length > 0 ? (
+                    <p className="text-red-600">
+                      {engineValidation.errors.length} error(s): {engineValidation.errors[0]?.message}
+                    </p>
+                  ) : null}
+                  {engineValidation.warnings.length > 0 ? (
+                    <p className="text-amber-700">
+                      {engineValidation.warnings.length} warning(s): {engineValidation.warnings[0]?.message}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
-        </div>
+        ) : null}
 
       {tab === 'modules' ? (
-        <section className="teacher-module-detail__content">
-          <div className="teacher-module-detail__stack" data-animate="fade">
-            <div className="teacher-module-detail__section-head">
+        <section className="space-y-2">
+          <div className="rounded-2xl border border-[var(--admin-outline)] bg-white p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2>Modules</h2>
-                <p>{modules.length} modules</p>
+                <h2 className="text-xl font-black leading-tight text-[var(--admin-text-strong)]">Course Modules</h2>
+                <p className="mt-1 text-xs font-semibold text-[var(--admin-text-muted)]">{modules.length} modules</p>
               </div>
-              <div className="teacher-module-detail__section-creator">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   data-testid="add-module-button"
                   type="button"
-                  className="teacher-module-detail__primary"
-                  data-priority="primary"
+                  className="teacher-class-workspace__solid h-9 rounded-full px-4 text-xs"
                   onClick={addModule}
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-3.5 w-3.5" />
                   Add Module
+                </Button>
+                <div className="inline-flex items-center rounded-full border border-[#d7e1ef] bg-[#edf3ff] p-1">
+                  <button
+                    type="button"
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${
+                      moduleView === 'cards' ? 'bg-white text-[#24467f]' : 'text-[#6b82a6]'
+                    }`}
+                    onClick={() => setModuleView('cards')}
+                    aria-label="Card view"
+                  >
+                    <Rows3 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition ${
+                      moduleView === 'compact' ? 'bg-white text-[#24467f]' : 'text-[#6b82a6]'
+                    }`}
+                    onClick={() => setModuleView('compact')}
+                    aria-label="Compact view"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={toggleAllModules}
+                  className="h-9 rounded-full border-[#cddbf0] px-3 text-xs font-bold text-[#27497e]"
+                >
+                  Select All
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={removeSelectedModules}
+                  disabled={!selectedModuleIndexes.length}
+                  className="h-9 rounded-full border-[#f2c7ce] px-3 text-xs font-bold text-[#d86b7b] hover:bg-[#fff3f5] disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete Selected
                 </Button>
               </div>
             </div>
+          </div>
 
+          <div className={moduleView === 'cards' ? 'space-y-2' : 'grid gap-2 xl:grid-cols-2'}>
             {modules.map((module, moduleIndex) => {
               const summary = summarizeModule(module);
+              const description = summarizeRichText(module.description);
+              const isSelected = selectedModuleIndexes.includes(moduleIndex);
+              const accentColor = moduleIndex % 2 === 0 ? '#3d64de' : '#1ea673';
+
               return (
-                <article key={`${module.id ?? 'new'}-${moduleIndex}`} className="teacher-module-detail__section-card">
-                  <header className="teacher-module-detail__section-card-head">
-                    <div className="teacher-module-detail__section-main">
-                      <Input
-                        data-testid={`module-title-${moduleIndex}`}
-                        value={module.title}
-                        onChange={(event) => updateModule(moduleIndex, { title: event.target.value })}
-                        className="font-semibold"
-                      />
-                      <span>
-                        {summary.lessons} lessons - {summary.assessmentsCount} assessments - {summary.files} PDFs
-                      </span>
-                    </div>
-                    <div className="teacher-module-detail__section-actions">
-                      <Button
-                        data-testid={`open-module-workspace-${moduleIndex}`}
-                        type="button"
-                        variant="outline"
-                        className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
-                        onClick={() =>
-                          router.push(
-                            `/dashboard/admin/class-templates/${templateId}/modules/${buildIndexKey(moduleIndex)}`,
-                          )
-                        }
-                      >
-                        Open Module Workspace
-                      </Button>
-                      <button
-                        type="button"
-                        className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                        onClick={() => removeModule(moduleIndex)}
-                        aria-label="Delete module"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </header>
+                <article
+                  key={`${module.id ?? 'new'}-${moduleIndex}`}
+                  className="relative overflow-hidden rounded-3xl border border-[#c9d7ec] bg-white p-3 shadow-[0_12px_28px_-28px_rgba(17,41,88,0.45)]"
+                  style={{ borderTop: `4px solid ${accentColor}` }}
+                >
+                  <div
+                    data-testid={`open-module-workspace-${moduleIndex}`}
+                    className="flex cursor-pointer flex-col gap-2 rounded-2xl lg:flex-row lg:items-center"
+                    onClick={() => openModuleWorkspace(moduleIndex)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openModuleWorkspace(moduleIndex);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex flex-col items-center gap-2 pt-1">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => toggleModuleSelection(moduleIndex)}
+                          className="h-4 w-4 rounded border-[#9cb0cf] accent-[#e70012]"
+                          aria-label={`Select ${module.title || `Module ${moduleIndex + 1}`}`}
+                        />
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#d2ddec] bg-[#eff4fb] text-[#6d83a8]"
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label="Drag module"
+                        >
+                          <GripVertical className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
 
-                  <div className="teacher-module-detail__items">
-                    <Textarea
-                      value={module.description ?? ''}
-                      onChange={(event) => updateModule(moduleIndex, { description: event.target.value })}
-                      placeholder="Add a short module description."
-                    />
-
-                    {(module.sections ?? []).map((section, sectionIndex) => (
-                      <div key={`${section.id ?? 'new'}-${sectionIndex}`} className="teacher-module-detail__item-row">
-                        <div className="teacher-module-detail__item-main teacher-module-detail__item-main--disabled">
-                          <div className="teacher-module-detail__item-copy">
-                            <div className="teacher-module-detail__chips">
-                              <span data-kind="lesson">section</span>
-                              <span data-kind="draft">{(section.items ?? []).length} blocks</span>
-                            </div>
-                            <Input
-                              value={section.title}
-                              onChange={(event) => updateSection(moduleIndex, sectionIndex, { title: event.target.value })}
-                              className="font-semibold"
-                            />
-                            <Textarea
-                              value={section.description ?? ''}
-                              onChange={(event) => updateSection(moduleIndex, sectionIndex, { description: event.target.value })}
-                              placeholder="Section/block description"
-                            />
+                      <div className="h-20 w-28 rounded-2xl bg-gradient-to-b from-[#b6c4d9] via-[#89a0c9] to-[#486ede] p-1.5">
+                        <div className="h-full rounded-xl border border-[#9ab1d4] bg-[rgba(255,255,255,0.22)] p-1.5">
+                          <div className="space-y-1">
+                            <div className="h-1.5 w-4/5 rounded bg-[rgba(226,238,255,0.92)]" />
+                            <div className="h-1.5 w-3/4 rounded bg-[rgba(226,238,255,0.8)]" />
+                            <div className="h-1.5 w-2/3 rounded bg-[rgba(226,238,255,0.68)]" />
+                            <div className="mt-2.5 h-1.5 w-1/2 rounded bg-[rgba(226,238,255,0.72)]" />
                           </div>
-                        </div>
-                        <div className="teacher-module-detail__item-controls">
-                          <button
-                            type="button"
-                            className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                            onClick={() => removeSection(moduleIndex, sectionIndex)}
-                            aria-label="Delete section"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
                         </div>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start gap-3">
+                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f8d4d9] text-xs font-black text-[#c81d33]">
+                          {moduleIndex + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <h3
+                            data-testid={`module-title-${moduleIndex}`}
+                            className="truncate text-xl font-black leading-tight text-[#0b2346]"
+                          >
+                            {module.title || `Module ${moduleIndex + 1}`}
+                          </h3>
+                          <p className="mt-1 text-sm font-semibold leading-tight text-[#112f5a]">
+                            {moduleIndex === 0 ? 'Core Module' : 'Learning Module'}
+                          </p>
+                          <p className="mt-1.5 text-xs font-medium text-[#6f88ac]">
+                            {description || 'Add a short module description.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 grid gap-1.5 md:grid-cols-2">
+                        <div className="rounded-xl border border-[#d4deee] bg-[#f4f8ff] px-2.5 py-2">
+                          <div className="flex items-center gap-1.5 text-lg font-black text-[#0a2c59]">
+                            <BookOpen className="h-4 w-4" />
+                            <span>{summary.lessons}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-[#6680a9]">Lessons</p>
+                        </div>
+                        <div className="rounded-xl border border-[#d4deee] bg-[#f4f8ff] px-2.5 py-2">
+                          <div className="flex items-center gap-1.5 text-lg font-black text-[#0a2c59]">
+                            <ClipboardList className="h-4 w-4" />
+                            <span>{summary.assessmentsCount}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-[#6680a9]">Assessments</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  <footer className="teacher-module-detail__section-footer">
-                    <Button type="button" className="teacher-module-detail__outline" onClick={() => addSection(moduleIndex)}>
-                      <Plus className="h-4 w-4" />
-                      Add Section
-                    </Button>
-                  </footer>
-
-                  {(module.sections ?? []).map((section, sectionIndex) => (
-                    <div key={`section-actions-${section.id ?? sectionIndex}`} className="teacher-module-detail__section-footer">
-                      <Button
-                        type="button"
-                        className="teacher-module-detail__outline"
-                        onClick={() => addModuleBlock(moduleIndex, sectionIndex, 'lesson')}
-                      >
-                        <BookOpen className="h-4 w-4" />
-                        Add Lesson Block
-                      </Button>
-                      <Button
-                        type="button"
-                        className="teacher-module-detail__outline"
-                        onClick={() => addModuleBlock(moduleIndex, sectionIndex, 'assessment')}
-                      >
-                        <ClipboardList className="h-4 w-4" />
-                        Add Assessment Block
-                      </Button>
-                      <Button
-                        type="button"
-                        className="teacher-module-detail__outline"
-                        onClick={() => addModuleBlock(moduleIndex, sectionIndex, 'file')}
-                      >
-                        <FileText className="h-4 w-4" />
-                        Attach PDF
-                      </Button>
-                      {(section.items ?? []).map((item, itemIndex) => {
-                        const metadataLinkedKey = (item.metadata?.linkedAssessmentKey as string | undefined) ?? '';
-                        const linkedKey = metadataLinkedKey.startsWith('draft:') && item.templateAssessmentId
-                          ? `id:${item.templateAssessmentId}`
-                          : metadataLinkedKey || (item.templateAssessmentId ? `id:${item.templateAssessmentId}` : '');
-                        const hasResolvedOption = linkedKey.startsWith('id:')
-                          ? assessments.some((assessment) => assessment.id === linkedKey.slice(3))
-                          : true;
-                        const linkedAssessmentRouteKey = (() => {
-                          if (linkedKey.startsWith('draft:')) {
-                            const draftIndex = Number.parseInt(linkedKey.slice(6), 10);
-                            return Number.isNaN(draftIndex) ? '' : buildIndexKey(draftIndex);
-                          }
-
-                          if (linkedKey.startsWith('id:')) {
-                            const linkedId = linkedKey.slice(3);
-                            const linkedIndex = assessments.findIndex((entry) => entry.id === linkedId);
-                            return linkedIndex < 0 ? '' : buildIndexKey(linkedIndex);
-                          }
-
-                          return '';
-                        })();
-                        const lessonTitle = (item.metadata?.lessonTitle as string | undefined) ?? '';
-                        const lessonSummary = (item.metadata?.lessonSummary as string | undefined) ?? '';
-                        const fileTitle = (item.metadata?.fileTitle as string | undefined) ?? '';
-                        const fileUrl = (item.metadata?.fileUrl as string | undefined) ?? '';
-                        return (
-                          <div key={`${item.id ?? 'new'}-${itemIndex}`} className="teacher-module-detail__item-row">
-                            <div className="teacher-module-detail__item-main teacher-module-detail__item-main--disabled">
-                              <div className="teacher-module-detail__item-icon">
-                                {item.itemType === 'lesson' ? (
-                                  <BookOpen className="h-4 w-4" />
-                                ) : item.itemType === 'assessment' ? (
-                                  <ClipboardList className="h-4 w-4" />
-                                ) : (
-                                  <FileText className="h-4 w-4" />
-                                )}
-                              </div>
-                              <div className="teacher-module-detail__item-copy">
-                                <div className="teacher-module-detail__chips">
-                                  <span data-kind={item.itemType}>{item.itemType}</span>
-                                  <span data-kind="draft">template</span>
-                                </div>
-
-                                {item.itemType === 'assessment' ? (
-                                  <>
-                                    <select
-                                      className="admin-select h-9 w-full rounded-lg px-2 text-sm"
-                                      value={linkedKey}
-                                      onChange={(event) =>
-                                        updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
-                                          metadata: {
-                                            ...(item.metadata ?? {}),
-                                            linkedAssessmentKey: event.target.value,
-                                          },
-                                        })
-                                      }
-                                    >
-                                      <option value="">Unlinked</option>
-                                      {!hasResolvedOption && linkedKey.startsWith('id:') ? (
-                                        <option value={linkedKey}>Linked Assessment (saved)</option>
-                                      ) : null}
-                                      {assessments.map((assessment, assessmentIndex) => (
-                                        <option
-                                          key={assessment.id ?? `draft-${assessmentIndex}`}
-                                          value={assessment.id ? `id:${assessment.id}` : `draft:${assessmentIndex}`}
-                                        >
-                                          {assessment.title} {assessment.id ? '(saved)' : '(draft)'}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <label className="teacher-module-detail__control-toggle">
-                                      <input
-                                        type="checkbox"
-                                        checked={Boolean(item.isRequired)}
-                                        onChange={(event) =>
-                                          updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
-                                            isRequired: event.target.checked,
-                                          })
-                                        }
-                                      />
-                                      Required
-                                    </label>
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
-                                      onClick={() => {
-                                        if (linkedAssessmentRouteKey) {
-                                          router.push(`/dashboard/admin/class-templates/${templateId}/assessments/${linkedAssessmentRouteKey}/edit`);
-                                          return;
-                                        }
-
-                                        openNewAssessmentStudio();
-                                      }}
-                                    >
-                                      {linkedAssessmentRouteKey ? 'Open Assessment Studio' : 'Create Assessment In Studio'}
-                                    </Button>
-                                  </>
-                                ) : null}
-
-                                {item.itemType === 'lesson' ? (
-                                  <>
-                                    <Input
-                                      value={lessonTitle}
-                                      onChange={(event) =>
-                                        updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
-                                          metadata: {
-                                            ...(item.metadata ?? {}),
-                                            lessonTitle: event.target.value,
-                                          },
-                                        })
-                                      }
-                                      placeholder="Lesson block title"
-                                    />
-                                    <Textarea
-                                      value={lessonSummary}
-                                      onChange={(event) =>
-                                        updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
-                                          metadata: {
-                                            ...(item.metadata ?? {}),
-                                            lessonSummary: event.target.value,
-                                          },
-                                        })
-                                      }
-                                      placeholder="Lesson summary/instructions"
-                                    />
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
-                                      onClick={() => openLessonStudio(moduleIndex, sectionIndex, itemIndex)}
-                                    >
-                                      Open Lesson Studio
-                                    </Button>
-                                  </>
-                                ) : null}
-
-                                {item.itemType === 'file' ? (
-                                  <>
-                                    <Input
-                                      value={fileTitle}
-                                      onChange={(event) =>
-                                        updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
-                                          metadata: {
-                                            ...(item.metadata ?? {}),
-                                            fileTitle: event.target.value,
-                                          },
-                                        })
-                                      }
-                                      placeholder="PDF title"
-                                    />
-                                    <Input
-                                      value={fileUrl}
-                                      onChange={(event) =>
-                                        updateAssessmentBlock(moduleIndex, sectionIndex, itemIndex, {
-                                          metadata: {
-                                            ...(item.metadata ?? {}),
-                                            fileUrl: event.target.value,
-                                          },
-                                        })
-                                      }
-                                      placeholder="PDF URL (https://...)"
-                                    />
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
-                            <div className="teacher-module-detail__item-controls">
-                              <button
-                                type="button"
-                                className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                                onClick={() => removeAssessmentBlock(moduleIndex, sectionIndex, itemIndex)}
-                                aria-label="Delete block"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                  <button
+                    type="button"
+                    className="absolute bottom-1.5 left-1.5 inline-flex h-6 w-6 items-center justify-center rounded-lg text-[#9fb2cc] transition hover:bg-[#fef1f3] hover:text-[#c62235]"
+                    onClick={() => removeModule(moduleIndex)}
+                    aria-label="Delete module"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </article>
               );
             })}
           </div>
+
+          {!modules.length ? (
+            <div className="rounded-2xl border border-dashed border-[#c9d7ec] bg-white/90 p-8 text-center text-sm font-semibold text-[var(--admin-text-muted)]">
+              No modules yet. Use Add Module to start building the course structure.
+            </div>
+          ) : null}
         </section>
       ) : null}
 
       {tab === 'assessments' ? (
         <div className="teacher-class-workspace__panel">
+          <div className="teacher-class-workspace__panel-head">
+            <div>
+              <h2 className="teacher-class-workspace__section-title">Assessments</h2>
+              <p>
+                {assessments.length} assessment{assessments.length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="teacher-class-workspace__head-actions">
+              <Button
+                data-testid="add-assessment-button"
+                className="teacher-class-workspace__outline"
+                variant="outline"
+                onClick={addAssessment}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Add Assessment
+              </Button>
+            </div>
+          </div>
           <div className="space-y-4">
-          {assessments.map((assessment, assessmentIndex) => (
-            <article key={`${assessment.id ?? 'new'}-${assessmentIndex}`} className="rounded-2xl border border-[var(--admin-outline)] bg-white p-4">
-              <div className="mb-2 flex items-center gap-2">
-                <Input
-                  data-testid={`assessment-title-${assessmentIndex}`}
-                  value={assessment.title}
-                  onChange={(event) => updateAssessment(assessmentIndex, { title: event.target.value })}
-                  className="font-bold"
-                />
-                <Button variant="outline" onClick={() => openAssessmentStudio(assessmentIndex)}>
-                  Open Studio
-                </Button>
-                <Button variant="outline" onClick={() => removeAssessment(assessmentIndex)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <Textarea
-                value={assessment.description ?? ''}
-                onChange={(event) => updateAssessment(assessmentIndex, { description: event.target.value })}
-                placeholder="Assessment description"
-              />
-              <div className="mt-2 grid gap-2 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">Type</label>
-                  <select
-                    className="admin-select h-9 w-full rounded-lg px-2 text-sm"
-                    value={assessment.type ?? 'quiz'}
-                    onChange={(event) => updateAssessment(assessmentIndex, { type: event.target.value })}
-                  >
-                    <option value="quiz">Quiz</option>
-                    <option value="exam">Exam</option>
-                    <option value="activity">Activity</option>
-                    <option value="file_upload">File Upload</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">Total Points</label>
-                  <Input
-                    type="number"
-                    value={assessment.totalPoints ?? 0}
-                    onChange={(event) => updateAssessment(assessmentIndex, { totalPoints: Number(event.target.value || 0) })}
-                  />
-                </div>
-              </div>
+          {!assessments.length ? (
+            <div className="rounded-2xl border border-dashed border-[#c9d7ec] bg-white/90 p-8 text-center text-sm font-semibold text-[var(--admin-text-muted)]">
+              No assessments yet. Use Add Assessment to create a draft and open the editor.
+            </div>
+          ) : null}
+          {assessments.map((assessment, assessmentIndex) => {
+            const questionCount = assessment.questions?.length ?? 0;
+            const summary = summarizeRichText(assessment.description);
 
-              <div className="mt-3 space-y-2 rounded-xl border border-dashed border-[var(--admin-outline)] p-3">
-                {(assessment.questions ?? []).map((question, questionIndex) => (
-                  <div key={`${question.id ?? 'new'}-${questionIndex}`} className="rounded-lg border border-[var(--admin-outline)] p-3">
-                    <div className="mb-2 flex items-center gap-2">
-                      <Input
-                        value={question.content}
-                        onChange={(event) => updateQuestion(assessmentIndex, questionIndex, { content: event.target.value })}
-                        className="font-medium"
-                      />
-                      <Button variant="outline" onClick={() => removeQuestion(assessmentIndex, questionIndex)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="grid gap-2 md:grid-cols-3">
-                      <select
-                        className="admin-select h-9 rounded-lg px-2 text-sm"
-                        value={question.type}
-                        onChange={(event) => updateQuestion(assessmentIndex, questionIndex, { type: event.target.value })}
-                      >
-                        <option value="multiple_choice">Multiple Choice</option>
-                        <option value="short_answer">Short Answer</option>
-                        <option value="true_false">True / False</option>
-                      </select>
-                      <Input
-                        type="number"
-                        value={question.points ?? 1}
-                        onChange={(event) => updateQuestion(assessmentIndex, questionIndex, { points: Number(event.target.value || 1) })}
-                        placeholder="Points"
-                      />
-                    </div>
+            return (
+              <article
+                key={`${assessment.id ?? 'new'}-${assessmentIndex}`}
+                className="teacher-class-workspace__assignment-card"
+              >
+                <button
+                  type="button"
+                  className="teacher-class-workspace__assignment-main text-left"
+                  onClick={() => openAssessmentStudio(assessmentIndex)}
+                >
+                  <div className="teacher-class-workspace__assignment-icon">
+                    <ClipboardList className="h-4 w-4" />
                   </div>
-                ))}
-                <Button variant="outline" onClick={() => addQuestion(assessmentIndex)}>
-                  <Plus className="mr-1 h-4 w-4" />
-                  Add Question
-                </Button>
-              </div>
-            </article>
-          ))}
-          <Button
-            data-testid="add-assessment-button"
-            className="teacher-class-workspace__outline"
-            variant="outline"
-            onClick={addAssessment}
-          >
-            <Plus className="mr-1 h-4 w-4" />
-            Add Assessment
-          </Button>
+                  <div className="teacher-class-workspace__assignment-copy">
+                    <div className="teacher-class-workspace__assignment-tags">
+                      <span>{formatTemplateAssessmentType(assessment.type)}</span>
+                      <span data-status="draft">Template Draft</span>
+                    </div>
+                    <h3 className="mt-2">
+                      {assessment.title?.trim() || `Untitled Assessment ${assessmentIndex + 1}`}
+                    </h3>
+                    <p className="mt-1">
+                      {summary || 'Open the assessment editor to add questions, instructions, and settings.'}
+                    </p>
+                    <p className="mt-2 text-xs font-semibold text-[var(--admin-text-muted)]">
+                      {questionCount} question{questionCount === 1 ? '' : 's'} •{' '}
+                      {assessment.totalPoints ?? 0} point{assessment.totalPoints === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                </button>
+
+                <div className="teacher-class-workspace__assignment-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="teacher-class-workspace__outline"
+                    onClick={() => openAssessmentStudio(assessmentIndex)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"
+                    onClick={() => removeAssessment(assessmentIndex)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
           </div>
         </div>
       ) : null}
@@ -960,14 +961,15 @@ export default function ClassTemplateEditorPage() {
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
-              <Textarea
+              <RichTextEditor
                 value={announcement.content}
-                onChange={(event) => {
+                onChange={(value) => {
                   const next = announcements.slice();
-                  next[index] = { ...announcement, content: event.target.value };
+                  next[index] = { ...announcement, content: value };
                   setAnnouncements(next);
                 }}
                 placeholder="Announcement content"
+                minHeight={140}
               />
             </div>
           ))}
@@ -983,12 +985,6 @@ export default function ClassTemplateEditorPage() {
         </div>
       ) : null}
 
-      {tab === 'assessments' ? (
-        <Button className="teacher-class-workspace__solid" onClick={openNewAssessmentStudio}>
-          <Plus className="mr-1 h-4 w-4" />
-          Create In Studio
-        </Button>
-      ) : null}
       </section>
     </div>
   );

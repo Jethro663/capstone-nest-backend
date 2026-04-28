@@ -157,13 +157,18 @@ export default function AdminChatbotPage() {
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     buildGreeting(user?.firstName),
   ]);
+  const isAuthenticated = Boolean(user);
 
   const checkHealth = useCallback(async () => {
     setHealthLoading(true);
     try {
-      setHealth(await adminChatbotService.getHealth());
+      const nextHealth = await adminChatbotService.getHealth();
+      setHealth(nextHealth);
+      return nextHealth;
     } catch {
-      setHealth({ online: false, model: 'unknown' });
+      const nextHealth = { online: false, model: 'unknown' };
+      setHealth(nextHealth);
+      return nextHealth;
     } finally {
       setHealthLoading(false);
     }
@@ -181,13 +186,27 @@ export default function AdminChatbotPage() {
   }, []);
 
   useEffect(() => {
-    if (loading || !user) return;
+    if (loading || !isAuthenticated) return;
 
-    checkHealth();
-    loadHistory();
+    let active = true;
+    const initialize = async () => {
+      const nextHealth = await checkHealth();
+      if (!active) return;
+      if (nextHealth.online) {
+        await loadHistory();
+      } else {
+        setHistoryItems([]);
+        setHistoryLoading(false);
+      }
+    };
+
+    void initialize();
     const interval = window.setInterval(checkHealth, 30_000);
-    return () => window.clearInterval(interval);
-  }, [checkHealth, loadHistory, loading, user]);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [checkHealth, isAuthenticated, loadHistory, loading, user?.firstName]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -407,7 +426,11 @@ export default function AdminChatbotPage() {
                 </span>
               </div>
 
-              {historyLoading ? (
+              {!healthLoading && !health.online ? (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+                  Admin analytics is offline. History and new answers will resume once the AI service is available.
+                </p>
+              ) : historyLoading ? (
                 <p className="text-sm text-[var(--admin-text-muted)]">
                   Loading admin sessions...
                 </p>
@@ -510,7 +533,7 @@ export default function AdminChatbotPage() {
               <button
                 type="button"
                 className="admin-chatbot-refresh"
-                onClick={checkHealth}
+                onClick={() => void checkHealth()}
                 aria-label="Refresh AI status"
               >
                 {healthLoading ? (

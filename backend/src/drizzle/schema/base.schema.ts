@@ -119,6 +119,7 @@ export const libraryFileKindEnum = pgEnum('library_file_kind', [
   'pdf',
   'txt',
   'pptx',
+  'image',
 ]);
 export const moduleItemTypeEnum = pgEnum('module_item_type', [
   'lesson',
@@ -412,6 +413,11 @@ export const lessons = pgTable(
 
     /** Links AI-generated lessons back to the extraction that created them (null for manually created) */
     sourceExtractionId: uuid('source_extraction_id'),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -424,6 +430,10 @@ export const lessons = pgTable(
     ),
     sourceExtractionIdx: index('lessons_source_extraction_idx').on(
       table.sourceExtractionId,
+    ),
+    templateIdIdx: index('lessons_template_id_idx').on(table.templateId),
+    templateSourceIdIdx: index('lessons_template_source_id_idx').on(
+      table.templateSourceId,
     ),
   }),
 );
@@ -1150,6 +1160,7 @@ export const uploadedFiles = pgTable(
       onDelete: 'cascade',
     }),
     scope: fileScopeEnum('scope').notNull().default('private'),
+    aiEnabled: boolean('ai_enabled').notNull().default(true),
     subjectKey: librarySubjectKeyEnum('subject_key'),
     gradeLevel: gradeLevelEnum('grade_level'),
     teacherVisible: boolean('teacher_visible').notNull().default(true),
@@ -1173,6 +1184,16 @@ export const uploadedFiles = pgTable(
     teacherIdx: index('uploaded_files_teacher_idx').on(table.teacherId),
     classIdx: index('uploaded_files_class_idx').on(table.classId),
     scopeIdx: index('uploaded_files_scope_idx').on(table.scope),
+    teacherAiEnabledLookupIdx: index(
+      'uploaded_files_teacher_ai_enabled_lookup_idx',
+    ).on(
+      table.teacherId,
+      table.aiEnabled,
+      table.scope,
+      table.subjectKey,
+      table.gradeLevel,
+      table.deletedAt,
+    ),
     generalPartitionIdx: index('uploaded_files_general_partition_idx').on(
       table.scope,
       table.subjectKey,

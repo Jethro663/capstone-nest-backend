@@ -112,6 +112,40 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('role')).toHaveTextContent('student');
   });
 
+  it('retries current-user lookup once before settling authenticated', async () => {
+    usePathnameMock.mockReturnValue('/dashboard/student');
+    mockedAxios.post.mockResolvedValue({
+      data: {
+        data: {
+          accessToken: 'access-token',
+        },
+      },
+    } as never);
+    getCurrentUserActionMock
+      .mockResolvedValueOnce({ success: false, user: null })
+      .mockResolvedValueOnce({
+        success: true,
+        user: {
+          firstName: 'Liam',
+          lastName: 'Navarro',
+          roles: ['student'],
+        },
+      });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated')).toHaveTextContent('yes');
+    });
+
+    expect(getCurrentUserActionMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+  });
+
   it('exits loading when refresh request times out', async () => {
     usePathnameMock.mockReturnValue('/dashboard');
     mockedAxios.post.mockRejectedValue(new Error('timeout'));

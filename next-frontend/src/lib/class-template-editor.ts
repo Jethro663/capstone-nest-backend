@@ -31,9 +31,52 @@ export interface LessonItemContext {
 
 const INDEX_KEY_PREFIX = 'idx-';
 
+export function createTemplateAssessmentDraft(order: number): ClassTemplateAssessment {
+  return {
+    title: 'Untitled Assessment',
+    description: '',
+    type: 'quiz',
+    totalPoints: 0,
+    order,
+    settings: {
+      maxAttempts: 1,
+      passingScore: 60,
+      randomizeQuestions: false,
+      closeWhenDue: false,
+    },
+    questions: [],
+  };
+}
+
+export function createLinkedTemplateAssessmentItem(
+  assessmentIdOrKey: string,
+  order: number,
+  templateAssessmentId?: string,
+): ClassTemplateModuleItem {
+  const linkedAssessmentKey = assessmentIdOrKey.includes(':')
+    ? assessmentIdOrKey
+    : `id:${assessmentIdOrKey}`;
+
+  return {
+    itemType: 'assessment',
+    templateAssessmentId:
+      linkedAssessmentKey.startsWith('id:')
+        ? linkedAssessmentKey.slice(3)
+        : templateAssessmentId,
+    order,
+    isRequired: false,
+    metadata: {
+      linkedAssessmentKey,
+    },
+  };
+}
+
 export const classTemplateDraftStorageKey = (templateId: string) => `class-template-editor:${templateId}:draft`;
 
 export function cloneTemplateEditorState(state: ClassTemplateEditorState): ClassTemplateEditorState {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(state);
+  }
   return JSON.parse(JSON.stringify(state)) as ClassTemplateEditorState;
 }
 
@@ -67,7 +110,12 @@ export function readTemplateEditorDraft(templateId: string): ClassTemplateEditor
 
 export function writeTemplateEditorDraft(templateId: string, state: ClassTemplateEditorState): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(classTemplateDraftStorageKey(templateId), JSON.stringify(state));
+  const storageKey = classTemplateDraftStorageKey(templateId);
+  const next = JSON.stringify(state);
+  if (window.localStorage.getItem(storageKey) === next) {
+    return;
+  }
+  window.localStorage.setItem(storageKey, next);
 }
 
 export function clearTemplateEditorDraft(templateId: string): void {
@@ -77,13 +125,12 @@ export function clearTemplateEditorDraft(templateId: string): void {
 
 export async function loadTemplateWorkspace(templateId: string): Promise<LoadedTemplateWorkspace> {
   const [templateRes, contentRes] = await Promise.all([
-    classTemplateService.getAll(),
+    classTemplateService.getById(templateId),
     classTemplateService.getContent(templateId),
   ]);
 
-  const template = (templateRes.data || []).find((entry) => entry.id === templateId) || null;
   return {
-    template,
+    template: templateRes.data ?? null,
     state: toEditorState(contentRes.data),
   };
 }

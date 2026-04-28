@@ -7,6 +7,8 @@ import { assessmentService } from '@/services/assessment-service';
 import { lessonService } from '@/services/lesson-service';
 import { lxpService } from '@/services/lxp-service';
 import { toast } from 'sonner';
+import type { InterventionStructuredOutput } from '@/types/ai';
+import type { TeacherInterventionQueueItem } from '@/types/lxp';
 
 const pushMock = jest.fn();
 let mockClassId: string | null = 'class-1';
@@ -43,6 +45,7 @@ jest.mock('@/services/lxp-service', () => ({
         queue: [],
       },
     }),
+    getTeacherCase: jest.fn(),
     assignIntervention: jest.fn(),
   },
 }));
@@ -70,6 +73,7 @@ const mockedToast = toast as jest.Mocked<typeof toast>;
 function buildQueueEntry(
   caseId: string = 'case-1',
   status: 'pending' | 'active' | 'completed' | 'dismissed' = 'active',
+  overrides: Partial<TeacherInterventionQueueItem> = {},
 ) {
   return {
     id: caseId,
@@ -88,7 +92,7 @@ function buildQueueEntry(
     latestBlendedScore: 54.2,
     latestThreshold: 60,
     aiPlanEligible: true,
-    totalCheckpoints: 2,
+    totalCheckpoints: 0,
     completedCheckpoints: 0,
     completionPercent: 0,
     progress: {
@@ -98,6 +102,7 @@ function buildQueueEntry(
       checkpointsCompleted: 0,
       lastActivityAt: null,
     },
+    ...overrides,
   };
 }
 
@@ -187,6 +192,9 @@ describe('TeacherInterventionWorkspacePage', () => {
         queue: [buildQueueEntry()],
       },
     });
+    mockedLxpService.getTeacherCase.mockResolvedValue({
+      data: buildQueueEntry(),
+    } as Awaited<ReturnType<typeof lxpService.getTeacherCase>>);
     mockedLessonService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -204,7 +212,7 @@ describe('TeacherInterventionWorkspacePage', () => {
       page: 1,
       pageSize: 200,
       totalPages: 1,
-    } as any);
+    } as Awaited<ReturnType<typeof lessonService.getByClass>>);
     mockedAssessmentService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -223,7 +231,7 @@ describe('TeacherInterventionWorkspacePage', () => {
       page: 1,
       limit: 200,
       totalPages: 1,
-    } as any);
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
     mockedAiService.getTeacherClassPolicy.mockResolvedValue({
       data: {
         classId: 'class-1',
@@ -235,7 +243,7 @@ describe('TeacherInterventionWorkspacePage', () => {
         createdAt: '2026-04-01T00:00:00.000Z',
         updatedAt: '2026-04-01T00:00:00.000Z',
       },
-    } as any);
+    } as Awaited<ReturnType<typeof aiService.getTeacherClassPolicy>>);
   });
 
   it('preserves classId in back navigation when class context exists', async () => {
@@ -281,7 +289,7 @@ describe('TeacherInterventionWorkspacePage', () => {
         createdAt: '2026-04-01T00:00:00.000Z',
         updatedAt: '2026-04-01T00:00:00.000Z',
       },
-    } as any);
+    } as Awaited<ReturnType<typeof aiService.updateTeacherClassPolicy>>);
 
     render(<TeacherInterventionWorkspacePage />);
 
@@ -299,6 +307,44 @@ describe('TeacherInterventionWorkspacePage', () => {
           mentorExplainEnabled: false,
         }),
       );
+    });
+  });
+
+  it('opens the helper instructions from the question mark button', async () => {
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Plan Creator' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /module help/i }));
+
+    expect(await screen.findByText('Teacher guide: Intervention Plan Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Start in Plan Creator')).toBeInTheDocument();
+    expect(screen.getByText('Add selected item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 2 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Watch the Generating tab')).toBeInTheDocument();
+    expect(screen.getByText('Retry button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 3 of 4')).toBeInTheDocument();
+    expect(screen.getAllByText('Clean Out & Assign').length).toBeGreaterThan(0);
+    expect(screen.getByText('Remove item')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(screen.getByText('Page 2 of 4')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 4 of 4')).toBeInTheDocument();
+    expect(screen.getByText('Understand replacement protection')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Teacher guide: Intervention Plan Workspace')).not.toBeInTheDocument();
     });
   });
 
@@ -358,12 +404,36 @@ describe('TeacherInterventionWorkspacePage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('falls back to direct case lookup when the case is no longer in the selected queue', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [buildQueueEntry('case-2')],
+      },
+    });
+    mockedLxpService.getTeacherCase.mockResolvedValue({
+      data: buildQueueEntry('case-1', 'completed'),
+    } as Awaited<ReturnType<typeof lxpService.getTeacherCase>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Reyes,\s*Alex - trigger 54.2%/i),
+      ).toBeInTheDocument();
+    });
+
+    expect(mockedLxpService.getTeacherCase).toHaveBeenCalledWith('case-1');
+  });
+
   it('blocks plan generation when the selected case is missing from teacher queue', async () => {
     mockedLxpService.getTeacherQueue.mockResolvedValue({
       data: {
         queue: [buildQueueEntry('case-2')],
       },
     });
+    mockedLxpService.getTeacherCase.mockResolvedValue({
+      data: null,
+    } as unknown as Awaited<ReturnType<typeof lxpService.getTeacherCase>>);
 
     render(<TeacherInterventionWorkspacePage />);
 
@@ -400,6 +470,115 @@ describe('TeacherInterventionWorkspacePage', () => {
     expect(generateButton).toBeDisabled();
     fireEvent.click(generateButton);
     expect(mockedAiService.createInterventionJob).not.toHaveBeenCalled();
+  });
+
+  it('warns before generating a plan for an existing unstarted intervention path', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [
+          buildQueueEntry('case-1', 'active', {
+            totalCheckpoints: 2,
+            completedCheckpoints: 0,
+            completionPercent: 0,
+          }),
+        ],
+      },
+    });
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildProcessingJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /generate plan/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+
+    expect(
+      await screen.findByText(/already has an assigned intervention path/i),
+    ).toBeInTheDocument();
+    expect(mockedAiService.createInterventionJob).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /generate new ai plan/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockedAiService.createInterventionJob).toHaveBeenCalledWith(
+        'case-1',
+        { note: undefined },
+      );
+    });
+  });
+
+  it('blocks replacing the current path after student checkpoint progress starts', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [
+          buildQueueEntry('case-1', 'active', {
+            totalCheckpoints: 2,
+            completedCheckpoints: 1,
+            completionPercent: 50,
+            progress: {
+              xpTotal: 10,
+              starsTotal: 1,
+              streakDays: 1,
+              checkpointsCompleted: 1,
+              lastActivityAt: null,
+            },
+          }),
+        ],
+      },
+    });
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildCompletedJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+    mockedAiService.getInterventionJobResult.mockResolvedValue({
+      data: {
+        job: {
+          jobId: 'job-1',
+          jobType: 'remedial_plan_generation',
+          status: 'completed',
+          outputId: 'output-1',
+        },
+        result: {
+          outputId: 'output-1',
+          outputType: 'intervention_plan',
+          structuredOutput: buildStructuredResult(),
+        },
+      },
+    } as Awaited<ReturnType<typeof aiService.getInterventionJobResult>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /generate plan/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Practice lessons then a quick quiz.'),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/student has already started this intervention path/i),
+    ).toBeInTheDocument();
+    const assignButton = screen.getByRole('button', {
+      name: /progress already started/i,
+    });
+    expect(assignButton).toBeDisabled();
+
+    fireEvent.click(assignButton);
+    expect(mockedLxpService.assignIntervention).not.toHaveBeenCalled();
   });
 
   it('disables assignment when AI result has no assignable lessons or assessments', async () => {
@@ -526,6 +705,10 @@ describe('TeacherInterventionWorkspacePage', () => {
       expect(screen.getAllByText('Manual Fraction Exit Check').length).toBeGreaterThan(0);
     });
 
+    fireEvent.click(
+      screen.getByRole('button', { name: /clean out & assign/i }),
+    );
+
     const assignButton = screen.getByRole('button', {
       name: /assign suggested path/i,
     });
@@ -567,7 +750,7 @@ describe('TeacherInterventionWorkspacePage', () => {
           structuredOutput: {
             ...buildStructuredResult(),
             suggestedAssignmentPayload: undefined,
-          } as any,
+          } as unknown as InterventionStructuredOutput,
         },
       },
     } as Awaited<ReturnType<typeof aiService.getInterventionJobResult>>);
@@ -620,6 +803,10 @@ describe('TeacherInterventionWorkspacePage', () => {
       target: { value: 'assessment-manual' },
     });
     fireEvent.click(screen.getAllByRole('button', { name: 'Add' })[1]);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /clean out & assign/i }),
+    );
 
     const assignButton = screen.getByRole('button', {
       name: /assign suggested path/i,

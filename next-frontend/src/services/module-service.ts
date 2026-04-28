@@ -130,6 +130,13 @@ export const moduleService = {
     return data;
   },
 
+  async downloadAttachedFile(itemId: string): Promise<Blob> {
+    const { data } = await api.get(`/modules/items/${itemId}/file/download`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
   async reorderItems(
     sectionId: string,
     items: Array<{ id: string; order: number }>,

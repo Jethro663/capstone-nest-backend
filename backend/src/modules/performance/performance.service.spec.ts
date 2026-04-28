@@ -26,6 +26,7 @@ function buildMockDb() {
       classRecords: { findMany: jest.fn() },
       studentConceptMastery: { findMany: jest.fn() },
       aiGenerationOutputs: { findMany: jest.fn() },
+      interventionCases: { findFirst: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       enrollments: { findMany: jest.fn() },
@@ -223,6 +224,99 @@ describe('PerformanceService', () => {
     );
   });
 
+  it('recomputeStudent should emit performance.status.changed for a first at-risk snapshot', async () => {
+    db.query.assessmentAttempts.findMany.mockResolvedValue([
+      {
+        assessmentId: 'a1',
+        score: 73,
+        submittedAt: new Date('2026-03-07T10:00:00Z'),
+        attemptNumber: 1,
+        assessment: { classId: 'class-1' },
+      },
+    ]);
+    db.query.classRecords.findMany.mockResolvedValue([]);
+    db.query.performanceSnapshots.findFirst.mockResolvedValue(null);
+    mockInsertReturning(db, [
+      {
+        id: 'snap-1',
+        assessmentAverage: '73',
+        classRecordAverage: null,
+        blendedScore: '73',
+        assessmentSampleSize: 1,
+        classRecordSampleSize: 0,
+        hasData: true,
+        isAtRisk: true,
+        thresholdApplied: '74',
+        lastComputedAt: new Date(),
+      },
+    ]);
+    mockInsertNoReturning(db);
+
+    await service.recomputeStudent(
+      'class-1',
+      'student-1',
+      'assessment_submitted',
+    );
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      PerformanceStatusChangedEvent.eventName,
+      expect.objectContaining({
+        classId: 'class-1',
+        studentId: 'student-1',
+        previousIsAtRisk: null,
+        currentIsAtRisk: true,
+      }),
+    );
+  });
+
+  it('recomputeStudent should emit performance.status.changed when an at-risk snapshot has no open intervention case', async () => {
+    db.query.assessmentAttempts.findMany.mockResolvedValue([
+      {
+        assessmentId: 'a1',
+        score: 73,
+        submittedAt: new Date('2026-03-07T10:00:00Z'),
+        attemptNumber: 1,
+        assessment: { classId: 'class-1' },
+      },
+    ]);
+    db.query.classRecords.findMany.mockResolvedValue([]);
+    db.query.performanceSnapshots.findFirst.mockResolvedValue({
+      id: 'snap-1',
+      isAtRisk: true,
+    });
+    db.query.interventionCases.findFirst.mockResolvedValue(null);
+    mockUpdateReturning(db, [
+      {
+        id: 'snap-1',
+        assessmentAverage: '73',
+        classRecordAverage: null,
+        blendedScore: '73',
+        assessmentSampleSize: 1,
+        classRecordSampleSize: 0,
+        hasData: true,
+        isAtRisk: true,
+        thresholdApplied: '74',
+        lastComputedAt: new Date(),
+      },
+    ]);
+
+    await service.recomputeStudent(
+      'class-1',
+      'student-1',
+      'manual_recompute',
+    );
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      PerformanceStatusChangedEvent.eventName,
+      expect.objectContaining({
+        classId: 'class-1',
+        studentId: 'student-1',
+        previousIsAtRisk: true,
+        currentIsAtRisk: true,
+      }),
+    );
+  });
+
   it('getClassSummary should return aggregated class metrics', async () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
@@ -364,7 +458,11 @@ describe('PerformanceService', () => {
       'teacher',
     ]);
 
-    expect(bulkSpy).toHaveBeenCalledWith('class-1', ['student-2'], 'view_refresh');
+    expect(bulkSpy).toHaveBeenCalledWith(
+      'class-1',
+      ['student-2'],
+      'view_refresh',
+    );
     expect(singleSpy).not.toHaveBeenCalled();
     expect(summary.totalStudents).toBe(2);
     expect(summary.atRiskCount).toBe(1);

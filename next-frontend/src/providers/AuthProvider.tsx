@@ -17,6 +17,7 @@ import { usePathname } from 'next/navigation';
 import { getCurrentUserAction } from '@/lib/auth-actions';
 import { getAccessToken, setAccessToken } from '@/lib/api-client';
 import {
+  AUTH_ME_RETRY_DELAY_MS,
   AUTH_ME_TIMEOUT_MS,
   shouldBootstrapAuth,
 } from '@/lib/auth-bootstrap';
@@ -66,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const fetchCurrentUserWithTimeout = useCallback(async () => {
+  const fetchCurrentUserWithTimeout = useCallback(async (attempt: number) => {
     const meStart = performance.now();
     const result = await Promise.race([
       getCurrentUserAction(),
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     ]);
     logBootstrap('me.result', {
+      attempt,
       success: result.success,
       durationMs: Math.round(performance.now() - meStart),
     });
@@ -97,7 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setAccessToken(newToken);
 
-      const result = await fetchCurrentUserWithTimeout();
+      let result = await fetchCurrentUserWithTimeout(1);
+      if (!result.success || !result.user) {
+        logBootstrap('me.retry.start');
+        await new Promise((resolve) => setTimeout(resolve, AUTH_ME_RETRY_DELAY_MS));
+        result = await fetchCurrentUserWithTimeout(2);
+      }
+
       if (result.success && result.user) {
         setUser(result.user as User);
         setStatus('authenticated');

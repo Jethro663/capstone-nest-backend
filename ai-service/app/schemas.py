@@ -259,6 +259,8 @@ class JaAskResponseRequest(BaseModel):
     thread_id: str = Field(..., alias="threadId")
     message: str = Field(..., min_length=1, max_length=2000)
     quick_action: str | None = Field(default=None, alias="quickAction")
+    lesson_id: str | None = Field(default=None, alias="lessonId")
+    lesson_title: str | None = Field(default=None, alias="lessonTitle")
     history: list[JaAskHistoryMessageDto] | None = None
     allowed_lesson_ids: list[str] | None = Field(default=None, alias="allowedLessonIds")
     allowed_assessment_ids: list[str] | None = Field(

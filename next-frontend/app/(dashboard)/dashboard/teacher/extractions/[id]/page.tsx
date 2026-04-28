@@ -9,7 +9,6 @@ import {
   TeacherEmptyState,
   TeacherPageShell,
   TeacherSectionCard,
-  TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +19,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type { Extraction, ExtractionBlock, ExtractionSection, ExtractionStatus } from '@/types/extraction';
 
 const STATUS_VARIANT: Record<ExtractionStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -610,20 +610,87 @@ export default function ExtractionReviewPage() {
   if (loadError) {
     return (
       <TeacherPageShell badge="AI Extraction" title="Extraction Review" description="Review extracted content before apply.">
-        <TeacherEmptyState title="Extraction unavailable" description={loadError} action={<Button onClick={fetchExtraction}>Retry</Button>} />
+        <TeacherEmptyState
+          title="Extraction unavailable"
+          description={loadError}
+          action={(
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button variant="outline" onClick={() => router.back()}>
+                Back
+              </Button>
+              <Button onClick={fetchExtraction}>Retry</Button>
+            </div>
+          )}
+        />
       </TeacherPageShell>
     );
   }
 
   if (!extraction) return null;
 
+  const draftQuestionCount = editSections.reduce(
+    (sum, section) => sum + (section.assessmentDraft?.questions?.length || 0),
+    0,
+  );
+
   return (
     <TeacherPageShell
       badge="AI Extraction Review"
       title="Extraction Review"
       description="Module-first review for sections, lesson blocks, and section assessments."
-      actions={<div className="flex flex-wrap items-center gap-2"><Button variant="outline" onClick={() => router.back()}>Back</Button>{dirty && isEditable && !isApplied ? <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button> : null}{isEditable && !isApplied ? <Button onClick={() => setShowApplyDialog(true)} disabled={selectedSections.size === 0}>Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})</Button> : null}{!isApplied ? <Button variant="destructive" size="sm" onClick={handleDelete}>Delete</Button> : <Badge>Applied</Badge>}</div>}
-      stats={<><TeacherStatCard label="Status" value={<Badge variant={STATUS_VARIANT[extraction.extractionStatus]}>{extraction.extractionStatus}</Badge>} caption={extraction.modelUsed ? `Model: ${extraction.modelUsed}` : 'Model pending'} icon={Shield} accent="amber" /><TeacherStatCard label="Sections" value={editSections.length} caption={`${selectedSections.size} selected`} icon={Layers3} accent="sky" /><TeacherStatCard label="Draft Questions" value={editSections.reduce((sum, section) => sum + (section.assessmentDraft?.questions?.length || 0), 0)} caption="Optional section assessments" icon={FileQuestion} accent="rose" /></>}
+      actions={(
+        <div className="flex w-full flex-col gap-3">
+          <div
+            data-testid="extraction-header-summary"
+            className="grid min-w-[min(42rem,80vw)] gap-2 sm:grid-cols-3"
+          >
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+                <Shield className="h-3.5 w-3.5" />
+                Status
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <Badge variant={STATUS_VARIANT[extraction.extractionStatus]}>{extraction.extractionStatus}</Badge>
+                <span className="text-xs text-white/70">
+                  {extraction.modelUsed ? `Model: ${extraction.modelUsed}` : 'Model pending'}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+                <Layers3 className="h-3.5 w-3.5" />
+                Sections
+              </div>
+              <div className="mt-1 flex items-end gap-2">
+                <strong className="text-2xl leading-none">{editSections.length}</strong>
+                <span className="text-xs text-white/70">{selectedSections.size} selected</span>
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+                <FileQuestion className="h-3.5 w-3.5" />
+                Draft Questions
+              </div>
+              <div className="mt-1 flex items-end gap-2">
+                <strong className="text-2xl leading-none">{draftQuestionCount}</strong>
+                <span className="text-xs text-white/70">Optional assessments</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              className="border-white/20 bg-white text-[#12284a] hover:bg-[#edf4ff] hover:text-[#12284a]"
+              onClick={() => router.back()}
+            >
+              Back
+            </Button>
+            {dirty && isEditable && !isApplied ? <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button> : null}
+            {isEditable && !isApplied ? <Button onClick={() => setShowApplyDialog(true)} disabled={selectedSections.size === 0}>Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})</Button> : null}
+            {!isApplied ? <Button variant="destructive" size="sm" onClick={handleDelete}>Delete</Button> : <Badge>Applied</Badge>}
+          </div>
+        </div>
+      )}
     >
       {['pending', 'processing'].includes(extraction.extractionStatus) ? (
         <TeacherSectionCard title="Extraction Progress" description="AI is converting the PDF into sections.">
@@ -811,7 +878,52 @@ export default function ExtractionReviewPage() {
                   </div>
                   <div className="mt-3 rounded-[10px] border border-[#e2e8f0] bg-white p-3">
                     <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Assessment Draft</span>{isEditable && !isApplied && !section.assessmentDraft ? <Button variant="outline" size="sm" onClick={() => updateSection(sectionIndex, { assessmentDraft: { title: `${section.title} Checkpoint`, description: '', type: 'quiz', passingScore: 60, feedbackLevel: 'standard', questions: [] } })}>Add Draft</Button> : null}</div>
-                    {!section.assessmentDraft ? <p className="text-xs text-[var(--teacher-text-muted)]">No draft assessment for this section.</p> : <div className="space-y-2"><Input value={section.assessmentDraft.title || ''} onChange={(event) => updateSection(sectionIndex, { assessmentDraft: { ...section.assessmentDraft!, title: event.target.value } })} disabled={!isEditable || isApplied} /><Textarea value={section.assessmentDraft.description || ''} onChange={(event) => updateSection(sectionIndex, { assessmentDraft: { ...section.assessmentDraft!, description: event.target.value } })} disabled={!isEditable || isApplied} rows={2} /><p className="text-xs text-[var(--teacher-text-muted)]">Questions: {section.assessmentDraft.questions?.length || 0}</p><div className="space-y-1">{section.assessmentDraft.questions?.slice(0, 3).map((question, questionIndex) => <div key={`${sectionIndex}-question-${questionIndex}`} className="flex items-center justify-between rounded-md border border-[#e2e8f0] bg-[var(--student-surface-soft)] px-2 py-1 text-xs"><span className="truncate pr-2">{question.content}</span>{question.imageUrl ? <Badge variant="outline">Image linked</Badge> : <Badge variant="secondary">No image</Badge>}</div>)}</div></div>}
+                    {!section.assessmentDraft ? (
+                      <p className="text-xs text-[var(--teacher-text-muted)]">
+                        No draft assessment for this section.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          value={section.assessmentDraft.title || ''}
+                          onChange={(event) =>
+                            updateSection(sectionIndex, {
+                              assessmentDraft: { ...section.assessmentDraft!, title: event.target.value },
+                            })
+                          }
+                          disabled={!isEditable || isApplied}
+                        />
+                        <Textarea
+                          value={section.assessmentDraft.description || ''}
+                          onChange={(event) =>
+                            updateSection(sectionIndex, {
+                              assessmentDraft: {
+                                ...section.assessmentDraft!,
+                                description: event.target.value,
+                              },
+                            })
+                          }
+                          disabled={!isEditable || isApplied}
+                          rows={2}
+                        />
+                        <p className="text-xs text-[var(--teacher-text-muted)]">
+                          Questions: {section.assessmentDraft.questions?.length || 0}
+                        </p>
+                        <div className="space-y-1">
+                          {section.assessmentDraft.questions?.slice(0, 3).map((question, questionIndex) => (
+                            <div
+                              key={`${sectionIndex}-question-${questionIndex}`}
+                              className="flex items-center justify-between rounded-md border border-[#e2e8f0] bg-[var(--student-surface-soft)] px-2 py-1 text-xs"
+                            >
+                              <span className="min-w-0 flex-1 pr-2">
+                                <RichTextRenderer html={question.content || '<p>No question content.</p>'} />
+                              </span>
+                              {question.imageUrl ? <Badge variant="outline">Image linked</Badge> : <Badge variant="secondary">No image</Badge>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

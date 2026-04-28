@@ -67,7 +67,11 @@ export default function ClassRecordPage() {
     const fetchClasses = async () => {
       try {
         const response = await dashboardService.getTeacherClasses();
-        setClasses(response.data || []);
+        const nextClasses = response.data || [];
+        setClasses(nextClasses);
+        if (!preselectedClassId && !selectedClassId && nextClasses[0]?.id) {
+          setSelectedClassId(nextClasses[0].id);
+        }
       } catch {
         setClasses([]);
       } finally {
@@ -76,7 +80,7 @@ export default function ClassRecordPage() {
     };
 
     void fetchClasses();
-  }, []);
+  }, [preselectedClassId, selectedClassId]);
 
   if (loading) {
     return (
@@ -114,7 +118,7 @@ export default function ClassRecordPage() {
             <div className="space-y-0.5">
               <h1 className="text-[2.05rem] font-bold leading-tight tracking-tight">Class Record</h1>
               <p className="text-base text-slate-200/90">
-                Grading workbook for your classes
+                Class record for your classes
               </p>
             </div>
           </div>
@@ -143,7 +147,7 @@ export default function ClassRecordPage() {
             onChange={(event) => setSelectedClassId(event.target.value)}
             className="h-11 min-w-[17rem] max-w-full rounded-xl border border-[#cfd9e8] bg-white px-3 text-sm font-medium text-slate-700 outline-none transition-shadow focus:border-[#8ea4c7] focus:shadow-[0_0_0_3px_rgba(59,130,246,0.14)]"
           >
-            <option value="">Choose a class record workbook...</option>
+            <option value="">Choose a class record...</option>
             {classes.map((classItem) => (
               <option key={classItem.id} value={classItem.id}>
                 {classItem.subjectName} - {classItem.section?.name}
@@ -196,7 +200,7 @@ export default function ClassRecordPage() {
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-[2.05rem] font-semibold tracking-tight text-[#0d2345]">
-              {selectedClass?.subjectName || 'Class workbook'}
+              {selectedClass?.subjectName || 'Class record'}
             </h2>
             <p className="mt-1 text-[1.45rem] font-normal text-[#7388a8]">
               {sectionLabel}
@@ -233,8 +237,8 @@ export default function ClassRecordPage() {
           )}
           emptyMessage={
             selectedClassId
-              ? 'No class record exists for this class yet. Create a quarter workbook to begin.'
-              : 'Choose a class first to open its workbook.'
+              ? 'No class record exists for this class yet. Create a quarter class record to begin.'
+              : 'Choose a class first to open its class record.'
           }
         />
       </motion.section>

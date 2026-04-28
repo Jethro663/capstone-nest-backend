@@ -19,6 +19,7 @@ import { motion } from 'framer-motion';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/helpers';
 import { PreviewModal } from '@/components/teacher/assessment/preview-modal';
+import { downloadXlsxBuffer } from '@/lib/download-xlsx-buffer';
 import type {
   Assessment,
   SubmissionsResponse,
@@ -82,7 +83,7 @@ export function PostScoresTab({ assessmentId, assessment, submissions, onDataCha
 
   const handleExportExcel = async () => {
     try {
-      const XLSX = await import('xlsx');
+      const { default: ExcelJS } = await import('exceljs');
       const rows: ExportRow[] = allSubmissions.map((s) => ({
         'Student Name': `${s.lastName}, ${s.firstName}`,
         'Email': s.email ?? '',
@@ -95,25 +96,37 @@ export function PostScoresTab({ assessmentId, assessment, submissions, onDataCha
         'Feedback': s.attempt?.teacherFeedback ?? '',
       }));
 
-      const ws = XLSX.utils.json_to_sheet(rows);
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet((assessment.title || 'Assessment').slice(0, 31));
+      const headers = Object.keys(rows[0] || {
+        'Student Name': '',
+        'Email': '',
+        'Status': '',
+        'Score (%)': '',
+        'Points': '',
+        'Total Points': '',
+        'Time (seconds)': '',
+        'Submitted': '',
+        'Feedback': '',
+      });
 
-      // Auto-width columns
-      const colWidths = Object.keys(rows[0] || {}).map((key) => {
+      worksheet.addRow(headers);
+      rows.forEach((row) => {
+        worksheet.addRow(headers.map((header) => row[header] ?? ''));
+      });
+      worksheet.columns = headers.map((key) => {
         const maxLen = Math.max(
           key.length,
           ...rows.map((row) => String(row[key as keyof ExportRow]).length),
         );
-        return { wch: Math.min(maxLen + 2, 40) };
+        return { width: Math.min(maxLen + 2, 40) };
       });
-      ws['!cols'] = colWidths;
 
-      const wb = XLSX.utils.book_new();
-      const sheetName = (assessment.title || 'Assessment').slice(0, 31);
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-      XLSX.writeFile(wb, `${assessment.title || 'assessment'}_scores.xlsx`);
+      const output = await workbook.xlsx.writeBuffer();
+      downloadXlsxBuffer(output, `${assessment.title || 'assessment'}_scores.xlsx`);
       toast.success('Excel file downloaded');
     } catch {
-      toast.error('Failed to export. Make sure xlsx is installed.');
+      toast.error('Failed to export scores.');
     }
   };
 

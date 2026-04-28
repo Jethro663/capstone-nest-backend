@@ -18,6 +18,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { ClassTemplatesService } from './class-templates.service';
 import {
   CreateClassTemplateDto,
+  EngineImportDto,
+  EngineImportValidateDto,
   PublishClassTemplateDto,
   UpdateClassTemplateContentDto,
   UpdateClassTemplateDto,
@@ -139,5 +141,37 @@ export class ClassTemplatesController {
       user?.roles ?? [],
     );
     return { success: true, message: 'Template content saved', data };
+  }
+
+  @Get(':id/engine-export')
+  @Roles(RoleName.Admin)
+  async getEngineExport(@Param('id') id: string) {
+    const data = await this.classTemplatesService.getEngineExport(id);
+    return { success: true, message: 'Template engine export generated', data };
+  }
+
+  @Post('engine-import/validate')
+  @Roles(RoleName.Admin)
+  async validateEngineImport(@Body() dto: EngineImportValidateDto) {
+    const data = await this.classTemplatesService.validateEngineImport(
+      dto.manifest,
+    );
+    return {
+      success: true,
+      message: 'Template engine import validation completed',
+      data,
+    };
+  }
+
+  @Post('engine-import')
+  @Roles(RoleName.Admin)
+  async importEngine(@Body() dto: EngineImportDto, @CurrentUser() user: any) {
+    const data = await this.classTemplatesService.importEngine(
+      dto.manifest,
+      user?.userId,
+      user?.roles ?? [],
+      Boolean(dto.publish),
+    );
+    return { success: true, message: 'Template engine imported', data };
   }
 }

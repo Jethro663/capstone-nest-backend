@@ -404,7 +404,14 @@ describe('UsersService', () => {
       mockDb.transaction.mockImplementation(async (cb: Function) => cb(tx));
 
       await expect(
-        service.updateUser('user-1', { phone: '0917-123-4567' } as any),
+        service.updateUser('user-1', {
+          dateOfBirth: '2005-08-15',
+          gender: 'Male',
+          phone: '09171234567',
+          familyName: 'Ana Navarro',
+          familyRelationship: 'Mother',
+          familyContact: '09179876543',
+        } as any),
       ).rejects.toThrow('profile fail');
     });
 
@@ -450,6 +457,11 @@ describe('UsersService', () => {
 
       const result = await service.updateUser('user-1', {
         dateOfBirth: '2005-08-15',
+        gender: 'Male',
+        phone: '09171234567',
+        familyName: 'Ana Navarro',
+        familyRelationship: 'Mother',
+        familyContact: '09179876543',
         profilePicture: '/api/profiles/images/test.png',
       } as any);
 
@@ -462,6 +474,39 @@ describe('UsersService', () => {
       );
       expect(result.profilePicture).toBe('/api/profiles/images/test.png');
       expect(result.dateOfBirth).toBe('2005-08-15T00:00:00.000Z');
+    });
+
+    it('rejects student profile saves when required admin QA fields are empty', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(
+        makeUser({
+          roles: [{ id: 'role-1', name: 'student' }],
+          lrn: '123456789012',
+          gradeLevel: '7',
+        }),
+      );
+
+      await expect(
+        service.updateUser(
+          'user-1',
+          {
+            firstName: 'Jane',
+            lastName: 'Doe',
+            email: 'user@example.com',
+            role: 'student',
+            lrn: '123456789012',
+            gradeLevel: '7',
+            dateOfBirth: '',
+            gender: '',
+            phone: '',
+            familyName: '',
+            familyRelationship: '',
+            familyContact: '',
+          } as any,
+          'admin-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(mockDb.transaction).not.toHaveBeenCalled();
     });
 
     it('writes actor-aware audit metadata when admin context is provided', async () => {
@@ -581,6 +626,46 @@ describe('UsersService', () => {
         targetId: 'user-1',
         metadata: {
           previousStatus: 'ACTIVE',
+          emailDeliveryStatus: 'sent',
+        },
+      });
+    });
+
+    it('still returns the generated password and audits when email delivery fails', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(
+        makeUser({
+          id: 'user-1',
+          email: 'user@example.com',
+          status: 'ACTIVE',
+        }),
+      );
+      jest.spyOn(service, 'updatePassword').mockResolvedValue({
+        message: 'Password successfully updated',
+        userId: 'user-1',
+      });
+      mockMailService.sendPasswordEmail.mockRejectedValueOnce(
+        new Error('SMTP unavailable'),
+      );
+
+      const result = await service.adminResetPassword('user-1', 'admin-1');
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          message: 'Password reset successfully, but email delivery failed',
+          userId: 'user-1',
+          generatedPassword: expect.any(String),
+          emailDeliveryStatus: 'failed',
+          emailDeliveryError: 'SMTP unavailable',
+        }),
+      );
+      expect(mockAuditService.log).toHaveBeenCalledWith({
+        actorId: 'admin-1',
+        action: 'user.password.reset_admin',
+        targetType: 'user',
+        targetId: 'user-1',
+        metadata: {
+          previousStatus: 'ACTIVE',
+          emailDeliveryStatus: 'failed',
         },
       });
     });

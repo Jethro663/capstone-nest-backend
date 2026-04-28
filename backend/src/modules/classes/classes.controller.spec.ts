@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ClassesController } from './classes.controller';
 import { ClassesService } from './classes.service';
+import { AiProxyService } from '../ai-mentor/ai-proxy.service';
 
 const mockClassesService = {
   create: jest.fn(),
@@ -21,6 +22,10 @@ const mockClassesService = {
   getStudentOverviewForClass: jest.fn(),
 };
 
+const mockAiProxy = {
+  forward: jest.fn(),
+};
+
 describe('ClassesController', () => {
   let controller: ClassesController;
 
@@ -29,7 +34,10 @@ describe('ClassesController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ClassesController],
-      providers: [{ provide: ClassesService, useValue: mockClassesService }],
+      providers: [
+        { provide: ClassesService, useValue: mockClassesService },
+        { provide: AiProxyService, useValue: mockAiProxy },
+      ],
     }).compile();
 
     controller = module.get<ClassesController>(ClassesController);
@@ -348,6 +356,7 @@ describe('ClassesController', () => {
         'admin-1',
         ['admin'],
       );
+      expect(mockAiProxy.forward).not.toHaveBeenCalled();
       expect(result).toEqual({
         success: true,
         message: 'Class created successfully',
@@ -356,6 +365,39 @@ describe('ClassesController', () => {
           ...payload,
         },
       });
+    });
+
+    it('triggers background indexing for template-based classes', async () => {
+      const payload = {
+        subjectName: 'Math',
+        subjectCode: 'MATH-7',
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+        templateId: 'template-1',
+      };
+      mockClassesService.create.mockResolvedValue({
+        id: 'class-1',
+        ...payload,
+      });
+      mockAiProxy.forward.mockResolvedValue({ success: true });
+
+      await controller.createClass(payload as any, {
+        userId: 'admin-1',
+        email: 'admin@lms.local',
+        roles: ['admin'],
+      });
+
+      expect(mockAiProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/index/classes/class-1',
+        {
+          id: 'admin-1',
+          email: 'admin@lms.local',
+          roles: ['admin'],
+        },
+        undefined,
+      );
     });
   });
 

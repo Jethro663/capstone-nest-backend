@@ -341,6 +341,11 @@ export class CreateQuestionDto {
 
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  conceptTags?: string[];
+
+  @IsOptional()
+  @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OptionDto)
   options?: OptionDto[];
@@ -370,6 +375,11 @@ export class UpdateQuestionDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  conceptTags?: string[];
 
   @IsOptional()
   @IsArray()

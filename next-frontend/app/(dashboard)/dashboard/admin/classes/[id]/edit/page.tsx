@@ -105,7 +105,7 @@ export default function EditClassPage() {
         sectionId: values.sectionId,
         teacherId: values.teacherId,
         schoolYear: values.schoolYear,
-        room: values.room || undefined,
+        room: values.room.trim(),
         schedules: values.schedules,
       });
       toast.success('Class updated');

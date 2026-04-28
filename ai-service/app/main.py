@@ -14,9 +14,12 @@ import logging
 import math
 import os
 import uuid
+import time
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +28,7 @@ from .config import settings
 from .database import AsyncSessionLocal, get_db
 from . import ollama_client
 from .extraction_pipeline import run_extraction
-from .indexing_pipeline import reindex_class_content
+from .indexing_pipeline import get_class_index_status, reindex_class_content
 from .library_indexing_pipeline import (
     backfill_library_files,
     delete_library_file_chunks,
@@ -76,11 +79,31 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
+AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
 AI_JOB_STALE_FAILURE_MESSAGE = (
     "AI generation timed out before completion. Please retry this job."
 )
+QUIZ_JOB_MAX_ATTEMPTS = 2
 ADMIN_ANALYTICS_SESSION_TYPE = "admin_analytics_chat"
+AI_HTTP_REQUESTS = Counter(
+    "nexora_ai_http_requests_total",
+    "Total AI service HTTP requests",
+    ["method", "path", "status"],
+)
+AI_HTTP_LATENCY = Histogram(
+    "nexora_ai_http_request_duration_seconds",
+    "AI service HTTP request duration",
+    ["method", "path"],
+)
+AI_READY = Gauge(
+    "nexora_ai_ready",
+    "AI service readiness state",
+)
+OLLAMA_AVAILABLE = Gauge(
+    "nexora_ai_ollama_available",
+    "Whether Ollama is reachable",
+)
 
 DEMO_INTERVENTION_PLAN_SYSTEM_PROMPT = """You generate concise, practical demo intervention plans for a school LMS.
 
@@ -220,6 +243,8 @@ APPROVED_ADMIN_SOURCE_IDS = {
 
 @app.on_event("startup")
 async def preload_ollama_models() -> None:
+    AI_JOB_TASKS.clear()
+    await _cleanup_stale_ai_jobs()
     try:
         await ollama_client.preload_model("chat")
     except Exception as err:
@@ -269,6 +294,139 @@ async def _persist_ai_job_runtime(
     return runtime
 
 
+async def _update_ai_job_status(
+    db: AsyncSession,
+    *,
+    job_id: str,
+    status: str,
+    error_message: str | None = None,
+    output_status: str | None = None,
+) -> None:
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET
+              status = :status,
+              error_message = :errorMessage,
+              updated_at = NOW()
+            WHERE id = :jobId
+            """
+        ),
+        {
+            "jobId": job_id,
+            "status": status,
+            "errorMessage": error_message,
+        },
+    )
+    if output_status:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_outputs
+                SET
+                  status = :status,
+                  updated_at = NOW()
+                WHERE job_id = :jobId
+                """
+            ),
+            {
+                "jobId": job_id,
+                "status": output_status,
+            },
+        )
+    await db.commit()
+
+
+async def _cleanup_stale_ai_jobs() -> None:
+    # ai_generation_jobs.updated_at is stored as a naive timestamp in Postgres,
+    # so the cutoff must be naive as well to avoid asyncpg timezone comparison errors.
+    cutoff = (
+        datetime.now(timezone.utc).replace(tzinfo=None)
+        - timedelta(seconds=AI_JOB_STALE_TIMEOUT_SECONDS)
+    )
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(
+            sa_text(
+                """
+                SELECT id
+                FROM ai_generation_jobs
+                WHERE status IN ('pending', 'processing')
+                  AND updated_at < :cutoff
+                """
+            ),
+            {"cutoff": cutoff},
+        )
+        stale_ids = [str(row["id"]) for row in rows.mappings()]
+        if not stale_ids:
+            return
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'failed',
+                  error_message = :errorMessage,
+                  updated_at = NOW()
+                WHERE id IN :jobIds
+                """
+            ).bindparams(bindparam("jobIds", expanding=True)),
+            {
+                "jobIds": stale_ids,
+                "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
+            },
+        )
+        await db.commit()
+        for job_id in stale_ids:
+            await _persist_ai_job_runtime(
+                db,
+                job_id=job_id,
+                runtime_patch={
+                    "progressPercent": 100,
+                    "statusMessage": "Generation timed out",
+                    "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
+                    "staleTimeoutAt": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+
+
+def _request_path_label(request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    return route_path or request.url.path
+
+
+def _should_skip_metrics_observation(path: str) -> bool:
+    return path in {
+        "/metrics",
+        "/ready",
+        "/health",
+        "/health/ready",
+        "/health/live",
+        "/openapi.json",
+        "/docs",
+        "/redoc",
+        "/favicon.ico",
+    } or path.startswith(("/metrics/", "/docs/", "/redoc/"))
+
+
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    start = time.perf_counter()
+    path = _request_path_label(request)
+    if _should_skip_metrics_observation(path):
+        return await call_next(request)
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration = time.perf_counter() - start
+        AI_HTTP_REQUESTS.labels(request.method, path, str(status_code)).inc()
+        AI_HTTP_LATENCY.labels(request.method, path).observe(duration)
+
+
 async def _record_ai_job_runtime(
     db: AsyncSession,
     *,
@@ -315,6 +473,7 @@ def _runtime_progress_for_status(status: str, runtime: dict[str, Any] | None) ->
         "processing": 60,
         "completed": 100,
         "approved": 100,
+        "cancelled": 100,
         "rejected": 100,
         "failed": 100,
     }.get(status, 0)
@@ -386,6 +545,7 @@ async def _create_ai_generation_job(
     class_id: str | None,
     teacher_id: str,
     source_filters: dict[str, Any],
+    max_attempts: int = 3,
 ) -> str:
     job_row = await db.execute(
         sa_text(
@@ -420,7 +580,7 @@ async def _create_ai_generation_job(
         job_id,
         progressPercent=5,
         statusMessage="Queued",
-        retryState={"attempt": 0, "maxAttempts": 3},
+        retryState={"attempt": 0, "maxAttempts": max_attempts},
     )
     await _persist_ai_job_runtime(
         db,
@@ -428,7 +588,7 @@ async def _create_ai_generation_job(
         runtime_patch={
             "progressPercent": 5,
             "statusMessage": "Queued",
-            "retryState": {"attempt": 0, "maxAttempts": 3},
+            "retryState": {"attempt": 0, "maxAttempts": max_attempts},
         },
     )
     return job_id
@@ -540,6 +700,102 @@ async def _load_ai_job_context(
     return normalized_record, merged_runtime, assessment_id
 
 
+async def _ensure_quiz_sources_ready(
+    db: AsyncSession,
+    *,
+    class_id: str,
+    job_id: str | None = None,
+    lesson_ids: list[str] | None = None,
+    extraction_ids: list[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    if job_id:
+        await _record_ai_job_runtime(
+            db,
+            job_id=job_id,
+            progressPercent=12,
+            statusMessage="Checking sources",
+        )
+
+    index_status = await get_class_index_status(db, class_id)
+    reindex_result: dict[str, Any] | None = None
+
+    if index_status.get("needsReindex"):
+        if job_id:
+            await _record_ai_job_runtime(
+                db,
+                job_id=job_id,
+                progressPercent=24,
+                statusMessage="Reindexing sources",
+            )
+        reindex_result = await reindex_class_content(db, class_id)
+        index_status = await get_class_index_status(db, class_id)
+
+    if int(index_status.get("chunksIndexed") or 0) <= 0:
+        raise HTTPException(
+            400,
+            str(
+                index_status.get("reason")
+                or "No indexed class source content found. Reindex the class sources before generating."
+            ),
+        )
+
+    selected_lesson_ids = {item for item in lesson_ids or [] if item}
+    if selected_lesson_ids:
+        ready_lessons = {
+            str(item.get("lessonId")): item
+            for item in index_status.get("readyLessons") or []
+        }
+        lesson_blockers = {
+            str(item.get("lessonId")): item
+            for item in index_status.get("lessonBlockers") or []
+        }
+        missing_selected = [
+            ready_lessons.get(lesson_id) or lesson_blockers.get(lesson_id)
+            for lesson_id in selected_lesson_ids
+            if int((ready_lessons.get(lesson_id) or {}).get("chunkCount") or 0) <= 0
+        ]
+        if missing_selected:
+            labels = [
+                str(item.get("title") or item.get("lessonId") or "lesson")
+                for item in missing_selected[:3]
+                if item
+            ]
+            raise HTTPException(
+                400,
+                "Selected lessons are not indexed yet. Reindex the class sources or choose lessons with published readable content."
+                + (f" Affected lessons: {', '.join(labels)}." if labels else ""),
+            )
+
+    selected_extraction_ids = {item for item in extraction_ids or [] if item}
+    if selected_extraction_ids:
+        ready_extractions = {
+            str(item.get("extractionId")): item
+            for item in index_status.get("readyExtractions") or []
+        }
+        extraction_blockers = {
+            str(item.get("extractionId")): item
+            for item in index_status.get("extractionBlockers") or []
+        }
+        missing_selected = [
+            ready_extractions.get(extraction_id) or extraction_blockers.get(extraction_id)
+            for extraction_id in selected_extraction_ids
+            if int((ready_extractions.get(extraction_id) or {}).get("chunkCount") or 0) <= 0
+        ]
+        if missing_selected:
+            labels = [
+                str(item.get("title") or item.get("extractionId") or "extraction")
+                for item in missing_selected[:3]
+                if item
+            ]
+            raise HTTPException(
+                400,
+                "Selected extractions are not indexed yet. Reindex the class sources or choose completed extractions with usable content."
+                + (f" Affected extractions: {', '.join(labels)}." if labels else ""),
+            )
+
+    return index_status, reindex_result
+
+
 async def _run_quiz_generation_job(
     job_id: str,
     body: GenerateQuizDraftRequest,
@@ -547,70 +803,97 @@ async def _run_quiz_generation_job(
 ) -> None:
     async with AsyncSessionLocal() as bg_db:
         try:
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="processing",
+                error_message=None,
+            )
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
-                progressPercent=20,
-                statusMessage="Planning quiz blueprint",
-                retryState={"attempt": 1, "maxAttempts": 3},
+                progressPercent=10,
+                statusMessage="Checking sources",
+                retryState={"attempt": 0, "maxAttempts": QUIZ_JOB_MAX_ATTEMPTS},
+            )
+            index_status, preflight_reindex = await _ensure_quiz_sources_ready(
+                bg_db,
+                class_id=body.class_id,
+                job_id=job_id,
+                lesson_ids=body.lesson_ids,
+                extraction_ids=body.extraction_ids,
             )
 
             async def _operation(attempt: int) -> dict[str, Any]:
+                await bg_db.rollback()
                 await _record_ai_job_runtime(
                     bg_db,
                     job_id=job_id,
-                    retryState={"attempt": attempt, "maxAttempts": 3},
-                    statusMessage=f"Generating quiz draft (attempt {attempt}/3)",
+                    retryState={"attempt": attempt, "maxAttempts": QUIZ_JOB_MAX_ATTEMPTS},
                 )
                 return await generate_quiz_draft(
                     bg_db,
                     user,
                     body,
                     existing_job_id=job_id,
+                    progress_callback=lambda status_message, progress_percent: _record_ai_job_runtime(
+                        bg_db,
+                        job_id=job_id,
+                        statusMessage=status_message,
+                        progressPercent=progress_percent,
+                        retryState={
+                            "attempt": attempt,
+                            "maxAttempts": QUIZ_JOB_MAX_ATTEMPTS,
+                        },
+                    ),
                 )
 
-            result = await _run_with_retries(_operation, max_attempts=3, delay_seconds=1.5)
-            await _record_ai_job_runtime(
-                bg_db,
-                job_id=job_id,
-                progressPercent=85,
-                statusMessage=(
-                    "Generating questions from fallback blueprint"
-                    if result.get("blueprintSource") == "fallback"
-                    else "Generating questions from quiz blueprint"
-                ),
+            result = await _run_with_retries(
+                _operation,
+                max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
+                delay_seconds=1.0,
             )
             indexing = await reindex_class_content(bg_db, body.class_id)
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
                 progressPercent=100,
-                statusMessage="Draft ready for teacher review",
+                statusMessage="Draft ready",
                 resultSummary={
                     "assessmentId": result.get("assessmentId"),
                     "outputId": result.get("outputId"),
                     "blueprintSource": result.get("blueprintSource"),
+                    "indexStatus": index_status,
+                    "preflightReindex": preflight_reindex,
                     "indexing": indexing,
                 },
             )
-        except Exception as exc:
-            await bg_db.execute(
-                sa_text(
-                    """
-                    UPDATE ai_generation_jobs
-                    SET
-                      status = 'failed',
-                      error_message = :errorMessage,
-                      updated_at = NOW()
-                    WHERE id = :jobId
-                    """
-                ),
-                {
-                    "jobId": job_id,
-                    "errorMessage": str(exc),
-                },
+        except asyncio.CancelledError:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="cancelled",
+                error_message="Generation cancelled by teacher.",
+                output_status="cancelled",
             )
-            await bg_db.commit()
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Generation cancelled",
+                errorMessage="Generation cancelled by teacher.",
+            )
+            logger.info("[ai-job] Quiz generation %s cancelled", job_id)
+            raise
+        except Exception as exc:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
+            )
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
@@ -619,6 +902,8 @@ async def _run_quiz_generation_job(
                 errorMessage=str(exc),
             )
             logger.exception("[ai-job] Quiz generation %s failed", job_id)
+        finally:
+            AI_JOB_TASKS.pop(job_id, None)
 
 
 async def _run_intervention_generation_job(
@@ -644,13 +929,17 @@ async def _run_intervention_generation_job(
                     retryState={"attempt": attempt, "maxAttempts": 3},
                     statusMessage=f"Generating intervention recommendation (attempt {attempt}/3)",
                 )
-                return await recommend_intervention_case(
-                    bg_db,
-                    user,
-                    case_id=case_id,
-                    note=note,
-                    existing_job_id=job_id,
-                )
+                try:
+                    return await recommend_intervention_case(
+                        bg_db,
+                        user,
+                        case_id=case_id,
+                        note=note,
+                        existing_job_id=job_id,
+                    )
+                except Exception:
+                    await bg_db.rollback()
+                    raise
 
             result = await _run_with_retries(_operation, max_attempts=3, delay_seconds=1.5)
             await _record_ai_job_runtime(
@@ -664,23 +953,13 @@ async def _run_intervention_generation_job(
                 },
             )
         except Exception as exc:
-            await bg_db.execute(
-                sa_text(
-                    """
-                    UPDATE ai_generation_jobs
-                    SET
-                      status = 'failed',
-                      error_message = :errorMessage,
-                      updated_at = NOW()
-                    WHERE id = :jobId
-                    """
-                ),
-                {
-                    "jobId": job_id,
-                    "errorMessage": str(exc),
-                },
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
             )
-            await bg_db.commit()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
@@ -689,6 +968,8 @@ async def _run_intervention_generation_job(
                 errorMessage=str(exc),
             )
             logger.exception("[ai-job] Intervention generation %s failed", job_id)
+        finally:
+            AI_JOB_TASKS.pop(job_id, None)
 
 # ---------------------------------------------------------------------------
 # JAKIPIR System Prompt
@@ -1217,6 +1498,8 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     ready = database_status["ok"] and (
         ollama_status["available"] or ai_degraded_allowed
     )
+    AI_READY.set(1 if ready else 0)
+    OLLAMA_AVAILABLE.set(1 if ollama_status["available"] else 0)
 
     return {
         "ready": ready,
@@ -1596,6 +1879,8 @@ async def ja_ask_respond(
         thread_id=body.thread_id,
         message=body.message,
         quick_action=body.quick_action,
+        lesson_id=body.lesson_id,
+        lesson_title=body.lesson_title,
         history=[
             {"role": entry.role, "content": entry.content}
             for entry in (body.history or [])
@@ -1753,6 +2038,7 @@ async def student_tutor_answers(
 async def health():
     status = await ollama_client.is_available()
     available_models = status["models"]
+    OLLAMA_AVAILABLE.set(1 if status["available"] else 0)
     return {
         "success": True,
         "message": "AI health status",
@@ -1769,6 +2055,11 @@ async def health():
             "availableModels": available_models,
         },
     }
+
+
+@app.get("/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/live")
@@ -2017,6 +2308,37 @@ async def internal_extraction_audit(
             "audit": audit,
             "lessonCount": len(structured_content.get("lessons") or []),
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# GET /index/classes/:id/status
+# ---------------------------------------------------------------------------
+
+
+@app.get("/index/classes/{class_id}/status")
+async def get_index_class_status(
+    class_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    class_row = await db.execute(
+        sa_text("SELECT id, teacher_id FROM classes WHERE id = :classId"),
+        {"classId": class_id},
+    )
+    class_info = class_row.mappings().first()
+    if not class_info:
+        raise HTTPException(404, "Class not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(class_info["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only view index status for your own classes")
+
+    data = await get_class_index_status(db, class_id)
+    return {
+        "success": True,
+        "message": "Class index status retrieved",
+        "data": data,
     }
 
 
@@ -3326,9 +3648,10 @@ async def queue_intervention_recommendation_job(
 
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(
+        task = loop.create_task(
             _run_intervention_generation_job(job_id, case_id, body.note, user)
         )
+        AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule intervention job %s: %s", job_id, exc)
         raise HTTPException(500, "Failed to schedule intervention generation job") from exc
@@ -3388,11 +3711,13 @@ async def queue_teacher_quiz_draft_job(
             "assessmentType": body.assessment_type,
             "title": body.title,
         },
+        max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
     )
 
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_run_quiz_generation_job(job_id, body, user))
+        task = loop.create_task(_run_quiz_generation_job(job_id, body, user))
+        AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule quiz job %s: %s", job_id, exc)
         raise HTTPException(500, "Failed to schedule quiz generation job") from exc
@@ -3488,6 +3813,66 @@ async def get_teacher_ai_job_result(
 
 
 # ---------------------------------------------------------------------------
+# DELETE /teacher/jobs/:id
+# ---------------------------------------------------------------------------
+
+
+@app.delete("/teacher/jobs/{job_id}")
+async def delete_teacher_ai_job(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job, _runtime, assessment_id = await _load_ai_job_context(db, job_id, user)
+    task = AI_JOB_TASKS.get(job_id)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=2)
+        except asyncio.CancelledError:
+            pass
+        except asyncio.TimeoutError:
+            logger.warning("[ai-job] Timed out waiting for cancellation of %s", job_id)
+        except Exception as err:
+            logger.warning("[ai-job] Cancellation wait for %s ended with %s", job_id, err)
+    AI_JOB_TASKS.pop(job_id, None)
+
+    status_message = (
+        "Draft removed"
+        if job.get("output_id") or assessment_id
+        else "Generation cancelled"
+    )
+    await _update_ai_job_status(
+        db,
+        job_id=job_id,
+        status="cancelled",
+        error_message="Generation cancelled by teacher.",
+        output_status="cancelled",
+    )
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage=status_message,
+        errorMessage="Generation cancelled by teacher.",
+    )
+
+    return {
+        "success": True,
+        "message": "AI generation job cancelled",
+        "data": {
+            "jobId": job_id,
+            "jobType": job.get("job_type") or "quiz_generation",
+            "status": "cancelled",
+            "progressPercent": 100,
+            "statusMessage": status_message,
+            "assessmentId": assessment_id,
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # POST /teacher/interventions/:id/recommend
 # ---------------------------------------------------------------------------
 
@@ -3523,6 +3908,12 @@ async def teacher_generate_quiz_draft(
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    index_status, _ = await _ensure_quiz_sources_ready(
+        db,
+        class_id=body.class_id,
+        lesson_ids=body.lesson_ids,
+        extraction_ids=body.extraction_ids,
+    )
     data = await generate_quiz_draft(db, user, body)
     index_result = await reindex_class_content(db, body.class_id)
     return {
@@ -3530,6 +3921,7 @@ async def teacher_generate_quiz_draft(
         "message": "AI draft assessment created",
         "data": {
             **data,
+            "indexStatus": index_status,
             "indexing": index_result,
         },
     }

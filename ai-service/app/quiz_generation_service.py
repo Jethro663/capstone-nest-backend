@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from fastapi import HTTPException
 from sqlalchemy import bindparam, text as sa_text
@@ -262,6 +262,7 @@ async def generate_quiz_draft(
     body: GenerateQuizDraftRequest,
     *,
     existing_job_id: str | None = None,
+    progress_callback: Callable[[str, int], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     class_row = await db.execute(
         sa_text(
@@ -288,12 +289,16 @@ async def generate_quiz_draft(
     )
     library_grade_level = str(class_info["grade_level"]) if class_info["grade_level"] else None
 
+    if progress_callback:
+        await progress_callback("Retrieving evidence", 45)
+
     source_chunks: list[dict[str, Any]]
     if body.lesson_ids:
         source_chunks = await similarity_search(
             db,
             query_text=body.teacher_note or class_info["subject_name"],
             class_id=body.class_id,
+            teacher_id=user.id,
             subject_key=library_subject_key,
             grade_level=library_grade_level,
             top_k=max(8, body.question_count * 2),
@@ -306,6 +311,7 @@ async def generate_quiz_draft(
             db,
             query_text=body.teacher_note or class_info["subject_name"],
             class_id=body.class_id,
+            teacher_id=user.id,
             subject_key=library_subject_key,
             grade_level=library_grade_level,
             top_k=max(8, body.question_count * 2),
@@ -320,6 +326,7 @@ async def generate_quiz_draft(
             db,
             query_text=body.teacher_note or class_info["subject_name"],
             class_id=body.class_id,
+            teacher_id=user.id,
             subject_key=library_subject_key,
             grade_level=library_grade_level,
             top_k=max(8, body.question_count * 2),
@@ -361,6 +368,9 @@ async def generate_quiz_draft(
         existing_question_texts=existing_question_texts,
     )
 
+    if progress_callback:
+        await progress_callback("Generating questions", 72)
+
     prompt = f"""
 Subject: {class_info["subject_name"]} ({class_info["subject_code"]})
 Grade level: {class_info["grade_level"] or "Unknown"}
@@ -401,18 +411,12 @@ Source material:
                 SET
                   status = 'processing',
                   error_message = NULL,
-                  source_filters = :sourceFilters,
                   updated_at = NOW()
                 WHERE id = :jobId
                 """
-            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            ),
             {
                 "jobId": existing_job_id,
-                "sourceFilters": {
-                    "lessonIds": body.lesson_ids,
-                    "extractionIds": body.extraction_ids,
-                    "questionCount": body.question_count,
-                },
             },
         )
         job_id = existing_job_id
@@ -448,6 +452,9 @@ Source material:
             },
         )
         job_id = job_row.scalar_one()
+
+    if progress_callback:
+        await progress_callback("Saving draft", 88)
 
     structured_output = {
         "title": parsed.get("title") or body.title or f"{class_info['subject_name']} AI Draft Quiz",

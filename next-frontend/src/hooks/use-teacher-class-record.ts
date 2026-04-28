@@ -2,10 +2,11 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { toast } from 'sonner';
 import { classRecordService } from '@/services/class-record-service';
 import { exportClassRecordTemplateWorkbook } from '@/lib/class-record-template-export';
+import { downloadXlsxBuffer } from '@/lib/download-xlsx-buffer';
 import type {
   ClassRecord,
   SpreadsheetData,
@@ -21,9 +22,7 @@ function getErrorMessage(error: unknown, fallback: string) {
   );
 }
 
-function downloadBrowserWorkbook(workbook: XLSX.WorkBook, filename: string) {
-  XLSX.writeFile(workbook, filename);
-}
+type MergeRange = { s: { r: number; c: number }; e: { r: number; c: number } };
 
 function getWorkbookSheetName(spreadsheet: SpreadsheetData, selectedRecord: ClassRecord) {
   const explicitName = spreadsheet.header.workbookSheetName?.trim();
@@ -85,7 +84,7 @@ function getCategoryTotalHps(category: SpreadsheetData['categories'][number] | u
   );
 }
 
-function exportWorkbook(
+async function exportWorkbook(
   spreadsheet: SpreadsheetData,
   selectedRecord: ClassRecord,
 ) {
@@ -158,7 +157,7 @@ function exportWorkbook(
   rows[9][32] = 100;
   rows[9][33] = quarterlyCategory ? Number((quarterlyCategory.weight / 100).toFixed(1)) : '';
 
-  const merges: XLSX.Range[] = [
+  const merges: MergeRange[] = [
     { s: { r: 0, c: 0 }, e: { r: 1, c: 35 } },
     { s: { r: 2, c: 0 }, e: { r: 2, c: 35 } },
     { s: { r: 3, c: 2 }, e: { r: 3, c: 5 } },
@@ -270,9 +269,20 @@ function exportWorkbook(
     });
   }
 
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  worksheet['!merges'] = merges;
-  worksheet['!cols'] = [
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName.slice(0, 31));
+  rows.forEach((row) => {
+    worksheet.addRow(row);
+  });
+  merges.forEach((merge) => {
+    worksheet.mergeCells(
+      merge.s.r + 1,
+      merge.s.c + 1,
+      merge.e.r + 1,
+      merge.e.c + 1,
+    );
+  });
+  worksheet.columns = [
     { wch: 4.14 },
     { wch: 7 },
     { wch: 7 },
@@ -291,8 +301,8 @@ function exportWorkbook(
     { wch: 7.14 },
     { wch: 10.29 },
     { wch: 10.29 },
-  ];
-  worksheet['!rows'] = [
+  ].map((column) => ({ width: column.wch }));
+  [
     { hpt: 15 },
     { hpt: 15 },
     { hpt: 15 },
@@ -303,12 +313,12 @@ function exportWorkbook(
     { hpt: 32 },
     { hpt: 18 },
     { hpt: 18 },
-  ];
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
-  downloadBrowserWorkbook(
-    workbook,
+  ].forEach((row, index) => {
+    worksheet.getRow(index + 1).height = row.hpt;
+  });
+  const output = await workbook.xlsx.writeBuffer();
+  downloadXlsxBuffer(
+    output,
     `class-record-${selectedRecord.gradingPeriod}-${selectedRecord.classId}.xlsx`,
   );
 }
@@ -631,7 +641,7 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
       toast.success('Workbook export downloaded');
     } catch {
       try {
-        exportWorkbook(spreadsheet, selectedRecord);
+        await exportWorkbook(spreadsheet, selectedRecord);
         toast.success('Workbook export downloaded');
       } catch (fallbackError) {
         toast.error(getErrorMessage(fallbackError, 'Failed to export workbook'));

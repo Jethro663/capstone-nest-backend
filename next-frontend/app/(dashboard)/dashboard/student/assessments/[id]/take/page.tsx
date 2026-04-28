@@ -2,18 +2,18 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import Image from 'next/image';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { Clock3, ListChecks, Download, UploadCloud, FileText } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type { SharedQuestionType } from '@/components/assessment/shared-answer-input';
+import { StudentObjectiveAssessmentSurface } from '@/components/student/assessment/StudentObjectiveAssessmentSurface';
 import { toast } from 'sonner';
 import {
   getLatestReturnedAttempt,
@@ -28,26 +28,6 @@ const StudentStatusChip = dynamic(
     ),
   {
     loading: () => <Skeleton className="h-6 w-24 rounded-full" />,
-  },
-);
-
-const SharedAnswerInput = dynamic(
-  () =>
-    import('@/components/assessment/shared-answer-input').then(
-      (mod) => mod.SharedAnswerInput,
-    ),
-  {
-    loading: () => <Skeleton className="h-40 w-full rounded-[1.75rem]" />,
-  },
-);
-
-const SharedQuestionNavigator = dynamic(
-  () =>
-    import('@/components/assessment/shared-question-navigator').then(
-      (mod) => mod.SharedQuestionNavigator,
-    ),
-  {
-    loading: () => <Skeleton className="h-16 w-full rounded-[1.75rem]" />,
   },
 );
 
@@ -790,9 +770,16 @@ export default function StudentAssessmentTakePage() {
 
               <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
                 <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)] mb-2">Instruction</p>
-                <p className="text-sm leading-relaxed text-[var(--student-text-strong)] whitespace-pre-wrap">
-                  {assessment.fileUploadInstructions || 'No additional instruction provided.'}
-                </p>
+                {assessment.fileUploadInstructions ? (
+                  <RichTextRenderer
+                    html={assessment.fileUploadInstructions}
+                    className="text-sm leading-relaxed text-[var(--student-text-strong)]"
+                  />
+                ) : (
+                  <p className="text-sm leading-relaxed text-[var(--student-text-strong)]">
+                    No additional instruction provided.
+                  </p>
+                )}
               </div>
 
               {(assessment.rubricCriteria?.length ?? 0) > 0 && (
@@ -917,144 +904,92 @@ export default function StudentAssessmentTakePage() {
   const progressValue = Math.round((answeredCount / questions.length) * 100);
 
   return (
-    <div
-      className="student-page rounded-3xl p-1"
-      onKeyDown={(event) => {
-        const tagName = (event.target as HTMLElement)?.tagName;
-        const isEditable = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-        if (!isEditable && (event.ctrlKey || event.metaKey) && ['c', 'x'].includes(event.key.toLowerCase())) {
-          event.preventDefault();
-        }
-      }}
-    >
-      <div className="sticky top-0 z-30 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-glass)] p-3 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-[var(--student-text-strong)]">{assessment.title}</p>
-            <p className="text-xs student-muted-text">Question {currentIdx + 1} of {questions.length}</p>
-          </div>
-          <div className="flex items-center gap-2">
+    <>
+      <StudentObjectiveAssessmentSurface
+        title={assessment.title}
+        questionLabel={`Question ${currentIdx + 1} of ${questions.length}`}
+        progressValue={progressValue}
+        statusChips={
+          <>
             <StudentStatusChip tone="info">
               <ListChecks className="mr-1 h-3.5 w-3.5" />
               {answeredCount}/{questions.length} answered
             </StudentStatusChip>
-            {timedQuestionsEnabled && questionTimerRemaining !== null && (
+            {timedQuestionsEnabled && questionTimerRemaining !== null ? (
               <StudentStatusChip tone={questionTimerRemaining <= 10 ? 'danger' : 'warning'}>
                 <Clock3 className="mr-1 h-3.5 w-3.5" />
                 Q: {formatTime(questionTimerRemaining)}
               </StudentStatusChip>
-            )}
+            ) : null}
             <StudentStatusChip tone={isTimeLow ? 'danger' : 'warning'}>
               <Clock3 className="mr-1 h-3.5 w-3.5" />
               {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeSpentSeconds)}
             </StudentStatusChip>
-          </div>
-        </div>
-        <Progress value={progressValue} className="mt-2 h-2" />
-      </div>
-
-      <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_250px]">
-        <Card className="student-card overflow-hidden">
-          <CardContent className="space-y-5 p-6">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="capitalize">{current.type.replace('_', ' ')}</Badge>
-              <Badge variant="secondary">{current.points} pts</Badge>
-            </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={current.id}
-                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-                animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
-                exit={reduceMotion ? {} : { opacity: 0, y: -6 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div
-                  className="select-none"
-                  onCopy={(event) => event.preventDefault()}
-                  onCut={(event) => event.preventDefault()}
-                  onContextMenu={(event) => event.preventDefault()}
-                >
-                  <h2 className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]">{current.content}</h2>
-                  {current.imageUrl ? (
-                    <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3">
-                      <Image
-                        src={current.imageUrl}
-                        alt="Question"
-                        width={1200}
-                        height={675}
-                        unoptimized
-                        className="max-h-[360px] h-auto w-full rounded-xl object-contain"
-                      />
-                    </div>
-                  ) : null}
-                </div>
-                <div className="mt-4">
-                  <SharedAnswerInput
-                    question={{
-                      id: current.id,
-                      type: current.type as SharedQuestionType,
-                      options: (current.options || []).map((opt) => ({
-                        id: opt.id,
-                        text: opt.text,
-                      })),
-                    }}
-                    value={responses[current.id]}
-                    onChange={(val) => setResponse(current.id, val)}
-                  />
-                </div>
-              </motion.div>
-            </AnimatePresence>
-
-            <div className="flex items-center justify-between border-t pt-4">
-              <Button
-                variant="outline"
-                disabled={currentIdx === 0 || isSequentialNavigationLocked}
-                onClick={() => {
-                  void handleNavigateToQuestion(Math.max(0, currentIdx - 1));
-                }}
-              >
-                Previous
-              </Button>
-              {currentIdx < questions.length - 1 ? (
-                <Button
-                  className="student-button-solid"
-                  disabled={!canAdvanceInStrictMode}
-                  onClick={() => {
-                    if (!canAdvanceInStrictMode) {
-                      toast.info('Strict mode requires answering this question before moving forward.');
-                      return;
-                    }
-                    void handleNavigateToQuestion(currentIdx + 1);
-                  }}
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button className="student-button-solid" onClick={() => setShowConfirm(true)}>
-                  Submit Assessment
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="student-card h-fit">
-          <CardContent className="p-4">
-            <SharedQuestionNavigator
-              questionIds={questions.map((question) => question.id)}
-              currentIdx={currentIdx}
-              answeredById={Object.fromEntries(
-                questions.map((question) => [question.id, isQuestionAnswered(question, responses[question.id])]),
-              )}
-              navigationLocked={isSequentialNavigationLocked}
-              onNavigate={(index) => {
-                void handleNavigateToQuestion(index);
+          </>
+        }
+        question={{
+          id: current.id,
+          type: current.type as SharedQuestionType,
+          points: current.points,
+          promptHtml: current.content ?? '<p></p>',
+          imageUrl: current.imageUrl,
+          options: (current.options || []).map((opt) => ({
+            id: opt.id,
+            text: opt.text,
+          })),
+        }}
+        currentIdx={currentIdx}
+        questionIds={questions.map((question) => question.id)}
+        answeredById={Object.fromEntries(
+          questions.map((question) => [question.id, isQuestionAnswered(question, responses[question.id])]),
+        )}
+        navigationLocked={isSequentialNavigationLocked}
+        value={responses[current.id]}
+        onChange={(val) => setResponse(current.id, val)}
+        onNavigate={(index) => {
+          void handleNavigateToQuestion(index);
+        }}
+        protectContent
+        onSurfaceKeyDown={(event) => {
+          const tagName = (event.target as HTMLElement)?.tagName;
+          const isEditable = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+          if (!isEditable && (event.ctrlKey || event.metaKey) && ['c', 'x'].includes(event.key.toLowerCase())) {
+            event.preventDefault();
+          }
+        }}
+        footerLeft={
+          <Button
+            variant="outline"
+            disabled={currentIdx === 0 || isSequentialNavigationLocked}
+            onClick={() => {
+              void handleNavigateToQuestion(Math.max(0, currentIdx - 1));
+            }}
+          >
+            Previous
+          </Button>
+        }
+        footerRight={
+          currentIdx < questions.length - 1 ? (
+            <Button
+              className="student-button-solid"
+              disabled={!canAdvanceInStrictMode}
+              onClick={() => {
+                if (!canAdvanceInStrictMode) {
+                  toast.info('Strict mode requires answering this question before moving forward.');
+                  return;
+                }
+                void handleNavigateToQuestion(currentIdx + 1);
               }}
-            />
-          </CardContent>
-        </Card>
-      </div>
+            >
+              Next
+            </Button>
+          ) : (
+            <Button className="student-button-solid" onClick={() => setShowConfirm(true)}>
+              Submit Assessment
+            </Button>
+          )
+        }
+      />
 
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
         <DialogContent>
@@ -1091,6 +1026,6 @@ export default function StudentAssessmentTakePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

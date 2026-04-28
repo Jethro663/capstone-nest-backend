@@ -12,6 +12,7 @@ interface TeacherPageShellProps {
   description: string;
   actions?: ReactNode;
   stats?: ReactNode;
+  headerStats?: ReactNode;
   children: ReactNode;
   className?: string;
 }
@@ -22,6 +23,8 @@ interface TeacherStatCardProps {
   caption?: ReactNode;
   icon?: LucideIcon;
   accent?: 'sky' | 'teal' | 'amber' | 'rose';
+  showIcon?: boolean;
+  valueInHeader?: boolean;
 }
 
 interface TeacherSectionCardProps {
@@ -39,11 +42,26 @@ interface TeacherEmptyStateProps {
   action?: ReactNode;
 }
 
+interface TeacherHeaderMetricProps {
+  label: string;
+  value: ReactNode;
+  caption?: ReactNode;
+  accent?: 'neutral' | 'sky' | 'teal' | 'amber' | 'rose';
+}
+
 const accentMap = {
   sky: 'from-[#dbeafe] via-[#dbeafe] to-transparent text-[#2563eb]',
   teal: 'from-[#dcfce7] via-[#dcfce7] to-transparent text-[#15803d]',
   amber: 'from-[#fef3c7] via-[#fef3c7] to-transparent text-[#b45309]',
   rose: 'from-[#fee2e2] via-[#fee2e2] to-transparent text-[#b91c1c]',
+} as const;
+
+const headerMetricAccentMap = {
+  neutral: 'border-white/70 bg-white/70',
+  sky: 'border-[#bfdbfe] bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(255,255,255,0.9))]',
+  teal: 'border-[#bbf7d0] bg-[linear-gradient(135deg,rgba(220,252,231,0.95),rgba(255,255,255,0.9))]',
+  amber: 'border-[#fde68a] bg-[linear-gradient(135deg,rgba(254,243,199,0.95),rgba(255,255,255,0.92))]',
+  rose: 'border-[#fecdd3] bg-[linear-gradient(135deg,rgba(254,226,226,0.96),rgba(255,255,255,0.92))]',
 } as const;
 
 export function TeacherPageShell({
@@ -52,6 +70,7 @@ export function TeacherPageShell({
   description,
   actions,
   stats,
+  headerStats,
   children,
   className,
 }: TeacherPageShellProps) {
@@ -62,10 +81,11 @@ export function TeacherPageShell({
           <div className="teacher-figma-header__icon">
             <BarChart3 className="h-5 w-5" />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-3">
             <p className="teacher-figma-header__badge">{badge}</p>
             <h1 className="teacher-figma-header__title">{title}</h1>
             <p className="teacher-figma-header__description">{description}</p>
+            {headerStats ? <div className="flex flex-wrap gap-2 pt-1">{headerStats}</div> : null}
           </div>
         </div>
         {actions ? <div className="teacher-figma-header__actions">{actions}</div> : null}
@@ -82,27 +102,69 @@ export function TeacherPageShell({
   );
 }
 
+export function TeacherHeaderMetric({
+  label,
+  value,
+  caption,
+  accent = 'neutral',
+}: TeacherHeaderMetricProps) {
+  return (
+    <div
+      className={cn(
+        'min-w-[118px] max-w-[190px] rounded-[12px] border px-3 py-2.5 shadow-sm backdrop-blur',
+        headerMetricAccentMap[accent],
+      )}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
+        {label}
+      </p>
+      <p className="mt-1 text-[1.05rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]">
+        {value}
+      </p>
+      {caption ? <p className="mt-1 text-[10px] leading-4 text-[var(--teacher-text-muted)]">{caption}</p> : null}
+    </div>
+  );
+}
+
 export function TeacherStatCard({
   label,
   value,
   caption,
   icon: Icon,
   accent = 'sky',
+  showIcon = true,
+  valueInHeader = false,
 }: TeacherStatCardProps) {
   return (
     <div className="teacher-figma-stat teacher-panel-hover relative overflow-hidden rounded-[14px] p-4">
       <div className={cn('absolute inset-x-0 top-0 h-full bg-gradient-to-br opacity-80', accentMap[accent])} />
       <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
-            {label}
-          </p>
-          <div className="text-[1.75rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]">
-            {value}
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className={cn('gap-3', valueInHeader ? 'flex items-start justify-between' : 'space-y-1.5')}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
+              {label}
+            </p>
+            <div
+              className={cn(
+                'text-[1.75rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]',
+                valueInHeader && 'shrink-0 text-right',
+              )}
+            >
+              {value}
+            </div>
           </div>
-          {caption ? <p className="text-xs text-[var(--teacher-text-muted)]">{caption}</p> : null}
+          {!valueInHeader ? (
+            <div className="text-[1.75rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]">
+              {value}
+            </div>
+          ) : null}
+          {caption ? (
+            <p className={cn('text-xs text-[var(--teacher-text-muted)]', valueInHeader && 'pr-2')}>
+              {caption}
+            </p>
+          ) : null}
         </div>
-        {Icon ? (
+        {Icon && showIcon ? (
           <div className="rounded-[10px] border border-[#e2e8f0] bg-white p-2.5 text-[var(--teacher-accent)]">
             <Icon className="h-4 w-4" />
           </div>

@@ -6,6 +6,7 @@ type TemplateLike = {
 };
 
 type ClassLike = {
+  subjectName?: string | null;
   subjectCode?: string | null;
   subjectGradeLevel?: string | null;
 };
@@ -98,11 +99,20 @@ export function isTemplateCompatibleWithClass(
   template: TemplateLike,
   classValues: ClassLike,
 ) {
+  const normalizedSubjectName = String(classValues.subjectName ?? '').trim();
+  const subjectMatches = normalizedSubjectName
+    ? matchesTemplateToSubject(
+        template,
+        normalizedSubjectName,
+        String(classValues.subjectCode ?? ''),
+      )
+    : normalizeSubjectCode(template.subjectCode) ===
+      normalizeSubjectCode(classValues.subjectCode);
+
   return (
     template.status === 'published' &&
     String(template.subjectGradeLevel ?? '').trim() ===
       String(classValues.subjectGradeLevel ?? '').trim() &&
-    normalizeSubjectCode(template.subjectCode) ===
-      normalizeSubjectCode(classValues.subjectCode)
+    subjectMatches
   );
 }

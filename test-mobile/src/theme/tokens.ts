@@ -1,7 +1,7 @@
 import type { ViewStyle } from "react-native";
 
 export const colors = {
-  surface: "#F8F9FF",
+  surface: "#0F1115",
   text: "#1F2937",
   textSecondary: "#6B7280",
   muted: "#9CA3AF",
@@ -17,7 +17,7 @@ export const colors = {
   purpleDeep: "#7C3AED",
   indigo: "#667EEA",
   violet: "#764BA2",
-  border: "#E5E7EB",
+  border: "rgba(15,23,42,0.12)",
   paleRed: "#FFF0F0",
   paleOrange: "#FFF5F0",
   paleAmber: "#FFF8E7",

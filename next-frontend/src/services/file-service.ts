@@ -19,6 +19,7 @@ export const fileService = {
       subjectKey?: LibrarySubjectKey;
       gradeLevel?: LibraryGradeLevel;
       teacherVisible?: boolean;
+      aiEnabled?: boolean;
     } = {},
   ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const formData = new FormData();
@@ -87,6 +88,7 @@ export const fileService = {
       subjectKey?: LibrarySubjectKey;
       gradeLevel?: LibraryGradeLevel;
       teacherVisible?: boolean;
+      aiEnabled?: boolean;
     },
   ): Promise<{ success: boolean; message: string; data: UploadedFile }> {
     const { data } = await api.patch(`/files/${id}`, dto);

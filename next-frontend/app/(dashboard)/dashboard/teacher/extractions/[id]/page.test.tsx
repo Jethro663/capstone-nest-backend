@@ -126,6 +126,28 @@ describe('ExtractionReviewPage', () => {
     expect(screen.queryByDisplayValue(/data:image\/png;base64/i)).not.toBeInTheDocument();
   });
 
+  it('keeps extraction status summary inside the header without standalone stat cards', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildExtraction('completed'),
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(await screen.findByText('Extraction Review')).toBeInTheDocument();
+
+    const headerSummary = screen.getByTestId('extraction-header-summary');
+    expect(headerSummary).toHaveTextContent('Status');
+    expect(headerSummary).toHaveTextContent('completed');
+    expect(headerSummary).toHaveTextContent('Sections');
+    expect(headerSummary).toHaveTextContent('1 selected');
+    expect(headerSummary).toHaveTextContent('Draft Questions');
+    expect(headerSummary).toHaveTextContent('1');
+    expect(document.querySelector('.teacher-figma-stat')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('text-[#12284a]');
+  });
+
   it('renders load error state and retries fetching extraction', async () => {
     mockedExtractionService.getById
       .mockRejectedValueOnce({
@@ -157,6 +179,25 @@ describe('ExtractionReviewPage', () => {
     expect(mockedToast.error).toHaveBeenCalledWith(
       'AI extraction queue is temporarily unavailable. Please retry shortly.',
     );
+  });
+
+  it('keeps a Back action visible when extraction loading fails', async () => {
+    mockedExtractionService.getById.mockRejectedValue({
+      response: {
+        data: {
+          message: 'AI service is unavailable. Start the AI service and try again.',
+        },
+      },
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(
+      await screen.findByText('AI service is unavailable. Start the AI service and try again.'),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(backMock).toHaveBeenCalledTimes(1);
   });
 
   it('stops polling and surfaces warning after repeated status failures', async () => {

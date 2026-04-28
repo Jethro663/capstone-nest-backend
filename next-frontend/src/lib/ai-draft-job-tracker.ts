@@ -14,7 +14,7 @@ const STORAGE_PREFIX = 'teacher-ai-draft-jobs:';
 const MAX_TRACKED_JOBS = 20;
 const RETENTION_DAYS = 14;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
-const TERMINAL_STATUSES: AiGenerationStatus[] = ['completed', 'approved', 'failed', 'rejected'];
+const TERMINAL_STATUSES: AiGenerationStatus[] = ['completed', 'approved', 'cancelled', 'failed', 'rejected'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -134,4 +134,11 @@ export function mergeTrackedAiDraftJobFromStatus(
     assessmentId: job.assessmentId ?? null,
     updatedAt: job.updatedAt ?? null,
   });
+}
+
+export function removeTrackedAiDraftJob(classId: string, jobId: string) {
+  const current = readTrackedAiDraftJobs(classId);
+  const filtered = current.filter((entry) => entry.jobId !== jobId);
+  writeTrackedAiDraftJobs(classId, filtered);
+  return filtered;
 }

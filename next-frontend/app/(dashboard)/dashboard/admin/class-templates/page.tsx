@@ -1,13 +1,45 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, BookTemplate, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookTemplate,
+  ChevronDown,
+  Eye,
+  Filter,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AdminEmptyState,
+  AdminPageShell,
+  AdminSectionCard,
+} from '@/components/admin/AdminPageShell';
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogConfig,
+} from '@/components/shared/ConfirmationDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { classTemplateService } from '@/services/class-template-service';
-import type { ClassTemplate } from '@/types/class-template';
+import type {
+  ClassTemplate,
+  ClassTemplateStatus,
+} from '@/types/class-template';
 
 const SUBJECTS = [
   { code: 'MATH-7', label: 'Mathematics' },
@@ -18,26 +50,18 @@ const SUBJECTS = [
   { code: 'TLE-9', label: 'TLE' },
   { code: 'MAPEH-10', label: 'MAPEH' },
   { code: 'ESP-10', label: 'ESP' },
-];
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'draft', label: 'Draft only' },
-  { value: 'published', label: 'Published only' },
 ] as const;
 
 const SORT_OPTIONS = [
-  { value: 'created-desc', label: 'Created (Newest first)' },
-  { value: 'created-asc', label: 'Created (Oldest first)' },
-  { value: 'updated-desc', label: 'Updated (Newest first)' },
-  { value: 'updated-asc', label: 'Updated (Oldest first)' },
-  { value: 'name-asc', label: 'Name (A-Z)' },
-  { value: 'name-desc', label: 'Name (Z-A)' },
+  { value: 'updated-desc', label: 'Recently updated' },
+  { value: 'updated-asc', label: 'Least recently updated' },
+  { value: 'created-desc', label: 'Newest created' },
+  { value: 'created-asc', label: 'Oldest created' },
+  { value: 'name-asc', label: 'Name A-Z' },
+  { value: 'name-desc', label: 'Name Z-A' },
 ] as const;
 
-const PAGE_SIZE_OPTIONS = [6, 9, 12, 24] as const;
-
-type TemplateStatusFilter = (typeof STATUS_OPTIONS)[number]['value'];
+type TemplateStatusFilter = 'all' | ClassTemplateStatus;
 type TemplateSort = (typeof SORT_OPTIONS)[number]['value'];
 
 function toTimestamp(value?: string) {
@@ -52,12 +76,31 @@ function formatDate(value?: string) {
   return Number.isNaN(date.getTime()) ? 'Unknown' : date.toISOString().slice(0, 10);
 }
 
+function getSubjectLabel(subjectCode: string) {
+  return SUBJECTS.find((subject) => subject.code === subjectCode)?.label ?? subjectCode;
+}
+
+function getStatusTone(status: ClassTemplateStatus) {
+  return status === 'published'
+    ? 'admin-status-pill admin-status-pill--active'
+    : 'admin-status-pill admin-status-pill--pending';
+}
+
+function getStatusLabel(status: ClassTemplateStatus) {
+  return status === 'published' ? 'Published' : 'Draft';
+}
+
+function getSortLabel(sortBy: TemplateSort) {
+  return SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? 'Recently updated';
+}
+
 export default function ClassTemplatesPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<ClassTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
   const [name, setName] = useState('');
   const [subjectCode, setSubjectCode] = useState('MATH-7');
   const [subjectGradeLevel, setSubjectGradeLevel] = useState('7');
@@ -65,25 +108,32 @@ export default function ClassTemplatesPage() {
   const [statusFilter, setStatusFilter] = useState<TemplateStatusFilter>('all');
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [gradeFilter, setGradeFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<TemplateSort>('created-desc');
-  const [pageSize, setPageSize] = useState<number>(9);
-  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<TemplateSort>('updated-desc');
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
 
-  const fetchTemplates = useCallback(async () => {
+  const fetchTemplates = useCallback(async (mode: 'initial' | 'table') => {
     try {
-      setLoading(true);
+      if (mode === 'initial') {
+        setInitialLoading(true);
+      } else {
+        setTableLoading(true);
+      }
+
       const response = await classTemplateService.getAll();
       setTemplates(response.data ?? []);
     } catch {
       toast.error('Failed to load templates');
     } finally {
-      setLoading(false);
+      if (mode === 'initial') {
+        setInitialLoading(false);
+      } else {
+        setTableLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    void fetchTemplates();
+    void fetchTemplates('initial');
   }, [fetchTemplates]);
 
   const handleCreate = async () => {
@@ -91,6 +141,7 @@ export default function ClassTemplatesPage() {
       toast.error('Template name is required');
       return;
     }
+
     try {
       setCreating(true);
       const response = await classTemplateService.create({
@@ -127,9 +178,11 @@ export default function ClassTemplatesPage() {
         return true;
       }
 
+      const subjectLabel = getSubjectLabel(template.subjectCode).toLowerCase();
       return (
         template.name.toLowerCase().includes(query) ||
         template.subjectCode.toLowerCase().includes(query) ||
+        subjectLabel.includes(query) ||
         template.subjectGradeLevel.toLowerCase().includes(query) ||
         template.status.toLowerCase().includes(query)
       );
@@ -138,6 +191,7 @@ export default function ClassTemplatesPage() {
 
   const sortedTemplates = useMemo(() => {
     const sorted = filteredTemplates.slice();
+
     sorted.sort((left, right) => {
       switch (sortBy) {
         case 'created-asc':
@@ -146,41 +200,57 @@ export default function ClassTemplatesPage() {
           return toTimestamp(right.createdAt) - toTimestamp(left.createdAt);
         case 'updated-asc':
           return toTimestamp(left.updatedAt) - toTimestamp(right.updatedAt);
-        case 'updated-desc':
-          return toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt);
         case 'name-desc':
           return right.name.localeCompare(left.name);
         case 'name-asc':
-        default:
           return left.name.localeCompare(right.name);
+        case 'updated-desc':
+        default:
+          return toTimestamp(right.updatedAt) - toTimestamp(left.updatedAt);
       }
     });
+
     return sorted;
   }, [filteredTemplates, sortBy]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedTemplates.length / pageSize));
+  const draftCount = useMemo(
+    () => templates.filter((template) => template.status === 'draft').length,
+    [templates],
+  );
+  const publishedCount = useMemo(
+    () => templates.filter((template) => template.status === 'published').length,
+    [templates],
+  );
+
+  const selectableVisibleIds = useMemo(
+    () => sortedTemplates.map((template) => template.id),
+    [sortedTemplates],
+  );
 
   useEffect(() => {
-    setPage((current) => Math.min(current, totalPages));
-  }, [totalPages]);
+    const visibleSet = new Set(selectableVisibleIds);
+    setSelectedTemplateIds((current) => current.filter((id) => visibleSet.has(id)));
+  }, [selectableVisibleIds]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, subjectFilter, gradeFilter, sortBy, pageSize]);
-
-  const paginatedTemplates = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return sortedTemplates.slice(start, start + pageSize);
-  }, [page, pageSize, sortedTemplates]);
-
-  useEffect(() => {
-    const visibleIds = new Set(sortedTemplates.map((template) => template.id));
-    setSelectedTemplateIds((current) => current.filter((id) => visibleIds.has(id)));
-  }, [sortedTemplates]);
-
-  const visiblePageIds = paginatedTemplates.map((template) => template.id);
   const allVisibleSelected =
-    visiblePageIds.length > 0 && visiblePageIds.every((id) => selectedTemplateIds.includes(id));
+    selectableVisibleIds.length > 0 &&
+    selectableVisibleIds.every((id) => selectedTemplateIds.includes(id));
+
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    statusFilter !== 'all' ||
+    subjectFilter !== 'all' ||
+    gradeFilter !== 'all' ||
+    sortBy !== 'updated-desc';
+
+  const resetFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setSubjectFilter('all');
+    setGradeFilter('all');
+    setSortBy('updated-desc');
+    setSelectedTemplateIds([]);
+  };
 
   const toggleTemplateSelection = (templateId: string) => {
     setSelectedTemplateIds((current) =>
@@ -190,43 +260,25 @@ export default function ClassTemplatesPage() {
     );
   };
 
-  const handleSelectVisible = () => {
-    setSelectedTemplateIds((current) => {
-      if (allVisibleSelected) {
-        return current.filter((id) => !visiblePageIds.includes(id));
-      }
-
-      return [...new Set([...current, ...visiblePageIds])];
-    });
+  const handleSelectAllVisible = () => {
+    setSelectedTemplateIds(allVisibleSelected ? [] : selectableVisibleIds);
   };
 
-  const handleDeleteSelected = async () => {
-    if (selectedTemplateIds.length === 0) {
-      return;
-    }
+  const deleteTemplates = useCallback(
+    async (templateIds: string[]) => {
+      if (templateIds.length === 0) {
+        return;
+      }
 
-    const confirmed = window.confirm(
-      `Delete ${selectedTemplateIds.length} selected template${selectedTemplateIds.length === 1 ? '' : 's'}? This action cannot be undone.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    const idsToDelete = selectedTemplateIds.slice();
-
-    try {
-      setBulkDeleting(true);
       const results = await Promise.allSettled(
-        idsToDelete.map((templateId) => classTemplateService.remove(templateId)),
+        templateIds.map((templateId) => classTemplateService.remove(templateId)),
       );
 
       const deletedIds = results.flatMap((result, index) =>
-        result.status === 'fulfilled' ? [idsToDelete[index]] : [],
+        result.status === 'fulfilled' ? [templateIds[index]] : [],
       );
-
       const successCount = deletedIds.length;
-      const failureCount = idsToDelete.length - successCount;
+      const failureCount = templateIds.length - successCount;
 
       if (successCount > 0) {
         toast.success(
@@ -241,82 +293,147 @@ export default function ClassTemplatesPage() {
       }
 
       if (successCount > 0) {
-        await fetchTemplates();
+        await fetchTemplates('table');
       }
 
-      setSelectedTemplateIds((current) =>
-        current.filter((id) => !deletedIds.includes(id)),
-      );
-    } catch {
-      toast.error('Failed to delete selected templates');
-    } finally {
-      setBulkDeleting(false);
-    }
+      setSelectedTemplateIds((current) => current.filter((id) => !deletedIds.includes(id)));
+    },
+    [fetchTemplates],
+  );
+
+  const openDeleteConfirmation = (template: ClassTemplate) => {
+    setConfirmation({
+      title: 'Delete template?',
+      description:
+        'This removes the template and its saved workspace content. This action cannot be undone.',
+      confirmLabel: 'Delete template',
+      tone: 'danger',
+      details: (
+        <div className="space-y-2 text-sm text-[var(--student-text-strong)]">
+          <p className="font-black">{template.name}</p>
+          <p className="text-[var(--student-text-muted)]">
+            {getSubjectLabel(template.subjectCode)} ({template.subjectCode}) | Grade{' '}
+            {template.subjectGradeLevel}
+          </p>
+        </div>
+      ),
+      onConfirm: async () => {
+        await deleteTemplates([template.id]);
+      },
+    });
   };
 
-  const startRow = sortedTemplates.length === 0 ? 0 : (page - 1) * pageSize + 1;
-  const endRow = Math.min(page * pageSize, sortedTemplates.length);
+  const openBulkDeleteConfirmation = () => {
+    if (selectedTemplateIds.length === 0) {
+      return;
+    }
+
+    const selectedTemplates = sortedTemplates.filter((template) =>
+      selectedTemplateIds.includes(template.id),
+    );
+
+    setConfirmation({
+      title: 'Delete selected templates?',
+      description:
+        'This removes the selected templates and their saved workspace content. This action cannot be undone.',
+      confirmLabel: 'Delete templates',
+      tone: 'danger',
+      details: (
+        <div className="space-y-2 text-sm text-[var(--student-text-strong)]">
+          <p className="font-black">{selectedTemplateIds.length} selected</p>
+          <p className="text-[var(--student-text-muted)]">
+            {selectedTemplates
+              .slice(0, 3)
+              .map((template) => template.name)
+              .join(', ')}
+            {selectedTemplates.length > 3
+              ? ` and ${selectedTemplates.length - 3} more`
+              : ''}
+          </p>
+        </div>
+      ),
+      onConfirm: async () => {
+        await deleteTemplates(selectedTemplateIds);
+      },
+    });
+  };
+
+  if (initialLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-24 rounded-none" />
+        <Skeleton className="h-[12rem] rounded-[1.7rem]" />
+        <Skeleton className="h-[36rem] rounded-[1.7rem]" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-2xl border border-[var(--admin-outline)] bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--admin-text-muted)]">
-              Template Classes
-            </p>
-            <h1 className="mt-1 text-2xl font-black text-[var(--admin-text-strong)]">
-              Subject Template Board
-            </h1>
-            <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-              Build immutable core modules, assessments, and announcements per subject.
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            className="admin-button-outline rounded-xl font-black"
-            onClick={() => router.push('/dashboard/admin/classes')}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Classes
-          </Button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-[var(--admin-outline)] bg-white p-5">
+    <AdminPageShell
+      badge="Admin Templates"
+      title="Class Templates"
+      description="Manage reusable subject templates before turning them into live classes."
+      icon={BookTemplate}
+      actions={(
+        <Button
+          variant="outline"
+          className="admin-button-outline rounded-[1rem] px-4 font-bold"
+          onClick={() => router.push('/dashboard/admin/classes')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Classes
+        </Button>
+      )}
+    >
+      <AdminSectionCard
+        title="Create Template"
+        description="Create a new subject template and jump directly into its workspace."
+        density="compact"
+      >
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[14rem] flex-1">
+          <div className="min-w-[15rem] flex-1">
             <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
               Template Name
             </label>
             <Input
               data-testid="create-template-name-input"
+              className="admin-input"
+              placeholder="Quarter 1 Mathematics Template"
               value={name}
               onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleCreate();
+                }
+              }}
             />
           </div>
-          <div>
+
+          <div className="relative min-w-[13rem]">
             <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
               Subject
             </label>
             <select
-              className="admin-select h-10 min-w-[13rem] rounded-xl px-3"
+              className="admin-select min-w-[13rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
               value={subjectCode}
               onChange={(event) => setSubjectCode(event.target.value)}
             >
-              {SUBJECTS.map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.label} ({item.code})
+              {SUBJECTS.map((subject) => (
+                <option key={subject.code} value={subject.code}>
+                  {subject.label} ({subject.code})
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-[2.45rem] h-4 w-4 text-[#8ea0bc]" />
           </div>
-          <div>
+
+          <div className="relative min-w-[9rem]">
             <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
               Grade
             </label>
             <select
-              className="admin-select h-10 min-w-[7rem] rounded-xl px-3"
+              className="admin-select min-w-[9rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
               value={subjectGradeLevel}
               onChange={(event) => setSubjectGradeLevel(event.target.value)}
             >
@@ -326,223 +443,290 @@ export default function ClassTemplatesPage() {
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-[2.45rem] h-4 w-4 text-[#8ea0bc]" />
           </div>
+
           <Button
             data-testid="create-template-button"
-            onClick={() => void handleCreate()}
+            className="admin-button-solid rounded-[1rem] px-4 font-bold"
             disabled={creating}
-            className="admin-button-solid rounded-xl font-black"
+            onClick={() => void handleCreate()}
           >
             <Plus className="h-4 w-4" />
             {creating ? 'Creating...' : 'Create Template'}
           </Button>
         </div>
-      </div>
+      </AdminSectionCard>
 
-      <div className="rounded-2xl border border-[var(--admin-outline)] bg-white p-5">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div className="xl:col-span-2">
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Search
-            </label>
-            <Input
-              placeholder="Search templates..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Status
-            </label>
-            <select
-              className="admin-select h-10 w-full rounded-xl px-3"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as TemplateStatusFilter)}
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Subject
-            </label>
-            <select
-              className="admin-select h-10 w-full rounded-xl px-3"
-              value={subjectFilter}
-              onChange={(event) => setSubjectFilter(event.target.value)}
-            >
-              <option value="all">All subjects</option>
-              {SUBJECTS.map((subject) => (
-                <option key={subject.code} value={subject.code}>
-                  {subject.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Grade
-            </label>
-            <select
-              className="admin-select h-10 w-full rounded-xl px-3"
-              value={gradeFilter}
-              onChange={(event) => setGradeFilter(event.target.value)}
-            >
-              <option value="all">All grades</option>
-              {['7', '8', '9', '10'].map((grade) => (
-                <option key={grade} value={grade}>
-                  Grade {grade}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Sort
-            </label>
-            <select
-              className="admin-select h-10 w-full rounded-xl px-3"
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value as TemplateSort)}
-            >
-              {SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+      <AdminSectionCard
+        title="Template Directory"
+        description="Use the table to scan subjects faster, keep the list scrollable, and manage templates with bulk actions."
+        contentClassName="space-y-5"
+      >
+        <Tabs
+          value={statusFilter}
+          onValueChange={(value) => {
+            setStatusFilter(value as TemplateStatusFilter);
+            setSelectedTemplateIds([]);
+          }}
+          className="space-y-5"
+        >
+          <TabsList className="admin-tab-list h-auto flex-wrap justify-start">
+            <TabsTrigger value="all" className="admin-tab">
+              All <span className="admin-segment-count">{templates.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="draft" className="admin-tab">
+              Draft <span className="admin-segment-count">{draftCount}</span>
+            </TabsTrigger>
+            <TabsTrigger value="published" className="admin-tab">
+              Published <span className="admin-segment-count">{publishedCount}</span>
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--admin-outline)] pt-4">
-          <p className="text-sm text-[var(--admin-text-muted)]">
-            Showing {startRow}-{endRow} of {sortedTemplates.length} template
-            {sortedTemplates.length === 1 ? '' : 's'}.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--admin-text-muted)]">
-              Per page
-            </label>
-            <select
-              className="admin-select h-10 rounded-xl px-3"
-              value={pageSize}
-              onChange={(event) => setPageSize(Number(event.target.value))}
-            >
-              {PAGE_SIZE_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={handleSelectVisible}
-              disabled={visiblePageIds.length === 0}
-            >
-              {allVisibleSelected ? 'Unselect Page' : 'Select Page'}
-            </Button>
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl font-black"
-              onClick={() => setSelectedTemplateIds([])}
-              disabled={selectedTemplateIds.length === 0}
-            >
-              Clear Selection
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-xl border-red-200 text-red-700 hover:bg-red-50"
-              onClick={() => void handleDeleteSelected()}
-              disabled={selectedTemplateIds.length === 0 || bulkDeleting}
-            >
-              <Trash2 className="h-4 w-4" />
-              {bulkDeleting ? 'Deleting...' : `Quick Delete (${selectedTemplateIds.length})`}
-            </Button>
-          </div>
-        </div>
-      </div>
+          <div className="admin-filter-row">
+            <div className="admin-search-shell min-w-[18rem] flex-1 md:max-w-[22rem]">
+              <Search className="h-4 w-4 text-[#8ea0bc]" />
+              <Input
+                placeholder="Search templates..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="admin-input"
+              />
+            </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {loading ? <p className="text-sm text-[var(--admin-text-muted)]">Loading templates...</p> : null}
-        {!loading && sortedTemplates.length === 0 ? (
-          <p className="text-sm text-[var(--admin-text-muted)]">No templates yet.</p>
-        ) : null}
-        {paginatedTemplates.map((template) => (
-          <button
-            key={template.id}
-            type="button"
-            onClick={() => router.push(`/dashboard/admin/class-templates/${template.id}`)}
-            className="rounded-2xl border border-[var(--admin-outline)] bg-white p-4 text-left shadow-sm transition hover:-translate-y-[1px]"
-          >
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-3 py-1 text-xs font-bold text-[#304a72]">
-                <BookTemplate className="h-3 w-3" />
-                {template.subjectCode}
-              </span>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold uppercase text-[var(--admin-text-muted)]">
-                  {template.status}
-                </span>
-                <label
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--admin-outline)] px-2 py-1 text-xs font-bold text-[var(--admin-text-muted)]"
-                  onClick={(event) => event.stopPropagation()}
+            <div className="admin-controls">
+              <div className="relative">
+                <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+                <select
+                  aria-label="Filter templates by subject"
+                  value={subjectFilter}
+                  onChange={(event) => setSubjectFilter(event.target.value)}
+                  className="admin-select min-w-[12rem] appearance-none rounded-[1rem] py-2 pl-9 pr-10 text-sm font-semibold text-[#6f83a3]"
                 >
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5"
-                    checked={selectedTemplateIds.includes(template.id)}
-                    onChange={() => toggleTemplateSelection(template.id)}
-                  />
-                  Select
-                </label>
+                  <option value="all">All subjects</option>
+                  {SUBJECTS.map((subject) => (
+                    <option key={subject.code} value={subject.code}>
+                      {subject.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+              </div>
+
+              <div className="relative">
+                <select
+                  aria-label="Filter templates by grade"
+                  value={gradeFilter}
+                  onChange={(event) => setGradeFilter(event.target.value)}
+                  className="admin-select min-w-[9rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
+                >
+                  <option value="all">All grades</option>
+                  {['7', '8', '9', '10'].map((grade) => (
+                    <option key={grade} value={grade}>
+                      Grade {grade}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+              </div>
+
+              <div className="relative">
+                <select
+                  aria-label="Sort templates"
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value as TemplateSort)}
+                  className="admin-select min-w-[13rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
               </div>
             </div>
-            <h3 className="mt-3 text-lg font-black text-[var(--admin-text-strong)]">{template.name}</h3>
-            <p className="mt-1 text-sm text-[var(--admin-text-muted)]">
-              {(SUBJECTS.find((item) => item.code === template.subjectCode)?.label ??
-                template.subjectCode)}{' '}
-              • Grade {template.subjectGradeLevel}
-            </p>
-            <p className="mt-2 text-xs text-[var(--admin-text-muted)]">
-              Created: {formatDate(template.createdAt)} • Updated: {formatDate(template.updatedAt)}
-            </p>
-          </button>
-        ))}
-      </div>
-
-      {!loading && sortedTemplates.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--admin-outline)] bg-white p-4">
-          <p className="text-sm text-[var(--admin-text-muted)]">
-            Page {page} of {totalPages}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={page === 1}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              className="admin-button-outline rounded-xl"
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-              disabled={page === totalPages}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      ) : null}
-    </div>
+        </Tabs>
+
+        {sortedTemplates.length > 0 ? (
+          <div className="admin-bulk-bar">
+            <div className="admin-controls">
+              <span className="admin-pill">{selectedTemplateIds.length} selected</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="admin-button-outline rounded-[1rem] px-4 font-bold"
+                onClick={handleSelectAllVisible}
+                disabled={selectableVisibleIds.length === 0}
+              >
+                {allVisibleSelected ? 'Clear visible selection' : 'Select all visible'}
+              </Button>
+              {subjectFilter !== 'all' ? (
+                <span className="admin-filter-badge">{getSubjectLabel(subjectFilter)}</span>
+              ) : null}
+              {gradeFilter !== 'all' ? (
+                <span className="admin-filter-badge">Grade {gradeFilter}</span>
+              ) : null}
+              {sortBy !== 'updated-desc' ? (
+                <span className="admin-filter-badge">{getSortLabel(sortBy)}</span>
+              ) : null}
+            </div>
+
+            <div className="admin-controls">
+              {hasActiveFilters ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="admin-button-outline rounded-[1rem] px-4 font-bold"
+                  onClick={resetFilters}
+                >
+                  Reset filters
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="rounded-[1rem] px-4 font-bold"
+                onClick={openBulkDeleteConfirmation}
+                disabled={selectedTemplateIds.length === 0}
+              >
+                Delete selected
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {sortedTemplates.length === 0 ? (
+          <AdminEmptyState
+            title="No templates found"
+            description="Try another search term or clear the current filters."
+            action={
+              hasActiveFilters ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="admin-button-outline rounded-[1rem] px-4 font-bold"
+                  onClick={resetFilters}
+                >
+                  Clear filters
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className={`admin-table-shell${tableLoading ? ' admin-table-shell--loading' : ''}`}>
+            {tableLoading ? (
+              <div className="admin-table-loading">Refreshing templates...</div>
+            ) : null}
+            <Table>
+              <TableHeader className="admin-table-head">
+                <TableRow>
+                  <TableHead className="w-[6rem]">Select</TableHead>
+                  <TableHead>Template Name</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Grade</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Updated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedTemplates.map((template) => {
+                  const isSelected = selectedTemplateIds.includes(template.id);
+                  const workspacePath = `/dashboard/admin/class-templates/${template.id}`;
+
+                  return (
+                    <TableRow
+                      key={template.id}
+                      className="border-t border-[var(--admin-outline)] hover:bg-[#fbfcfe]"
+                    >
+                      <TableCell onClick={(event) => event.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          role="checkbox"
+                          aria-label={`Select template ${template.name}`}
+                          className="admin-row-checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleTemplateSelection(template.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-left">
+                        <Link href={workspacePath} className="admin-table-row-link block">
+                          <span className="block font-semibold text-[var(--admin-text-strong)]">
+                            {template.name}
+                          </span>
+                          <span className="block text-xs text-[#9aaed0]">Open workspace</span>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-left">
+                        <Link href={workspacePath} className="admin-table-row-link block text-[#7083a4]">
+                          <span className="block font-medium text-[var(--admin-text-strong)]">
+                            {getSubjectLabel(template.subjectCode)}
+                          </span>
+                          <span className="block text-xs text-[#9aaed0]">{template.subjectCode}</span>
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Link href={workspacePath} className="admin-table-row-link inline-flex">
+                          <span className="admin-role-pill admin-role-pill--teacher">
+                            Grade {template.subjectGradeLevel}
+                          </span>
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Link href={workspacePath} className="admin-table-row-link inline-flex">
+                          <span className={getStatusTone(template.status)}>
+                            {getStatusLabel(template.status)}
+                          </span>
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-[#9aaed0]">
+                        <Link href={workspacePath} className="admin-table-row-link block">
+                          {formatDate(template.createdAt)}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-[#9aaed0]">
+                        <Link href={workspacePath} className="admin-table-row-link block">
+                          {formatDate(template.updatedAt)}
+                        </Link>
+                      </TableCell>
+                      <TableCell onClick={(event) => event.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Link
+                            href={workspacePath}
+                            className="admin-icon-button"
+                            title="Open template workspace"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                          <button
+                            type="button"
+                            className="admin-icon-button"
+                            onClick={() => openDeleteConfirmation(template)}
+                            title="Delete template"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </AdminSectionCard>
+
+      <ConfirmationDialog
+        config={confirmation}
+        onClose={() => setConfirmation(null)}
+      />
+    </AdminPageShell>
   );
 }

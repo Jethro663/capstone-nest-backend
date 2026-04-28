@@ -2,318 +2,844 @@ import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import {
   AnimatedEntrance,
-  Card,
-  EmptyState,
-  FloatingIconButton,
-  GradientHeader,
-  Pill,
   Refreshable,
   ScreenScroll,
 } from "../components/ui/primitives";
-import { toAppError } from "../api/http";
-import { queryKeys, usePerformanceSummary, useStudentClasses } from "../api/hooks";
+import { peekAppError } from "../api/http";
+import { queryKeys, useStudentClasses } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
-import { lessonsApi } from "../api/services/lessons";
-import { toAssessmentCard, toSubjectCard } from "../data/mappers";
 import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
-import { colors, gradients } from "../theme/tokens";
+import type { Assessment, AssessmentAttempt, AssessmentType } from "../types/assessment";
+import type { ClassItem } from "../types/class";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Assessments">;
-type FilterType = "all" | "pending" | "late" | "missing" | "completed";
+type AssessmentFilterKey = "allAssessments" | "pending" | "completed" | "late" | "missing";
+type AssessmentStatus = Exclude<AssessmentRecord["status"], never>;
+type AssessmentActionKey = "details" | "history" | "results" | "class";
 
-const filterColors: Record<FilterType, { bg: string; text: string; border: string }> = {
-  all: { bg: colors.amber, text: colors.white, border: colors.amber },
-  pending: { bg: colors.blue, text: colors.white, border: colors.blue },
-  late: { bg: colors.red, text: colors.white, border: colors.red },
-  missing: { bg: colors.orange, text: colors.white, border: colors.orange },
-  completed: { bg: colors.green, text: colors.white, border: colors.green },
+type AssessmentRecord = {
+  id: string;
+  classId: string;
+  title: string;
+  subjectName: string;
+  subjectCode: string;
+  typeLabel: string;
+  badgeText: string;
+  badgeColor: string;
+  status: "pending" | "completed" | "late" | "missing";
+  statusLabel: string;
+  dueLabel: string;
+  dueTime: number | null;
+  totalPoints: number;
+  attemptCount: number;
+  latestAttempt: AssessmentAttempt | null;
 };
 
-const statusConfig = {
-  pending: { icon: "clock-outline", color: colors.blue, bg: colors.paleBlue, label: "Pending" },
-  late: { icon: "alert-circle", color: colors.red, bg: colors.paleRed, label: "Late" },
-  missing: { icon: "close-circle", color: colors.orange, bg: colors.paleOrange, label: "Missing" },
-  completed: { icon: "check-circle", color: colors.green, bg: colors.paleGreen, label: "Completed" },
+const darkTheme = {
+  bg: "#141414",
+  topbar: "#1C1C1C",
+  surface: "#1E1E1E",
+  active: "#252525",
+  channel: "#191919",
+  border: "rgba(255,255,255,0.07)",
+  text: "#E8E8E8",
+  muted: "#777777",
+  subtext: "rgba(255,255,255,0.45)",
+  dim: "#444444",
+  red: "#E8294E",
+  blue: "#4A8CF7",
+  green: "#22C97A",
+  purple: "#A78BFA",
+  amber: "#FBBF24",
 } as const;
+
+const filterTabs: Array<{ key: AssessmentFilterKey; label: string }> = [
+  { key: "allAssessments", label: "All Assessments" },
+  { key: "pending", label: "Pending" },
+  { key: "completed", label: "Completed" },
+  { key: "late", label: "Late" },
+  { key: "missing", label: "Missing" },
+];
+
+const assessmentTypeBadge: Record<AssessmentType, string> = {
+  quiz: "QZ",
+  exam: "EX",
+  assignment: "AS",
+  written_work: "WW",
+  performance_task: "PT",
+  quarterly_assessment: "QA",
+  file_upload: "FU",
+};
+
+const statusPriority: Record<AssessmentRecord["status"], number> = {
+  missing: 0,
+  late: 1,
+  pending: 2,
+  completed: 3,
+};
+
+const statusProgress: Record<AssessmentRecord["status"], number> = {
+  missing: 14,
+  late: 36,
+  pending: 68,
+  completed: 100,
+};
+
+const actionConfig: Record<
+  AssessmentActionKey,
+  {
+    defaultLabel: string;
+    icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+    background: string;
+    color: string;
+  }
+> = {
+  details: {
+    defaultLabel: "Open Assessment",
+    icon: "clipboard-text-outline",
+    background: "rgba(74,140,247,0.14)",
+    color: "#6AABFF",
+  },
+  history: {
+    defaultLabel: "Assessment History",
+    icon: "history",
+    background: "rgba(167,139,250,0.14)",
+    color: darkTheme.purple,
+  },
+  results: {
+    defaultLabel: "Latest Status",
+    icon: "chart-box-outline",
+    background: "rgba(251,191,36,0.14)",
+    color: darkTheme.amber,
+  },
+  class: {
+    defaultLabel: "Open Class",
+    icon: "book-open-page-variant-outline",
+    background: "rgba(34,201,122,0.14)",
+    color: "#4EDD9C",
+  },
+};
+
+function pluralize(count: number, singular: string, plural: string) {
+  return count === 1 ? singular : plural;
+}
+
+function resolveSubjectName(classItem?: ClassItem) {
+  return classItem?.subjectName || classItem?.className || classItem?.name || "Class";
+}
+
+function resolveSubjectCode(classItem?: ClassItem) {
+  return classItem?.subjectCode || "CLASS";
+}
+
+function resolveAssessmentTypeLabel(type?: AssessmentType) {
+  return (type || "assignment")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (value) => value.toUpperCase());
+}
+
+function resolveAssessmentBadge(type?: AssessmentType) {
+  if (!type) {
+    return "AS";
+  }
+
+  return assessmentTypeBadge[type] || "AS";
+}
+
+function resolveBadgeColor(status: AssessmentRecord["status"]) {
+  switch (status) {
+    case "completed":
+      return darkTheme.green;
+    case "late":
+      return darkTheme.amber;
+    case "missing":
+      return darkTheme.red;
+    case "pending":
+    default:
+      return darkTheme.blue;
+  }
+}
+
+function resolveStatusLabel(status: AssessmentRecord["status"]) {
+  switch (status) {
+    case "completed":
+      return "Completed";
+    case "late":
+      return "Late";
+    case "missing":
+      return "Missing";
+    case "pending":
+    default:
+      return "Pending";
+  }
+}
+
+function resolveUserInitials(firstName?: string, lastName?: string, email?: string) {
+  const fromNames = [firstName, lastName]
+    .filter(Boolean)
+    .map((value) => value?.trim()?.[0] ?? "")
+    .join("")
+    .toUpperCase();
+
+  if (fromNames.length >= 2) {
+    return fromNames.slice(0, 2);
+  }
+
+  if (fromNames.length === 1) {
+    return `${fromNames}S`;
+  }
+
+  return (email?.slice(0, 2) || "ST").toUpperCase();
+}
+
+function formatDueDate(value?: string) {
+  if (!value) {
+    return "No due date";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "No due date";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function getAttemptTimestamp(attempt: AssessmentAttempt) {
+  return new Date(attempt.submittedAt || attempt.startedAt || attempt.createdAt || 0).getTime();
+}
+
+function resolveAssessmentStatus(assessment: Assessment, attempts: AssessmentAttempt[]) {
+  const latestAttempt =
+    [...attempts].sort((left, right) => getAttemptTimestamp(right) - getAttemptTimestamp(left))[0] || null;
+  const dueTime = assessment.dueDate ? new Date(assessment.dueDate).getTime() : null;
+  let status: AssessmentRecord["status"] = "pending";
+
+  if (latestAttempt?.isSubmitted) {
+    status = "completed";
+  } else if (dueTime && dueTime < Date.now()) {
+    status = latestAttempt ? "late" : "missing";
+  }
+
+  return { latestAttempt, dueTime, status };
+}
+
+function buildAssessmentSubtitle(item: AssessmentRecord) {
+  return `${item.subjectCode} - ${item.typeLabel} - Due ${item.dueLabel}`;
+}
+
+function buildEmptyStateSubtitle(activeFilter: AssessmentFilterKey, searchQuery: string) {
+  if (searchQuery.trim()) {
+    return "Try another search term or switch the current filter.";
+  }
+
+  if (activeFilter === "allAssessments") {
+    return "No published assessments are available right now.";
+  }
+
+  const filterLabel = filterTabs.find((tab) => tab.key === activeFilter)?.label.toLowerCase() || "assessments";
+  const normalizedLabel = filterLabel.includes("assessment") ? filterLabel : `${filterLabel} assessments`;
+  return `No ${normalizedLabel} match this view.`;
+}
+
+function buildActionLabel(item: AssessmentRecord, action: AssessmentActionKey) {
+  if (action === "results") {
+    if (item.latestAttempt?.isSubmitted && item.latestAttempt.isReturned) {
+      return "View Results";
+    }
+
+    if (item.latestAttempt && !item.latestAttempt.isSubmitted) {
+      return "Continue Attempt";
+    }
+
+    if (item.latestAttempt?.isSubmitted) {
+      return "Submission Status";
+    }
+  }
+
+  return actionConfig[action].defaultLabel;
+}
+
+function buildActionBadge(item: AssessmentRecord, action: AssessmentActionKey) {
+  switch (action) {
+    case "details":
+      return item.statusLabel;
+    case "history":
+      return `${item.attemptCount} ${pluralize(item.attemptCount, "attempt", "attempts")}`;
+    case "results":
+      if (item.latestAttempt?.isSubmitted && item.latestAttempt.isReturned && item.latestAttempt.score !== undefined) {
+        return `${Math.round(item.latestAttempt.score)}/${item.totalPoints}`;
+      }
+
+      if (item.latestAttempt?.isSubmitted) {
+        return "Checking";
+      }
+
+      if (item.latestAttempt && !item.latestAttempt.isSubmitted) {
+        return `Attempt ${item.latestAttempt.attemptNumber || item.attemptCount}`;
+      }
+
+      return "Not started";
+    case "class":
+      return item.subjectCode;
+  }
+}
+
+function navigateToAction(
+  navigation: Props["navigation"],
+  item: AssessmentRecord,
+  action: AssessmentActionKey,
+) {
+  const nextNavigation = navigation as any;
+
+  switch (action) {
+    case "details":
+      nextNavigation.navigate("AssessmentDetail", {
+        assessmentId: item.id,
+        classId: item.classId,
+      });
+      return;
+    case "history":
+      nextNavigation.navigate("AssessmentHistory", {
+        assessmentId: item.id,
+        classId: item.classId,
+      });
+      return;
+    case "results":
+      if (item.latestAttempt?.isSubmitted && item.latestAttempt.isReturned) {
+        nextNavigation.navigate("AssessmentResults", {
+          attemptId: item.latestAttempt.id,
+          assessmentId: item.id,
+        });
+        return;
+      }
+
+      if (item.latestAttempt && !item.latestAttempt.isSubmitted) {
+        nextNavigation.navigate("AssessmentTake", {
+          assessmentId: item.id,
+        });
+        return;
+      }
+
+      nextNavigation.navigate("AssessmentDetail", {
+        assessmentId: item.id,
+        classId: item.classId,
+      });
+      return;
+    case "class":
+      nextNavigation.navigate("ClassDetail", {
+        classId: item.classId,
+        initialTab: "assignments",
+      });
+  }
+}
+
+function DarkNotice({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <View
+      style={{
+        backgroundColor: darkTheme.surface,
+        borderColor: darkTheme.border,
+        borderRadius: 18,
+        borderWidth: 1,
+        padding: 16,
+      }}
+    >
+      <Text style={{ color: darkTheme.text, fontSize: 14, fontWeight: "800" }}>{title}</Text>
+      <Text style={{ color: darkTheme.muted, fontSize: 12, lineHeight: 18, marginTop: 6 }}>
+        {subtitle}
+      </Text>
+    </View>
+  );
+}
 
 export function AssessmentsScreen({ navigation }: Props) {
   const { user } = useAuth();
-  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<AssessmentFilterKey>("allAssessments");
+  const [expandedAssessmentId, setExpandedAssessmentId] = useState<string | null>(null);
   const classesQuery = useStudentClasses(user?.userId || user?.id);
-  const performanceQuery = usePerformanceSummary();
-  const classIds = classesQuery.data?.map((classItem) => classItem.id) ?? [];
 
-  const lessonQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessons(classId),
-      queryFn: () => lessonsApi.getByClass(classId),
-      enabled: classIds.length > 0,
+  const publishedAssessmentQueries = useQueries({
+    queries: (classesQuery.data ?? []).map((classItem) => ({
+      queryKey: queryKeys.assessments(classItem.id),
+      queryFn: () => assessmentsApi.getByClass(classItem.id),
+      enabled: !!classItem.id,
     })),
   });
 
-  const completionQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.lessonCompletions(classId),
-      queryFn: () => lessonsApi.getCompletedByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
-
-  const assessmentQueries = useQueries({
-    queries: classIds.map((classId) => ({
-      queryKey: queryKeys.assessments(classId),
-      queryFn: () => assessmentsApi.getByClass(classId),
-      enabled: classIds.length > 0,
-    })),
-  });
-
-  const subjects = useMemo(
+  const baseAssessments = useMemo(
     () =>
-      (classesQuery.data ?? []).map((classItem, index) =>
-        toSubjectCard(
-          classItem,
-          lessonQueries[index]?.data ?? [],
-          completionQueries[index]?.data ?? [],
-          performanceQuery.data?.classes.find((entry) => entry.classId === classItem.id),
-        ),
-      ),
-    [classesQuery.data, completionQueries, lessonQueries, performanceQuery.data?.classes],
-  );
+      publishedAssessmentQueries.flatMap((query, index) => {
+        const classItem = (classesQuery.data ?? [])[index];
+        const items = (query.data ?? []) as Assessment[];
 
-  const assessments = useMemo(
-    () =>
-      assessmentQueries.flatMap((query, index) => {
-        const subject = subjects[index];
-        if (!subject || !query.data) return [];
-        return query.data.map((assessment) => toAssessmentCard(assessment, subject, []));
+        return items
+          .filter((assessment) => assessment.isPublished !== false)
+          .map((assessment) => ({ assessment, classItem }));
       }),
-    [assessmentQueries, subjects],
+    [classesQuery.data, publishedAssessmentQueries],
   );
 
   const attemptQueries = useQueries({
-    queries: assessments.map((assessment) => ({
+    queries: baseAssessments.map(({ assessment }) => ({
       queryKey: queryKeys.assessmentAttempts(assessment.id),
       queryFn: () => assessmentsApi.getStudentAttempts(assessment.id),
-      enabled: assessments.length > 0,
+      enabled: !!assessment.id,
     })),
   });
 
-  const assessmentCards = useMemo(
-    () =>
-      assessments.flatMap((assessment, index) => {
-        const attempts = attemptQueries[index]?.data ?? [];
-        const subject = subjects.find((entry) => entry.id === assessment.subjectId);
-
-        if (!subject) {
-          return [];
-        }
+  const derivedAssessments = useMemo<AssessmentRecord[]>(() => {
+    return baseAssessments
+      .map(({ assessment, classItem }, index) => {
+        const attempts = (attemptQueries[index]?.data ?? []) as AssessmentAttempt[];
+        const { latestAttempt, dueTime, status } = resolveAssessmentStatus(assessment, attempts);
 
         return {
-          ...assessment,
-          ...toAssessmentCard(assessment.raw as any, subject, attempts),
+          id: assessment.id,
+          classId: assessment.classId,
+          title: assessment.title || "Untitled assessment",
+          subjectName: resolveSubjectName(classItem),
+          subjectCode: resolveSubjectCode(classItem),
+          typeLabel: resolveAssessmentTypeLabel(assessment.type),
+          badgeText: resolveAssessmentBadge(assessment.type),
+          badgeColor: resolveBadgeColor(status),
+          status,
+          statusLabel: resolveStatusLabel(status),
+          dueLabel: formatDueDate(assessment.dueDate),
+          dueTime,
+          totalPoints: assessment.totalPoints ?? 100,
+          attemptCount: attempts.length,
+          latestAttempt,
         };
-      }),
-    [assessments, attemptQueries, subjects],
-  );
+      })
+      .sort((left, right) => {
+        const statusGap = statusPriority[left.status] - statusPriority[right.status];
+        if (statusGap !== 0) {
+          return statusGap;
+        }
 
-  const filters: FilterType[] = ["all", "pending", "late", "missing", "completed"];
-  const pendingCount = assessmentCards.filter((entry) => entry.status === "pending").length;
-  const lateCount = assessmentCards.filter((entry) => entry.status === "late").length;
-  const missingCount = assessmentCards.filter((entry) => entry.status === "missing").length;
-  const filtered =
-    activeFilter === "all" ? assessmentCards : assessmentCards.filter((entry) => entry.status === activeFilter);
+        const dueGap = (left.dueTime ?? Number.MAX_SAFE_INTEGER) - (right.dueTime ?? Number.MAX_SAFE_INTEGER);
+        if (dueGap !== 0) {
+          return dueGap;
+        }
+
+        return left.title.localeCompare(right.title);
+      });
+  }, [attemptQueries, baseAssessments]);
+
+  const filteredAssessments = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return derivedAssessments.filter((assessment) => {
+      const matchesFilter =
+        activeFilter === "allAssessments" ? true : assessment.status === activeFilter;
+
+      const matchesSearch =
+        normalizedQuery.length === 0
+          ? true
+          : [assessment.title, assessment.subjectName, assessment.subjectCode, assessment.typeLabel, assessment.statusLabel]
+              .join(" ")
+              .toLowerCase()
+              .includes(normalizedQuery);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [activeFilter, derivedAssessments, searchQuery]);
 
   const refreshing =
     classesQuery.isRefetching ||
-    assessmentQueries.some((query) => query.isRefetching) ||
+    publishedAssessmentQueries.some((query) => query.isRefetching) ||
     attemptQueries.some((query) => query.isRefetching);
+
   const primaryError =
     classesQuery.error ||
-    performanceQuery.error ||
-    assessmentQueries.find((query) => query.error)?.error ||
+    publishedAssessmentQueries.find((query) => query.error)?.error ||
     attemptQueries.find((query) => query.error)?.error;
+
+  const handleRefresh = () => {
+    void Promise.all([
+      classesQuery.refetch(),
+      ...publishedAssessmentQueries.map((query) => query.refetch()),
+      ...attemptQueries.map((query) => query.refetch()),
+    ]);
+  };
+
+  const userInitials = resolveUserInitials(user?.firstName, user?.lastName, user?.email);
 
   return (
     <ScreenScroll
-      refreshControl={
-        <Refreshable
-          refreshing={refreshing}
-          onRefresh={() => {
-            void Promise.all([classesQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
-          }}
-        />
-      }
+      backgroundColor={darkTheme.bg}
+      refreshControl={<Refreshable refreshing={refreshing} onRefresh={handleRefresh} />}
     >
-      <GradientHeader
-        colors={gradients.assessments}
-        eyebrow="Track your work 📝"
-        title="Assessments"
-        rightContent={<FloatingIconButton icon="clipboard-check-outline" />}
-      >
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
-          {[
-            { label: "Pending", count: pendingCount, color: colors.blue },
-            { label: "Late", count: lateCount, color: colors.red },
-            { label: "Missing", count: missingCount, color: colors.orange },
-          ].map((item) => (
-            <View
-              key={item.label}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                borderRadius: 999,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                backgroundColor: "rgba(255,255,255,0.24)",
-              }}
-            >
-              <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: item.color }} />
-              <Text style={{ color: colors.white, fontSize: 12, fontWeight: "800" }}>
-                {item.count} {item.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </GradientHeader>
-
-      <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
-          {filters.map((filter) => {
-            const isActive = activeFilter === filter;
-            const config = filterColors[filter];
-            return (
-              <Pressable
-                key={filter}
-                onPress={() => setActiveFilter(filter)}
+      <View style={{ backgroundColor: darkTheme.bg }}>
+        <View
+          style={{
+            backgroundColor: darkTheme.topbar,
+            borderBottomColor: darkTheme.border,
+            borderBottomWidth: 1,
+            paddingHorizontal: 16,
+            paddingTop: 16,
+          }}
+        >
+          <View
+            style={{
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginBottom: 12,
+            }}
+          >
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 9 }}>
+              <View
                 style={{
-                  borderRadius: 999,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  backgroundColor: isActive ? config.bg : colors.white,
-                  borderWidth: 2,
-                  borderColor: isActive ? config.border : colors.border,
+                  alignItems: "center",
+                  backgroundColor: darkTheme.red,
+                  borderRadius: 8,
+                  height: 28,
+                  justifyContent: "center",
+                  width: 28,
                 }}
               >
-                <Text
-                  style={{
-                    color: isActive ? config.text : colors.muted,
-                    fontSize: 13,
-                    fontWeight: "800",
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {filter}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>N</Text>
+              </View>
+              <Text style={{ color: darkTheme.text, fontSize: 17, fontWeight: "600" }}>Assessments</Text>
+            </View>
 
-        <View style={{ marginTop: 8, gap: 12 }}>
-          {primaryError ? (
-            <Card>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>Assessments are unavailable</Text>
-              <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-                {toAppError(primaryError).message}
-              </Text>
-            </Card>
+            <View style={{ alignItems: "center", flexDirection: "row", gap: 10 }}>
+              <Pressable
+                accessibilityLabel="Open assessment search"
+                onPress={() => setSearchOpen((current) => !current)}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                  borderRadius: 999,
+                  height: 30,
+                  justifyContent: "center",
+                  width: 30,
+                }}
+              >
+                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="magnify" size={15} />
+              </Pressable>
+
+              <Pressable
+                accessibilityLabel="Open assessment history"
+                onPress={() => (navigation as any).navigate("AssessmentHistory")}
+                style={{
+                  alignItems: "center",
+                  backgroundColor: "rgba(255,255,255,0.07)",
+                  borderRadius: 999,
+                  height: 30,
+                  justifyContent: "center",
+                  width: 30,
+                }}
+              >
+                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="history" size={15} />
+              </Pressable>
+
+              <View
+                style={{
+                  alignItems: "center",
+                  backgroundColor: darkTheme.red,
+                  borderRadius: 999,
+                  height: 30,
+                  justifyContent: "center",
+                  width: 30,
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{userInitials}</Text>
+              </View>
+            </View>
+          </View>
+
+          <Text style={{ color: darkTheme.subtext, fontSize: 11, paddingBottom: 10 }}>
+            Stay on top, <Text style={{ color: darkTheme.text, fontWeight: "600" }}>{user?.firstName || "Student"}</Text>
+          </Text>
+
+          {searchOpen || searchQuery ? (
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: darkTheme.bg,
+                borderColor: darkTheme.border,
+                borderRadius: 14,
+                borderWidth: 1,
+                flexDirection: "row",
+                gap: 10,
+                marginBottom: 10,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+              }}
+            >
+              <MaterialCommunityIcons color={darkTheme.muted} name="magnify" size={16} />
+              <TextInput
+                onChangeText={setSearchQuery}
+                placeholder="Search assessments"
+                placeholderTextColor={darkTheme.muted}
+                style={{ color: darkTheme.text, flex: 1, fontSize: 13, padding: 0 }}
+                value={searchQuery}
+              />
+            </View>
           ) : null}
-          {filtered.length === 0 ? (
-            <EmptyState emoji="🎉" title="All clear!" subtitle={`No ${activeFilter} assessments right now.`} />
-          ) : (
-            filtered.map((assessment, index) => {
-              const config = statusConfig[assessment.status];
-              const isUrgent = assessment.status === "late" || assessment.status === "missing";
+
+          <View style={{ flexDirection: "row" }}>
+            {filterTabs.map((tab) => {
+              const focused = activeFilter === tab.key;
 
               return (
-                <AnimatedEntrance key={assessment.id} delay={index * 80}>
-                  <Pressable
-                    onPress={() =>
-                      (navigation as any).navigate("AssessmentDetail", {
-                        assessmentId: assessment.id,
-                        classId: assessment.classId || assessment.subjectId,
-                      })
-                    }
+                <Pressable
+                  key={tab.key}
+                  onPress={() => setActiveFilter(tab.key)}
+                  style={{
+                    borderBottomColor: focused ? darkTheme.red : "transparent",
+                    borderBottomWidth: 2,
+                    paddingHorizontal: 13,
+                    paddingVertical: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: focused ? darkTheme.red : darkTheme.muted,
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
                   >
-                    <Card style={{ overflow: "hidden", padding: 0 }}>
-                      {isUrgent ? <View style={{ height: 3, backgroundColor: config.color, width: "100%" }} /> : null}
-                      <View style={{ flexDirection: "row", gap: 12, padding: 16 }}>
+                    {tab.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={{ paddingBottom: 76 }}>
+          <View
+            style={{
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "space-between",
+              paddingBottom: 6,
+              paddingHorizontal: 16,
+              paddingTop: 14,
+            }}
+          >
+            <Text
+              style={{
+                color: darkTheme.muted,
+                fontSize: 10,
+                fontWeight: "600",
+                letterSpacing: 0.7,
+                textTransform: "uppercase",
+              }}
+            >
+              Assessments & Actions
+            </Text>
+            <Text style={{ color: darkTheme.red, fontSize: 10, fontWeight: "600" }}>
+              {filteredAssessments.length} {pluralize(filteredAssessments.length, "assessment", "assessments")}
+            </Text>
+          </View>
+
+          <View style={{ gap: 0 }}>
+            {primaryError ? (
+              <View style={{ paddingBottom: 14, paddingHorizontal: 16 }}>
+                <DarkNotice title="Some assessment data could not load" subtitle={peekAppError(primaryError).message} />
+              </View>
+            ) : null}
+
+            {classesQuery.isLoading && derivedAssessments.length === 0 ? (
+              <View style={{ paddingHorizontal: 16 }}>
+                <DarkNotice title="Loading assessments" subtitle="Pulling your published work now." />
+              </View>
+            ) : filteredAssessments.length === 0 ? (
+              <View style={{ paddingHorizontal: 16 }}>
+                <DarkNotice
+                  title="No assessments found"
+                  subtitle={buildEmptyStateSubtitle(activeFilter, searchQuery)}
+                />
+              </View>
+            ) : (
+              filteredAssessments.map((assessment, index) => {
+                const expanded = expandedAssessmentId === assessment.id;
+                const attemptBadge = assessment.attemptCount > 0 ? assessment.attemptCount : null;
+
+                return (
+                  <AnimatedEntrance key={assessment.id} delay={index * 50}>
+                    <View>
+                      <Pressable
+                        onPress={() =>
+                          setExpandedAssessmentId((current) =>
+                            current === assessment.id ? null : assessment.id,
+                          )
+                        }
+                        style={{
+                          alignItems: "center",
+                          backgroundColor: expanded ? darkTheme.surface : darkTheme.bg,
+                          borderBottomColor: darkTheme.border,
+                          borderBottomWidth: 1,
+                          flexDirection: "row",
+                          gap: 12,
+                          paddingHorizontal: 16,
+                          paddingVertical: 11,
+                        }}
+                      >
                         <View
                           style={{
-                            width: 54,
-                            height: 54,
-                            borderRadius: 18,
                             alignItems: "center",
+                            backgroundColor: assessment.badgeColor,
+                            borderRadius: 10,
+                            height: 40,
                             justifyContent: "center",
-                            backgroundColor: config.bg,
+                            width: 40,
                           }}
                         >
-                          <Text style={{ fontSize: 28 }}>{assessment.emoji}</Text>
+                          <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
+                            {assessment.badgeText}
+                          </Text>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>{assessment.title}</Text>
-                            {isUrgent ? <Pill label={config.label} backgroundColor={config.bg} color={config.color} /> : null}
-                          </View>
-                          <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>{assessment.subject}</Text>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                              <MaterialCommunityIcons name="clock-outline" size={12} color={colors.muted} />
-                              <Text style={{ fontSize: 11, fontWeight: "700", color: colors.muted }}>
-                                Due: {assessment.dueDate}
-                              </Text>
-                            </View>
-                            {assessment.status === "completed" && assessment.score !== undefined ? (
-                              <Pill
-                                label={`${Math.round(assessment.score)}/${assessment.totalScore} ✓`}
-                                backgroundColor={colors.paleGreen}
-                                color={colors.green}
-                              />
-                            ) : null}
-                          </View>
+
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: darkTheme.text, fontSize: 14, fontWeight: "500" }}
+                          >
+                            {assessment.title}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: darkTheme.muted, fontSize: 11, marginTop: 2 }}
+                          >
+                            {buildAssessmentSubtitle(assessment)}
+                          </Text>
                         </View>
-                        <View style={{ alignItems: "center", justifyContent: "space-between" }}>
+
+                        <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
                           <View
                             style={{
-                              width: 36,
-                              height: 36,
-                              borderRadius: 999,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              backgroundColor: config.bg,
+                              backgroundColor: "rgba(255,255,255,0.1)",
+                              borderRadius: 2,
+                              height: 3,
+                              overflow: "hidden",
+                              width: 38,
                             }}
                           >
-                            <MaterialCommunityIcons name={config.icon} size={18} color={config.color} />
-                          </View>
-                          <View
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 999,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              backgroundColor: assessment.status === "completed" ? colors.green : colors.amber,
-                            }}
-                          >
-                            <MaterialCommunityIcons
-                              name={assessment.status === "completed" ? "check" : "chevron-right"}
-                              size={16}
-                              color={colors.white}
+                            <View
+                              style={{
+                                backgroundColor: assessment.badgeColor,
+                                borderRadius: 2,
+                                height: "100%",
+                                width: `${statusProgress[assessment.status]}%`,
+                              }}
                             />
                           </View>
+
+                          {attemptBadge ? (
+                            <View
+                              style={{
+                                alignItems: "center",
+                                backgroundColor: darkTheme.purple,
+                                borderRadius: 999,
+                                height: 18,
+                                justifyContent: "center",
+                                width: 18,
+                              }}
+                            >
+                              <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "700" }}>
+                                {attemptBadge}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          <MaterialCommunityIcons
+                            color={darkTheme.dim}
+                            name={expanded ? "chevron-down" : "chevron-right"}
+                            size={14}
+                          />
+                          <MaterialCommunityIcons
+                            color={darkTheme.muted}
+                            name="dots-horizontal"
+                            size={16}
+                          />
                         </View>
-                      </View>
-                    </Card>
-                  </Pressable>
-                </AnimatedEntrance>
-              );
-            })
-          )}
+                      </Pressable>
+
+                      {expanded ? (
+                        <View
+                          style={{
+                            backgroundColor: darkTheme.channel,
+                            borderBottomColor: darkTheme.border,
+                            borderBottomWidth: 1,
+                          }}
+                        >
+                          {(["details", "history", "results", "class"] as AssessmentActionKey[]).map(
+                            (action, actionIndex, actions) => {
+                              const config = actionConfig[action];
+
+                              return (
+                                <Pressable
+                                  key={action}
+                                  onPress={() => navigateToAction(navigation, assessment, action)}
+                                  style={{
+                                    alignItems: "center",
+                                    borderBottomColor:
+                                      actionIndex === actions.length - 1
+                                        ? "transparent"
+                                        : "rgba(255,255,255,0.04)",
+                                    borderBottomWidth: actionIndex === actions.length - 1 ? 0 : 1,
+                                    flexDirection: "row",
+                                    gap: 10,
+                                    paddingBottom: 10,
+                                    paddingLeft: 58,
+                                    paddingRight: 16,
+                                    paddingTop: 10,
+                                  }}
+                                >
+                                  <MaterialCommunityIcons
+                                    color="#AAAAAA"
+                                    name={config.icon}
+                                    size={15}
+                                    style={{ opacity: 0.55 }}
+                                  />
+                                  <Text
+                                    style={{
+                                      color: "#999999",
+                                      flex: 1,
+                                      fontSize: 13,
+                                    }}
+                                  >
+                                    {buildActionLabel(assessment, action)}
+                                  </Text>
+                                  <View
+                                    style={{
+                                      backgroundColor: config.background,
+                                      borderRadius: 4,
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 2,
+                                    }}
+                                  >
+                                    <Text style={{ color: config.color, fontSize: 10, fontWeight: "500" }}>
+                                      {buildActionBadge(assessment, action)}
+                                    </Text>
+                                  </View>
+                                </Pressable>
+                              );
+                            },
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
+                  </AnimatedEntrance>
+                );
+              })
+            )}
+          </View>
         </View>
       </View>
     </ScreenScroll>

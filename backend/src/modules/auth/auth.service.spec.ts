@@ -318,7 +318,7 @@ describe('AuthService', () => {
       );
     });
 
-    it('should throw when old password is incorrect', async () => {
+    it('should throw a bad request when old password is incorrect', async () => {
       mockUsersService.findById.mockResolvedValue(makeUser());
       bcrypt.compare.mockResolvedValue(false);
 
@@ -328,7 +328,7 @@ describe('AuthService', () => {
           newPassword: 'NewP@ss2!',
           confirmPassword: 'NewP@ss2!',
         }),
-      ).rejects.toThrow('Old password is incorrect');
+      ).rejects.toThrow('Current password is incorrect');
     });
   });
 });

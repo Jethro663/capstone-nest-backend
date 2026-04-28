@@ -64,7 +64,7 @@ describe('StudentDashboardPage', () => {
     } as ReturnType<typeof useAuth>);
   });
 
-  it('renders the compact student dashboard with context rail data', async () => {
+  it('renders pending tasks and recent lessons first without the old summary panels', async () => {
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -162,10 +162,27 @@ describe('StudentDashboardPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your Learning Hub' })).toBeInTheDocument();
 
-    expect(screen.getByRole('heading', { name: "Today's Learning Rhythm" })).toBeInTheDocument();
+    expect(screen.queryByText('Enrolled Classes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready Lessons')).not.toBeInTheDocument();
+    expect(screen.queryByText('Profile Ready')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Today's Learning Rhythm" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Keep Exploring' })).not.toBeInTheDocument();
+
+    const mainGrid = document.querySelector('.student-v2-grid');
+    expect(mainGrid).toBeInTheDocument();
+
+    const mainSections = Array.from(mainGrid?.children ?? []);
+    expect(mainSections).toHaveLength(2);
+    expect(mainSections[0]).toHaveTextContent('Pending Tasks');
+    expect(mainSections[0]).toHaveTextContent('Algebra Quiz');
+    expect(mainSections[1]).toHaveTextContent('Recent Lessons');
+    expect(mainSections[1]).toHaveTextContent('Linear Equations');
+
     expect(screen.getByRole('heading', { name: 'Day Schedule' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Announcements & Events' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Upcoming Events' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /See All/i })).toBeInTheDocument();
     expect(screen.getAllByText('Mathematics').length).toBeGreaterThan(0);
   });
 
@@ -188,8 +205,95 @@ describe('StudentDashboardPage', () => {
       expect(screen.getByRole('heading', { name: 'Your Learning Hub' })).toBeInTheDocument(),
     );
 
-    expect(screen.getByText('No class schedules for today yet.')).toBeInTheDocument();
-    expect(screen.getByText('You are not enrolled in classes yet.')).toBeInTheDocument();
+    expect(screen.queryByText('No class schedules for today yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('You are not enrolled in classes yet.')).not.toBeInTheDocument();
     expect(screen.getByText("You're all caught up right now.")).toBeInTheDocument();
+    expect(screen.getByText('No recent lessons yet.')).toBeInTheDocument();
+  });
+
+  it('excludes assessments from pending tasks when all attempts are already used', async () => {
+    mockedClassService.getByStudent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
+          section: { id: 'section-1', name: 'Rizal', gradeLevel: 'Grade 10' },
+          teacher: { id: 'teacher-1', firstName: 'Lopez', lastName: 'Santos' },
+          schedules: [],
+        },
+      ],
+    });
+
+    mockedLessonService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'assessment-exhausted',
+          classId: 'class-1',
+          title: 'Short Quiz #1',
+          type: 'quiz',
+          isPublished: true,
+          maxAttempts: 1,
+        },
+        {
+          id: 'assessment-open',
+          classId: 'class-1',
+          title: 'Activity 1.1',
+          type: 'quiz',
+          isPublished: true,
+          maxAttempts: 2,
+        },
+      ],
+    });
+
+    mockedAssessmentService.getStudentAttempts.mockImplementation(async (assessmentId: string) => ({
+      success: true,
+      message: 'ok',
+      data:
+        assessmentId === 'assessment-exhausted'
+          ? [
+              {
+                id: 'attempt-1',
+                assessmentId: 'assessment-exhausted',
+                studentId: 'student-1',
+                isSubmitted: true,
+              },
+            ]
+          : [],
+      count: assessmentId === 'assessment-exhausted' ? 1 : 0,
+    }));
+
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+
+    render(<StudentDashboardPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Your Learning Hub' })).toBeInTheDocument();
+
+    expect(screen.getByText('Activity 1.1')).toBeInTheDocument();
+    expect(screen.queryByText('Short Quiz #1')).not.toBeInTheDocument();
+    expect(screen.getByText('You have 1 pending task today')).toBeInTheDocument();
   });
 });

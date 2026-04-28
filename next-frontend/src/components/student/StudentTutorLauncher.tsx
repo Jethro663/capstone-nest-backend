@@ -67,7 +67,7 @@ export function StudentTutorLauncher() {
           <button
             type="button"
             className="student-tutor-launcher__open"
-            onClick={() => router.push("/dashboard/student/ja")}
+            onClick={() => router.push("/dashboard/student/ja?mode=ask")}
           >
             <MessageCircle className="h-4 w-4" />
             Open JA Hub

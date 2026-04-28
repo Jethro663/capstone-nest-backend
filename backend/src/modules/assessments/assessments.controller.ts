@@ -67,6 +67,8 @@ const ALLOWED_ASSESSMENT_FILE_MIMES = [
   'image/png',
   'image/jpeg',
   'image/webp',
+  'application/zip',
+  'application/x-zip-compressed',
   'application/octet-stream',
 ];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB

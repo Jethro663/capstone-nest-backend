@@ -47,17 +47,18 @@ jest.mock('@/services/module-service', () => ({
 jest.mock('@/services/lesson-service', () => ({
   lessonService: {
     getByClass: jest.fn(),
+    getById: jest.fn(),
     create: jest.fn(),
     delete: jest.fn(),
   },
 }));
 
 jest.mock('@/services/assessment-service', () => ({
-  assessmentService: { getByClass: jest.fn(), create: jest.fn() },
+  assessmentService: { getByClass: jest.fn(), getById: jest.fn(), create: jest.fn() },
 }));
 
 jest.mock('@/services/file-service', () => ({
-  fileService: { upload: jest.fn() },
+  fileService: { upload: jest.fn(), getAll: jest.fn() },
 }));
 
 jest.mock('@/components/shared/ConfirmationDialog', () => ({
@@ -133,6 +134,19 @@ describe('TeacherModuleDetailPage', () => {
       pageSize: 20,
       totalPages: 1,
     } as never);
+    mockedLessonService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'lesson-1',
+        classId: 'class-1',
+        title: 'Core Lesson',
+        description: '<p>Core lesson content</p>',
+        order: 1,
+        isDraft: false,
+        contentBlocks: [],
+      } as never,
+    });
     mockedAssessmentService.getByClass.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -143,6 +157,20 @@ describe('TeacherModuleDetailPage', () => {
       totalPages: 1,
       total: 0,
     } as never);
+    mockedAssessmentService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'assessment-existing',
+        classId: 'class-1',
+        title: 'Core Quiz',
+        description: '<p>Assessment content</p>',
+        type: 'quiz',
+        isPublished: true,
+        totalPoints: 10,
+        questions: [],
+      } as never,
+    });
     mockedAssessmentService.create.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -164,6 +192,31 @@ describe('TeacherModuleDetailPage', () => {
       message: 'ok',
       data: { id: 'file-1' } as never,
     });
+    mockedFileService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'general-file-1',
+          teacherId: 'admin-1',
+          scope: 'general',
+          originalName: 'General Science File',
+          storedName: 'general-science-file.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          filePath: 'uploads/library/general-science-file.pdf',
+          uploadedAt: '2026-04-17T00:00:00.000Z',
+          subjectKey: 'math',
+          gradeLevel: '7',
+          teacherVisible: true,
+        },
+      ],
+      count: 1,
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    } as never);
   });
 
   it('creates and attaches a new lesson block then opens lesson editor', async () => {
@@ -256,10 +309,139 @@ describe('TeacherModuleDetailPage', () => {
     await screen.findByText('Default Module');
     expect(screen.getByText('Default module')).toBeInTheDocument();
     expect(screen.getByText('Default item')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Release Item' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Hide' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Give' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View Content' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Visibility' }));
     expect(screen.getByRole('button', { name: 'Release Module' })).toBeInTheDocument();
+  });
+
+  it('routes core default assessment content to the read-only editor shell', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: true,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [
+            {
+              id: 'section-1',
+              moduleId: 'module-1',
+              title: 'Section A',
+              description: '',
+              order: 1,
+              items: [
+                {
+                  id: 'item-1',
+                  moduleSectionId: 'section-1',
+                  itemType: 'assessment',
+                  assessmentId: 'assessment-existing',
+                  order: 1,
+                  isVisible: true,
+                  isRequired: true,
+                  isGiven: true,
+                  isCoreTemplateAsset: true,
+                  assessment: {
+                    id: 'assessment-existing',
+                    classId: 'class-1',
+                    title: 'Core Quiz',
+                    type: 'quiz',
+                    totalPoints: 10,
+                    isPublished: true,
+                  },
+                },
+              ],
+            },
+          ],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    fireEvent.click(screen.getByRole('button', { name: 'View Content' }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(
+        '/dashboard/teacher/assessments/assessment-existing/edit?mode=view&classId=class-1&moduleId=module-1',
+      );
+    });
+    expect(mockedAssessmentService.getById).not.toHaveBeenCalled();
+  });
+
+  it('routes core default lesson content to the teacher read-only reader', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: true,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [
+            {
+              id: 'section-1',
+              moduleId: 'module-1',
+              title: 'Section A',
+              description: '',
+              order: 1,
+              items: [
+                {
+                  id: 'item-1',
+                  moduleSectionId: 'section-1',
+                  itemType: 'lesson',
+                  lessonId: 'lesson-existing',
+                  order: 1,
+                  isVisible: true,
+                  isRequired: true,
+                  isGiven: false,
+                  isCoreTemplateAsset: true,
+                  lesson: {
+                    id: 'lesson-existing',
+                    classId: 'class-1',
+                    title: 'Core Lesson',
+                    order: 1,
+                    isDraft: false,
+                  },
+                },
+              ],
+            },
+          ],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    fireEvent.click(screen.getByRole('button', { name: 'View Content' }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith(
+        '/dashboard/teacher/lessons/lesson-existing/view?classId=class-1&moduleId=module-1',
+      );
+    });
+    expect(mockedLessonService.getById).not.toHaveBeenCalled();
   });
 
   it('creates and attaches a new assessment block then opens assessment editor', async () => {
@@ -435,5 +617,35 @@ describe('TeacherModuleDetailPage', () => {
     await waitFor(() => {
       expect(mockedLessonService.delete).toHaveBeenCalledWith('lesson-orphan');
     });
+  });
+
+  it('attaches an existing library file instead of uploading a new pdf', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const fileTypeButton = within(dialog).getByText('PDF').closest('button');
+    if (!fileTypeButton) {
+      throw new Error('PDF block type button was not rendered');
+    }
+    fireEvent.click(fileTypeButton);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Choose from Library/i }));
+    const picker = await screen.findByRole('dialog', { name: 'Choose from Library' });
+    fireEvent.click(await within(picker).findByRole('button', { name: /General Science File/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+
+    await waitFor(() => {
+      expect(mockedModuleService.attachItem).toHaveBeenCalledWith(
+        'section-1',
+        expect.objectContaining({
+          itemType: 'file',
+          fileId: 'general-file-1',
+        }),
+      );
+    });
+    expect(mockedFileService.upload).not.toHaveBeenCalled();
   });
 });

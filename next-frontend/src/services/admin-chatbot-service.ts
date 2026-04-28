@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { api } from '@/lib/api-client';
-import { getFrontendApiOrigin } from '@/lib/api-origin';
 import {
   getAccessToken,
   setAccessToken,
@@ -279,7 +278,7 @@ async function sendAdminChatDirect(
 ): Promise<AdminAnalyticsChatResponse> {
   const attemptDirectPost = async (token: string) => {
     const response = await axios.post(
-      `${getFrontendApiOrigin()}/api/ai/admin/chat`,
+      '/api/ai/admin/chat',
       payload,
       {
         withCredentials: true,

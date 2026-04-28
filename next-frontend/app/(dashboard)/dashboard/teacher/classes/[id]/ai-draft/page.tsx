@@ -2,27 +2,47 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Search, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Bot,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Loader2,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Trash2,
+  XCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { aiService } from '@/services/ai-service';
-import { classService } from '@/services/class-service';
-import { extractionService } from '@/services/extraction-service';
-import { lessonService } from '@/services/lesson-service';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+import { classService } from '@/services/class-service';
+import { lessonService } from '@/services/lesson-service';
+import { extractionService } from '@/services/extraction-service';
+import { aiService } from '@/services/ai-service';
+import { assessmentService } from '@/services/assessment-service';
 import { getApiErrorMessage } from '@/lib/api-error';
 import {
   isAiDraftTerminalStatus,
   mergeTrackedAiDraftJobFromStatus,
   readTrackedAiDraftJobs,
+  removeTrackedAiDraftJob,
   type TrackedAiDraftJobEntry,
-  writeTrackedAiDraftJobs,
 } from '@/lib/ai-draft-job-tracker';
-import type { AiGenerationJob, QuizDraftStructuredOutput } from '@/types/ai';
+import type {
+  AiClassIndexStatus,
+  AiGenerationJob,
+  QuizDraftStructuredOutput,
+} from '@/types/ai';
 import type { ClassItem } from '@/types/class';
 import type { Extraction } from '@/types/extraction';
 import type { Lesson } from '@/types/lesson';
@@ -37,17 +57,63 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
   { value: 'multiple_select', label: 'Multiple Select' },
 ];
 
+const JOB_POLL_INTERVAL_MS = 2500;
+
+type DraftWorkflowTab = 'sources' | 'setup' | 'generation' | 'preview';
+
+const WORKFLOW_TABS: Array<{
+  value: DraftWorkflowTab;
+  step: string;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'sources',
+    step: '01',
+    label: 'Sources',
+    description: 'Pick lessons and extracted files',
+  },
+  {
+    value: 'setup',
+    step: '02',
+    label: 'Quiz setup',
+    description: 'Set question count and guidance',
+  },
+  {
+    value: 'generation',
+    step: '03',
+    label: 'Generation',
+    description: 'Track the AI draft job',
+  },
+  {
+    value: 'preview',
+    step: '04',
+    label: 'Preview',
+    description: 'Review the generated draft',
+  },
+];
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function getQuizJobErrorMessage(errorMessage?: string | null): string | null {
   if (!errorMessage) return null;
   const normalized = errorMessage.toLowerCase();
   if (normalized.includes('blueprint')) {
-    return 'Blueprint planning failed. Try a narrower source set or add a shorter teacher note, then run again.';
+    return 'Blueprint planning failed. Narrow the source set or shorten the teacher note, then try again.';
   }
-  if (normalized.includes('generated questions were duplicates')) {
-    return 'Generated questions duplicated existing items. Narrow sources or adjust your note, then retry.';
+  if (normalized.includes('duplicates')) {
+    return 'The generated questions repeated existing items. Narrow the source selection or adjust the note, then retry.';
   }
   if (normalized.includes('no indexed source content')) {
-    return 'No indexed source content found. Reindex class sources before generating.';
+    return 'No indexed class source content is ready yet. Reindex the class sources before generating.';
+  }
+  if (normalized.includes('selected lessons are not indexed')) {
+    return errorMessage;
+  }
+  if (normalized.includes('selected extractions are not indexed')) {
+    return errorMessage;
   }
   return errorMessage;
 }
@@ -65,6 +131,101 @@ function toRelativeTime(value?: string | null) {
   return `${Math.floor(diffHour / 24)}d ago`;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return 'Unknown';
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return 'Unknown';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(parsed);
+}
+
+function getJobBadgeVariant(status?: string | null) {
+  if (status === 'failed') return 'destructive' as const;
+  if (status === 'completed' || status === 'approved') return 'secondary' as const;
+  return 'outline' as const;
+}
+
+function getReadinessBadge(indexStatus: AiClassIndexStatus | null) {
+  if (!indexStatus) {
+    return {
+      label: 'Checking sources',
+      tone: 'pending',
+      detail: 'Loading class indexing status.',
+    };
+  }
+  if (indexStatus.chunksIndexed > 0 && !indexStatus.needsReindex) {
+    return {
+      label: 'Sources indexed',
+      tone: 'ready',
+      detail: `${indexStatus.chunksIndexed} class chunk(s) ready for quiz generation.`,
+    };
+  }
+  if (indexStatus.chunksIndexed > 0 && indexStatus.needsReindex) {
+    return {
+      label: 'Reindex recommended',
+      tone: 'warning',
+      detail:
+        indexStatus.reason ||
+        'Some class sources changed after the last index. Run reindex before generating.',
+    };
+  }
+  return {
+    label: 'Index required',
+    tone: 'warning',
+    detail:
+      indexStatus.reason ||
+      'This class needs indexed source content before quiz generation can start.',
+  };
+}
+
+function buildTrackedJobSnapshot(entry: TrackedAiDraftJobEntry): AiGenerationJob {
+  return {
+    jobId: entry.jobId,
+    jobType: entry.jobType,
+    status: entry.lastKnownStatus,
+    progressPercent: entry.lastKnownProgress,
+    statusMessage: null,
+    errorMessage: null,
+    outputId: null,
+    assessmentId: entry.assessmentId ?? null,
+    updatedAt: entry.updatedAt ?? entry.createdAt,
+  };
+}
+
+function buildUnavailableIndexStatus(classId: string): AiClassIndexStatus {
+  return {
+    classId,
+    chunksIndexed: 0,
+    lessonChunks: 0,
+    extractionChunks: 0,
+    questionChunks: 0,
+    lastIndexedAt: null,
+    latestSourceUpdateAt: null,
+    isStale: false,
+    needsReindex: false,
+    reason:
+      'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.',
+    readyLessons: [],
+    lessonBlockers: [],
+    readyExtractions: [],
+    extractionBlockers: [],
+    sourceSummary: {
+      lessons: { total: 0, ready: 0, blocked: 0 },
+      extractions: { total: 0, ready: 0, blocked: 0 },
+      questions: {
+        assessments: 0,
+        assessmentsWithQuestions: 0,
+        questionCount: 0,
+        needsIndex: 0,
+      },
+    },
+  };
+}
+
 export default function TeacherAiDraftQuizPage() {
   const params = useParams();
   const router = useRouter();
@@ -72,9 +233,15 @@ export default function TeacherAiDraftQuizPage() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
+  const [indexStatus, setIndexStatus] = useState<AiClassIndexStatus | null>(null);
+
   const [title, setTitle] = useState('');
   const [teacherNote, setTeacherNote] = useState('');
   const [questionCount, setQuestionCount] = useState('5');
@@ -90,128 +257,327 @@ export default function TeacherAiDraftQuizPage() {
 
   const [lessonSearch, setLessonSearch] = useState('');
   const [extractionSearch, setExtractionSearch] = useState('');
-  const [showLessons, setShowLessons] = useState(true);
-  const [showExtractions, setShowExtractions] = useState(true);
+  const [activeTab, setActiveTab] = useState<DraftWorkflowTab>('sources');
 
-  const fetchWorkspace = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [classRes, lessonRes, extractionRes] = await Promise.all([
-        classService.getById(classId),
-        lessonService.getByClass(classId, { status: 'all', pageSize: 100 }),
-        extractionService.listByClass(classId),
-      ]);
-      setClassItem(classRes.data);
-      setLessons(lessonRes.data ?? []);
-      setExtractions(extractionRes.data ?? []);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load AI draft workspace'));
-    } finally {
-      setLoading(false);
+  const syncTrackedJobs = useCallback(
+    (entries?: TrackedAiDraftJobEntry[]) => {
+      const nextEntries = entries ?? readTrackedAiDraftJobs(classId);
+      setTrackedJobs(nextEntries);
+      return nextEntries;
+    },
+    [classId],
+  );
+
+  const fetchWorkspace = useCallback(
+    async (options?: { retry?: boolean }) => {
+      const loadWorkspaceOnce = async () => {
+        const [classRes, lessonRes] = await Promise.all([
+          classService.getById(classId),
+          lessonService.getByClass(classId, { status: 'all', pageSize: 100 }),
+        ]);
+        setClassItem(classRes.data);
+        setLessons(lessonRes.data ?? []);
+      };
+      try {
+        await loadWorkspaceOnce();
+      } catch (error) {
+        if (options?.retry === false) {
+          throw error;
+        }
+        await wait(900);
+        await loadWorkspaceOnce();
+      }
+    },
+    [classId],
+  );
+
+  const fetchExtractions = useCallback(
+    async (options?: { retry?: boolean }) => {
+      const loadExtractionsOnce = async () => {
+        const extractionRes = await extractionService.listByClass(classId);
+        setExtractions(extractionRes.data ?? []);
+      };
+      try {
+        await loadExtractionsOnce();
+      } catch (error) {
+        if (options?.retry === false) {
+          throw error;
+        }
+        await wait(900);
+        await loadExtractionsOnce();
+      }
+    },
+    [classId],
+  );
+
+  const fetchReadiness = useCallback(
+    async (options?: { silent?: boolean; retry?: boolean }) => {
+      const loadReadinessOnce = async () => {
+        const response = await aiService.getClassIndexStatus(classId);
+        setIndexStatus(response.data);
+        return response.data;
+      };
+      if (!options?.silent) {
+        setReadinessLoading(true);
+      }
+      try {
+        return await loadReadinessOnce();
+      } catch (error) {
+        if (options?.retry === false) {
+          throw error;
+        }
+        await wait(900);
+        return await loadReadinessOnce();
+      } finally {
+        if (!options?.silent) {
+          setReadinessLoading(false);
+        }
+      }
+    },
+    [classId],
+  );
+
+  const refreshCurrentJob = useCallback(
+    async (
+      targetJobId?: string | null,
+      options?: { silent?: boolean; loadResult?: boolean },
+    ) => {
+      const jobIdToLoad = targetJobId ?? currentJobId;
+      if (!jobIdToLoad) {
+        return null;
+      }
+      try {
+        const statusRes = await aiService.getTeacherJobStatus(jobIdToLoad);
+        setJob(statusRes.data);
+        mergeTrackedAiDraftJobFromStatus(classId, statusRes.data);
+        syncTrackedJobs();
+
+        if (
+          options?.loadResult !== false &&
+          (statusRes.data.status === 'completed' || statusRes.data.status === 'approved')
+        ) {
+          const resultRes = await aiService.getQuizDraftJobResult(jobIdToLoad);
+          setResult(resultRes.data.result.structuredOutput);
+          setActiveTab('preview');
+          void fetchReadiness({ silent: true });
+        } else if (statusRes.data.status === 'cancelled') {
+          setResult(null);
+          void fetchReadiness({ silent: true });
+        }
+
+        return statusRes.data;
+      } catch (error) {
+        if (!options?.silent) {
+          toast.error(getApiErrorMessage(error, 'Failed to refresh AI draft status'));
+        }
+        return null;
+      }
+    },
+    [classId, currentJobId, fetchReadiness, syncTrackedJobs],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        await fetchWorkspace();
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(getApiErrorMessage(error, 'Failed to load the AI draft workspace'));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+      try {
+        await fetchExtractions();
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(getApiErrorMessage(error, 'Failed to load class extractions'));
+        }
+      }
+      try {
+        await fetchReadiness();
+      } catch (error) {
+        if (!cancelled) {
+          setIndexStatus(buildUnavailableIndexStatus(classId));
+          toast.error(getApiErrorMessage(error, 'Failed to load AI source readiness'));
+        }
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [classId, fetchExtractions, fetchReadiness, fetchWorkspace]);
+
+  useEffect(() => {
+    const cached = syncTrackedJobs();
+    if (cached.length > 0) {
+      setCurrentJobId((current) => current ?? cached[0].jobId);
+    } else {
+      setCurrentJobId(null);
+      setJob(null);
+      setResult(null);
     }
-  }, [classId]);
+  }, [classId, syncTrackedJobs]);
 
-  const refreshTrackedJobs = useCallback(async () => {
-    const seed = readTrackedAiDraftJobs(classId);
-    if (seed.length === 0) {
-      setTrackedJobs([]);
+  useEffect(() => {
+    if (!currentJobId) {
+      setJob(null);
+      setResult(null);
       return;
     }
-
-    const createdAtById = new Map(seed.map((entry) => [entry.jobId, entry.createdAt]));
-    await Promise.all(seed.map(async (entry) => {
-      try {
-        const statusRes = await aiService.getTeacherJobStatus(entry.jobId);
-        mergeTrackedAiDraftJobFromStatus(classId, statusRes.data, createdAtById.get(entry.jobId));
-      } catch {
-        // Keep local cache entry when status endpoint fails; prune policy handles stale terminal jobs.
-      }
-    }));
-
-    const refreshed = readTrackedAiDraftJobs(classId);
-    setTrackedJobs(refreshed);
-    if (!currentJobId && refreshed.length > 0) setCurrentJobId(refreshed[0].jobId);
-  }, [classId, currentJobId]);
+    void refreshCurrentJob(currentJobId, { silent: true });
+  }, [currentJobId, refreshCurrentJob]);
 
   useEffect(() => {
-    void fetchWorkspace();
-  }, [fetchWorkspace]);
+    if (result) {
+      setActiveTab('preview');
+    }
+  }, [result]);
+
+  const currentTrackedJob = useMemo(
+    () => trackedJobs.find((entry) => entry.jobId === currentJobId) ?? null,
+    [currentJobId, trackedJobs],
+  );
+
+  const displayJob = useMemo<AiGenerationJob | null>(() => {
+    if (job && (!currentJobId || job.jobId === currentJobId)) {
+      return job;
+    }
+    if (currentTrackedJob) {
+      return buildTrackedJobSnapshot(currentTrackedJob);
+    }
+    return job;
+  }, [currentJobId, currentTrackedJob, job]);
+
+  const shouldPollCurrentJob = Boolean(
+    currentJobId &&
+      displayJob &&
+      !isAiDraftTerminalStatus(displayJob.status),
+  );
 
   useEffect(() => {
-    const cached = readTrackedAiDraftJobs(classId);
-    setTrackedJobs(cached);
-    if (cached.length > 0) setCurrentJobId((current) => current || cached[0].jobId);
-    void refreshTrackedJobs();
-  }, [classId, refreshTrackedJobs]);
+    if (!currentJobId || !shouldPollCurrentJob) {
+      return undefined;
+    }
+    const interval = window.setInterval(() => {
+      void refreshCurrentJob(currentJobId, { silent: true });
+    }, JOB_POLL_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [currentJobId, refreshCurrentJob, shouldPollCurrentJob]);
 
-  useEffect(() => {
-    if (!currentJobId) return;
-    const tracked = trackedJobs.find((entry) => entry.jobId === currentJobId);
-    if (!tracked) return;
-    setJob((current) => {
-      if (current?.jobId === tracked.jobId) {
-        return {
-          ...current,
-          status: tracked.lastKnownStatus,
-          progressPercent: tracked.lastKnownProgress,
-          assessmentId: tracked.assessmentId ?? current.assessmentId ?? null,
-          updatedAt: tracked.updatedAt ?? current.updatedAt ?? null,
-        };
+  const readyLessonMap = useMemo(
+    () => new Map((indexStatus?.readyLessons ?? []).map((entry) => [entry.lessonId, entry])),
+    [indexStatus],
+  );
+  const lessonBlockerMap = useMemo(
+    () => new Map((indexStatus?.lessonBlockers ?? []).map((entry) => [entry.lessonId, entry])),
+    [indexStatus],
+  );
+  const readyExtractionMap = useMemo(
+    () =>
+      new Map((indexStatus?.readyExtractions ?? []).map((entry) => [entry.extractionId, entry])),
+    [indexStatus],
+  );
+  const extractionBlockerMap = useMemo(
+    () =>
+      new Map((indexStatus?.extractionBlockers ?? []).map((entry) => [entry.extractionId, entry])),
+    [indexStatus],
+  );
+
+  const lessonRows = useMemo(() => {
+    return lessons.map((lesson) => {
+      const ready = readyLessonMap.get(lesson.id);
+      const blocker = lessonBlockerMap.get(lesson.id);
+      const selectable = !blocker;
+      let stateLabel = 'Status unavailable';
+      let tone: 'ready' | 'index' | 'blocked' = 'index';
+      if (ready?.status === 'indexed') {
+        tone = 'ready';
+        stateLabel = `${ready.chunkCount} indexed chunk(s)`;
+      } else if (ready?.status === 'ready_to_index') {
+        tone = 'index';
+        stateLabel = 'Ready to index';
+      } else if (blocker) {
+        tone = 'blocked';
+        stateLabel = blocker.reason;
+      } else if (lesson.isDraft) {
+        tone = 'blocked';
+        stateLabel = 'Lesson is still a draft.';
       }
       return {
-        jobId: tracked.jobId,
-        jobType: tracked.jobType,
-        status: tracked.lastKnownStatus,
-        progressPercent: tracked.lastKnownProgress,
-        statusMessage: null,
-        errorMessage: null,
-        outputId: null,
-        assessmentId: tracked.assessmentId ?? null,
-        updatedAt: tracked.updatedAt ?? null,
+        id: lesson.id,
+        title: lesson.title,
+        description: lesson.description || '',
+        selectable,
+        selected: selectedLessonIds.includes(lesson.id),
+        tone,
+        stateLabel,
+        updatedAt: ready?.updatedAt ?? blocker?.updatedAt ?? lesson.updatedAt ?? null,
       };
     });
-  }, [currentJobId, trackedJobs]);
+  }, [lessonBlockerMap, lessons, readyLessonMap, selectedLessonIds]);
 
-  useEffect(() => {
-    if (!job?.jobId || !job?.status || !['completed', 'approved'].includes(job.status)) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const resultRes = await aiService.getQuizDraftJobResult(job.jobId);
-        if (cancelled) return;
-        setResult(resultRes.data.result.structuredOutput);
-      } catch (error) {
-        if (!cancelled) toast.error(getApiErrorMessage(error, 'Failed to load AI draft result'));
+  const extractionRows = useMemo(() => {
+    return extractions.map((extraction) => {
+      const ready = readyExtractionMap.get(extraction.id);
+      const blocker = extractionBlockerMap.get(extraction.id);
+      const selectable = !blocker;
+      let stateLabel = 'Status unavailable';
+      let tone: 'ready' | 'index' | 'blocked' = 'index';
+      if (ready?.status === 'indexed') {
+        tone = 'ready';
+        stateLabel = `${ready.chunkCount} indexed chunk(s)`;
+      } else if (ready?.status === 'ready_to_index') {
+        tone = 'index';
+        stateLabel = 'Ready to index';
+      } else if (blocker) {
+        tone = 'blocked';
+        stateLabel = blocker.reason;
+      } else if (extraction.extractionStatus === 'processing' || extraction.extractionStatus === 'pending') {
+        tone = 'blocked';
+        stateLabel = 'Extraction is still processing.';
       }
-    })();
-    return () => { cancelled = true; };
-  }, [job?.jobId, job?.status]);
-
-  useEffect(() => {
-    const hasActiveTracked = trackedJobs.some((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus));
-    const hasActiveCurrent = Boolean(job && !isAiDraftTerminalStatus(job.status));
-    if (!hasActiveTracked && !hasActiveCurrent) return;
-
-    const interval = window.setInterval(() => {
-      void refreshTrackedJobs();
-    }, 2500);
-    return () => window.clearInterval(interval);
-  }, [job, refreshTrackedJobs, trackedJobs]);
-
-  const visibleLessons = useMemo(() => {
-    const needle = lessonSearch.trim().toLowerCase();
-    if (!needle) return lessons;
-    return lessons.filter((lesson) => `${lesson.title} ${lesson.description || ''}`.toLowerCase().includes(needle));
-  }, [lessonSearch, lessons]);
-
-  const visibleExtractions = useMemo(() => {
-    const needle = extractionSearch.trim().toLowerCase();
-    if (!needle) return extractions;
-    return extractions.filter((extraction) => {
-      const titleText = extraction.structuredContent?.title || extraction.originalName || extraction.id;
-      return `${titleText} ${extraction.extractionStatus}`.toLowerCase().includes(needle);
+      return {
+        id: extraction.id,
+        title:
+          extraction.structuredContent?.title ||
+          extraction.originalName ||
+          'Extraction',
+        description: extraction.originalName || extraction.id,
+        selectable,
+        selected: selectedExtractionIds.includes(extraction.id),
+        tone,
+        stateLabel,
+        updatedAt:
+          ready?.updatedAt ?? blocker?.updatedAt ?? extraction.updatedAt ?? null,
+      };
     });
-  }, [extractionSearch, extractions]);
+  }, [extractionBlockerMap, extractions, readyExtractionMap, selectedExtractionIds]);
+
+  const visibleLessonRows = useMemo(() => {
+    const needle = lessonSearch.trim().toLowerCase();
+    if (!needle) return lessonRows;
+    return lessonRows.filter((lesson) =>
+      `${lesson.title} ${lesson.description} ${lesson.stateLabel}`
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [lessonRows, lessonSearch]);
+
+  const visibleExtractionRows = useMemo(() => {
+    const needle = extractionSearch.trim().toLowerCase();
+    if (!needle) return extractionRows;
+    return extractionRows.filter((extraction) =>
+      `${extraction.title} ${extraction.description} ${extraction.stateLabel}`
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [extractionRows, extractionSearch]);
 
   const selectedLessons = useMemo(
     () => lessons.filter((lesson) => selectedLessonIds.includes(lesson.id)),
@@ -223,59 +589,118 @@ export default function TeacherAiDraftQuizPage() {
   );
 
   const parsedQuestionCount = Number(questionCount);
-  const isQuestionCountValid = Number.isFinite(parsedQuestionCount) && parsedQuestionCount >= 1;
+  const isQuestionCountValid =
+    Number.isFinite(parsedQuestionCount) && parsedQuestionCount >= 1;
   const hasAnySource = lessons.length + extractions.length > 0;
-  const hasManualSelection = selectedLessonIds.length + selectedExtractionIds.length > 0;
-  const canGenerate = !submitting && hasAnySource && isQuestionCountValid && (useAllSourcesWhenNoneSelected || hasManualSelection);
+  const hasManualSelection =
+    selectedLessonIds.length + selectedExtractionIds.length > 0;
+  const hasRunningJob = Boolean(
+    displayJob && !isAiDraftTerminalStatus(displayJob.status),
+  );
+  const readinessUnavailable = Boolean(
+    indexStatus?.reason?.includes('AI source readiness is temporarily unavailable'),
+  );
+  const canGenerate =
+    !submitting &&
+    !hasRunningJob &&
+    !readinessUnavailable &&
+    hasAnySource &&
+    isQuestionCountValid &&
+    (useAllSourcesWhenNoneSelected || hasManualSelection);
 
-  const assessmentId = result?.assessmentId || result?.runtime?.assessmentId || job?.assessmentId || null;
-  const activeTrackedJobs = trackedJobs.filter((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus));
-  const recentTrackedJobs = trackedJobs.slice(0, 8);
+  const readinessBadge = getReadinessBadge(indexStatus);
+  const assessmentId =
+    result?.assessmentId ||
+    result?.runtime?.assessmentId ||
+    displayJob?.assessmentId ||
+    null;
+  const canDeleteCurrentDraft = Boolean(displayJob?.jobId || assessmentId);
+  const recentTrackedJobs = trackedJobs.slice(0, 6);
+  const selectedSourceCount = selectedLessonIds.length + selectedExtractionIds.length;
+  const sourceStepComplete =
+    hasAnySource && (useAllSourcesWhenNoneSelected || hasManualSelection);
+  const setupStepComplete = isQuestionCountValid;
+  const generationStepComplete = Boolean(result);
 
-  const toggleSelection = (id: string, currentIds: string[], setIds: (value: string[]) => void) => {
-    setIds(currentIds.includes(id) ? currentIds.filter((value) => value !== id) : [...currentIds, id]);
+  const getWorkflowTabStatus = (tab: DraftWorkflowTab) => {
+    if (tab === 'sources') {
+      if (!hasAnySource) return 'Waiting for sources';
+      return hasManualSelection
+        ? `${selectedSourceCount} selected`
+        : useAllSourcesWhenNoneSelected
+          ? 'All ready sources'
+          : 'Needs selection';
+    }
+    if (tab === 'setup') {
+      return setupStepComplete
+        ? `${parsedQuestionCount} question${parsedQuestionCount === 1 ? '' : 's'}`
+        : 'Needs count';
+    }
+    if (tab === 'generation') {
+      return displayJob?.status || 'Idle';
+    }
+    return result?.questions?.length
+      ? `${result.questions.length} question${result.questions.length === 1 ? '' : 's'}`
+      : 'No preview';
   };
 
-  const setAllVisibleLessonSelection = (checked: boolean) => {
+  const getWorkflowTabState = (tab: DraftWorkflowTab) => {
+    if (tab === activeTab) return 'active';
+    if (tab === 'sources' && sourceStepComplete && activeTab !== 'sources') return 'done';
+    if (
+      tab === 'setup' &&
+      setupStepComplete &&
+      (Boolean(displayJob) || activeTab === 'generation' || activeTab === 'preview')
+    ) {
+      return 'done';
+    }
+    if (tab === 'generation' && generationStepComplete) return 'done';
+    if (tab === 'preview' && result) return 'done';
+    return 'idle';
+  };
+
+  const toggleSelection = (
+    id: string,
+    currentIds: string[],
+    setIds: (value: string[]) => void,
+  ) => {
+    setIds(
+      currentIds.includes(id)
+        ? currentIds.filter((value) => value !== id)
+        : [...currentIds, id],
+    );
+  };
+
+  const setVisibleLessonSelection = (checked: boolean) => {
+    const selectableVisibleIds = visibleLessonRows
+      .filter((row) => row.selectable)
+      .map((row) => row.id);
     if (checked) {
       const next = new Set(selectedLessonIds);
-      visibleLessons.forEach((lesson) => next.add(lesson.id));
+      selectableVisibleIds.forEach((id) => next.add(id));
       setSelectedLessonIds(Array.from(next));
       return;
     }
-    const visibleSet = new Set(visibleLessons.map((lesson) => lesson.id));
-    setSelectedLessonIds(selectedLessonIds.filter((id) => !visibleSet.has(id)));
+    const visibleIdSet = new Set(selectableVisibleIds);
+    setSelectedLessonIds((current) =>
+      current.filter((id) => !visibleIdSet.has(id)),
+    );
   };
 
-  const setAllVisibleExtractionSelection = (checked: boolean) => {
+  const setVisibleExtractionSelection = (checked: boolean) => {
+    const selectableVisibleIds = visibleExtractionRows
+      .filter((row) => row.selectable)
+      .map((row) => row.id);
     if (checked) {
       const next = new Set(selectedExtractionIds);
-      visibleExtractions.forEach((extraction) => next.add(extraction.id));
+      selectableVisibleIds.forEach((id) => next.add(id));
       setSelectedExtractionIds(Array.from(next));
       return;
     }
-    const visibleSet = new Set(visibleExtractions.map((extraction) => extraction.id));
-    setSelectedExtractionIds(selectedExtractionIds.filter((id) => !visibleSet.has(id)));
-  };
-
-  const resumeTrackedJob = async (jobId: string) => {
-    setCurrentJobId(jobId);
-    try {
-      const statusRes = await aiService.getTeacherJobStatus(jobId);
-      setJob(statusRes.data);
-      mergeTrackedAiDraftJobFromStatus(classId, statusRes.data);
-      const refreshed = readTrackedAiDraftJobs(classId);
-      writeTrackedAiDraftJobs(classId, refreshed);
-      setTrackedJobs(refreshed);
-      if (['completed', 'approved'].includes(statusRes.data.status)) {
-        const resultRes = await aiService.getQuizDraftJobResult(jobId);
-        setResult(resultRes.data.result.structuredOutput);
-      } else {
-        setResult(null);
-      }
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to resume selected AI draft job'));
-    }
+    const visibleIdSet = new Set(selectableVisibleIds);
+    setSelectedExtractionIds((current) =>
+      current.filter((id) => !visibleIdSet.has(id)),
+    );
   };
 
   const handleGenerate = async () => {
@@ -284,7 +709,7 @@ export default function TeacherAiDraftQuizPage() {
       return;
     }
     if (!hasAnySource) {
-      toast.error('No source lessons or extractions are available for this class.');
+      toast.error('No source lessons or extractions are available for this class yet.');
       return;
     }
     if (!useAllSourcesWhenNoneSelected && !hasManualSelection) {
@@ -293,11 +718,22 @@ export default function TeacherAiDraftQuizPage() {
     }
 
     try {
+      setActiveTab('generation');
       setSubmitting(true);
       setResult(null);
-      const lessonIds = selectedLessonIds.length > 0 ? selectedLessonIds : (useAllSourcesWhenNoneSelected ? undefined : []);
-      const extractionIds = selectedExtractionIds.length > 0 ? selectedExtractionIds : (useAllSourcesWhenNoneSelected ? undefined : []);
-      const res = await aiService.createQuizDraftJob({
+      const lessonIds =
+        selectedLessonIds.length > 0
+          ? selectedLessonIds
+          : useAllSourcesWhenNoneSelected
+            ? undefined
+            : [];
+      const extractionIds =
+        selectedExtractionIds.length > 0
+          ? selectedExtractionIds
+          : useAllSourcesWhenNoneSelected
+            ? undefined
+            : [];
+      const response = await aiService.createQuizDraftJob({
         classId,
         title: title.trim() || undefined,
         teacherNote: teacherNote.trim() || undefined,
@@ -310,11 +746,10 @@ export default function TeacherAiDraftQuizPage() {
         lessonIds,
         extractionIds,
       });
-      setJob(res.data);
-      setCurrentJobId(res.data.jobId);
-      mergeTrackedAiDraftJobFromStatus(classId, res.data, new Date().toISOString());
-      const refreshed = readTrackedAiDraftJobs(classId);
-      setTrackedJobs(refreshed);
+      setCurrentJobId(response.data.jobId);
+      setJob(response.data);
+      mergeTrackedAiDraftJobFromStatus(classId, response.data, new Date().toISOString());
+      syncTrackedJobs();
       toast.success('Quiz draft generation started.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to start AI draft generation'));
@@ -323,319 +758,804 @@ export default function TeacherAiDraftQuizPage() {
     }
   };
 
+  const handleResumeJob = async (jobIdToLoad: string) => {
+    setActiveTab('generation');
+    setCurrentJobId(jobIdToLoad);
+    const status = await refreshCurrentJob(jobIdToLoad, {
+      silent: false,
+      loadResult: true,
+    });
+    if (!status) {
+      return;
+    }
+    if (status.status === 'cancelled') {
+      setResult(null);
+    }
+    if (status.status === 'completed' || status.status === 'approved') {
+      setActiveTab('preview');
+    }
+  };
+
+  const handleReindex = async () => {
+    try {
+      setReindexing(true);
+      const response = await aiService.reindexClass(classId);
+      await fetchReadiness();
+      toast.success(
+        `Indexed ${response.data.chunksIndexed} class chunk(s) for quiz generation.`,
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reindex class sources'));
+    } finally {
+      setReindexing(false);
+    }
+  };
+
+  const handleDeleteDraft = async () => {
+    const targetJobId = displayJob?.jobId ?? null;
+    if (!targetJobId && !assessmentId) {
+      toast.error('No draft or AI job is selected to remove.');
+      return;
+    }
+    const confirmed = window.confirm(
+      assessmentId
+        ? 'Delete this AI draft assessment and remove its AI job history from this workspace?'
+        : 'Cancel this AI generation job and remove it from this workspace?',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      if (assessmentId) {
+        await assessmentService.delete(assessmentId);
+      }
+      if (targetJobId) {
+        await aiService.deleteTeacherJob(targetJobId);
+      }
+      const nextTracked = targetJobId
+        ? removeTrackedAiDraftJob(classId, targetJobId)
+        : readTrackedAiDraftJobs(classId);
+      syncTrackedJobs(nextTracked);
+      setResult(null);
+      setJob(null);
+      const nextJobId = nextTracked[0]?.jobId ?? null;
+      setCurrentJobId(nextJobId);
+      setActiveTab(nextJobId ? 'generation' : 'sources');
+      if (nextJobId) {
+        void refreshCurrentJob(nextJobId, { silent: true });
+      }
+      await fetchReadiness();
+      toast.success(assessmentId ? 'Draft deleted.' : 'AI job removed.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete the current AI draft'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-40" />
-        <Skeleton className="h-48 rounded-xl" />
-        <Skeleton className="h-64 rounded-xl" />
+      <div className="teacher-ai-draft">
+        <div className="teacher-ai-draft__skeleton">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="teacher-ai-draft">
-      <section className="teacher-ai-draft__hero">
-        <button
-          type="button"
-          className="teacher-ai-draft__back"
-          onClick={() => router.push(`/dashboard/teacher/classes/${classId}?view=assignments`)}
-        >
-          <ArrowLeft size={16} />
-          Back to assignments
-        </button>
+      <header className="teacher-ai-draft__header">
+        <div className="teacher-ai-draft__header-main">
+          <button
+            type="button"
+            className="teacher-ai-draft__back"
+            onClick={() =>
+              router.push(`/dashboard/teacher/classes/${classId}?view=assignments`)
+            }
+          >
+            <ArrowLeft size={16} />
+            Back to assignments
+          </button>
 
-        <div className="teacher-ai-draft__hero-main">
-          <div className="teacher-ai-draft__hero-icon">
-            <Sparkles size={22} />
-          </div>
-          <div className="teacher-ai-draft__hero-copy">
-            <h1>AI Draft Quiz Workspace</h1>
-            <p>Build, track, and resume draft generation without losing your review context.</p>
-            <div className="teacher-ai-draft__hero-meta">
-              <span>{classItem?.subjectName || 'Class'}</span>
-              <span>{classItem?.subjectCode || 'No code'}</span>
-              <span>{activeTrackedJobs.length} active job(s)</span>
+          <div className="teacher-ai-draft__headline">
+            <div className="teacher-ai-draft__headline-icon">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <p className="teacher-ai-draft__eyebrow">AI Draft Quiz Generator</p>
+              <h1>Generate a draft quiz from your class sources</h1>
+              <p className="teacher-ai-draft__subtitle">
+                Select ready lessons or completed extractions, let Nexora prepare the
+                draft, then continue directly in the assessment editor.
+              </p>
             </div>
           </div>
         </div>
-      </section>
 
-      <section className="teacher-ai-draft__controls">
-        <div className="teacher-ai-draft__controls-head">
-          <h2>Generation controls</h2>
-          <p>Set targets, choose sources, and run with clear guardrails.</p>
-        </div>
-        <div className="teacher-ai-draft__form-grid">
-          <label className="teacher-ai-draft__field teacher-ai-draft__field--wide">
-            <span>Draft title</span>
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Optional title for this draft run" />
-          </label>
+        <div className="teacher-ai-draft__header-actions">
+          <div
+            className={`teacher-ai-draft__readiness teacher-ai-draft__readiness--${readinessBadge.tone}`}
+          >
+            <span className="teacher-ai-draft__readiness-label">
+              {readinessLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {readinessBadge.label}
+            </span>
+            <p>{readinessBadge.detail}</p>
+          </div>
 
-          <label className="teacher-ai-draft__field">
-            <span>Question count</span>
-            <Input value={questionCount} onChange={(event) => setQuestionCount(event.target.value)} inputMode="numeric" />
-          </label>
-
-          <label className="teacher-ai-draft__field">
-            <span>Question type</span>
-            <select
-              value={questionType}
-              onChange={(event) => setQuestionType(event.target.value as QuestionType)}
-              className="teacher-ai-draft__select"
-            >
-              {QUESTION_TYPES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="teacher-ai-draft__field teacher-ai-draft__field--full">
-            <span>Teacher note</span>
-            <Textarea
-              value={teacherNote}
-              onChange={(event) => setTeacherNote(event.target.value)}
-              placeholder="Focus area, difficulty target, grading notes, or scope constraints"
-              rows={3}
-            />
-          </label>
-        </div>
-
-        <label className="teacher-ai-draft__check">
-          <input
-            type="checkbox"
-            checked={useAllSourcesWhenNoneSelected}
-            onChange={(event) => setUseAllSourcesWhenNoneSelected(event.target.checked)}
-          />
-          <span>Use all available sources when no lesson/extraction is selected</span>
-        </label>
-
-        <div className="teacher-ai-draft__actions">
-          <Button type="button" className="teacher-class-workspace__solid" onClick={handleGenerate} disabled={!canGenerate}>
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {job ? 'Regenerate Draft' : 'Start Draft Generation'}
-          </Button>
-          {assessmentId ? (
+          <div className="teacher-ai-draft__header-buttons">
             <Button
               type="button"
               className="teacher-class-workspace__outline"
-              onClick={() => router.push(`/dashboard/teacher/assessments/${assessmentId}/edit`)}
+              onClick={() => void handleReindex()}
+              disabled={reindexing || deleting || hasRunningJob}
             >
-              Open Assessment Editor
+              {reindexing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Reindex Sources
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            className="teacher-class-workspace__outline"
-            onClick={() => router.push(`/dashboard/teacher/classes/${classId}?view=assignments`)}
-          >
-            Open Assignments Tracker
-          </Button>
+            <Button
+              type="button"
+              className="teacher-ai-draft__danger"
+              onClick={() => void handleDeleteDraft()}
+              disabled={!canDeleteCurrentDraft || deleting}
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete Draft
+            </Button>
+          </div>
         </div>
 
-        {!canGenerate ? (
-          <p className="teacher-ai-draft__hint">
-            {hasAnySource
-              ? 'Select at least one source or keep fallback-to-all enabled. Question count must be valid.'
-              : 'No source lessons or extractions are available for this class yet.'}
-          </p>
-        ) : null}
-      </section>
+        <nav
+          className="teacher-ai-draft__tabs"
+          role="tablist"
+          aria-label="AI draft workflow"
+        >
+          {WORKFLOW_TABS.map((tab) => {
+            const state = getWorkflowTabState(tab.value);
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.value}
+                className={`teacher-ai-draft__tab teacher-ai-draft__tab--${state}`}
+                onClick={() => setActiveTab(tab.value)}
+              >
+                <span className="teacher-ai-draft__tab-step">{tab.step}</span>
+                <span className="teacher-ai-draft__tab-copy">
+                  <strong>{tab.label}</strong>
+                  <small>{tab.description}</small>
+                </span>
+                <span className="teacher-ai-draft__tab-state">
+                  {state === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+                  {getWorkflowTabStatus(tab.value)}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </header>
 
-      <section className="teacher-ai-draft__body">
-        <article className="teacher-ai-draft__panel">
-          <div className="teacher-ai-draft__panel-head">
-            <h3>Source selection</h3>
-            <div className="teacher-ai-draft__chips">
-              <Badge variant="secondary">{selectedLessonIds.length} lesson(s)</Badge>
-              <Badge variant="outline">{selectedExtractionIds.length} extraction(s)</Badge>
+      <div className="teacher-ai-draft__layout teacher-ai-draft__layout--tabs">
+        <section
+          className={`teacher-ai-draft__card teacher-ai-draft__card--sources ${activeTab === 'sources' ? 'is-active' : 'is-hidden'}`}
+          hidden={activeTab !== 'sources'}
+        >
+          <div className="teacher-ai-draft__section-head">
+            <div>
+              <span className="teacher-ai-draft__step">Step 1</span>
+              <h2>Choose the class sources</h2>
+              <p>
+                Green sources are ready now. Amber sources can be indexed during
+                generation. Red sources need attention first.
+              </p>
+            </div>
+            <div className="teacher-ai-draft__summary-grid">
+              <div className="teacher-ai-draft__summary-tile">
+                <strong>{indexStatus?.sourceSummary.lessons.ready ?? 0}</strong>
+                <span>Ready lessons</span>
+              </div>
+              <div className="teacher-ai-draft__summary-tile">
+                <strong>
+                  {(indexStatus?.sourceSummary.lessons.blocked ?? 0) +
+                    (indexStatus?.sourceSummary.extractions.blocked ?? 0)}
+                </strong>
+                <span>Blocked sources</span>
+              </div>
+              <div className="teacher-ai-draft__summary-tile">
+                <strong>{indexStatus?.chunksIndexed ?? 0}</strong>
+                <span>Indexed chunks</span>
+              </div>
+              <div className="teacher-ai-draft__summary-tile">
+                <strong>{indexStatus?.questionChunks ?? 0}</strong>
+                <span>Question chunks</span>
+              </div>
             </div>
           </div>
 
-          <div className="teacher-ai-draft__source-group">
-            <button type="button" className="teacher-ai-draft__source-toggle" onClick={() => setShowLessons((current) => !current)}>
-              <span>Lessons ({visibleLessons.length})</span>
-              {showLessons ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
-
-            {showLessons ? (
-              <div className="teacher-ai-draft__source-body">
-                <div className="teacher-ai-draft__search">
-                  <Search size={14} />
-                  <Input value={lessonSearch} onChange={(event) => setLessonSearch(event.target.value)} placeholder="Search lesson title or description" />
-                </div>
-                <div className="teacher-ai-draft__mini-actions">
-                  <Button type="button" className="teacher-class-workspace__outline" onClick={() => setAllVisibleLessonSelection(true)}>
-                    Select visible
-                  </Button>
-                  <Button type="button" className="teacher-class-workspace__outline" onClick={() => setAllVisibleLessonSelection(false)}>
-                    Clear visible
-                  </Button>
-                </div>
-                <div className="teacher-ai-draft__list">
-                  {visibleLessons.length === 0 ? (
-                    <p className="teacher-ai-draft__empty">No lessons match your filter.</p>
-                  ) : visibleLessons.map((lesson) => (
-                    <label key={lesson.id} className="teacher-ai-draft__item">
-                      <input
-                        type="checkbox"
-                        checked={selectedLessonIds.includes(lesson.id)}
-                        onChange={() => toggleSelection(lesson.id, selectedLessonIds, setSelectedLessonIds)}
-                      />
-                      <div>
-                        <strong>{lesson.title}</strong>
-                        <p>{lesson.isDraft ? 'Draft lesson' : 'Published lesson'}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="teacher-ai-draft__source-group">
-            <button type="button" className="teacher-ai-draft__source-toggle" onClick={() => setShowExtractions((current) => !current)}>
-              <span>Extractions ({visibleExtractions.length})</span>
-              {showExtractions ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            </button>
-
-            {showExtractions ? (
-              <div className="teacher-ai-draft__source-body">
-                <div className="teacher-ai-draft__search">
-                  <Search size={14} />
-                  <Input value={extractionSearch} onChange={(event) => setExtractionSearch(event.target.value)} placeholder="Search extraction title or status" />
-                </div>
-                <div className="teacher-ai-draft__mini-actions">
-                  <Button type="button" className="teacher-class-workspace__outline" onClick={() => setAllVisibleExtractionSelection(true)}>
-                    Select visible
-                  </Button>
-                  <Button type="button" className="teacher-class-workspace__outline" onClick={() => setAllVisibleExtractionSelection(false)}>
-                    Clear visible
-                  </Button>
-                </div>
-                <div className="teacher-ai-draft__list">
-                  {visibleExtractions.length === 0 ? (
-                    <p className="teacher-ai-draft__empty">No extractions match your filter.</p>
-                  ) : visibleExtractions.map((extraction) => (
-                    <label key={extraction.id} className="teacher-ai-draft__item">
-                      <input
-                        type="checkbox"
-                        checked={selectedExtractionIds.includes(extraction.id)}
-                        onChange={() => toggleSelection(extraction.id, selectedExtractionIds, setSelectedExtractionIds)}
-                      />
-                      <div>
-                        <strong>{extraction.structuredContent?.title || extraction.originalName || 'Extraction'}</strong>
-                        <p>{extraction.extractionStatus} - {extraction.originalName || extraction.id}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </article>
-
-        <article className="teacher-ai-draft__panel">
-          <div className="teacher-ai-draft__panel-head">
-            <h3>Live jobs</h3>
-            <p>{activeTrackedJobs.length > 0 ? `${activeTrackedJobs.length} active` : 'No active jobs'}</p>
-          </div>
-
-          <div className="teacher-ai-draft__live">
-            <div className="teacher-ai-draft__status">
+          {indexStatus?.reason ? (
+            <div className="teacher-ai-draft__notice">
+              <AlertTriangle className="h-4 w-4" />
               <div>
-                <strong>{job?.statusMessage || 'Configure and run generation'}</strong>
-                <p>Last update: {toRelativeTime(job?.updatedAt)}</p>
+                <strong>What needs attention</strong>
+                <p>{indexStatus.reason}</p>
               </div>
-              <Badge variant={job?.status === 'failed' ? 'destructive' : 'secondary'}>{job?.status || 'idle'}</Badge>
             </div>
-            <Progress value={job?.progressPercent ?? 0} />
-            {job?.errorMessage ? <p className="teacher-ai-draft__error">{getQuizJobErrorMessage(job.errorMessage)}</p> : null}
+          ) : (
+            <div className="teacher-ai-draft__notice teacher-ai-draft__notice--quiet">
+              <CheckCircle2 className="h-4 w-4" />
+              <div>
+                <strong>Source status looks good</strong>
+                <p>
+                  Last indexed {toRelativeTime(indexStatus?.lastIndexedAt)}. Latest source
+                  update {toRelativeTime(indexStatus?.latestSourceUpdateAt)}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="teacher-ai-draft__source-columns">
+            <article className="teacher-ai-draft__source-panel">
+              <div className="teacher-ai-draft__source-head">
+                <div>
+                  <h3>Lessons</h3>
+                  <p>
+                    {indexStatus?.sourceSummary.lessons.total ?? lessons.length} lesson(s) in
+                    this class
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {selectedLessonIds.length} selected
+                </Badge>
+              </div>
+
+              <div className="teacher-ai-draft__search-row">
+                <Search size={14} />
+                <Input
+                  value={lessonSearch}
+                  onChange={(event) => setLessonSearch(event.target.value)}
+                  placeholder="Search lesson title or blocker reason"
+                />
+              </div>
+
+              <div className="teacher-ai-draft__mini-actions">
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__outline"
+                  onClick={() => setVisibleLessonSelection(true)}
+                >
+                  Select visible
+                </Button>
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__outline"
+                  onClick={() => setVisibleLessonSelection(false)}
+                >
+                  Clear visible
+                </Button>
+              </div>
+
+              <div className="teacher-ai-draft__list">
+                {visibleLessonRows.length === 0 ? (
+                  <p className="teacher-ai-draft__empty">
+                    No lessons match the current filter.
+                  </p>
+                ) : (
+                  visibleLessonRows.map((lessonRow) => (
+                    <label
+                      key={lessonRow.id}
+                      className={`teacher-ai-draft__source-item teacher-ai-draft__source-item--${lessonRow.tone}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={lessonRow.selected}
+                        disabled={!lessonRow.selectable}
+                        onChange={() =>
+                          toggleSelection(
+                            lessonRow.id,
+                            selectedLessonIds,
+                            setSelectedLessonIds,
+                          )
+                        }
+                      />
+                      <div className="teacher-ai-draft__source-copy">
+                        <div className="teacher-ai-draft__source-title-row">
+                          <strong>{lessonRow.title}</strong>
+                          <span>{lessonRow.tone === 'ready' ? 'Indexed' : lessonRow.tone === 'index' ? 'Needs index' : 'Blocked'}</span>
+                        </div>
+                        <p>{lessonRow.stateLabel}</p>
+                        <small>Updated {toRelativeTime(lessonRow.updatedAt)}</small>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </article>
+
+            <article className="teacher-ai-draft__source-panel">
+              <div className="teacher-ai-draft__source-head">
+                <div>
+                  <h3>Extractions</h3>
+                  <p>
+                    {indexStatus?.sourceSummary.extractions.total ?? extractions.length}{' '}
+                    extraction(s) in this class
+                  </p>
+                </div>
+                <Badge variant="outline">
+                  {selectedExtractionIds.length} selected
+                </Badge>
+              </div>
+
+              <div className="teacher-ai-draft__search-row">
+                <Search size={14} />
+                <Input
+                  value={extractionSearch}
+                  onChange={(event) => setExtractionSearch(event.target.value)}
+                  placeholder="Search extraction title or blocker reason"
+                />
+              </div>
+
+              <div className="teacher-ai-draft__mini-actions">
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__outline"
+                  onClick={() => setVisibleExtractionSelection(true)}
+                >
+                  Select visible
+                </Button>
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__outline"
+                  onClick={() => setVisibleExtractionSelection(false)}
+                >
+                  Clear visible
+                </Button>
+              </div>
+
+              <div className="teacher-ai-draft__list">
+                {visibleExtractionRows.length === 0 ? (
+                  <p className="teacher-ai-draft__empty">
+                    No extractions match the current filter.
+                  </p>
+                ) : (
+                  visibleExtractionRows.map((extractionRow) => (
+                    <label
+                      key={extractionRow.id}
+                      className={`teacher-ai-draft__source-item teacher-ai-draft__source-item--${extractionRow.tone}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={extractionRow.selected}
+                        disabled={!extractionRow.selectable}
+                        onChange={() =>
+                          toggleSelection(
+                            extractionRow.id,
+                            selectedExtractionIds,
+                            setSelectedExtractionIds,
+                          )
+                        }
+                      />
+                      <div className="teacher-ai-draft__source-copy">
+                        <div className="teacher-ai-draft__source-title-row">
+                          <strong>{extractionRow.title}</strong>
+                          <span>{extractionRow.tone === 'ready' ? 'Indexed' : extractionRow.tone === 'index' ? 'Needs index' : 'Blocked'}</span>
+                        </div>
+                        <p>{extractionRow.stateLabel}</p>
+                        <small>Updated {toRelativeTime(extractionRow.updatedAt)}</small>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+            </article>
           </div>
 
-          <div className="teacher-ai-draft__tracked">
-            <h4>Recent jobs</h4>
-            {recentTrackedJobs.length === 0 ? (
-              <p className="teacher-ai-draft__empty">No recent AI draft jobs yet.</p>
-            ) : (
-              <div className="teacher-ai-draft__tracked-list">
-                {recentTrackedJobs.map((entry) => (
-                  <div key={entry.jobId} className="teacher-ai-draft__tracked-item">
-                    <div className="teacher-ai-draft__tracked-head">
-                      <span>{entry.jobId}</span>
-                      <Badge variant={entry.lastKnownStatus === 'failed' ? 'destructive' : 'outline'}>{entry.lastKnownStatus}</Badge>
-                    </div>
-                    <p>Progress {Math.round(entry.lastKnownProgress)}% - Updated {toRelativeTime(entry.updatedAt || entry.createdAt)}</p>
-                    <div className="teacher-ai-draft__mini-actions">
-                      <Button type="button" className="teacher-class-workspace__outline" onClick={() => void resumeTrackedJob(entry.jobId)}>
-                        Resume
-                      </Button>
-                      {entry.assessmentId ? (
+          <div className="teacher-ai-draft__step-actions">
+            <Button
+              type="button"
+              className="teacher-class-workspace__outline"
+              onClick={() =>
+                router.push(`/dashboard/teacher/classes/${classId}?view=assignments`)
+              }
+            >
+              Open Assignments Tracker
+            </Button>
+            <Button
+              type="button"
+              className="teacher-class-workspace__solid"
+              onClick={() => setActiveTab('setup')}
+              disabled={!sourceStepComplete}
+            >
+              Continue to quiz setup
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </section>
+
+        <div
+          className={`teacher-ai-draft__sidebar ${activeTab === 'setup' || activeTab === 'generation' ? 'is-active' : 'is-hidden'}`}
+          hidden={activeTab !== 'setup' && activeTab !== 'generation'}
+        >
+          <section
+            className={`teacher-ai-draft__card ${activeTab === 'setup' ? 'is-active' : 'is-hidden'}`}
+            hidden={activeTab !== 'setup'}
+          >
+            <div className="teacher-ai-draft__section-head">
+              <div>
+                <span className="teacher-ai-draft__step">Step 2</span>
+                <h2>Set up the quiz draft</h2>
+                <p>Define the quiz shape before the AI starts writing questions.</p>
+              </div>
+            </div>
+
+            <div className="teacher-ai-draft__form-grid">
+              <label className="teacher-ai-draft__field teacher-ai-draft__field--full">
+                <span>Draft title</span>
+                <Input
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="Optional title for this draft"
+                />
+              </label>
+
+              <label className="teacher-ai-draft__field">
+                <span>Question count</span>
+                <Input
+                  value={questionCount}
+                  onChange={(event) => setQuestionCount(event.target.value)}
+                  inputMode="numeric"
+                />
+              </label>
+
+              <label className="teacher-ai-draft__field">
+                <span>Question type</span>
+                <select
+                  value={questionType}
+                  onChange={(event) => setQuestionType(event.target.value as QuestionType)}
+                  className="teacher-ai-draft__select"
+                >
+                  {QUESTION_TYPES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="teacher-ai-draft__field teacher-ai-draft__field--full">
+                <span>Teacher note</span>
+                <Textarea
+                  value={teacherNote}
+                  onChange={(event) => setTeacherNote(event.target.value)}
+                  placeholder="Focus on specific lessons, difficulty, misconceptions, or grading reminders"
+                  rows={4}
+                />
+              </label>
+            </div>
+
+            <label className="teacher-ai-draft__checkbox">
+              <input
+                type="checkbox"
+                checked={useAllSourcesWhenNoneSelected}
+                onChange={(event) => setUseAllSourcesWhenNoneSelected(event.target.checked)}
+              />
+              <span>Use every ready class source when nothing is selected manually</span>
+            </label>
+
+            <div className="teacher-ai-draft__selection-summary">
+              <Badge variant="secondary">{selectedLessonIds.length} lesson(s)</Badge>
+              <Badge variant="outline">
+                {selectedExtractionIds.length} extraction(s)
+              </Badge>
+              <Badge variant="outline">
+                {parsedQuestionCount || 0} question target
+              </Badge>
+            </div>
+
+            {!canGenerate ? (
+              <p className="teacher-ai-draft__hint">
+                {hasRunningJob
+                  ? 'Wait for the current AI generation to finish before starting another draft.'
+                  : readinessUnavailable
+                    ? 'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.'
+                  : hasAnySource
+                    ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
+                    : 'No source lessons or extractions are available for this class yet.'}
+              </p>
+            ) : null}
+
+            <div className="teacher-ai-draft__actions">
+              <Button
+                type="button"
+                className="teacher-class-workspace__outline"
+                onClick={() => setActiveTab('sources')}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to sources
+              </Button>
+              <Button
+                type="button"
+                className="teacher-class-workspace__solid"
+                onClick={() => void handleGenerate()}
+                disabled={!canGenerate}
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Bot className="h-4 w-4" />
+                )}
+                {displayJob ? 'Generate another draft' : 'Generate draft'}
+              </Button>
+              <Button
+                type="button"
+                className="teacher-class-workspace__outline"
+                onClick={() =>
+                  router.push(`/dashboard/teacher/classes/${classId}?view=assignments`)
+                }
+              >
+                Open Assignments Tracker
+              </Button>
+            </div>
+          </section>
+
+          <section
+            className={`teacher-ai-draft__card ${activeTab === 'generation' ? 'is-active' : 'is-hidden'}`}
+            hidden={activeTab !== 'generation'}
+          >
+            <div className="teacher-ai-draft__section-head">
+              <div>
+                <span className="teacher-ai-draft__step">Step 3</span>
+                <h2>Track generation progress</h2>
+                <p>Watch the AI stages, reopen previous runs, or jump into the editor.</p>
+              </div>
+            </div>
+
+            <div className="teacher-ai-draft__job-panel">
+              <div className="teacher-ai-draft__job-head">
+                <div>
+                  <strong>
+                    {displayJob?.statusMessage ||
+                      'Ready to start a new AI draft run'}
+                  </strong>
+                  <p>
+                    Last update {toRelativeTime(displayJob?.updatedAt)} -{' '}
+                    {formatDateTime(displayJob?.updatedAt)}
+                  </p>
+                </div>
+                <Badge variant={getJobBadgeVariant(displayJob?.status)}>
+                  {displayJob?.status || 'idle'}
+                </Badge>
+              </div>
+              <Progress value={displayJob?.progressPercent ?? 0} />
+              {displayJob?.errorMessage ? (
+                <div className="teacher-ai-draft__job-error">
+                  <XCircle className="h-4 w-4" />
+                  <p>{getQuizJobErrorMessage(displayJob.errorMessage)}</p>
+                </div>
+              ) : null}
+
+              <div className="teacher-ai-draft__job-actions">
+                {assessmentId ? (
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__outline"
+                    onClick={() =>
+                      router.push(`/dashboard/teacher/assessments/${assessmentId}/edit`)
+                    }
+                  >
+                    <FileText className="h-4 w-4" />
+                    Open Assessment Editor
+                  </Button>
+                ) : null}
+                {displayJob?.jobId ? (
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__outline"
+                    onClick={() => void handleResumeJob(displayJob.jobId)}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh this job
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="teacher-ai-draft__recent">
+              <div className="teacher-ai-draft__recent-head">
+                <h3>Recent runs</h3>
+                <span>{recentTrackedJobs.length} saved locally</span>
+              </div>
+
+              {recentTrackedJobs.length === 0 ? (
+                <p className="teacher-ai-draft__empty">
+                  No AI draft runs are tracked yet.
+                </p>
+              ) : (
+                <div className="teacher-ai-draft__recent-list">
+                  {recentTrackedJobs.map((entry) => (
+                    <article
+                      key={entry.jobId}
+                      className={`teacher-ai-draft__recent-item${entry.jobId === currentJobId ? ' is-current' : ''}`}
+                    >
+                      <div className="teacher-ai-draft__recent-item-head">
+                        <div>
+                          <strong>{entry.jobId}</strong>
+                          <p>
+                            {Math.round(entry.lastKnownProgress)}% - Updated{' '}
+                            {toRelativeTime(entry.updatedAt || entry.createdAt)}
+                          </p>
+                        </div>
+                        <Badge variant={getJobBadgeVariant(entry.lastKnownStatus)}>
+                          {entry.lastKnownStatus}
+                        </Badge>
+                      </div>
+                      <div className="teacher-ai-draft__mini-actions">
                         <Button
                           type="button"
                           className="teacher-class-workspace__outline"
-                          onClick={() => router.push(`/dashboard/teacher/assessments/${entry.assessmentId}/edit`)}
+                          onClick={() => void handleResumeJob(entry.jobId)}
                         >
-                          Open assessment
+                          Resume
                         </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </article>
-      </section>
+                        {entry.assessmentId ? (
+                          <Button
+                            type="button"
+                            className="teacher-class-workspace__outline"
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/teacher/assessments/${entry.assessmentId}/edit`,
+                              )
+                            }
+                          >
+                            Open editor
+                          </Button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
 
-      <section className="teacher-ai-draft__preview">
-        <div className="teacher-ai-draft__panel-head">
-          <h3>Draft preview</h3>
-          <p>{result?.questions?.length || 0} question(s)</p>
+            <div className="teacher-ai-draft__step-actions">
+              <Button
+                type="button"
+                className="teacher-class-workspace__outline"
+                onClick={() => setActiveTab('setup')}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to setup
+              </Button>
+              <Button
+                type="button"
+                className="teacher-class-workspace__solid"
+                onClick={() => setActiveTab('preview')}
+                disabled={!result}
+              >
+                Review draft preview
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </section>
         </div>
 
-        {result ? (
-          <div className="teacher-ai-draft__preview-body">
-            <div className="teacher-ai-draft__preview-copy">
-              <h4>{result.title}</h4>
-              <p>{result.description || 'No description provided.'}</p>
+        <section
+          className={`teacher-ai-draft__card teacher-ai-draft__card--preview ${activeTab === 'preview' ? 'is-active' : 'is-hidden'}`}
+          hidden={activeTab !== 'preview'}
+        >
+          <div className="teacher-ai-draft__section-head">
+            <div>
+              <h2>Draft preview</h2>
+              <p>
+                Review the generated draft before opening the full assessment editor.
+              </p>
             </div>
-            <div className="teacher-ai-draft__chips">
-              {selectedLessons.map((lesson) => (
-                <Badge key={lesson.id} variant="secondary">{lesson.title}</Badge>
-              ))}
-              {selectedExtractions.map((extraction) => (
-                <Badge key={extraction.id} variant="outline">{extraction.originalName || extraction.id}</Badge>
-              ))}
-            </div>
-            <div className="teacher-ai-draft__question-list">
-              {result.questions.map((question, index) => (
-                <article key={`${question.content}-${index}`} className="teacher-ai-draft__question">
-                  <div className="teacher-ai-draft__question-head">
-                    <strong>Q{index + 1}. {question.content}</strong>
-                    <Badge variant="outline">{question.type}</Badge>
-                  </div>
-                  {question.options && question.options.length > 0 ? (
-                    <ul>
-                      {question.options.map((option, optionIndex) => (
-                        <li key={`${option.text}-${optionIndex}`}>
-                          {option.isCorrect ? 'Correct' : 'Option'}: {option.text}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </article>
-              ))}
-            </div>
+            <Badge variant="secondary">
+              {result?.questions?.length ?? 0} question(s)
+            </Badge>
           </div>
-        ) : (
-          <p className="teacher-ai-draft__empty">
-            Start generation to preview a draft. You can leave this page and resume tracked jobs from assignments.
-          </p>
-        )}
-      </section>
+
+          {result ? (
+            <div className="teacher-ai-draft__preview-body">
+              <div className="teacher-ai-draft__preview-copy">
+                <h3>{result.title}</h3>
+                <RichTextRenderer
+                  html={result.description || '<p>No description provided.</p>'}
+                />
+              </div>
+
+              <div className="teacher-ai-draft__selection-summary">
+                {selectedLessons.map((lesson) => (
+                  <Badge key={lesson.id} variant="secondary">
+                    {lesson.title}
+                  </Badge>
+                ))}
+                {selectedExtractions.map((extraction) => (
+                  <Badge key={extraction.id} variant="outline">
+                    {extraction.originalName || extraction.id}
+                  </Badge>
+                ))}
+              </div>
+
+              <div className="teacher-ai-draft__question-list">
+                {result.questions.map((question, index) => (
+                  <article
+                    key={`${question.content}-${index}`}
+                    className="teacher-ai-draft__question"
+                  >
+                    <div className="teacher-ai-draft__question-head">
+                      <div>
+                        <span>Question {index + 1}</span>
+                        <Badge variant="outline">{question.type}</Badge>
+                      </div>
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
+                    <RichTextRenderer
+                      html={question.content || '<p>Untitled question</p>'}
+                    />
+                    {question.options && question.options.length > 0 ? (
+                      <ul>
+                        {question.options.map((option, optionIndex) => (
+                          <li key={`${option.text}-${optionIndex}`}>
+                            {option.isCorrect ? 'Correct' : 'Option'}: {option.text}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="teacher-ai-draft__empty-state">
+              <Clock3 className="h-6 w-6" />
+              <div>
+                <strong>No draft preview yet</strong>
+                <p>
+                  Start generation to see the draft preview here. Completed runs can
+                  be resumed from the recent list.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="teacher-ai-draft__step-actions">
+            <Button
+              type="button"
+              className="teacher-class-workspace__outline"
+              onClick={() => setActiveTab('generation')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to generation
+            </Button>
+            {assessmentId ? (
+              <Button
+                type="button"
+                className="teacher-class-workspace__solid"
+                onClick={() =>
+                  router.push(`/dashboard/teacher/assessments/${assessmentId}/edit`)
+                }
+              >
+                <FileText className="h-4 w-4" />
+                Open Assessment Editor
+              </Button>
+            ) : null}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

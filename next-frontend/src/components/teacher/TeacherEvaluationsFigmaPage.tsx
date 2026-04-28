@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Gauge, Search, Star, Users } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { lxpService } from '@/services/lxp-service';
 import type {
   SystemEvaluationRow,
@@ -9,9 +9,9 @@ import type {
 } from '@/types/lxp';
 import {
   TeacherEmptyState,
+  TeacherHeaderMetric,
   TeacherPageShell,
   TeacherSectionCard,
-  TeacherStatCard,
 } from '@/components/teacher/TeacherPageShell';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,7 +31,7 @@ const MODULE_OPTIONS: Array<{
 }> = [
   { label: 'All modules', value: '' },
   { label: 'LMS', value: 'lms' },
-  { label: 'LXP', value: 'lxp' },
+  { label: 'Learners Path', value: 'lxp' },
   { label: 'AI Mentor', value: 'ai_mentor' },
   { label: 'Intervention', value: 'intervention' },
   { label: 'Overall', value: 'overall' },
@@ -47,6 +47,8 @@ function formatSubmitter(row: SystemEvaluationRow): string {
 }
 
 function formatModuleName(value: string): string {
+  if (value === 'lxp') return 'Learners Path';
+  if (value === 'ai_mentor') return 'AI Mentor';
   return value
     .split('_')
     .map((token) => token[0].toUpperCase() + token.slice(1))
@@ -135,34 +137,30 @@ export function TeacherEvaluationsFigmaPage() {
       badge="Teacher Evaluations"
       title="Evaluations"
       description="Student and peer feedback on your classes"
-      stats={
+      headerStats={
         <>
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Responses"
             value={filteredRows.length}
             caption="Submitted evaluation entries"
-            icon={Users}
             accent="sky"
           />
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Content Score"
             value={stats.content}
             caption="Average functionality rating"
-            icon={Star}
             accent="teal"
           />
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Delivery Score"
             value={stats.delivery}
             caption="Average performance rating"
-            icon={Gauge}
             accent="amber"
           />
-          <TeacherStatCard
+          <TeacherHeaderMetric
             label="Engagement Score"
             value={stats.engagement}
             caption="Average satisfaction rating"
-            icon={Star}
             accent="rose"
           />
         </>

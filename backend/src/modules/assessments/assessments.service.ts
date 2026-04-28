@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
@@ -20,6 +21,7 @@ import {
   classRecordCategories,
   classRecordItems,
   classes,
+  moduleItems,
   users,
   enrollments,
   uploadedFiles,
@@ -40,6 +42,7 @@ import { FeedbackService } from './feedback.service';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
 import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
+import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -60,6 +63,7 @@ const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
   'jpg',
   'jpeg',
   'webp',
+  'zip',
 ];
 const DEFAULT_FILE_UPLOAD_MIME_TYPES = [
   'application/pdf',
@@ -78,6 +82,8 @@ const DEFAULT_FILE_UPLOAD_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/webp',
+  'application/zip',
+  'application/x-zip-compressed',
 ];
 
 type RubricCriterion = {
@@ -100,6 +106,8 @@ const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{
 
 @Injectable()
 export class AssessmentsService {
+  private readonly logger = new Logger(AssessmentsService.name);
+
   constructor(
     private databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
@@ -111,6 +119,23 @@ export class AssessmentsService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private async runAssessmentNotificationSideEffects(
+    assessmentId: string,
+    action: string,
+    work: () => Promise<void>,
+  ) {
+    try {
+      await work();
+    } catch (error) {
+      this.logger.error(
+        `Assessment notification sync failed after ${action} for assessment ${assessmentId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   private normalizeExtensions(extensions?: string[]) {
@@ -173,6 +198,12 @@ export class AssessmentsService {
     }
 
     return normalized;
+  }
+
+  private sanitizeOptionalRichText(value?: string | null) {
+    if (value === undefined || value === null) return null;
+    const trimmed = value.trim();
+    return trimmed ? sanitizeRichTextHtml(trimmed) : null;
   }
 
   private sumRubricPoints(criteria: RubricCriterion[]) {
@@ -716,6 +747,106 @@ export class AssessmentsService {
     }
   }
 
+  private async assertCoreAssessmentReadyForPublish(assessment: {
+    id: string;
+    classId: string;
+    classRecordCategory?: string | null;
+    quarter?: string | null;
+  }) {
+    if (!assessment.classRecordCategory || !assessment.quarter) {
+      throw new BadRequestException(
+        'Core assessments must be assigned to a class record category and quarter before publishing',
+      );
+    }
+
+    const expectedCategoryName = this.getClassRecordCategoryName(
+      assessment.classRecordCategory,
+    );
+    if (!expectedCategoryName) {
+      throw new BadRequestException(
+        'Core assessments must be assigned to a valid class record category before publishing',
+      );
+    }
+
+    const linkedItem = await this.db.query.classRecordItems.findFirst({
+      where: eq(classRecordItems.assessmentId, assessment.id),
+      with: {
+        classRecord: {
+          columns: {
+            id: true,
+            classId: true,
+            gradingPeriod: true,
+          },
+        },
+        category: {
+          columns: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (
+      !linkedItem ||
+      linkedItem.classRecord.classId !== assessment.classId ||
+      linkedItem.classRecord.gradingPeriod !== assessment.quarter ||
+      linkedItem.category.name !== expectedCategoryName
+    ) {
+      throw new BadRequestException(
+        'Core assessments must be placed in a class record slot before publishing',
+      );
+    }
+
+    await this.validateForPublish(assessment.id);
+  }
+
+  private async canStudentAccessAssessment(assessment: {
+    id: string;
+    classId: string;
+    isPublished?: boolean | null;
+    isCoreTemplateAsset?: boolean | null;
+  }) {
+    if (!assessment.isPublished) return false;
+    if (!assessment.isCoreTemplateAsset) return true;
+
+    const attachedItems = await this.db.query.moduleItems.findMany({
+      where: and(
+        eq(moduleItems.assessmentId, assessment.id),
+        eq(moduleItems.itemType, 'assessment'),
+      ),
+      with: {
+        section: {
+          with: {
+            module: {
+              columns: {
+                id: true,
+                classId: true,
+                isVisible: true,
+                isLocked: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (attachedItems.length === 0) {
+      return true;
+    }
+
+    return attachedItems.some((item: any) => {
+      const parentModule = item.section?.module;
+      return (
+        Boolean(item.isGiven) &&
+        Boolean(item.isVisible) &&
+        parentModule?.classId === assessment.classId &&
+        Boolean(parentModule.isVisible) &&
+        !parentModule.isLocked
+      );
+    });
+  }
+
   private assertTeacherClassOwnership(
     classTeacherId: string | null | undefined,
     currentUser: any,
@@ -1017,9 +1148,13 @@ export class AssessmentsService {
     });
 
     if (currentUser && this.getUserRole(currentUser) === 'student') {
-      assessmentList = assessmentList.filter(
-        (assessment) => assessment.isPublished,
-      );
+      const visibleAssessments: typeof assessmentList = [];
+      for (const assessment of assessmentList) {
+        if (await this.canStudentAccessAssessment(assessment)) {
+          visibleAssessments.push(assessment);
+        }
+      }
+      assessmentList = visibleAssessments;
     }
 
     if (options?.studentId) {
@@ -1144,9 +1279,9 @@ export class AssessmentsService {
       );
       if (role === 'student') {
         await this.ensureStudentEnrolled(assessment.classId, userId);
-        if (!assessment.isPublished) {
+        if (!(await this.canStudentAccessAssessment(assessment))) {
           throw new ForbiddenException(
-            'Students cannot view unpublished assessments',
+            'Students cannot view unavailable assessments',
           );
         }
       }
@@ -1174,8 +1309,18 @@ export class AssessmentsService {
       assessment.rubricParseStatus,
     );
 
+    const sanitizedQuestions =
+      viewerRole === 'student'
+        ? assessment.questions.map((question) =>
+            question.type === QuestionType.FILL_BLANK
+              ? { ...question, options: [] }
+              : question,
+          )
+        : assessment.questions;
+
     const assessmentWithAttachment = {
       ...assessment,
+      questions: sanitizedQuestions,
       teacherAttachmentFile,
       rubricSourceFile: rubricSourceFile
         ? {
@@ -1258,7 +1403,9 @@ export class AssessmentsService {
       .insert(assessments)
       .values({
         title: createAssessmentDto.title,
-        description: createAssessmentDto.description,
+        description: this.sanitizeOptionalRichText(
+          createAssessmentDto.description,
+        ),
         classId: createAssessmentDto.classId,
         type: createAssessmentDto.type,
         dueDate: createAssessmentDto.dueDate
@@ -1272,7 +1419,9 @@ export class AssessmentsService {
           createAssessmentDto.questionTimeLimitSeconds ?? null,
         strictMode: createAssessmentDto.strictMode ?? false,
         fileUploadInstructions: isFileUpload
-          ? createAssessmentDto.fileUploadInstructions?.trim()
+          ? this.sanitizeOptionalRichText(
+              createAssessmentDto.fileUploadInstructions,
+            )
           : null,
         teacherAttachmentFileId: isFileUpload
           ? createAssessmentDto.teacherAttachmentFileId
@@ -1428,6 +1577,16 @@ export class AssessmentsService {
               );
             }
           }
+        } else if (q.type === QuestionType.FILL_BLANK) {
+          const validAnswerKeys = (q.options || [])
+            .filter((option) => option.isCorrect)
+            .map((option) => option.text?.trim())
+            .filter((answer) => Boolean(answer));
+          if (validAnswerKeys.length === 0) {
+            errors.push(
+              `Question ${i + 1}: Fill in the blank needs at least one correct answer`,
+            );
+          }
         }
       }
     }
@@ -1477,10 +1636,6 @@ export class AssessmentsService {
 
     // Verify assessment exists
     const existingAssessment = await this.getAssessmentById(assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(
-      existingAssessment,
-      'update publish state',
-    );
     this.assertTeacherClassOwnership(
       existingAssessment.class?.teacherId,
       currentUser,
@@ -1490,6 +1645,13 @@ export class AssessmentsService {
     const nextType = updateAssessmentDto.type ?? existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
     const wasPublished = Boolean(existingAssessment.isPublished);
+    const shouldSyncClassRecordPlacement =
+      !existingAssessment.isCoreTemplateAsset ||
+      updateAssessmentDto.classRecordCategory !== undefined ||
+      updateAssessmentDto.quarter !== undefined ||
+      updateAssessmentDto.classRecordItemId !== undefined ||
+      updateAssessmentDto.title !== undefined ||
+      updateAssessmentDto.rubricCriteria !== undefined;
     const shouldRescheduleDueReminder =
       updateAssessmentDto.dueDate !== undefined ||
       updateAssessmentDto.isPublished !== undefined;
@@ -1516,7 +1678,18 @@ export class AssessmentsService {
 
     // Validate before publishing
     if (updateAssessmentDto.isPublished === true) {
-      await this.validateForPublish(assessmentId);
+      if (existingAssessment.isCoreTemplateAsset) {
+        await this.assertCoreAssessmentReadyForPublish({
+          id: assessmentId,
+          classId: existingAssessment.classId,
+          classRecordCategory:
+            updateAssessmentDto.classRecordCategory ??
+            existingAssessment.classRecordCategory,
+          quarter: updateAssessmentDto.quarter ?? existingAssessment.quarter,
+        });
+      } else {
+        await this.validateForPublish(assessmentId);
+      }
     }
 
     // Build update object with only provided fields
@@ -1524,7 +1697,9 @@ export class AssessmentsService {
     if (updateAssessmentDto.title !== undefined)
       updateData.title = updateAssessmentDto.title;
     if (updateAssessmentDto.description !== undefined)
-      updateData.description = updateAssessmentDto.description;
+      updateData.description = this.sanitizeOptionalRichText(
+        updateAssessmentDto.description,
+      );
     if (updateAssessmentDto.type !== undefined)
       updateData.type = updateAssessmentDto.type;
     if (updateAssessmentDto.dueDate !== undefined)
@@ -1544,8 +1719,9 @@ export class AssessmentsService {
     if (updateAssessmentDto.strictMode !== undefined)
       updateData.strictMode = updateAssessmentDto.strictMode;
     if (updateAssessmentDto.fileUploadInstructions !== undefined)
-      updateData.fileUploadInstructions =
-        updateAssessmentDto.fileUploadInstructions?.trim() || null;
+      updateData.fileUploadInstructions = this.sanitizeOptionalRichText(
+        updateAssessmentDto.fileUploadInstructions,
+      );
     if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
       updateData.teacherAttachmentFileId =
         updateAssessmentDto.teacherAttachmentFileId;
@@ -1639,15 +1815,17 @@ export class AssessmentsService {
       .where(eq(assessments.id, assessmentId))
       .returning();
 
-    await this.syncClassRecordPlacement({
-      assessmentId: updated.id,
-      classId: updated.classId,
-      title: updated.title,
-      totalPoints: updated.totalPoints ?? 0,
-      classRecordCategory: updated.classRecordCategory ?? undefined,
-      quarter: updated.quarter ?? undefined,
-      classRecordItemId: updateAssessmentDto.classRecordItemId,
-    });
+    if (shouldSyncClassRecordPlacement) {
+      await this.syncClassRecordPlacement({
+        assessmentId: updated.id,
+        classId: updated.classId,
+        title: updated.title,
+        totalPoints: updated.totalPoints ?? 0,
+        classRecordCategory: updated.classRecordCategory ?? undefined,
+        quarter: updated.quarter ?? undefined,
+        classRecordItemId: updateAssessmentDto.classRecordItemId,
+      });
+    }
 
     const assessment = await this.getAssessmentById(updated.id);
 
@@ -1671,26 +1849,32 @@ export class AssessmentsService {
       source: 'assessments.updateAssessment',
     });
 
-    if (!wasPublished && assessment.isPublished) {
-      await this.assessmentNotificationDispatch.enqueueAssessmentAssigned(
-        assessment,
-      );
-    }
+    await this.runAssessmentNotificationSideEffects(
+      assessment.id,
+      'updateAssessment',
+      async () => {
+        if (!wasPublished && assessment.isPublished) {
+          await this.assessmentNotificationDispatch.enqueueAssessmentAssigned(
+            assessment,
+          );
+        }
 
-    if (
-      assessment.isPublished &&
-      (!wasPublished || shouldRescheduleDueReminder)
-    ) {
-      await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
-        assessment,
-      );
-    }
+        if (
+          assessment.isPublished &&
+          (!wasPublished || shouldRescheduleDueReminder)
+        ) {
+          await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
+            assessment,
+          );
+        }
 
-    if (wasPublished && !assessment.isPublished) {
-      await this.assessmentNotificationDispatch.removeAssessmentDueReminder(
-        assessment.id,
-      );
-    }
+        if (wasPublished && !assessment.isPublished) {
+          await this.assessmentNotificationDispatch.removeAssessmentDueReminder(
+            assessment.id,
+          );
+        }
+      },
+    );
 
     return assessment;
   }
@@ -1720,7 +1904,7 @@ export class AssessmentsService {
     }
 
     if (dto.isPublished) {
-      await this.validateForPublish(assessmentId);
+      await this.assertCoreAssessmentReadyForPublish(assessment);
     }
 
     const [updated] = await this.db
@@ -1740,22 +1924,30 @@ export class AssessmentsService {
       },
     });
 
-    if (!assessment.isPublished && updated.isPublished) {
-      await this.assessmentNotificationDispatch.enqueueAssessmentAssigned(
-        updated,
-      );
-      await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
-        updated,
-      );
-    }
+    const releasedAssessment = await this.getAssessmentById(assessmentId);
 
-    if (assessment.isPublished && !updated.isPublished) {
-      await this.assessmentNotificationDispatch.removeAssessmentDueReminder(
-        updated.id,
-      );
-    }
+    await this.runAssessmentNotificationSideEffects(
+      releasedAssessment.id,
+      'releaseCoreAssessment',
+      async () => {
+        if (!assessment.isPublished && releasedAssessment.isPublished) {
+          await this.assessmentNotificationDispatch.enqueueAssessmentAssigned(
+            releasedAssessment,
+          );
+          await this.assessmentNotificationDispatch.rescheduleAssessmentDueReminder(
+            releasedAssessment,
+          );
+        }
 
-    return this.getAssessmentById(assessmentId);
+        if (assessment.isPublished && !releasedAssessment.isPublished) {
+          await this.assessmentNotificationDispatch.removeAssessmentDueReminder(
+            releasedAssessment.id,
+          );
+        }
+      },
+    );
+
+    return releasedAssessment;
   }
 
   /**
@@ -1813,7 +2005,6 @@ export class AssessmentsService {
     const assessment = await this.getAssessmentById(
       createQuestionDto.assessmentId,
     );
-    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -1826,12 +2017,16 @@ export class AssessmentsService {
       .values({
         assessmentId: createQuestionDto.assessmentId,
         type: createQuestionDto.type,
-        content: createQuestionDto.content,
+        content:
+          this.sanitizeOptionalRichText(createQuestionDto.content) || '<p></p>',
         points: createQuestionDto.points,
         order: createQuestionDto.order,
         isRequired: createQuestionDto.isRequired,
-        explanation: createQuestionDto.explanation,
+        explanation: this.sanitizeOptionalRichText(
+          createQuestionDto.explanation,
+        ),
         imageUrl: createQuestionDto.imageUrl,
+        conceptTags: createQuestionDto.conceptTags,
       })
       .returning();
 
@@ -1911,7 +2106,6 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -1926,11 +2120,13 @@ export class AssessmentsService {
       updateQuestionDto.order !== undefined ||
       updateQuestionDto.isRequired !== undefined ||
       updateQuestionDto.explanation !== undefined ||
-      updateQuestionDto.imageUrl !== undefined
+      updateQuestionDto.imageUrl !== undefined ||
+      updateQuestionDto.conceptTags !== undefined
     ) {
       const setData: Record<string, any> = { updatedAt: new Date() };
       if (updateQuestionDto.content !== undefined)
-        setData.content = updateQuestionDto.content;
+        setData.content =
+          this.sanitizeOptionalRichText(updateQuestionDto.content) || '<p></p>';
       if (updateQuestionDto.points !== undefined)
         setData.points = updateQuestionDto.points;
       if (updateQuestionDto.order !== undefined)
@@ -1938,9 +2134,13 @@ export class AssessmentsService {
       if (updateQuestionDto.isRequired !== undefined)
         setData.isRequired = updateQuestionDto.isRequired;
       if (updateQuestionDto.explanation !== undefined)
-        setData.explanation = updateQuestionDto.explanation;
+        setData.explanation = this.sanitizeOptionalRichText(
+          updateQuestionDto.explanation,
+        );
       if (updateQuestionDto.imageUrl !== undefined)
         setData.imageUrl = updateQuestionDto.imageUrl;
+      if (updateQuestionDto.conceptTags !== undefined)
+        setData.conceptTags = updateQuestionDto.conceptTags;
 
       await this.db
         .update(assessmentQuestions)
@@ -2014,7 +2214,6 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
-    this.ensureAssessmentNotCoreTemplateAsset(assessment, 'modify questions');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2064,7 +2263,10 @@ export class AssessmentsService {
    */
   async startAttempt(studentId: string, assessmentId: string) {
     // Verify assessment exists and is published
-    const assessment = await this.getAssessmentById(assessmentId);
+    const assessment = await this.getAssessmentById(assessmentId, 'student', {
+      userId: studentId,
+      roles: ['student'],
+    });
 
     if (!assessment.isPublished) {
       throw new ForbiddenException('This assessment is not published yet');
@@ -3271,6 +3473,75 @@ export class AssessmentsService {
    * Auto-grade objective questions and store responses.
    * Returns total points earned and the stored response records.
    */
+  private getFillBlankMatchOptions(question: { conceptTags?: unknown }): {
+    smartCaseInsensitive: boolean;
+    experimentalSmartMatch: boolean;
+  } {
+    const conceptTags = Array.isArray(question.conceptTags)
+      ? question.conceptTags
+          .map((tag) => String(tag).trim())
+          .filter((tag) => tag.length > 0)
+      : [];
+    return {
+      smartCaseInsensitive: !conceptTags.includes(
+        'fill_blank:smart_case_sensitive',
+      ),
+      experimentalSmartMatch: conceptTags.includes(
+        'fill_blank:experimental_smart_match',
+      ),
+    };
+  }
+
+  private normalizeFillBlankAnswer(
+    value: string,
+    matchOptions: {
+      smartCaseInsensitive: boolean;
+      experimentalSmartMatch: boolean;
+    },
+  ): string {
+    let normalized = value.trim();
+    if (matchOptions.experimentalSmartMatch) {
+      normalized = normalized.replace(/[^a-z0-9]+/gi, '');
+    }
+    if (matchOptions.smartCaseInsensitive) {
+      normalized = normalized.toLowerCase();
+    }
+    return normalized;
+  }
+
+  private isFillBlankResponseCorrect(
+    question: {
+      options?: Array<{ text?: string; isCorrect?: boolean }>;
+      conceptTags?: unknown;
+    },
+    response: { studentAnswer?: string },
+  ): boolean {
+    if (!response.studentAnswer || !Array.isArray(question.options)) {
+      return false;
+    }
+
+    const matchOptions = this.getFillBlankMatchOptions(question);
+    const normalizedStudentAnswer = this.normalizeFillBlankAnswer(
+      response.studentAnswer,
+      matchOptions,
+    );
+
+    if (!normalizedStudentAnswer) {
+      return false;
+    }
+
+    const normalizedAnswerKeys = question.options
+      .filter((option) => option.isCorrect)
+      .map((option) =>
+        this.normalizeFillBlankAnswer(option.text ?? '', matchOptions),
+      )
+      .filter((answer) => answer.length > 0);
+
+    return normalizedAnswerKeys.some(
+      (answerKey) => answerKey === normalizedStudentAnswer,
+    );
+  }
+
   private async autoGradeResponses(
     submittedResponses: any[],
     questions: any[],
@@ -3326,8 +3597,13 @@ export class AssessmentsService {
             pointsEarned = question.points;
           }
         }
+      } else if (question.type === QuestionType.FILL_BLANK) {
+        if (this.isFillBlankResponseCorrect(question, response)) {
+          isCorrect = true;
+          pointsEarned = question.points;
+        }
       }
-      // Short answer and fill blank are not auto-graded
+      // Short answer remains ungraded by design.
 
       totalPoints += pointsEarned;
 
@@ -3343,7 +3619,8 @@ export class AssessmentsService {
             question.type === QuestionType.MULTIPLE_CHOICE ||
             question.type === QuestionType.TRUE_FALSE ||
             question.type === QuestionType.DROPDOWN ||
-            question.type === QuestionType.MULTIPLE_SELECT
+            question.type === QuestionType.MULTIPLE_SELECT ||
+            question.type === QuestionType.FILL_BLANK
               ? isCorrect
               : null,
           pointsEarned,

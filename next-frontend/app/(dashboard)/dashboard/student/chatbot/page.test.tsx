@@ -15,10 +15,10 @@ describe('StudentChatbotRedirectPage', () => {
     jest.clearAllMocks();
   });
 
-  it('redirects to the JA workspace route', () => {
+  it('redirects to the standalone JA ask route', () => {
     render(<StudentChatbotRedirectPage />);
 
     expect(mockedRedirect).toHaveBeenCalledTimes(1);
-    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard/student/ja');
+    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard/student/ja?mode=ask');
   });
 });

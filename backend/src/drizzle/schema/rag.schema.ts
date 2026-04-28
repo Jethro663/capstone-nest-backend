@@ -55,6 +55,7 @@ export const aiGenerationStatusEnum = pgEnum('ai_generation_status', [
   'processing',
   'completed',
   'approved',
+  'cancelled',
   'rejected',
   'failed',
 ]);

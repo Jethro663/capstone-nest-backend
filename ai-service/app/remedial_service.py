@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+from html import unescape
 from typing import Any
 
 from fastapi import HTTPException
@@ -9,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .indexing_pipeline import get_class_index_status, reindex_class_content
 from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser
 
@@ -40,6 +43,162 @@ INTERVENTION_RECOMMENDATION_FORMAT: dict[str, Any] = {
     },
     "required": ["summary", "teacherActions", "studentFocus"],
 }
+
+FAILED_RETRY_ASSESSMENT_SQL = """
+            SELECT
+              a.id,
+              a.title,
+              a.description,
+              a.passing_score,
+              MAX(aa.submitted_at) AS latest_submitted_at,
+              a.created_at AS assessment_created_at
+            FROM assessments a
+            INNER JOIN assessment_attempts aa
+              ON aa.assessment_id = a.id
+            WHERE a.class_id = :classId
+              AND a.is_published = true
+              AND aa.student_id = :studentId
+              AND aa.is_submitted = true
+              AND aa.passed = false
+            GROUP BY a.id, a.title, a.description, a.passing_score, a.created_at
+            ORDER BY latest_submitted_at DESC NULLS LAST, assessment_created_at DESC
+            LIMIT 12
+            """
+
+HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+WHITESPACE_PATTERN = re.compile(r"\s+")
+QUOTED_TERM_PATTERN = re.compile(r"[\"“”']([^\"“”']+)[\"“”']")
+
+
+def _sanitize_plain_text(value: Any, *, max_length: int | None = None) -> str:
+    if value is None:
+        return ""
+
+    cleaned = unescape(str(value)).replace("\xa0", " ")
+    cleaned = HTML_TAG_PATTERN.sub(" ", cleaned)
+    cleaned = WHITESPACE_PATTERN.sub(" ", cleaned).strip(" -:;,.")
+
+    if max_length and len(cleaned) > max_length:
+        cleaned = cleaned[: max_length - 1].rstrip(" -:;,.") + "..."
+    return cleaned
+
+
+def _normalize_concept_labels(
+    raw_tags: Any,
+    *,
+    fallback_text: str | None = None,
+) -> list[str]:
+    tags = raw_tags or []
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except json.JSONDecodeError:
+            tags = [tags]
+
+    normalized: list[str] = []
+    for tag in tags:
+        cleaned = _sanitize_plain_text(tag, max_length=80)
+        if cleaned:
+            normalized.append(cleaned)
+
+    if normalized:
+        return normalized
+
+    fallback = _sanitize_plain_text(fallback_text, max_length=80)
+    return [fallback] if fallback else []
+
+
+def _derive_question_focus_label(question_text: Any) -> str:
+    cleaned = _sanitize_plain_text(question_text, max_length=140)
+    if not cleaned:
+        return ""
+
+    lowered = cleaned.lower().rstrip("?")
+    quoted_term = ""
+    quoted_match = QUOTED_TERM_PATTERN.search(str(question_text or ""))
+    if quoted_match:
+        quoted_term = _sanitize_plain_text(quoted_match.group(1), max_length=40)
+
+    if "which operation" in lowered:
+        if "both" in lowered:
+            return "intersection of sets"
+        if " or " in lowered or "either" in lowered:
+            return "union of sets"
+        return "set operation selection"
+
+    if "venn diagram" in lowered and "rectangular region" in lowered:
+        return "universal set in a Venn diagram"
+
+    if "venn diagram" in lowered:
+        return "Venn diagrams"
+
+    if "conjunction" in lowered and quoted_term:
+        if "set" in lowered:
+            return f'conjunction "{quoted_term}" in set problems'
+        return f'conjunction "{quoted_term}"'
+
+    for prefix in (
+        "what does ",
+        "what is ",
+        "which of the following is ",
+        "which of the following describes ",
+        "which statement best describes ",
+        "what diagram is used to ",
+    ):
+        if lowered.startswith(prefix):
+            candidate = _sanitize_plain_text(cleaned[len(prefix) :], max_length=80)
+            if candidate:
+                return candidate[0].upper() + candidate[1:]
+
+    return cleaned
+
+
+async def _ensure_intervention_index_ready(
+    db: AsyncSession,
+    class_id: str,
+) -> dict[str, Any]:
+    index_status = await get_class_index_status(db, class_id)
+    if index_status.get("needsReindex") or int(index_status.get("chunksIndexed") or 0) <= 0:
+        await reindex_class_content(db, class_id)
+        index_status = await get_class_index_status(db, class_id)
+    return index_status
+
+
+async def _load_assessment_concept_map(
+    db: AsyncSession,
+    assessment_ids: list[str],
+) -> dict[str, set[str]]:
+    normalized_ids = [assessment_id for assessment_id in assessment_ids if assessment_id]
+    if not normalized_ids:
+        return {}
+
+    concept_rows = await db.execute(
+        sa_text(
+            """
+            SELECT assessment_id, concept_tags
+            FROM assessment_questions
+            WHERE assessment_id IN :assessmentIds
+            """
+        ).bindparams(bindparam("assessmentIds", expanding=True)),
+        {
+            "assessmentIds": normalized_ids,
+        },
+    )
+
+    concept_map: dict[str, set[str]] = {}
+    for row in concept_rows.mappings():
+        assessment_id = str(row.get("assessment_id") or "")
+        if not assessment_id:
+            continue
+        normalized = {
+            label.lower()
+            for label in _normalize_concept_labels(row.get("concept_tags"))
+            if label
+        }
+        if assessment_id not in concept_map:
+            concept_map[assessment_id] = set()
+        concept_map[assessment_id].update(normalized)
+    return concept_map
 
 
 async def recommend_intervention_case(
@@ -114,45 +273,57 @@ async def recommend_intervention_case(
         raise HTTPException(400, "No incorrect assessment responses found for this intervention case")
 
     concept_counts: dict[str, int] = {}
+    concept_display: dict[str, str] = {}
     for row in mistakes:
-        concept_tags = row.get("concept_tags") or []
-        if isinstance(concept_tags, str):
-            try:
-                concept_tags = json.loads(concept_tags)
-            except json.JSONDecodeError:
-                concept_tags = []
-        if not concept_tags:
-            concept_tags = [row["content"][:80]]
+        question_text = _sanitize_plain_text(row.get("content"), max_length=140)
+        explanation_text = _sanitize_plain_text(row.get("explanation"), max_length=180)
+        fallback_focus = _derive_question_focus_label(question_text or explanation_text)
+        concept_tags = _normalize_concept_labels(
+            row.get("concept_tags"),
+            fallback_text=fallback_focus or question_text or explanation_text,
+        )
         for concept in concept_tags:
-            key = str(concept).strip()
+            label = _sanitize_plain_text(concept, max_length=80)
+            key = label.lower()
             if not key:
                 continue
+            concept_display.setdefault(key, label)
             concept_counts[key] = concept_counts.get(key, 0) + 1
 
-    weak_concepts = sorted(concept_counts, key=concept_counts.get, reverse=True)[:5]
+    weak_concepts = [
+        concept_display[key]
+        for key in sorted(concept_counts, key=concept_counts.get, reverse=True)[:5]
+    ]
     retrieval_query = "\n".join(
-        [row["content"] for row in mistakes[:6]]
-        + [row.get("explanation") or "" for row in mistakes[:4]]
+        [_sanitize_plain_text(row.get("content"), max_length=260) for row in mistakes[:6]]
+        + [_sanitize_plain_text(row.get("explanation"), max_length=220) for row in mistakes[:4]]
         + weak_concepts
-        + ([note] if note else [])
+        + ([_sanitize_plain_text(note, max_length=200)] if note else [])
     )
 
-    chunks = await similarity_search(
+    index_status = await _ensure_intervention_index_ready(
         db,
-        query_text=retrieval_query,
-        class_id=str(intervention_case["class_id"]),
-        subject_key=normalize_library_subject_key(
-            intervention_case["subject_code"],
-            intervention_case["subject_name"],
-        ),
-        grade_level=str(intervention_case["grade_level"])
-        if intervention_case["grade_level"]
-        else None,
-        top_k=10,
-        only_published=True,
-        policy_name="remedial",
-        concept_hints=weak_concepts,
+        str(intervention_case["class_id"]),
     )
+    chunks: list[dict[str, Any]] = []
+    if int(index_status.get("chunksIndexed") or 0) > 0:
+        chunks = await similarity_search(
+            db,
+            query_text=retrieval_query,
+            class_id=str(intervention_case["class_id"]),
+            teacher_id=user.id,
+            subject_key=normalize_library_subject_key(
+                intervention_case["subject_code"],
+                intervention_case["subject_name"],
+            ),
+            grade_level=str(intervention_case["grade_level"])
+            if intervention_case["grade_level"]
+            else None,
+            top_k=10,
+            only_published=True,
+            policy_name="remedial",
+            concept_hints=weak_concepts,
+        )
 
     recommended_lessons: list[dict[str, Any]] = []
     seen_lessons: set[str] = set()
@@ -189,23 +360,17 @@ async def recommend_intervention_case(
             break
 
     assessment_rows = await db.execute(
-        sa_text(
-            """
-            SELECT id, title, description, passing_score
-            FROM assessments
-            WHERE class_id = :classId
-              AND is_published = true
-            ORDER BY created_at DESC
-            LIMIT 12
-            """
-        ),
-        {"classId": str(intervention_case["class_id"])},
+        sa_text(FAILED_RETRY_ASSESSMENT_SQL),
+        {
+            "classId": str(intervention_case["class_id"]),
+            "studentId": str(intervention_case["student_id"]),
+        },
     )
     assessment_candidates = [
         {
             "assessmentId": str(row["id"]),
             "title": row["title"],
-            "reason": "Recent published assessment available for retry and checking mastery.",
+            "reason": "Recent failed published assessment available for retry and checking mastery.",
             "confidence": 0.45,
             "evidence": {
                 "policy": "class.published.fallback",
@@ -214,37 +379,14 @@ async def recommend_intervention_case(
         }
         for row in assessment_rows.mappings()
     ]
-    concept_rows = await db.execute(
-        sa_text(
-            """
-            SELECT assessment_id, concept_tags
-            FROM assessment_questions
-            WHERE assessment_id = ANY(:assessmentIds::uuid[])
-            """
-        ),
-        {
-            "assessmentIds": [
-                candidate["assessmentId"]
-                for candidate in assessment_candidates
-                if candidate["assessmentId"]
-            ],
-        },
+    concept_map = await _load_assessment_concept_map(
+        db,
+        [
+            candidate["assessmentId"]
+            for candidate in assessment_candidates
+            if candidate["assessmentId"]
+        ],
     )
-    concept_map: dict[str, set[str]] = {}
-    for row in concept_rows.mappings():
-        assessment_id = str(row.get("assessment_id") or "")
-        if not assessment_id:
-            continue
-        tags = row.get("concept_tags") or []
-        if isinstance(tags, str):
-            try:
-                tags = json.loads(tags)
-            except json.JSONDecodeError:
-                tags = []
-        normalized = {str(tag).strip().lower() for tag in tags if str(tag).strip()}
-        if assessment_id not in concept_map:
-            concept_map[assessment_id] = set()
-        concept_map[assessment_id].update(normalized)
 
     weak_set = {concept.lower() for concept in weak_concepts}
     for candidate in assessment_candidates:
@@ -293,8 +435,8 @@ async def recommend_intervention_case(
             {
                 "questionId": str(row["question_id"]),
                 "assessmentTitle": row["assessment_title"],
-                "question": row["content"],
-                "explanation": row.get("explanation") or "",
+                "question": _sanitize_plain_text(row.get("content"), max_length=220),
+                "explanation": _sanitize_plain_text(row.get("explanation"), max_length=220),
             }
             for row in mistakes[:5]
         ],
@@ -439,7 +581,8 @@ Recommended lesson evidence:
             }
             for item in recommended_assessments
         ],
-        "note": f"AI recommendation based on weak concepts: {', '.join(weak_concepts[:3])}",
+        "note": "AI recommendation based on weak concepts: "
+        + ", ".join(weak_concepts[:3]),
     }
 
     structured_output = {

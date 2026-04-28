@@ -7,12 +7,6 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { IOptions as SanitizeOptions } from 'sanitize-html';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const sanitizeHtml = require('sanitize-html') as (
-  dirty: string,
-  options?: SanitizeOptions,
-) => string;
 import { DatabaseService } from '../../database/database.service';
 import {
   classes,
@@ -25,6 +19,7 @@ import {
   uploadedFiles,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
+import { sanitizeRichTextHtml as sanitizeRichText } from '../../common/utils/rich-text-sanitizer';
 import {
   CreateDiscussionThreadDto,
   DISCUSSION_THEME_IDS,
@@ -60,37 +55,6 @@ type ThreadAttachmentPayload = {
   } | null;
 };
 
-const THREAD_ALLOWED_TAGS: SanitizeOptions = {
-  allowedTags: [
-    'b',
-    'i',
-    'u',
-    'em',
-    'strong',
-    'p',
-    'br',
-    'ul',
-    'ol',
-    'li',
-    'blockquote',
-    'h2',
-    'h3',
-    'a',
-  ],
-  allowedAttributes: {
-    a: ['href', 'target', 'rel'],
-  },
-  allowedSchemes: ['http', 'https', 'mailto'],
-};
-
-const COMMENT_ALLOWED_TAGS: SanitizeOptions = {
-  allowedTags: ['b', 'i', 'u', 'em', 'strong', 'p', 'br', 'a'],
-  allowedAttributes: {
-    a: ['href', 'target', 'rel'],
-  },
-  allowedSchemes: ['http', 'https', 'mailto'],
-};
-
 function stripHtml(input: string) {
   return input
     .replace(/<[^>]*>/g, ' ')
@@ -112,11 +76,11 @@ export class DiscussionBoardService {
   }
 
   private sanitizeThreadHtml(input: string): string {
-    return sanitizeHtml(input, THREAD_ALLOWED_TAGS).trim();
+    return sanitizeRichText(input);
   }
 
   private sanitizeCommentHtml(input: string): string {
-    return sanitizeHtml(input, COMMENT_ALLOWED_TAGS).trim();
+    return sanitizeRichText(input);
   }
 
   private assertTheme(themeId?: string) {

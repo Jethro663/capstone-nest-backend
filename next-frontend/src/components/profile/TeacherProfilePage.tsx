@@ -35,6 +35,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ProfileSecurityCard } from '@/components/profile/ProfileSecurityCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   getMissingTeacherProfileFields,
   isTeacherProfileComplete,
@@ -74,6 +75,14 @@ function toFormState(
     employeeId: String(user?.employeeId ?? ''),
     profilePicture: String(user?.profilePicture ?? ''),
   };
+}
+
+function sanitizeTeacherPhoneInput(value: string): string {
+  const digits = value.replace(/\D/g, '');
+  if (digits.startsWith('63')) {
+    return `0${digits.slice(2, 12)}`;
+  }
+  return digits.slice(0, 11);
 }
 
 const baselineCardClass =
@@ -160,7 +169,8 @@ export default function TeacherProfilePage() {
   );
 
   const handleFieldChange = (field: keyof TeacherProfileForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    const nextValue = field === 'phone' ? sanitizeTeacherPhoneInput(value) : value;
+    setForm((current) => ({ ...current, [field]: nextValue }));
   };
 
   const handleChooseAvatar = () => {
@@ -303,224 +313,248 @@ export default function TeacherProfilePage() {
             </div>
           </div>
         </motion.section>
+        <Tabs defaultValue="profile" className="space-y-5">
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, delay: 0.04, ease: 'easeOut' }}
+            className="flex justify-start"
+          >
+            <TabsList className="teacher-tab-list h-auto flex-wrap justify-start">
+              <TabsTrigger value="profile" className="teacher-tab min-w-[144px] px-5 py-3 text-sm font-semibold">
+                Profile
+              </TabsTrigger>
+              <TabsTrigger value="security" className="teacher-tab min-w-[144px] px-5 py-3 text-sm font-semibold">
+                Security
+              </TabsTrigger>
+            </TabsList>
+          </motion.section>
 
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22, delay: 0.04, ease: 'easeOut' }}
-          className={baselineCardClass}
-        >
-          <CardContent className="space-y-5 px-6 py-6 md:px-7">
-            <div className="flex items-center gap-4">
-              <div className="inline-flex h-[74px] w-[74px] items-center justify-center rounded-[1.25rem] bg-[#ef0018] text-[2.55rem] font-bold leading-none text-white">
-                {initials}
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-[2.7rem] font-semibold leading-none tracking-tight text-[#0d2345]">
-                  {displayName}
-                </p>
-                <p className="text-[1.16rem] text-[#728bb0]">{roleLine}</p>
-                <p className="text-[1.08rem] text-[#7f99bc]">{user?.email || 'No email set'}</p>
-              </div>
-            </div>
-
-            <div className="h-px w-full bg-[#e3e8f0]" />
-
-            <div className="grid grid-cols-1 gap-x-5 gap-y-3.5 md:grid-cols-2">
-              <ProfileField label="First Name" icon={UserRound}>
-                <Input className={fieldClass} value={user?.firstName ?? ''} readOnly />
-              </ProfileField>
-              <ProfileField label="Last Name" icon={UserRound}>
-                <Input className={fieldClass} value={user?.lastName ?? ''} readOnly />
-              </ProfileField>
-              <ProfileField label="Email" icon={Mail}>
-                <Input className={fieldClass} value={user?.email ?? ''} readOnly />
-              </ProfileField>
-              <ProfileField label="Phone" icon={Phone}>
-                <Input
-                  className={fieldClass}
-                  value={form.phone}
-                  onChange={(event) => handleFieldChange('phone', event.target.value)}
-                  placeholder="+63 912 345 6789"
-                />
-              </ProfileField>
-              <ProfileField label="Address" icon={MapPin}>
-                <Input
-                  className={fieldClass}
-                  value={form.address}
-                  onChange={(event) => handleFieldChange('address', event.target.value)}
-                  placeholder="Quezon City, Metro Manila"
-                />
-              </ProfileField>
-              <ProfileField label="Department" icon={GraduationCap}>
-                <Input
-                  className={fieldClass}
-                  value={form.department}
-                  onChange={(event) => handleFieldChange('department', event.target.value)}
-                />
-              </ProfileField>
-              <ProfileField label="Employee ID" icon={IdCard}>
-                <Input
-                  className={fieldClass}
-                  value={form.employeeId}
-                  onChange={(event) => handleFieldChange('employeeId', event.target.value)}
-                />
-              </ProfileField>
-              <ProfileField label="Specialization" icon={GraduationCap}>
-                <Input
-                  className={fieldClass}
-                  value={form.specialization}
-                  onChange={(event) => handleFieldChange('specialization', event.target.value)}
-                />
-              </ProfileField>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <Button
-                type="button"
-                onClick={handleSaveAttempt}
-                disabled={saving}
-                className="inline-flex h-[46px] min-w-[188px] rounded-full bg-[#ef0018] px-8 text-[1.04rem] font-semibold text-white hover:bg-[#da0016]"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save Profile
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22, delay: 0.08, ease: 'easeOut' }}
-          className="mx-auto w-full max-w-[860px]"
-        >
-          <ProfileSecurityCard appearance="teacher" layout="teacher-parity" />
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.22, delay: 0.12, ease: 'easeOut' }}
-          className="mx-auto grid w-full max-w-[860px] gap-4 md:grid-cols-[1.3fr_0.7fr]"
-        >
-          <Card className="rounded-[1.35rem] border border-[#d9e0eb] bg-white shadow-[0_10px_24px_-22px_rgba(15,23,42,0.34)]">
-            <CardContent className="space-y-4 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="flex items-center gap-2 text-[1.05rem] font-semibold text-[#14325e]">
-                  <CalendarDays className="h-4 w-4 text-[#ef0018]" />
-                  Additional Teacher Details
-                </h3>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif"
-                  className="hidden"
-                  onChange={handleAvatarSelected}
-                />
-                <Button
-                  type="button"
-                  onClick={handleChooseAvatar}
-                  disabled={uploadingAvatar}
-                  className="h-[38px] rounded-full border border-[#d2dcec] bg-[#f8fafe] px-4 text-[0.86rem] font-semibold text-[#334e73] hover:bg-[#edf2f9]"
-                  variant="outline"
-                >
-                  {uploadingAvatar ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-3.5 w-3.5" />
-                      Change Avatar
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-[0.82rem] font-medium text-[#2d4c77]">Date of Birth</Label>
-                  <Input
-                    type="date"
-                    className={fieldClass}
-                    value={form.dateOfBirth}
-                    onChange={(event) => handleFieldChange('dateOfBirth', event.target.value)}
-                  />
+          <TabsContent value="profile" className="mt-0 space-y-5">
+            <motion.section
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: 0.06, ease: 'easeOut' }}
+              className={baselineCardClass}
+            >
+              <CardContent className="space-y-5 px-6 py-6 md:px-7">
+                <div className="flex items-center gap-4">
+                  <div className="inline-flex h-[74px] w-[74px] items-center justify-center rounded-[1.25rem] bg-[#ef0018] text-[2.55rem] font-bold leading-none text-white">
+                    {initials}
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="text-[2.7rem] font-semibold leading-none tracking-tight text-[#0d2345]">
+                      {displayName}
+                    </p>
+                    <p className="text-[1.16rem] text-[#728bb0]">{roleLine}</p>
+                    <p className="text-[1.08rem] text-[#7f99bc]">{user?.email || 'No email set'}</p>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-[0.82rem] font-medium text-[#2d4c77]">Gender</Label>
-                  <select
-                    value={form.gender}
-                    onChange={(event) => handleFieldChange('gender', event.target.value)}
-                    className={cn(fieldClass, 'w-full pr-10')}
+
+                <div className="h-px w-full bg-[#e3e8f0]" />
+
+                <div className="grid grid-cols-1 gap-x-5 gap-y-3.5 md:grid-cols-2">
+                  <ProfileField label="First Name" icon={UserRound}>
+                    <Input className={fieldClass} value={user?.firstName ?? ''} readOnly />
+                  </ProfileField>
+                  <ProfileField label="Last Name" icon={UserRound}>
+                    <Input className={fieldClass} value={user?.lastName ?? ''} readOnly />
+                  </ProfileField>
+                  <ProfileField label="Email" icon={Mail}>
+                    <Input className={fieldClass} value={user?.email ?? ''} readOnly />
+                  </ProfileField>
+                  <ProfileField label="Phone" icon={Phone}>
+                    <Input
+                      aria-label="Phone"
+                      className={fieldClass}
+                      value={form.phone}
+                      onChange={(event) => handleFieldChange('phone', event.target.value)}
+                      placeholder="+63 912 345 6789"
+                      inputMode="tel"
+                      maxLength={11}
+                    />
+                  </ProfileField>
+                  <ProfileField label="Address" icon={MapPin}>
+                    <Input
+                      className={fieldClass}
+                      value={form.address}
+                      onChange={(event) => handleFieldChange('address', event.target.value)}
+                      placeholder="Quezon City, Metro Manila"
+                    />
+                  </ProfileField>
+                  <ProfileField label="Department" icon={GraduationCap}>
+                    <Input
+                      className={fieldClass}
+                      value={form.department}
+                      onChange={(event) => handleFieldChange('department', event.target.value)}
+                    />
+                  </ProfileField>
+                  <ProfileField label="Employee ID" icon={IdCard}>
+                    <Input
+                      className={fieldClass}
+                      value={form.employeeId}
+                      onChange={(event) => handleFieldChange('employeeId', event.target.value)}
+                    />
+                  </ProfileField>
+                  <ProfileField label="Specialization" icon={GraduationCap}>
+                    <Input
+                      className={fieldClass}
+                      value={form.specialization}
+                      onChange={(event) => handleFieldChange('specialization', event.target.value)}
+                    />
+                  </ProfileField>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <Button
+                    type="button"
+                    onClick={handleSaveAttempt}
+                    disabled={saving}
+                    className="inline-flex h-[46px] min-w-[188px] rounded-full bg-[#ef0018] px-8 text-[1.04rem] font-semibold text-white hover:bg-[#da0016]"
                   >
-                    <option value="">Select</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                  </select>
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Save Profile
+                      </>
+                    )}
+                  </Button>
                 </div>
-              </div>
+              </CardContent>
+            </motion.section>
 
-              <div
-                className={cn(
-                  'rounded-xl border px-3 py-2 text-[0.84rem]',
-                  isComplete
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                    : 'border-amber-200 bg-amber-50 text-amber-700',
-                )}
-              >
-                {isComplete
-                  ? 'Teacher profile requirements are complete.'
-                  : 'Complete required teacher details before saving.'}
-              </div>
-            </CardContent>
-          </Card>
+            <motion.section
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: 0.1, ease: 'easeOut' }}
+              className="mx-auto grid w-full max-w-[860px] gap-4 md:grid-cols-[1.3fr_0.7fr]"
+            >
+              <Card className="rounded-[1.35rem] border border-[#d9e0eb] bg-white shadow-[0_10px_24px_-22px_rgba(15,23,42,0.34)]">
+                <CardContent className="space-y-4 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="flex items-center gap-2 text-[1.05rem] font-semibold text-[#14325e]">
+                      <CalendarDays className="h-4 w-4 text-[#ef0018]" />
+                      Additional Teacher Details
+                    </h3>
 
-          <div className="space-y-4">
-            <Card className="rounded-[1.35rem] border border-[#d9e0eb] bg-white shadow-[0_10px_24px_-22px_rgba(15,23,42,0.34)]">
-              <CardContent className="space-y-3 p-5">
-                <h3 className="flex items-center gap-2 text-[1.05rem] font-semibold text-[#14325e]">
-                  <BriefcaseBusiness className="h-4 w-4 text-[#ef0018]" />
-                  Coverage Snapshot
-                </h3>
-                <div className="space-y-2">
-                  {coverageStats.map((item) => (
-                    <div key={item.label} className="rounded-xl border border-[#e2e8f1] bg-[#f8fafd] px-3 py-2">
-                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[#7a90ad]">
-                        {item.label}
-                      </p>
-                      <p className="mt-0.5 text-[0.93rem] font-medium text-[#12315c]">{item.value}</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleAvatarSelected}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleChooseAvatar}
+                      disabled={uploadingAvatar}
+                      className="h-[38px] rounded-full border border-[#d2dcec] bg-[#f8fafe] px-4 text-[0.86rem] font-semibold text-[#334e73] hover:bg-[#edf2f9]"
+                      variant="outline"
+                    >
+                      {uploadingAvatar ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-3.5 w-3.5" />
+                          Change Avatar
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-[0.82rem] font-medium text-[#2d4c77]">Date of Birth</Label>
+                      <Input
+                        type="date"
+                        className={fieldClass}
+                        value={form.dateOfBirth}
+                        onChange={(event) => handleFieldChange('dateOfBirth', event.target.value)}
+                      />
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="space-y-1.5">
+                      <Label className="text-[0.82rem] font-medium text-[#2d4c77]">Gender</Label>
+                      <select
+                        value={form.gender}
+                        onChange={(event) => handleFieldChange('gender', event.target.value)}
+                        className={cn(fieldClass, 'w-full pr-10')}
+                      >
+                        <option value="">Select</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </div>
+                  </div>
 
-            <Card className="rounded-[1.35rem] border border-[#d9e0eb] bg-white shadow-[0_10px_24px_-22px_rgba(15,23,42,0.34)]">
-              <CardContent className="space-y-2 p-5">
-                <h3 className="flex items-center gap-2 text-[1.05rem] font-semibold text-[#14325e]">
-                  <ShieldCheck className="h-4 w-4 text-[#ef0018]" />
-                  Privacy Note
-                </h3>
-                <p className="text-[0.84rem] leading-relaxed text-[#5d7394]">
-                  Your profile information is visible to administrators and relevant staff to support official school records.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </motion.section>
+                  <div
+                    className={cn(
+                      'rounded-xl border px-3 py-2 text-[0.84rem]',
+                      isComplete
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700',
+                    )}
+                  >
+                    {isComplete
+                      ? 'Teacher profile requirements are complete.'
+                      : 'Complete required teacher details before saving.'}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-4">
+                <Card className="rounded-[1.35rem] border border-[#d9e0eb] bg-white shadow-[0_10px_24px_-22px_rgba(15,23,42,0.34)]">
+                  <CardContent className="space-y-3 p-5">
+                    <h3 className="flex items-center gap-2 text-[1.05rem] font-semibold text-[#14325e]">
+                      <BriefcaseBusiness className="h-4 w-4 text-[#ef0018]" />
+                      Coverage Snapshot
+                    </h3>
+                    <div className="space-y-2">
+                      {coverageStats.map((item) => (
+                        <div key={item.label} className="rounded-xl border border-[#e2e8f1] bg-[#f8fafd] px-3 py-2">
+                          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[#7a90ad]">
+                            {item.label}
+                          </p>
+                          <p className="mt-0.5 text-[0.93rem] font-medium text-[#12315c]">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-[1.35rem] border border-[#d9e0eb] bg-white shadow-[0_10px_24px_-22px_rgba(15,23,42,0.34)]">
+                  <CardContent className="space-y-2 p-5">
+                    <h3 className="flex items-center gap-2 text-[1.05rem] font-semibold text-[#14325e]">
+                      <ShieldCheck className="h-4 w-4 text-[#ef0018]" />
+                      Privacy Note
+                    </h3>
+                    <p className="text-[0.84rem] leading-relaxed text-[#5d7394]">
+                      Your profile information is visible to administrators and relevant staff to support official school records.
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </motion.section>
+          </TabsContent>
+
+          <TabsContent value="security" className="mt-0">
+            <motion.section
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: 0.06, ease: 'easeOut' }}
+              className="mx-auto w-full max-w-[860px]"
+            >
+              <ProfileSecurityCard appearance="teacher" layout="teacher-parity" />
+            </motion.section>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={missingDialogOpen} onOpenChange={setMissingDialogOpen}>

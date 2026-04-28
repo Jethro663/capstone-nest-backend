@@ -1,3 +1,4 @@
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { Button } from '@/components/ui/button';
 
 export type SharedQuestionType =
@@ -23,12 +24,23 @@ export function SharedAnswerInput({
   question,
   value,
   onChange,
+  optionTextMode = 'text',
 }: {
   question: SharedAssessmentQuestion;
   value: string | string[] | undefined;
   onChange: (val: string | string[]) => void;
+  optionTextMode?: 'text' | 'rich';
 }) {
   const options = question.options || [];
+  const renderOptionText = (text: string) =>
+    optionTextMode === 'rich' ? (
+      <RichTextRenderer
+        html={text}
+        className="min-w-0 flex-1 text-[var(--student-text-strong)] [&_p]:m-0 [&_ul]:m-0 [&_ol]:m-0"
+      />
+    ) : (
+      <span className="select-none text-[var(--student-text-strong)]">{text}</span>
+    );
 
   switch (question.type) {
     case 'multiple_choice':
@@ -50,7 +62,7 @@ export function SharedAnswerInput({
                 onChange={() => onChange(opt.id)}
                 className="accent-[var(--student-accent)]"
               />
-              <span className="select-none text-[var(--student-text-strong)]">{opt.text}</span>
+              {renderOptionText(opt.text)}
             </label>
           ))}
         </div>
@@ -79,7 +91,7 @@ export function SharedAnswerInput({
                   }}
                   className="accent-[var(--student-accent)]"
                 />
-                <span className="select-none text-[var(--student-text-strong)]">{opt.text}</span>
+                {renderOptionText(opt.text)}
               </label>
             );
           })}

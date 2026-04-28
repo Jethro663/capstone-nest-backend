@@ -37,7 +37,7 @@ const MODULE_OPTIONS: Array<{
 }> = [
   { label: 'All modules', value: '' },
   { label: 'LMS', value: 'lms' },
-  { label: 'LXP', value: 'lxp' },
+  { label: 'Learners Path', value: 'lxp' },
   { label: 'AI Mentor', value: 'ai_mentor' },
   { label: 'Intervention', value: 'intervention' },
   { label: 'Overall', value: 'overall' },
@@ -53,6 +53,8 @@ function formatSubmitter(row: SystemEvaluationRow): string {
 }
 
 function formatModuleName(value: string): string {
+  if (value === 'lxp') return 'Learners Path';
+  if (value === 'ai_mentor') return 'AI Mentor';
   return value
     .split('_')
     .map((part) => part[0].toUpperCase() + part.slice(1))

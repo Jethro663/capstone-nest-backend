@@ -19,6 +19,7 @@ import { aiService } from '@/services/ai-service';
 import { lxpService } from '@/services/lxp-service';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import {
   Dialog,
   DialogContent,
@@ -289,7 +290,10 @@ export default function StudentAssessmentResultsPage() {
                     </p>
                   </div>
 
-                  <p className="mt-2 font-medium text-[var(--student-text-strong)]">{response.question?.content}</p>
+                  <RichTextRenderer
+                    html={response.question?.content ?? '<p>No question content.</p>'}
+                    className="mt-2 font-medium text-[var(--student-text-strong)]"
+                  />
 
                   {response.question?.imageUrl && (
                     <div className="mt-3">
@@ -347,9 +351,10 @@ export default function StudentAssessmentResultsPage() {
                   )}
 
                   {response.question?.explanation && (
-                    <div className="mt-3 rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3 text-sm text-[var(--student-text-strong)]">
-                      {response.question.explanation}
-                    </div>
+                    <RichTextRenderer
+                      html={response.question.explanation}
+                      className="mt-3 rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3 text-sm text-[var(--student-text-strong)]"
+                    />
                   )}
 
                   {response.isCorrect === false && (

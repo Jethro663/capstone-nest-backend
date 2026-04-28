@@ -1,30 +1,26 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent as ReactDragEvent } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Copy,
+  BarChart3,
   Eye,
+  FileText,
   GripVertical,
-  List,
   Loader2,
-  MoreHorizontal,
   Plus,
   Save,
+  Settings2,
   Trash2,
-  Type,
   Upload,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import {
   Dialog,
   DialogContent,
@@ -33,13 +29,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { AssessmentQuestionEditor } from '@/features/assessment-composer/AssessmentQuestionEditor';
+import {
+  createAssessmentComposerQuestion,
+  deleteAssessmentComposerQuestion,
+  duplicateAssessmentComposerQuestion,
+  reorderAssessmentComposerQuestions,
+} from '@/features/assessment-composer/reducer';
+import {
+  ASSESSMENT_COMPOSER_LABELS,
+  ASSESSMENT_COMPOSER_QUESTION_TYPES,
+} from '@/features/assessment-composer/question-config';
+import type { AssessmentComposerQuestionDraft as QuestionDraft } from '@/features/assessment-composer/types';
 import { assessmentService } from '@/services/assessment-service';
 import { classRecordService } from '@/services/class-record-service';
 import type {
@@ -60,49 +63,7 @@ import './assessment-editor.css';
 type RightTab = 'settings' | 'rubric' | 'analytics';
 type Availability = 'given' | 'draft';
 type ShowResultMode = 'immediate' | 'scheduled';
-
-type QuestionDraft = {
-  id: string;
-  type: QuestionType;
-  content: string;
-  points: number;
-  isRequired: boolean;
-  options: Array<{
-    id: string;
-    text: string;
-    isCorrect: boolean;
-    order: number;
-  }>;
-  isNew?: boolean;
-};
-
-const PANE_STORAGE_PREFIX = 'teacher-assessment-editor-panes';
-
-const QUESTION_TILES: Array<{ label: string; value: QuestionType; icon: typeof List }> = [
-  { label: 'Multiple', value: 'multiple_choice', icon: List },
-  { label: 'Identification', value: 'short_answer', icon: Type },
-  { label: 'Essay', value: 'fill_blank', icon: Type },
-  { label: 'File', value: 'dropdown', icon: List },
-  { label: 'Matching', value: 'multiple_select', icon: List },
-];
-
-const QUESTION_LABELS: Record<QuestionType, string> = {
-  multiple_choice: 'Multiple Choice',
-  multiple_select: 'Multiple Select',
-  true_false: 'True / False',
-  short_answer: 'Identification',
-  fill_blank: 'Essay',
-  dropdown: 'Dropdown',
-};
-
-const QUESTION_TYPE_ICONS: Record<QuestionType, typeof List> = {
-  multiple_choice: List,
-  multiple_select: List,
-  true_false: List,
-  short_answer: Type,
-  fill_blank: Type,
-  dropdown: List,
-};
+type AssessmentComposerSaveState = 'saved' | 'saving' | 'dirty' | 'error';
 
 const ASSESSMENT_TYPE_TABS: Array<{ value: AssessmentType; label: string }> = [
   { value: 'quiz', label: 'Question Assessment' },
@@ -158,26 +119,55 @@ function supportsOptions(type: QuestionType) {
   );
 }
 
-function defaultOptionsForType(type: QuestionType) {
-  if (type === 'true_false') {
-    return [
-      { id: createTempId(), text: 'True', isCorrect: true, order: 1 },
-      { id: createTempId(), text: 'False', isCorrect: false, order: 2 },
-    ];
+const FILL_BLANK_CASE_SENSITIVE_TAG = 'fill_blank:smart_case_sensitive';
+const FILL_BLANK_EXPERIMENTAL_SMART_TAG = 'fill_blank:experimental_smart_match';
+const FILL_BLANK_META_TAG_PREFIX = 'fill_blank:';
+
+function normalizeConceptTags(rawConceptTags: unknown): string[] {
+  if (!Array.isArray(rawConceptTags)) return [];
+  return rawConceptTags
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter((entry) => entry.length > 0);
+}
+
+function parseFillBlankSettings(conceptTags: string[]) {
+  return {
+    fillBlankSmartCaseInsensitive: !conceptTags.includes(FILL_BLANK_CASE_SENSITIVE_TAG),
+    fillBlankExperimentalSmartMatch: conceptTags.includes(FILL_BLANK_EXPERIMENTAL_SMART_TAG),
+  };
+}
+
+function buildFillBlankConceptTags(
+  conceptTags: string[],
+  fillBlankSmartCaseInsensitive: boolean,
+  fillBlankExperimentalSmartMatch: boolean,
+) {
+  const passthroughTags = conceptTags.filter((tag) => !tag.startsWith(FILL_BLANK_META_TAG_PREFIX));
+  if (!fillBlankSmartCaseInsensitive) {
+    passthroughTags.push(FILL_BLANK_CASE_SENSITIVE_TAG);
   }
-  return [
-    { id: createTempId(), text: '', isCorrect: false, order: 1 },
-    { id: createTempId(), text: '', isCorrect: false, order: 2 },
-  ];
+  if (fillBlankExperimentalSmartMatch) {
+    passthroughTags.push(FILL_BLANK_EXPERIMENTAL_SMART_TAG);
+  }
+  return passthroughTags;
 }
 
 function normalizeQuestion(question: AssessmentQuestion): QuestionDraft {
+  const conceptTags = normalizeConceptTags(
+    (question as AssessmentQuestion & { conceptTags?: unknown }).conceptTags,
+  );
+  const fillBlankSettings = parseFillBlankSettings(conceptTags);
   return {
     id: question.id,
     type: question.type,
     content: question.content || '',
     points: question.points || 1,
     isRequired: question.isRequired ?? true,
+    explanation: question.explanation || '',
+    imageUrl: question.imageUrl || '',
+    conceptTags,
+    fillBlankSmartCaseInsensitive: fillBlankSettings.fillBlankSmartCaseInsensitive,
+    fillBlankExperimentalSmartMatch: fillBlankSettings.fillBlankExperimentalSmartMatch,
     options: (question.options || []).map((option) => ({
       id: option.id,
       text: option.text,
@@ -185,16 +175,6 @@ function normalizeQuestion(question: AssessmentQuestion): QuestionDraft {
       order: option.order,
     })),
   };
-}
-
-function getQuestionPreview(question: QuestionDraft) {
-  const trimmed = question.content.trim();
-  if (!trimmed) return 'Untitled question';
-  return trimmed.length > 58 ? `${trimmed.slice(0, 58)}...` : trimmed;
-}
-
-function getPaneStorageKey(assessmentId: string) {
-  return `${PANE_STORAGE_PREFIX}:${assessmentId}`;
 }
 
 function getDefaultUploadExtensions() {
@@ -220,26 +200,47 @@ function fromDateInputValue(value: string) {
   return date.toISOString();
 }
 
-function isDesktopPanesEnabled() {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(min-width: 1201px)').matches;
+function stripTitleFromSerializedDraft(serializedDraft: string) {
+  try {
+    const parsed = JSON.parse(serializedDraft) as Record<string, unknown>;
+    delete parsed.title;
+    return JSON.stringify(parsed);
+  } catch {
+    return serializedDraft;
+  }
 }
 
 export default function AssessmentEditorPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const assessmentId = toParamValue(params.id);
+  const isReadOnlyMode =
+    searchParams.get('mode') === 'view' || searchParams.get('readonly') === '1';
+  const initializedDraftRef = useRef(false);
+  const lastSavedFingerprintRef = useRef<string | null>(null);
+  const lastSavedTitleRef = useRef('');
+  const latestSerializedDraftRef = useRef('');
+  const latestTitleRef = useRef('');
+  const titleAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [saveState, setSaveState] = useState<AssessmentComposerSaveState>('saved');
+  const [previewEnabled, setPreviewEnabled] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [addQuestionDialogOpen, setAddQuestionDialogOpen] = useState(false);
+  const [insertAfterQuestionIndex, setInsertAfterQuestionIndex] = useState<number | null>(null);
+  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
+  const [dropTargetQuestionId, setDropTargetQuestionId] = useState<string | null>(null);
+  const [hideFloatingAdd, setHideFloatingAdd] = useState(false);
+  const questionListBottomRef = useRef<HTMLDivElement | null>(null);
 
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<QuestionDraft[]>([]);
   const [selectedQuestionId, setSelectedQuestionId] = useState<string | null>(null);
   const [deletedQuestionIds, setDeletedQuestionIds] = useState<string[]>([]);
-  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
-  const [dropTargetQuestionId, setDropTargetQuestionId] = useState<string | null>(null);
-  const [isReorderingQuestions, setIsReorderingQuestions] = useState(false);
 
   const [rightTab, setRightTab] = useState<RightTab>('settings');
   const [availability, setAvailability] = useState<Availability>('draft');
@@ -280,9 +281,6 @@ export default function AssessmentEditorPage() {
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [desktopPanesEnabled, setDesktopPanesEnabled] = useState(false);
-  const [leftPaneCollapsed, setLeftPaneCollapsed] = useState(false);
-  const [rightPaneCollapsed, setRightPaneCollapsed] = useState(false);
 
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
 
@@ -298,9 +296,12 @@ export default function AssessmentEditorPage() {
 
       setAssessment(data);
       setTitle(data.title || '');
+      lastSavedTitleRef.current = data.title || '';
+      setDescription(data.description || '');
       setQuestions(normalizedQuestions);
       setSelectedQuestionId(normalizedQuestions[0]?.id || null);
       setDeletedQuestionIds([]);
+      setPreviewEnabled(isReadOnlyMode);
 
       setAvailability(data.isPublished ? 'given' : 'draft');
       setShowResultMode(data.feedbackLevel === 'immediate' ? 'immediate' : 'scheduled');
@@ -351,52 +352,18 @@ export default function AssessmentEditorPage() {
       setAnalytics(null);
       setSlotOverview(null);
       setSlotOverviewError(null);
+      initializedDraftRef.current = false;
     } catch {
       toast.error('Unable to load assessment');
       setAssessment(null);
     } finally {
       setLoading(false);
     }
-  }, [assessmentId]);
+  }, [assessmentId, isReadOnlyMode]);
 
   useEffect(() => {
     void fetchAssessment();
   }, [fetchAssessment]);
-
-  useEffect(() => {
-    const apply = () => {
-      setDesktopPanesEnabled(isDesktopPanesEnabled());
-    };
-    apply();
-    if (typeof window === 'undefined') return;
-    window.addEventListener('resize', apply);
-    return () => window.removeEventListener('resize', apply);
-  }, []);
-
-  useEffect(() => {
-    if (!assessmentId || typeof window === 'undefined') return;
-    const raw = window.localStorage.getItem(getPaneStorageKey(assessmentId));
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as { leftCollapsed?: boolean; rightCollapsed?: boolean };
-      setLeftPaneCollapsed(parsed.leftCollapsed === true);
-      setRightPaneCollapsed(parsed.rightCollapsed === true);
-    } catch {
-      setLeftPaneCollapsed(false);
-      setRightPaneCollapsed(false);
-    }
-  }, [assessmentId]);
-
-  useEffect(() => {
-    if (!assessmentId || typeof window === 'undefined') return;
-    window.localStorage.setItem(
-      getPaneStorageKey(assessmentId),
-      JSON.stringify({
-        leftCollapsed: leftPaneCollapsed,
-        rightCollapsed: rightPaneCollapsed,
-      }),
-    );
-  }, [assessmentId, leftPaneCollapsed, rightPaneCollapsed]);
 
   useEffect(() => {
     if (rightTab !== 'analytics' || !assessmentId) return;
@@ -461,10 +428,174 @@ export default function AssessmentEditorPage() {
     };
   }, [advancedOpen, assessment?.classId, assessmentId, category, quarter]);
 
-  const selectedQuestion = useMemo(
-    () => questions.find((question) => question.id === selectedQuestionId) || null,
-    [questions, selectedQuestionId],
+  const serializedDraft = useMemo(
+    () =>
+      JSON.stringify({
+        title,
+        description,
+        questions,
+        availability,
+        assessmentType,
+        passingScore,
+        maxAttempts,
+        timeLimitMinutes,
+        dueDate,
+        feedbackLevel,
+        feedbackDelayHours,
+        category,
+        quarter,
+        placementMode,
+        selectedSlotId,
+        closeWhenDue,
+        randomizeQuestions,
+        timedQuestionsEnabled,
+        questionTimeLimitSeconds,
+        strictMode,
+        fileUploadInstructions,
+        allowedUploadExtensions,
+        allowedUploadMimeTypes,
+        maxUploadSizeBytes,
+        teacherAttachmentFileId: teacherAttachmentFile?.id ?? null,
+        rubricCriteria,
+      }),
+    [
+      allowedUploadExtensions,
+      allowedUploadMimeTypes,
+      assessmentType,
+      availability,
+      category,
+      closeWhenDue,
+      description,
+      dueDate,
+      feedbackDelayHours,
+      feedbackLevel,
+      fileUploadInstructions,
+      maxAttempts,
+      maxUploadSizeBytes,
+      passingScore,
+      placementMode,
+      quarter,
+      questionTimeLimitSeconds,
+      questions,
+      randomizeQuestions,
+      rubricCriteria,
+      selectedSlotId,
+      strictMode,
+      teacherAttachmentFile,
+      timedQuestionsEnabled,
+      timeLimitMinutes,
+      title,
+    ],
   );
+
+  useEffect(() => {
+    latestSerializedDraftRef.current = serializedDraft;
+  }, [serializedDraft]);
+
+  useEffect(() => {
+    latestTitleRef.current = title;
+  }, [title]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!initializedDraftRef.current) {
+      initializedDraftRef.current = true;
+      lastSavedFingerprintRef.current = serializedDraft;
+      setSaveState('saved');
+      return;
+    }
+
+    if (serializedDraft !== lastSavedFingerprintRef.current) {
+      setSaveState((current) => (current === 'saving' ? current : 'dirty'));
+    }
+  }, [loading, serializedDraft]);
+
+  const autoSaveTitle = useCallback(
+    async (nextTitle: string) => {
+      if (!assessment || !assessmentId || saving || isReadOnlyMode) return;
+      try {
+        setSaveState('saving');
+        await assessmentService.update(assessment.id, { title: nextTitle });
+        lastSavedTitleRef.current = nextTitle;
+        setAssessment((current) => (current ? { ...current, title: nextTitle } : current));
+
+        if (latestTitleRef.current.trim() !== nextTitle) {
+          setSaveState('dirty');
+          return;
+        }
+
+        const latestDraft = latestSerializedDraftRef.current;
+        const lastSavedDraft = lastSavedFingerprintRef.current;
+
+        if (
+          lastSavedDraft &&
+          stripTitleFromSerializedDraft(lastSavedDraft) === stripTitleFromSerializedDraft(latestDraft)
+        ) {
+          lastSavedFingerprintRef.current = latestDraft;
+          setSaveState('saved');
+          return;
+        }
+
+        setSaveState('dirty');
+      } catch {
+        setSaveState('error');
+        toast.error('Unable to auto-save assessment title');
+      }
+    },
+    [assessment, assessmentId, isReadOnlyMode, saving],
+  );
+
+  useEffect(() => {
+    if (
+      !assessment ||
+      loading ||
+      saving ||
+      isReadOnlyMode ||
+      !initializedDraftRef.current
+    ) {
+      return;
+    }
+    const nextTitle = title.trim();
+    const lastSavedTitle = lastSavedTitleRef.current.trim();
+
+    if (!nextTitle || nextTitle === lastSavedTitle) return;
+
+    if (titleAutosaveTimerRef.current) {
+      clearTimeout(titleAutosaveTimerRef.current);
+    }
+
+    titleAutosaveTimerRef.current = setTimeout(() => {
+      void autoSaveTitle(nextTitle);
+    }, 5000);
+
+    return () => {
+      if (titleAutosaveTimerRef.current) {
+        clearTimeout(titleAutosaveTimerRef.current);
+        titleAutosaveTimerRef.current = null;
+      }
+    };
+  }, [assessment, autoSaveTitle, isReadOnlyMode, loading, saving, title]);
+
+  useEffect(() => {
+    if (assessmentType !== 'file_upload' && rightTab === 'rubric') {
+      setRightTab('settings');
+    }
+  }, [assessmentType, rightTab]);
+
+  useEffect(() => {
+    const observerTarget = questionListBottomRef.current;
+    if (!observerTarget) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setHideFloatingAdd(Boolean(entries[0]?.isIntersecting));
+      },
+      { root: null, threshold: 0.12 },
+    );
+    observer.observe(observerTarget);
+    return () => observer.disconnect();
+  }, [questions.length, previewEnabled, assessmentType]);
 
   const totalPoints = useMemo(
     () => questions.reduce((sum, question) => sum + (Number(question.points) || 0), 0),
@@ -476,51 +607,55 @@ export default function AssessmentEditorPage() {
     return slotOverview.categories.find((entry) => entry.key === category) || null;
   }, [category, slotOverview]);
 
-  const effectiveLeftCollapsed = desktopPanesEnabled ? leftPaneCollapsed : false;
-  const effectiveRightCollapsed = desktopPanesEnabled ? rightPaneCollapsed : false;
-
-  const updateQuestion = (
-    questionId: string,
-    updater: (question: QuestionDraft) => QuestionDraft,
-  ) => {
-    setQuestions((current) =>
-      current.map((question) => (question.id === questionId ? updater(question) : question)),
-    );
-  };
-
-  const handleAddQuestion = (type: QuestionType) => {
+  const handleAddQuestion = (type: QuestionType, afterIndex: number | null = null) => {
+    if (isReadOnlyMode) return;
     if (assessmentType === 'file_upload') {
       toast.info('Switch to Question Assessment mode to add questions.');
       return;
     }
-    const question: QuestionDraft = {
-      id: createTempId(),
-      type,
-      content: '',
-      points: 5,
-      isRequired: true,
-      options: supportsOptions(type) ? defaultOptionsForType(type) : [],
-      isNew: true,
-    };
-    setQuestions((current) => [...current, question]);
+    const question = createAssessmentComposerQuestion(type, questions.length + 1);
+    setQuestions((current) => {
+      const insertAt = afterIndex === null ? current.length : Math.min(afterIndex + 1, current.length);
+      const next = current.slice();
+      next.splice(insertAt, 0, question);
+      return next;
+    });
     setSelectedQuestionId(question.id);
+    setAddQuestionDialogOpen(false);
+    setInsertAfterQuestionIndex(null);
+  };
+
+  const openQuestionTypeDialog = (afterIndex: number | null = null) => {
+    if (isReadOnlyMode) return;
+    setInsertAfterQuestionIndex(afterIndex);
+    setAddQuestionDialogOpen(true);
+  };
+
+  const handleQuestionDrop = (targetQuestionId: string) => {
+    if (isReadOnlyMode) return;
+    const sourceQuestionId = draggingQuestionId;
+    setDraggingQuestionId(null);
+    setDropTargetQuestionId(null);
+    if (!sourceQuestionId || sourceQuestionId === targetQuestionId) return;
+
+    const fromIndex = questions.findIndex((question) => question.id === sourceQuestionId);
+    const toIndex = questions.findIndex((question) => question.id === targetQuestionId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+    setQuestions((current) => reorderAssessmentComposerQuestions(current, fromIndex, toIndex));
+  };
+
+  const openPanelTab = (tab: RightTab) => {
+    setRightTab(tab);
+    setPanelOpen(true);
   };
 
   const handleDuplicateQuestion = (questionId: string) => {
+    if (isReadOnlyMode) return;
     setQuestions((current) => {
       const sourceIndex = current.findIndex((question) => question.id === questionId);
       if (sourceIndex === -1) return current;
-      const source = current[sourceIndex];
-      const duplicate: QuestionDraft = {
-        ...source,
-        id: createTempId(),
-        isNew: true,
-        options: source.options.map((option, index) => ({
-          ...option,
-          id: createTempId(),
-          order: index + 1,
-        })),
-      };
+      const duplicate = duplicateAssessmentComposerQuestion(current[sourceIndex]);
       const next = current.slice();
       next.splice(sourceIndex + 1, 0, duplicate);
       setSelectedQuestionId(duplicate.id);
@@ -529,19 +664,16 @@ export default function AssessmentEditorPage() {
   };
 
   const handleDeleteQuestion = (questionId: string) => {
+    if (isReadOnlyMode) return;
     setConfirmation({
       title: 'Delete question?',
       description: 'This question will be removed from the assessment.',
       confirmLabel: 'Delete',
       tone: 'danger',
       onConfirm: async () => {
-        setQuestions((current) => {
-          const remaining = current.filter((question) => question.id !== questionId);
-          setSelectedQuestionId((selected) =>
-            selected === questionId ? (remaining[0]?.id ?? null) : selected,
-          );
-          return remaining;
-        });
+        const nextState = deleteAssessmentComposerQuestion(questions, questionId, selectedQuestionId);
+        setQuestions(nextState.questions);
+        setSelectedQuestionId(nextState.nextSelectedQuestionId);
         if (!questionId.startsWith('temp-')) {
           setDeletedQuestionIds((current) => [...current, questionId]);
         }
@@ -549,73 +681,8 @@ export default function AssessmentEditorPage() {
     });
   };
 
-  const persistQuestionOrder = async (nextQuestions: QuestionDraft[], previousQuestions: QuestionDraft[]) => {
-    try {
-      setIsReorderingQuestions(true);
-      await Promise.all(
-        nextQuestions.map((question, index) => {
-          if (question.id.startsWith('temp-')) return Promise.resolve();
-          return assessmentService.updateQuestion(question.id, { order: index + 1 });
-        }),
-      );
-      toast.success('Question order saved');
-    } catch {
-      setQuestions(previousQuestions);
-      toast.error('Unable to save question order. Reverted to previous order.');
-    } finally {
-      setIsReorderingQuestions(false);
-    }
-  };
-
-  const handleQuestionDragStart = (
-    event: ReactDragEvent<HTMLElement>,
-    questionId: string,
-  ) => {
-    if (assessmentType === 'file_upload') {
-      event.preventDefault();
-      return;
-    }
-    setDraggingQuestionId(questionId);
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', questionId);
-  };
-
-  const handleQuestionDragOver = (
-    event: ReactDragEvent<HTMLElement>,
-    questionId: string,
-  ) => {
-    if (!draggingQuestionId || draggingQuestionId === questionId || assessmentType === 'file_upload') return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTargetQuestionId(questionId);
-  };
-
-  const handleQuestionDrop = async (
-    event: ReactDragEvent<HTMLElement>,
-    targetQuestionId: string,
-  ) => {
-    event.preventDefault();
-    if (assessmentType === 'file_upload') return;
-
-    const sourceQuestionId = draggingQuestionId || event.dataTransfer.getData('text/plain');
-    setDraggingQuestionId(null);
-    setDropTargetQuestionId(null);
-    if (!sourceQuestionId || sourceQuestionId === targetQuestionId) return;
-
-    const sourceIndex = questions.findIndex((question) => question.id === sourceQuestionId);
-    const targetIndex = questions.findIndex((question) => question.id === targetQuestionId);
-    if (sourceIndex < 0 || targetIndex < 0) return;
-
-    const previousQuestions = questions;
-    const reordered = questions.slice();
-    const [moved] = reordered.splice(sourceIndex, 1);
-    reordered.splice(targetIndex, 0, moved);
-    setQuestions(reordered);
-    await persistQuestionOrder(reordered, previousQuestions);
-  };
-
   const syncQuestions = async () => {
-    if (!assessment) return;
+    if (!assessment || isReadOnlyMode) return;
 
     for (const questionId of deletedQuestionIds) {
       await assessmentService.deleteQuestion(questionId);
@@ -625,13 +692,34 @@ export default function AssessmentEditorPage() {
       const question = questions[index];
       const content = question.content.trim();
       const points = Number(question.points);
+      const isFillBlank = question.type === 'fill_blank';
+
+      const fillBlankAnswerOptions = isFillBlank
+        ? question.options
+            .map((option) => option.text.trim())
+            .filter((answer) => answer.length > 0)
+            .map((answer, answerIndex) => ({
+              text: answer,
+              isCorrect: true,
+              order: answerIndex + 1,
+            }))
+        : [];
+
       const options = supportsOptions(question.type)
         ? question.options.map((option, optionIndex) => ({
             text: option.text.trim(),
             isCorrect: option.isCorrect,
             order: optionIndex + 1,
           }))
-        : [];
+        : fillBlankAnswerOptions;
+
+      const conceptTags = isFillBlank
+        ? buildFillBlankConceptTags(
+            question.conceptTags,
+            question.fillBlankSmartCaseInsensitive,
+            question.fillBlankExperimentalSmartMatch,
+          )
+        : question.conceptTags.filter((tag) => !tag.startsWith(FILL_BLANK_META_TAG_PREFIX));
 
       if (!content) {
         throw new Error(`Question ${index + 1} is empty`);
@@ -641,7 +729,11 @@ export default function AssessmentEditorPage() {
         throw new Error(`Question ${index + 1} needs valid points`);
       }
 
-      if (supportsOptions(question.type)) {
+      if (isFillBlank) {
+        if (options.length === 0) {
+          throw new Error(`Question ${index + 1} needs at least one correct answer`);
+        }
+      } else if (supportsOptions(question.type)) {
         if (options.some((option) => !option.text)) {
           throw new Error(`Question ${index + 1} has empty answer choices`);
         }
@@ -661,6 +753,9 @@ export default function AssessmentEditorPage() {
         points,
         order: index + 1,
         isRequired: question.isRequired,
+        explanation: question.explanation || undefined,
+        imageUrl: question.imageUrl || undefined,
+        conceptTags,
         options,
       };
 
@@ -672,6 +767,9 @@ export default function AssessmentEditorPage() {
           points,
           order: index + 1,
           isRequired: question.isRequired,
+          explanation: question.explanation || undefined,
+          imageUrl: question.imageUrl || undefined,
+          conceptTags,
           options,
         };
         await assessmentService.createQuestion(createPayload);
@@ -701,23 +799,28 @@ export default function AssessmentEditorPage() {
   };
 
   const handleSave = async () => {
-    if (!assessment || saving) return;
+    if (!assessment || saving || isReadOnlyMode) return;
     if (!title.trim()) {
       toast.error('Assessment title is required');
       return;
     }
-
     if (assessmentType !== 'file_upload' && questions.length === 0) {
       toast.error('Add at least one question');
       return;
     }
 
-    if (assessmentType === 'file_upload' && !fileUploadInstructions.trim()) {
+    if (
+      assessmentType === 'file_upload' &&
+      !fileUploadInstructions.trim()
+    ) {
       toast.error('File upload instructions are required');
       return;
     }
 
-    if (assessmentType === 'file_upload' && allowedUploadExtensions.length === 0) {
+    if (
+      assessmentType === 'file_upload' &&
+      allowedUploadExtensions.length === 0
+    ) {
       toast.error('Select at least one allowed file type');
       return;
     }
@@ -734,9 +837,22 @@ export default function AssessmentEditorPage() {
 
     try {
       setSaving(true);
+      setSaveState('saving');
+
+      const classRecordPlacementPayload = {
+        classRecordCategory: category || undefined,
+        quarter: quarter || undefined,
+        classRecordItemId:
+          category && quarter
+            ? placementMode === 'manual'
+              ? selectedSlotId || null
+              : null
+            : null,
+      };
 
       await assessmentService.update(assessment.id, {
         title: title.trim(),
+        description: description.trim() || undefined,
         type: assessmentType,
         passingScore,
         maxAttempts,
@@ -752,14 +868,7 @@ export default function AssessmentEditorPage() {
         strictMode,
         feedbackLevel,
         feedbackDelayHours: feedbackLevel === 'immediate' ? 0 : feedbackDelayHours,
-        classRecordCategory: category || undefined,
-        quarter: quarter || undefined,
-        classRecordItemId:
-          category && quarter
-            ? placementMode === 'manual'
-              ? selectedSlotId || null
-              : null
-            : null,
+        ...classRecordPlacementPayload,
         fileUploadInstructions:
           assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
         teacherAttachmentFileId:
@@ -779,6 +888,9 @@ export default function AssessmentEditorPage() {
 
       toast.success('Assessment saved');
       await fetchAssessment();
+      lastSavedFingerprintRef.current = serializedDraft;
+      lastSavedTitleRef.current = title.trim();
+      setSaveState('saved');
     } catch (error: unknown) {
       const message =
         typeof error === 'object' &&
@@ -787,6 +899,7 @@ export default function AssessmentEditorPage() {
         typeof (error as { message?: unknown }).message === 'string'
           ? (error as { message: string }).message
           : 'Unable to save assessment';
+      setSaveState('error');
       toast.error(message);
     } finally {
       setSaving(false);
@@ -794,7 +907,7 @@ export default function AssessmentEditorPage() {
   };
 
   const handleSaveRubric = async () => {
-    if (!assessment) return;
+    if (!assessment || isReadOnlyMode) return;
     try {
       const normalized = rubricCriteria
         .map((criterion, index) => ({
@@ -858,676 +971,765 @@ export default function AssessmentEditorPage() {
     ? `/dashboard/teacher/classes/${assessment.classId}?view=assignments`
     : '/dashboard/teacher/assessments';
 
-  return (
-    <div className="assessment-editor">
-      <header className="assessment-editor__header">
-        <div className="assessment-editor__title">
-          <Link href={backHref} className="assessment-editor__back">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+  const assessmentTypeSwitcher = (
+    <div className="rounded-[1.5rem] border border-slate-200/80 bg-slate-50/80 p-3">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Assessment format</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {ASSESSMENT_TYPE_TABS.map((entry) => (
+          <button
+            key={entry.value}
+            type="button"
+            className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+              assessmentType === entry.value
+                ? 'border-sky-300 bg-sky-50 text-sky-800'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+            }`}
+            onClick={() => {
+              setAssessmentType(entry.value);
+              if (entry.value === 'file_upload') {
+                toast.info('File Upload mode enabled. Questions are preserved but hidden.');
+              }
+            }}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const settingsContent = (
+    <div className="space-y-5">
+      {assessmentTypeSwitcher}
+
+      <div className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4">
+        <div>
+          <p className="text-sm font-black text-slate-900">Core settings</p>
+          <p className="text-sm text-slate-500">Set grading, visibility, and delivery defaults.</p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Assessment Category
+          </label>
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value as ClassRecordCategory)}
+            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800"
+          >
+            <option value="written_work">Written Work</option>
+            <option value="performance_task">Performance Task</option>
+            <option value="quarterly_assessment">Quarterly Assessment</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Time Limit (minutes)
+          </label>
           <Input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className="assessment-editor__title-input"
+            type="number"
+            min={1}
+            value={timeLimitMinutes}
+            onChange={(event) => setTimeLimitMinutes(event.target.value)}
+            className="h-11 rounded-2xl border-slate-200 bg-slate-50"
           />
-          <div className="assessment-editor__mode-switch">
-            {ASSESSMENT_TYPE_TABS.map((entry) => (
-              <button
-                key={entry.value}
-                type="button"
-                data-active={assessmentType === entry.value}
-                onClick={() => {
-                  setAssessmentType(entry.value);
-                  if (entry.value === 'file_upload') {
-                    toast.info('File Upload mode enabled. Questions are preserved but hidden.');
-                  }
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Show Results
+          </label>
+          <div className="grid gap-2">
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <input
+                type="radio"
+                checked={showResultMode === 'immediate'}
+                onChange={() => {
+                  setShowResultMode('immediate');
+                  setFeedbackLevel('immediate');
                 }}
-              >
-                {entry.label}
-              </button>
-            ))}
+              />
+              Immediately After Submit
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <input
+                type="radio"
+                checked={showResultMode === 'scheduled'}
+                onChange={() => {
+                  setShowResultMode('scheduled');
+                  if (feedbackLevel === 'immediate') setFeedbackLevel('standard');
+                }}
+              />
+              Scheduled Release
+            </label>
           </div>
         </div>
 
-        <div className="assessment-editor__header-actions">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full rounded-2xl"
+          onClick={() => setAdvancedOpen(true)}
+        >
+          Open Advanced Settings
+        </Button>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Total: <strong>{totalPoints} points</strong> across {questions.length} questions
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Notes
+          </label>
+          <RichTextEditor
+            value={description}
+            onChange={setDescription}
+            className="rounded-2xl"
+            placeholder="Add notes or instructions for this assessment."
+            minHeight={170}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const rubricContent = (
+    <div className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4">
+      <div>
+        <p className="text-sm font-black text-slate-900">Rubric rows</p>
+        <p className="text-sm text-slate-500">Use this for file uploads or scored performance tasks.</p>
+      </div>
+
+      <div className="space-y-3">
+        {rubricCriteria.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+            No rubric criteria yet.
+          </p>
+        ) : (
+          rubricCriteria.map((criterion, index) => (
+            <div
+              key={criterion.id || index}
+              className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-3"
+            >
+              <Input
+                value={criterion.title}
+                onChange={(event) =>
+                  setRubricCriteria((current) =>
+                    current.map((entry, entryIndex) =>
+                      entryIndex === index ? { ...entry, title: event.target.value } : entry,
+                    ),
+                  )
+                }
+                placeholder="Criterion title"
+                className="h-11 rounded-2xl border-slate-200 bg-white"
+              />
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_92px_auto]">
+                <Input
+                  value={criterion.description || ''}
+                  onChange={(event) =>
+                    setRubricCriteria((current) =>
+                      current.map((entry, entryIndex) =>
+                        entryIndex === index ? { ...entry, description: event.target.value } : entry,
+                      ),
+                    )
+                  }
+                  placeholder="Description"
+                  className="h-11 rounded-2xl border-slate-200 bg-white"
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  value={criterion.points}
+                  onChange={(event) =>
+                    setRubricCriteria((current) =>
+                      current.map((entry, entryIndex) =>
+                        entryIndex === index
+                          ? { ...entry, points: Number(event.target.value) || 0 }
+                          : entry,
+                      ),
+                    )
+                  }
+                  placeholder="Points"
+                  className="h-11 rounded-2xl border-slate-200 bg-white"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-2xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                  onClick={() =>
+                    setRubricCriteria((current) =>
+                      current.filter((_, entryIndex) => entryIndex !== index),
+                    )
+                  }
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-2xl"
+          onClick={() =>
+            setRubricCriteria((current) => [
+              ...current,
+              { id: createTempId(), title: '', points: 1, description: '' },
+            ])
+          }
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Row
+        </Button>
+        <Button type="button" className="rounded-2xl" onClick={() => void handleSaveRubric()}>
+          Save Rubric
+        </Button>
+      </div>
+    </div>
+  );
+
+  const analyticsContent = analyticsLoading ? (
+    <Skeleton className="h-24 rounded-xl" />
+  ) : analytics ? (
+    <div className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4">
+      <div>
+        <p className="text-sm font-black text-slate-900">Assessment analytics</p>
+        <p className="text-sm text-slate-500">Review response trends without leaving the composer.</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Total Responses: <strong>{analytics.totalResponses || 0}</strong>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Total Attempts: <strong>{analytics.totalAttempts || 0}</strong>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {analytics.questions.map((entry) => (
+          <article
+            key={entry.questionId}
+            className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4"
+          >
+            <h4 className="text-sm font-semibold text-slate-900">
+              {entry.content || 'Untitled question'}
+            </h4>
+            <p className="mt-2 text-sm text-slate-600">
+              Correct: {Math.round(entry.correctPercent || 0)}% | Avg:{' '}
+              {entry.averagePoints.toFixed(1)} pts
+            </p>
+          </article>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+      No analytics data yet.
+    </p>
+  );
+
+  const controlPanelContent = (
+    <div className="space-y-5">
+      {rightTab === 'settings' ? settingsContent : null}
+      {rightTab === 'rubric' ? rubricContent : null}
+      {rightTab === 'analytics' ? analyticsContent : null}
+    </div>
+  );
+
+  const saveStateMeta: { label: string; className: string } = (() => {
+    if (saveState === 'saving') {
+      return { label: 'Saving', className: 'border-amber-200 bg-amber-50 text-amber-700' };
+    }
+    if (saveState === 'dirty') {
+      return { label: 'Unsaved', className: 'border-slate-200 bg-slate-100 text-slate-700' };
+    }
+    if (saveState === 'error') {
+      return { label: 'Retry needed', className: 'border-rose-200 bg-rose-50 text-rose-700' };
+    }
+    return { label: 'Saved', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
+  })();
+
+  const rubricDisabled = assessmentType !== 'file_upload';
+
+  return (
+    <div className="assessment-editor mx-auto max-w-[1220px] px-4 pb-10 pt-3 lg:px-6">
+      <header className="sticky top-3 z-30 rounded-[1.9rem] border border-slate-200/80 bg-white/95 px-4 py-4 shadow-[0_20px_48px_-34px_rgba(15,23,42,0.28)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
             variant="outline"
-            className="assessment-editor__draft-btn"
-            onClick={() => setAvailability((current) => (current === 'given' ? 'draft' : 'given'))}
+            className="rounded-2xl"
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+                return;
+              }
+              window.location.assign(backHref);
+            }}
           >
-            <Eye className="h-4 w-4" />
-            {availability === 'given' ? 'Given' : 'Draft'}
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to assessments
+          </Button>
+          <span className={`rounded-full border px-3 py-1 text-sm font-semibold ${saveStateMeta.className}`}>
+            {isReadOnlyMode ? 'View only' : saveStateMeta.label}
+          </span>
+          <Input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="h-12 min-w-[260px] flex-1 rounded-2xl border-slate-200 bg-slate-50 px-4 text-xl font-black"
+            placeholder="Untitled assessment"
+            disabled={isReadOnlyMode}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className={`rounded-2xl ${
+              panelOpen && rightTab === 'settings' ? 'border-slate-900 bg-slate-900 text-white' : ''
+            }`}
+            onClick={() => openPanelTab('settings')}
+            disabled={isReadOnlyMode}
+          >
+            <Settings2 className="mr-2 h-4 w-4" />
+            Settings
           </Button>
           <Button
             type="button"
-            className="assessment-editor__save-btn"
-            onClick={() => void handleSave()}
-            disabled={saving}
+            variant="outline"
+            className="rounded-2xl border-[#ef233c]/35 text-[#b91c1c] hover:bg-[#fff1f2] hover:text-[#9f1239]"
+            onClick={() => setAdvancedOpen(true)}
+            disabled={isReadOnlyMode}
           >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving...' : 'Save'}
+            <Settings2 className="mr-2 h-4 w-4" />
+            Advanced
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={rubricDisabled}
+            className={`rounded-2xl ${
+              panelOpen && rightTab === 'rubric' ? 'border-slate-900 bg-slate-900 text-white' : ''
+            } ${rubricDisabled ? 'cursor-not-allowed opacity-55' : ''}`}
+            onClick={() => {
+              if (rubricDisabled) return;
+              openPanelTab('rubric');
+            }}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Rubric
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className={`rounded-2xl ${
+              panelOpen && rightTab === 'analytics' ? 'border-slate-900 bg-slate-900 text-white' : ''
+            }`}
+            onClick={() => openPanelTab('analytics')}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Analytics
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-2xl"
+            onClick={() => setPreviewEnabled((current) => !current)}
+            disabled={isReadOnlyMode}
+          >
+            <Eye className="mr-2 h-4 w-4" />
+            {isReadOnlyMode ? 'Read-only preview' : previewEnabled ? 'Back to edit' : 'Preview'}
+          </Button>
+          <Button
+            type="button"
+            className="rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
+            onClick={() => void handleSave()}
+            disabled={saving || isReadOnlyMode}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {!saving ? <Save className="mr-2 h-4 w-4" /> : null}
+            Save now
           </Button>
         </div>
       </header>
 
-      <section
-        className="assessment-editor__workspace"
-        style={{
-          gridTemplateColumns: `${effectiveLeftCollapsed ? '3.25rem' : '18.75rem'} minmax(0, 1fr) ${
-            effectiveRightCollapsed ? '3.25rem' : '20rem'
-          }`,
-        }}
-      >
-        <aside className="assessment-editor__left" data-collapsed={effectiveLeftCollapsed}>
-          {effectiveLeftCollapsed ? (
-            <button
-              type="button"
-              className="assessment-editor__pane-expand"
-              onClick={() => setLeftPaneCollapsed(false)}
-              aria-label="Expand question panel"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          ) : (
-            <>
-              <div className="assessment-editor__left-head">
-                <span>
-                  QUESTIONS ({questions.length})
-                  {isReorderingQuestions ? (
-                    <span className="assessment-editor__left-saving">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Saving order...
-                    </span>
-                  ) : null}
-                </span>
-                <button
-                  type="button"
-                  className="assessment-editor__pane-collapse"
-                  onClick={() => {
-                    if (!desktopPanesEnabled) return;
-                    setLeftPaneCollapsed(true);
-                  }}
-                  aria-label="Collapse question panel"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-              </div>
+      <main className="mt-5 space-y-4">
+        {assessmentType === 'file_upload' && !isReadOnlyMode ? (
+          <article className="assessment-editor__card assessment-editor__file-mode">
+            <div className="assessment-editor__file-mode-head">
+              <h3>File Upload Assessment</h3>
+              <p>
+                Students submit files instead of answering question cards. Existing questions are kept for
+                future mode switches.
+              </p>
+            </div>
 
-              <div className="assessment-editor__question-list">
-                {questions.map((question, index) => (
+            <div className="assessment-editor__field">
+              <label>Upload Instructions</label>
+              <RichTextEditor
+                value={fileUploadInstructions}
+                onChange={setFileUploadInstructions}
+                className="assessment-editor__question-text"
+                placeholder="Explain what students must upload and how they should format it."
+                minHeight={190}
+              />
+            </div>
+
+            <div className="assessment-editor__file-groups">
+              {FILE_UPLOAD_TYPE_GROUPS.map((group) => {
+                const enabled = group.extensions.every((ext) => allowedUploadExtensions.includes(ext));
+                return (
+                  <label key={group.key} className="assessment-editor__file-group" data-active={enabled}>
+                    <input type="checkbox" checked={enabled} onChange={() => toggleGroup(group.key)} />
+                    <span>{group.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="assessment-editor__field">
+              <label>Maximum upload size (MB)</label>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={Math.round(maxUploadSizeBytes / (1024 * 1024))}
+                onChange={(event) => {
+                  const mb = Number(event.target.value) || 1;
+                  setMaxUploadSizeBytes(Math.min(Math.max(mb, 1), 100) * 1024 * 1024);
+                }}
+              />
+            </div>
+
+            <div className="assessment-editor__file-attachment">
+              <div>
+                <p>Teacher Reference File</p>
+                <span>Optional file students can preview while submitting.</span>
+              </div>
+              <label className="assessment-editor__upload-btn">
+                <Upload className="h-4 w-4" />
+                {uploadingTeacherAttachment ? 'Uploading...' : 'Upload'}
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={handleTeacherAttachmentUpload}
+                  disabled={uploadingTeacherAttachment}
+                />
+              </label>
+            </div>
+
+            {teacherAttachmentFile ? (
+              <div className="assessment-editor__attachment-card">
+                <div>
+                  <strong>{teacherAttachmentFile.originalName}</strong>
+                  <p>{Math.round(teacherAttachmentFile.sizeBytes / 1024)} KB</p>
+                </div>
+                <div className="assessment-editor__attachment-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      void assessmentService.downloadTeacherAttachment(
+                        assessment.id,
+                        teacherAttachmentFile.originalName,
+                      )
+                    }
+                  >
+                    Download
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-rose-600"
+                    onClick={() => setTeacherAttachmentFile(null)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </article>
+        ) : previewEnabled || isReadOnlyMode ? (
+          <div className="space-y-4">
+            {questions.length === 0 ? (
+              <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-10 text-center text-sm text-slate-500">
+                No questions yet. Add one to preview the learner flow.
+              </div>
+            ) : (
+              questions.map((question, index) => (
+                <article
+                  key={question.id}
+                  className="rounded-[1.6rem] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_18px_40px_-32px_rgba(15,23,42,0.18)]"
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                      Question {index + 1}
+                    </span>
+                    <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+                      {ASSESSMENT_COMPOSER_LABELS[question.type]}
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      {question.points} pts {question.isRequired ? '| Required' : '| Optional'}
+                    </span>
+                  </div>
+
+                  <RichTextRenderer
+                    html={question.content || '<p>Untitled question</p>'}
+                    className="mt-4 text-base font-semibold leading-7 text-slate-900"
+                  />
+                </article>
+              ))
+            )}
+          </div>
+        ) : questions.length === 0 ? (
+          <div className="space-y-4 rounded-[1.7rem] border border-slate-200/80 bg-white p-5 shadow-[0_20px_40px_-34px_rgba(15,23,42,0.25)]">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Quick start with</p>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ASSESSMENT_COMPOSER_QUESTION_TYPES.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <button
+                    key={entry.type}
+                    type="button"
+                    onClick={() => handleAddQuestion(entry.type)}
+                    disabled={isReadOnlyMode}
+                    className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50/70"
+                  >
+                    <span className="rounded-xl bg-white p-2 text-sky-700 shadow-sm">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">{entry.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {questions.map((question, index) => {
+              const isSelected = selectedQuestionId === question.id;
+              const isLastQuestion = index === questions.length - 1;
+              return (
+                <div key={question.id} className="group space-y-2">
                   <article
-                    key={question.id}
-                    className="assessment-editor__question-item"
-                    data-active={selectedQuestionId === question.id}
-                    data-dragging={draggingQuestionId === question.id}
-                    data-drop-target={dropTargetQuestionId === question.id}
-                    draggable={assessmentType !== 'file_upload'}
-                    onDragStart={(event) => handleQuestionDragStart(event, question.id)}
-                    onDragOver={(event) => handleQuestionDragOver(event, question.id)}
-                    onDrop={(event) => void handleQuestionDrop(event, question.id)}
+                    draggable
+                    onClick={() => setSelectedQuestionId(question.id)}
+                    onDragStart={(event) => {
+                      setDraggingQuestionId(question.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', question.id);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      if (draggingQuestionId && draggingQuestionId !== question.id) {
+                        setDropTargetQuestionId(question.id);
+                      }
+                    }}
+                    onDrop={() => handleQuestionDrop(question.id)}
                     onDragEnd={() => {
                       setDraggingQuestionId(null);
                       setDropTargetQuestionId(null);
                     }}
+                    className={`rounded-[1.5rem] border bg-white p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.28)] ${
+                      dropTargetQuestionId === question.id
+                        ? 'border-emerald-300'
+                        : isSelected
+                          ? 'border-sky-300'
+                          : 'border-slate-200/80'
+                    }`}
                   >
-                    <button
-                      type="button"
-                      className="assessment-editor__question-main"
-                      onClick={() => setSelectedQuestionId(question.id)}
-                    >
-                      <div className="assessment-editor__question-rail">
-                        <GripVertical className="h-3.5 w-3.5" />
-                        <div className="assessment-editor__question-index-wrap">
-                          <span className="assessment-editor__question-index">Q{index + 1}</span>
-                          {(() => {
-                            const Icon = QUESTION_TYPE_ICONS[question.type];
-                            return <Icon className="h-3.5 w-3.5" />;
-                          })()}
-                        </div>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="flex cursor-grab items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500"
+                          aria-label={`Drag to reorder question ${index + 1}`}
+                        >
+                          <GripVertical className="h-4 w-4" />
+                          Q{index + 1}
+                        </button>
+                        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-sky-700">
+                          {ASSESSMENT_COMPOSER_LABELS[question.type]}
+                        </span>
                       </div>
-                      <div className="assessment-editor__question-preview">
-                        <p>{getQuestionPreview(question)}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDuplicateQuestion(question.id);
+                          }}
+                        >
+                          Duplicate
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteQuestion(question.id);
+                          }}
+                        >
+                          Delete
+                        </Button>
                       </div>
-                    </button>
+                    </div>
 
-                    <div className="assessment-editor__question-tail">
-                      <span className="assessment-editor__question-points">{question.points}pt</span>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="assessment-editor__question-menu"
-                            aria-label={`Actions for question ${index + 1}`}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onSelect={() => handleDuplicateQuestion(question.id)}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Duplicate
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-rose-600 focus:text-rose-700"
-                            onSelect={() => handleDeleteQuestion(question.id)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <div className="mt-3">
+                      {isSelected ? (
+                        <AssessmentQuestionEditor
+                          question={question}
+                          questions={questions}
+                          onQuestionsChange={setQuestions}
+                        />
+                      ) : (
+                        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                          <RichTextRenderer
+                            html={question.content || '<p>Untitled question</p>'}
+                            className="text-base font-semibold leading-7 text-slate-900"
+                          />
+                          {supportsOptions(question.type) && question.options.length > 0 ? (
+                            <div className="space-y-2">
+                              {question.options.map((option) => (
+                                <div
+                                  key={option.id}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                                >
+                                  {option.text || 'Untitled option'}
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   </article>
-                ))}
-              </div>
 
-              <div className="assessment-editor__left-foot">
-                <p>ADD QUESTION</p>
-                <div className="assessment-editor__tile-grid">
-                  {QUESTION_TILES.map((tile) => {
-                    const Icon = tile.icon;
-                    return (
-                      <button
-                        key={tile.label}
-                        type="button"
-                        className="assessment-editor__tile-btn"
-                        onClick={() => handleAddQuestion(tile.value)}
-                        disabled={assessmentType === 'file_upload'}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {tile.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {assessmentType === 'file_upload' ? (
-                  <p className="assessment-editor__left-note">
-                    Questions are preserved in File Upload mode and editable again when you switch back.
-                  </p>
-                ) : null}
-              </div>
-            </>
-          )}
-        </aside>
-
-        <main className="assessment-editor__center">
-          {assessmentType === 'file_upload' ? (
-            <article className="assessment-editor__card assessment-editor__file-mode">
-              <div className="assessment-editor__file-mode-head">
-                <h3>File Upload Assessment</h3>
-                <p>
-                  Students submit files instead of answering question cards. Existing questions are kept for
-                  future mode switches.
-                </p>
-              </div>
-
-              <div className="assessment-editor__field">
-                <label>Upload Instructions</label>
-                <Textarea
-                  value={fileUploadInstructions}
-                  onChange={(event) => setFileUploadInstructions(event.target.value)}
-                  className="assessment-editor__question-text"
-                  placeholder="Explain what students must upload and how they should format it."
-                />
-              </div>
-
-              <div className="assessment-editor__file-groups">
-                {FILE_UPLOAD_TYPE_GROUPS.map((group) => {
-                  const enabled = group.extensions.every((ext) => allowedUploadExtensions.includes(ext));
-                  return (
-                    <label key={group.key} className="assessment-editor__file-group" data-active={enabled}>
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        onChange={() => toggleGroup(group.key)}
-                      />
-                      <span>{group.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-
-              <div className="assessment-editor__field">
-                <label>Maximum upload size (MB)</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={Math.round(maxUploadSizeBytes / (1024 * 1024))}
-                  onChange={(event) => {
-                    const mb = Number(event.target.value) || 1;
-                    setMaxUploadSizeBytes(Math.min(Math.max(mb, 1), 100) * 1024 * 1024);
-                  }}
-                />
-              </div>
-
-              <div className="assessment-editor__file-attachment">
-                <div>
-                  <p>Teacher Reference File</p>
-                  <span>Optional file students can preview while submitting.</span>
-                </div>
-                <label className="assessment-editor__upload-btn">
-                  <Upload className="h-4 w-4" />
-                  {uploadingTeacherAttachment ? 'Uploading...' : 'Upload'}
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={handleTeacherAttachmentUpload}
-                    disabled={uploadingTeacherAttachment}
-                  />
-                </label>
-              </div>
-
-              {teacherAttachmentFile ? (
-                <div className="assessment-editor__attachment-card">
-                  <div>
-                    <strong>{teacherAttachmentFile.originalName}</strong>
-                    <p>{Math.round(teacherAttachmentFile.sizeBytes / 1024)} KB</p>
-                  </div>
-                  <div className="assessment-editor__attachment-actions">
+                  <div className="flex justify-center">
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() =>
-                        void assessmentService.downloadTeacherAttachment(
-                          assessment.id,
-                          teacherAttachmentFile.originalName,
-                        )
-                      }
-                    >
-                      Download
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="text-rose-600"
-                      onClick={() => setTeacherAttachmentFile(null)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </article>
-          ) : !selectedQuestion ? (
-            <div className="assessment-editor__empty">Select a question or add a new one.</div>
-          ) : (
-            <>
-              <article className="assessment-editor__card">
-                <div className="assessment-editor__card-top">
-                  <span className="assessment-editor__type-chip">
-                    <List className="h-3.5 w-3.5" />
-                    {QUESTION_LABELS[selectedQuestion.type]}
-                  </span>
-                  <div className="assessment-editor__card-meta">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={selectedQuestion.isRequired}
-                        onChange={(event) =>
-                          updateQuestion(selectedQuestion.id, (question) => ({
-                            ...question,
-                            isRequired: event.target.checked,
-                          }))
-                        }
-                      />
-                      Required
-                    </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      className="assessment-editor__point-input"
-                      value={selectedQuestion.points}
-                      onChange={(event) =>
-                        updateQuestion(selectedQuestion.id, (question) => ({
-                          ...question,
-                          points: Number(event.target.value) || 1,
-                        }))
-                      }
-                    />
-                    <span>pts</span>
-                  </div>
-                </div>
-
-                <Textarea
-                  value={selectedQuestion.content}
-                  onChange={(event) =>
-                    updateQuestion(selectedQuestion.id, (question) => ({
-                      ...question,
-                      content: event.target.value,
-                    }))
-                  }
-                  className="assessment-editor__question-text"
-                  placeholder="Type question..."
-                />
-              </article>
-
-              <article className="assessment-editor__card">
-                <div className="assessment-editor__answer-head">
-                  <h3>Answer Choices</h3>
-                </div>
-
-                {supportsOptions(selectedQuestion.type) ? (
-                  <div className="assessment-editor__choices">
-                    {selectedQuestion.options.map((option, optionIndex) => (
-                      <div
-                        key={option.id}
-                        className="assessment-editor__choice-row"
-                        data-correct={option.isCorrect}
-                      >
-                        <button
-                          type="button"
-                          className="assessment-editor__choice-check"
-                          onClick={() =>
-                            updateQuestion(selectedQuestion.id, (question) => ({
-                              ...question,
-                              options: question.options.map((entry, entryIndex) => ({
-                                ...entry,
-                                isCorrect:
-                                  question.type === 'multiple_select'
-                                    ? entryIndex === optionIndex
-                                      ? !entry.isCorrect
-                                      : entry.isCorrect
-                                    : entryIndex === optionIndex,
-                              })),
-                            }))
-                          }
-                        >
-                          {option.isCorrect ? <Check className="h-3.5 w-3.5" /> : null}
-                        </button>
-                        <Input
-                          value={option.text}
-                          onChange={(event) =>
-                            updateQuestion(selectedQuestion.id, (question) => ({
-                              ...question,
-                              options: question.options.map((entry, entryIndex) =>
-                                entryIndex === optionIndex
-                                  ? { ...entry, text: event.target.value }
-                                  : entry,
-                              ),
-                            }))
-                          }
-                          className="assessment-editor__choice-input"
-                        />
-                        <button
-                          type="button"
-                          className="assessment-editor__choice-delete"
-                          onClick={() =>
-                            updateQuestion(selectedQuestion.id, (question) => ({
-                              ...question,
-                              options:
-                                question.options.length <= 2
-                                  ? question.options
-                                  : question.options.filter((_, entryIndex) => entryIndex !== optionIndex),
-                            }))
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      className="assessment-editor__add-choice"
-                      onClick={() =>
-                        updateQuestion(selectedQuestion.id, (question) => ({
-                          ...question,
-                          options: [
-                            ...question.options,
-                            {
-                              id: createTempId(),
-                              text: '',
-                              isCorrect: false,
-                              order: question.options.length + 1,
-                            },
-                          ],
-                        }))
-                      }
+                      size="icon"
+                      onClick={() => openQuestionTypeDialog(index)}
+                      className={`h-10 min-w-14 rounded-full border-sky-200 bg-white/95 px-4 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.42)] transition hover:scale-[1.03] hover:border-sky-300 hover:bg-sky-50 ${
+                        isLastQuestion
+                          ? ''
+                          : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100'
+                      }`}
                     >
                       <Plus className="h-4 w-4" />
-                      Add Choice
-                    </button>
-                    <p className="assessment-editor__choice-note">
-                      Click the circle to mark the correct answer.
-                    </p>
+                    </Button>
                   </div>
-                ) : (
-                  <div className="assessment-editor__short-answer-note">
-                    This question type uses text response and has no choice list.
-                  </div>
-                )}
-              </article>
-            </>
-          )}
-        </main>
+                </div>
+              );
+            })}
+            <div ref={questionListBottomRef} className="h-2" />
+          </div>
+        )}
+      </main>
 
-        <aside className="assessment-editor__right" data-collapsed={effectiveRightCollapsed}>
-          {effectiveRightCollapsed ? (
+      {assessmentType !== 'file_upload' && questions.length > 0 && !hideFloatingAdd && !isReadOnlyMode ? (
+        <Button
+          type="button"
+          onClick={() => openQuestionTypeDialog(null)}
+          className="fixed bottom-5 right-5 z-30 h-10 w-10 rounded-full p-0 shadow-[0_20px_36px_-20px_rgba(15,23,42,0.45)]"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      ) : null}
+
+      <Dialog
+        open={addQuestionDialogOpen}
+        onOpenChange={(open) => {
+          setAddQuestionDialogOpen(open);
+          if (!open) setInsertAfterQuestionIndex(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl rounded-3xl border-slate-200 p-0">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5">
+            <DialogTitle className="text-xl font-black text-slate-900">Add Question</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Choose the next question type for this assessment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[62vh] overflow-y-auto px-6 py-5">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {ASSESSMENT_COMPOSER_QUESTION_TYPES.map((entry) => {
+                const Icon = entry.icon;
+                return (
+                  <button
+                    key={`${entry.type}-dialog`}
+                    type="button"
+                    onClick={() => handleAddQuestion(entry.type, insertAfterQuestionIndex)}
+                    className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-left transition hover:border-sky-300 hover:bg-sky-50/70"
+                  >
+                    <span className="rounded-xl bg-white p-2 text-sky-700 shadow-sm">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">{entry.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-100 px-6 py-4">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl font-black"
+              onClick={() => {
+                setAddQuestionDialogOpen(false);
+                setInsertAfterQuestionIndex(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className={`fixed inset-0 z-40 transition ${panelOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+        <button
+          type="button"
+          aria-label="Close panel"
+          className={`absolute inset-0 bg-slate-900/35 transition-opacity duration-300 ${panelOpen ? 'opacity-100' : 'opacity-0'}`}
+          onClick={() => setPanelOpen(false)}
+        />
+        <aside
+          className={`absolute right-0 top-0 h-full w-full max-w-[440px] border-l border-slate-200 bg-white px-5 pb-5 pt-4 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.42)] transition-transform duration-300 ${
+            panelOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xl font-black text-slate-900">
+              {rightTab[0].toUpperCase() + rightTab.slice(1)}
+            </h3>
             <button
               type="button"
-              className="assessment-editor__pane-expand"
-              onClick={() => setRightPaneCollapsed(false)}
-              aria-label="Expand settings panel"
+              onClick={() => setPanelOpen(false)}
+              className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:bg-slate-100"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </button>
-          ) : (
-            <>
-              <div className="assessment-editor__right-top">
-                <nav className="assessment-editor__right-tabs">
-                  {(['settings', 'rubric', 'analytics'] as RightTab[]).map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      data-active={rightTab === tab}
-                      onClick={() => setRightTab(tab)}
-                    >
-                      {tab[0].toUpperCase() + tab.slice(1)}
-                    </button>
-                  ))}
-                </nav>
-                <button
-                  type="button"
-                  className="assessment-editor__pane-collapse"
-                  onClick={() => {
-                    if (!desktopPanesEnabled) return;
-                    setRightPaneCollapsed(true);
-                  }}
-                  aria-label="Collapse settings panel"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-
-              {rightTab === 'settings' ? (
-                <div className="assessment-editor__right-body">
-                  <div className="assessment-editor__field">
-                    <label>Assessment Category</label>
-                    <select
-                      value={category}
-                      onChange={(event) => setCategory(event.target.value as ClassRecordCategory)}
-                    >
-                      <option value="written_work">Written Work</option>
-                      <option value="performance_task">Performance Task</option>
-                      <option value="quarterly_assessment">Quarterly Assessment</option>
-                    </select>
-                  </div>
-
-                  <div className="assessment-editor__field">
-                    <label>Time Limit (minutes)</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={timeLimitMinutes}
-                      onChange={(event) => setTimeLimitMinutes(event.target.value)}
-                    />
-                  </div>
-
-                  <div className="assessment-editor__field">
-                    <label>Show Results</label>
-                    <label className="assessment-editor__radio">
-                      <input
-                        type="radio"
-                        checked={showResultMode === 'immediate'}
-                        onChange={() => {
-                          setShowResultMode('immediate');
-                          setFeedbackLevel('immediate');
-                        }}
-                      />
-                      Immediately After Submit
-                    </label>
-                    <label className="assessment-editor__radio">
-                      <input
-                        type="radio"
-                        checked={showResultMode === 'scheduled'}
-                        onChange={() => {
-                          setShowResultMode('scheduled');
-                          if (feedbackLevel === 'immediate') setFeedbackLevel('standard');
-                        }}
-                      />
-                      Scheduled Release
-                    </label>
-                  </div>
-
-                  <div className="assessment-editor__field">
-                    <label>Availability</label>
-                    <div className="assessment-editor__availability">
-                      <button
-                        type="button"
-                        data-active={availability === 'given'}
-                        onClick={() => setAvailability('given')}
-                      >
-                        Given
-                      </button>
-                      <button
-                        type="button"
-                        data-active={availability === 'draft'}
-                        onClick={() => setAvailability('draft')}
-                      >
-                        Draft
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="assessment-editor__advanced-btn"
-                    onClick={() => setAdvancedOpen(true)}
-                  >
-                    Open Advanced Settings
-                  </button>
-
-                  <div className="assessment-editor__summary">
-                    Total: <strong>{totalPoints} points</strong> - {questions.length} questions
-                  </div>
-                </div>
-              ) : null}
-
-              {rightTab === 'rubric' ? (
-                <div className="assessment-editor__right-body">
-                  <div className="assessment-editor__rubric-list">
-                    {rubricCriteria.length === 0 ? (
-                      <p className="assessment-editor__empty-small">No rubric criteria yet.</p>
-                    ) : (
-                      rubricCriteria.map((criterion, index) => (
-                        <div key={criterion.id || index} className="assessment-editor__rubric-row">
-                          <Input
-                            value={criterion.title}
-                            onChange={(event) =>
-                              setRubricCriteria((current) =>
-                                current.map((entry, entryIndex) =>
-                                  entryIndex === index ? { ...entry, title: event.target.value } : entry,
-                                ),
-                              )
-                            }
-                            placeholder="Criterion title"
-                          />
-                          <Input
-                            type="number"
-                            min={0}
-                            value={criterion.points}
-                            onChange={(event) =>
-                              setRubricCriteria((current) =>
-                                current.map((entry, entryIndex) =>
-                                  entryIndex === index
-                                    ? { ...entry, points: Number(event.target.value) || 0 }
-                                    : entry,
-                                ),
-                              )
-                            }
-                            placeholder="Points"
-                          />
-                          <button
-                            type="button"
-                            className="assessment-editor__choice-delete"
-                            onClick={() =>
-                              setRubricCriteria((current) =>
-                                current.filter((_, entryIndex) => entryIndex !== index),
-                              )
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="assessment-editor__rubric-actions">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        setRubricCriteria((current) => [
-                          ...current,
-                          { id: createTempId(), title: '', points: 1, description: '' },
-                        ])
-                      }
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add Row
-                    </Button>
-                    <Button type="button" onClick={() => void handleSaveRubric()}>
-                      <Save className="h-4 w-4" />
-                      Save Rubric
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {rightTab === 'analytics' ? (
-                <div className="assessment-editor__right-body">
-                  {analyticsLoading ? (
-                    <Skeleton className="h-24 rounded-xl" />
-                  ) : analytics ? (
-                    <div className="assessment-editor__analytics">
-                      <p>
-                        Total Responses: <strong>{analytics.totalResponses || 0}</strong>
-                      </p>
-                      <p>
-                        Total Attempts: <strong>{analytics.totalAttempts || 0}</strong>
-                      </p>
-                      <div className="assessment-editor__analytics-list">
-                        {analytics.questions.map((entry) => (
-                          <article key={entry.questionId}>
-                            <h4>{entry.content || 'Untitled question'}</h4>
-                            <p>
-                              Correct: {Math.round(entry.correctPercent || 0)}% - Avg:{' '}
-                              {entry.averagePoints.toFixed(1)} pts
-                            </p>
-                          </article>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="assessment-editor__empty-small">No analytics data yet.</p>
-                  )}
-                </div>
-              ) : null}
-            </>
-          )}
+          </div>
+          <div className="h-[calc(100%-56px)] overflow-y-auto pr-1">
+            {controlPanelContent}
+          </div>
         </aside>
-      </section>
+      </div>
 
       <Dialog open={advancedOpen} onOpenChange={setAdvancedOpen}>
         <DialogContent className="assessment-editor__advanced-dialog">

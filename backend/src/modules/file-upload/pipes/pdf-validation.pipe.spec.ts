@@ -28,18 +28,6 @@ jest.mock('fs', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock file-type (CJS require inside the pipe)
-// ---------------------------------------------------------------------------
-
-let mockFileTypeResult: { mime: string } | undefined = {
-  mime: 'application/pdf',
-};
-
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(async () => mockFileTypeResult),
-}));
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -86,7 +74,6 @@ describe('PdfValidationPipe', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     pipe = new PdfValidationPipe();
-    mockFileTypeResult = { mime: 'application/pdf' };
 
     // Default: behave as if fs returns a real PDF header
     mockOpenSync.mockReturnValue(3);
@@ -188,8 +175,7 @@ describe('PdfValidationPipe', () => {
   // -------------------------------------------------------------------------
 
   describe('non-PDF magic bytes', () => {
-    it('throws UnsupportedMediaTypeException when file-type detects a non-PDF MIME', async () => {
-      mockFileTypeResult = { mime: 'image/png' };
+    it('throws UnsupportedMediaTypeException when the header is not PDF magic bytes', async () => {
       mockReadSync.mockImplementation(
         (
           _fd: number,
@@ -224,8 +210,7 @@ describe('PdfValidationPipe', () => {
       expect(mockUnlink).toHaveBeenCalledWith(path.resolve(file.path));
     });
 
-    it('throws UnsupportedMediaTypeException when file-type returns undefined (unrecognised bytes)', async () => {
-      mockFileTypeResult = undefined;
+    it('throws UnsupportedMediaTypeException for unrecognised bytes', async () => {
       mockReadSync.mockImplementation(
         (
           _fd: number,

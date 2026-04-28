@@ -29,6 +29,8 @@ export interface ResetUserPasswordResponse {
   message: string;
   userId: string;
   generatedPassword: string;
+  emailDeliveryStatus?: 'sent' | 'failed';
+  emailDeliveryError?: string;
 }
 
 export type BulkUserLifecycleAction = 'suspend' | 'reactivate' | 'archive' | 'purge';

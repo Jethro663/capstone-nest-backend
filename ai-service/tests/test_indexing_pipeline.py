@@ -1,6 +1,6 @@
 import unittest
 
-from app.indexing_pipeline import build_extraction_chunks
+from app.indexing_pipeline import build_class_index_status, build_extraction_chunks
 
 
 class IndexingPipelineTests(unittest.TestCase):
@@ -54,7 +54,66 @@ class IndexingPipelineTests(unittest.TestCase):
         self.assertIn("Coherence context:", chunk_text)
         self.assertNotIn("data:image/png;base64", chunk_text)
 
+    def test_build_class_index_status_marks_ready_lessons_that_need_indexing(self) -> None:
+        status = build_class_index_status(
+            "class-1",
+            lesson_rows=[
+                {
+                    "lesson_id": "lesson-1",
+                    "lesson_title": "Fractions",
+                    "is_draft": False,
+                    "source_updated_at": "2026-04-24T08:00:00+00:00",
+                    "blocks_json": [
+                        {
+                            "id": "block-1",
+                            "type": "text",
+                            "content": {"text": "Fractions compare parts of a whole."},
+                        }
+                    ],
+                }
+            ],
+            extraction_rows=[],
+            assessment_rows=[],
+            chunk_rows=[],
+        )
+
+        self.assertTrue(status["needsReindex"])
+        self.assertEqual(status["chunksIndexed"], 0)
+        self.assertEqual(status["sourceSummary"]["lessons"]["ready"], 1)
+        self.assertEqual(status["readyLessons"][0]["status"], "ready_to_index")
+        self.assertIn("Reindex", status["reason"])
+
+    def test_build_class_index_status_reports_blockers_when_no_usable_sources_exist(self) -> None:
+        status = build_class_index_status(
+            "class-1",
+            lesson_rows=[
+                {
+                    "lesson_id": "lesson-draft",
+                    "lesson_title": "Draft lesson",
+                    "is_draft": True,
+                    "source_updated_at": "2026-04-24T08:00:00+00:00",
+                    "blocks_json": [],
+                }
+            ],
+            extraction_rows=[
+                {
+                    "id": "extraction-1",
+                    "extraction_status": "failed",
+                    "structured_content": None,
+                    "error_message": "OCR failed",
+                    "source_updated_at": "2026-04-24T08:05:00+00:00",
+                    "original_name": "module.pdf",
+                }
+            ],
+            assessment_rows=[],
+            chunk_rows=[],
+        )
+
+        self.assertFalse(status["needsReindex"])
+        self.assertEqual(status["sourceSummary"]["lessons"]["blocked"], 1)
+        self.assertEqual(status["sourceSummary"]["extractions"]["blocked"], 1)
+        self.assertIn("No usable class sources are ready yet", status["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

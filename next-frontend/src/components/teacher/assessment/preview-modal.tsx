@@ -5,6 +5,7 @@ import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import {
   Dialog,
   DialogContent,
@@ -131,7 +132,7 @@ export function PreviewModal({ attemptId, open, onClose }: PreviewModalProps) {
                       <div className="flex items-start justify-between">
                         <div>
                           <span className="text-xs font-semibold text-muted-foreground mr-2">Q{i + 1}</span>
-                          <span className="text-sm font-medium">{q.content}</span>
+                        <RichTextRenderer html={q.content ?? '<p>No question content.</p>'} className="text-sm font-medium" />
                         </div>
                         <Badge variant={isCorrect ? 'default' : isWrong ? 'destructive' : 'secondary'} className="text-[10px] shrink-0 ml-2">
                           {r.pointsEarned ?? 0}/{q.points}

@@ -61,6 +61,73 @@ export interface IndexingSummary {
   lessonChunks?: number;
   extractionChunks?: number;
   questionChunks?: number;
+  lastIndexedAt?: string | null;
+}
+
+export interface AiReadyLessonSource {
+  lessonId: string;
+  title: string;
+  chunkCount: number;
+  status: 'indexed' | 'ready_to_index';
+  updatedAt?: string | null;
+}
+
+export interface AiLessonSourceBlocker {
+  lessonId: string;
+  title: string;
+  reason: string;
+  updatedAt?: string | null;
+}
+
+export interface AiReadyExtractionSource {
+  extractionId: string;
+  title: string;
+  chunkCount: number;
+  status: 'indexed' | 'ready_to_index';
+  updatedAt?: string | null;
+}
+
+export interface AiExtractionSourceBlocker {
+  extractionId: string;
+  title: string;
+  status?: string | null;
+  reason: string;
+  updatedAt?: string | null;
+}
+
+export interface AiClassIndexStatus {
+  classId: string;
+  chunksIndexed: number;
+  lessonChunks: number;
+  extractionChunks: number;
+  questionChunks: number;
+  lastIndexedAt?: string | null;
+  latestSourceUpdateAt?: string | null;
+  isStale: boolean;
+  needsReindex: boolean;
+  reason?: string | null;
+  readyLessons: AiReadyLessonSource[];
+  lessonBlockers: AiLessonSourceBlocker[];
+  readyExtractions: AiReadyExtractionSource[];
+  extractionBlockers: AiExtractionSourceBlocker[];
+  sourceSummary: {
+    lessons: {
+      total: number;
+      ready: number;
+      blocked: number;
+    };
+    extractions: {
+      total: number;
+      ready: number;
+      blocked: number;
+    };
+    questions: {
+      assessments: number;
+      assessmentsWithQuestions: number;
+      questionCount: number;
+      needsIndex: number;
+    };
+  };
 }
 
 export interface InterventionRecommendation {
@@ -105,6 +172,7 @@ export type AiGenerationStatus =
   | 'processing'
   | 'completed'
   | 'approved'
+  | 'cancelled'
   | 'rejected'
   | 'failed';
 

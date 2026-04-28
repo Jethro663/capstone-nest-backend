@@ -24,6 +24,14 @@ export function normalizeObject<T extends object>(value: unknown, fallback: T): 
   };
 }
 
-export function toAppError(error: unknown) {
-  return normalizeApiError(error);
+type AppErrorOptions = {
+  present?: boolean;
+};
+
+export function toAppError(error: unknown, options?: AppErrorOptions) {
+  return normalizeApiError(error, options);
+}
+
+export function peekAppError(error: unknown) {
+  return normalizeApiError(error, { present: false });
 }

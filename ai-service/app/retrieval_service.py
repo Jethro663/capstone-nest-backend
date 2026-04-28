@@ -187,6 +187,7 @@ async def _vector_search(
     *,
     query_text: str,
     class_id: str,
+    teacher_id: str | None = None,
     subject_key: str | None = None,
     grade_level: str | None = None,
     include_library: bool = True,
@@ -202,23 +203,41 @@ async def _vector_search(
         "embedding": embedding_to_vector_literal(embedding),
         "topK": limit,
     }
-    if include_library and subject_key and grade_level:
+    class_filters = ["c.class_id = :classId"]
+    library_filters: list[str] = []
+    library_allowed = include_library and subject_key and grade_level and (
+        not source_types or "library_file" in source_types
+    )
+    if library_allowed:
         params["subjectKey"] = subject_key
         params["gradeLevel"] = grade_level
-        filters = [
+        library_filters.append(
             """
             (
-              c.class_id = :classId
-              OR (
-                c.source_type = 'library_file'
-                AND c.subject_key = :subjectKey
-                AND c.grade_level = :gradeLevel
+              c.source_type = 'library_file'
+              AND c.subject_key = :subjectKey
+              AND c.grade_level = :gradeLevel
+              AND (
+                c.metadata_json->>'scope' = 'general'
+                OR c.metadata_json->>'scope' IS NULL
               )
             )
             """
-        ]
-    else:
-        filters = ["c.class_id = :classId"]
+        )
+        if teacher_id:
+            params["teacherId"] = teacher_id
+            library_filters.append(
+                """
+                (
+                  c.source_type = 'library_file'
+                  AND c.subject_key = :subjectKey
+                  AND c.grade_level = :gradeLevel
+                  AND c.metadata_json->>'teacherId' = :teacherId
+                  AND c.metadata_json->>'scope' = 'private'
+                  AND c.metadata_json->>'aiEnabled' = 'true'
+                )
+                """
+            )
     query_text_template = """
         SELECT
           c.id,
@@ -246,27 +265,36 @@ async def _vector_search(
 
     if lesson_ids:
         params["lessonIds"] = lesson_ids
-        filters.append("c.lesson_id IN :lessonIds")
+        class_filters.append("c.lesson_id IN :lessonIds")
         expanding_binds.append(bindparam("lessonIds", expanding=True))
     if assessment_ids:
         params["assessmentIds"] = assessment_ids
-        filters.append("c.assessment_id IN :assessmentIds")
+        class_filters.append("c.assessment_id IN :assessmentIds")
         expanding_binds.append(bindparam("assessmentIds", expanding=True))
     if source_types:
         params["sourceTypes"] = source_types
-        filters.append("c.source_type IN :sourceTypes")
+        class_filters.append("c.source_type IN :sourceTypes")
         expanding_binds.append(bindparam("sourceTypes", expanding=True))
     if only_published:
-        filters.append(
-            """
+        published_filter = """
             (
               c.metadata_json->>'isPublished' = 'true'
               OR c.metadata_json->>'isPublished' IS NULL
             )
             """
-        )
+        class_filters.append(published_filter)
+        if library_filters:
+            library_filters = [
+                f"{library_filter} AND {published_filter}"
+                for library_filter in library_filters
+            ]
 
-    query = sa_text(query_text_template.replace("__FILTERS__", " AND ".join(filters)))
+    if library_filters:
+        filter_sql = f"(({' AND '.join(class_filters)}) OR ({' OR '.join(library_filters)}))"
+    else:
+        filter_sql = " AND ".join(class_filters)
+
+    query = sa_text(query_text_template.replace("__FILTERS__", filter_sql))
     if expanding_binds:
         query = query.bindparams(*expanding_binds)
 
@@ -469,6 +497,7 @@ async def similarity_search(
     *,
     query_text: str,
     class_id: str,
+    teacher_id: str | None = None,
     subject_key: str | None = None,
     grade_level: str | None = None,
     include_library: bool = True,
@@ -498,6 +527,7 @@ async def similarity_search(
             db,
             query_text=variant,
             class_id=class_id,
+            teacher_id=teacher_id,
             subject_key=subject_key,
             grade_level=grade_level,
             include_library=include_library,
@@ -535,6 +565,7 @@ async def preview_retrieval(
     *,
     query_text: str,
     class_id: str,
+    teacher_id: str | None = None,
     subject_key: str | None = None,
     grade_level: str | None = None,
     include_library: bool = True,
@@ -555,6 +586,7 @@ async def preview_retrieval(
         db,
         query_text=query_text,
         class_id=class_id,
+        teacher_id=teacher_id,
         subject_key=subject_key,
         grade_level=grade_level,
         include_library=include_library,

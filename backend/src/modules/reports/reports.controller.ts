@@ -13,6 +13,8 @@ import { ReportsService } from './reports.service';
 
 type AuthUser = { userId: string; roles: string[] };
 
+const REPORT_EXPORT_AUDIT_TARGET_ID = '00000000-0000-0000-0000-000000000000';
+
 @ApiBearerAuth('token')
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -81,8 +83,9 @@ export class ReportsController {
       actorId: user.userId,
       action: 'reports.exported',
       targetType: 'report',
-      targetId: reportKey,
+      targetId: REPORT_EXPORT_AUDIT_TARGET_ID,
       metadata: {
+        reportKey,
         exportFormat: 'csv',
         filters: this.toExportAuditFilters(filters),
       },

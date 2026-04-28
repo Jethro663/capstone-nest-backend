@@ -5,6 +5,7 @@ const push = jest.fn();
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/student/classes/class-1",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push }),
 }));
 
@@ -26,7 +27,7 @@ describe("StudentTutorLauncher", () => {
     expect(screen.getByRole("button", { name: "Open JA Hub" })).toBeInTheDocument();
   });
 
-  it("navigates to student ja when open button is clicked", () => {
+  it("navigates to the standalone JA ask route when open button is clicked", () => {
     render(<StudentTutorLauncher />);
 
     fireEvent.click(
@@ -34,6 +35,6 @@ describe("StudentTutorLauncher", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Open JA Hub" }));
 
-    expect(push).toHaveBeenCalledWith("/dashboard/student/ja");
+    expect(push).toHaveBeenCalledWith("/dashboard/student/ja?mode=ask");
   });
 });

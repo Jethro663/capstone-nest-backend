@@ -1,0 +1,152 @@
+{
+  "runMeta": {
+    "date": "2026-04-17",
+    "repo": "capstone-nest-react-lms"
+  },
+  "baseline": [
+    "python scripts/run_tests.py passed (36 tests)",
+    "python -m unittest tests.test_student_tutor_service tests.test_quiz_generation_service tests.test_retrieval_service tests.test_extraction_pipeline tests.test_ai_job_runtime passed (27 tests)",
+    "python scripts/run_eval_suite.py passed (36 tests)",
+    "python -c \"from app.main import app; print(app.title)\" returned Nexora AI Service",
+    "backend npm test -- ai-proxy.service.spec.ts ai-mentor.controller.spec.ts lxp.controller.spec.ts lxp.service.spec.ts passed (86 tests)"
+  ],
+  "scenarios": [
+    {
+      "feature": "student-tutor and chat",
+      "scenario": "baseline correctness plus code-path stress gap review",
+      "loadStyle": "partially verified",
+      "expectedResult": "tutor and chat routes remain correct and grounded under repeated and concurrent requests",
+      "failureSignal": "session drift, empty-context tutoring, malformed model output, header mismatch, timeout regressions",
+      "observabilityEvidence": "student tutor tests passed, backend proxy/controller specs passed, but no real HTTP concurrency or live Ollama pressure run exists",
+      "confidence": "medium"
+    },
+    {
+      "feature": "JA, LXP-adjacent, and remedial flows",
+      "scenario": "unit-backed coverage plus route and service review",
+      "loadStyle": "partially verified",
+      "expectedResult": "JA and remedial paths degrade cleanly without destabilizing LXP-linked flows",
+      "failureSignal": "sparse-evidence hard failures, swallowed LLM exceptions, race-prone intervention creation, undersized review packets",
+      "observabilityEvidence": "LXP backend specs passed, but JA/remedial route-level pressure behavior is not directly exercised",
+      "confidence": "medium"
+    },
+    {
+      "feature": "extraction, retrieval, indexing, and quiz jobs",
+      "scenario": "targeted pipeline tests plus runtime helper review",
+      "loadStyle": "partially verified",
+      "expectedResult": "long-running jobs survive retries, reindexing, and repeated polling without duplicate or partial side effects",
+      "failureSignal": "in-memory job loss, partial DB side effects, reindex-triggered job failure, route-level contract drift, large-payload instability",
+      "observabilityEvidence": "pipeline helper tests passed, but no end-to-end stress or restart survival run exists",
+      "confidence": "medium"
+    },
+    {
+      "feature": "backend proxy and contract boundary",
+      "scenario": "header, timeout, and envelope compatibility review",
+      "loadStyle": "partially verified",
+      "expectedResult": "Nest proxy and FastAPI app stay aligned on paths, headers, timeout classes, and payload envelopes",
+      "failureSignal": "path-prefix timeout drift, malformed headers, 401 on secret mismatch, transport failure handling gaps",
+      "observabilityEvidence": "focused backend specs passed and route surfaces align, but real fetch-to-FastAPI stress is unproven",
+      "confidence": "medium"
+    }
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "severity": "high",
+      "status": "partially verified",
+      "category": "resilience failure",
+      "title": "Long-running extraction and quiz job paths are not stress-proven under restart, concurrency, or partial failure",
+      "files": [
+        "ai-service/app/main.py",
+        "ai-service/app/extraction_pipeline.py",
+        "ai-service/app/quiz_generation_service.py"
+      ],
+      "evidence": "Targeted helper tests pass, but no route-level or restart-survival stress run exists; in-memory job runtime and fire-and-forget create_task patterns remain unproven under crash or contention."
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "status": "partially verified",
+      "category": "contract fragility",
+      "title": "Backend proxy compatibility is only spec-proven, not stress-proven through real HTTP header and timeout behavior",
+      "files": [
+        "backend/src/modules/ai-mentor/ai-proxy.service.ts",
+        "backend/src/modules/ai-mentor/ai-mentor.controller.ts",
+        "ai-service/app/main.py"
+      ],
+      "evidence": "Focused backend specs passed, but missing-header, malformed-header, transport-failure, and true abort/timeout behavior are not exercised end to end."
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "status": "partially verified",
+      "category": "extension-risk fragility",
+      "title": "Tutor, JA, and remedial flows rely on graceful fallbacks that can mask retrieval or model-quality regressions",
+      "files": [
+        "ai-service/app/student_tutor_service.py",
+        "ai-service/app/ja_practice_service.py",
+        "ai-service/app/remedial_service.py"
+      ],
+      "evidence": "Current tests prove happy-path helper correctness, but empty-context tutoring, sparse evidence, regex-only prompt guards, and swallowed LLM exceptions can degrade behavior without surfacing a hard failure."
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "status": "partially verified",
+      "category": "performance bottleneck",
+      "title": "Retrieval, indexing, and extraction paths lack contention evidence for large payloads and repeated polling patterns",
+      "files": [
+        "ai-service/app/retrieval_service.py",
+        "ai-service/app/indexing_pipeline.py",
+        "ai-service/app/extraction_pipeline.py"
+      ],
+      "evidence": "Helper tests pass, but there is no mixed-flow soak run for large PDFs, repeated indexing, empty-index retrieval, or sustained status polling."
+    }
+  ],
+  "plan": {
+    "safeImmediateFixes": [
+      "Add route-level stress or integration tests for tutor/session, extraction status/apply, and teacher job endpoints under malformed headers and degraded dependency conditions.",
+      "Add targeted tests for JA and remedial route families covering sparse evidence, malformed model payloads, and invalid JSON fallback behavior.",
+      "Add focused proxy tests for missing or malformed X-User-* headers, secret mismatch, non-JSON upstream bodies, and real timeout cancellation handling."
+    ],
+    "conditionalRefactors": [
+      "Move AI job runtime state off in-memory storage or harden the reconciliation path if process-restart survival becomes a product requirement.",
+      "Make tutor/JA/remedial degraded-mode behavior more explicit when retrieval or model quality collapses, instead of silently falling back to low-confidence outputs."
+    ],
+    "deferredItems": [
+      "Build a heavier mixed-flow soak harness for extraction, quiz jobs, and tutor sessions if you want evidence beyond unit and targeted integration coverage.",
+      "Review LXP intervention create-or-assign flows for stronger idempotency or locking if concurrent performance events become common."
+    ]
+  },
+  "changesMade": [],
+  "verification": [
+    "python scripts/run_tests.py",
+    "python -m unittest tests.test_student_tutor_service tests.test_quiz_generation_service tests.test_retrieval_service tests.test_extraction_pipeline tests.test_ai_job_runtime",
+    "python scripts/run_eval_suite.py",
+    "python -c \"from app.main import app; print(app.title)\"",
+    "npm test -- ai-proxy.service.spec.ts ai-mentor.controller.spec.ts lxp.controller.spec.ts lxp.service.spec.ts"
+  ],
+  "comparison": {
+    "improved": [],
+    "unchanged": [
+      "Current unit and targeted spec baseline is green across ai-service and the backend AI/LXP boundary.",
+      "No code changes were applied in this run."
+    ],
+    "remainingRisks": [
+      "Real HTTP concurrency and timeout behavior between Nest fetch() and FastAPI remains unproven.",
+      "Long-running extraction and quiz job survival across restart or crash remains unproven.",
+      "JA, remedial, and tutor degraded-mode behavior can mask grounding or model-quality regressions.",
+      "Large-payload and repeated-polling contention for retrieval/indexing/extraction remains unproven."
+    ]
+  },
+  "readiness": {
+    "lxp": "partially verified",
+    "aiFeatures": "partially verified",
+    "notes": [
+      "The baseline is healthy, but the weakest family is still extraction and long-running job resilience under realistic pressure.",
+      "Tutor, JA, and remedial flows look functionally healthy at helper level, not yet robust end to end under live dependency pressure."
+    ]
+  },
+  "secondPassVerification": [
+    "Independent scenario-family review converged on the same outcome: current AI features are functionally healthy but only partially verified for real stress, concurrency, and proxy-failure conditions."
+  ]
+}
