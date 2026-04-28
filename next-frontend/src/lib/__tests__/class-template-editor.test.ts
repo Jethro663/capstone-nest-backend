@@ -1,4 +1,5 @@
 import {
+  createLinkedTemplateAssessmentItem,
   updateTemplateItemByIndex,
   updateTemplateModuleByIndex,
   updateTemplateSectionByIndex,
@@ -28,6 +29,18 @@ function sampleModules(): ClassTemplateModule[] {
 }
 
 describe('class-template-editor immutable helpers', () => {
+  it('creates a linked assessment item that points at an existing template assessment', () => {
+    expect(createLinkedTemplateAssessmentItem('assessment-1', 3)).toEqual({
+      itemType: 'assessment',
+      templateAssessmentId: 'assessment-1',
+      order: 3,
+      isRequired: false,
+      metadata: {
+        linkedAssessmentKey: 'id:assessment-1',
+      },
+    });
+  });
+
   it('updates only the targeted module immutably', () => {
     const original = sampleModules();
     const next = updateTemplateModuleByIndex(original, 0, (moduleEntry) => ({

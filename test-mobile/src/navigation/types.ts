@@ -4,6 +4,15 @@ export type {
 } from "./student-route-manifest";
 
 export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "calendar";
+export type JaPanel = "practice" | "ask" | "review" | "lxp";
+export type LxpMobileTab = "paths" | "steps" | "replays" | "case" | "overview";
+
+export type JaRouteParams = {
+  panel?: JaPanel;
+  classId?: string;
+  lxpClassId?: string;
+  lxpTab?: LxpMobileTab;
+};
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -17,7 +26,7 @@ export type RootStackParamList = {
   AssessmentTake: { assessmentId: string };
   AssessmentResults: { attemptId: string };
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
-  LXP: undefined;
+  LXP: { classId?: string; tab?: LxpMobileTab } | undefined;
   Chatbot: { classId?: string } | undefined;
   Performance: undefined;
   Transcript: undefined;
@@ -29,7 +38,7 @@ export type MainTabParamList = {
   Dashboard: undefined;
   Classes: undefined;
   Assessments: undefined;
-  JA: undefined;
+  JA: JaRouteParams | undefined;
   Announcements: undefined;
   Profile: undefined;
   // Deprecated keys kept temporarily for migration-only screen compatibility.

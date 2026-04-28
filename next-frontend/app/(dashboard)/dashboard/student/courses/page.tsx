@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
+import { moduleService } from '@/services/module-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
@@ -51,6 +52,7 @@ import {
   type StudentUpcomingEvent,
   toDateKey,
 } from '@/components/student/my-classes/types';
+import { deriveStudentCourseMetrics } from '@/lib/student-course-metrics';
 
 interface ClassWithProgress extends ClassItem {
   progress: number;
@@ -166,18 +168,27 @@ export default function StudentCoursesPage() {
       const classRows = await Promise.all(
         Array.from(merged.values()).map(async (cls) => {
           try {
-            const [lessonsRes, completedRes, assessmentsRes, announcementsRes] = await Promise.all([
-              lessonService.getByClass(cls.id),
+            const [modulesRes, completedRes, assessmentsRes, announcementsRes] = await Promise.all([
+              moduleService.getByClass(cls.id).catch(() => ({ data: [] })),
               lessonService.getCompletedByClass(cls.id),
               assessmentService.getByClass(cls.id),
               announcementService.getByClass(cls.id, { limit: 6 }).catch(() => ({ data: [] })),
             ]);
 
-            const totalLessons = lessonsRes.data?.length ?? 0;
-            const completedCount = completedRes.data?.length ?? 0;
-            const totalAssessments = assessmentsRes.data?.length ?? 0;
+            const {
+              totalLessons,
+              completedCount,
+              totalAssessments,
+              pendingCount,
+              progress,
+            } = deriveStudentCourseMetrics({
+              modules: modulesRes.data ?? [],
+              assessments: assessmentsRes.data ?? [],
+              completedLessonIds: (completedRes.data ?? [])
+                .filter((entry) => entry.completed)
+                .map((entry) => entry.lessonId),
+            });
             const classmatesCount = Math.max(0, (cls.enrollments?.length ?? 0) - 1);
-            const pendingCount = Math.max(totalLessons - completedCount, 0) + totalAssessments;
 
             const classLabel = cls.subjectName || cls.className || cls.name || 'Class';
             const sectionLabel = cls.section?.name ? `Section ${cls.section.name}` : 'Class';
@@ -229,7 +240,7 @@ export default function StudentCoursesPage() {
               totalAssessments,
               classmatesCount,
               pendingCount,
-              progress: totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0,
+              progress,
             } satisfies ClassWithProgress;
 
             return {

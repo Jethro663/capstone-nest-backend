@@ -48,6 +48,29 @@ export function createTemplateAssessmentDraft(order: number): ClassTemplateAsses
   };
 }
 
+export function createLinkedTemplateAssessmentItem(
+  assessmentIdOrKey: string,
+  order: number,
+  templateAssessmentId?: string,
+): ClassTemplateModuleItem {
+  const linkedAssessmentKey = assessmentIdOrKey.includes(':')
+    ? assessmentIdOrKey
+    : `id:${assessmentIdOrKey}`;
+
+  return {
+    itemType: 'assessment',
+    templateAssessmentId:
+      linkedAssessmentKey.startsWith('id:')
+        ? linkedAssessmentKey.slice(3)
+        : templateAssessmentId,
+    order,
+    isRequired: false,
+    metadata: {
+      linkedAssessmentKey,
+    },
+  };
+}
+
 export const classTemplateDraftStorageKey = (templateId: string) => `class-template-editor:${templateId}:draft`;
 
 export function cloneTemplateEditorState(state: ClassTemplateEditorState): ClassTemplateEditorState {

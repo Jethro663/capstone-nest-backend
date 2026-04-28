@@ -36,6 +36,7 @@ export const queryKeys = {
   performance: ["performance"] as const,
   lxpEligibility: ["lxp-eligibility"] as const,
   lxpPlaylist: (classId: string) => ["lxp-playlist", classId] as const,
+  lxpOverview: (classId?: string) => ["lxp-overview", classId ?? "missing"] as const,
   profile: ["profile"] as const,
   tutorBootstrap: (classId?: string) => ["tutor-bootstrap", classId ?? "all"] as const,
   tutorSession: (sessionId?: string) => ["tutor-session", sessionId ?? "missing"] as const,
@@ -170,6 +171,13 @@ export const useLxpPlaylist = (classId?: string) =>
   useQuery({
     queryKey: classId ? queryKeys.lxpPlaylist(classId) : ["lxp-playlist", "missing"],
     queryFn: () => lxpApi.getPlaylist(classId!),
+    enabled: !!classId,
+  });
+
+export const useLxpOverview = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.lxpOverview(classId),
+    queryFn: () => lxpApi.getOverview(classId!),
     enabled: !!classId,
   });
 

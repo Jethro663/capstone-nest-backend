@@ -344,6 +344,25 @@ export class PerformanceService {
     }
 
     const previousIsAtRisk = existing?.isAtRisk ?? null;
+    let isMissingOpenInterventionCase = false;
+    if (data.hasData && data.isAtRisk && previousIsAtRisk === true) {
+      const openInterventionCase =
+        await this.db.query.interventionCases.findFirst({
+          where: and(
+            eq(interventionCases.classId, classId),
+            eq(interventionCases.studentId, studentId),
+            inArray(interventionCases.status, ['pending', 'active']),
+          ),
+          columns: { id: true },
+        });
+      isMissingOpenInterventionCase = !openInterventionCase;
+    }
+
+    const shouldEmitStatusChanged =
+      data.hasData &&
+      ((previousIsAtRisk === null && data.isAtRisk) ||
+        (previousIsAtRisk !== null && previousIsAtRisk !== data.isAtRisk) ||
+        isMissingOpenInterventionCase);
     const shouldLog =
       data.hasData &&
       previousIsAtRisk !== null &&
@@ -370,7 +389,7 @@ export class PerformanceService {
       });
     }
 
-    if (previousIsAtRisk !== null && previousIsAtRisk !== data.isAtRisk) {
+    if (shouldEmitStatusChanged) {
       this.eventEmitter.emit(
         PerformanceStatusChangedEvent.eventName,
         new PerformanceStatusChangedEvent({

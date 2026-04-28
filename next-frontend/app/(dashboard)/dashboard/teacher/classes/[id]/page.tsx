@@ -54,6 +54,10 @@ import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
+import {
+  hasCoreAssessmentPlacementForPublish,
+  resolveAssessmentForPublishValidation,
+} from '@/lib/core-assessment-publish';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
@@ -1253,13 +1257,29 @@ export default function TeacherClassDetailPage() {
       setBusyAssessmentId(assessment.id);
       const nextIsPublished = !assessment.isPublished;
       const isCoreTemplateAssessment = Boolean(assessment.isCoreTemplateAsset);
+      let validatedAssessment = assessment;
+
+      if (nextIsPublished && isCoreTemplateAssessment) {
+        if (!hasCoreAssessmentPlacementForPublish(assessment)) {
+          try {
+            const detailedAssessment = await assessmentService.getById(assessment.id);
+            validatedAssessment = resolveAssessmentForPublishValidation(
+              assessment,
+              detailedAssessment.data,
+            );
+          } catch (error) {
+            toast.error(
+              getApiErrorMessage(error, 'Failed to validate class record placement'),
+            );
+            return;
+          }
+        }
+      }
 
       if (
         nextIsPublished &&
         isCoreTemplateAssessment &&
-        (!assessment.classRecordCategory ||
-          !assessment.quarter ||
-          !(assessment.classRecordItemId || assessment.classRecordPlacement?.itemId))
+        !hasCoreAssessmentPlacementForPublish(validatedAssessment)
       ) {
         toast.warning(
           'Core assessments must be tagged in a class record category, quarter, and slot before publishing.',
@@ -1272,7 +1292,13 @@ export default function TeacherClassDetailPage() {
       });
       setAssessments((current) =>
         current.map((entry) =>
-          entry.id === assessment.id ? response.data : entry,
+          entry.id === assessment.id
+            ? {
+                ...entry,
+                ...validatedAssessment,
+                ...response.data,
+              }
+            : entry,
         ),
       );
       toast.success(

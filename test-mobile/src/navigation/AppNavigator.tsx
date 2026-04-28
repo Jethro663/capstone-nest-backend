@@ -21,8 +21,6 @@ import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentHistoryScreen } from "../screens/AssessmentHistoryScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
-import { AiTutorScreen } from "../screens/AiTutorScreen";
-import { LxpScreen } from "../screens/LxpScreen";
 import { PerformanceScreen } from "../screens/PerformanceScreen";
 import { TranscriptScreen } from "../screens/TranscriptScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
@@ -103,11 +101,20 @@ function JaRouteScreen(props: BottomTabScreenProps<MainTabParamList, "JA">) {
 }
 
 function ChatbotRouteScreen(props: NativeStackScreenProps<RootStackParamList, "Chatbot">) {
-  return <JaScreen navigation={props.navigation as never} />;
+  return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "ask", classId: props.route.params?.classId } }} />;
 }
 
 function LxpRouteScreen(props: NativeStackScreenProps<RootStackParamList, "LXP">) {
-  return <LxpScreen navigation={props.navigation as never} route={props.route as never} />;
+  return (
+    <JaScreen
+      navigation={props.navigation as never}
+      route={{ params: { panel: "lxp", lxpClassId: props.route.params?.classId, lxpTab: props.route.params?.tab } }}
+    />
+  );
+}
+
+function AiTutorRouteScreen(props: NativeStackScreenProps<RootStackParamList, "AiTutor">) {
+  return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "ask", classId: props.route.params?.classId } }} />;
 }
 
 const studentTabScreens = {
@@ -140,7 +147,7 @@ const studentStackScreens = {
 
 const studentSupportScreens = {
   ClassWorkspace: ClassWorkspaceScreen,
-  AiTutor: AiTutorScreen,
+  AiTutor: AiTutorRouteScreen,
 } satisfies { [K in StudentSupportRouteName]: StackScreenComponent<K> };
 
 const [classWorkspaceRouteName, aiTutorRouteName] = studentSupportRouteNames;

@@ -432,7 +432,9 @@ body {
 }
 
 .student-page {
-  background-image: radial-gradient(circle at 10% 0%, rgba(220, 38, 38, 0.08), transparent 40%);
+  background-image:
+    radial-gradient(circle at 10% 0%, var(--student-hero-stripe), transparent 40%),
+    linear-gradient(180deg, color-mix(in srgb, var(--student-elevated) 26%, transparent), transparent 62%);
 }
 
 .student-panel {
@@ -486,7 +488,7 @@ body {
 .student-card-hover:hover {
   transform: translateY(-2px);
   box-shadow: var(--student-shadow-hover);
-  border-color: #fca5a5;
+  border-color: var(--student-outline-strong);
 }
 
 .student-muted-text {

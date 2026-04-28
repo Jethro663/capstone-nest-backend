@@ -36,6 +36,7 @@ import {
   buildIndexKey,
   buildLessonItemKey,
   clearTemplateEditorDraft,
+  createLinkedTemplateAssessmentItem,
   loadTemplateWorkspace,
   readTemplateEditorDraft,
   resolveAndSaveTemplateContent,
@@ -59,6 +60,12 @@ import { normalizeRichText } from '@/lib/rich-text';
 import '../../../../../teacher/classes/[id]/modules/[moduleId]/module-workspace.css';
 
 type TemplateModuleTab = 'sections' | 'visibility' | 'locking' | 'notes';
+type AssessmentPickerState = {
+  open: boolean;
+  sectionIndex: number;
+  itemIndex: number | null;
+  selectedAssessmentKey: string;
+};
 
 const TAB_ITEMS: Array<{ key: TemplateModuleTab; label: string; icon: typeof Layers3 }> = [
   { key: 'sections', label: 'Sections', icon: Layers3 },
@@ -143,14 +150,29 @@ function itemIconForType(itemType: ClassTemplateModuleItem['itemType']) {
   return BookOpen;
 }
 
+function getTemplateAssessmentLinkKey(item: ClassTemplateModuleItem) {
+  const metadataLinkedKey =
+    (item.metadata?.linkedAssessmentKey as string | undefined) ?? '';
+
+  if (metadataLinkedKey.startsWith('draft:') && item.templateAssessmentId) {
+    return `id:${item.templateAssessmentId}`;
+  }
+
+  return metadataLinkedKey || (item.templateAssessmentId ? `id:${item.templateAssessmentId}` : '');
+}
+
+function getTemplateAssessmentOptionKey(
+  assessment: ClassTemplateAssessment,
+  assessmentIndex: number,
+) {
+  return assessment.id ? `id:${assessment.id}` : `draft:${assessmentIndex}`;
+}
+
 function assessmentRouteKeyForItem(
   item: ClassTemplateModuleItem,
   assessments: ClassTemplateAssessment[],
 ) {
-  const metadataLinkedKey = (item.metadata?.linkedAssessmentKey as string | undefined) ?? '';
-  const linkedKey = metadataLinkedKey.startsWith('draft:') && item.templateAssessmentId
-    ? `id:${item.templateAssessmentId}`
-    : metadataLinkedKey || (item.templateAssessmentId ? `id:${item.templateAssessmentId}` : '');
+  const linkedKey = getTemplateAssessmentLinkKey(item);
 
   if (linkedKey.startsWith('draft:')) {
     const draftIndex = Number.parseInt(linkedKey.slice(6), 10);
@@ -175,7 +197,7 @@ function itemTitleForTemplate(
   }
 
   if (item.itemType === 'assessment') {
-    const linkedKey = (item.metadata?.linkedAssessmentKey as string | undefined) ?? '';
+    const linkedKey = getTemplateAssessmentLinkKey(item);
     if (linkedKey.startsWith('draft:')) {
       const draftIndex = Number.parseInt(linkedKey.slice(6), 10);
       if (!Number.isNaN(draftIndex)) {
@@ -244,6 +266,12 @@ export default function AdminTemplateModuleWorkspacePage() {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [uploadingFileBlockKey, setUploadingFileBlockKey] = useState<string | null>(null);
   const [visibilityConfirmOpen, setVisibilityConfirmOpen] = useState(false);
+  const [assessmentPickerState, setAssessmentPickerState] = useState<AssessmentPickerState>({
+    open: false,
+    sectionIndex: -1,
+    itemIndex: null,
+    selectedAssessmentKey: '',
+  });
   const saveInFlightRef = useRef(false);
   const lastSavedPayloadKeyRef = useRef<string>('');
 
@@ -254,6 +282,48 @@ export default function AdminTemplateModuleWorkspacePage() {
   );
   const activeModuleId = activeModule?.id;
   const activeModuleNotes = activeModule?.teacherNotes ?? '';
+  const assessmentPickerOptions = useMemo(() => {
+    const currentItem =
+      assessmentPickerState.itemIndex === null
+        ? null
+        : activeModule?.sections?.[assessmentPickerState.sectionIndex]?.items?.[
+            assessmentPickerState.itemIndex
+          ] ?? null;
+    const currentLinkedKey =
+      currentItem?.itemType === 'assessment'
+        ? getTemplateAssessmentLinkKey(currentItem)
+        : '';
+    const reservedKeys = new Set<string>();
+
+    for (const moduleEntry of modules) {
+      for (const section of moduleEntry.sections ?? []) {
+        for (const item of section.items ?? []) {
+          if (item.itemType !== 'assessment') continue;
+          const linkedKey = getTemplateAssessmentLinkKey(item);
+          if (linkedKey) {
+            reservedKeys.add(linkedKey);
+          }
+        }
+      }
+    }
+
+    if (currentLinkedKey) {
+      reservedKeys.delete(currentLinkedKey);
+    }
+
+    return assessments
+      .map((assessment, assessmentIndex) => ({
+        value: getTemplateAssessmentOptionKey(assessment, assessmentIndex),
+        label: assessment.title?.trim() || `Untitled Assessment ${assessmentIndex + 1}`,
+      }))
+      .filter((option) => !reservedKeys.has(option.value));
+  }, [
+    activeModule,
+    assessmentPickerState.itemIndex,
+    assessmentPickerState.sectionIndex,
+    assessments,
+    modules,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -302,6 +372,24 @@ export default function AdminTemplateModuleWorkspacePage() {
     if (!activeModuleId) return;
     setNotesDraft(activeModuleNotes);
   }, [activeModuleId, activeModuleNotes]);
+
+  useEffect(() => {
+    if (!assessmentPickerState.open) return;
+
+    setAssessmentPickerState((current) => {
+      if (
+        current.selectedAssessmentKey &&
+        assessmentPickerOptions.some((option) => option.value === current.selectedAssessmentKey)
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selectedAssessmentKey: assessmentPickerOptions[0]?.value ?? '',
+      };
+    });
+  }, [assessmentPickerOptions, assessmentPickerState.open]);
 
   const updateModule = (patch: Partial<ClassTemplateModule>) => {
     if (moduleIndex < 0 || !modules[moduleIndex]) return;
@@ -373,7 +461,87 @@ export default function AdminTemplateModuleWorkspacePage() {
     );
   };
 
-  const addModuleBlock = (sectionIndex: number, blockType: 'lesson' | 'assessment' | 'file') => {
+  const resetAssessmentPicker = () => {
+    setAssessmentPickerState({
+      open: false,
+      sectionIndex: -1,
+      itemIndex: null,
+      selectedAssessmentKey: '',
+    });
+  };
+
+  const openAssessmentPicker = (sectionIndex: number, itemIndex: number | null = null) => {
+    const currentItem =
+      itemIndex === null
+        ? null
+        : activeModule?.sections?.[sectionIndex]?.items?.[itemIndex] ?? null;
+
+    setAssessmentPickerState({
+      open: true,
+      sectionIndex,
+      itemIndex,
+      selectedAssessmentKey:
+        currentItem?.itemType === 'assessment'
+          ? getTemplateAssessmentLinkKey(currentItem)
+          : '',
+    });
+  };
+
+  const applyTaggedAssessmentSelection = () => {
+    if (moduleIndex < 0 || !modules[moduleIndex]) return;
+    if (assessmentPickerState.sectionIndex < 0) return;
+    if (!assessmentPickerState.selectedAssessmentKey) {
+      toast.error('Select an assessment from the assessment workspace first');
+      return;
+    }
+
+    if (assessmentPickerState.itemIndex === null) {
+      setModules((current) =>
+        updateTemplateSectionByIndex(
+          current,
+          moduleIndex,
+          assessmentPickerState.sectionIndex,
+          (sectionEntry) => ({
+            ...sectionEntry,
+            items: [
+              ...(sectionEntry.items ?? []),
+              createLinkedTemplateAssessmentItem(
+                assessmentPickerState.selectedAssessmentKey,
+                (sectionEntry.items ?? []).length + 1,
+              ),
+            ],
+          }),
+        ),
+      );
+      toast.success('Assessment tagged in module');
+      resetAssessmentPicker();
+      return;
+    }
+
+    const itemIndex = assessmentPickerState.itemIndex;
+    setModules((current) =>
+      updateTemplateItemByIndex(
+        current,
+        moduleIndex,
+        assessmentPickerState.sectionIndex,
+        itemIndex,
+        (itemEntry) => ({
+          ...itemEntry,
+          templateAssessmentId: assessmentPickerState.selectedAssessmentKey.startsWith('id:')
+            ? assessmentPickerState.selectedAssessmentKey.slice(3)
+            : undefined,
+          metadata: {
+            ...(itemEntry.metadata ?? {}),
+            linkedAssessmentKey: assessmentPickerState.selectedAssessmentKey,
+          },
+        }),
+      ),
+    );
+    toast.success('Assessment tag updated');
+    resetAssessmentPicker();
+  };
+
+  const addModuleBlock = (sectionIndex: number, blockType: 'lesson' | 'file') => {
     if (moduleIndex < 0 || !modules[moduleIndex]) return;
 
     setModules((current) =>
@@ -381,14 +549,7 @@ export default function AdminTemplateModuleWorkspacePage() {
         const items = sectionEntry.items ?? [];
 
         let nextItem: ClassTemplateModuleItem;
-        if (blockType === 'assessment') {
-          nextItem = {
-            itemType: 'assessment',
-            order: items.length + 1,
-            isRequired: false,
-            metadata: { linkedAssessmentKey: '' },
-          };
-        } else if (blockType === 'lesson') {
+        if (blockType === 'lesson') {
           nextItem = {
             itemType: 'lesson',
             order: items.length + 1,
@@ -796,21 +957,32 @@ export default function AdminTemplateModuleWorkspacePage() {
                               </div>
                               <div className="flex flex-wrap items-center justify-end gap-2">
                                 {item.itemType === 'assessment' ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      if (linkedRouteKey) {
-                                        router.push(`/dashboard/admin/class-templates/${templateId}/assessments/${linkedRouteKey}/edit`);
-                                        return;
-                                      }
-                                      router.push(`/dashboard/admin/class-templates/${templateId}/assessments/new/edit`);
-                                    }}
-                                  >
-                                    {linkedRouteKey ? 'Open Assessment Studio' : 'Create Assessment In Studio'}
-                                  </Button>
+                                  <>
+                                    {linkedRouteKey ? (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          router.push(`/dashboard/admin/class-templates/${templateId}/assessments/${linkedRouteKey}/edit`);
+                                        }}
+                                      >
+                                        Open Assessment Studio
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openAssessmentPicker(sectionIndex, itemIndex);
+                                      }}
+                                    >
+                                      {linkedRouteKey ? 'Retag Assessment' : 'Tag Assessment'}
+                                    </Button>
+                                  </>
                                 ) : null}
 
                                 {item.itemType === 'file' ? (
@@ -868,10 +1040,10 @@ export default function AdminTemplateModuleWorkspacePage() {
                         data-testid={`add-assessment-block-${sectionIndex}`}
                         type="button"
                         className="teacher-module-detail__outline"
-                        onClick={() => addModuleBlock(sectionIndex, 'assessment')}
+                        onClick={() => openAssessmentPicker(sectionIndex)}
                       >
                         <ClipboardList className="h-4 w-4" />
-                        Add Assessment Block
+                        Tag Assessment
                       </Button>
                       <Button
                         data-testid={`add-file-block-${sectionIndex}`}
@@ -1007,6 +1179,79 @@ export default function AdminTemplateModuleWorkspacePage() {
           </div>
         ) : null}
       </div>
+
+      <Dialog open={assessmentPickerState.open} onOpenChange={(open) => {
+        if (open) return;
+        resetAssessmentPicker();
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {assessmentPickerState.itemIndex === null ? 'Tag Assessment in Module' : 'Retag Assessment'}
+            </DialogTitle>
+            <DialogDescription>
+              Link an assessment that already exists in this template&apos;s assessment workspace. This module page no longer creates assessment drafts.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {assessmentPickerOptions.length > 0 ? (
+              <>
+                <label htmlFor="template-assessment-picker" className="text-sm font-semibold text-slate-700">
+                  Available assessments
+                </label>
+                <select
+                  id="template-assessment-picker"
+                  value={assessmentPickerState.selectedAssessmentKey}
+                  onChange={(event) =>
+                    setAssessmentPickerState((current) => ({
+                      ...current,
+                      selectedAssessmentKey: event.target.value,
+                    }))
+                  }
+                  className="flex h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-slate-400"
+                >
+                  {assessmentPickerOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                No untagged assessments are available. Create one from the template assessment workspace first, or retag an item that is already linked.
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={resetAssessmentPicker}
+              className="teacher-module-detail__outline"
+            >
+              Cancel
+            </Button>
+            {assessmentPickerOptions.length === 0 ? (
+              <Button
+                type="button"
+                onClick={() => {
+                  resetAssessmentPicker();
+                  router.push(`/dashboard/admin/class-templates/${templateId}`);
+                }}
+              >
+                Open Template Workspace
+              </Button>
+            ) : (
+              <Button type="button" onClick={applyTaggedAssessmentSelection}>
+                {assessmentPickerState.itemIndex === null ? 'Tag Assessment' : 'Save Tag'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={visibilityConfirmOpen} onOpenChange={setVisibilityConfirmOpen}>
         <DialogContent className="sm:max-w-lg">

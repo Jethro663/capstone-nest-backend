@@ -3,6 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "../../api/services/ai";
+import { jaApi } from "../../api/services/ja";
 import { useAuth } from "../../providers/AuthProvider";
 import {
   useAnnouncements,
@@ -23,7 +24,9 @@ import {
   useAssessmentSubmitMutation,
   useLxpCheckpointMutation,
   useLxpEligibility,
+  useLxpOverview,
   useLxpPlaylist,
+  useJaHub,
   usePerformanceSummary,
   useProfile,
   useProfileAvatarMutation,
@@ -177,6 +180,22 @@ jest.mock("../../api/services/ai", () => ({
   },
 }));
 
+jest.mock("../../api/services/ja", () => ({
+  jaApi: {
+    createAskThread: jest.fn(),
+    getAskThread: jest.fn(),
+    sendAskMessage: jest.fn(),
+    createSession: jest.fn(),
+    getSession: jest.fn(),
+    submitResponse: jest.fn(),
+    completeSession: jest.fn(),
+    createReviewSession: jest.fn(),
+    getReviewSession: jest.fn(),
+    submitReviewResponse: jest.fn(),
+    completeReviewSession: jest.fn(),
+  },
+}));
+
 jest.mock("../../api/services/assessments", () => ({
   assessmentsApi: {
     getByClass: jest.fn().mockResolvedValue([]),
@@ -224,6 +243,8 @@ jest.mock("../../api/hooks", () => ({
   useClassDetail: jest.fn(),
   useClassModules: jest.fn(),
   useLxpEligibility: jest.fn(),
+  useLxpOverview: jest.fn(),
+  useJaHub: jest.fn(),
   useTutorBootstrap: jest.fn(),
   useLxpPlaylist: jest.fn(),
   useLxpCheckpointMutation: jest.fn(),
@@ -385,6 +406,8 @@ const mockedUseStudentClasses = useStudentClasses as jest.MockedFunction<typeof 
 const mockedUseClassDetail = useClassDetail as jest.MockedFunction<typeof useClassDetail>;
 const mockedUseClassModules = useClassModules as jest.MockedFunction<typeof useClassModules>;
 const mockedUseLxpEligibility = useLxpEligibility as jest.MockedFunction<typeof useLxpEligibility>;
+const mockedUseLxpOverview = useLxpOverview as jest.MockedFunction<typeof useLxpOverview>;
+const mockedUseJaHub = useJaHub as jest.MockedFunction<typeof useJaHub>;
 const mockedUseTutorBootstrap = useTutorBootstrap as jest.MockedFunction<typeof useTutorBootstrap>;
 const mockedUseLxpPlaylist = useLxpPlaylist as jest.MockedFunction<typeof useLxpPlaylist>;
 const mockedUseLxpCheckpointMutation = useLxpCheckpointMutation as jest.MockedFunction<typeof useLxpCheckpointMutation>;
@@ -413,6 +436,7 @@ const mockedUseAssessmentSubmitMutation = useAssessmentSubmitMutation as jest.Mo
 const mockedUseQueries = useQueries as jest.Mock;
 const mockedUseQueryClient = useQueryClient as jest.Mock;
 const mockedAiApi = aiApi as jest.Mocked<typeof aiApi>;
+const mockedJaApi = jaApi as jest.Mocked<typeof jaApi>;
 const mockedAssessmentsApi = require("../../api/services/assessments").assessmentsApi as {
   getOngoingAttempt: jest.Mock;
   startAttempt: jest.Mock;
@@ -530,6 +554,27 @@ describe("mobile rendered screen flows", () => {
     );
     mockedUseLxpEligibility.mockReturnValue(
       createQueryState({
+        threshold: 60,
+        paths: [
+          {
+            classId: "class-1",
+            class: {
+              id: "class-1",
+              subjectName: "Mathematics",
+              subjectCode: "MATH-1",
+              section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+            },
+            interventionCaseId: "case-1",
+            status: "active",
+            isAtRisk: false,
+            blendedScore: 76,
+            thresholdApplied: 60,
+            openedAt: "2026-04-18T08:00:00.000Z",
+            closedAt: null,
+            counts: { steps: 1, replays: 1, pending: 2, total: 2, completed: 0 },
+            progress: { totalCheckpoints: 2, completedCheckpoints: 0, completionPercent: 0 },
+          },
+        ],
         eligibleClasses: [
           {
             classId: "class-1",
@@ -547,6 +592,122 @@ describe("mobile rendered screen flows", () => {
           },
         ],
       }) as ReturnType<typeof useLxpEligibility>,
+    );
+    mockedUseLxpOverview.mockReturnValue(
+      createQueryState({
+        selectedClass: {
+          classId: "class-1",
+          subjectName: "Mathematics",
+          subjectCode: "MATH-1",
+          section: { id: "section-1", name: "Section A", gradeLevel: "10" },
+          blendedScore: 76,
+          thresholdApplied: 60,
+          lastComputedAt: null,
+        },
+        interventionStatus: {
+          caseId: "case-1",
+          status: "active",
+          code: "needs_attention",
+          label: "Needs attention",
+          message: "Keep moving through the assigned path.",
+          openedAt: "2026-04-18T08:00:00.000Z",
+          closedAt: null,
+          triggerScore: 76,
+          thresholdApplied: 60,
+        },
+        progress: {
+          xpTotal: 120,
+          starsTotal: 2,
+          streakDays: 3,
+          checkpointsCompleted: 0,
+          totalCheckpoints: 2,
+          completionPercent: 0,
+          lastActivityAt: null,
+        },
+        subjectMastery: [],
+        recommendedAction: null,
+        upcomingAssessments: [],
+        recentActivity: [],
+        weakFocusItems: [
+          {
+            id: "focus-1",
+            source: "performance",
+            title: "Fractions",
+            subtitle: "Practice equivalent values",
+            masteryPercent: 48,
+            href: "/dashboard/student/ja",
+          },
+        ],
+      }) as ReturnType<typeof useLxpOverview>,
+    );
+    mockedUseJaHub.mockReturnValue(
+      createQueryState({
+        classes: [
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            sectionName: "Section A",
+            gradeLevel: "10",
+          },
+        ],
+        selectedClassId: "class-1",
+        progress: { xpTotal: 120, streakDays: 3, sessionsCompleted: 2, lastActivityAt: null },
+        mastery: { classId: "class-1", percent: 72, label: "Building" },
+        badges: [],
+        practice: {
+          classes: [],
+          selectedClassId: "class-1",
+          recommendations: [
+            {
+              id: "rec-1",
+              title: "Fractions Foundation",
+              reason: "Rebuild fundamentals",
+              focusText: "Fractions and equivalent values",
+            },
+          ],
+          recentLessons: [],
+          recentAttempts: [],
+          sessions: [
+            {
+              id: "practice-1",
+              status: "completed",
+              currentIndex: 10,
+              questionCount: 10,
+              strikeCount: 0,
+              rewardState: "awarded",
+              groundingStatus: "grounded",
+              startedAt: "2026-04-18T08:00:00.000Z",
+              completedAt: "2026-04-18T08:20:00.000Z",
+            },
+          ],
+        },
+        ask: {
+          threads: [],
+          lessonContexts: [
+            {
+              lessonId: "lesson-1",
+              title: "Fractions Lesson",
+              moduleTitle: "Number Sense Module",
+              sectionTitle: "Core Lessons",
+            },
+          ],
+          guidelines: ["Ask for concept help."],
+        },
+        review: {
+          eligibleAttempts: [
+            {
+              attemptId: "attempt-1",
+              assessmentId: "assessment-1",
+              assessmentTitle: "Fractions Quiz",
+              submittedAt: "2026-04-18T08:30:00.000Z",
+              score: 55,
+              passed: false,
+            },
+          ],
+          sessions: [],
+        },
+      }) as ReturnType<typeof useJaHub>,
     );
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
@@ -574,9 +735,23 @@ describe("mobile rendered screen flows", () => {
         checkpoints: [
           {
             id: "checkpoint-1",
+            type: "lesson_review",
             label: "Fractions lesson",
+            order: 1,
             xpAwarded: 20,
             isCompleted: false,
+            completedAt: null,
+            lesson: { id: "lesson-1", title: "Fractions Lesson", description: "Compare fractions", order: 1 },
+          },
+          {
+            id: "checkpoint-2",
+            type: "assessment_retry",
+            label: "Fractions Quiz replay",
+            order: 2,
+            xpAwarded: 20,
+            isCompleted: false,
+            completedAt: null,
+            assessment: { id: "assessment-1", title: "Fractions Quiz", passingScore: 75 },
           },
         ],
       }) as ReturnType<typeof useLxpPlaylist>,
@@ -953,6 +1128,120 @@ describe("mobile rendered screen flows", () => {
     mockedAiApi.startTutorSession.mockResolvedValue({ sessionId: "session-1" } as Awaited<ReturnType<typeof aiApi.startTutorSession>>);
     mockedAiApi.sendTutorMessage.mockResolvedValue(undefined as never);
     mockedAiApi.submitTutorAnswers.mockResolvedValue(undefined as never);
+    mockedJaApi.createAskThread.mockResolvedValue({
+      thread: {
+        id: "thread-1",
+        classId: "class-1",
+        title: "Explain the lesson",
+        status: "active",
+      },
+      messages: [],
+    } as never);
+    mockedJaApi.sendAskMessage.mockResolvedValue({
+      thread: {
+        id: "thread-1",
+        classId: "class-1",
+        title: "Explain the lesson",
+      },
+      message: {
+        id: "message-1",
+        role: "assistant",
+        content: "Here is a grounded explanation.",
+        blocked: false,
+      },
+      blocked: false,
+    } as never);
+    mockedJaApi.createSession.mockResolvedValue({
+      session: {
+        id: "practice-live",
+        classId: "class-1",
+        mode: "practice",
+        status: "active",
+        currentIndex: 0,
+        questionCount: 1,
+        strikeCount: 0,
+        rewardState: "pending",
+        groundingStatus: "grounded",
+        startedAt: "2026-04-27T08:00:00.000Z",
+      },
+      items: [
+        {
+          id: "practice-item-1",
+          orderIndex: 0,
+          itemType: "single_choice",
+          prompt: "Which fraction is larger?",
+          options: [
+            { id: "option-1", text: "1/2", order: 1 },
+            { id: "option-2", text: "1/3", order: 2 },
+          ],
+          response: null,
+        },
+      ],
+    } as never);
+    mockedJaApi.createReviewSession.mockResolvedValue({
+      session: {
+        id: "review-live",
+        classId: "class-1",
+        mode: "review",
+        status: "active",
+        currentIndex: 0,
+        questionCount: 1,
+        strikeCount: 0,
+        rewardState: "pending",
+        groundingStatus: "grounded",
+        startedAt: "2026-04-27T08:00:00.000Z",
+      },
+      items: [
+        {
+          id: "review-item-1",
+          orderIndex: 0,
+          itemType: "single_choice",
+          prompt: "Replay question",
+          options: [{ id: "option-1", text: "Answer", order: 1 }],
+          response: null,
+        },
+      ],
+    } as never);
+    mockedJaApi.getSession.mockImplementation(async () => mockedJaApi.createSession.mock.results[0]?.value ?? {
+      session: { id: "practice-live", status: "active", currentIndex: 0, questionCount: 1 },
+      items: [],
+    } as never);
+    mockedJaApi.getReviewSession.mockImplementation(async () => mockedJaApi.createReviewSession.mock.results[0]?.value ?? {
+      session: { id: "review-live", status: "active", currentIndex: 0, questionCount: 1 },
+      items: [],
+    } as never);
+    mockedJaApi.submitResponse.mockResolvedValue({
+      sessionId: "practice-live",
+      itemId: "practice-item-1",
+      isCorrect: true,
+      feedback: "Correct",
+      currentIndex: 1,
+      answeredCount: 1,
+      questionCount: 1,
+    } as never);
+    mockedJaApi.submitReviewResponse.mockResolvedValue({
+      sessionId: "review-live",
+      itemId: "review-item-1",
+      isCorrect: true,
+      feedback: "Correct",
+      currentIndex: 1,
+      answeredCount: 1,
+      questionCount: 1,
+    } as never);
+    mockedJaApi.completeSession.mockResolvedValue({
+      sessionId: "practice-live",
+      totalScore: 1,
+      questionCount: 1,
+      awardedNow: true,
+      xpAwarded: 20,
+    } as never);
+    mockedJaApi.completeReviewSession.mockResolvedValue({
+      sessionId: "review-live",
+      totalScore: 1,
+      questionCount: 1,
+      awardedNow: true,
+      xpAwarded: 20,
+    } as never);
     mockedUseQueryClient.mockReturnValue({
       invalidateQueries: jest.fn().mockResolvedValue(undefined),
     });
@@ -1056,6 +1345,242 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("LXP Dashboard");
     expect(renderedText).toContain("Open Tutor");
     expect(renderedText).not.toContain("LXP data is partially unavailable");
+  });
+
+  it("renders the JA hub as a four-mode dark workspace with Learners Path embedded", () => {
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: undefined } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("JA Hub");
+    expect(renderedText).toContain("Activity History");
+    expect(renderedText).toContain("Practice");
+    expect(renderedText).toContain("Ask");
+    expect(renderedText).toContain("Replay");
+    expect(renderedText).toContain("Learners Path");
+    expect(renderedText).toContain("Generate Practice Run");
+  });
+
+  it("keeps JA Ask fixed-action only and requires lesson context before sending", async () => {
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask" } } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Pick a visible lesson"),
+      ),
+    ).toBeTruthy();
+    expect(testRenderer!.root.findAll((node) => node.type === "TextInput")).toHaveLength(0);
+
+    const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
+    await act(async () => {
+      await explainAction.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(mockedJaApi.sendAskMessage).not.toHaveBeenCalled();
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Select a visible lesson first"),
+      ),
+    ).toBeTruthy();
+
+    const lessonChip = findPressableByText(testRenderer!.root, "Fractions Lesson");
+    await act(async () => {
+      lessonChip.props.onPress();
+    });
+    await act(async () => {
+      await explainAction.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(mockedJaApi.sendAskMessage).toHaveBeenCalledWith("thread-1", {
+      message: "Explain the lesson",
+      quickAction: "Explain the lesson",
+      lessonId: "lesson-1",
+    });
+  });
+
+  it("switches JA classes from the header and clears ask state", async () => {
+    mockedUseJaHub.mockReturnValue(
+      createQueryState({
+        classes: [
+          {
+            id: "class-1",
+            subjectName: "Mathematics",
+            subjectCode: "MATH-1",
+            sectionName: "Section A",
+            gradeLevel: "10",
+          },
+          {
+            id: "class-2",
+            subjectName: "Science",
+            subjectCode: "SCI-1",
+            sectionName: "Section B",
+            gradeLevel: "10",
+          },
+        ],
+        selectedClassId: "class-1",
+        progress: { xpTotal: 120, streakDays: 3, sessionsCompleted: 2, lastActivityAt: null },
+        mastery: { classId: "class-1", percent: 72, label: "Building" },
+        badges: [],
+        practice: {
+          classes: [],
+          selectedClassId: "class-1",
+          recommendations: [
+            {
+              id: "rec-1",
+              title: "Fractions Foundation",
+              reason: "Rebuild fundamentals",
+              focusText: "Fractions and equivalent values",
+            },
+          ],
+          recentLessons: [],
+          recentAttempts: [],
+          sessions: [],
+        },
+        ask: {
+          threads: [],
+          lessonContexts: [
+            {
+              lessonId: "lesson-1",
+              title: "Fractions Lesson",
+              moduleTitle: "Number Sense Module",
+              sectionTitle: "Core Lessons",
+            },
+          ],
+          guidelines: ["Ask for concept help."],
+        },
+        review: {
+          eligibleAttempts: [],
+          sessions: [],
+        },
+      }) as ReturnType<typeof useJaHub>,
+    );
+
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    const lessonChip = findPressableByText(testRenderer!.root, "Fractions Lesson");
+    await act(async () => {
+      lessonChip.props.onPress();
+    });
+
+    const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
+    await act(async () => {
+      await explainAction.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(
+      testRenderer!.root.find(
+        (node) => node.type === "Text" && flattenText(node).includes("Here is a grounded explanation."),
+      ),
+    ).toBeTruthy();
+
+    const classSelector = findPressableByText(testRenderer!.root, "Mathematics (MATH-1)");
+    await act(async () => {
+      classSelector.props.onPress();
+    });
+
+    const scienceOption = findPressableByText(testRenderer!.root, "Science (SCI-1)");
+    await act(async () => {
+      scienceOption.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Science (SCI-1)");
+    expect(renderedText).not.toContain("Here is a grounded explanation.");
+
+    const explainAgain = findPressableByText(testRenderer!.root, "Explain the lesson");
+    await act(async () => {
+      await explainAgain.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(mockedJaApi.sendAskMessage).toHaveBeenCalledTimes(1);
+    expect(
+      testRenderer!.root.find(
+        (node) =>
+          node.type === "Text" &&
+          flattenText(node).includes("Select a visible lesson first so JA can keep the answer grounded."),
+      ),
+    ).toBeTruthy();
+  });
+
+  it("opens Learners Path list and drills into the class-style detail shell", () => {
+    const { JaScreen } = require("../JaScreen");
+    const navigate = jest.fn();
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate } as never,
+          route: { key: "JA", name: "JA", params: { panel: "lxp" } } as never,
+        }),
+      );
+    });
+
+    expect(
+      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("My Paths")),
+    ).toBeTruthy();
+
+    const pathButton = findPressableByText(testRenderer!.root, "Mathematics");
+    act(() => {
+      pathButton.props.onPress();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Assigned Steps");
+    expect(renderedText).toContain("Replays");
+    expect(renderedText).toContain("Case File");
+    expect(renderedText).toContain("Overview");
+
+    const openLesson = findPressableByText(testRenderer!.root, "Open Lesson");
+    act(() => {
+      openLesson.props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("LessonDetail", {
+      lessonId: "lesson-1",
+      classId: "class-1",
+    });
   });
 
   it("renders Dashboard screen shell with the dark student home sections", () => {
