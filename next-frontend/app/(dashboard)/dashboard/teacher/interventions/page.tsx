@@ -50,6 +50,8 @@ import {
   TeacherPageShell,
   TeacherSectionCard,
 } from '@/components/teacher/TeacherPageShell';
+import { AiOutageNotice } from '@/components/student/AiOutageNotice';
+import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { toast } from 'sonner';
 
 const LEADERBOARD_SCOPE_OPTIONS = [
@@ -364,6 +366,7 @@ type LeaderboardScoreRow = LxpClassReport['leaderboard'][number] & {
 export default function TeacherInterventionsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const aiAvailability = useAiAvailability();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [loadingClasses, setLoadingClasses] = useState(true);
@@ -385,6 +388,7 @@ export default function TeacherInterventionsPage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
 
+  const aiUnavailable = aiAvailability.status === 'degraded';
   const thresholdLabel = report?.threshold ?? queue?.threshold ?? null;
   const queueEntries = useMemo(() => queue?.queue ?? [], [queue]);
   const leaderboardRows = useMemo(() => report?.leaderboard ?? [], [report]);
@@ -514,6 +518,7 @@ export default function TeacherInterventionsPage() {
   };
 
   const handleRecommend = (caseId: string) => {
+    if (aiUnavailable) return;
     const target = selectedClassId
       ? `/dashboard/teacher/interventions/${caseId}?classId=${selectedClassId}`
       : `/dashboard/teacher/interventions/${caseId}`;
@@ -631,6 +636,14 @@ export default function TeacherInterventionsPage() {
         </div>
       }
     >
+      {aiUnavailable ? (
+        <AiOutageNotice
+          mode="teacher"
+          message={aiAvailability.message}
+          className="teacher-figma-stagger"
+        />
+      ) : null}
+
       {!selectedClassId ? (
         <TeacherSectionCard
           title="Pick a class first"
@@ -775,6 +788,7 @@ export default function TeacherInterventionsPage() {
                                       size="sm"
                                       variant="teacher"
                                       className="rounded-md"
+                                      disabled={aiUnavailable}
                                       onClick={() => handleRecommend(entry.id)}
                                     >
                                       AI Plan

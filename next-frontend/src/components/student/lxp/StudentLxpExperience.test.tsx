@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentLxpExperience from './StudentLxpExperience';
 import { lxpService } from '@/services/lxp-service';
+import { healthService } from '@/services/health-service';
 
 const push = jest.fn();
 const replace = jest.fn();
@@ -29,7 +30,14 @@ jest.mock('@/services/lxp-service', () => ({
   },
 }));
 
+jest.mock('@/services/health-service', () => ({
+  healthService: {
+    getReadiness: jest.fn(),
+  },
+}));
+
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
+const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 
 const eligibilityResponse = {
   data: {
@@ -129,6 +137,15 @@ describe('StudentLxpExperience path list', () => {
     searchParamsState.tab = null;
     searchParamsState.mode = null;
     searchParamsState.classId = null;
+    mockedHealthService.getReadiness.mockResolvedValue({
+      ready: true,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: { ok: true },
+      },
+    });
     mockedLxpService.getEligibility.mockResolvedValue(eligibilityResponse as never);
   });
 
@@ -181,5 +198,29 @@ describe('StudentLxpExperience path list', () => {
         '/dashboard/student/ja?mode=ask&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp',
       );
     });
+  });
+
+  it('shows an AI outage banner while keeping path navigation available', async () => {
+    mockedHealthService.getReadiness.mockResolvedValueOnce({
+      ready: true,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: {
+          ok: true,
+          degraded: true,
+          message: 'AI service reachable but no AI runtime is available',
+        },
+      },
+    });
+
+    render(<StudentLxpExperience />);
+
+    expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
+    expect(screen.getByText(/replay help may be paused/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Path' }));
+    expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-active');
   });
 });

@@ -1,0 +1,710 @@
+.adminChatbotPage {
+  padding-top: 0;
+  padding-bottom: 0;
+  margin: -1.25rem;
+  min-height: calc(100dvh - 5.2rem);
+}
+
+.adminChatbotPage :global(.admin-page-header) {
+  display: none;
+}
+
+.adminChatbotRedesign {
+  display: grid;
+  grid-template-columns: minmax(14rem, 15rem) minmax(0, 1fr);
+  min-height: 0;
+  block-size: calc(100dvh - 5.2rem);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid #e4ebf4;
+  background: #f8fafc;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--admin-accent);
+  color: #ffffff;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-new-chat) {
+  width: 100%;
+  min-height: 2.4rem;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--admin-accent);
+  color: #ffffff;
+  box-shadow: none;
+  padding-inline: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-new-chat:hover) {
+  background: var(--admin-accent-strong);
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar-body) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.9rem 0.85rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar-section) {
+  display: grid;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar-section-header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar-section--history) {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-count) {
+  display: inline-flex;
+  min-width: 1.45rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e4ebf4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #6f82a1;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.08rem 0.45rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-section-eyebrow) {
+  margin: 0 0 0.15rem;
+  color: #8da0bf;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-section-title) {
+  margin: 0;
+  color: #2a3d5c;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-list),
+.adminChatbotRedesign :global(.admin-chatbot-prompt-list) {
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  scrollbar-width: thin;
+  scrollbar-color: #ccd7e6 transparent;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-list) {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 12rem;
+  min-height: 0;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-item) {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
+  background: transparent;
+  padding: 0.68rem 0.7rem;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-item:hover),
+.adminChatbotRedesign :global(.admin-chatbot-history-item.is-active) {
+  border-color: #dbe5f1;
+  background: #ffffff;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-item.is-active) {
+  box-shadow: inset 3px 0 0 var(--admin-accent);
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-header) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-title) {
+  margin: 0;
+  color: #1f314d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-time) {
+  color: #95a6bf;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-history-preview) {
+  margin: 0.3rem 0 0;
+  color: #70819c;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-prompt) {
+  width: 100%;
+  border: 1px solid #dfe7f1;
+  border-radius: 0.55rem;
+  background: #ffffff;
+  padding: 0.62rem 0.7rem;
+  text-align: left;
+  color: #526986;
+  font-size: 0.74rem;
+  font-weight: 750;
+  line-height: 1.45;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-prompt:hover) {
+  border-color: #cfd9e8;
+  background: #fdfefe;
+  color: #182a44;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-prompt-list) {
+  max-height: 11.5rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar-footer) {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid #e4ebf4;
+  background: #ffffff;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-sidebar-meta) {
+  margin: 0;
+  color: #7d8fa9;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-status) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #526986;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-status-dot) {
+  width: 0.44rem;
+  height: 0.44rem;
+  border-radius: 999px;
+  background: #d97706;
+  animation: admin-chatbot-pulse 2s infinite;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-status-dot--online) {
+  background: #16a34a;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage) {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-header) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1.25rem 0.85rem;
+  border-bottom: 1px solid #e4ebf4;
+  background: #ffffff;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-copy) {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-kicker) {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  color: #8da0bf;
+  font-size: 0.63rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-kicker::before) {
+  content: "";
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: var(--admin-accent);
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-title) {
+  max-width: 48rem;
+  margin: 0;
+  color: #13223a;
+  font-size: clamp(1.1rem, 1.6vw, 1.3rem);
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-description) {
+  max-width: 42rem;
+  margin: 0;
+  color: #72839e;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-tools) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.1rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-tool-row) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-model-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #ead6a7;
+  border-radius: 999px;
+  background: #fff9eb;
+  padding: 0.4rem 0.65rem;
+  color: #a16207;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-refresh) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #dfe7f1;
+  border-radius: 0.55rem;
+  background: #ffffff;
+  color: #6f82a1;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-refresh:hover) {
+  background: #f5f7fb;
+  color: #182a44;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-stage-tools .admin-chatbot-new-chat) {
+  width: 100%;
+  min-width: 8rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-thread) {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  background:
+    linear-gradient(180deg, #fbfdff 0%, #ffffff 56%),
+    #ffffff;
+  scrollbar-width: thin;
+  scrollbar-color: #ccd7e6 transparent;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message) {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 58rem;
+  margin-inline: auto;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message--user) {
+  flex-direction: row-reverse;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message--user .admin-chatbot-bubble) {
+  margin-left: auto;
+  border-radius: 0.85rem 0.25rem 0.85rem 0.85rem;
+  background: #f4f7fb;
+  color: #182a44;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message-icon) {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 0.55rem;
+  margin-top: 0.05rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message-icon--user) {
+  border: 1px solid #dfe7f1;
+  background: #ffffff;
+  color: #536b90;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-bubble) {
+  width: min(100%, 46rem);
+  border: 1px solid #e2e9f3;
+  border-radius: 0.25rem 0.85rem 0.85rem 0.85rem;
+  background: #ffffff;
+  padding: 0.78rem 0.9rem;
+  color: #243956;
+  font-size: 0.86rem;
+  line-height: 1.62;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message-meta) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-message-author) {
+  color: #526986;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-time) {
+  color: #95a6bf;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.66rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-tag-row) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-tag) {
+  border-radius: 999px;
+  padding: 0.2rem 0.48rem;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-tag--green) {
+  background: #eafaf2;
+  color: #087a4e;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-tag--blue) {
+  background: #edf5ff;
+  color: #2563eb;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-empty-state) {
+  display: grid;
+  place-items: center;
+  gap: 0.65rem;
+  flex: 1;
+  min-height: 11rem;
+  color: #8393ab;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-empty-state p) {
+  margin: 0;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-empty-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid #f5d99b;
+  border-radius: 0.85rem;
+  background: #fff9eb;
+  color: #d97706;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-source-block) {
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #edf2f7;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-source-heading) {
+  margin: 0;
+  color: #5c7295;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-source-card) {
+  border: 1px solid #e5ebf2;
+  border-radius: 0.65rem;
+  background: #f9fbfd;
+  padding: 0.72rem 0.78rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-source-window) {
+  display: inline-flex;
+  border: 1px solid #e5ebf2;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0.2rem 0.48rem;
+  color: #6c83a7;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-composer) {
+  padding: 0.9rem 1.25rem 1rem;
+  border-top: 1px solid #e4ebf4;
+  background: #ffffff;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-composer-shell) {
+  width: min(100%, 46rem);
+  margin: 0 auto;
+  border: 1px solid #dfe7f1;
+  border-radius: 0.85rem;
+  background: #ffffff;
+  padding: 0.75rem 0.8rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-composer-shell:focus-within) {
+  border-color: rgba(247, 10, 16, 0.38);
+  box-shadow: 0 0 0 3px rgba(247, 10, 16, 0.08);
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-input) {
+  width: 100%;
+  min-height: 2rem;
+  max-height: 8.5rem;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: #213754;
+  padding: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-input::placeholder) {
+  color: #95a6bf;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-input:focus) {
+  outline: none;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-composer-bar) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-top: 0.65rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-composer-hints) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-hint-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  color: #7a8ca6;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-send) {
+  min-width: 5.4rem;
+  height: 2.25rem;
+  gap: 0.4rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: var(--admin-accent);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-send:hover) {
+  background: var(--admin-accent-strong);
+}
+
+.adminChatbotRedesign :global(.admin-chatbot-send:disabled) {
+  opacity: 0.45;
+}
+
+@keyframes admin-chatbot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (min-width: 768px) {
+  .adminChatbotPage {
+    margin: -1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .adminChatbotPage {
+    margin: -2rem;
+  }
+}
+
+@media (max-width: 1080px) {
+  .adminChatbotRedesign {
+    grid-template-columns: minmax(0, 1fr);
+    block-size: auto;
+    min-height: calc(100dvh - 5.2rem);
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-sidebar) {
+    border-right: 0;
+    border-bottom: 1px solid #e4ebf4;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-stage) {
+    block-size: min(44rem, calc(100dvh - 12rem));
+  }
+}
+
+@media (max-width: 720px) {
+  .adminChatbotRedesign,
+  .adminChatbotRedesign :global(.admin-chatbot-stage) {
+    block-size: auto;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-sidebar-body) {
+    overflow: visible;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-history-list) {
+    max-height: 18rem;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-thread) {
+    padding: 0.95rem;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-stage-header),
+  .adminChatbotRedesign :global(.admin-chatbot-composer),
+  .adminChatbotRedesign :global(.admin-chatbot-sidebar-body),
+  .adminChatbotRedesign :global(.admin-chatbot-sidebar-footer) {
+    padding-inline: 0.95rem;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-stage-header),
+  .adminChatbotRedesign :global(.admin-chatbot-composer-bar) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-stage-tools) {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-stage-tool-row) {
+    justify-content: space-between;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-message) {
+    gap: 0.6rem;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-bubble) {
+    width: 100%;
+  }
+
+  .adminChatbotRedesign :global(.admin-chatbot-send) {
+    width: 100%;
+  }
+}

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentLxpDetailExperience from './StudentLxpDetailExperience';
 import { lxpService } from '@/services/lxp-service';
+import { healthService } from '@/services/health-service';
 
 const push = jest.fn();
 const replace = jest.fn();
@@ -29,7 +30,14 @@ jest.mock('@/services/lxp-service', () => ({
   },
 }));
 
+jest.mock('@/services/health-service', () => ({
+  healthService: {
+    getReadiness: jest.fn(),
+  },
+}));
+
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
+const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 
 const overviewResponse = {
   data: {
@@ -136,6 +144,15 @@ describe('StudentLxpDetailExperience', () => {
     jest.clearAllMocks();
     routeClassId = 'class-active';
     searchParamsState.tab = null;
+    mockedHealthService.getReadiness.mockResolvedValue({
+      ready: true,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: { ok: true },
+      },
+    });
     mockedLxpService.getOverview.mockResolvedValue(overviewResponse as never);
     mockedLxpService.getPlaylist.mockResolvedValue(activePlaylistResponse as never);
     mockedLxpService.completeCheckpoint.mockResolvedValue(activePlaylistResponse as never);
@@ -241,5 +258,30 @@ describe('StudentLxpDetailExperience', () => {
       expect(screen.queryByRole('button', { name: 'Mark Complete' })).not.toBeInTheDocument();
     });
     expect(screen.getByText('Read-only history')).toBeInTheDocument();
+  });
+
+  it('shows an AI outage banner but keeps lessons and replay handoff links available', async () => {
+    searchParamsState.tab = 'replays';
+    mockedHealthService.getReadiness.mockResolvedValueOnce({
+      ready: false,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: {
+          ok: false,
+          message: 'connect ECONNREFUSED',
+        },
+      },
+    });
+
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
+    const jaLink = await screen.findByRole('link', { name: 'Open JA Hub' });
+    expect(jaLink).toHaveAttribute(
+      'href',
+      '/dashboard/student/ja?mode=review&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active%3Ftab%3Dreplays',
+    );
   });
 });

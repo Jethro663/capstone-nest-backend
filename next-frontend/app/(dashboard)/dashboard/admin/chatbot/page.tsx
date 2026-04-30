@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   Bot,
   CirclePlus,
   Loader2,
@@ -9,6 +10,7 @@ import {
   SendHorizontal,
   ShieldCheck,
   Sparkles,
+  UserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminAnalyticsChatChart } from '@/components/admin/AdminAnalyticsChatChart';
@@ -23,6 +25,7 @@ import type {
 } from '@/types/admin-chatbot';
 import { useAuth } from '@/providers/AuthProvider';
 import { cn } from '@/utils/cn';
+import styles from './admin-chatbot.module.css';
 
 type ChatMessage = {
   id: string;
@@ -38,7 +41,8 @@ const QUICK_PROMPTS = [
   'Give me a class-by-class risk snapshot.',
   'Summarize weekly system usage.',
   'Which interventions need attention this week?',
-  'Compare assessment performance by subject.',
+  'Show evaluation pass rate trends.',
+  'Flag any recent audit anomalies.',
 ];
 
 const formatTime = (value: Date) =>
@@ -393,23 +397,10 @@ export default function AdminChatbotPage() {
       title="AI Chatbot"
       description="Grounded analytics assistant for admin-only LMS insights"
       icon={Bot}
+      className={styles.adminChatbotPage}
     >
-      <div className="admin-chatbot-app">
+      <div className={cn(styles.adminChatbotRedesign, 'admin-chatbot-app')}>
         <aside className="admin-chatbot-sidebar">
-          <div className="admin-chatbot-sidebar-top">
-            <Button className="admin-chatbot-new-chat" onClick={startNewChat}>
-              <CirclePlus className="h-4 w-4" />
-              New chat
-            </Button>
-
-            <div className="admin-chatbot-sidebar-copy">
-              <p className="admin-chatbot-section-eyebrow">Admin analytics</p>
-              <p className="admin-chatbot-sidebar-note">
-                Private history, grounded answers, read-only access.
-              </p>
-            </div>
-          </div>
-
           <div className="admin-chatbot-sidebar-body">
             <section className="admin-chatbot-sidebar-section admin-chatbot-sidebar-section--history">
               <div className="admin-chatbot-sidebar-section-header">
@@ -522,26 +513,32 @@ export default function AdminChatbotPage() {
             </div>
 
             <div className="admin-chatbot-stage-tools">
-              <div className="admin-chatbot-model-pill">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                <span>
-                  {healthLoading
-                    ? 'Refreshing model status'
-                    : `${statusText} - ${health.model}`}
-                </span>
+              <div className="admin-chatbot-stage-tool-row">
+                <div className="admin-chatbot-model-pill">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>
+                    {healthLoading
+                      ? 'Refreshing model status'
+                      : `${statusText} - ${health.model}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="admin-chatbot-refresh"
+                  onClick={() => void checkHealth()}
+                  aria-label="Refresh AI status"
+                >
+                  {healthLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                </button>
               </div>
-              <button
-                type="button"
-                className="admin-chatbot-refresh"
-                onClick={() => void checkHealth()}
-                aria-label="Refresh AI status"
-              >
-                {healthLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-              </button>
+              <Button className="admin-chatbot-new-chat" onClick={startNewChat}>
+                <CirclePlus className="h-4 w-4" />
+                New thread
+              </Button>
             </div>
           </header>
 
@@ -560,7 +557,11 @@ export default function AdminChatbotPage() {
                   <div className="admin-chatbot-message-icon">
                     <Bot className="h-3.5 w-3.5" />
                   </div>
-                ) : null}
+                ) : (
+                  <div className="admin-chatbot-message-icon admin-chatbot-message-icon--user">
+                    <UserRound className="h-3.5 w-3.5" />
+                  </div>
+                )}
 
                 <div className="admin-chatbot-bubble">
                   <div className="admin-chatbot-message-meta">
@@ -575,6 +576,17 @@ export default function AdminChatbotPage() {
                   </div>
 
                   <p>{message.content}</p>
+
+                  {message.kind === 'greeting' ? (
+                    <div className="admin-chatbot-tag-row">
+                      <span className="admin-chatbot-tag admin-chatbot-tag--green">
+                        Read-only
+                      </span>
+                      <span className="admin-chatbot-tag admin-chatbot-tag--blue">
+                        Grounded sources
+                      </span>
+                    </div>
+                  ) : null}
 
                   {message.chart ? (
                     <AdminAnalyticsChatChart chart={message.chart} />
@@ -608,6 +620,19 @@ export default function AdminChatbotPage() {
                 </div>
               </article>
             ))}
+
+            {!healthLoading && !health.online && transcriptMessages.length === 0 ? (
+              <div className="admin-chatbot-empty-state">
+                <div className="admin-chatbot-empty-icon">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <p>
+                  AI service is currently offline.
+                  <br />
+                  Reconnect it to continue grounded admin analytics.
+                </p>
+              </div>
+            ) : null}
 
             {sending || sessionLoading ? (
               <article className="admin-chatbot-message admin-chatbot-message--assistant">

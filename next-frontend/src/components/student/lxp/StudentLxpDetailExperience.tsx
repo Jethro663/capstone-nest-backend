@@ -26,8 +26,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import { ClassWorkspaceShell, type ClassWorkspaceTabItem } from '@/components/class/workspace/ClassWorkspaceShell';
 import { lxpService } from '@/services/lxp-service';
+import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { LxpCheckpoint, LxpOverviewResponse, PlaylistResponse } from '@/types/lxp';
 import { cn } from '@/utils/cn';
 
@@ -239,6 +241,8 @@ export default function StudentLxpDetailExperience() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const aiAvailability = useAiAvailability();
+  const aiUnavailable = aiAvailability.status === 'degraded';
   const classId = resolveClassId(params.classId);
   const currentTab = getTab(searchParams.get('tab'));
   const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
@@ -384,6 +388,14 @@ export default function StudentLxpDetailExperience() {
       ]}
       tabs={tabs}
     >
+      {aiUnavailable ? (
+        <AiOutageNotice
+          mode="lxp"
+          message={aiAvailability.message}
+          className="mb-4 border-[#f4d192] bg-[#fff8e8]"
+        />
+      ) : null}
+
       {currentTab === 'steps' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head student-class-panel__head--modules">

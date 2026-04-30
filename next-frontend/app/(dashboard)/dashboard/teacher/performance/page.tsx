@@ -22,6 +22,8 @@ import {
   TeacherPageShell,
   TeacherSectionCard,
 } from '@/components/teacher/TeacherPageShell';
+import { AiOutageNotice } from '@/components/student/AiOutageNotice';
+import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { cn } from '@/utils/cn';
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
@@ -89,6 +91,7 @@ function formatLogStudent(entry: {
 
 export default function TeacherPerformancePage() {
   const { user } = useAuth();
+  const aiAvailability = useAiAvailability();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [summary, setSummary] = useState<ClassPerformanceSummary | null>(null);
@@ -108,6 +111,7 @@ export default function TeacherPerformancePage() {
     () => classes.find((item) => item.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
+  const aiUnavailable = aiAvailability.status === 'degraded';
   const threshold = summary?.threshold ?? atRisk?.threshold ?? null;
 
   const fetchClassList = useCallback(async () => {
@@ -237,7 +241,7 @@ export default function TeacherPerformancePage() {
   }, [analysisJob]);
 
   const handleAnalyze = async (studentId?: string) => {
-    if (!selectedClassId) return;
+    if (!selectedClassId || aiUnavailable) return;
     try {
       setAnalyzing(true);
       setAnalysisResult(null);
@@ -334,6 +338,14 @@ export default function TeacherPerformancePage() {
         </div>
       }
     >
+      {aiUnavailable ? (
+        <AiOutageNotice
+          mode="teacher"
+          message={aiAvailability.message}
+          className="teacher-figma-stagger"
+        />
+      ) : null}
+
       {!selectedClassId ? (
         <TeacherSectionCard
           title="Waiting for class selection"
@@ -434,7 +446,7 @@ export default function TeacherPerformancePage() {
                                 size="sm"
                                 variant="teacherOutline"
                                 className="rounded-lg"
-                                disabled={analyzing}
+                                disabled={aiUnavailable || analyzing}
                                 onClick={() => handleAnalyze(student.studentId)}
                               >
                                 Analyze
@@ -457,7 +469,7 @@ export default function TeacherPerformancePage() {
                   <Button
                     variant="teacher"
                     className="rounded-lg"
-                    disabled={!selectedClassId || analyzing}
+                    disabled={!selectedClassId || aiUnavailable || analyzing}
                     onClick={() => handleAnalyze()}
                   >
                     {analyzing ? 'Analyzing...' : 'Analyze Whole Class'}

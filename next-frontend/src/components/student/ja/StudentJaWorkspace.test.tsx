@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import StudentJaWorkspace from './StudentJaWorkspace';
 import { jaService } from '@/services/ja-service';
+import { healthService } from '@/services/health-service';
 import { toast } from 'sonner';
 
 jest.mock('framer-motion', () => ({
@@ -36,14 +37,25 @@ jest.mock('@/services/ja-service', () => ({
     getAskThread: jest.fn(),
     getSession: jest.fn(),
     getReviewSession: jest.fn(),
+    createSession: jest.fn(),
     createAskThread: jest.fn(),
     createReviewSession: jest.fn(),
     sendAskMessage: jest.fn(),
+    submitResponse: jest.fn(),
     submitReviewResponse: jest.fn(),
+    completeSession: jest.fn(),
+    completeReviewSession: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/health-service', () => ({
+  healthService: {
+    getReadiness: jest.fn(),
   },
 }));
 
 const mockedJaService = jaService as jest.Mocked<typeof jaService>;
+const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 
 const hubResponse = {
   data: {
@@ -169,6 +181,15 @@ const hubResponse = {
 describe('StudentJaWorkspace refactored shell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedHealthService.getReadiness.mockResolvedValue({
+      ready: true,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: { ok: true },
+      },
+    });
     mockedJaService.getHub.mockResolvedValue(hubResponse as never);
     mockedJaService.getAskThread.mockResolvedValue({
       data: {
@@ -786,5 +807,69 @@ describe('StudentJaWorkspace refactored shell', () => {
     });
     expect(mockedJaService.getHub).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Preparing JA Hub/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a view-only outage state and keeps history usable when AI is degraded', async () => {
+    mockedHealthService.getReadiness.mockResolvedValueOnce({
+      ready: true,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: {
+          ok: true,
+          degraded: true,
+          message: 'AI service reachable but no AI runtime is available',
+        },
+      },
+    });
+
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/AI offline/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/view-only/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Replay$/i }));
+    expect(screen.getByText('Assessment Replay')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Ask$/i }));
+    expect(screen.getByRole('button', { name: /New chat/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Ask JA about this lesson/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Equivalent Fractions/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    expect(mockedJaService.createAskThread).not.toHaveBeenCalled();
+    expect(mockedJaService.sendAskMessage).not.toHaveBeenCalled();
+  });
+
+  it('blocks JA practice and replay generation calls when AI is degraded', async () => {
+    mockedHealthService.getReadiness.mockResolvedValueOnce({
+      ready: false,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: {
+          ok: false,
+          message: 'connect ECONNREFUSED',
+        },
+      },
+    });
+
+    render(<StudentJaWorkspace initialMode="practice" initialClassId="class-1" />);
+
+    expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Generate Practice Run/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Generate Practice Run/i }));
+    expect(mockedJaService.createSession).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Replay Revisit weak spots/i }));
+    const replayButton = await screen.findByRole('button', {
+      name: /Fractions Quiz.*Submitted.*62%/i,
+    });
+    expect(replayButton).toBeDisabled();
+    fireEvent.click(replayButton);
+    expect(mockedJaService.createReviewSession).not.toHaveBeenCalled();
   });
 });

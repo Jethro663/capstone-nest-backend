@@ -51,7 +51,9 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
+import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
+import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
 import {
@@ -363,6 +365,7 @@ export default function TeacherClassDetailPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
+  const aiAvailability = useAiAvailability();
   const classIdParam = params.id;
   const classId = Array.isArray(classIdParam) ? classIdParam[0] : (classIdParam as string) || '';
   const isClassIdValid = UUID_PATTERN.test(classId);
@@ -418,6 +421,7 @@ export default function TeacherClassDetailPage() {
 
   const [uploadingExtraction, setUploadingExtraction] = useState(false);
   const extractionInputRef = useRef<HTMLInputElement | null>(null);
+  const aiUnavailable = aiAvailability.status === 'degraded';
 
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -1345,13 +1349,14 @@ export default function TeacherClassDetailPage() {
   );
 
   const handleExtractionSelect = () => {
+    if (aiUnavailable) return;
     extractionInputRef.current?.click();
   };
 
   const handleExtractionFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || uploadingExtraction) return;
+    if (!file || uploadingExtraction || aiUnavailable) return;
     const subjectKey = normalizeLibrarySubjectKey(
       classItem?.subjectCode,
       classItem?.subjectName,
@@ -2079,6 +2084,13 @@ export default function TeacherClassDetailPage() {
 
         {activeTab === 'extraction' ? (
           <div className="teacher-class-workspace__panel">
+            {aiUnavailable ? (
+              <AiOutageNotice
+                mode="teacher"
+                message={aiAvailability.message}
+                className="mb-4"
+              />
+            ) : null}
             <div className="teacher-class-workspace__panel-head">
               <div>
                 <h2>AI Extractions</h2>
@@ -2090,7 +2102,7 @@ export default function TeacherClassDetailPage() {
                 type="button"
                 className="teacher-class-workspace__extract-dropzone"
                 onClick={handleExtractionSelect}
-                disabled={uploadingExtraction}
+                disabled={uploadingExtraction || aiUnavailable}
               >
                 <Radar className="h-6 w-6" />
                 <strong>{uploadingExtraction ? 'Uploading PDF...' : 'Drop a PDF here to extract module'}</strong>
@@ -2101,6 +2113,7 @@ export default function TeacherClassDetailPage() {
                 type="file"
                 accept="application/pdf"
                 onChange={(event) => void handleExtractionFile(event)}
+                disabled={uploadingExtraction || aiUnavailable}
                 hidden
               />
               <div className="teacher-class-workspace__stack">

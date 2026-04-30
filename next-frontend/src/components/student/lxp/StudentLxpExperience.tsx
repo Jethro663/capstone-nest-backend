@@ -26,11 +26,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import {
   resolveStudentCoursePresentation,
   toStudentHeroStyle,
 } from '@/components/class/student-course-presentation';
 import { lxpService } from '@/services/lxp-service';
+import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { EligibleClass, LxpPathSummary } from '@/types/lxp';
 import { cn } from '@/utils/cn';
 
@@ -271,6 +273,8 @@ function PathListSkeleton() {
 export default function StudentLxpExperience() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const aiAvailability = useAiAvailability();
+  const aiUnavailable = aiAvailability.status === 'degraded';
   const [paths, setPaths] = useState<LxpPathSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -433,6 +437,14 @@ export default function StudentLxpExperience() {
           </span>
         </div>
       </section>
+
+      {aiUnavailable ? (
+        <AiOutageNotice
+          mode="lxp"
+          message={aiAvailability.message}
+          className="border-[#f4d192] bg-[#fff8e8]"
+        />
+      ) : null}
 
       {error ? (
         <section className="rounded-[1.25rem] border border-[#f5c8d6] bg-[#fff1f6] p-4">

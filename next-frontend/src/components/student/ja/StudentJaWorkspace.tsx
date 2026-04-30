@@ -27,6 +27,7 @@ import {
   Swords,
   X,
 } from "lucide-react";
+import { AiOutageNotice } from "@/components/student/AiOutageNotice";
 import { toast } from "sonner";
 import { getMotionProps } from "@/components/student/student-motion";
 import { StudentStatusChip } from "@/components/student/student-primitives";
@@ -36,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { jaService } from "@/services/ja-service";
+import { useAiAvailability } from "@/hooks/use-ai-availability";
 import type {
   JaAskMessage,
   JaAskLessonContextSummary,
@@ -250,6 +252,8 @@ export default function StudentJaWorkspace({
   initialMode,
   returnTo,
 }: StudentJaWorkspaceProps) {
+  const aiAvailability = useAiAvailability();
+  const aiUnavailable = aiAvailability.status === "degraded";
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = Boolean(prefersReducedMotion);
   const motionProps = useMemo(
@@ -317,6 +321,7 @@ export default function StudentJaWorkspace({
   }, [clearAnswersForItems, reviewSession]);
 
   const startNewAskChat = useCallback(() => {
+    if (aiUnavailable) return;
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
     setAskMessages([]);
@@ -328,7 +333,7 @@ export default function StudentJaWorkspace({
     setMode("ask");
     setShowHome(false);
     setActivityFilter("ask");
-  }, [selectedClassId]);
+  }, [aiUnavailable, selectedClassId]);
 
   const syncAskThreadSummary = useCallback(
     (
@@ -693,6 +698,7 @@ export default function StudentJaWorkspace({
   };
 
   const selectAskLessonContext = (context: JaAskLessonContextSummary) => {
+    if (aiUnavailable) return;
     setSelectedLessonContext(context);
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
@@ -707,6 +713,7 @@ export default function StudentJaWorkspace({
   };
 
   const clearAskLessonContext = () => {
+    if (aiUnavailable) return;
     setSelectedLessonContext(null);
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
@@ -718,6 +725,7 @@ export default function StudentJaWorkspace({
   };
 
   const startPractice = async () => {
+    if (aiUnavailable) return;
     if (!hub || !selectedClassId) return;
     setBusy(true);
     try {
@@ -740,6 +748,7 @@ export default function StudentJaWorkspace({
   };
 
   const startReview = async (attemptId: string) => {
+    if (aiUnavailable) return;
     if (!selectedClassId) return;
     setBusy(true);
     try {
@@ -767,6 +776,7 @@ export default function StudentJaWorkspace({
   };
 
   const submitCurrentAnswer = async () => {
+    if (aiUnavailable) return;
     if (!currentSession || !activeItem) return;
     setBusy(true);
     try {
@@ -815,6 +825,7 @@ export default function StudentJaWorkspace({
   };
 
   const sendAskPreset = async (preset: JaAskPresetAction) => {
+    if (aiUnavailable) return;
     if (!selectedClassId || busy) return;
     setAskMenuOpen(false);
 
@@ -893,6 +904,7 @@ export default function StudentJaWorkspace({
   };
 
   const completeCurrentSession = async () => {
+    if (aiUnavailable) return;
     if (!currentSession) return;
     setBusy(true);
     try {
@@ -1096,13 +1108,16 @@ export default function StudentJaWorkspace({
             ) : (
               <span className="ja-class-label-static">{selectedClassLabel}</span>
             )}
+            {aiUnavailable ? (
+              <span className="ja-ai-offline-pill">AI offline</span>
+            ) : null}
           </div>
           <div className="ja-topbar__actions">
             {mode === "ask" ? (
               <Button
                 type="button"
                 variant="outline"
-                disabled={busy}
+                disabled={busy || aiUnavailable}
                 className="ja-head-link ja-new-chat-button"
                 onClick={startNewAskChat}
               >
@@ -1135,6 +1150,13 @@ export default function StudentJaWorkspace({
             ) : null}
           </div>
         </div>
+
+        {aiUnavailable ? (
+          <AiOutageNotice
+            className="ja-outage-notice"
+            message={aiAvailability.message}
+          />
+        ) : null}
 
         <AnimatePresence mode="wait" initial={false}>
           {showHome ? (
@@ -1217,6 +1239,7 @@ export default function StudentJaWorkspace({
                                   "ja-context-chip",
                                   isSelected && "is-selected",
                                 )}
+                                disabled={aiUnavailable}
                                 onClick={() => selectAskLessonContext(context)}
                               >
                                 <BookOpen className="h-4 w-4" />
@@ -1342,6 +1365,7 @@ export default function StudentJaWorkspace({
                             key={item.id}
                             type="button"
                             className="ja-ask-menu__item"
+                            disabled={aiUnavailable}
                             onClick={() => void sendAskPreset(item)}
                           >
                             {item.label}
@@ -1353,7 +1377,7 @@ export default function StudentJaWorkspace({
                 </div>
                 <Button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || aiUnavailable}
                   className={cn(
                     "student-button-solid ja-send-button ja-prompt-button",
                     askMenuOpen && "is-open",
@@ -1387,7 +1411,7 @@ export default function StudentJaWorkspace({
                       </div>
                       <Button
                         onClick={() => void startPractice()}
-                        disabled={busy}
+                        disabled={busy || aiUnavailable}
                         className="student-button-solid ja-primary-action"
                       >
                         <Swords className="h-4 w-4" />
@@ -1428,6 +1452,7 @@ export default function StudentJaWorkspace({
                             <button
                               key={attempt.attemptId}
                               type="button"
+                              disabled={aiUnavailable}
                               onClick={() => void startReview(attempt.attemptId)}
                             >
                               <strong>{attempt.assessmentTitle}</strong>
@@ -1584,7 +1609,7 @@ export default function StudentJaWorkspace({
                               type="button"
                               className="student-button-solid"
                               onClick={() => void completeCurrentSession()}
-                              disabled={busy}
+                              disabled={busy || aiUnavailable}
                             >
                               Complete Session
                             </Button>
@@ -1593,7 +1618,7 @@ export default function StudentJaWorkspace({
                               type="button"
                               className="student-button-solid"
                               onClick={() => void submitCurrentAnswer()}
-                              disabled={busy || !allSessionItemsReady}
+                              disabled={busy || aiUnavailable || !allSessionItemsReady}
                             >
                               Submit Answers
                             </Button>
@@ -1647,6 +1672,7 @@ export default function StudentJaWorkspace({
                                 type="button"
                                 className={cn(selected && "selected")}
                                 onClick={() => {
+                                  if (aiUnavailable) return;
                                   setAnswers((prev) => ({
                                     ...prev,
                                     [activeItem.id]:
@@ -1660,7 +1686,7 @@ export default function StudentJaWorkspace({
                                   }));
                                 }}
                                 aria-pressed={selected}
-                                disabled={Boolean(activeItem.response)}
+                                disabled={aiUnavailable || Boolean(activeItem.response)}
                               >
                                 <span className="ja-option-mark" aria-hidden="true">
                                   {selected ? "[x]" : "[ ]"}
@@ -1728,6 +1754,7 @@ export default function StudentJaWorkspace({
                                 onClick={() => void submitCurrentAnswer()}
                                 disabled={
                                   busy ||
+                                  aiUnavailable ||
                                   Boolean(activeItem.response) ||
                                   !itemReady(activeItem, answers[activeItem.id])
                                 }
@@ -1742,7 +1769,7 @@ export default function StudentJaWorkspace({
                             !canComplete ? (
                               <Button
                                 onClick={() => void submitCurrentAnswer()}
-                                disabled={busy || !allSessionItemsReady}
+                                disabled={busy || aiUnavailable || !allSessionItemsReady}
                                 className="student-button-solid ja-primary-action"
                               >
                                 Submit Answers
@@ -1753,7 +1780,7 @@ export default function StudentJaWorkspace({
                               <Button
                                 variant="outline"
                                 onClick={() => void completeCurrentSession()}
-                                disabled={busy}
+                                disabled={busy || aiUnavailable}
                                 className="student-button-outline ja-secondary-action"
                               >
                                 Complete Session
