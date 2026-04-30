@@ -223,4 +223,44 @@ describe('StudentLxpExperience path list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue Path' }));
     expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-active');
   });
+
+  it('opens the student help guide, walks through all pages, and closes it', async () => {
+    render(<StudentLxpExperience />);
+
+    await screen.findByText('Mathematics 7');
+    fireEvent.click(screen.getByRole('button', { name: /learners path help/i }));
+
+    expect(await screen.findByText('Student guide: Learners Path')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 5')).toBeInTheDocument();
+    expect(screen.getByText('Start on the page and know what it is for')).toBeInTheDocument();
+    expect(screen.getByText('Help button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 2 of 5')).toBeInTheDocument();
+    expect(screen.getByText('Find the right path faster')).toBeInTheDocument();
+    expect(screen.getAllByText('Reset Filters')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 3 of 5')).toBeInTheDocument();
+    expect(screen.getByText('Read a path card')).toBeInTheDocument();
+    expect(screen.getByText('Status badge')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 4 of 5')).toBeInTheDocument();
+    expect(screen.getByText('Choose the action you need')).toBeInTheDocument();
+    expect(screen.getByText('Continue or Review')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 5 of 5')).toBeInTheDocument();
+    expect(screen.getByText('Know the special notices on this page')).toBeInTheDocument();
+    expect(screen.getByText('JA break banner')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
+    expect(screen.getByText('Page 4 of 5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close guide/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Student guide: Learners Path')).not.toBeInTheDocument();
+    });
+  });
 });
