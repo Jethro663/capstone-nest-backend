@@ -360,7 +360,7 @@ export default function StudentLxpExperience() {
   );
 
   return (
-    <main className="space-y-5 bg-[#f5f3f8] p-4 md:p-6">
+    <main className="space-y-5 bg-[var(--student-elevated)] p-4 md:p-6">
       <section className="rounded-[1.35rem] border border-[#e1ddec] bg-white p-4 shadow-[0_18px_38px_-34px_rgba(17,25,47,0.45)]">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>

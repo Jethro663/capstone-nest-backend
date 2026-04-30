@@ -10,6 +10,15 @@ import {
   ValidationOptions,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import {
+  EMPLOYEE_ID_REGEX,
+  lowerTrimmedValue,
+  PASSWORD_SAFE_REGEX,
+  PERSON_NAME_REGEX,
+  PH_MOBILE_REGEX,
+  trimValue,
+  upperTrimmedValue,
+} from '../../../common/validation/input-policy';
 
 // Custom email domain validator
 function IsPopularEmailProvider(validationOptions?: ValidationOptions) {
@@ -51,7 +60,7 @@ function IsPopularEmailProvider(validationOptions?: ValidationOptions) {
 export class CreateUserDto {
   @IsEmail({}, { message: 'Must be a valid email address' })
   @IsPopularEmailProvider()
-  @Transform(({ value }: { value: string }) => value.toLowerCase().trim())
+  @Transform(({ value }: { value: string }) => lowerTrimmedValue(value))
   email: string;
 
   @IsOptional()
@@ -67,19 +76,34 @@ export class CreateUserDto {
   @Matches(/[@$!%*?&#]/, {
     message: 'Password must contain at least one special character',
   })
+  @Matches(PASSWORD_SAFE_REGEX, {
+    message: 'Password contains unsupported control characters',
+  })
   password?: string;
 
   @IsString()
-  @Transform(({ value }: { value: string }) => value.trim())
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "First name may only contain letters, spaces, hyphens, and apostrophes",
+  })
+  @Transform(({ value }: { value: string }) => trimValue(value))
   firstName: string;
 
   @IsOptional()
   @IsString()
-  @Transform(({ value }: { value?: string }) => value?.trim())
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Middle name may only contain letters, spaces, hyphens, and apostrophes",
+  })
+  @Transform(({ value }: { value?: string }) => trimValue(value))
   middleName?: string;
 
   @IsString()
-  @Transform(({ value }: { value: string }) => value.trim())
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Last name may only contain letters, spaces, hyphens, and apostrophes",
+  })
+  @Transform(({ value }: { value: string }) => trimValue(value))
   lastName: string;
 
   @IsIn(['student', 'teacher', 'admin'], {
@@ -89,8 +113,8 @@ export class CreateUserDto {
 
   @ValidateIf((o: { role: string }) => o.role === 'teacher')
   @IsString({ message: 'Employee ID is required for teacher accounts' })
-  @Transform(({ value }: { value?: string }) => value?.trim())
-  @Matches(/^[A-Za-z0-9-]{1,20}$/, {
+  @Transform(({ value }: { value?: string }) => upperTrimmedValue(value))
+  @Matches(EMPLOYEE_ID_REGEX, {
     message:
       'Employee ID must be 1-20 characters using letters, numbers, or hyphens',
   })
@@ -98,8 +122,8 @@ export class CreateUserDto {
 
   @ValidateIf((o: { role: string }) => o.role === 'teacher')
   @IsString({ message: 'Contact number is required for teacher accounts' })
-  @Transform(({ value }: { value?: string }) => value?.trim())
-  @Matches(/^(?:\+63|0)9\d{9}$/, {
+  @Transform(({ value }: { value?: string }) => trimValue(value))
+  @Matches(PH_MOBILE_REGEX, {
     message:
       'Contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
   })

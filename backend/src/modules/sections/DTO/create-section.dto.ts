@@ -9,9 +9,15 @@ import {
   IsUUID,
   IsIn,
   Validate,
+  Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { IsValidSchoolYearConstraint } from '../../classes/DTO/validators';
+import {
+  ROOM_LABEL_REGEX,
+  SECTION_NAME_REGEX,
+  trimValue,
+} from '../../../common/validation/input-policy';
 
 const VALID_GRADE_LEVELS = ['7', '8', '9', '10'] as const;
 
@@ -20,7 +26,11 @@ export class CreateSectionDto {
   @IsNotEmpty({ message: 'Section name is required' })
   @MinLength(1, { message: 'Section name must be at least 1 character' })
   @MaxLength(100, { message: 'Section name must not exceed 100 characters' })
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }) => trimValue(value))
+  @Matches(SECTION_NAME_REGEX, {
+    message:
+      "Section name may only contain letters, numbers, spaces, hyphens, and apostrophes",
+  })
   name: string;
 
   @IsString()
@@ -44,7 +54,11 @@ export class CreateSectionDto {
   @IsString()
   @IsOptional()
   @MaxLength(50, { message: 'Room number must not exceed 50 characters' })
-  @Transform(({ value }) => value?.trim())
+  @Transform(({ value }) => trimValue(value))
+  @Matches(ROOM_LABEL_REGEX, {
+    message:
+      'Room number may only contain letters, numbers, spaces, number signs, hyphens, and slashes',
+  })
   roomNumber?: string;
 
   @IsUUID('4', { message: 'Adviser ID must be a valid UUID' })

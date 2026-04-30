@@ -1,9 +1,10 @@
 # GitHub CI/CD Setup
 
-This repo now has two GitHub Actions workflows:
+This repo now has three GitHub Actions workflows:
 
 - `CI`: runs build and test checks for `backend`, `next-frontend`, `mobile`, and `ai-service`.
 - `Docker Publish`: builds and pushes container images for `backend`, `next-frontend`, and `ai-service` to GitHub Container Registry (`ghcr.io`) after a successful `CI` run on `main`, or when triggered manually.
+- `Railway Deploy (developement)`: deploys `backend`, `next-frontend`, and `ai-service` to the live Railway project when matching changes are pushed to `developement`.
 
 ## What runs in CI
 
@@ -15,6 +16,12 @@ The workflow at `.github/workflows/ci.yml` currently uses checks that pass again
 - `ai-service`: `python -m unittest discover -s tests -v`
 
 `next-frontend` lint is intentionally not part of CI yet because the current branch has existing lint errors that would make the workflow fail immediately.
+
+`CI` runs on:
+
+- pull requests that touch the app code or CI workflow
+- pushes to `main`
+- pushes to `developement`
 
 ## Docker image names
 
@@ -51,11 +58,26 @@ After pushing these workflow files to GitHub:
 
 This setup stops at image publishing. That is enough for continuous integration plus container delivery.
 
-If you want automatic deployment next, the usual next step is:
+## Railway auto-deploy from `developement`
 
-- provision a VM or cloud service
-- authenticate that target to GHCR
-- deploy with `docker compose pull && docker compose up -d`
-- add a third workflow that runs after `Docker Publish` and deploys over SSH or to your cloud provider
+The workflow at `.github/workflows/railway-deploy-developement.yml` deploys the live Railway services directly from GitHub Actions when code is pushed to `developement`.
 
-If you want, I can wire the next step for a specific target like an Ubuntu VPS, Render, Railway, Fly.io, or EC2.
+It targets:
+
+- `capstone-backend-v2`
+- `next-frontend-v2`
+- `ai-service`
+
+It only deploys services whose paths changed in the push.
+
+### Required GitHub secret
+
+Add this repository secret before relying on the workflow:
+
+- `RAILWAY_TOKEN`
+
+This should be a Railway token with access to project `precious-nourishment`.
+
+### Important behavior note
+
+This workflow deploys to the Railway `production` environment from the `developement` branch by design. That means pushes to `developement` become live after the workflow runs successfully.

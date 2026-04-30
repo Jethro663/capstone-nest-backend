@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  sanitizeRoomLabelInput,
+  sanitizeSubjectCodeInput,
+} from '@/lib/input-policy';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 import {
@@ -101,7 +105,14 @@ export default function ClassForm({
   }, [form, onValuesChange]);
 
   const setField = (field: keyof ClassFormValues, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    let nextValue = value;
+    if (field === 'subjectCode') {
+      nextValue = sanitizeSubjectCodeInput(value, 20);
+    } else if (field === 'room') {
+      nextValue = sanitizeRoomLabelInput(value, 50);
+    }
+
+    setForm((current) => ({ ...current, [field]: nextValue }));
   };
 
   const handleGradeLevelChange = (value: string) => {
@@ -238,7 +249,8 @@ export default function ClassForm({
 
     await onSubmit({
       ...form,
-      room: form.room.trim(),
+      subjectCode: sanitizeSubjectCodeInput(form.subjectCode, 20),
+      room: sanitizeRoomLabelInput(form.room, 50),
       schedules,
     });
   };
@@ -311,6 +323,7 @@ export default function ClassForm({
             value={form.subjectCode}
             onChange={(event) => setField('subjectCode', event.target.value)}
             placeholder="e.g. MATH-7"
+            maxLength={20}
             className="admin-input h-10 rounded-xl"
           />
         </Field>
@@ -390,6 +403,7 @@ export default function ClassForm({
           value={form.room}
           onChange={(event) => setField('room', event.target.value)}
           placeholder="e.g. Room 201"
+          maxLength={50}
           className="admin-input h-10 rounded-xl"
         />
       </Field>

@@ -52,4 +52,24 @@ describe('user/profile DTO validation', () => {
       'Last name may only contain letters, spaces, hyphens, and apostrophes',
     );
   });
+
+  it('rejects unsupported characters in email, address, and contact-like profile fields', async () => {
+    const messages = await messagesFor(UpdateUserDto, {
+      email: 'alex🙂@example.com',
+      address: 'Lot <A>',
+      familyName: 'Ana🙂',
+      familyContact: '0917-123-4567',
+    });
+
+    expect(messages).toContain('Must be a valid email address');
+    expect(messages).toContain(
+      'Address may only contain letters, numbers, spaces, commas, periods, number signs, apostrophes, hyphens, and slashes',
+    );
+    expect(messages).toContain(
+      'Guardian name may only contain letters, spaces, hyphens, and apostrophes',
+    );
+    expect(messages).toContain(
+      'Guardian contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
+    );
+  });
 });

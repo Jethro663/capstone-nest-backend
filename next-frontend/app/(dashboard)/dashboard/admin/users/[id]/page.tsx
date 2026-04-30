@@ -15,6 +15,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getApiErrorMessage } from '@/lib/api-error';
+import {
+  sanitizeAddressInput,
+  sanitizeEmailInput,
+  sanitizeLrnInput,
+  sanitizePersonNameInput,
+  sanitizePhoneLocalInput,
+} from '@/lib/input-policy';
 import { formatDate, getRoleName } from '@/utils/helpers';
 import type { UpdateUserDto, User } from '@/types/user';
 
@@ -53,7 +60,7 @@ const EMPTY_FORM: UserFormState = {
 };
 
 const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
-const PH_MOBILE_REGEX = /^(09\d{9}|\+639\d{9})$/;
+const PH_MOBILE_REGEX = /^09\d{9}$/;
 const PERSON_NAME_ERROR =
   'Names may only contain letters, spaces, hyphens, and apostrophes.';
 const STUDENT_REQUIRED_ERROR =
@@ -71,12 +78,33 @@ function toFormState(user: User): UserFormState {
     gradeLevel: String(user.gradeLevel ?? ''),
     dateOfBirth: String(user.dateOfBirth ?? user.dob ?? '').slice(0, 10),
     gender: String(user.gender ?? ''),
-    phone: String(user.phone ?? ''),
-    address: String(user.address ?? ''),
-    familyName: String(user.familyName ?? ''),
+    phone: sanitizePhoneLocalInput(String(user.phone ?? ''), 11),
+    address: sanitizeAddressInput(String(user.address ?? ''), 180),
+    familyName: sanitizePersonNameInput(String(user.familyName ?? ''), 80),
     familyRelationship: String(user.familyRelationship ?? ''),
-    familyContact: String(user.familyContact ?? ''),
+    familyContact: sanitizePhoneLocalInput(String(user.familyContact ?? ''), 11),
   };
+}
+
+function sanitizeFieldValue(field: keyof UserFormState, value: string) {
+  switch (field) {
+    case 'firstName':
+    case 'middleName':
+    case 'lastName':
+    case 'familyName':
+      return sanitizePersonNameInput(value, field === 'familyName' ? 80 : 30);
+    case 'email':
+      return sanitizeEmailInput(value, 100);
+    case 'lrn':
+      return sanitizeLrnInput(value, 12);
+    case 'phone':
+    case 'familyContact':
+      return sanitizePhoneLocalInput(value, 11);
+    case 'address':
+      return sanitizeAddressInput(value, 180);
+    default:
+      return value;
+  }
 }
 
 export default function AdminUserDetailPage() {
@@ -125,7 +153,10 @@ export default function AdminUserDetailPage() {
   }, [userId]);
 
   const setField = (field: keyof UserFormState, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => ({
+      ...current,
+      [field]: sanitizeFieldValue(field, value),
+    }));
   };
 
   const handleResetPassword = async () => {
@@ -206,17 +237,19 @@ export default function AdminUserDetailPage() {
       firstName: form.firstName.trim(),
       middleName: form.middleName.trim() || undefined,
       lastName: form.lastName.trim(),
-      email: form.email.trim().toLowerCase(),
+      email: sanitizeEmailInput(form.email, 100),
       role: form.role,
-      lrn: isStudent ? form.lrn.trim() : undefined,
+      lrn: isStudent ? sanitizeLrnInput(form.lrn, 12) : undefined,
       gradeLevel: isStudent ? form.gradeLevel || undefined : undefined,
       dateOfBirth: isStudent ? form.dateOfBirth || undefined : undefined,
       gender: isStudent ? form.gender || undefined : undefined,
-      phone: isStudent ? form.phone || undefined : undefined,
-      address: isStudent ? form.address || undefined : undefined,
-      familyName: isStudent ? form.familyName || undefined : undefined,
+      phone: isStudent ? sanitizePhoneLocalInput(form.phone, 11) || undefined : undefined,
+      address: isStudent ? sanitizeAddressInput(form.address, 180) || undefined : undefined,
+      familyName: isStudent ? sanitizePersonNameInput(form.familyName, 80) || undefined : undefined,
       familyRelationship: isStudent ? (form.familyRelationship || undefined) : undefined,
-      familyContact: isStudent ? form.familyContact || undefined : undefined,
+      familyContact: isStudent
+        ? sanitizePhoneLocalInput(form.familyContact, 11) || undefined
+        : undefined,
     };
 
     try {

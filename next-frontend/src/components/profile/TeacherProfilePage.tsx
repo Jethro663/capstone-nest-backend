@@ -20,6 +20,12 @@ import {
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
+import {
+  sanitizeAddressInput,
+  sanitizeEmployeeIdInput,
+  sanitizeLabelTextInput,
+  sanitizePhoneLocalInput,
+} from '@/lib/input-policy';
 import { teacherProfileService } from '@/services/teacher-profile-service';
 import type { TeacherProfile } from '@/types/profile';
 import { Button } from '@/components/ui/button';
@@ -56,6 +62,14 @@ type TeacherProfileForm = {
   profilePicture: string;
 };
 
+const FIELD_LIMITS = {
+  phone: 11,
+  address: 180,
+  department: 80,
+  specialization: 80,
+  employeeId: 20,
+} as const;
+
 function toDateInputValue(value: string | null | undefined): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
@@ -68,21 +82,25 @@ function toFormState(
   return {
     dateOfBirth: toDateInputValue(user?.dateOfBirth ?? user?.dob),
     gender: String(user?.gender ?? ''),
-    phone: String(user?.phone ?? user?.contactNumber ?? ''),
-    address: String(user?.address ?? ''),
-    department: String(user?.department ?? ''),
-    specialization: String(user?.specialization ?? ''),
-    employeeId: String(user?.employeeId ?? ''),
+    phone: sanitizePhoneLocalInput(
+      String(user?.phone ?? user?.contactNumber ?? ''),
+      FIELD_LIMITS.phone,
+    ),
+    address: sanitizeAddressInput(String(user?.address ?? ''), FIELD_LIMITS.address),
+    department: sanitizeLabelTextInput(
+      String(user?.department ?? ''),
+      FIELD_LIMITS.department,
+    ),
+    specialization: sanitizeLabelTextInput(
+      String(user?.specialization ?? ''),
+      FIELD_LIMITS.specialization,
+    ),
+    employeeId: sanitizeEmployeeIdInput(
+      String(user?.employeeId ?? ''),
+      FIELD_LIMITS.employeeId,
+    ),
     profilePicture: String(user?.profilePicture ?? ''),
   };
-}
-
-function sanitizeTeacherPhoneInput(value: string): string {
-  const digits = value.replace(/\D/g, '');
-  if (digits.startsWith('63')) {
-    return `0${digits.slice(2, 12)}`;
-  }
-  return digits.slice(0, 11);
 }
 
 const baselineCardClass =
@@ -169,7 +187,18 @@ export default function TeacherProfilePage() {
   );
 
   const handleFieldChange = (field: keyof TeacherProfileForm, value: string) => {
-    const nextValue = field === 'phone' ? sanitizeTeacherPhoneInput(value) : value;
+    let nextValue = value;
+    if (field === 'phone') {
+      nextValue = sanitizePhoneLocalInput(value, FIELD_LIMITS.phone);
+    } else if (field === 'address') {
+      nextValue = sanitizeAddressInput(value, FIELD_LIMITS.address);
+    } else if (field === 'department') {
+      nextValue = sanitizeLabelTextInput(value, FIELD_LIMITS.department);
+    } else if (field === 'specialization') {
+      nextValue = sanitizeLabelTextInput(value, FIELD_LIMITS.specialization);
+    } else if (field === 'employeeId') {
+      nextValue = sanitizeEmployeeIdInput(value, FIELD_LIMITS.employeeId);
+    }
     setForm((current) => ({ ...current, [field]: nextValue }));
   };
 
@@ -371,7 +400,7 @@ export default function TeacherProfilePage() {
                       onChange={(event) => handleFieldChange('phone', event.target.value)}
                       placeholder="+63 912 345 6789"
                       inputMode="tel"
-                      maxLength={11}
+                      maxLength={FIELD_LIMITS.phone}
                     />
                   </ProfileField>
                   <ProfileField label="Address" icon={MapPin}>
@@ -380,6 +409,7 @@ export default function TeacherProfilePage() {
                       value={form.address}
                       onChange={(event) => handleFieldChange('address', event.target.value)}
                       placeholder="Quezon City, Metro Manila"
+                      maxLength={FIELD_LIMITS.address}
                     />
                   </ProfileField>
                   <ProfileField label="Department" icon={GraduationCap}>
@@ -387,6 +417,7 @@ export default function TeacherProfilePage() {
                       className={fieldClass}
                       value={form.department}
                       onChange={(event) => handleFieldChange('department', event.target.value)}
+                      maxLength={FIELD_LIMITS.department}
                     />
                   </ProfileField>
                   <ProfileField label="Employee ID" icon={IdCard}>
@@ -394,6 +425,7 @@ export default function TeacherProfilePage() {
                       className={fieldClass}
                       value={form.employeeId}
                       onChange={(event) => handleFieldChange('employeeId', event.target.value)}
+                      maxLength={FIELD_LIMITS.employeeId}
                     />
                   </ProfileField>
                   <ProfileField label="Specialization" icon={GraduationCap}>
@@ -401,6 +433,7 @@ export default function TeacherProfilePage() {
                       className={fieldClass}
                       value={form.specialization}
                       onChange={(event) => handleFieldChange('specialization', event.target.value)}
+                      maxLength={FIELD_LIMITS.specialization}
                     />
                   </ProfileField>
                 </div>

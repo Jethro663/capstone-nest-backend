@@ -10,6 +10,7 @@
 
 import { clearAccessToken, setAccessToken } from './api-client';
 import * as authService from './auth-service';
+import { clearStudentAnnouncementBoardDismissal } from './student-announcement-board';
 import type { UpdateProfileDto } from '@/types/profile';
 
 type ActionErrorResult = {
@@ -75,6 +76,7 @@ export async function logoutAction(reason?: string) {
   }
 
   clearAccessToken();
+  clearStudentAnnouncementBoardDismissal();
   const target = reason
     ? `/login?reason=${encodeURIComponent(reason)}`
     : '/login';
@@ -89,6 +91,7 @@ export async function logoutAllAction(reason?: string) {
   }
 
   clearAccessToken();
+  clearStudentAnnouncementBoardDismissal();
   const target = reason
     ? `/login?reason=${encodeURIComponent(reason)}`
     : '/login';

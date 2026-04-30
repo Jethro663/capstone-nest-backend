@@ -68,7 +68,7 @@ describe('AdminUserDetailPage', () => {
     } as Awaited<ReturnType<typeof userService.update>>);
   });
 
-  it('blocks invalid names and missing student QA fields before saving', async () => {
+  it('blocks saving when required student QA fields are missing after sanitization', async () => {
     const { container } = render(<AdminUserDetailPage />);
     await screen.findByRole('heading', { name: 'Liam Navarro' });
 
@@ -91,9 +91,53 @@ describe('AdminUserDetailPage', () => {
 
     await waitFor(() =>
       expect(mockedToast.error).toHaveBeenCalledWith(
-        'Names may only contain letters, spaces, hyphens, and apostrophes.',
+        'Date of birth, gender, student contact number, guardian name, relationship, and guardian contact are required for student accounts.',
       ),
     );
     expect(mockedUserService.update).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes editable student inputs before submit', async () => {
+    const { container } = render(<AdminUserDetailPage />);
+    await screen.findByRole('heading', { name: 'Liam Navarro' });
+
+    const inputs = Array.from(container.querySelectorAll('input'));
+    const firstName = inputs[0];
+    const email = inputs[3];
+    const phone = inputs[6];
+    const address = inputs[7];
+    const guardianName = inputs[8];
+    const guardianContact = inputs[9];
+
+    fireEvent.change(firstName, { target: { value: ' Liam🙂  ' } });
+    fireEvent.change(email, {
+      target: { value: '  Liam.Student @Example.COM🙂  ' },
+    });
+    fireEvent.change(phone, { target: { value: '+63 917-123-4567abc' } });
+    fireEvent.change(address, {
+      target: { value: '  Blk. 4, Lot #2 <North>🙂 / Phase 1 ' },
+    });
+    fireEvent.change(guardianName, {
+      target: { value: "  Ana@@ Navarro🙂 123 " },
+    });
+    fireEvent.change(guardianContact, {
+      target: { value: '+63 917-987-6543abc' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() =>
+      expect(mockedUserService.update).toHaveBeenCalledWith(
+        'student-1',
+        expect.objectContaining({
+          firstName: 'Liam',
+          email: 'liam.student@example.com',
+          phone: '09171234567',
+          address: 'Blk. 4, Lot #2 North / Phase 1',
+          familyName: 'Ana Navarro',
+          familyContact: '09179876543',
+        }),
+      ),
+    );
   });
 });

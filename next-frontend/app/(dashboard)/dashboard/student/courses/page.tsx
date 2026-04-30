@@ -465,7 +465,7 @@ export default function StudentCoursesPage() {
   }
 
   return (
-    <div className="space-y-5 bg-[#f5f3f8] p-4 md:p-6">
+    <div className="space-y-5 bg-[var(--student-elevated)] p-4 md:p-6">
       <section className="rounded-[1.35rem] border border-[#e1deea] bg-white p-3.5 shadow-[0_18px_32px_-30px_rgba(22,32,58,0.5)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">

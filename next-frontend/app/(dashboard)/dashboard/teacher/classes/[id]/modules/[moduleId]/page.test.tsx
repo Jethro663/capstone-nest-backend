@@ -560,65 +560,6 @@ describe('TeacherModuleDetailPage', () => {
     expect(submitButton).not.toBeDisabled();
   });
 
-  it('shows orphan legacy lessons and deletes them from the cleanup section', async () => {
-    mockedModuleService.getByClass.mockResolvedValueOnce({
-      success: true,
-      message: 'ok',
-      data: [
-        {
-          ...createModulePayload()[0],
-          sections: [
-            {
-              id: 'section-1',
-              moduleId: 'module-1',
-              title: 'Section A',
-              description: '',
-              order: 1,
-              items: [
-                {
-                  id: 'item-1',
-                  moduleSectionId: 'section-1',
-                  itemType: 'lesson',
-                  lessonId: 'lesson-attached',
-                  order: 1,
-                  isVisible: true,
-                  isRequired: false,
-                  isGiven: true,
-                },
-              ],
-            },
-          ],
-        },
-      ] as never,
-      count: 1,
-    });
-    mockedLessonService.getByClass.mockResolvedValueOnce({
-      success: true,
-      message: 'ok',
-      data: [
-        { id: 'lesson-attached', classId: 'class-1', title: 'Attached lesson', isDraft: true },
-        { id: 'lesson-orphan', classId: 'class-1', title: 'Orphan lesson', isDraft: true },
-      ] as never,
-      count: 2,
-      total: 2,
-      page: 1,
-      pageSize: 20,
-      totalPages: 1,
-    } as never);
-
-    render(<TeacherModuleDetailPage />);
-
-    expect(await screen.findByText('Legacy Lessons (Not In Modules)')).toBeInTheDocument();
-    expect(screen.getByText('Orphan lesson')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete legacy lesson' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Action' }));
-
-    await waitFor(() => {
-      expect(mockedLessonService.delete).toHaveBeenCalledWith('lesson-orphan');
-    });
-  });
-
   it('attaches an existing library file instead of uploading a new pdf', async () => {
     render(<TeacherModuleDetailPage />);
 

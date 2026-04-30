@@ -104,4 +104,28 @@ describe('LoginForm', () => {
       expect(pushMock).toHaveBeenCalledWith('/dashboard/notifications');
     });
   });
+
+  it('normalizes login email while preserving password whitespace', async () => {
+    loginActionMock.mockResolvedValue({
+      success: false,
+      message: 'Invalid email or password',
+    });
+
+    render(<LoginForm />);
+
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: '  Alex.User+1 @Example.COM🙂  ' },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: '  Test@123 ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(loginActionMock).toHaveBeenCalledWith({
+        email: 'alex.user+1@example.com',
+        password: '  Test@123 ',
+      });
+    });
+  });
 });

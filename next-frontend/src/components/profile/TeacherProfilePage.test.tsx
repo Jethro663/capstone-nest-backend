@@ -250,4 +250,45 @@ describe('TeacherProfilePage', () => {
 
     expect(phoneInput).toHaveValue('09171234567');
   });
+
+  it('sanitizes teacher free-text fields while typing', async () => {
+    mockedTeacherProfileService.getMine.mockResolvedValue({
+      success: true,
+      data: buildTeacherProfile({
+        phone: '',
+        contactNumber: '',
+        address: '',
+        department: '',
+        specialization: '',
+        employeeId: '',
+      }),
+    } as GetMineResponse);
+
+    render(<TeacherProfilePage />);
+
+    const phoneInput = await screen.findByLabelText('Phone');
+    const addressInput = screen.getByPlaceholderText('Quezon City, Metro Manila');
+    const inputs = screen.getAllByRole('textbox');
+    const departmentInput = inputs[5];
+    const employeeIdInput = inputs[6];
+    const specializationInput = inputs[7];
+
+    fireEvent.change(phoneInput, { target: { value: '+63 917-123-4567🙂' } });
+    fireEvent.change(addressInput, {
+      target: { value: '  Blk. 4, Lot #2 <North>🙂 / Phase 1 ' },
+    });
+    fireEvent.change(departmentInput, {
+      target: { value: 'Sci./Math & Research🙂' },
+    });
+    fireEvent.change(employeeIdInput, { target: { value: ' emp_2026-01🙂 ' } });
+    fireEvent.change(specializationInput, {
+      target: { value: 'STEM./Advisory & Research🙂' },
+    });
+
+    expect(phoneInput).toHaveValue('09171234567');
+    expect(addressInput).toHaveValue('Blk. 4, Lot #2 North / Phase 1');
+    expect(departmentInput).toHaveValue('Sci./Math Research');
+    expect(employeeIdInput).toHaveValue('EMP2026-01');
+    expect(specializationInput).toHaveValue('STEM./Advisory Research');
+  });
 });

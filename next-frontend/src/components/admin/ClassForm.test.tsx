@@ -81,4 +81,40 @@ describe('ClassForm', () => {
     );
     expect(baseProps.onSubmit).not.toHaveBeenCalled();
   });
+
+  it('sanitizes subject code and room before submit', async () => {
+    render(
+      <ClassForm
+        {...baseProps}
+        initialValues={{
+          ...createEmptyClassForm('2026-2027'),
+          subjectName: 'Mathematics',
+          subjectCode: '',
+          subjectGradeLevel: '7',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          room: '',
+          schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
+        }}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('e.g. MATH-7'), {
+      target: { value: ' math-7 / rm🙂 ' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Room 201'), {
+      target: { value: ' Room #201/<A>🙂 ' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Class' }));
+
+    await waitFor(() =>
+      expect(baseProps.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subjectCode: 'MATH-7RM',
+          room: 'Room #201/A',
+        }),
+      ),
+    );
+  });
 });

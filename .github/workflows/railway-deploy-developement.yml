@@ -1,0 +1,117 @@
+name: Railway Deploy (developement)
+
+on:
+  push:
+    branches:
+      - developement
+    paths:
+      - "backend/**"
+      - "next-frontend/**"
+      - "ai-service/**"
+      - ".github/workflows/railway-deploy-developement.yml"
+      - ".github/workflows/ci.yml"
+
+concurrency:
+  group: railway-deploy-developement
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect_changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      ai_service: ${{ steps.filter.outputs.ai_service }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/railway-deploy-developement.yml'
+            frontend:
+              - 'next-frontend/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/railway-deploy-developement.yml'
+            ai_service:
+              - 'ai-service/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/railway-deploy-developement.yml'
+
+  deploy_backend:
+    name: Deploy backend
+    needs: detect_changes
+    if: needs.detect_changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: 00b7dfa6-d938-4029-8119-0194a04b5795
+      RAILWAY_ENVIRONMENT_NAME: production
+      RAILWAY_SERVICE_NAME: capstone-backend-v2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy backend to Railway
+        working-directory: backend
+        run: railway up . --path-as-root --ci --project "$env:RAILWAY_PROJECT_ID" --environment "$env:RAILWAY_ENVIRONMENT_NAME" --service "$env:RAILWAY_SERVICE_NAME"
+        shell: pwsh
+
+  deploy_frontend:
+    name: Deploy frontend
+    needs: detect_changes
+    if: needs.detect_changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: 00b7dfa6-d938-4029-8119-0194a04b5795
+      RAILWAY_ENVIRONMENT_NAME: production
+      RAILWAY_SERVICE_NAME: next-frontend-v2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy frontend to Railway
+        working-directory: next-frontend
+        run: railway up . --path-as-root --ci --project "$env:RAILWAY_PROJECT_ID" --environment "$env:RAILWAY_ENVIRONMENT_NAME" --service "$env:RAILWAY_SERVICE_NAME"
+        shell: pwsh
+
+  deploy_ai_service:
+    name: Deploy ai-service
+    needs: detect_changes
+    if: needs.detect_changes.outputs.ai_service == 'true'
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_PROJECT_ID: 00b7dfa6-d938-4029-8119-0194a04b5795
+      RAILWAY_ENVIRONMENT_NAME: production
+      RAILWAY_SERVICE_NAME: ai-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy ai-service to Railway
+        working-directory: ai-service
+        run: railway up . --path-as-root --ci --project "$env:RAILWAY_PROJECT_ID" --environment "$env:RAILWAY_ENVIRONMENT_NAME" --service "$env:RAILWAY_SERVICE_NAME"
+        shell: pwsh

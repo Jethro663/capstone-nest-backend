@@ -200,7 +200,6 @@ export default function TeacherModuleDetailPage() {
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [classModules, setClassModules] = useState<ClassModule[]>([]);
   const [module, setModule] = useState<ClassModule | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [activeTab, setActiveTab] = useState<ModuleTab>('sections');
   const [loading, setLoading] = useState(true);
@@ -240,10 +239,9 @@ export default function TeacherModuleDetailPage() {
 
     try {
       setLoading(true);
-      const [classResponse, modulesResponse, lessonResponse, assessmentResponse] = await Promise.all([
+      const [classResponse, modulesResponse, assessmentResponse] = await Promise.all([
         classService.getById(classId),
         moduleService.getByClass(classId),
-        lessonService.getByClass(classId),
         assessmentService.getByClass(classId),
       ]);
 
@@ -257,7 +255,6 @@ export default function TeacherModuleDetailPage() {
       setClassItem(resolvedClass);
       setClassModules(normalizedModules);
       setModule(currentModule);
-      setLessons(lessonResponse.data || []);
       setAssessments(assessmentResponse.data || []);
       setNotesDraft(currentModule?.teacherNotes || '');
       setExpandedSections((current) => {
@@ -272,7 +269,6 @@ export default function TeacherModuleDetailPage() {
       setClassItem(null);
       setClassModules([]);
       setModule(null);
-      setLessons([]);
       setAssessments([]);
       toast.error('Unable to load module details');
     } finally {
@@ -361,22 +357,6 @@ export default function TeacherModuleDetailPage() {
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'lesson').length,
     0,
   );
-
-  const attachedLessonIdsAcrossClass = useMemo(() => {
-    return new Set(
-      classModules.flatMap((entry) =>
-        entry.sections.flatMap((section) =>
-          section.items
-            .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
-            .map((item) => item.lessonId as string),
-        ),
-      ),
-    );
-  }, [classModules]);
-
-  const legacyLessons = useMemo(() => {
-    return lessons.filter((lesson) => !attachedLessonIdsAcrossClass.has(lesson.id));
-  }, [attachedLessonIdsAcrossClass, lessons]);
 
   const assessmentCount = sectionList.reduce(
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
@@ -688,22 +668,6 @@ export default function TeacherModuleDetailPage() {
         await moduleService.detachItem(itemId);
         await fetchData();
         toast.success('Item removed');
-      },
-    });
-  };
-
-  const confirmDeleteLegacyLesson = (lesson: Lesson) => {
-    setConfirmation({
-      title: 'Delete legacy lesson?',
-      description:
-        'This lesson is not attached to any module and will be permanently deleted.',
-      tone: 'danger',
-      confirmLabel: 'Delete Lesson',
-      details: 'This action cannot be undone.',
-      onConfirm: async () => {
-        await lessonService.delete(lesson.id);
-        await fetchData();
-        toast.success('Legacy lesson deleted');
       },
     });
   };
@@ -1289,62 +1253,6 @@ export default function TeacherModuleDetailPage() {
               );
             })}
 
-            <article className="teacher-module-detail__section-card">
-              <header className="teacher-module-detail__section-card-head">
-                <div className="teacher-module-detail__section-main">
-                  <h3>Legacy Lessons (Not In Modules)</h3>
-                  <span>{legacyLessons.length} lessons</span>
-                </div>
-              </header>
-              <div className="teacher-module-detail__items">
-                {legacyLessons.length === 0 ? (
-                  <div className="teacher-module-detail__empty">
-                    No legacy lessons found. All class lessons are attached to modules.
-                  </div>
-                ) : (
-                  legacyLessons.map((lesson) => (
-                    <div key={lesson.id} className="teacher-module-detail__item-row">
-                      <div className="teacher-module-detail__item-main">
-                        <div className="teacher-module-detail__item-icon">
-                          <BookOpen className="h-4 w-4" />
-                        </div>
-                        <div className="teacher-module-detail__item-copy">
-                          <div className="teacher-module-detail__chips">
-                            <span data-kind="lesson">lesson</span>
-                            <span data-kind={lesson.isDraft ? 'draft' : 'published'}>
-                              {lesson.isDraft ? 'Draft' : 'Published'}
-                            </span>
-                          </div>
-                          <h4>{lesson.title}</h4>
-                          <p>Legacy lesson not attached to any module section.</p>
-                        </div>
-                      </div>
-                      <div className="teacher-module-detail__item-controls">
-                        <ActionTooltip label="Open lesson editor">
-                          <Link
-                            href={`/dashboard/teacher/lessons/${lesson.id}/edit`}
-                            className="teacher-module-detail__ghost"
-                            aria-label="Open legacy lesson editor"
-                          >
-                            <NotebookPen className="h-4 w-4" />
-                          </Link>
-                        </ActionTooltip>
-                        <ActionTooltip label="Delete legacy lesson">
-                          <button
-                            type="button"
-                            className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                            onClick={() => confirmDeleteLegacyLesson(lesson)}
-                            aria-label="Delete legacy lesson"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </ActionTooltip>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </article>
           </div>
         ) : null}
         {activeTab === 'visibility' ? (

@@ -36,4 +36,27 @@ describe('Classes DTOs', () => {
     expect(messages).toContain('room cannot be empty');
     expect(messages).toContain('At least one schedule slot is required');
   });
+
+  it('rejects unsupported characters in class identifiers and room labels', async () => {
+    const createMessages = await messagesFor(CreateClassDto, {
+      subjectName: 'Mathematics🙂',
+      subjectCode: 'MATH-7/ROOM',
+      subjectGradeLevel: '7',
+      sectionId: '11111111-1111-4111-8111-111111111111',
+      teacherId: '22222222-2222-4222-8222-222222222222',
+      schoolYear: '2026-2027',
+      room: 'Room <201>',
+      schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
+    });
+
+    expect(createMessages).toContain(
+      'subjectName may only contain letters, numbers, spaces, hyphens, and apostrophes',
+    );
+    expect(createMessages).toContain(
+      'subjectCode may only contain uppercase letters, numbers, and hyphens',
+    );
+    expect(createMessages).toContain(
+      'room may only contain letters, numbers, spaces, number signs, hyphens, and slashes',
+    );
+  });
 });

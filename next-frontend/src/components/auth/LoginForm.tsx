@@ -2,12 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
 
 import { loginSchema, type LoginFormValues } from '@/schemas/auth';
 import { loginAction, validateCredentialsAction } from '@/lib/auth-actions';
+import {
+  hasEdgeWhitespace,
+  sanitizeEmailInput,
+  sanitizePasswordInput,
+} from '@/lib/input-policy';
 import { useAuth } from '@/providers/AuthProvider';
 import { resolvePostLoginDestination } from '@/lib/dashboard-route-access';
 import { toast } from 'sonner';
@@ -39,8 +44,16 @@ export function LoginForm() {
   const {
     register,
     handleSubmit,
+    setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
+  const emailValue = useWatch({ control, name: 'email' }) ?? '';
+  const passwordValue = useWatch({ control, name: 'password' }) ?? '';
+  const passwordHasEdgeWhitespace =
+    passwordValue.length > 0 && hasEdgeWhitespace(passwordValue);
+  const emailRegister = register('email');
+  const passwordRegister = register('password');
 
   const onSubmit = async (data: LoginFormValues) => {
     setServerError('');
@@ -91,7 +104,15 @@ export function LoginForm() {
           autoComplete="username"
           disabled={isSubmitting}
           className="auth-input"
-          {...register('email')}
+          {...emailRegister}
+          value={emailValue}
+          onChange={(event) => {
+            setValue('email', sanitizeEmailInput(event.target.value), {
+              shouldDirty: true,
+              shouldTouch: true,
+              shouldValidate: true,
+            });
+          }}
         />
         {errors.email && <p className="auth-error-text">{errors.email.message}</p>}
       </div>
@@ -107,9 +128,22 @@ export function LoginForm() {
           autoComplete="current-password"
           disabled={isSubmitting}
           className="auth-input"
-          {...register('password')}
+          {...passwordRegister}
+          value={passwordValue}
+          onChange={(event) => {
+            setValue('password', sanitizePasswordInput(event.target.value), {
+              shouldDirty: true,
+              shouldTouch: true,
+              shouldValidate: true,
+            });
+          }}
         />
         {errors.password && <p className="auth-error-text">{errors.password.message}</p>}
+        {!errors.password && passwordHasEdgeWhitespace ? (
+          <p className="text-xs text-amber-600">
+            Leading or trailing spaces will be kept as part of your password.
+          </p>
+        ) : null}
       </div>
 
       <Button type="submit" className="auth-primary-button w-full" disabled={isSubmitting}>

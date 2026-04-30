@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, CircleDashed, Eye, EyeOff, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { changePassword } from "@/lib/auth-service";
+import { hasEdgeWhitespace, sanitizePasswordInput } from "@/lib/input-policy";
 import { changePasswordSchema, passwordStrengthChecks } from "@/schemas/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,12 @@ export function ProfileSecurityCard({
   );
   const passwordsMatch =
     confirmPassword.length > 0 && newPassword === confirmPassword;
+  const currentPasswordHasEdgeWhitespace =
+    oldPassword.length > 0 && hasEdgeWhitespace(oldPassword);
+  const newPasswordHasEdgeWhitespace =
+    newPassword.length > 0 && hasEdgeWhitespace(newPassword);
+  const confirmPasswordHasEdgeWhitespace =
+    confirmPassword.length > 0 && hasEdgeWhitespace(confirmPassword);
 
   const handleChangePassword = async () => {
     const result = changePasswordSchema.safeParse({
@@ -194,7 +201,7 @@ export function ProfileSecurityCard({
               )}
               value={oldPassword}
               onChange={(e) => {
-                setOldPassword(e.target.value);
+                setOldPassword(sanitizePasswordInput(e.target.value));
                 setSubmitErrors((current) => ({
                   ...current,
                   oldPassword: undefined,
@@ -209,6 +216,10 @@ export function ProfileSecurityCard({
           </div>
           {submitErrors.oldPassword ? (
             <p className="text-xs text-rose-600">{submitErrors.oldPassword}</p>
+          ) : currentPasswordHasEdgeWhitespace ? (
+            <p className="text-xs text-amber-600">
+              Leading or trailing spaces will be kept as part of your password.
+            </p>
           ) : null}
         </div>
         <div className="space-y-1.5">
@@ -247,7 +258,7 @@ export function ProfileSecurityCard({
               )}
               value={newPassword}
               onChange={(e) => {
-                setNewPassword(e.target.value);
+                setNewPassword(sanitizePasswordInput(e.target.value));
                 setSubmitErrors((current) => ({
                   ...current,
                   newPassword: undefined,
@@ -282,6 +293,10 @@ export function ProfileSecurityCard({
           </div>
           {submitErrors.newPassword ? (
             <p className="text-xs text-rose-600">{submitErrors.newPassword}</p>
+          ) : newPasswordHasEdgeWhitespace ? (
+            <p className="text-xs text-amber-600">
+              Leading or trailing spaces will be kept as part of your password.
+            </p>
           ) : null}
         </div>
         <div className="space-y-1.5">
@@ -320,7 +335,7 @@ export function ProfileSecurityCard({
               )}
               value={confirmPassword}
               onChange={(e) => {
-                setConfirmPassword(e.target.value);
+                setConfirmPassword(sanitizePasswordInput(e.target.value));
                 setSubmitErrors((current) => ({
                   ...current,
                   confirmPassword: undefined,
@@ -346,6 +361,10 @@ export function ProfileSecurityCard({
           {submitErrors.confirmPassword ? (
             <p className="text-xs text-rose-600">
               {submitErrors.confirmPassword}
+            </p>
+          ) : confirmPasswordHasEdgeWhitespace ? (
+            <p className="text-xs text-amber-600">
+              Leading or trailing spaces will be kept as part of your password.
             </p>
           ) : null}
         </div>
